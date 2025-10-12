@@ -8,19 +8,13 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 )
 
-type CustomerService interface {
-	CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error)
-	GetCustomer(ctx context.Context, id string) (*dto.CustomerResponse, error)
-	GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error)
-	UpdateCustomer(ctx context.Context, id string, req dto.UpdateCustomerRequest) (*dto.CustomerResponse, error)
-	DeleteCustomer(ctx context.Context, id string) error
-	GetCustomerByLookupKey(ctx context.Context, lookupKey string) (*dto.CustomerResponse, error)
-}
+type CustomerService = interfaces.CustomerService
 
 type customerService struct {
 	ServiceParams
@@ -48,9 +42,18 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 
 	// Validate integration entity mappings if provided
 	if len(req.IntegrationEntityMapping) > 0 {
-		integrationService := NewIntegrationService(s.ServiceParams)
-		if err := integrationService.ValidateIntegrationEntityMappings(ctx, req.IntegrationEntityMapping); err != nil {
-			return nil, err
+		// Validation: Check that provider types are valid
+		for _, mapping := range req.IntegrationEntityMapping {
+			if mapping.Provider != string(types.SecretProviderStripe) {
+				return nil, ierr.NewError("unsupported provider type").
+					WithHint("Only Stripe provider is currently supported").
+					Mark(ierr.ErrValidation)
+			}
+			if mapping.ID == "" {
+				return nil, ierr.NewError("provider entity ID is required").
+					WithHint("Provider entity ID must be provided for integration mapping").
+					Mark(ierr.ErrValidation)
+			}
 		}
 	}
 
@@ -87,14 +90,26 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 				cust.Metadata[mapping.Provider+"_customer_id"] = mapping.ID
 
 				// Update provider customer metadata with FlexPrice info
-				integrationService := NewIntegrationService(s.ServiceParams)
-				if err := integrationService.UpdateProviderCustomerMetadata(txCtx, mapping.Provider, mapping.ID, cust); err != nil {
-					s.Logger.Errorw("failed to update provider customer metadata",
-						"provider", mapping.Provider,
-						"provider_customer_id", mapping.ID,
-						"customer_id", cust.ID,
-						"error", err)
-					// Don't fail the request, just log the error
+				if mapping.Provider == string(types.SecretProviderStripe) {
+					// Get Stripe integration
+					stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+					if err != nil {
+						s.Logger.Warnw("failed to get Stripe integration for metadata update",
+							"error", err,
+							"customer_id", cust.ID)
+						// Don't fail the entire operation, just log the error
+						continue
+					}
+
+					// Update Stripe customer metadata with FlexPrice customer information
+					err = stripeIntegration.CustomerSvc.UpdateStripeCustomerMetadata(ctx, mapping.ID, cust)
+					if err != nil {
+						s.Logger.Warnw("failed to update Stripe customer metadata",
+							"error", err,
+							"stripe_customer_id", mapping.ID,
+							"customer_id", cust.ID)
+						// Don't fail the entire operation, just log the error
+					}
 				}
 			}
 
@@ -215,9 +230,18 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 
 	// Validate integration entity mappings if provided
 	if len(req.IntegrationEntityMapping) > 0 {
-		integrationService := NewIntegrationService(s.ServiceParams)
-		if err := integrationService.ValidateIntegrationEntityMappings(ctx, req.IntegrationEntityMapping); err != nil {
-			return nil, err
+		// Validation: Check that provider types are valid
+		for _, mapping := range req.IntegrationEntityMapping {
+			if mapping.Provider != string(types.SecretProviderStripe) {
+				return nil, ierr.NewError("unsupported provider type").
+					WithHint("Only Stripe provider is currently supported").
+					Mark(ierr.ErrValidation)
+			}
+			if mapping.ID == "" {
+				return nil, ierr.NewError("provider entity ID is required").
+					WithHint("Provider entity ID must be provided for integration mapping").
+					Mark(ierr.ErrValidation)
+			}
 		}
 	}
 
@@ -332,14 +356,26 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 			cust.Metadata[mapping.Provider+"_customer_id"] = mapping.ID
 
 			// Update provider customer metadata with FlexPrice info
-			integrationService := NewIntegrationService(s.ServiceParams)
-			if err := integrationService.UpdateProviderCustomerMetadata(ctx, mapping.Provider, mapping.ID, cust); err != nil {
-				s.Logger.Errorw("failed to update provider customer metadata",
-					"provider", mapping.Provider,
-					"provider_customer_id", mapping.ID,
-					"customer_id", cust.ID,
-					"error", err)
-				// Don't fail the request, just log the error
+			if mapping.Provider == string(types.SecretProviderStripe) {
+				// Get Stripe integration
+				stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
+				if err != nil {
+					s.Logger.Warnw("failed to get Stripe integration for metadata update",
+						"error", err,
+						"customer_id", cust.ID)
+					// Don't fail the entire operation, just log the error
+					continue
+				}
+
+				// Update Stripe customer metadata with FlexPrice customer information
+				err = stripeIntegration.CustomerSvc.UpdateStripeCustomerMetadata(ctx, mapping.ID, cust)
+				if err != nil {
+					s.Logger.Warnw("failed to update Stripe customer metadata",
+						"error", err,
+						"stripe_customer_id", mapping.ID,
+						"customer_id", cust.ID)
+					// Don't fail the entire operation, just log the error
+				}
 			}
 		}
 	}

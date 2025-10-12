@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ConnectionCreate is the builder for creating a Connection entity.
@@ -131,6 +132,12 @@ func (cc *ConnectionCreate) SetEncryptedSecretData(m map[string]interface{}) *Co
 // SetMetadata sets the "metadata" field.
 func (cc *ConnectionCreate) SetMetadata(m map[string]interface{}) *ConnectionCreate {
 	cc.mutation.SetMetadata(m)
+	return cc
+}
+
+// SetSyncConfig sets the "sync_config" field.
+func (cc *ConnectionCreate) SetSyncConfig(tc *types.SyncConfig) *ConnectionCreate {
+	cc.mutation.SetSyncConfig(tc)
 	return cc
 }
 
@@ -306,6 +313,10 @@ func (cc *ConnectionCreate) createSpec() (*Connection, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.Metadata(); ok {
 		_spec.SetField(connection.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
+	}
+	if value, ok := cc.mutation.SyncConfig(); ok {
+		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
+		_node.SyncConfig = value
 	}
 	return _node, _spec
 }

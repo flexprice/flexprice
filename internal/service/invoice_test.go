@@ -100,9 +100,11 @@ func (s *InvoiceServiceSuite) setupService() {
 		TaxRateRepo:                  s.GetStores().TaxRateRepo,
 		TaxAppliedRepo:               s.GetStores().TaxAppliedRepo,
 		TaxAssociationRepo:           s.GetStores().TaxAssociationRepo,
+		IntegrationFactory:           s.GetIntegrationFactory(),
 		SettingsRepo:                 s.GetStores().SettingsRepo,
 		ConnectionRepo:               s.GetStores().ConnectionRepo,
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
+		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
 	})
 }
 
@@ -1148,6 +1150,7 @@ func (s *InvoiceServiceSuite) setupWallets() {
 		AuthRepo:         s.GetStores().AuthRepo,
 		WalletRepo:       s.GetStores().WalletRepo,
 		PaymentRepo:      s.GetStores().PaymentRepo,
+		AlertLogsRepo:    s.GetStores().AlertLogsRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})

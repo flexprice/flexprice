@@ -9,6 +9,7 @@ services:
       POSTGRES_DB: flexprice
     volumes:
       - ./init-temporal-db.sh:/docker-entrypoint-initdb.d/init-temporal-db.sh
+      - ./migrations:/docker-entrypoint-initdb.d/migration
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: pg_isready -U flexprice -d flexprice

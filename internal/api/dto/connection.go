@@ -13,6 +13,7 @@ type CreateConnectionRequest struct {
 	ProviderType        types.SecretProvider     `json:"provider_type" validate:"required"`
 	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
 	Metadata            map[string]interface{}   `json:"metadata,omitempty"`
+	SyncConfig          *types.SyncConfig        `json:"sync_config,omitempty" validate:"omitempty,dive"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
@@ -23,6 +24,7 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 		ProviderType        types.SecretProvider   `json:"provider_type"`
 		EncryptedSecretData map[string]interface{} `json:"encrypted_secret_data,omitempty"`
 		Metadata            map[string]interface{} `json:"metadata,omitempty"`
+		SyncConfig          *types.SyncConfig      `json:"sync_config,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -33,6 +35,7 @@ func (req *CreateConnectionRequest) UnmarshalJSON(data []byte) error {
 	req.Name = temp.Name
 	req.ProviderType = temp.ProviderType
 	req.Metadata = temp.Metadata
+	req.SyncConfig = temp.SyncConfig
 
 	// Convert flat encrypted secret data to structured format based on provider_type
 	if temp.EncryptedSecretData != nil {
@@ -77,16 +80,18 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 
 // UpdateConnectionRequest represents the request to update a connection
 type UpdateConnectionRequest struct {
-	Name     string                 `json:"name,omitempty" validate:"omitempty,max=255"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Name       string                 `json:"name,omitempty" validate:"omitempty,max=255"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	SyncConfig *types.SyncConfig      `json:"sync_config,omitempty" validate:"omitempty,dive"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
 func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	// First, unmarshal to a temporary struct to get the raw data
 	var temp struct {
-		Name     string                 `json:"name"`
-		Metadata map[string]interface{} `json:"metadata,omitempty"`
+		Name       string                 `json:"name"`
+		Metadata   map[string]interface{} `json:"metadata,omitempty"`
+		SyncConfig *types.SyncConfig      `json:"sync_config,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -96,6 +101,7 @@ func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	// Set the basic fields
 	req.Name = temp.Name
 	req.Metadata = temp.Metadata
+	req.SyncConfig = temp.SyncConfig
 
 	return nil
 }
@@ -109,6 +115,7 @@ type ConnectionResponse struct {
 	TenantID      string                 `json:"tenant_id"`
 	Status        types.Status           `json:"status"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	SyncConfig    *types.SyncConfig      `json:"sync_config,omitempty"`
 	CreatedAt     string                 `json:"created_at"`
 	UpdatedAt     string                 `json:"updated_at"`
 	CreatedBy     string                 `json:"created_by"`
@@ -130,6 +137,7 @@ func (req *CreateConnectionRequest) ToConnection() *connection.Connection {
 		ProviderType:        req.ProviderType,
 		EncryptedSecretData: req.EncryptedSecretData,
 		Metadata:            req.Metadata,
+		SyncConfig:          req.SyncConfig,
 	}
 }
 
@@ -147,6 +155,7 @@ func ToConnectionResponse(conn *connection.Connection) *ConnectionResponse {
 		TenantID:      conn.TenantID,
 		Status:        conn.Status,
 		Metadata:      conn.Metadata,
+		SyncConfig:    conn.GetSyncConfig(),
 		CreatedAt:     conn.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     conn.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		CreatedBy:     conn.CreatedBy,

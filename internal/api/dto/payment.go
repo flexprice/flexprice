@@ -283,6 +283,7 @@ type ChargeSavedPaymentMethodRequest struct {
 	Amount          decimal.Decimal `json:"amount" binding:"required"`
 	Currency        string          `json:"currency" binding:"required"`
 	InvoiceID       string          `json:"invoice_id,omitempty"`
+	PaymentID       string          `json:"payment_id,omitempty"`
 }
 
 // PaymentIntentResponse represents a payment intent response

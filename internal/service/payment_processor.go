@@ -226,9 +226,6 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 			Mark(ierr.ErrValidation)
 	}
 
-	// Create payment link using the specified gateway
-	gatewayService := NewPaymentGatewayService(p.ServiceParams)
-
 	// Extract success URL and cancel URL from gateway metadata
 	successURL := ""
 	cancelURL := ""
@@ -242,26 +239,27 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 	}
 
 	// Prepare metadata for payment link request
-	linkMetadata := paymentObj.Metadata
-	if linkMetadata == nil {
-		linkMetadata = types.Metadata{}
+	linkMetadata := types.Metadata{}
+	if paymentObj.Metadata != nil {
+		// Copy metadata but exclude connection-related fields (internal use only)
+		for k, v := range paymentObj.Metadata {
+			if k != "connection_id" && k != "connection_name" {
+				linkMetadata[k] = v
+			}
+		}
 	}
 
-	// Convert to payment link request
-	paymentLinkReq := &dto.CreatePaymentLinkRequest{
+	// Add FlexPrice payment ID to metadata for new payment_intent.succeeded webhook
+	linkMetadata["flexprice_payment_id"] = paymentObj.ID
+
+	// Convert to Stripe payment link request
+	paymentLinkReq := &dto.CreateStripePaymentLinkRequest{
 		InvoiceID:  paymentObj.DestinationID,
 		CustomerID: invoice.CustomerID,
 		Amount:     paymentObj.Amount,
 		Currency:   paymentObj.Currency,
 		SuccessURL: successURL,
 		CancelURL:  cancelURL,
-		Gateway: func() *types.PaymentGatewayType {
-			if paymentObj.PaymentGateway != nil {
-				gatewayType := types.PaymentGatewayType(*paymentObj.PaymentGateway)
-				return &gatewayType
-			}
-			return nil
-		}(),
 		SaveCardAndMakeDefault: func() bool {
 			if paymentObj.GatewayMetadata != nil {
 				if saveCardStr, exists := paymentObj.GatewayMetadata["save_card_and_make_default"]; exists {
@@ -270,10 +268,23 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 			}
 			return false
 		}(),
-		Metadata: linkMetadata,
+		Metadata:      linkMetadata,
+		PaymentID:     paymentObj.ID,
+		EnvironmentID: types.GetEnvironmentID(ctx),
 	}
 
-	paymentLinkResp, err := gatewayService.CreatePaymentLink(ctx, paymentLinkReq)
+	// Get Stripe integration for creating payment link
+	stripeIntegration, err := p.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get Stripe integration").
+			Mark(ierr.ErrSystem)
+	}
+
+	customerService := NewCustomerService(p.ServiceParams)
+	invoiceService := NewInvoiceService(p.ServiceParams)
+
+	paymentLinkResp, err := stripeIntegration.PaymentSvc.CreatePaymentLink(ctx, paymentLinkReq, customerService, invoiceService)
 	if err != nil {
 		// If Stripe SDK fails, keep payment status as INITIATED and return error
 		p.Logger.Errorw("failed to create payment link via Stripe SDK",
@@ -294,7 +305,7 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 	}
 	// Merge with existing gateway metadata (preserving save_card_and_make_default if set)
 	paymentObj.GatewayMetadata["payment_url"] = paymentLinkResp.PaymentURL
-	paymentObj.GatewayMetadata["gateway"] = paymentLinkResp.Gateway
+	paymentObj.GatewayMetadata["gateway"] = string(types.PaymentGatewayTypeStripe)
 	paymentObj.GatewayMetadata["session_id"] = paymentLinkResp.ID
 
 	// Update the payment record
@@ -571,13 +582,19 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		"payment_id", paymentObj.ID,
 	)
 
-	// Initialize Stripe service
-	stripeService := NewStripeService(p.ServiceParams)
+	// Get Stripe integration
+	stripeIntegration, err := p.IntegrationFactory.GetStripeIntegration(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get Stripe integration").
+			Mark(ierr.ErrSystem)
+	}
 
 	// If no specific payment method ID is provided, we need to get one
 	if paymentObj.PaymentMethodID == "" {
 		// Get the default payment method - this is required for card payments
-		defaultPaymentMethod, err := stripeService.GetDefaultPaymentMethod(ctx, customerID)
+		customerService := NewCustomerService(p.ServiceParams)
+		defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, customerID, customerService)
 		if err != nil || defaultPaymentMethod == nil {
 			p.Logger.Warnw("customer has no default payment method for card payment",
 				"customer_id", customerID,
@@ -615,9 +632,14 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		Amount:          paymentObj.Amount,
 		Currency:        paymentObj.Currency,
 		InvoiceID:       paymentObj.DestinationID,
+		PaymentID:       paymentObj.ID,
 	}
 
-	paymentIntentResp, err := stripeService.ChargeSavedPaymentMethod(ctx, chargeReq)
+	// Create service instances for charging
+	custSvc := NewCustomerService(p.ServiceParams)
+	invSvc := NewInvoiceService(p.ServiceParams)
+
+	paymentIntentResp, err := stripeIntegration.PaymentSvc.ChargeSavedPaymentMethod(ctx, chargeReq, custSvc, invSvc)
 	if err != nil {
 		// Update payment status to failed
 		updateReq := &dto.UpdatePaymentRequest{

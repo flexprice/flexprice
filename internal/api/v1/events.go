@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/config"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -19,14 +20,16 @@ type EventsHandler struct {
 	eventService                service.EventService
 	eventPostProcessingService  service.EventPostProcessingService
 	featureUsageTrackingService service.FeatureUsageTrackingService
+	config                      *config.Configuration
 	log                         *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
 		eventService:                eventService,
 		eventPostProcessingService:  eventPostProcessingService,
 		featureUsageTrackingService: featureUsageTrackingService,
+		config:                      config,
 		log:                         log,
 	}
 }
@@ -336,8 +339,16 @@ func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 		return
 	}
 
-	// Call the service to get detailed analytics
-	response, err := h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
+	// Call the appropriate service based on feature flag
+	var response *dto.GetUsageAnalyticsResponse
+	if !h.config.FeatureFlag.EnableFeatureUsageForAnalytics {
+		// Use v1 (eventPostProcessingService) when flag is disabled
+		response, err = h.eventPostProcessingService.GetDetailedUsageAnalytics(ctx, &req)
+	} else {
+		// Use v2 (featureUsageTrackingService) when flag is enabled
+		response, err = h.featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, &req)
+	}
+
 	if err != nil {
 		c.Error(err)
 		return

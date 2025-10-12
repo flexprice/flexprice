@@ -432,82 +432,80 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			RealTimeBalance:       lo.ToPtr(decimal.Zero),
 			RealTimeCreditBalance: lo.ToPtr(decimal.Zero),
 			BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
-			UnpaidInvoiceAmount:   lo.ToPtr(decimal.Zero),
 			CurrentPeriodUsage:    lo.ToPtr(decimal.Zero),
 		}, nil
 	}
 
-	// STEP 1: Get all unpaid invoices for the customer
-	// This includes any previously generated invoices that haven't been paid
-	invoiceService := NewInvoiceService(s.ServiceParams)
-	_, unpaidInvoiceAmountToBePaid, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, w.CustomerID, w.Currency)
-	if err != nil {
-		return nil, err
-	}
+	// Determine if we should include usage based on wallet's allowed price types
+	// If wallet has no allowed price types (nil or empty), treat as ALL (include usage)
+	// Otherwise, check if wallet allows USAGE or ALL price types
+	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
+		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
+		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
-	// STEP 2: Get all active subscriptions to calculate current usage
-	subscriptions, err := s.SubRepo.ListByCustomerID(ctx, w.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter subscriptions by currency
-	filteredSubscriptions := make([]*subscription.Subscription, 0)
-	for _, sub := range subscriptions {
-		if sub.Currency == w.Currency {
-			filteredSubscriptions = append(filteredSubscriptions, sub)
-			s.Logger.Infow("found matching subscription",
-				"subscription_id", sub.ID,
-				"currency", sub.Currency,
-				"period_start", sub.CurrentPeriodStart,
-				"period_end", sub.CurrentPeriodEnd)
-		}
-	}
-
-	// Initialize billing service
-	billingService := NewBillingService(s.ServiceParams)
-
-	// Calculate total pending charges (usage)
+	// Initialize total pending charges
 	totalPendingCharges := decimal.Zero
-	for _, sub := range filteredSubscriptions {
-		// Get current period
-		periodStart := sub.CurrentPeriodStart
-		periodEnd := sub.CurrentPeriodEnd
 
-		// Get usage data for current period
+	if shouldIncludeUsage {
+		// STEP 1: Get all active subscriptions to calculate current usage
+		subscriptions, err := s.SubRepo.ListByCustomerID(ctx, w.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Filter subscriptions by currency
+		filteredSubscriptions := make([]*subscription.Subscription, 0)
+		for _, sub := range subscriptions {
+			if sub.Currency == w.Currency {
+				filteredSubscriptions = append(filteredSubscriptions, sub)
+				s.Logger.Infow("found matching subscription",
+					"subscription_id", sub.ID,
+					"currency", sub.Currency,
+					"period_start", sub.CurrentPeriodStart,
+					"period_end", sub.CurrentPeriodEnd)
+			}
+		}
+
+		billingService := NewBillingService(s.ServiceParams)
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
 
-		usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-			SubscriptionID: sub.ID,
-			StartTime:      periodStart,
-			EndTime:        periodEnd,
-		})
+		// Calculate total pending charges (usage) only if usage is allowed
+		for _, sub := range filteredSubscriptions {
+			// Get current period
+			periodStart := sub.CurrentPeriodStart
+			periodEnd := sub.CurrentPeriodEnd
 
-		if err != nil {
-			return nil, err
+			usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+				SubscriptionID: sub.ID,
+				StartTime:      periodStart,
+				EndTime:        periodEnd,
+			})
+
+			if err != nil {
+				return nil, err
+			}
+
+			// Calculate usage charges
+			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			if err != nil {
+				return nil, err
+			}
+
+			s.Logger.Infow("subscription charges details",
+				"subscription_id", sub.ID,
+				"usage_total", usageTotal,
+				"num_usage_charges", len(usageCharges))
+
+			totalPendingCharges = totalPendingCharges.Add(usageTotal)
 		}
-
-		// Calculate usage charges
-		usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
-		if err != nil {
-			return nil, err
-		}
-
-		s.Logger.Infow("subscription charges details",
-			"subscription_id", sub.ID,
-			"usage_total", usageTotal,
-			"num_usage_charges", len(usageCharges))
-
-		totalPendingCharges = totalPendingCharges.Add(usageTotal)
 	}
 
 	// Calculate real-time balance
-	realTimeBalance := w.Balance.Sub(unpaidInvoiceAmountToBePaid).Sub(totalPendingCharges)
+	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
 	s.Logger.Debugw("detailed balance calculation",
 		"wallet_id", w.ID,
 		"current_balance", w.Balance,
-		"unpaid_invoices", unpaidInvoiceAmountToBePaid,
 		"pending_charges", totalPendingCharges,
 		"real_time_balance", realTimeBalance,
 		"credit_balance", w.CreditBalance)
@@ -517,11 +515,10 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
-		RealTimeBalance:       &realTimeBalance,
-		RealTimeCreditBalance: &realTimeCreditBalance,
+		RealTimeBalance:       lo.ToPtr(realTimeBalance),
+		RealTimeCreditBalance: lo.ToPtr(realTimeCreditBalance),
 		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
-		UnpaidInvoiceAmount:   &unpaidInvoiceAmountToBePaid,
-		CurrentPeriodUsage:    &totalPendingCharges,
+		CurrentPeriodUsage:    lo.ToPtr(totalPendingCharges),
 	}, nil
 }
 
@@ -637,7 +634,7 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 		// Convert AlertConfig to types.AlertConfig
 		existing.AlertConfig = &types.AlertConfig{
 			Threshold: &types.AlertThreshold{
-				Type:  req.AlertConfig.Threshold.Type,
+				Type:  types.AlertThresholdType(req.AlertConfig.Threshold.Type),
 				Value: req.AlertConfig.Threshold.Value,
 			},
 		}
@@ -757,66 +754,68 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.WalletOperation) error {
 	s.Logger.Debugw("Processing wallet operation", "req", req)
 
-	return s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Get wallet
-		w, err := s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+	// Get wallet
+	w, err := s.WalletRepo.GetWalletByID(ctx, req.WalletID)
+	if err != nil {
+		return err
+	}
+
+	// Validate operation
+	if err := s.validateWalletOperation(w, req); err != nil {
+		return err
+	}
+
+	var newCreditBalance decimal.Decimal
+
+	// For debit operations, find and consume available credits
+	if req.Type == types.TransactionTypeDebit {
+		newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
+		// Process debit operation first
+		err = s.processDebitOperation(ctx, req)
 		if err != nil {
 			return err
 		}
+	} else {
+		// Process credit operation
+		newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
+	}
 
-		// Validate operation
-		if err := s.validateWalletOperation(w, req); err != nil {
-			return err
-		}
+	finalBalance := s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
 
-		var newCreditBalance decimal.Decimal
-		// For debit operations, find and consume available credits
-		if req.Type == types.TransactionTypeDebit {
-			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
-			// Process debit operation first
-			err = s.processDebitOperation(ctx, req)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Process credit operation
-			newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
-		}
+	// Create transaction record
+	tx := &wallet.Transaction{
+		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:            req.WalletID,
+		Type:                req.Type,
+		Amount:              req.Amount,
+		CreditAmount:        req.CreditAmount,
+		ReferenceType:       req.ReferenceType,
+		ReferenceID:         req.ReferenceID,
+		Description:         req.Description,
+		Metadata:            req.Metadata,
+		TxStatus:            types.TransactionStatusCompleted,
+		TransactionReason:   req.TransactionReason,
+		ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+		Priority:            req.Priority,
+		CreditBalanceBefore: w.CreditBalance,
+		CreditBalanceAfter:  newCreditBalance,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		IdempotencyKey:      req.IdempotencyKey,
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+	}
 
-		finalBalance := s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
+	// Set credits available based on transaction type
+	if req.Type == types.TransactionTypeCredit {
+		tx.CreditsAvailable = req.CreditAmount
+	} else {
+		tx.CreditsAvailable = decimal.Zero
+	}
 
-		// Create transaction record
-		tx := &wallet.Transaction{
-			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
-			WalletID:            req.WalletID,
-			Type:                req.Type,
-			Amount:              req.Amount,
-			CreditAmount:        req.CreditAmount,
-			ReferenceType:       req.ReferenceType,
-			ReferenceID:         req.ReferenceID,
-			Description:         req.Description,
-			Metadata:            req.Metadata,
-			TxStatus:            types.TransactionStatusCompleted,
-			TransactionReason:   req.TransactionReason,
-			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
-			Priority:            req.Priority,
-			CreditBalanceBefore: w.CreditBalance,
-			CreditBalanceAfter:  newCreditBalance,
-			EnvironmentID:       types.GetEnvironmentID(ctx),
-			IdempotencyKey:      req.IdempotencyKey,
-			BaseModel:           types.GetDefaultBaseModel(ctx),
-		}
+	if req.Type == types.TransactionTypeCredit && req.ExpiryDate != nil {
+		tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
+	}
 
-		// Set credits available based on transaction type
-		if req.Type == types.TransactionTypeCredit {
-			tx.CreditsAvailable = req.CreditAmount
-		} else {
-			tx.CreditsAvailable = decimal.Zero
-		}
-
-		if req.Type == types.TransactionTypeCredit && req.ExpiryDate != nil {
-			tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
-		}
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
 		if err := s.WalletRepo.CreateTransaction(ctx, tx); err != nil {
 			return err
@@ -830,8 +829,67 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		s.Logger.Debugw("Wallet operation completed")
 		s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 		return nil
-
 	})
+	if err != nil {
+		return err
+	}
+
+	// Check credit balance alerts after wallet operation
+	var thresholdValue decimal.Decimal
+	var alertStatus types.AlertState
+
+	// Get wallet threshold or use default (0)
+	if w.AlertConfig != nil && w.AlertConfig.Threshold != nil {
+		thresholdValue = w.AlertConfig.Threshold.Value
+	} else {
+		thresholdValue = decimal.Zero
+	}
+
+	// Determine alert status based on balance vs threshold
+	if newCreditBalance.LessThan(thresholdValue) {
+		alertStatus = types.AlertStateInAlarm
+	} else {
+		alertStatus = types.AlertStateOk
+	}
+
+	// Create alert info
+	alertInfo := types.AlertInfo{
+		Threshold: types.AlertThreshold{
+			Type:  types.AlertThresholdTypeAmount,
+			Value: thresholdValue,
+		},
+		ValueAtTime: newCreditBalance,
+		Timestamp:   time.Now().UTC(),
+	}
+
+	// Log the alert
+	alertService := NewAlertLogsService(s.ServiceParams)
+	logAlertReq := &LogAlertRequest{
+		EntityType:  types.AlertEntityTypeWallet,
+		EntityID:    w.ID,
+		AlertType:   types.AlertTypeLowCreditBalance,
+		AlertStatus: alertStatus,
+		AlertInfo:   alertInfo,
+	}
+
+	if err := alertService.LogAlert(ctx, logAlertReq); err != nil {
+		// Log error but don't fail the transaction
+		s.Logger.Errorw("failed to log credit balance alert",
+			"error", err,
+			"wallet_id", w.ID,
+			"new_credit_balance", newCreditBalance,
+			"threshold", thresholdValue,
+			"alert_status", alertStatus,
+		)
+	} else {
+		s.Logger.Infow("credit balance alert logged successfully",
+			"wallet_id", w.ID,
+			"new_credit_balance", newCreditBalance,
+			"threshold", thresholdValue,
+			"alert_status", alertStatus,
+		)
+	}
+	return nil
 }
 
 // ExpireCredits expires credits for a given transaction
@@ -1153,10 +1211,10 @@ func (s *walletService) PublishEvent(ctx context.Context, eventName string, w *w
 
 func getAlertType(eventName string) string {
 	switch eventName {
-	case types.WebhookEventWalletCreditBalanceDropped:
-		return "credit_balance"
-	case types.WebhookEventWalletOngoingBalanceDropped:
-		return "ongoing_balance"
+	case types.WebhookEventWalletCreditBalanceDropped, types.WebhookEventWalletCreditBalanceRecovered:
+		return string(types.AlertTypeLowCreditBalance)
+	case types.WebhookEventWalletOngoingBalanceDropped, types.WebhookEventWalletOngoingBalanceRecovered:
+		return string(types.AlertTypeLowOngoingBalance)
 	default:
 		return ""
 	}
@@ -1203,7 +1261,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 		)
 
 		// If current state is alert, update to ok (recovery)
-		if w.AlertState == string(types.AlertStateAlert) {
+		if w.AlertState == string(types.AlertStateInAlarm) {
 			if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateOk); err != nil {
 				s.Logger.Errorw("failed to update wallet alert state",
 					"wallet_id", w.ID,
@@ -1220,7 +1278,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	}
 
 	// Skip if already in alert state
-	if w.AlertState == string(types.AlertStateAlert) {
+	if w.AlertState == string(types.AlertStateInAlarm) {
 		s.Logger.Infow("skipping alert - already in alert state",
 			"wallet_id", w.ID,
 		)
@@ -1235,7 +1293,7 @@ func (s *walletService) CheckBalanceThresholds(ctx context.Context, w *wallet.Wa
 	)
 
 	// Update wallet state to alert
-	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateAlert); err != nil {
+	if err := s.UpdateWalletAlertState(ctx, w.ID, types.AlertStateInAlarm); err != nil {
 		s.Logger.Errorw("failed to update wallet alert state",
 			"wallet_id", w.ID,
 			"error", err,
@@ -1416,80 +1474,78 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			RealTimeBalance:       lo.ToPtr(decimal.Zero),
 			RealTimeCreditBalance: lo.ToPtr(decimal.Zero),
 			BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
-			UnpaidInvoiceAmount:   lo.ToPtr(decimal.Zero),
 			CurrentPeriodUsage:    lo.ToPtr(decimal.Zero),
 		}, nil
 	}
 
-	// STEP 1: Get all unpaid invoices for the customer
-	// This includes any previously generated invoices that haven't been paid
-	invoiceService := NewInvoiceService(s.ServiceParams)
-	_, unpaidInvoiceAmountToBePaid, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, w.CustomerID, w.Currency)
-	if err != nil {
-		return nil, err
-	}
+	// If wallet has no allowed price types (nil or empty), treat as ALL (include usage)
+	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
+		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
+		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
-	// STEP 2: Get all active subscriptions to calculate current usage
-	subscriptions, err := s.SubRepo.ListByCustomerID(ctx, w.CustomerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Filter subscriptions by currency
-	filteredSubscriptions := make([]*subscription.Subscription, 0)
-	for _, sub := range subscriptions {
-		if sub.Currency == w.Currency {
-			filteredSubscriptions = append(filteredSubscriptions, sub)
-			s.Logger.Infow("found matching subscription",
-				"subscription_id", sub.ID,
-				"currency", sub.Currency,
-				"period_start", sub.CurrentPeriodStart,
-				"period_end", sub.CurrentPeriodEnd)
-		}
-	}
-
-	// Initialize billing service
-	billingService := NewBillingService(s.ServiceParams)
-
-	// Calculate total pending charges (usage)
 	totalPendingCharges := decimal.Zero
-	for _, sub := range filteredSubscriptions {
-		// Get current period
-		periodStart := sub.CurrentPeriodStart
-		periodEnd := sub.CurrentPeriodEnd
+	if shouldIncludeUsage {
 
-		// Get usage data for current period
+		// STEP 1: Get all active subscriptions to calculate current usage
+		subscriptions, err := s.SubRepo.ListByCustomerID(ctx, w.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Filter subscriptions by currency
+		filteredSubscriptions := make([]*subscription.Subscription, 0)
+		for _, sub := range subscriptions {
+			if sub.Currency == w.Currency {
+				filteredSubscriptions = append(filteredSubscriptions, sub)
+				s.Logger.Infow("found matching subscription",
+					"subscription_id", sub.ID,
+					"currency", sub.Currency,
+					"period_start", sub.CurrentPeriodStart,
+					"period_end", sub.CurrentPeriodEnd)
+			}
+		}
+
+		billingService := NewBillingService(s.ServiceParams)
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
-			SubscriptionID: sub.ID,
-			StartTime:      periodStart,
-			EndTime:        periodEnd,
-		})
-		if err != nil {
-			return nil, err
+
+		// Calculate total pending charges (usage)
+		for _, sub := range filteredSubscriptions {
+
+			// Get current period
+			periodStart := sub.CurrentPeriodStart
+			periodEnd := sub.CurrentPeriodEnd
+
+			// Get usage data for current period
+			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+				SubscriptionID: sub.ID,
+				StartTime:      periodStart,
+				EndTime:        periodEnd,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			// Calculate usage charges
+			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			if err != nil {
+				return nil, err
+			}
+
+			s.Logger.Infow("subscription charges details",
+				"subscription_id", sub.ID,
+				"usage_total", usageTotal,
+				"num_usage_charges", len(usageCharges))
+
+			totalPendingCharges = totalPendingCharges.Add(usageTotal)
 		}
-
-		// Calculate usage charges
-		usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
-		if err != nil {
-			return nil, err
-		}
-
-		s.Logger.Infow("subscription charges details",
-			"subscription_id", sub.ID,
-			"usage_total", usageTotal,
-			"num_usage_charges", len(usageCharges))
-
-		totalPendingCharges = totalPendingCharges.Add(usageTotal)
 	}
 
 	// Calculate real-time balance
-	realTimeBalance := w.Balance.Sub(unpaidInvoiceAmountToBePaid).Sub(totalPendingCharges)
+	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
 	s.Logger.Debugw("detailed balance calculation",
 		"wallet_id", w.ID,
 		"current_balance", w.Balance,
-		"unpaid_invoices", unpaidInvoiceAmountToBePaid,
 		"pending_charges", totalPendingCharges,
 		"real_time_balance", realTimeBalance,
 		"credit_balance", w.CreditBalance)
@@ -1502,7 +1558,6 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		RealTimeBalance:       &realTimeBalance,
 		RealTimeCreditBalance: &realTimeCreditBalance,
 		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
-		UnpaidInvoiceAmount:   &unpaidInvoiceAmountToBePaid,
 		CurrentPeriodUsage:    &totalPendingCharges,
 	}, nil
 }

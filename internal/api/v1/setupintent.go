@@ -7,20 +7,23 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 type SetupIntentHandler struct {
-	stripeService *service.StripeService
-	log           *logger.Logger
+	integrationFactory *integration.Factory
+	customerService    interfaces.CustomerService
+	log                *logger.Logger
 }
 
-func NewSetupIntentHandler(stripeService *service.StripeService, log *logger.Logger) *SetupIntentHandler {
+func NewSetupIntentHandler(integrationFactory *integration.Factory, customerService interfaces.CustomerService, log *logger.Logger) *SetupIntentHandler {
 	return &SetupIntentHandler{
-		stripeService: stripeService,
-		log:           log,
+		integrationFactory: integrationFactory,
+		customerService:    customerService,
+		log:                log,
 	}
 }
 
@@ -55,7 +58,15 @@ func (h *SetupIntentHandler) CreateSetupIntentSession(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.stripeService.SetupIntent(c.Request.Context(), customerID, &req)
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
+	if err != nil {
+		h.log.Error("Failed to get Stripe integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	resp, err := stripeIntegration.PaymentSvc.SetupIntent(c.Request.Context(), customerID, &req, h.customerService)
 	if err != nil {
 		h.log.Error("Failed to create Setup Intent", "error", err)
 		c.Error(err)
@@ -114,7 +125,15 @@ func (h *SetupIntentHandler) ListCustomerPaymentMethods(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.stripeService.ListCustomerPaymentMethods(c.Request.Context(), customerID, &req)
+	// Get Stripe integration
+	stripeIntegration, err := h.integrationFactory.GetStripeIntegration(c.Request.Context())
+	if err != nil {
+		h.log.Error("Failed to get Stripe integration", "error", err)
+		c.Error(err)
+		return
+	}
+
+	resp, err := stripeIntegration.PaymentSvc.ListCustomerPaymentMethods(c.Request.Context(), customerID, &req, h.customerService)
 	if err != nil {
 		h.log.Error("Failed to list Customer Payment Methods", "error", err)
 		c.Error(err)

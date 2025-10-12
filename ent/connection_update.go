@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/connection"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ConnectionUpdate is the builder for updating Connection entities.
@@ -120,6 +121,18 @@ func (cu *ConnectionUpdate) ClearMetadata() *ConnectionUpdate {
 	return cu
 }
 
+// SetSyncConfig sets the "sync_config" field.
+func (cu *ConnectionUpdate) SetSyncConfig(tc *types.SyncConfig) *ConnectionUpdate {
+	cu.mutation.SetSyncConfig(tc)
+	return cu
+}
+
+// ClearSyncConfig clears the value of the "sync_config" field.
+func (cu *ConnectionUpdate) ClearSyncConfig() *ConnectionUpdate {
+	cu.mutation.ClearSyncConfig()
+	return cu
+}
+
 // Mutation returns the ConnectionMutation object of the builder.
 func (cu *ConnectionUpdate) Mutation() *ConnectionMutation {
 	return cu.mutation
@@ -223,6 +236,12 @@ func (cu *ConnectionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.MetadataCleared() {
 		_spec.ClearField(connection.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := cu.mutation.SyncConfig(); ok {
+		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
+	}
+	if cu.mutation.SyncConfigCleared() {
+		_spec.ClearField(connection.FieldSyncConfig, field.TypeJSON)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -333,6 +352,18 @@ func (cuo *ConnectionUpdateOne) SetMetadata(m map[string]interface{}) *Connectio
 // ClearMetadata clears the value of the "metadata" field.
 func (cuo *ConnectionUpdateOne) ClearMetadata() *ConnectionUpdateOne {
 	cuo.mutation.ClearMetadata()
+	return cuo
+}
+
+// SetSyncConfig sets the "sync_config" field.
+func (cuo *ConnectionUpdateOne) SetSyncConfig(tc *types.SyncConfig) *ConnectionUpdateOne {
+	cuo.mutation.SetSyncConfig(tc)
+	return cuo
+}
+
+// ClearSyncConfig clears the value of the "sync_config" field.
+func (cuo *ConnectionUpdateOne) ClearSyncConfig() *ConnectionUpdateOne {
+	cuo.mutation.ClearSyncConfig()
 	return cuo
 }
 
@@ -469,6 +500,12 @@ func (cuo *ConnectionUpdateOne) sqlSave(ctx context.Context) (_node *Connection,
 	}
 	if cuo.mutation.MetadataCleared() {
 		_spec.ClearField(connection.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := cuo.mutation.SyncConfig(); ok {
+		_spec.SetField(connection.FieldSyncConfig, field.TypeJSON, value)
+	}
+	if cuo.mutation.SyncConfigCleared() {
+		_spec.ClearField(connection.FieldSyncConfig, field.TypeJSON)
 	}
 	_node = &Connection{config: cuo.config}
 	_spec.Assign = _node.assignValues

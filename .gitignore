@@ -56,25 +56,58 @@ scripts/hacks/*
 # build directory
 build/
 
-# Generated SDK code (exclude test files)
-api/*/*
-# custom scripts
-!api/scripts/*
-# skip examples and README.md modifications
-!api/*/examples
-!api/*/README.md
-!api/*/.openapi-generator-ignore
-# /spacific package files
-!api/*/go.mod
-!api/*/go.sum
-!api/*/package.json
-!api/*/package-lock.json
-!api/*/pyproject.toml
-!api/*/setup.py
-!api/*/requirements.txt
-!api/*/tsconfig.json
-!api/*/tsconfig.node.json
-!api/*/tsconfig.app.json
+# =============================================================================
+# API SDK GENERATION RULES
+# =============================================================================
+
+# Generated SDK code - ignore all generated files in language-specific directories
+api/go/src/
+api/go/examples/
+api/javascript/src/
+api/javascript/examples/
+api/python/flexprice/
+
+# But keep configuration and build files for each language
+!api/go/go.mod
+!api/go/go.sum
+!api/go/README.md
+!api/go/helpers.go
+!api/go/custom/
+
+!api/javascript/package.json
+!api/javascript/package-lock.json
+!api/javascript/tsconfig.json
+!api/javascript/tsconfig.esm.json
+!api/javascript/tsconfig.node.json
+!api/javascript/tsconfig.app.json
+!api/javascript/jest.config.js
+!api/javascript/.eslintrc.js
+!api/javascript/.gitignore
+!api/javascript/.npmignore
+!api/javascript/.openapi-generator-ignore
+!api/javascript/README.md
+
+!api/python/pyproject.toml
+!api/python/setup.py
+!api/python/requirements.txt
+!api/python/README.md
+
+# Custom code directory - always track
+!api/custom/
+!api/custom/**
+
+# Scripts directory - always track
+!api/scripts/
+!api/scripts/**
+
+# Root API files - always track
+!api/README.md
+!api/publish.sh
+!api/ci-cd-example.yml
+
+# =============================================================================
+# END API SDK RULES
+# =============================================================================
 
 CLAUDE.m
 

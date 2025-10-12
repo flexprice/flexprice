@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
@@ -37,10 +38,12 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
+	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -81,6 +84,7 @@ type Stores struct {
 	ConnectionRepo               connection.Repository
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
+	AlertLogsRepo                alertlogs.Repository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -96,6 +100,7 @@ type BaseServiceTestSuite struct {
 	now                 time.Time
 	pdfGenerator        pdf.Generator
 	prorationCalculator proration.Calculator
+	integrationFactory  *integration.Factory
 }
 
 // SetupSuite is called once before running the tests in the suite
@@ -135,6 +140,24 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.T().Fatalf("failed to create webhook publisher: %v", err)
 	}
 	s.webhookPublisher = webhookPublisher
+
+	// Initialize encryption service
+	encryptionService, err := security.NewEncryptionService(s.config, s.logger)
+	if err != nil {
+		s.T().Fatalf("failed to create encryption service: %v", err)
+	}
+
+	// Initialize integration factory
+	s.integrationFactory = integration.NewFactory(
+		s.config,
+		s.logger,
+		s.stores.ConnectionRepo,
+		s.stores.CustomerRepo,
+		s.stores.InvoiceRepo,
+		s.stores.PaymentRepo,
+		s.stores.EntityIntegrationMappingRepo,
+		encryptionService,
+	)
 }
 
 // SetupTest is called before each test
@@ -190,6 +213,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		ConnectionRepo:               NewInMemoryConnectionStore(),
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
+		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -237,6 +261,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AddonAssociationRepo.(*InMemoryAddonAssociationStore).Clear()
 	s.stores.SettingsRepo.(*InMemorySettingsStore).Clear()
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
+	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {
@@ -295,4 +320,9 @@ func (s *BaseServiceTestSuite) GetUUID() string {
 
 func (s *BaseServiceTestSuite) GetCalculator() proration.Calculator {
 	return s.prorationCalculator
+}
+
+// GetIntegrationFactory returns the test integration factory
+func (s *BaseServiceTestSuite) GetIntegrationFactory() *integration.Factory {
+	return s.integrationFactory
 }

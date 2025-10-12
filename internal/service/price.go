@@ -410,6 +410,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		Tiers:              tiers,
 		PriceUnitTiers:     priceUnitTiers,
 		TransformQuantity:  transformQuantity,
+		ParentPriceID:      req.ParentPriceID,
 		EnvironmentID:      envID,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 		// Price unit fields - set all from the fetched price unit
@@ -419,6 +420,7 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 		DisplayPriceUnitAmount: displayPriceUnitAmount,
 		ConversionRate:         priceUnit.ConversionRate,
 	}
+
 	p.DisplayAmount = p.GetDisplayAmount()
 
 	if err := s.PriceRepo.Create(ctx, p); err != nil {
@@ -650,27 +652,92 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 }
 
 func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error) {
-	price, err := s.PriceRepo.Get(ctx, id)
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the existing price
+	existingPrice, err := s.PriceRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	price.Description = req.Description
-	price.Metadata = req.Metadata
-	price.LookupKey = req.LookupKey
+	// Check if the request has critical fields
+	if req.ShouldCreateNewPrice() {
+		if existingPrice.EndDate != nil {
+			return nil, ierr.NewError("price is already terminated").
+				WithHint("Cannot update a terminated price").
+				WithReportableDetails(map[string]interface{}{
+					"price_id": id,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 
-	if err := s.PriceRepo.Update(ctx, price); err != nil {
-		return nil, err
+		var newPriceResp *dto.PriceResponse
+
+		// Set termination end date - use EndDate from request if provided, otherwise use current time
+		terminationEndDate := time.Now().UTC()
+		if req.EffectiveFrom != nil {
+			terminationEndDate = *req.EffectiveFrom
+		}
+
+		if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+			// Terminate the existing price
+			existingPrice.EndDate = &terminationEndDate
+			if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
+				return err
+			}
+
+			// Convert update request to create request - this handles all the field mapping
+			createReq := req.ToCreatePriceRequest(existingPrice)
+
+			// Set start date for new price to be exactly when the old price ends
+			createReq.StartDate = &terminationEndDate
+
+			// Create the new price - this will use all existing validation logic
+			newPriceResp, err = s.CreatePrice(ctx, createReq)
+			return err
+
+		}); err != nil {
+			return nil, err
+		}
+
+		s.Logger.Infow("price updated with termination and recreation",
+			"old_price_id", existingPrice.ID,
+			"new_price_id", newPriceResp.ID,
+			"termination_end_date", terminationEndDate,
+			"new_price_start_date", terminationEndDate,
+			"entity_type", existingPrice.EntityType,
+			"entity_id", existingPrice.EntityID)
+
+		return newPriceResp, nil
+	} else {
+		// No critical fields - simple update
+
+		// Update non-critical fields
+		if req.LookupKey != "" {
+			existingPrice.LookupKey = req.LookupKey
+		}
+		if req.Description != "" {
+			existingPrice.Description = req.Description
+		}
+		if req.Metadata != nil {
+			existingPrice.Metadata = req.Metadata
+		}
+		if req.EffectiveFrom != nil {
+			existingPrice.EndDate = req.EffectiveFrom
+		}
+
+		// Update the price in database
+		if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
+			return nil, err
+		}
+
+		response := &dto.PriceResponse{Price: existingPrice}
+
+		return response, nil
 	}
-
-	response := &dto.PriceResponse{Price: price}
-
-	// TODO: !REMOVE after migration
-	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = price.EntityID
-	}
-
-	return response, nil
 }
 
 func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error {

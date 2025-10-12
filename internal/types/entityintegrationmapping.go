@@ -15,6 +15,7 @@ const (
 	IntegrationEntityTypeSubscription IntegrationEntityType = "subscription"
 	IntegrationEntityTypePayment      IntegrationEntityType = "payment"
 	IntegrationEntityTypeCreditNote   IntegrationEntityType = "credit_note"
+	IntegrationEntityTypeAddon        IntegrationEntityType = "addon"
 )
 
 func (e IntegrationEntityType) String() string {
@@ -32,7 +33,7 @@ func (e IntegrationEntityType) Validate() error {
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note").
+			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon").
 			Mark(ierr.ErrValidation)
 	}
 	return nil

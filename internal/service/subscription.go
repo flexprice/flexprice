@@ -10,6 +10,8 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/interfaces"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
@@ -22,53 +24,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type SubscriptionService interface {
-	CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error)
-	GetSubscription(ctx context.Context, id string) (*dto.SubscriptionResponse, error)
-	CancelSubscription(ctx context.Context, subscriptionID string, req *dto.CancelSubscriptionRequest) (*dto.CancelSubscriptionResponse, error)
-	ActivateIncompleteSubscription(ctx context.Context, subscriptionID string) error
-	ListSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error)
-	GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
-	UpdateBillingPeriods(ctx context.Context) (*dto.SubscriptionUpdatePeriodResponse, error)
-
-	// Pause-related methods
-	PauseSubscription(ctx context.Context, subscriptionID string, req *dto.PauseSubscriptionRequest) (*dto.PauseSubscriptionResponse, error)
-	ResumeSubscription(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*dto.ResumeSubscriptionResponse, error)
-	GetPause(ctx context.Context, pauseID string) (*subscription.SubscriptionPause, error)
-	ListPauses(ctx context.Context, subscriptionID string) (*dto.ListSubscriptionPausesResponse, error)
-	CalculatePauseImpact(ctx context.Context, subscriptionID string, req *dto.PauseSubscriptionRequest) (*types.BillingImpactDetails, error)
-	CalculateResumeImpact(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error)
-
-	// Schedule-related methods
-	CreateSubscriptionSchedule(ctx context.Context, req *dto.CreateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error)
-	GetSubscriptionSchedule(ctx context.Context, id string) (*dto.SubscriptionScheduleResponse, error)
-	GetScheduleBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.SubscriptionScheduleResponse, error)
-	UpdateSubscriptionSchedule(ctx context.Context, id string, req *dto.UpdateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error)
-	AddSchedulePhase(ctx context.Context, scheduleID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
-	AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error)
-
-	// Coupon-related methods
-	ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, subscriptionCoupons []string, lineItemCoupons map[string][]string, lineItems []*subscription.SubscriptionLineItem) error
-
-	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription) ([]*dto.PriceResponse, error)
-
-	// Addon management for subscriptions
-	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
-	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
-
-	// Line item management
-	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
-	DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
-
-	// Auto-cancellation methods
-	ProcessAutoCancellationSubscriptions(ctx context.Context) error
-	// Renewal due alert methods
-	ProcessSubscriptionRenewalDueAlert(ctx context.Context) error
-
-	// Feature usage tracking
-	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
-}
-
+type SubscriptionService = interfaces.SubscriptionService
 type subscriptionService struct {
 	ServiceParams
 }
@@ -142,6 +98,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		plan.ID,
 		types.PRICE_ENTITY_TYPE_PLAN,
 		sub,
+		req.Workflow,
 	)
 	if err != nil {
 		return nil, err
@@ -396,7 +353,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if invoice != nil {
 		response.LatestInvoice = invoice
 	}
-
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionCreated, sub.ID)
 	return response, nil
 }
@@ -493,6 +449,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			MeterID:              originalPrice.MeterID,
 			Description:          originalPrice.Description,
 			Metadata:             originalPrice.Metadata,
+			ParentPriceID:        originalPrice.GetRootPriceID(), // Always point to the root price ID
 			SkipEntityValidation: true,
 		}
 
@@ -516,8 +473,6 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			transformQuantity := price.TransformQuantity(originalPrice.TransformQuantity)
 			createPriceReq.TransformQuantity = &transformQuantity
 		}
-
-		// Apply overrides - handle all override fields
 
 		// Amount override
 		if override.Amount != nil {
@@ -691,6 +646,49 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	return response, nil
 }
 
+// UpdateSubscription updates a subscription with the provided request
+func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscriptionID string, req dto.UpdateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
+	logger := s.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+	)
+
+	logger.Info("updating subscription")
+
+	// Get the current subscription
+	subscription, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Update fields from request
+	if req.Status != "" {
+		subscription.SubscriptionStatus = req.Status
+	}
+
+	if req.CancelAt != nil {
+		subscription.CancelAt = req.CancelAt
+	}
+
+	subscription.CancelAtPeriodEnd = req.CancelAtPeriodEnd
+
+	// Update the subscription in the database
+	err = s.SubRepo.Update(ctx, subscription)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to update subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	logger.Info("successfully updated subscription")
+
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventSubscriptionUpdated, subscription.ID)
+
+	// Return the updated subscription
+	return s.GetSubscription(ctx, subscriptionID)
+}
+
 // CancelSubscription provides enhanced cancellation with proration support
 func (s *subscriptionService) CancelSubscription(
 	ctx context.Context,
@@ -811,8 +809,10 @@ func (s *subscriptionService) CancelSubscription(
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Step 10: Publish events
-	s.publishCancellationEvents(ctx, subscription)
+	if !req.SuppressWebhook {
+		// Step 10: Publish events
+		s.publishCancellationEvents(ctx, subscription)
+	}
 
 	// Step 11: Build response
 	response := &dto.CancelSubscriptionResponse{
@@ -1915,6 +1915,7 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 	entityID string,
 	entityType types.PriceEntityType,
 	subscription *subscription.Subscription,
+	workflowType *types.TemporalWorkflowType,
 ) ([]*dto.PriceResponse, error) {
 	// Get prices for the entity (plan or addon)
 	priceService := NewPriceService(s.ServiceParams)
@@ -1932,32 +1933,54 @@ func (s *subscriptionService) ValidateAndFilterPricesForSubscription(
 		return nil, err
 	}
 
-	if len(pricesResponse.Items) == 0 {
-		return nil, ierr.NewError("no prices found for entity").
-			WithHint("The entity must have at least one price to create a subscription").
-			WithReportableDetails(map[string]interface{}{
-				"entity_id":   entityID,
-				"entity_type": entityType,
-			}).
-			Mark(ierr.ErrValidation)
+	// Check if empty prices are allowed for this workflow type
+	if !s.allowsEmptyPrices(workflowType) {
+		if len(pricesResponse.Items) == 0 {
+			return nil, ierr.NewError("no prices found for entity").
+				WithHint("The entity must have at least one price to create a subscription").
+				WithReportableDetails(map[string]interface{}{
+					"entity_id":   entityID,
+					"entity_type": entityType,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Filter prices for subscription that are valid for the entity
+		validPrices := filterValidPricesForSubscription(pricesResponse.Items, subscription)
+		if len(validPrices) == 0 {
+			return nil, ierr.NewError("no valid prices found for subscription").
+				WithHint("No prices match the subscription criteria").
+				WithReportableDetails(map[string]interface{}{
+					"entity_id":       entityID,
+					"entity_type":     entityType,
+					"billing_period":  subscription.BillingPeriod,
+					"billing_cadence": subscription.BillingCadence,
+					"currency":        subscription.Currency,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		return validPrices, nil
 	}
 
-	// Filter prices for subscription that are valid for the entity
+	// For workflows that allow empty prices, filter and return (even if empty)
 	validPrices := filterValidPricesForSubscription(pricesResponse.Items, subscription)
-	if len(validPrices) == 0 {
-		return nil, ierr.NewError("no valid prices found for subscription").
-			WithHint("No prices match the subscription criteria").
-			WithReportableDetails(map[string]interface{}{
-				"entity_id":       entityID,
-				"entity_type":     entityType,
-				"billing_period":  subscription.BillingPeriod,
-				"billing_cadence": subscription.BillingCadence,
-				"currency":        subscription.Currency,
-			}).
-			Mark(ierr.ErrValidation)
-	}
 
 	return validPrices, nil
+}
+
+// allowsEmptyPrices checks if the given workflow type allows empty prices
+func (s *subscriptionService) allowsEmptyPrices(workflowType *types.TemporalWorkflowType) bool {
+	if workflowType == nil {
+		return false
+	}
+
+	// Define workflow types that allow empty prices
+	emptyPricesAllowedWorkflows := []types.TemporalWorkflowType{
+		types.TemporalStripeIntegrationWorkflow,
+		// Add more workflow types here as needed
+	}
+
+	return lo.Contains(emptyPricesAllowedWorkflows, *workflowType)
 }
 
 // PauseSubscription pauses a subscription
@@ -3311,6 +3334,7 @@ func (s *subscriptionService) handleSubscriptionAddons(
 			addonReq.AddonID,
 			types.PRICE_ENTITY_TYPE_ADDON,
 			subscription,
+			nil, // No workflow type for addon operations
 		)
 		if err != nil {
 			return ierr.WithError(err).
@@ -3420,7 +3444,7 @@ func (s *subscriptionService) addAddonToSubscription(
 	}
 
 	// Validate and filter prices for the addon using the same pattern as plans
-	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, req.AddonID, types.PRICE_ENTITY_TYPE_ADDON, sub)
+	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, req.AddonID, types.PRICE_ENTITY_TYPE_ADDON, sub, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -3838,8 +3862,37 @@ func (s *subscriptionService) ProcessAutoCancellationSubscriptions(ctx context.C
 			"environment_id", tenantConfig.EnvironmentID,
 			"grace_period_days", tenantConfig.GracePeriodDays)
 
+		// Get all past due invoices for this tenant x environment
+		invoicesFilter := &types.InvoiceFilter{
+			InvoiceType:   types.InvoiceTypeSubscription,
+			PaymentStatus: []types.PaymentStatus{types.PaymentStatusFailed, types.PaymentStatusPending, types.PaymentStatusInitiated, types.PaymentStatusProcessing},
+			SkipLineItems: true,
+			QueryFilter:   types.NewNoLimitQueryFilter(),
+		}
+
+		invoices, err := s.InvoiceRepo.List(tenantCtx, invoicesFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to get invoices for tenant",
+				"tenant_id", tenantConfig.TenantID,
+				"environment_id", tenantConfig.EnvironmentID,
+				"error", err)
+			continue // Skip this tenant but continue with others
+		}
+
+		subscriptionIDs := lo.FilterMap(invoices, func(invoice *invoice.Invoice, _ int) (string, bool) {
+			return *invoice.SubscriptionID, invoice.SubscriptionID != nil
+		})
+		subscriptionIDs = lo.Uniq(subscriptionIDs)
+
+		s.Logger.Infow("found invoices for tenant",
+			"tenant_id", tenantConfig.TenantID,
+			"environment_id", tenantConfig.EnvironmentID,
+			"invoice_count", len(invoices),
+			"subscription_count", len(subscriptionIDs))
+
 		// Get ONLY ACTIVE subscriptions for this tenant x environment
 		filter := &types.SubscriptionFilter{
+			SubscriptionIDs:    subscriptionIDs,
 			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
 		}
 

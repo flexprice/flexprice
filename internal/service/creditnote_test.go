@@ -81,6 +81,7 @@ func (s *CreditNoteServiceSuite) setupService() {
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
+		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 	})
 }
 
@@ -416,6 +417,7 @@ func (s *CreditNoteServiceSuite) createTestWallets() {
 		Config:           s.GetConfig(),
 		DB:               s.GetDB(),
 		WalletRepo:       s.GetStores().WalletRepo,
+		AlertLogsRepo:    s.GetStores().AlertLogsRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})

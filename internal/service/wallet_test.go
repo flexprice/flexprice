@@ -61,6 +61,8 @@ func (s *WalletServiceSuite) SetupTest() {
 // TearDownTest is called after each test
 func (s *WalletServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
+	// Clear stores to prevent data persistence between tests
+	s.BaseServiceTestSuite.ClearStores()
 }
 
 func (s *WalletServiceSuite) setupService() {
@@ -80,6 +82,7 @@ func (s *WalletServiceSuite) setupService() {
 		EntitlementRepo:  stores.EntitlementRepo,
 		FeatureRepo:      stores.FeatureRepo,
 		SettingsRepo:     stores.SettingsRepo,
+		AlertLogsRepo:    s.GetStores().AlertLogsRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})
@@ -102,6 +105,7 @@ func (s *WalletServiceSuite) setupService() {
 		SettingsRepo:          stores.SettingsRepo,
 		EventPublisher:        s.GetPublisher(),
 		WebhookPublisher:      s.GetWebhookPublisher(),
+		AlertLogsRepo:         s.GetStores().AlertLogsRepo,
 	})
 }
 
@@ -779,16 +783,14 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 		walletID                string
 		expectedError           bool
 		expectedRealTimeBalance decimal.Decimal
-		expectedUnpaidAmount    decimal.Decimal
 		expectedCurrentUsage    decimal.Decimal
 	}{
 		{
 			name:     "Success - Active wallet with matching currency",
 			walletID: s.testData.wallet.ID,
 			// Usage includes both storage (315 * 0.1 = 31.5) and API calls tiers (assessed across subscriptions)
-			// Given test data, current period usage totals to 123 and real-time balance becomes 1000 - 250 - 123 = 627
-			expectedRealTimeBalance: decimal.NewFromInt(627), // 1000 - 250 - 123
-			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices only)
+			// Given test data, current period usage totals to 123 and real-time balance becomes 1000 - 123 = 877
+			expectedRealTimeBalance: decimal.NewFromInt(877), // 1000 - 123
 			expectedCurrentUsage:    decimal.NewFromInt(123), // Aggregated usage from billing service
 		},
 		{
@@ -800,7 +802,6 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 			name:                    "Inactive wallet",
 			walletID:                "wallet_inactive",
 			expectedRealTimeBalance: decimal.NewFromInt(0),
-			expectedUnpaidAmount:    decimal.NewFromInt(0),
 			expectedCurrentUsage:    decimal.NewFromInt(0),
 			expectedError:           false,
 		},
@@ -834,12 +835,9 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 			s.True(tc.expectedRealTimeBalance.Equal(lo.FromPtr(resp.RealTimeBalance)),
 				"RealTimeBalance mismatch: expected %s, got %s",
 				tc.expectedRealTimeBalance, resp.RealTimeBalance)
-			s.True(tc.expectedUnpaidAmount.Equal(lo.FromPtr(resp.UnpaidInvoiceAmount)),
-				"UnpaidInvoiceAmount mismatch: expected %s, got %s",
-				tc.expectedUnpaidAmount, lo.FromPtr(resp.UnpaidInvoiceAmount))
 			s.True(tc.expectedCurrentUsage.Equal(lo.FromPtr(resp.CurrentPeriodUsage)),
 				"CurrentPeriodUsage mismatch: expected %s, got %s",
-				tc.expectedCurrentUsage, lo.FromPtr(resp.CurrentPeriodUsage))
+				tc.expectedCurrentUsage, resp.CurrentPeriodUsage)
 			s.NotZero(resp.BalanceUpdatedAt)
 			s.NotNil(resp.Wallet)
 		})
@@ -1543,7 +1541,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 		name                    string
 		setupFunc               func()
 		expectedRealTimeBalance decimal.Decimal
-		expectedUnpaidAmount    decimal.Decimal
 		expectedCurrentUsage    decimal.Decimal
 		wantErr                 bool
 	}{
@@ -1566,9 +1563,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				s.NoError(err)
 			},
 			// Entitlements created in this test do not eliminate all usage across meters in the
-			// current setup; align expectation with computed usage (78) and resulting balance 672
-			expectedRealTimeBalance: decimal.NewFromInt(672), // 1000 - 250 - 78
-			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
+			// current setup; align expectation with computed usage (78) and resulting balance 922
+			expectedRealTimeBalance: decimal.NewFromInt(922), // 1000 - 78
 			expectedCurrentUsage:    decimal.NewFromInt(78),  // Usage after entitlement adjustments
 			wantErr:                 false,
 		},
@@ -1590,8 +1586,7 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(672), // 1000 - 250 - 78
-			expectedUnpaidAmount:    decimal.NewFromInt(250),
+			expectedRealTimeBalance: decimal.NewFromInt(922), // 1000 - 78
 			expectedCurrentUsage:    decimal.NewFromInt(78),
 			wantErr:                 false,
 		},
@@ -1613,14 +1608,16 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			expectedRealTimeBalance: decimal.NewFromInt(672), // 1000 - 250 - 78
-			expectedUnpaidAmount:    decimal.NewFromInt(250),
+			expectedRealTimeBalance: decimal.NewFromInt(922), // 1000 - 78
 			expectedCurrentUsage:    decimal.NewFromInt(78),
 			wantErr:                 false,
 		},
 		{
 			name: "disabled_entitlement",
 			setupFunc: func() {
+				// Clear any existing entitlements first
+				s.GetStores().EntitlementRepo.(*testutil.InMemoryEntitlementStore).Clear()
+
 				entitlement := &entitlement.Entitlement{
 					ID:               "ent_test_4",
 					EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
@@ -1635,11 +1632,15 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				}
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
+
+				// Verify the entitlement was created as disabled
+				created, err := s.GetStores().EntitlementRepo.Get(s.GetContext(), "ent_test_4")
+				s.NoError(err)
+				s.False(created.IsEnabled, "Entitlement should be disabled")
 			},
 			// Disabled entitlement should not adjust usage; expect same charges as baseline
-			expectedRealTimeBalance: decimal.NewFromInt(672), // 1000 - 250 - 78
-			expectedUnpaidAmount:    decimal.NewFromInt(250), // 100 + 150 (USD invoices)
-			expectedCurrentUsage:    decimal.NewFromInt(78),  // Usage unchanged when entitlement is disabled
+			expectedRealTimeBalance: decimal.NewFromInt(877), // 1000 - 123
+			expectedCurrentUsage:    decimal.NewFromInt(123), // Usage unchanged when entitlement is disabled
 			wantErr:                 false,
 		},
 	}
@@ -1660,9 +1661,6 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 			s.True(tt.expectedRealTimeBalance.Equal(lo.FromPtr(resp.RealTimeBalance)),
 				"RealTimeBalance mismatch: expected %s, got %s",
 				tt.expectedRealTimeBalance, resp.RealTimeBalance)
-			s.True(tt.expectedUnpaidAmount.Equal(lo.FromPtr(resp.UnpaidInvoiceAmount)),
-				"UnpaidInvoiceAmount mismatch: expected %s, got %s",
-				tt.expectedUnpaidAmount, lo.FromPtr(resp.UnpaidInvoiceAmount))
 			s.True(tt.expectedCurrentUsage.Equal(lo.FromPtr(resp.CurrentPeriodUsage)),
 				"CurrentPeriodUsage mismatch: expected %s, got %s",
 				tt.expectedCurrentUsage, lo.FromPtr(resp.CurrentPeriodUsage))

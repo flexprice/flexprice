@@ -7,17 +7,11 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/entityintegrationmapping"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-type EntityIntegrationMappingService interface {
-	CreateEntityIntegrationMapping(ctx context.Context, req dto.CreateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error)
-	GetEntityIntegrationMapping(ctx context.Context, id string) (*dto.EntityIntegrationMappingResponse, error)
-	GetEntityIntegrationMappings(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (*dto.ListEntityIntegrationMappingsResponse, error)
-	UpdateEntityIntegrationMapping(ctx context.Context, id string, req dto.UpdateEntityIntegrationMappingRequest) (*dto.EntityIntegrationMappingResponse, error)
-	DeleteEntityIntegrationMapping(ctx context.Context, id string) error
-}
-
+type EntityIntegrationMappingService = interfaces.EntityIntegrationMappingService
 type entityIntegrationMappingService struct {
 	ServiceParams
 }
@@ -218,5 +212,3 @@ func (s *entityIntegrationMappingService) DeleteEntityIntegrationMapping(ctx con
 
 	return nil
 }
-
-// Helper-specific methods removed; use GetEntityIntegrationMappings with filters instead

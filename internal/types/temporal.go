@@ -45,6 +45,7 @@ const (
 	TemporalTaskProcessingWorkflow       TemporalWorkflowType = "TaskProcessingWorkflow"
 	TemporalSubscriptionChangeWorkflow   TemporalWorkflowType = "SubscriptionChangeWorkflow"
 	TemporalSubscriptionCreationWorkflow TemporalWorkflowType = "SubscriptionCreationWorkflow"
+	TemporalStripeIntegrationWorkflow    TemporalWorkflowType = "StripeIntegrationWorkflow"
 )
 
 // String returns the string representation of the workflow type

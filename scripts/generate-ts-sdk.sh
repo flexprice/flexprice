@@ -3,7 +3,8 @@
 # TypeScript SDK Generation Script
 # This script generates a modern TypeScript SDK with proper configuration
 
-set -e -o pipefail
+# Remove set -e to make script more resilient
+# set -e -o pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -16,7 +17,7 @@ NC='\033[0m' # No Color
 API_DIR="api/javascript"
 SWAGGER_FILE="docs/swagger/swagger-3-0.json"
 SDK_NAME="@flexprice/sdk"
-SDK_VERSION="1.0.17"
+SDK_VERSION="1.0.0"
 
 echo -e "${BLUE}🚀 Starting TypeScript SDK generation...${NC}"
 
@@ -63,35 +64,63 @@ fi
 
 # Generate TypeScript SDK
 echo -e "${BLUE}⚙️  Generating TypeScript SDK...${NC}"
-openapi-generator-cli generate \
+if ! openapi-generator-cli generate \
     -i "$SWAGGER_FILE" \
     -g typescript-fetch \
     -o "$API_DIR" \
-    --additional-properties=npmName="$SDK_NAME",npmVersion="$SDK_VERSION",npmRepository=https://github.com/flexprice/javascript-sdk.git,supportsES6=true,typescriptThreePlus=true,withNodeImports=true,withSeparateModelsAndApi=true,modelPackage=models,apiPackage=apis,enumPropertyNaming=UPPERCASE,stringEnums=true,modelPropertyNaming=camelCase,paramNaming=camelCase,withInterfaces=true,useSingleRequestParameter=true,platform=node,sortParamsByRequiredFlag=true,sortModelPropertiesByRequiredFlag=true,ensureUniqueParams=true,allowUnicodeIdentifiers=false,prependFormOrBodyParameters=false,apiNameSuffix=Api \
+    --additional-properties=npmName="$SDK_NAME",supportsES6=true,typescriptThreePlus=true,withNodeImports=true,withSeparateModelsAndApi=true,modelPackage=models,apiPackage=apis,enumPropertyNaming=UPPERCASE,stringEnums=true,modelPropertyNaming=camelCase,paramNaming=camelCase,withInterfaces=true,useSingleRequestParameter=true,platform=node,sortParamsByRequiredFlag=true,sortModelPropertiesByRequiredFlag=true,ensureUniqueParams=true,allowUnicodeIdentifiers=false,prependFormOrBodyParameters=false,apiNameSuffix=Api \
     --git-repo-id=javascript-sdk \
     --git-user-id=flexprice \
-    --global-property apiTests=false,modelTests=false,apiDocs=true,modelDocs=true,withSeparateModelsAndApi=true,withInterfaces=true,useSingleRequestParameter=true,typescriptThreePlus=true,platform=node
+    --global-property apiTests=false,modelTests=false,apiDocs=true,modelDocs=true,withSeparateModelsAndApi=true,withInterfaces=true,useSingleRequestParameter=true,typescriptThreePlus=true,platform=node; then
+    echo -e "${RED}❌ Error: OpenAPI generator failed${NC}"
+    echo -e "${YELLOW}💡 Check the swagger file and generator configuration${NC}"
+    exit 1
+fi
 
 # Configure package.json
 echo -e "${BLUE}📝 Configuring package.json...${NC}"
 cd "$API_DIR"
 
-# Update package.json with modern configuration
-npm pkg set type=module
-npm pkg set main=./dist/index.js
-npm pkg set module=./dist/index.js
-npm pkg set types=./dist/index.d.ts
-npm pkg set engines.node=">=16.0.0"
-npm pkg set description="Official TypeScript/JavaScript SDK of Flexprice"
-npm pkg set author="Flexprice"
-npm pkg set keywords='["flexprice","sdk","typescript","javascript","api","billing","pricing","es7","esmodules","fetch"]'
-npm pkg set scripts.build="tsc"
-npm pkg set scripts.prepare="npm run build"
-npm pkg set scripts.test="jest"
-npm pkg set scripts.lint="eslint src/**/*.ts"
-npm pkg set scripts."lint:fix"="eslint src/**/*.ts --fix"
-npm pkg set files='["dist","src","README.md"]'
-npm pkg set exports='{".": {"import": "./dist/index.js", "require": "./dist/index.cjs", "types": "./dist/index.d.ts"}, "./package.json": "./package.json"}'
+# Create package.json with proper JSON structure
+echo -e "${BLUE}🔧 Creating package.json with proper JSON structure...${NC}"
+cat > package.json << EOF
+{
+  "name": "@flexprice/sdk",
+  "version": "$SDK_VERSION",
+  "description": "Official TypeScript/JavaScript SDK of Flexprice",
+  "author": "Flexprice",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/flexprice/javascript-sdk.git"
+  },
+  "main": "./dist/index.js",
+  "typings": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": ["flexprice", "sdk", "typescript", "javascript", "api", "billing", "pricing", "es7", "esmodules", "fetch"],
+  "files": ["dist", "README.md"],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./package.json": "./package.json"
+  }
+}
+EOF
 
 # Remove invalid dependencies and add proper ones
 echo -e "${BLUE}🔧 Fixing package.json dependencies...${NC}"
@@ -102,7 +131,7 @@ npm pkg delete devDependencies."@types/jest"
 
 # Install TypeScript dependencies
 echo -e "${BLUE}📦 Installing TypeScript dependencies...${NC}"
-npm install --save-dev \
+if ! npm install --save-dev \
     typescript@^5.0.0 \
     @types/node@^20.0.0 \
     @typescript-eslint/eslint-plugin@^6.0.0 \
@@ -110,7 +139,11 @@ npm install --save-dev \
     eslint@^8.0.0 \
     jest@^29.5.0 \
     ts-jest@^29.1.0 \
-    @types/jest@^29.5.0
+    @types/jest@^29.5.0; then
+    echo -e "${RED}❌ Error: Failed to install TypeScript dependencies${NC}"
+    echo -e "${YELLOW}💡 Check npm configuration and network connectivity${NC}"
+    echo -e "${YELLOW}⚠️  Continuing with build...${NC}"
+fi
 
 # Create TypeScript configuration
 echo -e "${BLUE}⚙️  Creating TypeScript configuration...${NC}"
@@ -118,7 +151,7 @@ cat > tsconfig.json << 'EOF'
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
+    "module": "ES2022",
     "moduleResolution": "node",
     "lib": ["ES2022", "DOM"],
     "declaration": true,
@@ -138,7 +171,7 @@ cat > tsconfig.json << 'EOF'
     "tsBuildInfoFile": "./dist/.tsbuildinfo"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.spec.ts"]
 }
 EOF
 
@@ -154,7 +187,7 @@ export default {
       useESM: true,
     },
   },
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   transform: {
@@ -295,6 +328,9 @@ pids/
 
 # TernJS port file
 .tern-port
+
+# OpenAPI Generator files
+.openapi-generator/
 EOF
 
 # Create .openapi-generator-ignore
@@ -306,6 +342,7 @@ tsconfig.json
 jest.config.js
 .eslintrc.js
 .gitignore
+.npmignore
 README.md
 
 # Ignore test files for now
@@ -316,7 +353,33 @@ EOF
 
 # Build the project
 echo -e "${BLUE}🔨 Building TypeScript project...${NC}"
-npm run build
+if ! npm run build; then
+    echo -e "${RED}❌ Error: TypeScript build failed${NC}"
+    echo -e "${YELLOW}💡 Check the build output above for errors${NC}"
+    exit 1
+fi
+
+# Copy custom files if they exist
+echo -e "${BLUE}🔄 Copying custom files...${NC}"
+# Get the absolute path to the project root
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo "$(dirname "$0")")"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Try to copy custom files without changing directory
+if [ -f "$SCRIPT_DIR/copy-custom-files.sh" ]; then
+    # Change to project root for the copy script
+    if cd "$PROJECT_ROOT" 2>/dev/null; then
+        if ! "$SCRIPT_DIR/copy-custom-files.sh" javascript; then
+            echo -e "${YELLOW}⚠️  Warning: Custom files copy failed, but continuing...${NC}"
+        fi
+        # Return to original directory
+        cd - >/dev/null 2>&1
+    else
+        echo -e "${YELLOW}⚠️  Could not change to project root, skipping custom files copy...${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  Custom files copy script not found${NC}"
+fi
 
 echo -e "${GREEN}✅ TypeScript SDK generated successfully!${NC}"
 echo -e "${GREEN}📁 Location: $API_DIR${NC}"
@@ -329,3 +392,7 @@ echo -e "  2. npm run test    # Run tests"
 echo -e "  3. npm run lint    # Check code quality"
 echo -e "  4. npm run build   # Build the project"
 echo -e "  5. npm publish     # Publish to npm (when ready)"
+echo -e ""
+echo -e "${BLUE}💡 Custom files management:${NC}"
+echo -e "  - Add custom files to: api/custom/javascript/"
+echo -e "  - They will be automatically copied on next regeneration"

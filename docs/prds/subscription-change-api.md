@@ -17,9 +17,11 @@ POST /v1/subscriptions/{id}/change/preview
 ```
 
 **Path Parameters:**
+
 - `id` (string, required): The subscription ID
 
 **Request Body:**
+
 ```json
 {
   "target_plan_id": "plan_abc123",
@@ -37,6 +39,7 @@ POST /v1/subscriptions/{id}/change/preview
 ```
 
 **Response:**
+
 ```json
 {
   "subscription_id": "subs_xyz789",
@@ -135,9 +138,11 @@ POST /v1/subscriptions/{id}/change/execute
 ```
 
 **Path Parameters:**
+
 - `id` (string, required): The subscription ID
 
 **Request Body:**
+
 ```json
 {
   "target_plan_id": "plan_abc123",
@@ -154,6 +159,7 @@ POST /v1/subscriptions/{id}/change/execute
 ```
 
 **Response:**
+
 ```json
 {
   "old_subscription": {
@@ -207,16 +213,16 @@ POST /v1/subscriptions/{id}/change/execute
 
 ### SubscriptionChangeRequest Fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `target_plan_id` | string | Yes | ID of the new plan to change to |
-| `proration_behavior` | string | Yes | How to handle proration: `create_prorations`, `always_invoice`, `none` |
-| `effective_date` | timestamp | No | When the change should take effect (defaults to now) |
-| `billing_cycle_anchor` | string | No | How to handle billing cycle: `unchanged`, `reset`, `immediate` |
-| `trial_end` | timestamp | No | New trial end date |
-| `cancel_at_period_end` | boolean | No | Schedule cancellation at period end |
-| `invoice_now` | boolean | No | Generate invoice immediately (defaults to true) |
-| `metadata` | object | No | Additional key-value pairs |
+| Field                  | Type      | Required | Description                                                            |
+| ---------------------- | --------- | -------- | ---------------------------------------------------------------------- |
+| `target_plan_id`       | string    | Yes      | ID of the new plan to change to                                        |
+| `proration_behavior`   | string    | Yes      | How to handle proration: `create_prorations`, `always_invoice`, `none` |
+| `effective_date`       | timestamp | No       | When the change should take effect (defaults to now)                   |
+| `billing_cycle_anchor` | string    | No       | How to handle billing cycle: `unchanged`, `reset`, `immediate`         |
+| `trial_end`            | timestamp | No       | New trial end date                                                     |
+| `cancel_at_period_end` | boolean   | No       | Schedule cancellation at period end                                    |
+| `invoice_now`          | boolean   | No       | Generate invoice immediately (defaults to true)                        |
+| `metadata`             | object    | No       | Additional key-value pairs                                             |
 
 ### Proration Behavior Options
 
@@ -297,6 +303,7 @@ The system automatically determines the change type:
 ### Proration Logic
 
 The system uses existing proration services to:
+
 - Calculate unused time credits from current subscription
 - Calculate prorated charges for new subscription
 - Apply proration coefficients based on billing periods
@@ -305,6 +312,7 @@ The system uses existing proration services to:
 ### Transaction Safety
 
 All subscription changes are executed within database transactions to ensure:
+
 - Atomicity of subscription archival and creation
 - Consistency of billing data
 - Rollback capability on failures
@@ -312,11 +320,13 @@ All subscription changes are executed within database transactions to ensure:
 ### Warnings and Validations
 
 The system provides warnings for:
+
 - Downgrades that may remove features
 - Trial period changes
 - Proration impacts
 
 Validations prevent:
+
 - Changes to cancelled/paused subscriptions
 - Invalid plan transitions
 - Past effective dates
@@ -326,7 +336,7 @@ Validations prevent:
 ### Basic Upgrade
 
 ```bash
-curl -X POST "https://api.flexprice.com/v1/subscriptions/subs_123/change/preview" \
+curl -X POST "https://api.cloud.flexprice.io/v1/subscriptions/subs_123/change/preview" \
   -H "Content-Type: application/json" \
   -H "x-api-key: your-api-key" \
   -d '{
@@ -338,7 +348,7 @@ curl -X POST "https://api.flexprice.com/v1/subscriptions/subs_123/change/preview
 ### Immediate Change Without Proration
 
 ```bash
-curl -X POST "https://api.flexprice.com/v1/subscriptions/subs_123/change/execute" \
+curl -X POST "https://api.cloud.flexprice.io/v1/subscriptions/subs_123/change/execute" \
   -H "Content-Type: application/json" \
   -H "x-api-key: your-api-key" \
   -d '{
@@ -352,7 +362,7 @@ curl -X POST "https://api.flexprice.com/v1/subscriptions/subs_123/change/execute
 ### Scheduled Change
 
 ```bash
-curl -X POST "https://api.flexprice.com/v1/subscriptions/subs_123/change/execute" \
+curl -X POST "https://api.cloud.flexprice.io/v1/subscriptions/subs_123/change/execute" \
   -H "Content-Type: application/json" \
   -H "x-api-key: your-api-key" \
   -d '{

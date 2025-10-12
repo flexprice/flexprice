@@ -4,6 +4,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	costsheet "github.com/flexprice/flexprice/internal/domain/costsheet"
@@ -37,6 +38,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/httpclient"
+	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -93,6 +95,7 @@ type ServiceParams struct {
 	ConnectionRepo               connection.Repository
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
+	AlertLogsRepo                alertlogs.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -103,6 +106,9 @@ type ServiceParams struct {
 
 	// Proration
 	ProrationCalculator proration.Calculator
+
+	// Integration Factory
+	IntegrationFactory *integration.Factory
 }
 
 // Common service params
@@ -153,7 +159,9 @@ func NewServiceParams(
 	connectionRepo connection.Repository,
 	entityIntegrationMappingRepo entityintegrationmapping.Repository,
 	settingsRepo settings.Repository,
+	alertLogsRepo alertlogs.Repository,
 	prorationCalculator proration.Calculator,
+	integrationFactory *integration.Factory,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -202,6 +210,8 @@ func NewServiceParams(
 		ConnectionRepo:               connectionRepo,
 		EntityIntegrationMappingRepo: entityIntegrationMappingRepo,
 		SettingsRepo:                 settingsRepo,
+		AlertLogsRepo:                alertLogsRepo,
 		ProrationCalculator:          prorationCalculator,
+		IntegrationFactory:           integrationFactory,
 	}
 }

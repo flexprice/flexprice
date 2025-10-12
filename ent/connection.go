@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/connection"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Connection is the model entity for the Connection schema.
@@ -39,7 +40,9 @@ type Connection struct {
 	// EncryptedSecretData holds the value of the "encrypted_secret_data" field.
 	EncryptedSecretData map[string]interface{} `json:"encrypted_secret_data,omitempty"`
 	// Metadata holds the value of the "metadata" field.
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	// SyncConfig holds the value of the "sync_config" field.
+	SyncConfig   *types.SyncConfig `json:"sync_config,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -48,7 +51,7 @@ func (*Connection) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case connection.FieldEncryptedSecretData, connection.FieldMetadata:
+		case connection.FieldEncryptedSecretData, connection.FieldMetadata, connection.FieldSyncConfig:
 			values[i] = new([]byte)
 		case connection.FieldID, connection.FieldTenantID, connection.FieldStatus, connection.FieldCreatedBy, connection.FieldUpdatedBy, connection.FieldEnvironmentID, connection.FieldName, connection.FieldProviderType:
 			values[i] = new(sql.NullString)
@@ -145,6 +148,14 @@ func (c *Connection) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
 			}
+		case connection.FieldSyncConfig:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field sync_config", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &c.SyncConfig); err != nil {
+					return fmt.Errorf("unmarshal field sync_config: %w", err)
+				}
+			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
 		}
@@ -213,6 +224,9 @@ func (c *Connection) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", c.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("sync_config=")
+	builder.WriteString(fmt.Sprintf("%v", c.SyncConfig))
 	builder.WriteByte(')')
 	return builder.String()
 }

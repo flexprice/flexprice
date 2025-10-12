@@ -419,76 +419,82 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 	}
 
 	// Build efficient maps for lookups
-	meterMap := make(map[string]*meter.Meter)                             // Map meter_id -> meter
-	priceMap := make(map[string]*price.Price)                             // Map price_id -> price
-	featureMap := make(map[string]*feature.Feature)                       // Map feature_id -> feature
-	featureMeterMap := make(map[string]*feature.Feature)                  // Map meter_id -> feature
+	// Collect all price IDs and meter IDs from subscription line items
+	priceIDs := make([]string, 0)
+	meterIDs := make([]string, 0)
 	subLineItemMap := make(map[string]*subscription.SubscriptionLineItem) // Map price_id -> line item
 
-	addonIDs := make([]string, 0) // Collects addon EntityIDs for bulk price fetching
 	// Extract meters, prices and line items from subscriptions
 	for _, sub := range subscriptions {
-		if sub.Plan == nil || sub.Plan.Prices == nil {
-			continue
-		}
-
 		for _, item := range sub.LineItems {
 			if !item.IsUsage() || !item.IsActive(event.Timestamp) {
 				continue
 			}
 
 			subLineItemMap[item.PriceID] = item
-			if item.EntityType == types.SubscriptionLineItemEntityTypeAddon {
-				addonIDs = append(addonIDs, item.EntityID)
-			}
-		}
-
-		for _, item := range sub.Plan.Prices {
-			if !item.IsUsage() {
-				continue
-			}
-
-			priceMap[item.ID] = item.Price
-
-			if item.MeterID != "" && item.Meter != nil {
-				meterMap[item.MeterID] = item.Meter.ToMeter()
-			}
+			priceIDs = append(priceIDs, item.PriceID)
 		}
 	}
 
-	// Fetch addon prices in bulk if we have addon IDs
-	addonIDs = lo.Uniq(addonIDs)
-	if len(addonIDs) > 0 {
-		priceService := NewPriceService(s.ServiceParams)
-		priceFilter := types.NewNoLimitPriceFilter().
-			WithEntityIDs(addonIDs).
-			WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
-			WithStatus(types.StatusPublished).
-			WithExpand(string(types.ExpandMeters))
+	// Remove duplicates
+	priceIDs = lo.Uniq(priceIDs)
 
-		prices, err := priceService.GetPrices(ctx, priceFilter)
-		if err != nil {
-			s.Logger.Errorw("failed to get addon prices",
-				"error", err,
-				"event_id", event.ID,
-				"addon_count", len(addonIDs),
-			)
-			return results, err
+	// Fetch all prices in bulk
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithPriceIDs(priceIDs).
+		WithStatus(types.StatusPublished).
+		WithExpand(string(types.ExpandMeters))
+
+	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get prices",
+			"error", err,
+			"event_id", event.ID,
+			"price_count", len(priceIDs),
+		)
+		return results, err
+	}
+
+	// Build price map and collect meter IDs
+	priceMap := make(map[string]*price.Price)
+	for _, p := range prices {
+		if !p.IsUsage() {
+			continue
 		}
-
-		for _, priceItem := range prices.Items {
-			if !priceItem.IsUsage() {
-				continue
-			}
-			priceMap[priceItem.ID] = priceItem.Price
-			if priceItem.MeterID != "" && priceItem.Meter != nil {
-				meterMap[priceItem.MeterID] = priceItem.Meter.ToMeter()
-			}
+		priceMap[p.ID] = p
+		if p.MeterID != "" {
+			meterIDs = append(meterIDs, p.MeterID)
 		}
 	}
 
-	// Get features if not already expanded in subscriptions
-	if len(meterMap) > 0 && len(featureMap) == 0 {
+	// Remove duplicate meter IDs
+	meterIDs = lo.Uniq(meterIDs)
+
+	// Fetch all meters in bulk
+	meterFilter := types.NewNoLimitMeterFilter()
+	meterFilter.MeterIDs = meterIDs
+
+	meters, err := s.MeterRepo.List(ctx, meterFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get meters",
+			"error", err,
+			"event_id", event.ID,
+			"meter_count", len(meterIDs),
+		)
+		return results, err
+	}
+
+	// Build meter map
+	meterMap := make(map[string]*meter.Meter)
+	for _, m := range meters {
+		meterMap[m.ID] = m
+	}
+
+	// Build feature maps
+	featureMap := make(map[string]*feature.Feature)      // Map feature_id -> feature
+	featureMeterMap := make(map[string]*feature.Feature) // Map meter_id -> feature
+
+	if len(meterMap) > 0 {
 		featureFilter := types.NewNoLimitFeatureFilter()
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
@@ -507,7 +513,6 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 			featureMeterMap[f.MeterID] = f
 		}
 	}
-
 	// Process the event against each subscription
 	processedEventsPerSub := make([]*events.ProcessedEvent, 0)
 
@@ -549,6 +554,9 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 		prices := make([]*price.Price, 0, len(subscriptionLineItems))
 		for _, item := range subscriptionLineItems {
 			if price, ok := priceMap[item.PriceID]; ok {
+				if event.Timestamp.Before(item.StartDate) || (!item.EndDate.IsZero() && event.Timestamp.After(item.EndDate)) {
+					continue
+				}
 				prices = append(prices, price)
 			} else {
 				s.Logger.Warnw("price not found for subscription line item",

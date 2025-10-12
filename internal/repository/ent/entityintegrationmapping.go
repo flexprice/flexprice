@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
@@ -349,12 +350,16 @@ func (r *entityIntegrationMappingRepository) Delete(ctx context.Context, mapping
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	err := client.EntityIntegrationMapping.DeleteOneID(mapping.ID).
+	_, err := client.EntityIntegrationMapping.Update().
 		Where(
+			entityintegrationmapping.ID(mapping.ID),
 			entityintegrationmapping.TenantID(tenantID),
 			entityintegrationmapping.EnvironmentID(environmentID),
 		).
-		Exec(ctx)
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

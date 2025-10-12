@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/addonassociation"
+	"github.com/flexprice/flexprice/ent/alertlogs"
 	"github.com/flexprice/flexprice/ent/auth"
 	"github.com/flexprice/flexprice/ent/billingsequence"
 	"github.com/flexprice/flexprice/ent/connection"
@@ -148,6 +149,51 @@ func init() {
 	addonassociation.DefaultAddonStatus = addonassociationDescAddonStatus.Default.(string)
 	// addonassociation.AddonStatusValidator is a validator for the "addon_status" field. It is called by the builders before save.
 	addonassociation.AddonStatusValidator = addonassociationDescAddonStatus.Validators[0].(func(string) error)
+	alertlogsMixin := schema.AlertLogs{}.Mixin()
+	alertlogsMixinFields0 := alertlogsMixin[0].Fields()
+	_ = alertlogsMixinFields0
+	alertlogsMixinFields1 := alertlogsMixin[1].Fields()
+	_ = alertlogsMixinFields1
+	alertlogsFields := schema.AlertLogs{}.Fields()
+	_ = alertlogsFields
+	// alertlogsDescTenantID is the schema descriptor for tenant_id field.
+	alertlogsDescTenantID := alertlogsMixinFields0[0].Descriptor()
+	// alertlogs.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	alertlogs.TenantIDValidator = alertlogsDescTenantID.Validators[0].(func(string) error)
+	// alertlogsDescStatus is the schema descriptor for status field.
+	alertlogsDescStatus := alertlogsMixinFields0[1].Descriptor()
+	// alertlogs.DefaultStatus holds the default value on creation for the status field.
+	alertlogs.DefaultStatus = alertlogsDescStatus.Default.(string)
+	// alertlogsDescCreatedAt is the schema descriptor for created_at field.
+	alertlogsDescCreatedAt := alertlogsMixinFields0[2].Descriptor()
+	// alertlogs.DefaultCreatedAt holds the default value on creation for the created_at field.
+	alertlogs.DefaultCreatedAt = alertlogsDescCreatedAt.Default.(func() time.Time)
+	// alertlogsDescUpdatedAt is the schema descriptor for updated_at field.
+	alertlogsDescUpdatedAt := alertlogsMixinFields0[3].Descriptor()
+	// alertlogs.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	alertlogs.DefaultUpdatedAt = alertlogsDescUpdatedAt.Default.(func() time.Time)
+	// alertlogs.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	alertlogs.UpdateDefaultUpdatedAt = alertlogsDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// alertlogsDescEnvironmentID is the schema descriptor for environment_id field.
+	alertlogsDescEnvironmentID := alertlogsMixinFields1[0].Descriptor()
+	// alertlogs.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	alertlogs.DefaultEnvironmentID = alertlogsDescEnvironmentID.Default.(string)
+	// alertlogsDescEntityType is the schema descriptor for entity_type field.
+	alertlogsDescEntityType := alertlogsFields[1].Descriptor()
+	// alertlogs.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	alertlogs.EntityTypeValidator = alertlogsDescEntityType.Validators[0].(func(string) error)
+	// alertlogsDescEntityID is the schema descriptor for entity_id field.
+	alertlogsDescEntityID := alertlogsFields[2].Descriptor()
+	// alertlogs.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	alertlogs.EntityIDValidator = alertlogsDescEntityID.Validators[0].(func(string) error)
+	// alertlogsDescAlertType is the schema descriptor for alert_type field.
+	alertlogsDescAlertType := alertlogsFields[3].Descriptor()
+	// alertlogs.AlertTypeValidator is a validator for the "alert_type" field. It is called by the builders before save.
+	alertlogs.AlertTypeValidator = alertlogsDescAlertType.Validators[0].(func(string) error)
+	// alertlogsDescAlertStatus is the schema descriptor for alert_status field.
+	alertlogsDescAlertStatus := alertlogsFields[4].Descriptor()
+	// alertlogs.AlertStatusValidator is a validator for the "alert_status" field. It is called by the builders before save.
+	alertlogs.AlertStatusValidator = alertlogsDescAlertStatus.Validators[0].(func(string) error)
 	authFields := schema.Auth{}.Fields()
 	_ = authFields
 	// authDescProvider is the schema descriptor for provider field.

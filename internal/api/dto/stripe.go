@@ -19,6 +19,7 @@ type CreateStripePaymentLinkRequest struct {
 	EnvironmentID          string          `json:"environment_id" binding:"required"`
 	Metadata               types.Metadata  `json:"metadata,omitempty"`
 	SaveCardAndMakeDefault bool            `json:"save_card_and_make_default" default:"false"`
+	PaymentID              string          `json:"payment_id" binding:"required"`
 }
 
 // StripePaymentLinkResponse represents a response from creating a Stripe payment link

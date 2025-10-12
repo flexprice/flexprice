@@ -694,6 +694,16 @@ func MetadataNotNil() predicate.Connection {
 	return predicate.Connection(sql.FieldNotNull(FieldMetadata))
 }
 
+// SyncConfigIsNil applies the IsNil predicate on the "sync_config" field.
+func SyncConfigIsNil() predicate.Connection {
+	return predicate.Connection(sql.FieldIsNull(FieldSyncConfig))
+}
+
+// SyncConfigNotNil applies the NotNil predicate on the "sync_config" field.
+func SyncConfigNotNil() predicate.Connection {
+	return predicate.Connection(sql.FieldNotNull(FieldSyncConfig))
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Connection) predicate.Connection {
 	return predicate.Connection(sql.AndPredicates(predicates...))

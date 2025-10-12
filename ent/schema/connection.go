@@ -5,6 +5,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Connection holds the schema definition for the Connection entity.
@@ -42,6 +43,8 @@ func (Connection) Fields() []ent.Field {
 		field.JSON("encrypted_secret_data", map[string]interface{}{}).
 			Optional(),
 		field.JSON("metadata", map[string]interface{}{}).
+			Optional(),
+		field.JSON("sync_config", &types.SyncConfig{}).
 			Optional(),
 	}
 }

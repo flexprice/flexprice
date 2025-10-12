@@ -23,7 +23,7 @@ type CreatePriceRequest struct {
 	Type               types.PriceType          `json:"type" validate:"required"`
 	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                      `json:"billing_period_count" validate:"required,min=1"`
+	BillingPeriodCount int                      `json:"billing_period_count" default:"1"`
 	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
 	BillingCadence     types.BillingCadence     `json:"billing_cadence" validate:"required"`
 	MeterID            string                   `json:"meter_id,omitempty"`
@@ -44,6 +44,9 @@ type CreatePriceRequest struct {
 	// This is used when creating a subscription-scoped price
 	// NOTE: This is not a public field and is used internally should be used with caution
 	SkipEntityValidation bool `json:"-"`
+
+	// ParentPriceID is the id of the parent price for this price
+	ParentPriceID string `json:"-"`
 }
 
 type PriceUnitConfig struct {
@@ -74,6 +77,18 @@ func (r *CreatePriceRequest) Validate() error {
 	// Set default price unit type to FIAT if not provided
 	if r.PriceUnitType == "" {
 		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
+	}
+
+	// Set default value to Billing Period Count if not provided
+	if r.BillingPeriodCount == 0 {
+		r.BillingPeriodCount = 1
+	} else if r.BillingPeriodCount < 0 {
+		return ierr.NewError("invalid billing period count").
+			WithHint("Billing Period must be a valid positive number").
+			WithReportableDetails(map[string]interface{}{
+				"billing_period_count": r.BillingPeriodCount,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Base validations
@@ -618,6 +633,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		EntityType:         r.EntityType,
 		EntityID:           r.EntityID,
 		StartDate:          startDate,
+		ParentPriceID:      r.ParentPriceID,
 		EndDate:            r.EndDate,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
@@ -628,9 +644,155 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 }
 
 type UpdatePriceRequest struct {
-	LookupKey   string            `json:"lookup_key"`
-	Description string            `json:"description"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
+	// All price fields that can be updated
+	// Non-critical fields (can be updated directly)
+	LookupKey     string            `json:"lookup_key,omitempty"`
+	Description   string            `json:"description,omitempty"`
+	Metadata      map[string]string `json:"metadata,omitempty"`
+	EffectiveFrom *time.Time        `json:"effective_from,omitempty"`
+
+	BillingModel types.BillingModel `json:"billing_model,omitempty"`
+
+	// Amount is the new price amount that overrides the original price (optional)
+	Amount *decimal.Decimal `json:"amount,omitempty"`
+
+	// TierMode determines how to calculate the price for a given quantity
+	TierMode types.BillingTier `json:"tier_mode,omitempty"`
+
+	// Tiers determines the pricing tiers for this line item
+	Tiers []CreatePriceTier `json:"tiers,omitempty"`
+
+	// TransformQuantity determines how to transform the quantity for this line item
+	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+}
+
+func (r *UpdatePriceRequest) Validate() error {
+	// If EffectiveFrom is provided, at least one critical field must be present
+	if r.EffectiveFrom != nil && !r.ShouldCreateNewPrice() {
+		return ierr.NewError("effective_from requires at least one critical field").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, or transform_quantity").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.EffectiveFrom != nil && r.ShouldCreateNewPrice() && r.EffectiveFrom.Before(time.Now().UTC()) {
+		return ierr.NewError("effective from date must be in the future when used as termination date").
+			WithHint("Effective from date must be in the future when updating critical fields").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ShouldCreateNewPrice checks if the request contains any critical fields that require creating a new price
+func (r *UpdatePriceRequest) ShouldCreateNewPrice() bool {
+	return r.BillingModel != "" ||
+		r.Amount != nil ||
+		r.TierMode != "" ||
+		len(r.Tiers) > 0 ||
+		r.TransformQuantity != nil
+}
+
+// ToCreatePriceRequest converts the update request to a create request for the new price
+func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) CreatePriceRequest {
+	// Start with existing price as base
+	createReq := CreatePriceRequest{
+		EntityType:           existingPrice.EntityType,
+		EntityID:             existingPrice.EntityID,
+		SkipEntityValidation: true, // Skip validation since we're updating an existing entity
+	}
+
+	// Copy all non-critical, non-billing-model-specific fields from existing price
+	createReq.Currency = existingPrice.Currency
+	createReq.Type = existingPrice.Type
+	createReq.PriceUnitType = existingPrice.PriceUnitType
+	createReq.BillingPeriod = existingPrice.BillingPeriod
+	createReq.BillingPeriodCount = existingPrice.BillingPeriodCount
+	createReq.BillingCadence = existingPrice.BillingCadence
+	createReq.InvoiceCadence = existingPrice.InvoiceCadence
+	createReq.TrialPeriod = existingPrice.TrialPeriod
+	createReq.MeterID = existingPrice.MeterID
+	createReq.ParentPriceID = existingPrice.GetRootPriceID()
+
+	// Determine target billing model (use request billing model if provided, otherwise existing)
+	targetBillingModel := existingPrice.BillingModel
+	if r.BillingModel != "" {
+		targetBillingModel = r.BillingModel
+	}
+	createReq.BillingModel = targetBillingModel
+
+	// Handle billing model-specific fields based on target billing model
+	switch targetBillingModel {
+	case types.BILLING_MODEL_FLAT_FEE:
+		// For FLAT_FEE, only amount is relevant
+		if r.Amount != nil {
+			createReq.Amount = r.Amount.String()
+		} else {
+			createReq.Amount = existingPrice.Amount.String()
+		}
+
+	case types.BILLING_MODEL_PACKAGE:
+		// For PACKAGE, amount and transform_quantity are relevant
+		if r.Amount != nil {
+			createReq.Amount = r.Amount.String()
+		} else {
+			createReq.Amount = existingPrice.Amount.String()
+		}
+
+		if r.TransformQuantity != nil {
+			createReq.TransformQuantity = r.TransformQuantity
+		} else if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+			transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
+			createReq.TransformQuantity = &transformQuantity
+		}
+
+	case types.BILLING_MODEL_TIERED:
+		// For TIERED, only tier_mode and tiers are relevant
+		if r.TierMode != "" {
+			createReq.TierMode = r.TierMode
+		} else {
+			createReq.TierMode = existingPrice.TierMode
+		}
+
+		if len(r.Tiers) > 0 {
+			createReq.Tiers = r.Tiers
+		} else if len(existingPrice.Tiers) > 0 {
+			createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
+			for i, tier := range existingPrice.Tiers {
+				createReq.Tiers[i] = CreatePriceTier{
+					UpTo:       tier.UpTo,
+					UnitAmount: tier.UnitAmount.String(),
+				}
+				if tier.FlatAmount != nil {
+					flatAmountStr := tier.FlatAmount.String()
+					createReq.Tiers[i].FlatAmount = &flatAmountStr
+				}
+			}
+		}
+	}
+
+	// Apply non-critical field updates from request
+	if r.LookupKey != "" {
+		createReq.LookupKey = r.LookupKey
+	} else {
+		createReq.LookupKey = existingPrice.LookupKey
+	}
+	if r.Description != "" {
+		createReq.Description = r.Description
+	} else {
+		createReq.Description = existingPrice.Description
+	}
+	if r.Metadata != nil {
+		createReq.Metadata = r.Metadata
+	} else {
+		createReq.Metadata = existingPrice.Metadata
+	}
+
+	// Note: StartDate and EndDate are handled by the service layer:
+	// - EffectiveFrom in the request is used as termination date for the old price
+	// - New price starts exactly when the old price ends (terminationEndDate)
+	// - New price will not have an end date unless explicitly set
+
+	return createReq
 }
 
 type PriceResponse struct {

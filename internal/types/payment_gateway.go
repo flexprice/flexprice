@@ -8,15 +8,13 @@ import (
 type PaymentGatewayType string
 
 const (
-	PaymentGatewayTypeStripe   PaymentGatewayType = "stripe"
-	PaymentGatewayTypeRazorpay PaymentGatewayType = "razorpay"
-	PaymentGatewayTypeFinix    PaymentGatewayType = "finix"
+	PaymentGatewayTypeStripe PaymentGatewayType = "stripe"
 )
 
 // Validate validates the payment gateway type
 func (p PaymentGatewayType) Validate() error {
 	switch p {
-	case PaymentGatewayTypeStripe, PaymentGatewayTypeRazorpay, PaymentGatewayTypeFinix:
+	case PaymentGatewayTypeStripe:
 		return nil
 	default:
 		return ierr.NewError("invalid payment gateway type").
@@ -24,8 +22,6 @@ func (p PaymentGatewayType) Validate() error {
 			WithReportableDetails(map[string]any{
 				"allowed": []PaymentGatewayType{
 					PaymentGatewayTypeStripe,
-					PaymentGatewayTypeRazorpay,
-					PaymentGatewayTypeFinix,
 				},
 			}).
 			Mark(ierr.ErrValidation)
@@ -50,57 +46,11 @@ const (
 	WebhookEventTypePaymentIntentPaymentFailed           WebhookEventType = "payment_intent.payment_failed"
 	WebhookEventTypeInvoicePaymentPaid                   WebhookEventType = "invoice_payment.paid"
 	WebhookEventTypeSetupIntentSucceeded                 WebhookEventType = "setup_intent.succeeded"
+	WebhookEventTypeProductCreated                       WebhookEventType = "product.created"
+	WebhookEventTypeProductUpdated                       WebhookEventType = "product.updated"
+	WebhookEventTypeProductDeleted                       WebhookEventType = "product.deleted"
+	WebhookEventTypeSubscriptionCreated                  WebhookEventType = "customer.subscription.created"
+	WebhookEventTypeSubscriptionUpdated                  WebhookEventType = "customer.subscription.updated"
+	WebhookEventTypeSubscriptionDeleted                  WebhookEventType = "customer.subscription.deleted"
+	WebhookEventTypePaymentIntentSucceeded               WebhookEventType = "payment_intent.succeeded"
 )
-
-// Validate validates the webhook event type
-func (w WebhookEventType) Validate() error {
-	switch w {
-	case WebhookEventTypeCheckoutSessionCompleted,
-		WebhookEventTypeCheckoutSessionAsyncPaymentSucceeded,
-		WebhookEventTypeCheckoutSessionAsyncPaymentFailed,
-		WebhookEventTypeCheckoutSessionExpired,
-		WebhookEventTypeCustomerCreated,
-		WebhookEventTypePaymentIntentPaymentFailed,
-		WebhookEventTypeInvoicePaymentPaid,
-		WebhookEventTypeSetupIntentSucceeded:
-		return nil
-	default:
-		return ierr.NewError("invalid webhook event type").
-			WithHint("Please provide a valid webhook event type").
-			WithReportableDetails(map[string]any{
-				"allowed": []WebhookEventType{
-					WebhookEventTypeCheckoutSessionCompleted,
-					WebhookEventTypeCheckoutSessionAsyncPaymentSucceeded,
-					WebhookEventTypeCheckoutSessionAsyncPaymentFailed,
-					WebhookEventTypeCheckoutSessionExpired,
-					WebhookEventTypeCustomerCreated,
-					WebhookEventTypePaymentIntentPaymentFailed,
-					WebhookEventTypeInvoicePaymentPaid,
-					WebhookEventTypeSetupIntentSucceeded,
-				},
-			}).
-			Mark(ierr.ErrValidation)
-	}
-}
-
-// String returns the string representation of the webhook event type
-func (w WebhookEventType) String() string {
-	return string(w)
-}
-
-// GetGatewayFromEventType returns the payment gateway type from a webhook event type
-func (w WebhookEventType) GetGatewayFromEventType() PaymentGatewayType {
-	switch w {
-	case WebhookEventTypeCheckoutSessionCompleted,
-		WebhookEventTypeCheckoutSessionAsyncPaymentSucceeded,
-		WebhookEventTypeCheckoutSessionAsyncPaymentFailed,
-		WebhookEventTypeCheckoutSessionExpired,
-		WebhookEventTypeCustomerCreated,
-		WebhookEventTypePaymentIntentPaymentFailed,
-		WebhookEventTypeInvoicePaymentPaid,
-		WebhookEventTypeSetupIntentSucceeded:
-		return PaymentGatewayTypeStripe
-	default:
-		return PaymentGatewayTypeStripe // Default to Stripe for unknown events
-	}
-}

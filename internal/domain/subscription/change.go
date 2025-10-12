@@ -108,7 +108,7 @@ type BillingCyclePreview struct {
 	BillingPeriod types.BillingPeriod `json:"billing_period"`
 
 	// BillingPeriodCount of the new plan
-	BillingPeriodCount int `json:"billing_period_count"`
+	BillingPeriodCount int `json:"billing_period_count" default:"1"`
 }
 
 // InvoiceAmountPreview contains invoice amount preview information

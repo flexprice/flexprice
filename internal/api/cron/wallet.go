@@ -19,18 +19,21 @@ type WalletCronHandler struct {
 	walletService      service.WalletService
 	tenantService      service.TenantService
 	environmentService service.EnvironmentService
+	alertLogsService   service.AlertLogsService
 }
 
 func NewWalletCronHandler(logger *logger.Logger,
 	walletService service.WalletService,
 	tenantService service.TenantService,
 	environmentService service.EnvironmentService,
+	alertLogsService service.AlertLogsService,
 ) *WalletCronHandler {
 	return &WalletCronHandler{
 		logger:             logger,
 		walletService:      walletService,
 		tenantService:      tenantService,
 		environmentService: environmentService,
+		alertLogsService:   alertLogsService,
 	}
 }
 
@@ -191,7 +194,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 
 					if req.Threshold == nil {
 						wallet.AlertConfig.Threshold = &types.AlertThreshold{
-							Type:  "amount",
+							Type:  types.AlertThresholdTypeAmount,
 							Value: decimal.NewFromInt(1),
 						}
 					}
@@ -223,92 +226,67 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 					"alert_state", wallet.AlertState,
 				)
 
-				// Check balances separately
-				isCurrentBalanceBelowThreshold := currentBalance.LessThanOrEqual(threshold)
+				// Check ongoing balance
 				isOngoingBalanceBelowThreshold := ongoingBalance.LessThanOrEqual(threshold)
-				isAnyBalanceBelowThreshold := isCurrentBalanceBelowThreshold || isOngoingBalanceBelowThreshold
 
 				h.logger.Infow("balance check results",
 					"wallet_id", wallet.ID,
-					"current_balance_below", isCurrentBalanceBelowThreshold,
 					"ongoing_balance_below", isOngoingBalanceBelowThreshold,
-					"any_balance_below", isAnyBalanceBelowThreshold,
 				)
 
-				// Handle balance above threshold (recovery)
-				if !isAnyBalanceBelowThreshold {
-					h.logger.Infow("all balances above threshold - checking recovery",
-						"wallet_id", wallet.ID,
-						"threshold", threshold,
-						"current_balance", currentBalance,
-						"ongoing_balance", ongoingBalance,
-						"alert_state", wallet.AlertState,
-					)
-
-					// If current state is alert, update to ok (recovery)
-					if wallet.AlertState == string(types.AlertStateAlert) {
-						if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateOk); err != nil {
-							h.logger.Errorw("failed to update wallet alert state",
-								"wallet_id", wallet.ID,
-								"error", err,
-							)
-						} else {
-							h.logger.Infow("wallet recovered from alert state",
-								"wallet_id", wallet.ID,
-							)
-						}
-					}
-					continue
+				// Determine alert status based on balance check
+				var alertStatus types.AlertState
+				if isOngoingBalanceBelowThreshold {
+					alertStatus = types.AlertStateInAlarm
+				} else {
+					alertStatus = types.AlertStateOk
 				}
 
-				// Skip if already in alert state
-				if wallet.AlertState == string(types.AlertStateAlert) {
-					h.logger.Infow("skipping wallet - already in alert state",
-						"wallet_id", wallet.ID,
-					)
-					continue
-				}
-
-				h.logger.Infow("balance below/equal threshold - triggering alert",
+				h.logger.Infow("logging alert status",
 					"wallet_id", wallet.ID,
 					"threshold", threshold,
-					"current_balance", currentBalance,
 					"ongoing_balance", ongoingBalance,
+					"alert_status", alertStatus,
+					"ongoing_balance_alert_state", wallet.AlertState,
 				)
 
-				// Update wallet state to alert
-				if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, types.AlertStateAlert); err != nil {
-					h.logger.Errorw("failed to update wallet alert state",
+				// Use AlertLogsService to handle alert logging and webhook publishing
+				err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
+					EntityType:  types.AlertEntityTypeWallet,
+					EntityID:    wallet.ID,
+					AlertType:   types.AlertTypeLowOngoingBalance,
+					AlertStatus: alertStatus,
+					AlertInfo: types.AlertInfo{
+						Threshold: types.AlertThreshold{
+							Type:  types.AlertThresholdTypeAmount,
+							Value: threshold,
+						},
+						ValueAtTime: *ongoingBalance,
+						Timestamp:   time.Now().UTC(),
+					},
+				})
+				if err != nil {
+					h.logger.Errorw("failed to log alert",
 						"wallet_id", wallet.ID,
+						"alert_status", alertStatus,
 						"error", err,
 					)
 					continue
 				}
 
-				// Trigger alerts based on which balance is below threshold
-				if isCurrentBalanceBelowThreshold {
-					h.logger.Infow("triggering credit balance alert",
-						"wallet_id", wallet.ID,
-						"credit_balance", currentBalance,
-						"threshold", threshold,
-					)
-					if err := h.walletService.PublishEvent(ctx, types.WebhookEventWalletCreditBalanceDropped, wallet); err != nil {
-						h.logger.Errorw("failed to publish credit balance alert",
+				// Update wallet alert state to match the logged status (if it changed)
+				if wallet.AlertState != string(alertStatus) {
+					if err := h.walletService.UpdateWalletAlertState(ctx, wallet.ID, alertStatus); err != nil {
+						h.logger.Errorw("failed to update wallet alert state",
 							"wallet_id", wallet.ID,
+							"new_state", alertStatus,
 							"error", err,
 						)
-					}
-				}
-				if isOngoingBalanceBelowThreshold {
-					h.logger.Infow("triggering ongoing balance alert",
-						"wallet_id", wallet.ID,
-						"ongoing_balance", ongoingBalance,
-						"threshold", threshold,
-					)
-					if err := h.walletService.PublishEvent(ctx, types.WebhookEventWalletOngoingBalanceDropped, wallet); err != nil {
-						h.logger.Errorw("failed to publish ongoing balance alert",
+					} else {
+						h.logger.Infow("updated wallet alert state",
 							"wallet_id", wallet.ID,
-							"error", err,
+							"old_state", wallet.AlertState,
+							"new_state", alertStatus,
 						)
 					}
 				}

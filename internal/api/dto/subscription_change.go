@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
@@ -30,7 +31,7 @@ type SubscriptionChangeRequest struct {
 	BillingPeriod types.BillingPeriod `json:"billing_period" validate:"required" binding:"required"`
 
 	// billing_period_count is the billing period count for the new subscription
-	BillingPeriodCount int `json:"billing_period_count" validate:"required" binding:"required"`
+	BillingPeriodCount int `json:"billing_period_count" default:"1"`
 
 	// billing_cycle is the billing cycle for the new subscription
 	BillingCycle types.BillingCycle `json:"billing_cycle" validate:"required" binding:"required"`
@@ -41,6 +42,18 @@ func (r *SubscriptionChangeRequest) Validate() error {
 	// Validate using struct tags first
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
+	}
+
+	// Set default value to Billing Period Count if not provided
+	if r.BillingPeriodCount == 0 {
+		r.BillingPeriodCount = 1
+	} else if r.BillingPeriodCount < 0 {
+		return ierr.NewError("invalid billing period count").
+			WithHint("Billing Period must be a valid positive number").
+			WithReportableDetails(map[string]interface{}{
+				"billing_period_count": r.BillingPeriodCount,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate proration behavior
@@ -254,7 +267,7 @@ type BillingCycleInfo struct {
 	BillingPeriod types.BillingPeriod `json:"billing_period"`
 
 	// billing_period_count is the billing period count
-	BillingPeriodCount int `json:"billing_period_count"`
+	BillingPeriodCount int `json:"billing_period_count" default:"1"`
 }
 
 // ToSubscriptionChange converts the request to a domain subscription change

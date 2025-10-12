@@ -5,6 +5,7 @@ import (
 	"github.com/flexprice/flexprice/internal/clickhouse"
 	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/alertlogs"
 	"github.com/flexprice/flexprice/internal/domain/auth"
 	"github.com/flexprice/flexprice/internal/domain/connection"
 	"github.com/flexprice/flexprice/internal/domain/costsheet"
@@ -203,4 +204,8 @@ func NewAddonAssociationRepository(p RepositoryParams) addonassociation.Reposito
 
 func NewSettingsRepository(p RepositoryParams) settings.Repository {
 	return entRepo.NewSettingsRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
+	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.Cache)
 }

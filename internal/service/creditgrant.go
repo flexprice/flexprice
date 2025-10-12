@@ -288,7 +288,7 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
 		CreditGrantID:                   grant.ID,
 		SubscriptionID:                  subscription.ID,
-		ScheduledFor:                    time.Now().UTC(),
+		ScheduledFor:                    subscription.StartDate,
 		PeriodStart:                     lo.ToPtr(periodStart),
 		PeriodEnd:                       lo.ToPtr(periodEnd),
 		ApplicationStatus:               types.ApplicationStatusPending,

@@ -70,7 +70,7 @@ type Price struct {
 	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
 
 	// BillingPeriodCount is the count of the billing period ex 1, 3, 6, 12
-	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count"`
+	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
 
 	BillingModel types.BillingModel `db:"billing_model" json:"billing_model"`
 
@@ -111,7 +111,7 @@ type Price struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID string `db:"entity_id" json:"entity_id,omitempty"`
 
-	// ParentPriceID references the parent price (only set when scope is SUBSCRIPTION)
+	// ParentPriceID references the root price (always set for price lineage tracking)
 	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
 
 	// StartDate is the start date of the price
@@ -551,26 +551,16 @@ func (p *Price) IsAddonScoped() bool {
 	return p.EntityType == types.PRICE_ENTITY_TYPE_ADDON
 }
 
-// IsSubscriptionScoped checks if this price is scoped to a subscription (override)
-func (p *Price) IsSubscriptionScoped() bool {
-	return p.EntityType == types.PRICE_ENTITY_TYPE_SUBSCRIPTION
-}
-
 // HasParentPrice checks if this price has a parent price (for overrides)
 func (p *Price) HasParentPrice() bool {
 	return p.ParentPriceID != ""
 }
 
-// IsOverride checks if this price is an override of another price
-func (p *Price) IsOverride() bool {
-	return p.HasParentPrice()
-}
-
-// GetEffectivePriceID returns the effective price ID for comparison
-// For overrides, returns the parent price ID
-// For regular prices, returns the price ID itself
-func (p *Price) GetEffectivePriceID() string {
-	if p.HasParentPrice() {
+// GetRootPriceID returns the root price ID for this price
+// ParentPriceID always points to the original plan price (root)
+// If ParentPriceID is set, returns it; otherwise returns the price ID itself
+func (p *Price) GetRootPriceID() string {
+	if p.ParentPriceID != "" {
 		return p.ParentPriceID
 	}
 	return p.ID

@@ -13,6 +13,7 @@ type Connection struct {
 	ProviderType        types.SecretProvider     `db:"provider_type" json:"provider_type"`
 	EncryptedSecretData types.ConnectionMetadata `db:"encrypted_secret_data" json:"encrypted_secret_data"`
 	Metadata            map[string]interface{}   `db:"metadata" json:"metadata"`
+	SyncConfig          *types.SyncConfig        `db:"sync_config" json:"sync_config,omitempty"`
 	EnvironmentID       string                   `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
@@ -111,6 +112,7 @@ func FromEnt(entConn *ent.Connection) *Connection {
 		ProviderType:        types.SecretProvider(entConn.ProviderType),
 		EncryptedSecretData: metadata,
 		Metadata:            entConn.Metadata,
+		SyncConfig:          entConn.SyncConfig,
 		EnvironmentID:       entConn.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  entConn.TenantID,
@@ -121,4 +123,45 @@ func FromEnt(entConn *ent.Connection) *Connection {
 			UpdatedBy: entConn.UpdatedBy,
 		},
 	}
+}
+
+// GetSyncConfig returns the sync config or default (all disabled) if not set
+func (c *Connection) GetSyncConfig() *types.SyncConfig {
+	if c.SyncConfig == nil {
+		return types.DefaultSyncConfig()
+	}
+	return c.SyncConfig
+}
+
+// IsPlanInboundEnabled checks if plan inbound sync is enabled
+func (c *Connection) IsPlanInboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Plan != nil && config.Plan.Inbound
+}
+
+// IsPlanOutboundEnabled checks if plan outbound sync is enabled
+func (c *Connection) IsPlanOutboundEnabled() bool {
+	return false
+}
+
+// IsSubscriptionInboundEnabled checks if subscription inbound sync is enabled
+func (c *Connection) IsSubscriptionInboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Subscription != nil && config.Subscription.Inbound
+}
+
+// IsSubscriptionOutboundEnabled checks if subscription outbound sync is enabled
+func (c *Connection) IsSubscriptionOutboundEnabled() bool {
+	return false
+}
+
+// IsInvoiceInboundEnabled checks if invoice inbound sync is enabled
+func (c *Connection) IsInvoiceInboundEnabled() bool {
+	return false
+}
+
+// IsInvoiceOutboundEnabled checks if invoice outbound sync is enabled
+func (c *Connection) IsInvoiceOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Invoice != nil && config.Invoice.Outbound
 }

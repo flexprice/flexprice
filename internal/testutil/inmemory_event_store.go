@@ -570,7 +570,10 @@ func (s *InMemoryEventStore) GetDistinctEventNames(ctx context.Context, external
 
 	var eventNames []string
 	for _, event := range s.events {
-		if event.ExternalCustomerID == externalCustomerID && event.Timestamp.After(startTime) && event.Timestamp.Before(endTime) {
+		// Use inclusive comparison: event.Timestamp >= startTime && event.Timestamp < endTime
+		if event.ExternalCustomerID == externalCustomerID &&
+			(event.Timestamp.Equal(startTime) || event.Timestamp.After(startTime)) &&
+			event.Timestamp.Before(endTime) {
 			eventNames = append(eventNames, event.EventName)
 		}
 	}

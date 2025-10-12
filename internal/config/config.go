@@ -36,6 +36,7 @@ type Configuration struct {
 	EventPostProcessing  EventPostProcessingConfig  `mapstructure:"event_post_processing" validate:"required"`
 	FeatureUsageTracking FeatureUsageTrackingConfig `mapstructure:"feature_usage_tracking" validate:"required"`
 	EnvAccess            EnvAccessConfig            `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
+	FeatureFlag          FeatureFlagConfig          `mapstructure:"feature_flag" validate:"required"`
 }
 
 type CacheConfig struct {
@@ -180,6 +181,10 @@ type FeatureUsageTrackingConfig struct {
 }
 type EnvAccessConfig struct {
 	UserEnvMapping map[string]map[string][]string `mapstructure:"user_env_mapping" json:"user_env_mapping" validate:"omitempty"`
+}
+
+type FeatureFlagConfig struct {
+	EnableFeatureUsageForAnalytics bool `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
 }
 
 func NewConfig() (*Configuration, error) {

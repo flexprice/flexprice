@@ -110,8 +110,8 @@ init-db: up migrate-postgres migrate-clickhouse generate-ent migrate-ent seed-db
 migrate-postgres:
 	@echo "Running Postgres migrations..."
 	@sleep 5  # Wait for postgres to be ready
-	@PGPASSWORD=flexprice123 psql -h localhost -U flexprice -d flexprice -c "CREATE SCHEMA IF NOT EXISTS extensions;"
-	@PGPASSWORD=flexprice123 psql -h localhost -U flexprice -d flexprice -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;"
+	@docker compose exec -T postgres psql -U flexprice -d flexprice -c "CREATE SCHEMA IF NOT EXISTS extensions;"
+	@docker compose exec -T postgres psql -U flexprice -d flexprice -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;"
 	@echo "Postgres migrations complete"
 
 # Run clickhouse migrations
@@ -129,7 +129,7 @@ migrate-clickhouse:
 # Seed initial data
 seed-db:
 	@echo "Running Seed data migration..."
-	@PGPASSWORD=flexprice123 psql -h localhost -U flexprice -d flexprice -f migrations/postgres/V1__seed.sql
+	@docker compose exec -T postgres psql -U flexprice -d flexprice -f /docker-entrypoint-initdb.d/migration/postgres/V1__seed.sql
 	@echo "Postgres seed data migration complete"
 
 # Initialize kafka topics
@@ -255,11 +255,25 @@ install-typst:
 install-openapi-generator:
 	@which openapi-generator-cli > /dev/null || (npm install -g @openapitools/openapi-generator-cli)
 
-.PHONY: generate-sdk generate-go-sdk generate-python-sdk generate-javascript-sdk
+.PHONY: generate-sdk generate-go-sdk generate-python-sdk generate-javascript-sdk regenerate-sdk clean-sdk update-sdk
 
 # Generate all SDKs
 generate-sdk: generate-go-sdk generate-python-sdk generate-javascript-sdk
-	@echo "All SDKs generated successfully"
+	@echo "All SDKs generated successfully with custom files"
+
+# Regenerate all SDKs (clean + generate)
+regenerate-sdk: clean-sdk generate-sdk
+	@echo "All SDKs regenerated successfully with custom files"
+
+# Update swagger and regenerate all SDKs
+update-sdk: swagger regenerate-sdk
+	@echo "Swagger updated and all SDKs regenerated with custom files"
+
+# Clean all generated SDKs
+clean-sdk:
+	@echo "Cleaning generated SDKs..."
+	@rm -rf api/javascript api/python api/go
+	@echo "Generated SDKs cleaned"
 
 # Generate Go SDK
 generate-go-sdk: install-openapi-generator
@@ -274,6 +288,8 @@ generate-go-sdk: install-openapi-generator
 		--global-property apiTests=false,modelTests=false
 	@chmod +x api/scripts/go/add_go_async.sh
 	@./api/scripts/go/add_go_async.sh
+	@echo "Copying custom files..."
+	@./scripts/copy-custom-files.sh go
 	@echo "Go SDK generated successfully"
 
 # Generate Python SDK
@@ -288,12 +304,77 @@ generate-python-sdk: install-openapi-generator
 		--git-user-id=flexprice \
 		--global-property apiTests=false,modelTests=false
 	@python api/scripts/python/add_python_async.py || echo "Failed to add async functionality, but continuing..."
+	@echo "Copying custom files..."
+	@./scripts/copy-custom-files.sh python
 	@echo "Python SDK generated successfully"
 
 # Generate JavaScript/TypeScript SDK
 generate-javascript-sdk: install-openapi-generator
 	@echo "Generating TypeScript SDK with modern ES7 module support..."
 	@./scripts/generate-ts-sdk.sh
+
+# Copy custom files to specific SDKs (manual operation)
+copy-custom:
+	@echo "Copying custom files to all SDKs..."
+	@./scripts/copy-custom-files.sh javascript
+	@./scripts/copy-custom-files.sh python
+	@./scripts/copy-custom-files.sh go
+
+copy-javascript-custom:
+	@echo "Copying custom files to JavaScript SDK..."
+	@./scripts/copy-custom-files.sh javascript
+
+copy-python-custom:
+	@echo "Copying custom files to Python SDK..."
+	@./scripts/copy-custom-files.sh python
+
+copy-go-custom:
+	@echo "Copying custom files to Go SDK..."
+	@./scripts/copy-custom-files.sh go
+
+# Show custom files status
+show-custom-files:
+	@echo "Custom files status:"
+	@echo "==================="
+	@echo "JavaScript custom files:"
+	@if [ -d "api/custom/javascript" ]; then \
+		find api/custom/javascript -type f -not -name "README.md" | sed 's/^/  /' || echo "  No custom files found"; \
+	else \
+		echo "  No custom directory found"; \
+	fi
+	@echo ""
+	@echo "Python custom files:"
+	@if [ -d "api/custom/python" ]; then \
+		find api/custom/python -type f -not -name "README.md" | sed 's/^/  /' || echo "  No custom files found"; \
+	else \
+		echo "  No custom directory found"; \
+	fi
+	@echo ""
+	@echo "Go custom files:"
+	@if [ -d "api/custom/go" ]; then \
+		find api/custom/go -type f -not -name "README.md" | sed 's/^/  /' || echo "  No custom files found"; \
+	else \
+		echo "  No custom directory found"; \
+	fi
+
+# Help for SDK management
+help-sdk:
+	@echo "SDK Management Commands:"
+	@echo "======================="
+	@echo "  make generate-sdk        - Generate all SDKs with custom files"
+	@echo "  make regenerate-sdk      - Clean and regenerate all SDKs"
+	@echo "  make update-sdk          - Update swagger and regenerate all SDKs"
+	@echo "  make clean-sdk           - Clean all generated SDKs"
+	@echo "  make copy-custom         - Copy custom files to all SDKs"
+	@echo "  make show-custom-files   - Show status of custom files"
+	@echo ""
+	@echo "Individual SDK Commands:"
+	@echo "  make generate-javascript-sdk  - Generate JavaScript SDK"
+	@echo "  make generate-python-sdk      - Generate Python SDK"
+	@echo "  make generate-go-sdk          - Generate Go SDK"
+	@echo "  make copy-javascript-custom   - Copy custom files to JavaScript SDK"
+	@echo "  make copy-python-custom       - Copy custom files to Python SDK"
+	@echo "  make copy-go-custom           - Copy custom files to Go SDK"
 
 # Note: Alternative modern approach removed during cleanup
 
@@ -334,4 +415,4 @@ test-github-workflow:
 	 --container-architecture linux/amd64 \
 	 --action-offline-mode
 
-.PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow
+.PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow show-custom-files help-sdk

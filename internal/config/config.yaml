@@ -156,3 +156,7 @@ feature_usage_tracking:
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
+
+feature_flag:
+  # This flag is used to enable/disable feature usage for analytics
+  enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025

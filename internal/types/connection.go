@@ -102,14 +102,6 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 	}
 }
 
-// IsInvoiceSyncEnabled checks if invoice sync is enabled for this connection
-func (c *ConnectionMetadata) IsInvoiceSyncEnabled() bool {
-	if c.Settings == nil || c.Settings.InvoiceSyncEnable == nil {
-		return false // Default to false if not set
-	}
-	return *c.Settings.InvoiceSyncEnable
-}
-
 // ConnectionFilter represents filters for connection queries
 type ConnectionFilter struct {
 	*QueryFilter

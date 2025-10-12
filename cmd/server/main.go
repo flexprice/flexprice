@@ -45,6 +45,7 @@ import (
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/gin-gonic/gin"
 )
@@ -162,6 +163,7 @@ func main() {
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSettingsRepository,
+			repository.NewAlertLogsRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -178,6 +180,8 @@ func main() {
 	opts = append(opts,
 		fx.Provide(
 			// Services
+			// Integration factory must be provided before service params
+			integration.NewFactory,
 			service.NewServiceParams,
 			service.NewTenantService,
 			service.NewAuthService,
@@ -206,15 +210,14 @@ func main() {
 			service.NewCostSheetService,
 			service.NewCreditNoteService,
 			service.NewConnectionService,
-			service.NewStripeService,
 			service.NewEntityIntegrationMappingService,
-			service.NewIntegrationService,
 			service.NewTaxService,
 			service.NewCouponService,
 			service.NewPriceUnitService,
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
+			service.NewAlertLogsService,
 		),
 	)
 
@@ -270,10 +273,8 @@ func provideHandlers(
 	creditGrantService service.CreditGrantService,
 	costSheetService service.CostSheetService,
 	creditNoteService service.CreditNoteService,
-	stripeService *service.StripeService,
 	connectionService service.ConnectionService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
-	integrationService service.IntegrationService,
 	priceUnitService *service.PriceUnitService,
 	svixClient *svix.Client,
 	taxService service.TaxService,
@@ -282,9 +283,12 @@ func provideHandlers(
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
+	alertLogsService service.AlertLogsService,
+	integrationFactory *integration.Factory,
+	db postgres.IClient,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -307,20 +311,20 @@ func provideHandlers(
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService),
+		CronInvoice:              cron.NewInvoiceHandler(invoiceService, subscriptionService, connectionService, tenantService, environmentService, integrationFactory, logger),
+		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, alertLogsService),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
 		CostSheet:                v1.NewCostSheetHandler(costSheetService, logger),
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
 		EntityIntegrationMapping: v1.NewEntityIntegrationMappingHandler(entityIntegrationMappingService, logger),
-		Integration:              v1.NewIntegrationHandler(integrationService, logger),
 		PriceUnit:                v1.NewPriceUnitHandler(priceUnitService, logger),
-		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, stripeService),
+		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db),
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
 		Addon:                    v1.NewAddonHandler(addonService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
-		SetupIntent:              v1.NewSetupIntentHandler(stripeService, logger),
+		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
 	}
 }
 
@@ -364,8 +368,16 @@ func provideTemporalWorkerManager(temporalClient client.TemporalClient, log *log
 }
 
 func provideTemporalService(temporalClient client.TemporalClient, workerManager worker.TemporalWorkerManager, log *logger.Logger) temporalservice.TemporalService {
-	service := temporalservice.NewTemporalService(temporalClient, workerManager, log)
-	service.Start(context.Background())
+	// Initialize the global Temporal service instance
+	temporalservice.InitializeGlobalTemporalService(temporalClient, workerManager, log)
+
+	// Get the global instance and start it
+	service := temporalservice.GetGlobalTemporalService()
+	if err := service.Start(context.Background()); err != nil {
+		log.Error("Failed to start global Temporal service", "error", err)
+		return nil
+	}
+
 	return service
 }
 

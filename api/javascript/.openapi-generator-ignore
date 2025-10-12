@@ -4,6 +4,7 @@ tsconfig.json
 jest.config.js
 .eslintrc.js
 .gitignore
+.npmignore
 README.md
 
 # Ignore test files for now

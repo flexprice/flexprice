@@ -32,7 +32,7 @@ type CreateSubscriptionRequest struct {
 	TrialEnd           *time.Time           `json:"trial_end,omitempty"`
 	BillingCadence     types.BillingCadence `json:"billing_cadence" validate:"required"`
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
-	BillingPeriodCount int                  `json:"billing_period_count" validate:"required,min=1"`
+	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
 	// BillingCycle is the cycle of the billing anchor.
 	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
@@ -117,6 +117,9 @@ type CancelSubscriptionRequest struct {
 
 	// Reason for cancellation (for audit and business intelligence)
 	Reason string `json:"reason,omitempty"`
+
+	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
+	SuppressWebhook bool `json:"_,omitempty"`
 }
 
 // CancelSubscriptionResponse represents the enhanced cancellation response
@@ -219,12 +222,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.CollectionMethod != nil {
 		// Handle legacy default_incomplete collection method
 		if string(*r.CollectionMethod) == "default_incomplete" {
-			// Convert to send_invoice + default_incomplete for backward compatibility
-			sendInvoiceMethod := types.CollectionMethodSendInvoice
-			r.CollectionMethod = &sendInvoiceMethod
-			if r.PaymentBehavior == nil {
-				defaultIncomplete := types.PaymentBehaviorDefaultIncomplete
-				r.PaymentBehavior = &defaultIncomplete
+			// Convert to charge_automatically + allow_incomplete for backward compatibility
+			chargeAutomaticallyMethod := types.CollectionMethodChargeAutomatically
+			r.CollectionMethod = &chargeAutomaticallyMethod
+			if r.PaymentBehavior == nil || *r.PaymentBehavior == types.PaymentBehaviorDefaultIncomplete {
+				allowIncomplete := types.PaymentBehaviorAllowIncomplete
+				r.PaymentBehavior = &allowIncomplete
 			}
 		}
 
@@ -241,6 +244,18 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
+	}
+
+	// Set default value to Billing Period Count if not provided
+	if r.BillingPeriodCount == 0 {
+		r.BillingPeriodCount = 1
+	} else if r.BillingPeriodCount < 0 {
+		return ierr.NewError("invalid billing period count").
+			WithHint("Billing Period must be a valid positive number").
+			WithReportableDetails(map[string]interface{}{
+				"billing_period_count": r.BillingPeriodCount,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate payment behavior and collection method combination
@@ -567,9 +582,9 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 
 	// Handle legacy default_incomplete collection method conversion
 	if r.CollectionMethod != nil && string(*r.CollectionMethod) == "default_incomplete" {
-		// Convert legacy default_incomplete collection method to send_invoice + default_incomplete
-		collectionMethod = types.CollectionMethodSendInvoice
-		paymentBehavior = types.PaymentBehaviorDefaultIncomplete
+		// Convert legacy default_incomplete collection method to charge_automatically + allow_incomplete
+		collectionMethod = types.CollectionMethodChargeAutomatically
+		paymentBehavior = types.PaymentBehaviorAllowIncomplete
 	} else {
 		// Normal flow - use provided values or defaults
 		if r.CollectionMethod != nil {
@@ -578,12 +593,6 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		if r.PaymentBehavior != nil {
 			paymentBehavior = *r.PaymentBehavior
 		}
-	}
-
-	// Validate collection method and payment behavior combination
-	if err := r.validatePaymentBehaviorForCollectionMethod(collectionMethod, paymentBehavior); err != nil {
-		// This validation will be caught in the main Validate() method
-		// We don't fail here to allow the conversion to happen first
 	}
 
 	// Set initial status based on payment behavior

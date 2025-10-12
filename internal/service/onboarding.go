@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/pubsub"
@@ -236,9 +235,21 @@ func (s *onboardingService) processMessage(msg *message.Message) error {
 func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.OnboardingEventsMessage) {
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
-	// Create a ticker to generate events at a rate of 5 per second
-	ticker := time.NewTicker(time.Millisecond * 200)
-	defer ticker.Stop()
+	// Calculate total events to generate
+	totalEvents := eventMsg.Duration * 5
+	numMeters := len(eventMsg.Meters)
+
+	if numMeters == 0 {
+		s.Logger.Warnw("no meters found, skipping event generation",
+			"customer_id", eventMsg.CustomerID,
+			"feature_id", eventMsg.FeatureID,
+		)
+		return
+	}
+
+	// Calculate events per meter using floor division
+	baseEventsPerMeter := totalEvents / numMeters
+	remainder := totalEvents % numMeters
 
 	// Create a counter for successful events
 	successCount := 0
@@ -248,17 +259,34 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"duration", eventMsg.Duration,
+		"total_events", totalEvents,
+		"num_meters", numMeters,
+		"base_events_per_meter", baseEventsPerMeter,
+		"remainder", remainder,
 	)
 
-	// multiply duration by 5
-	duration := eventMsg.Duration * 5
+	// Create a ticker to generate events at a rate of 5 per second
+	ticker := time.NewTicker(time.Millisecond * 200)
+	defer ticker.Stop()
 
-	// Generate events
-	for i := 0; i < duration; i++ {
-		select {
-		case <-ticker.C:
-			// Generate an event for each meter
-			for _, meter := range eventMsg.Meters {
+	// Generate events for each meter with proper distribution
+	for meterIdx, meter := range eventMsg.Meters {
+		// Calculate events for this specific meter
+		eventsForThisMeter := baseEventsPerMeter
+		if meterIdx < remainder {
+			eventsForThisMeter++ // Give +1 extra event to first 'remainder' meters
+		}
+
+		s.Logger.Infow("generating events for meter",
+			"meter_index", meterIdx+1,
+			"meter_name", meter.EventName,
+			"events_to_generate", eventsForThisMeter,
+		)
+
+		// Generate the allocated events for this meter
+		for i := 0; i < eventsForThisMeter; i++ {
+			select {
+			case <-ticker.C:
 				// Create event request
 				eventReq := s.createEventRequest(eventMsg, &meter)
 
@@ -269,8 +297,9 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 						"error", err,
 						"customer_id", eventMsg.CustomerID,
 						"event_name", meter.EventName,
+						"meter_index", meterIdx+1,
 						"event_number", i+1,
-						"total_events", eventMsg.Duration,
+						"total_events_for_meter", eventsForThisMeter,
 					)
 					continue
 				}
@@ -280,20 +309,21 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 					"customer_id", eventMsg.CustomerID,
 					"event_name", meter.EventName,
 					"event_id", eventReq.EventID,
+					"meter_index", meterIdx+1,
 					"event_number", i+1,
-					"total_events", eventMsg.Duration,
+					"total_events_for_meter", eventsForThisMeter,
 				)
+			case <-ctx.Done():
+				s.Logger.Warnw("context cancelled, stopping event generation",
+					"customer_id", eventMsg.CustomerID,
+					"feature_id", eventMsg.FeatureID,
+					"events_generated", successCount,
+					"events_failed", errorCount,
+					"total_expected", totalEvents,
+					"reason", ctx.Err(),
+				)
+				return
 			}
-		case <-ctx.Done():
-			s.Logger.Warnw("context cancelled, stopping event generation",
-				"customer_id", eventMsg.CustomerID,
-				"feature_id", eventMsg.FeatureID,
-				"events_generated", successCount,
-				"events_failed", errorCount,
-				"total_expected", eventMsg.Duration,
-				"reason", ctx.Err(),
-			)
-			return
 		}
 	}
 
@@ -301,6 +331,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 		"customer_id", eventMsg.CustomerID,
 		"feature_id", eventMsg.FeatureID,
 		"duration", eventMsg.Duration,
+		"total_events_expected", totalEvents,
 		"events_generated", successCount,
 		"events_failed", errorCount,
 	)
@@ -401,12 +432,18 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		if err := s.EnvironmentRepo.Create(ctx, env); err != nil {
 			return err
 		}
+
+		if envType == types.EnvironmentDevelopment {
+			if err := s.SetupSandboxEnvironment(ctx, tenantID, userID, env.ID); err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
 }
 
-// SetupSandboxEnvironment sets up the sandbox environment with https://www.cursor.com/pricing as an example
+// SetupSandboxEnvironment sets up the sandbox environment with generic AI-focused features for hackathon participants
 func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantID, userID, envID string) error {
 	// Set tenant ID in context
 	ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
@@ -431,7 +468,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 
 	// create a db transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		s.Logger.Infow("setting up sandbox environment with Cursor pricing model",
+		s.Logger.Infow("setting up sandbox environment with generic AI pricing model for hackathon",
 			"tenant_id", tenantID,
 			"user_id", userID,
 			"environment_id", envID,
@@ -449,7 +486,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 			return err
 		}
 
-		// Step 3: Create plans (Hobby, Pro, Business)
+		// Step 3: Create plans (Starter, Basic, Pro)
 		plans, err := s.createDefaultPlans(ctx, features, meters)
 		if err != nil {
 			return err
@@ -467,12 +504,7 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 			return err
 		}
 
-		// Optional steps - can be skipped for now
-		// Step 6: Create wallets
-		// Step 7: Create invoices
-		// Step 8: Create payments
-
-		s.Logger.Infow("successfully set up sandbox environment with Cursor pricing model",
+		s.Logger.Infow("successfully set up sandbox environment with generic AI pricing model",
 			"tenant_id", tenantID,
 			"user_id", userID,
 			"environment_id", envID,
@@ -485,190 +517,105 @@ func (s *onboardingService) SetupSandboxEnvironment(ctx context.Context, tenantI
 }
 
 func (s *onboardingService) createDefaultMeters(ctx context.Context) ([]*meter.Meter, error) {
-	s.Logger.Infow("creating default meters for Cursor pricing model")
+	s.Logger.Infow("creating AI-focused meters for hackathon environment")
 
 	// Create a meter service instance
 	meterService := NewMeterService(s.MeterRepo)
 
-	// Define meters based on Cursor pricing
+	// Define simple LLM usage meter
 	modelFilters := []meter.Filter{
 		{
 			Key:    "model",
-			Values: []string{"gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "claude-3-7-sonnet"},
+			Values: []string{"gpt-4", "gpt-3.5-turbo", "claude-3", "claude-2", "llama-2", "palm-2"},
 		},
 	}
 
-	completionsMeter := &dto.CreateMeterRequest{
-		Name:      "Completions",
-		EventName: "completion",
-		Aggregation: meter.Aggregation{
-			Type: types.AggregationCount,
-		},
-		Filters: modelFilters,
-	}
-
-	slowPremiumRequestsMeter := &dto.CreateMeterRequest{
-		Name:      "Premium Requests (Slow)",
-		EventName: "premium_request_slow",
+	llmUsageMeter := &dto.CreateMeterRequest{
+		Name:      "LLM Usage",
+		EventName: "llm_usage",
 		Aggregation: meter.Aggregation{
 			Type:  types.AggregationSum,
-			Field: "tool_calls",
+			Field: "value",
 		},
 		Filters: modelFilters,
 	}
 
-	fastPremiumRequestsMeter := &dto.CreateMeterRequest{
-		Name:      "Premium Requests (Fast)",
-		EventName: "premium_request_fast",
-		Aggregation: meter.Aggregation{
-			Type:  types.AggregationSum,
-			Field: "tool_calls",
-		},
-		Filters: modelFilters,
-	}
-
-	// Create meters
-	completionsResp, err := meterService.CreateMeter(ctx, completionsMeter)
+	// Create meter
+	llmUsageResp, err := meterService.CreateMeter(ctx, llmUsageMeter)
 	if err != nil {
 		return nil, err
 	}
-	s.Logger.Infow("created completions meter", "meter_id", completionsResp.ID)
+	s.Logger.Infow("created LLM usage meter", "meter_id", llmUsageResp.ID)
 
-	slowPremiumResp, err := meterService.CreateMeter(ctx, slowPremiumRequestsMeter)
-	if err != nil {
-		return nil, err
-	}
-	s.Logger.Infow("created slow premium requests meter", "meter_id", slowPremiumResp.ID)
-
-	fastPremiumResp, err := meterService.CreateMeter(ctx, fastPremiumRequestsMeter)
-	if err != nil {
-		return nil, err
-	}
-	s.Logger.Infow("created fast premium requests meter", "meter_id", fastPremiumResp.ID)
-
-	return []*meter.Meter{completionsResp, slowPremiumResp, fastPremiumResp}, nil
+	return []*meter.Meter{llmUsageResp}, nil
 }
 
 func (s *onboardingService) createDefaultFeatures(ctx context.Context, meters []*meter.Meter) ([]*dto.FeatureResponse, error) {
-	s.Logger.Infow("creating default features for Cursor pricing model")
+	s.Logger.Infow("creating simple LLM usage feature for hackathon environment")
 
-	var completionsMeter, slowPremiumMeter, fastPremiumMeter *meter.Meter
+	var llmUsageMeter *meter.Meter
 	for _, m := range meters {
-		switch m.Name {
-		case "Completions":
-			completionsMeter = m
-		case "Premium Requests (Slow)":
-			slowPremiumMeter = m
-		case "Premium Requests (Fast)":
-			fastPremiumMeter = m
+		if m.Name == "LLM Usage" {
+			llmUsageMeter = m
+			break
 		}
 	}
 
 	// Create a feature service instance
 	featureService := NewFeatureService(s.ServiceParams)
 
-	// Define features based on Cursor pricing
-	features := []dto.CreateFeatureRequest{
-		{
-			Name:        "SSO",
-			Description: "SAML/OIDC SSO integration",
-			Type:        types.FeatureTypeStatic,
-			LookupKey:   "sso",
-		},
-		{
-			Name:        "Admin Dashboard",
-			Description: "Admin dashboard with usage statistics",
-			Type:        types.FeatureTypeBoolean,
-			LookupKey:   "admin_dashboard",
-		},
-		{
-			Name:        "Team Billing",
-			Description: "Centralized team billing",
-			Type:        types.FeatureTypeBoolean,
-			LookupKey:   "team_billing",
-		},
-		{
-			Name:        "Privacy Mode",
-			Description: "Enforce privacy mode across the organization",
-			Type:        types.FeatureTypeBoolean,
-			LookupKey:   "privacy_mode",
-		},
-		{
-			Name:        "Premium Requests (Fast)",
-			Description: "Fast premium requests for AI assistance",
-			Type:        types.FeatureTypeMetered,
-			LookupKey:   "premium_requests_fast",
-			MeterID:     fastPremiumMeter.ID,
-		},
-		{
-			Name:        "Premium Requests (Slow)",
-			Description: "Slow premium requests for AI assistance",
-			Type:        types.FeatureTypeMetered,
-			LookupKey:   "premium_requests_slow",
-			MeterID:     slowPremiumMeter.ID,
-		},
-		{
-			Name:        "Completions",
-			Description: "AI completions for code generation and assistance",
-			Type:        types.FeatureTypeMetered,
-			LookupKey:   "completions",
-			MeterID:     completionsMeter.ID,
-		},
+	// Define single LLM usage feature
+	feature := dto.CreateFeatureRequest{
+		Name:        "LLM Usage",
+		Description: "LLM API usage and requests",
+		Type:        types.FeatureTypeMetered,
+		LookupKey:   "llm_usage",
+		MeterID:     llmUsageMeter.ID,
 	}
 
-	// Create each feature and collect responses
-	featureResponses := make([]*dto.FeatureResponse, 0, len(features))
-	for i := range features {
-		resp, err := featureService.CreateFeature(ctx, features[i])
-		if err != nil {
-			return nil, err
-		}
-		s.Logger.Infow("created feature",
-			"feature_id", resp.ID,
-			"feature_name", resp.Name,
-			"feature_type", resp.Type,
-		)
-		featureResponses = append(featureResponses, resp)
+	// Create feature
+	resp, err := featureService.CreateFeature(ctx, feature)
+	if err != nil {
+		return nil, err
 	}
+	s.Logger.Infow("created feature",
+		"feature_id", resp.ID,
+		"feature_name", resp.Name,
+		"feature_type", resp.Type,
+	)
 
-	return featureResponses, nil
+	return []*dto.FeatureResponse{resp}, nil
 }
 
 func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*dto.FeatureResponse, meters []*meter.Meter) ([]*dto.CreatePlanResponse, error) {
-	s.Logger.Infow("creating default plans for Cursor pricing model")
+	s.Logger.Infow("creating AI-focused plans for hackathon environment")
 
 	// Create a plan service instance with all required dependencies
 	planService := NewPlanService(
 		s.ServiceParams,
 	)
 
-	// Define plans based on Cursor pricing
+	// Define plans based on AI usage tiers
 	plans := []*dto.CreatePlanRequest{
 		{
-			Name:        "Business",
-			Description: "Business tier with team features",
-			LookupKey:   "business",
-		},
-		{
 			Name:        "Pro",
-			Description: "Professional tier with unlimited completions",
+			Description: "Professional tier with unlimited AI usage",
 			LookupKey:   "pro",
 		},
 		{
-			Name:        "Hobby",
-			Description: "Free tier for personal use",
-			LookupKey:   "hobby",
+			Name:        "Basic",
+			Description: "Basic tier with moderate AI usage limits",
+			LookupKey:   "basic",
+		},
+		{
+			Name:        "Starter",
+			Description: "Starter tier for getting started with AI",
+			LookupKey:   "starter",
 		},
 	}
 
-	// Create prices for the plans and meters
+	// Create prices for the plans
 	err := s.setDefaultPriceRequests(ctx, plans, meters)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create entitlements for the plans and features
-	err = s.setDefaultEntitlements(ctx, plans, features)
 	if err != nil {
 		return nil, err
 	}
@@ -692,158 +639,71 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 }
 
 func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*dto.CreatePlanRequest, meters []*meter.Meter) error {
-	s.Logger.Infow("creating default prices for Cursor pricing model")
+	s.Logger.Infow("creating AI-focused prices for hackathon environment")
 
 	// Find plans by name
-	var hobbyPlan, proPlan, businessPlan *dto.CreatePlanRequest
+	var starterPlan, basicPlan, proPlan *dto.CreatePlanRequest
 	for _, p := range plans {
 		switch p.Name {
-		case "Hobby":
-			hobbyPlan = p
+		case "Starter":
+			starterPlan = p
+		case "Basic":
+			basicPlan = p
 		case "Pro":
 			proPlan = p
-		case "Business":
-			businessPlan = p
 		}
 	}
 
-	// Find meters by name
-	var completionsMeter, slowPremiumMeter, fastPremiumMeter *meter.Meter
-	for _, m := range meters {
-		switch m.Name {
-		case "Completions":
-			completionsMeter = m
-		case "Premium Requests (Slow)":
-			slowPremiumMeter = m
-		case "Premium Requests (Fast)":
-			fastPremiumMeter = m
-		}
-	}
-
-	// Validate that we found all required plans and meters
-	if hobbyPlan == nil || proPlan == nil || businessPlan == nil {
+	// Validate that we found all required plans
+	if starterPlan == nil || basicPlan == nil || proPlan == nil {
 		return ierr.NewError("not all required plans were found").
 			WithHint("Not all required plans were found").
 			Mark(ierr.ErrValidation)
 	}
 
-	if completionsMeter == nil || slowPremiumMeter == nil || fastPremiumMeter == nil {
-		return ierr.NewError("not all required meters were found").
-			WithHint("Not all required meters were found").
-			Mark(ierr.ErrValidation)
-	}
-
-	usageBasedPriceRequests := []dto.CreatePlanPriceRequest{
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "0.05",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "hobby_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_USAGE,
-				BillingModel:       types.BILLING_MODEL_PACKAGE,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceArrear,
-				MeterID:            completionsMeter.ID,
-				TransformQuantity: &price.TransformQuantity{
-					DivideBy: 100,
-				},
-			},
-		}, {
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "0.05",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "hobby_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_USAGE,
-				BillingModel:       types.BILLING_MODEL_PACKAGE,
-				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
-				BillingPeriodCount: 1,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceArrear,
-				MeterID:            completionsMeter.ID,
-				TransformQuantity: &price.TransformQuantity{
-					DivideBy: 100,
-				},
-			},
-		},
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "0.1",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "hobby_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_USAGE,
-				BillingModel:       types.BILLING_MODEL_PACKAGE,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceArrear,
-				MeterID:            fastPremiumMeter.ID,
-				TransformQuantity: &price.TransformQuantity{
-					DivideBy: 100,
-				},
-			},
-		},
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "0.1",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "hobby_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_USAGE,
-				BillingModel:       types.BILLING_MODEL_PACKAGE,
-				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
-				BillingPeriodCount: 1,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceArrear,
-				MeterID:            fastPremiumMeter.ID,
-				TransformQuantity: &price.TransformQuantity{
-					DivideBy: 100,
-				},
-			},
-		},
-	}
-
-	hobbyPlan.Prices = []dto.CreatePlanPriceRequest{
+	// Starter Plan - Free tier
+	starterPlan.Prices = []dto.CreatePlanPriceRequest{
 		{
 			CreatePriceRequest: &dto.CreatePriceRequest{
 				Amount:             "0",
 				Currency:           "USD",
 				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "hobby_plan", // Will be updated during plan creation
+				EntityID:           "starter_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				InvoiceCadence:     types.InvoiceCadenceAdvance,
-				Description:        "Free tier for personal use",
+				Description:        "Free tier with usage limits",
 			},
 		},
+	}
+
+	// Basic Plan - $10/month
+	basicPlan.Prices = []dto.CreatePlanPriceRequest{
 		{
 			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "0",
+				Amount:             "10",
 				Currency:           "USD",
 				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "hobby_plan", // Will be updated during plan creation
+				EntityID:           "basic_plan", // Will be updated during plan creation
 				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				Description:        "Basic tier with moderate usage",
 			},
 		},
 	}
-	hobbyPlan.Prices = append(hobbyPlan.Prices, usageBasedPriceRequests...)
 
+	// Pro Plan - $50/month
 	proPlan.Prices = []dto.CreatePlanPriceRequest{
 		{
 			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "20",
+				Amount:             "50",
 				Currency:           "USD",
 				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 				EntityID:           "pro_plan", // Will be updated during plan creation
@@ -853,56 +713,10 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 				BillingCadence:     types.BILLING_CADENCE_RECURRING,
 				InvoiceCadence:     types.InvoiceCadenceAdvance,
-			},
-		},
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "16",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "pro_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				Description:        "Pro tier with high usage limits",
 			},
 		},
 	}
-	proPlan.Prices = append(proPlan.Prices, usageBasedPriceRequests...)
-
-	businessPlan.Prices = []dto.CreatePlanPriceRequest{
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "40",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "business_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
-			},
-		},
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "32",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "business_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_ANNUAL,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
-			},
-		},
-	}
-	businessPlan.Prices = append(businessPlan.Prices, usageBasedPriceRequests...)
 
 	return nil
 }
@@ -984,146 +798,6 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 		"subscription_id", resp.ID,
 		"subscription_status", resp.Status,
 	)
-
-	return nil
-}
-
-func (s *onboardingService) setDefaultEntitlements(_ context.Context, plans []*dto.CreatePlanRequest, features []*dto.FeatureResponse) error {
-	s.Logger.Infow("creating default entitlements for Cursor pricing model")
-
-	// Find plans by name
-	var hobbyPlan, proPlan, businessPlan *dto.CreatePlanRequest
-	for _, p := range plans {
-		switch p.Name {
-		case "Hobby":
-			hobbyPlan = p
-			hobbyPlan.Entitlements = make([]dto.CreatePlanEntitlementRequest, 0)
-		case "Pro":
-			proPlan = p
-			proPlan.Entitlements = make([]dto.CreatePlanEntitlementRequest, 0)
-		case "Business":
-			businessPlan = p
-			businessPlan.Entitlements = make([]dto.CreatePlanEntitlementRequest, 0)
-		}
-	}
-
-	// Find features by name
-	featureMap := make(map[string]string)
-	for _, f := range features {
-		featureMap[f.Name] = f.ID
-	}
-
-	// Validate that we found all required plans
-	if hobbyPlan == nil || proPlan == nil || businessPlan == nil {
-		return ierr.NewError("not all required plans were found").
-			WithHint("Not all required plans were found").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate that we found all required features
-	requiredFeatures := []string{
-		"Completions",
-		"Premium Requests (Slow)",
-		"Premium Requests (Fast)",
-		"Privacy Mode",
-		"Team Billing",
-		"Admin Dashboard",
-		"SSO",
-	}
-
-	for _, name := range requiredFeatures {
-		if _, ok := featureMap[name]; !ok {
-			return ierr.NewError("required feature '%s' not found").
-				WithHint("Required feature not found").
-				WithReportableDetails(map[string]interface{}{
-					"feature_name": name,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	hobbyPlan.Entitlements = []dto.CreatePlanEntitlementRequest{
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:        featureMap["Completions"],
-				FeatureType:      types.FeatureTypeMetered,
-				IsEnabled:        true,
-				UsageLimit:       lo.ToPtr(int64(2000)),
-				UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
-				IsSoftLimit:      true,
-			},
-		},
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:        featureMap["Premium Requests (Slow)"],
-				FeatureType:      types.FeatureTypeMetered,
-				IsEnabled:        true,
-				UsageLimit:       lo.ToPtr(int64(50)),
-				UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
-				IsSoftLimit:      true,
-			},
-		},
-	}
-
-	proPlan.Entitlements = []dto.CreatePlanEntitlementRequest{
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:   featureMap["Completions"],
-				FeatureType: types.FeatureTypeMetered,
-				IsEnabled:   true,
-			},
-		},
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:        featureMap["Premium Requests (Fast)"],
-				FeatureType:      types.FeatureTypeMetered,
-				IsEnabled:        true,
-				UsageLimit:       lo.ToPtr(int64(500)),
-				UsageResetPeriod: types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
-				IsSoftLimit:      true,
-			},
-		},
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:   featureMap["Premium Requests (Slow)"],
-				FeatureType: types.FeatureTypeMetered,
-				IsEnabled:   true,
-			},
-		},
-	}
-
-	businessPlan.Entitlements = append(businessPlan.Entitlements, proPlan.Entitlements...)
-	businessPlan.Entitlements = append(businessPlan.Entitlements, []dto.CreatePlanEntitlementRequest{
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:   featureMap["Privacy Mode"],
-				FeatureType: types.FeatureTypeBoolean,
-				IsEnabled:   true,
-			},
-		},
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:   featureMap["Team Billing"],
-				FeatureType: types.FeatureTypeBoolean,
-				IsEnabled:   true,
-			},
-		},
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:   featureMap["Admin Dashboard"],
-				FeatureType: types.FeatureTypeBoolean,
-				IsEnabled:   true,
-			},
-		},
-		{
-			CreateEntitlementRequest: &dto.CreateEntitlementRequest{
-				FeatureID:   featureMap["SSO"],
-				FeatureType: types.FeatureTypeStatic,
-				IsEnabled:   true,
-				StaticValue: "SAML/OIDC",
-			},
-		},
-	}...)
 
 	return nil
 }

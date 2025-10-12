@@ -76,6 +76,7 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
+		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 	}
 
 	s.creditGrantService = NewCreditGrantService(serviceParams)

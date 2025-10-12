@@ -74,6 +74,45 @@ var (
 			},
 		},
 	}
+	// AlertLogsColumns holds the columns for the "alert_logs" table.
+	AlertLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "alert_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "alert_status", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "alert_info", Type: field.TypeJSON, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// AlertLogsTable holds the schema information for the "alert_logs" table.
+	AlertLogsTable = &schema.Table{
+		Name:       "alert_logs",
+		Columns:    AlertLogsColumns,
+		PrimaryKey: []*schema.Column{AlertLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_alertlogs_entity",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[8], AlertLogsColumns[9]},
+			},
+			{
+				Name:    "idx_alertlogs_type",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[10]},
+			},
+			{
+				Name:    "idx_alertlogs_entity_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{AlertLogsColumns[1], AlertLogsColumns[7], AlertLogsColumns[8], AlertLogsColumns[9], AlertLogsColumns[3]},
+			},
+		},
+	}
 	// AuthsColumns holds the columns for the "auths" table.
 	AuthsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -151,6 +190,7 @@ var (
 		{Name: "provider_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "encrypted_secret_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
+		{Name: "sync_config", Type: field.TypeJSON, Nullable: true},
 	}
 	// ConnectionsTable holds the schema information for the "connections" table.
 	ConnectionsTable = &schema.Table{
@@ -2085,6 +2125,7 @@ var (
 	Tables = []*schema.Table{
 		AddonsTable,
 		AddonAssociationsTable,
+		AlertLogsTable,
 		AuthsTable,
 		BillingSequencesTable,
 		ConnectionsTable,
