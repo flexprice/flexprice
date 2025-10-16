@@ -84,6 +84,12 @@ type AddAddonToSubscriptionRequest struct {
 	StartDate *time.Time             `json:"start_date,omitempty"`
 	EndDate   *time.Time             `json:"end_date,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata"`
+
+	// SkipEntityValidation is used to skip the entitlement check for the addon
+	// This is used to add an addon to a subscription without checking the entitlement compatibility
+	// This is used when we are adding an addon to a subscription that already has an active instance of the addon
+	// In that case we don't need to check the entitlement compatibility
+	SkipEntityValidation bool `json:"-"`
 }
 
 func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, enitiyId string, enitityType types.AddonAssociationEntityType) *addonassociation.AddonAssociation {
@@ -119,4 +125,24 @@ func (r *AddAddonToSubscriptionRequest) Validate() error {
 // AddonAssociationResponse represents the response for an addon association
 type AddonAssociationResponse struct {
 	*addonassociation.AddonAssociation
+}
+
+// GetActiveAddonAssociationRequest represents the request to get active addon associations
+type GetActiveAddonAssociationRequest struct {
+	EntityID   string                           `json:"entity_id" validate:"required"`
+	EntityType types.AddonAssociationEntityType `json:"entity_type" validate:"required"`
+	StartDate  *time.Time                       `json:"start_date,omitempty"`
+}
+
+func (r *GetActiveAddonAssociationRequest) Validate() error {
+	err := validator.ValidateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	if err := r.EntityType.Validate(); err != nil {
+		return err
+	}
+
+	return nil
 }
