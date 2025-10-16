@@ -3,6 +3,7 @@ package testutil
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -202,4 +203,47 @@ func applyAddonAssociationFilterCondition(aa *addonassociation.AddonAssociation,
 func addonAssociationSortFn(i, j *addonassociation.AddonAssociation) bool {
 	// Default sort by created_at desc
 	return i.CreatedAt.After(j.CreatedAt)
+}
+
+// ListActive retrieves active addon associations for a given entity and optional time point
+func (s *InMemoryAddonAssociationStore) ListActive(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*addonassociation.AddonAssociation, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*addonassociation.AddonAssociation
+	for _, aa := range s.items {
+		// Check tenant and environment
+		if aa.TenantID != types.GetTenantID(ctx) {
+			continue
+		}
+		if !CheckEnvironmentFilter(ctx, aa.EnvironmentID) {
+			continue
+		}
+
+		// Filter by entity
+		if aa.EntityID != entityID || aa.EntityType != entityType {
+			continue
+		}
+
+		// Filter by active status
+		if aa.AddonStatus != types.AddonStatusActive {
+			continue
+		}
+
+		// Filter by published status
+		if aa.Status != types.StatusPublished {
+			continue
+		}
+
+		// Apply active filter: EndDate > periodStart or EndDate is nil
+		if periodStart != nil {
+			if aa.EndDate != nil && !aa.EndDate.After(*periodStart) {
+				continue
+			}
+		}
+
+		result = append(result, copyAddonAssociation(aa))
+	}
+
+	return result, nil
 }

@@ -116,6 +116,8 @@ type SubscriptionService interface {
 
 	// Feature usage tracking
 	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+
+	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*dto.EntitlementResponse, error)
 }
 
 type ServiceDependencies struct {

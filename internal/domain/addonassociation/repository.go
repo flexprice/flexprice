@@ -2,6 +2,7 @@ package addonassociation
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -15,4 +16,7 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.AddonAssociationFilter) ([]*AddonAssociation, error)
 	Count(ctx context.Context, filter *types.AddonAssociationFilter) (int, error)
+
+	// ListActive retrieves active addon associations for a given entity and optional time point
+	ListActive(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*AddonAssociation, error)
 }
