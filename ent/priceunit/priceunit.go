@@ -41,7 +41,7 @@ const (
 	// FieldPrecision holds the string denoting the precision field in the database.
 	FieldPrecision = "precision"
 	// Table holds the table name of the priceunit in the database.
-	Table = "price_unit"
+	Table = "price_units"
 )
 
 // Columns holds all SQL columns for priceunit fields.
