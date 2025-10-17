@@ -90,6 +90,7 @@ func (s *BillingServiceSuite) setupService() {
 		CouponAssociationRepo: s.GetStores().CouponAssociationRepo,
 		CouponRepo:            s.GetStores().CouponRepo,
 		CouponApplicationRepo: s.GetStores().CouponApplicationRepo,
+		AddonAssociationRepo:  s.GetStores().AddonAssociationRepo,
 		TaxRateRepo:           s.GetStores().TaxRateRepo,
 		TaxAssociationRepo:    s.GetStores().TaxAssociationRepo,
 		TaxAppliedRepo:        s.GetStores().TaxAppliedRepo,
@@ -1004,26 +1005,27 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 
 	// Initialize billing service
 	s.service = NewBillingService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		PlanRepo:            s.GetStores().PlanRepo,
-		PriceRepo:           s.GetStores().PriceRepo,
-		EventRepo:           s.GetStores().EventRepo,
-		MeterRepo:           s.GetStores().MeterRepo,
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		EntitlementRepo:     s.GetStores().EntitlementRepo,
-		EnvironmentRepo:     s.GetStores().EnvironmentRepo,
-		FeatureRepo:         s.GetStores().FeatureRepo,
-		TenantRepo:          s.GetStores().TenantRepo,
-		UserRepo:            s.GetStores().UserRepo,
-		AuthRepo:            s.GetStores().AuthRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		PaymentRepo:         s.GetStores().PaymentRepo,
-		EventPublisher:      s.GetPublisher(),
-		ProrationCalculator: s.GetCalculator(),
+		Logger:               s.GetLogger(),
+		Config:               s.GetConfig(),
+		DB:                   s.GetDB(),
+		SubRepo:              s.GetStores().SubscriptionRepo,
+		PlanRepo:             s.GetStores().PlanRepo,
+		PriceRepo:            s.GetStores().PriceRepo,
+		EventRepo:            s.GetStores().EventRepo,
+		MeterRepo:            s.GetStores().MeterRepo,
+		CustomerRepo:         s.GetStores().CustomerRepo,
+		InvoiceRepo:          s.GetStores().InvoiceRepo,
+		EntitlementRepo:      s.GetStores().EntitlementRepo,
+		EnvironmentRepo:      s.GetStores().EnvironmentRepo,
+		FeatureRepo:          s.GetStores().FeatureRepo,
+		TenantRepo:           s.GetStores().TenantRepo,
+		UserRepo:             s.GetStores().UserRepo,
+		AuthRepo:             s.GetStores().AuthRepo,
+		WalletRepo:           s.GetStores().WalletRepo,
+		PaymentRepo:          s.GetStores().PaymentRepo,
+		AddonAssociationRepo: s.GetStores().AddonAssociationRepo,
+		EventPublisher:       s.GetPublisher(),
+		ProrationCalculator:  s.GetCalculator(),
 	})
 
 	tests := []struct {
@@ -1650,7 +1652,6 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 
 			// Update subscription with new line item
 			s.testData.subscription.LineItems = append(s.testData.subscription.LineItems, lineItem)
-			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.testData.subscription))
 
 			// Create mock usage data with bucketed results
 			usage := &dto.GetUsageBySubscriptionResponse{
