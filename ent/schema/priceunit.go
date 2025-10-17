@@ -3,7 +3,6 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -13,13 +12,6 @@ import (
 // PriceUnit holds the schema definition for the PriceUnit entity.
 type PriceUnit struct {
 	ent.Schema
-}
-
-// Annotations of the PriceUnit.
-func (PriceUnit) Annotations() []schema.Annotation {
-	return []schema.Annotation{
-		entsql.Annotation{Table: "price_unit"},
-	}
 }
 
 // Mixin of the PriceUnit.
