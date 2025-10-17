@@ -328,6 +328,46 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
 }
 
+// @Summary Get subscription entitlements
+// @Description Get all entitlements for a subscription
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Success 200 {object} dto.ListEntitlementsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id}/entitlements [get]
+func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	entitlements, err := h.service.GetSubscriptionEntitlements(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to get subscription entitlements", "error", err)
+		c.Error(err)
+		return
+	}
+
+	response := &dto.ListEntitlementsResponse{
+		Items: entitlements,
+		Pagination: types.PaginationResponse{
+			Total:  len(entitlements),
+			Limit:  len(entitlements),
+			Offset: 0,
+		},
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // @Summary Update subscription line item
 // @Description Update a subscription line item by terminating the existing one and creating a new one
 // @Tags Subscriptions
