@@ -164,7 +164,6 @@ func (s *billingService) CalculateUsageCharges(
 	periodStart,
 	periodEnd time.Time,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
-	entitlementService := NewEntitlementService(s.ServiceParams)
 
 	if usage == nil {
 		return nil, decimal.Zero, nil
@@ -173,29 +172,19 @@ func (s *billingService) CalculateUsageCharges(
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
 	totalUsageCost := decimal.Zero
 
-	planIDs := make([]string, 0)
-	for _, item := range sub.LineItems {
-		if item.PriceType == types.PRICE_TYPE_USAGE {
-			planIDs = append(planIDs, item.EntityID)
-		}
+	// Use subscription service to get aggregated entitlements
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	aggregatedEntitlements, err := subscriptionService.GetAggregatedSubscriptionEntitlements(ctx, sub.ID, nil)
+	if err != nil {
+		return nil, decimal.Zero, err
 	}
-	planIDs = lo.Uniq(planIDs)
 
-	// map of plan ID to meter ID to entitlement
-	entitlementsByPlanMeterID := make(map[string]map[string]*dto.EntitlementResponse)
-	for _, planID := range planIDs {
-		entitlements, err := entitlementService.GetPlanEntitlements(ctx, planID)
-		if err != nil {
-			return nil, decimal.Zero, err
-		}
-
-		for _, entitlement := range entitlements.Items {
-			if entitlement.FeatureType == types.FeatureTypeMetered {
-				if _, ok := entitlementsByPlanMeterID[planID]; !ok {
-					entitlementsByPlanMeterID[planID] = make(map[string]*dto.EntitlementResponse)
-				}
-				entitlementsByPlanMeterID[planID][entitlement.Feature.MeterID] = entitlement
-			}
+	// Map aggregated entitlements by meter ID for efficient lookup
+	entitlementsByMeterID := make(map[string]*dto.AggregatedEntitlement)
+	for _, feature := range aggregatedEntitlements.Features {
+		if feature.Feature != nil && types.FeatureType(feature.Feature.Type) == types.FeatureTypeMetered &&
+			feature.Feature.MeterID != "" && feature.Entitlement != nil {
+			entitlementsByMeterID[feature.Feature.MeterID] = feature.Entitlement
 		}
 	}
 
@@ -257,7 +246,7 @@ func (s *billingService) CalculateUsageCharges(
 		// Process each matching charge individually (normal and overage charges)
 		for _, matchingCharge := range matchingCharges {
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
-			matchingEntitlement, ok := entitlementsByPlanMeterID[item.EntityID][item.MeterID]
+			matchingEntitlement, ok := entitlementsByMeterID[item.MeterID]
 
 			// Only apply entitlement adjustments if:
 			// 1. This is not an overage charge
