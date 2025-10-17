@@ -12,12 +12,17 @@ import (
 )
 
 type AddonHandler struct {
-	service service.AddonService
-	log     *logger.Logger
+	service            service.AddonService
+	entitlementService service.EntitlementService
+	log                *logger.Logger
 }
 
-func NewAddonHandler(service service.AddonService, log *logger.Logger) *AddonHandler {
-	return &AddonHandler{service: service, log: log}
+func NewAddonHandler(service service.AddonService, entitlementService service.EntitlementService, log *logger.Logger) *AddonHandler {
+	return &AddonHandler{
+		service:            service,
+		entitlementService: entitlementService,
+		log:                log,
+	}
 }
 
 // @Summary Create addon
@@ -239,6 +244,37 @@ func (h *AddonHandler) ListAddonsByFilter(c *gin.Context) {
 	resp, err := h.service.GetAddons(c.Request.Context(), &filter)
 	if err != nil {
 		h.log.Error("Failed to list addons", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get addon entitlements
+// @Description Get all entitlements for an addon
+// @Tags Entitlements
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Addon ID"
+// @Success 200 {object} dto.ListEntitlementsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /addons/{id}/entitlements [get]
+func (h *AddonHandler) GetAddonEntitlements(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("addon ID is required").
+			WithHint("Addon ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.entitlementService.GetAddonEntitlements(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to get addon entitlements", "error", err)
 		c.Error(err)
 		return
 	}
