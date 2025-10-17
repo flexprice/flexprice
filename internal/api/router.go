@@ -211,6 +211,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			addon.GET("/:id", handlers.Addon.GetAddon)
 			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
 			addon.PUT("/:id", handlers.Addon.UpdateAddon)
+			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
 			addon.DELETE("/:id", handlers.Addon.DeleteAddon)
 		}
 
