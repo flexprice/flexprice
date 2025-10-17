@@ -1547,10 +1547,20 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 		// Map feature to its subscription (use first source)
 		if len(feature.Sources) > 0 {
-			subscriptionIDs = append(subscriptionIDs, feature.Sources[0].EntityID)
+			subscriptionIDs = append(subscriptionIDs, feature.Sources[0].SubscriptionID)
 		}
 	}
 	subscriptionIDs = lo.Uniq(subscriptionIDs)
+
+	// Fetch all subscriptions at once
+	for _, subscriptionID := range subscriptionIDs {
+		sub, err := s.SubRepo.Get(ctx, subscriptionID)
+		if err != nil {
+			s.Logger.Warnw("failed to get subscription", "subscription_id", subscriptionID, "error", err)
+			continue
+		}
+		subscriptionMap[subscriptionID] = sub
+	}
 
 	// Map features to their subscriptions
 	for _, feature := range entitlements.Features {
