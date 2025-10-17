@@ -1347,9 +1347,9 @@ var (
 		PrimaryKey: []*schema.Column{PricesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "prices_price_unit_price_unit_edge",
+				Symbol:     "prices_price_units_price_unit_edge",
 				Columns:    []*schema.Column{PricesColumns[38]},
-				RefColumns: []*schema.Column{PriceUnitColumns[0]},
+				RefColumns: []*schema.Column{PriceUnitsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -1379,8 +1379,8 @@ var (
 			},
 		},
 	}
-	// PriceUnitColumns holds the columns for the "price_unit" table.
-	PriceUnitColumns = []*schema.Column{
+	// PriceUnitsColumns holds the columns for the "price_units" table.
+	PriceUnitsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -1396,16 +1396,16 @@ var (
 		{Name: "conversion_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
 		{Name: "precision", Type: field.TypeInt, Default: 0},
 	}
-	// PriceUnitTable holds the schema information for the "price_unit" table.
-	PriceUnitTable = &schema.Table{
-		Name:       "price_unit",
-		Columns:    PriceUnitColumns,
-		PrimaryKey: []*schema.Column{PriceUnitColumns[0]},
+	// PriceUnitsTable holds the schema information for the "price_units" table.
+	PriceUnitsTable = &schema.Table{
+		Name:       "price_units",
+		Columns:    PriceUnitsColumns,
+		PrimaryKey: []*schema.Column{PriceUnitsColumns[0]},
 		Indexes: []*schema.Index{
 			{
 				Name:    "priceunit_code_tenant_id_environment_id",
 				Unique:  true,
-				Columns: []*schema.Column{PriceUnitColumns[9], PriceUnitColumns[1], PriceUnitColumns[7]},
+				Columns: []*schema.Column{PriceUnitsColumns[9], PriceUnitsColumns[1], PriceUnitsColumns[7]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status = 'published'",
 				},
@@ -1413,7 +1413,7 @@ var (
 			{
 				Name:    "priceunit_tenant_id_environment_id",
 				Unique:  false,
-				Columns: []*schema.Column{PriceUnitColumns[1], PriceUnitColumns[7]},
+				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7]},
 			},
 		},
 	}
@@ -2167,7 +2167,7 @@ var (
 		PaymentAttemptsTable,
 		PlansTable,
 		PricesTable,
-		PriceUnitTable,
+		PriceUnitsTable,
 		ScheduledTasksTable,
 		SecretsTable,
 		SettingsTable,
@@ -2201,10 +2201,7 @@ func init() {
 	EntitlementsTable.ForeignKeys[0].RefTable = AddonsTable
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
-	PricesTable.ForeignKeys[0].RefTable = PriceUnitTable
-	PriceUnitTable.Annotation = &entsql.Annotation{
-		Table: "price_unit",
-	}
+	PricesTable.ForeignKeys[0].RefTable = PriceUnitsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPhasesTable.ForeignKeys[0].RefTable = SubscriptionsTable
