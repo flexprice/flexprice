@@ -44,7 +44,7 @@ const (
 	// EdgePrices holds the string denoting the prices edge name in mutations.
 	EdgePrices = "prices"
 	// Table holds the table name of the priceunit in the database.
-	Table = "price_unit"
+	Table = "price_units"
 	// PricesTable is the table that holds the prices relation/edge.
 	PricesTable = "prices"
 	// PricesInverseTable is the table name for the Price entity.

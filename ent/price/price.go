@@ -98,7 +98,7 @@ const (
 	PriceUnitEdgeTable = "prices"
 	// PriceUnitEdgeInverseTable is the table name for the PriceUnit entity.
 	// It exists in this package in order to avoid circular dependency with the "priceunit" package.
-	PriceUnitEdgeInverseTable = "price_unit"
+	PriceUnitEdgeInverseTable = "price_units"
 	// PriceUnitEdgeColumn is the table column denoting the price_unit_edge relation/edge.
 	PriceUnitEdgeColumn = "price_unit_id"
 )
