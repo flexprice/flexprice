@@ -4954,3 +4954,67 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 
 	return allEntitlements, nil
 }
+
+// GetAggregatedSubscriptionEntitlements retrieves and aggregates all entitlements for a subscription
+// and returns them in a structured response format with aggregated features
+func (s *subscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error) {
+	// Validate request if provided
+	if req != nil {
+		if err := req.Validate(); err != nil {
+			return nil, err
+		}
+	} else {
+		// Initialize with empty request if none provided
+		req = &dto.GetSubscriptionEntitlementsRequest{}
+	}
+
+	// Get the subscription
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get all entitlements for the subscription
+	entitlements, err := s.GetSubscriptionEntitlements(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by feature IDs if specified
+	if len(req.FeatureIDs) > 0 {
+		filteredEntitlements := make([]*dto.EntitlementResponse, 0)
+		for _, ent := range entitlements {
+			if lo.Contains(req.FeatureIDs, ent.FeatureID) {
+				filteredEntitlements = append(filteredEntitlements, ent)
+			}
+		}
+		entitlements = filteredEntitlements
+	}
+
+	// Use the generic aggregation function from billing service
+	billingService := NewBillingService(s.ServiceParams)
+	aggregatedFeatures := billingService.AggregateEntitlements(entitlements, subscriptionID)
+
+	// Ensure subscription ID is set in all sources
+	for _, feature := range aggregatedFeatures {
+		for _, source := range feature.Sources {
+			if source.SubscriptionID == "" {
+				source.SubscriptionID = subscriptionID
+			}
+		}
+	}
+
+	// Build final response
+	response := &dto.SubscriptionEntitlementsResponse{
+		SubscriptionID: subscriptionID,
+		PlanID:         sub.PlanID,
+		Features:       aggregatedFeatures,
+	}
+
+	return response, nil
+}
