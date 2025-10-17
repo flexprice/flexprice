@@ -320,6 +320,9 @@ func (s *BillingServiceSuite) setupTestData() {
 
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, lineItems))
 
+	// Update the subscription object to include the line items
+	s.testData.subscription.LineItems = lineItems
+
 	// Create test events
 	for i := 0; i < 500; i++ {
 		event := &events.Event{
@@ -1650,8 +1653,14 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 				BaseModel:        types.GetDefaultBaseModel(ctx),
 			}
 
-			// Update subscription with new line item
+			// Update subscription with new line item - save to repository
 			s.testData.subscription.LineItems = append(s.testData.subscription.LineItems, lineItem)
+			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.testData.subscription))
+
+			// Create a copy of the subscription with the updated line items for CalculateUsageCharges
+			subscriptionWithLineItems := *s.testData.subscription
+			subscriptionWithLineItems.LineItems = make([]*subscription.SubscriptionLineItem, len(s.testData.subscription.LineItems))
+			copy(subscriptionWithLineItems.LineItems, s.testData.subscription.LineItems)
 
 			// Create mock usage data with bucketed results
 			usage := &dto.GetUsageBySubscriptionResponse{
@@ -1672,10 +1681,10 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 			// Calculate charges
 			lineItems, totalAmount, err := s.service.CalculateUsageCharges(
 				ctx,
-				s.testData.subscription,
+				&subscriptionWithLineItems,
 				usage,
-				s.testData.subscription.CurrentPeriodStart,
-				s.testData.subscription.CurrentPeriodEnd,
+				subscriptionWithLineItems.CurrentPeriodStart,
+				subscriptionWithLineItems.CurrentPeriodEnd,
 			)
 
 			s.NoError(err, "Should not error for %s", tt.name)
