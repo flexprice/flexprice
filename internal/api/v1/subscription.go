@@ -350,7 +350,16 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 		return
 	}
 
-	response, err := h.service.GetSubscriptionEntitlements(c.Request.Context(), id)
+	// Call the service method with structured response
+	var req dto.GetSubscriptionEntitlementsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.log.Error("Failed to bind query", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	response, err := h.service.GetAggregatedSubscriptionEntitlements(c.Request.Context(), id, &req)
 	if err != nil {
 		h.log.Error("Failed to get subscription entitlements", "error", err)
 		c.Error(err)
