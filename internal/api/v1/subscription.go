@@ -335,7 +335,8 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
-// @Success 200 {object} dto.ListEntitlementsResponse
+// @Param feature_ids query []string false "Feature IDs to filter by"
+// @Success 200 {object} dto.SubscriptionEntitlementsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
@@ -349,20 +350,11 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 		return
 	}
 
-	entitlements, err := h.service.GetSubscriptionEntitlements(c.Request.Context(), id)
+	response, err := h.service.GetSubscriptionEntitlements(c.Request.Context(), id)
 	if err != nil {
 		h.log.Error("Failed to get subscription entitlements", "error", err)
 		c.Error(err)
 		return
-	}
-
-	response := &dto.ListEntitlementsResponse{
-		Items: entitlements,
-		Pagination: types.PaginationResponse{
-			Total:  len(entitlements),
-			Limit:  len(entitlements),
-			Offset: 0,
-		},
 	}
 
 	c.JSON(http.StatusOK, response)
