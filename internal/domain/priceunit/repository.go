@@ -11,7 +11,7 @@ type Repository interface {
 	List(ctx context.Context, filter *types.PriceUnitFilter) ([]*PriceUnit, error)
 	Create(ctx context.Context, priceUnit *PriceUnit) (*PriceUnit, error)
 	Update(ctx context.Context, priceUnit *PriceUnit) (*PriceUnit, error)
-	Delete(ctx context.Context, id string) error
+	Delete(ctx context.Context, priceUnit *PriceUnit) error
 
 	GetByCode(ctx context.Context, code string) (*PriceUnit, error)
 }
