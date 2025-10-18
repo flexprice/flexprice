@@ -43,6 +43,8 @@ func (s *PriceServiceSuite) SetupTest() {
 		PriceRepo: s.priceRepo,
 		MeterRepo: s.meterRepo,
 		PlanRepo:  s.planRepo,
+		AddonRepo: testutil.NewInMemoryAddonStore(),
+		SubRepo:   testutil.NewInMemorySubscriptionStore(),
 		Logger:    s.logger,
 	}
 	s.priceService = NewPriceService(serviceParams)
