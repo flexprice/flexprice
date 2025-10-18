@@ -18,9 +18,11 @@ import (
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount,omitempty"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
-	EntityType         types.PriceEntityType    `json:"entity_type" validate:"required"`
-	EntityID           string                   `json:"entity_id" validate:"required"`
+	PlanID             string                   `json:"plan_id,omitempty"`
+	EntityType         types.PriceEntityType    `json:"entity_type,omitempty"`
+	EntityID           string                   `json:"entity_id,omitempty"`
 	Type               types.PriceType          `json:"type" validate:"required"`
+	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"omitempty"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                      `json:"billing_period_count" default:"1"`
 	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
@@ -35,6 +37,7 @@ type CreatePriceRequest struct {
 	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
 	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
 	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
+	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
 	StartDate          *time.Time               `json:"start_date,omitempty"`
 	EndDate            *time.Time               `json:"end_date,omitempty"`
 	DisplayName        string                   `json:"display_name,omitempty"`
@@ -69,7 +72,21 @@ type CreatePriceTier struct {
 	FlatAmount *string `json:"flat_amount" validate:"omitempty"`
 }
 
-// TODO : add all price validations
+type PriceUnitConfig struct {
+	Amount         string            `json:"amount,omitempty"`
+	PriceUnit      string            `json:"price_unit" validate:"required,len=3"`
+	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
+}
+
+func (p *PriceUnitConfig) Validate() error {
+	if err := validator.ValidateRequest(p); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Validate validates the create price request
 func (r *CreatePriceRequest) Validate() error {
 	var err error
 
