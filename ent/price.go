@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/price"
-	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -105,11 +104,9 @@ type Price struct {
 type PriceEdges struct {
 	// Costsheet holds the value of the costsheet edge.
 	Costsheet []*Costsheet `json:"costsheet,omitempty"`
-	// PriceUnitEdge holds the value of the price_unit_edge edge.
-	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // CostsheetOrErr returns the Costsheet value or an error if the edge
@@ -119,17 +116,6 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 		return e.Costsheet, nil
 	}
 	return nil, &NotLoadedError{edge: "costsheet"}
-}
-
-// PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
-	if e.PriceUnitEdge != nil {
-		return e.PriceUnitEdge, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: priceunit.Label}
-	}
-	return nil, &NotLoadedError{edge: "price_unit_edge"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -432,11 +418,6 @@ func (pr *Price) Value(name string) (ent.Value, error) {
 // QueryCostsheet queries the "costsheet" edge of the Price entity.
 func (pr *Price) QueryCostsheet() *CostsheetQuery {
 	return NewPriceClient(pr.config).QueryCostsheet(pr)
-}
-
-// QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
-func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
-	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
 }
 
 // Update returns a builder for updating this Price.
