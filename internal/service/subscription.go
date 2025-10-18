@@ -196,8 +196,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		item.BillingPeriod = sub.BillingPeriod
 		item.InvoiceCadence = price.InvoiceCadence
 		item.TrialPeriod = price.TrialPeriod
-		item.PriceUnitID = price.PriceUnitID
-		item.PriceUnit = price.PriceUnit
 		item.StartDate = sub.StartDate
 		if sub.EndDate != nil {
 			item.EndDate = *sub.EndDate
@@ -442,7 +440,6 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
 			EntityID:             sub.ID,
 			Type:                 originalPrice.Type,
-			PriceUnitType:        originalPrice.PriceUnitType,
 			BillingPeriod:        originalPrice.BillingPeriod,
 			BillingPeriodCount:   originalPrice.BillingPeriodCount,
 			BillingModel:         originalPrice.BillingModel,

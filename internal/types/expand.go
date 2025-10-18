@@ -29,7 +29,6 @@ const (
 	ExpandTaxAssociation     ExpandableField = "tax_association"
 	ExpandCoupon             ExpandableField = "coupon"
 	ExpandCouponApplications ExpandableField = "coupon_applications"
-	ExpandPriceUnit          ExpandableField = "priceunit"
 	ExpandCouponAssociations ExpandableField = "coupon_associations"
 )
 
@@ -45,21 +44,19 @@ type ExpandConfig struct {
 var (
 	// PlanExpandConfig defines what can be expanded on a plan
 	PlanExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters, ExpandEntitlements, ExpandCreditGrant, ExpandPriceUnit},
+		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters, ExpandEntitlements, ExpandCreditGrant},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandPrices:       {ExpandMeters},
 			ExpandEntitlements: {ExpandFeatures},
 			ExpandCreditGrant:  {ExpandFeatures},
-			ExpandPriceUnit:    {},
 		},
 	}
 
 	// PriceExpandConfig defines what can be expanded on a price
 	PriceExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandMeters, ExpandPriceUnit},
+		AllowedFields: []ExpandableField{ExpandMeters},
 		NestedExpands: map[ExpandableField][]ExpandableField{
-			ExpandMeters:    {},
-			ExpandPriceUnit: {},
+			ExpandMeters: {},
 		},
 	}
 
