@@ -27,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -213,4 +214,8 @@ func NewGroupRepository(p RepositoryParams) group.Repository {
 
 func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
+}
+
+func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
+	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
 }
