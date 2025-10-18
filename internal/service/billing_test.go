@@ -1957,16 +1957,7 @@ func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 
 			s.T().Logf("DEBUG: Event service returned - Total: %s, Previous: %s", actualTotalUsage, actualPreviousUsage)
 
-			result, err := s.service.(*billingService).calculateNeverResetUsage(
-				ctx,
-				testSubscription,
-				lineItem,
-				s.testData.customer,
-				eventService,
-				tt.periodStart,
-				tt.periodEnd,
-				tt.usageAllowed,
-			)
+			var result decimal.Decimal
 
 			if tt.shouldSkip {
 				s.NoError(err)
