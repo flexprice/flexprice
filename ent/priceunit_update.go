@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/shopspring/decimal"
 )
@@ -160,9 +161,45 @@ func (puu *PriceUnitUpdate) AddPrecision(i int) *PriceUnitUpdate {
 	return puu
 }
 
+// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
+func (puu *PriceUnitUpdate) AddPriceIDs(ids ...string) *PriceUnitUpdate {
+	puu.mutation.AddPriceIDs(ids...)
+	return puu
+}
+
+// AddPrices adds the "prices" edges to the Price entity.
+func (puu *PriceUnitUpdate) AddPrices(p ...*Price) *PriceUnitUpdate {
+	ids := make([]string, len(p))
+	for i := range p {
+		ids[i] = p[i].ID
+	}
+	return puu.AddPriceIDs(ids...)
+}
+
 // Mutation returns the PriceUnitMutation object of the builder.
 func (puu *PriceUnitUpdate) Mutation() *PriceUnitMutation {
 	return puu.mutation
+}
+
+// ClearPrices clears all "prices" edges to the Price entity.
+func (puu *PriceUnitUpdate) ClearPrices() *PriceUnitUpdate {
+	puu.mutation.ClearPrices()
+	return puu
+}
+
+// RemovePriceIDs removes the "prices" edge to Price entities by IDs.
+func (puu *PriceUnitUpdate) RemovePriceIDs(ids ...string) *PriceUnitUpdate {
+	puu.mutation.RemovePriceIDs(ids...)
+	return puu
+}
+
+// RemovePrices removes "prices" edges to Price entities.
+func (puu *PriceUnitUpdate) RemovePrices(p ...*Price) *PriceUnitUpdate {
+	ids := make([]string, len(p))
+	for i := range p {
+		ids[i] = p[i].ID
+	}
+	return puu.RemovePriceIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -281,6 +318,51 @@ func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := puu.mutation.AddedPrecision(); ok {
 		_spec.AddField(priceunit.FieldPrecision, field.TypeInt, value)
+	}
+	if puu.mutation.PricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   priceunit.PricesTable,
+			Columns: []string{priceunit.PricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puu.mutation.RemovedPricesIDs(); len(nodes) > 0 && !puu.mutation.PricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   priceunit.PricesTable,
+			Columns: []string{priceunit.PricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puu.mutation.PricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   priceunit.PricesTable,
+			Columns: []string{priceunit.PricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, puu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -433,9 +515,45 @@ func (puuo *PriceUnitUpdateOne) AddPrecision(i int) *PriceUnitUpdateOne {
 	return puuo
 }
 
+// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
+func (puuo *PriceUnitUpdateOne) AddPriceIDs(ids ...string) *PriceUnitUpdateOne {
+	puuo.mutation.AddPriceIDs(ids...)
+	return puuo
+}
+
+// AddPrices adds the "prices" edges to the Price entity.
+func (puuo *PriceUnitUpdateOne) AddPrices(p ...*Price) *PriceUnitUpdateOne {
+	ids := make([]string, len(p))
+	for i := range p {
+		ids[i] = p[i].ID
+	}
+	return puuo.AddPriceIDs(ids...)
+}
+
 // Mutation returns the PriceUnitMutation object of the builder.
 func (puuo *PriceUnitUpdateOne) Mutation() *PriceUnitMutation {
 	return puuo.mutation
+}
+
+// ClearPrices clears all "prices" edges to the Price entity.
+func (puuo *PriceUnitUpdateOne) ClearPrices() *PriceUnitUpdateOne {
+	puuo.mutation.ClearPrices()
+	return puuo
+}
+
+// RemovePriceIDs removes the "prices" edge to Price entities by IDs.
+func (puuo *PriceUnitUpdateOne) RemovePriceIDs(ids ...string) *PriceUnitUpdateOne {
+	puuo.mutation.RemovePriceIDs(ids...)
+	return puuo
+}
+
+// RemovePrices removes "prices" edges to Price entities.
+func (puuo *PriceUnitUpdateOne) RemovePrices(p ...*Price) *PriceUnitUpdateOne {
+	ids := make([]string, len(p))
+	for i := range p {
+		ids[i] = p[i].ID
+	}
+	return puuo.RemovePriceIDs(ids...)
 }
 
 // Where appends a list predicates to the PriceUnitUpdate builder.
@@ -584,6 +702,51 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 	}
 	if value, ok := puuo.mutation.AddedPrecision(); ok {
 		_spec.AddField(priceunit.FieldPrecision, field.TypeInt, value)
+	}
+	if puuo.mutation.PricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   priceunit.PricesTable,
+			Columns: []string{priceunit.PricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puuo.mutation.RemovedPricesIDs(); len(nodes) > 0 && !puuo.mutation.PricesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   priceunit.PricesTable,
+			Columns: []string{priceunit.PricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := puuo.mutation.PricesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: true,
+			Table:   priceunit.PricesTable,
+			Columns: []string{priceunit.PricesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &PriceUnit{config: puuo.config}
 	_spec.Assign = _node.assignValues

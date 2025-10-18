@@ -82,8 +82,12 @@ const (
 	FieldEndDate = "end_date"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldPriceUnitID holds the string denoting the price_unit_id field in the database.
+	FieldPriceUnitID = "price_unit_id"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
 	EdgeCostsheet = "costsheet"
+	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
+	EdgePriceUnitEdge = "price_unit_edge"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
 	// CostsheetTable is the table that holds the costsheet relation/edge.
@@ -93,6 +97,13 @@ const (
 	CostsheetInverseTable = "costsheets"
 	// CostsheetColumn is the table column denoting the costsheet relation/edge.
 	CostsheetColumn = "price_costsheet"
+	// PriceUnitEdgeTable is the table that holds the price_unit_edge relation/edge.
+	PriceUnitEdgeTable = "prices"
+	// PriceUnitEdgeInverseTable is the table name for the PriceUnit entity.
+	// It exists in this package in order to avoid circular dependency with the "priceunit" package.
+	PriceUnitEdgeInverseTable = "price_units"
+	// PriceUnitEdgeColumn is the table column denoting the price_unit_edge relation/edge.
+	PriceUnitEdgeColumn = "price_unit_id"
 )
 
 // Columns holds all SQL columns for price fields.
@@ -131,6 +142,7 @@ var Columns = []string{
 	FieldStartDate,
 	FieldEndDate,
 	FieldGroupID,
+	FieldPriceUnitID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -333,6 +345,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
+// ByPriceUnitID orders the results by the price_unit_id field.
+func ByPriceUnitID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitID, opts...).ToFunc()
+}
+
 // ByCostsheetCount orders the results by costsheet count.
 func ByCostsheetCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -346,10 +363,24 @@ func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newCostsheetStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByPriceUnitEdgeField orders the results by price_unit_edge field.
+func ByPriceUnitEdgeField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPriceUnitEdgeStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newCostsheetStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CostsheetInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
+	)
+}
+func newPriceUnitEdgeStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PriceUnitEdgeInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, PriceUnitEdgeTable, PriceUnitEdgeColumn),
 	)
 }

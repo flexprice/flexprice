@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/shopspring/decimal"
 )
 
@@ -40,8 +41,17 @@ const (
 	FieldConversionRate = "conversion_rate"
 	// FieldPrecision holds the string denoting the precision field in the database.
 	FieldPrecision = "precision"
+	// EdgePrices holds the string denoting the prices edge name in mutations.
+	EdgePrices = "prices"
 	// Table holds the table name of the priceunit in the database.
 	Table = "price_units"
+	// PricesTable is the table that holds the prices relation/edge.
+	PricesTable = "prices"
+	// PricesInverseTable is the table name for the Price entity.
+	// It exists in this package in order to avoid circular dependency with the "price" package.
+	PricesInverseTable = "prices"
+	// PricesColumn is the table column denoting the prices relation/edge.
+	PricesColumn = "price_unit_id"
 )
 
 // Columns holds all SQL columns for priceunit fields.
@@ -172,4 +182,25 @@ func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
 // ByPrecision orders the results by the precision field.
 func ByPrecision(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPrecision, opts...).ToFunc()
+}
+
+// ByPricesCount orders the results by prices count.
+func ByPricesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newPricesStep(), opts...)
+	}
+}
+
+// ByPrices orders the results by prices terms.
+func ByPrices(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPricesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newPricesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PricesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, true, PricesTable, PricesColumn),
+	)
 }

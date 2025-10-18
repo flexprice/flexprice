@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -397,6 +398,20 @@ func (pc *PriceCreate) SetNillableGroupID(s *string) *PriceCreate {
 	return pc
 }
 
+// SetPriceUnitID sets the "price_unit_id" field.
+func (pc *PriceCreate) SetPriceUnitID(s string) *PriceCreate {
+	pc.mutation.SetPriceUnitID(s)
+	return pc
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnitID(*s)
+	}
+	return pc
+}
+
 // SetID sets the "id" field.
 func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	pc.mutation.SetID(s)
@@ -416,6 +431,25 @@ func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
 		ids[i] = c[i].ID
 	}
 	return pc.AddCostsheetIDs(ids...)
+}
+
+// SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
+func (pc *PriceCreate) SetPriceUnitEdgeID(id string) *PriceCreate {
+	pc.mutation.SetPriceUnitEdgeID(id)
+	return pc
+}
+
+// SetNillablePriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitEdgeID(id *string) *PriceCreate {
+	if id != nil {
+		pc = pc.SetPriceUnitEdgeID(*id)
+	}
+	return pc
+}
+
+// SetPriceUnitEdge sets the "price_unit_edge" edge to the PriceUnit entity.
+func (pc *PriceCreate) SetPriceUnitEdge(p *PriceUnit) *PriceCreate {
+	return pc.SetPriceUnitEdgeID(p.ID)
 }
 
 // Mutation returns the PriceMutation object of the builder.
@@ -764,6 +798,23 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := pc.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   price.PriceUnitEdgeTable,
+			Columns: []string{price.PriceUnitEdgeColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.PriceUnitID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

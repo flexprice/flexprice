@@ -219,6 +219,11 @@ func GroupID(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldGroupID, v))
 }
 
+// PriceUnitID applies equality check predicate on the "price_unit_id" field. It's identical to PriceUnitIDEQ.
+func PriceUnitID(v string) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldPriceUnitID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldTenantID, v))
@@ -2237,6 +2242,81 @@ func GroupIDContainsFold(v string) predicate.Price {
 	return predicate.Price(sql.FieldContainsFold(FieldGroupID, v))
 }
 
+// PriceUnitIDEQ applies the EQ predicate on the "price_unit_id" field.
+func PriceUnitIDEQ(v string) predicate.Price {
+	return predicate.Price(sql.FieldEQ(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDNEQ applies the NEQ predicate on the "price_unit_id" field.
+func PriceUnitIDNEQ(v string) predicate.Price {
+	return predicate.Price(sql.FieldNEQ(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDIn applies the In predicate on the "price_unit_id" field.
+func PriceUnitIDIn(vs ...string) predicate.Price {
+	return predicate.Price(sql.FieldIn(FieldPriceUnitID, vs...))
+}
+
+// PriceUnitIDNotIn applies the NotIn predicate on the "price_unit_id" field.
+func PriceUnitIDNotIn(vs ...string) predicate.Price {
+	return predicate.Price(sql.FieldNotIn(FieldPriceUnitID, vs...))
+}
+
+// PriceUnitIDGT applies the GT predicate on the "price_unit_id" field.
+func PriceUnitIDGT(v string) predicate.Price {
+	return predicate.Price(sql.FieldGT(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDGTE applies the GTE predicate on the "price_unit_id" field.
+func PriceUnitIDGTE(v string) predicate.Price {
+	return predicate.Price(sql.FieldGTE(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDLT applies the LT predicate on the "price_unit_id" field.
+func PriceUnitIDLT(v string) predicate.Price {
+	return predicate.Price(sql.FieldLT(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDLTE applies the LTE predicate on the "price_unit_id" field.
+func PriceUnitIDLTE(v string) predicate.Price {
+	return predicate.Price(sql.FieldLTE(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDContains applies the Contains predicate on the "price_unit_id" field.
+func PriceUnitIDContains(v string) predicate.Price {
+	return predicate.Price(sql.FieldContains(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDHasPrefix applies the HasPrefix predicate on the "price_unit_id" field.
+func PriceUnitIDHasPrefix(v string) predicate.Price {
+	return predicate.Price(sql.FieldHasPrefix(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDHasSuffix applies the HasSuffix predicate on the "price_unit_id" field.
+func PriceUnitIDHasSuffix(v string) predicate.Price {
+	return predicate.Price(sql.FieldHasSuffix(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDIsNil applies the IsNil predicate on the "price_unit_id" field.
+func PriceUnitIDIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldPriceUnitID))
+}
+
+// PriceUnitIDNotNil applies the NotNil predicate on the "price_unit_id" field.
+func PriceUnitIDNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldPriceUnitID))
+}
+
+// PriceUnitIDEqualFold applies the EqualFold predicate on the "price_unit_id" field.
+func PriceUnitIDEqualFold(v string) predicate.Price {
+	return predicate.Price(sql.FieldEqualFold(FieldPriceUnitID, v))
+}
+
+// PriceUnitIDContainsFold applies the ContainsFold predicate on the "price_unit_id" field.
+func PriceUnitIDContainsFold(v string) predicate.Price {
+	return predicate.Price(sql.FieldContainsFold(FieldPriceUnitID, v))
+}
+
 // HasCostsheet applies the HasEdge predicate on the "costsheet" edge.
 func HasCostsheet() predicate.Price {
 	return predicate.Price(func(s *sql.Selector) {
@@ -2252,6 +2332,29 @@ func HasCostsheet() predicate.Price {
 func HasCostsheetWith(preds ...predicate.Costsheet) predicate.Price {
 	return predicate.Price(func(s *sql.Selector) {
 		step := newCostsheetStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasPriceUnitEdge applies the HasEdge predicate on the "price_unit_edge" edge.
+func HasPriceUnitEdge() predicate.Price {
+	return predicate.Price(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, PriceUnitEdgeTable, PriceUnitEdgeColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasPriceUnitEdgeWith applies the HasEdge predicate on the "price_unit_edge" edge with a given conditions (other predicates).
+func HasPriceUnitEdgeWith(preds ...predicate.PriceUnit) predicate.Price {
+	return predicate.Price(func(s *sql.Selector) {
+		step := newPriceUnitEdgeStep()
 		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
 			for _, p := range preds {
 				p(s)
