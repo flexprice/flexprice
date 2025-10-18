@@ -324,76 +324,49 @@ func (r *CreatePriceRequest) Validate() error {
 }
 
 func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, error) {
-
-	amount := decimal.Zero
-	if r.Amount != "" {
-		var err error
-		amount, err = decimal.NewFromString(r.Amount)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Amount must be a valid decimal number").
-				WithReportableDetails(map[string]interface{}{
-					"amount": r.Amount,
-				}).
-				Mark(ierr.ErrValidation)
-		}
+	// Ensure price unit type is set to FIAT if not provided
+	if r.PriceUnitType == "" {
+		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
 	}
 
-	// set the start date from either the request or the current time
-	var startDate *time.Time
-	if r.StartDate != nil {
-		startDate = r.StartDate
-	} else {
+	// Parse amount with optimized error handling
+	amount, err := r.parseAmount()
+	if err != nil {
+		return nil, err
+	}
+
+	// Set start date with early return for nil case
+	startDate := r.StartDate
+	if startDate == nil {
 		now := time.Now().UTC()
 		startDate = &now
 	}
 
-	metadata := make(priceDomain.JSONBMetadata)
-	if r.Metadata != nil {
-		metadata = priceDomain.JSONBMetadata(r.Metadata)
+	// Convert metadata efficiently
+	metadata := priceDomain.JSONBMetadata(r.Metadata)
+	if r.Metadata == nil {
+		metadata = make(priceDomain.JSONBMetadata)
 	}
 
+	// Convert transform quantity efficiently
 	var transformQuantity priceDomain.JSONBTransformQuantity
 	if r.TransformQuantity != nil {
 		transformQuantity = priceDomain.JSONBTransformQuantity(*r.TransformQuantity)
 	}
 
-	var tiers priceDomain.JSONBTiers
-	if r.Tiers != nil {
-		priceTiers := make([]priceDomain.PriceTier, len(r.Tiers))
-		for i, tier := range r.Tiers {
-			unitAmount, err := decimal.NewFromString(tier.UnitAmount)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Unit amount must be a valid decimal number").
-					WithReportableDetails(map[string]interface{}{
-						"unit_amount": tier.UnitAmount,
-					}).
-					Mark(ierr.ErrValidation)
-			}
+	// Convert tiers with optimized helper function
+	tiers, err := r.convertTiers(r.Tiers)
+	if err != nil {
+		return nil, err
+	}
 
-			var flatAmount *decimal.Decimal
-			if tier.FlatAmount != nil {
-				parsed, err := decimal.NewFromString(*tier.FlatAmount)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithHint("Unit amount must be a valid decimal number").
-						WithReportableDetails(map[string]interface{}{
-							"flat_amount": tier.FlatAmount,
-						}).
-						Mark(ierr.ErrValidation)
-				}
-				flatAmount = &parsed
-			}
-
-			priceTiers[i] = priceDomain.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: unitAmount,
-				FlatAmount: flatAmount,
-			}
+	// Convert price unit tiers with optimized helper function
+	var priceUnitTiers priceDomain.JSONBTiers
+	if r.PriceUnitConfig != nil && r.PriceUnitConfig.PriceUnitTiers != nil {
+		priceUnitTiers, err = r.convertTiers(r.PriceUnitConfig.PriceUnitTiers)
+		if err != nil {
+			return nil, err
 		}
-
-		tiers = priceDomain.JSONBTiers(priceTiers)
 	}
 
 	var minQuantity *decimal.Decimal
@@ -402,10 +375,12 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		minQuantity = lo.ToPtr(decimal.NewFromInt(minQuantityInt))
 	}
 
+	// Create price struct with pre-allocated fields
 	price := &priceDomain.Price{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
 		Amount:             amount,
 		Currency:           r.Currency,
+		PriceUnitType:      r.PriceUnitType,
 		Type:               r.Type,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,
@@ -432,8 +407,83 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		GroupID:            r.GroupID,
 	}
 
+	// Set price unit related fields if price unit config is provided
+	if r.PriceUnitConfig != nil {
+		price.PriceUnit = r.PriceUnitConfig.PriceUnit
+		price.PriceUnitTiers = priceUnitTiers
+
+		if r.PriceUnitConfig.Amount != "" {
+			priceUnitAmount, err := decimal.NewFromString(r.PriceUnitConfig.Amount)
+			if err != nil {
+				return nil, r.createDecimalError("Price unit amount must be a valid decimal number", "amount", r.PriceUnitConfig.Amount)
+			}
+			price.PriceUnitAmount = &priceUnitAmount
+		}
+	}
+
 	price.DisplayAmount = price.GetDisplayAmount()
 	return price, nil
+}
+
+// parseAmount parses the amount string with optimized error handling
+func (r *CreatePriceRequest) parseAmount() (decimal.Decimal, error) {
+	if r.Amount == "" {
+		return decimal.Zero, nil
+	}
+
+	amount, err := decimal.NewFromString(r.Amount)
+	if err != nil {
+		return decimal.Zero, ierr.WithError(err).
+			WithHint("Amount must be a valid decimal number").
+			WithReportableDetails(map[string]interface{}{
+				"amount": r.Amount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return amount, nil
+}
+
+// convertTiers converts CreatePriceTier slice to priceDomain.JSONBTiers with optimized error handling
+func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.JSONBTiers, error) {
+	if len(tiers) == 0 {
+		return nil, nil
+	}
+
+	priceTiers := make([]priceDomain.PriceTier, len(tiers))
+	for i, tier := range tiers {
+		unitAmount, err := decimal.NewFromString(tier.UnitAmount)
+		if err != nil {
+			return nil, r.createDecimalError("Unit amount must be a valid decimal number", "unit_amount", tier.UnitAmount)
+		}
+
+		var flatAmount *decimal.Decimal
+		if tier.FlatAmount != nil {
+			parsed, err := decimal.NewFromString(*tier.FlatAmount)
+			if err != nil {
+				return nil, r.createDecimalError("Flat amount must be a valid decimal number", "flat_amount", *tier.FlatAmount)
+			}
+			flatAmount = &parsed
+		}
+
+		priceTiers[i] = priceDomain.PriceTier{
+			UpTo:       tier.UpTo,
+			UnitAmount: unitAmount,
+			FlatAmount: flatAmount,
+		}
+	}
+
+	return priceDomain.JSONBTiers(priceTiers), nil
+}
+
+// createDecimalError creates a standardized decimal parsing error
+func (r *CreatePriceRequest) createDecimalError(hint, field, value string) error {
+	return ierr.NewError("invalid decimal format").
+		WithHint(hint).
+		WithReportableDetails(map[string]interface{}{
+			field: value,
+		}).
+		Mark(ierr.ErrValidation)
 }
 
 type UpdatePriceRequest struct {
