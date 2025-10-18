@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -63,6 +64,7 @@ type ServiceParams struct {
 	FeatureUsageRepo             events.FeatureUsageRepository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
+	PriceUnitRepo                priceunit.Repository
 	CustomerRepo                 customer.Repository
 	PlanRepo                     plan.Repository
 	SubRepo                      subscription.Repository
@@ -122,6 +124,7 @@ func NewServiceParams(
 	featureUsageRepo events.FeatureUsageRepository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
+	priceUnitRepo priceunit.Repository,
 	customerRepo customer.Repository,
 	planRepo plan.Repository,
 	subRepo subscription.Repository,
@@ -172,6 +175,7 @@ func NewServiceParams(
 		FeatureUsageRepo:             featureUsageRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
+		PriceUnitRepo:                priceUnitRepo,
 		CustomerRepo:                 customerRepo,
 		PlanRepo:                     planRepo,
 		SubRepo:                      subRepo,

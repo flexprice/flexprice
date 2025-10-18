@@ -38180,6 +38180,7 @@ type PriceUnitMutation struct {
 	created_by      *string
 	updated_by      *string
 	environment_id  *string
+	metadata        *map[string]string
 	name            *string
 	code            *string
 	symbol          *string
@@ -38591,6 +38592,55 @@ func (m *PriceUnitMutation) ResetEnvironmentID() {
 	delete(m.clearedFields, priceunit.FieldEnvironmentID)
 }
 
+// SetMetadata sets the "metadata" field.
+func (m *PriceUnitMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *PriceUnitMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the PriceUnit entity.
+// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceUnitMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *PriceUnitMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[priceunit.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *PriceUnitMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[priceunit.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *PriceUnitMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, priceunit.FieldMetadata)
+}
+
 // SetName sets the "name" field.
 func (m *PriceUnitMutation) SetName(s string) {
 	m.name = &s
@@ -38915,7 +38965,7 @@ func (m *PriceUnitMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceUnitMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.tenant_id != nil {
 		fields = append(fields, priceunit.FieldTenantID)
 	}
@@ -38936,6 +38986,9 @@ func (m *PriceUnitMutation) Fields() []string {
 	}
 	if m.environment_id != nil {
 		fields = append(fields, priceunit.FieldEnvironmentID)
+	}
+	if m.metadata != nil {
+		fields = append(fields, priceunit.FieldMetadata)
 	}
 	if m.name != nil {
 		fields = append(fields, priceunit.FieldName)
@@ -38977,6 +39030,8 @@ func (m *PriceUnitMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedBy()
 	case priceunit.FieldEnvironmentID:
 		return m.EnvironmentID()
+	case priceunit.FieldMetadata:
+		return m.Metadata()
 	case priceunit.FieldName:
 		return m.Name()
 	case priceunit.FieldCode:
@@ -39012,6 +39067,8 @@ func (m *PriceUnitMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldUpdatedBy(ctx)
 	case priceunit.FieldEnvironmentID:
 		return m.OldEnvironmentID(ctx)
+	case priceunit.FieldMetadata:
+		return m.OldMetadata(ctx)
 	case priceunit.FieldName:
 		return m.OldName(ctx)
 	case priceunit.FieldCode:
@@ -39081,6 +39138,13 @@ func (m *PriceUnitMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEnvironmentID(v)
+		return nil
+	case priceunit.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
 		return nil
 	case priceunit.FieldName:
 		v, ok := value.(string)
@@ -39178,6 +39242,9 @@ func (m *PriceUnitMutation) ClearedFields() []string {
 	if m.FieldCleared(priceunit.FieldEnvironmentID) {
 		fields = append(fields, priceunit.FieldEnvironmentID)
 	}
+	if m.FieldCleared(priceunit.FieldMetadata) {
+		fields = append(fields, priceunit.FieldMetadata)
+	}
 	return fields
 }
 
@@ -39200,6 +39267,9 @@ func (m *PriceUnitMutation) ClearField(name string) error {
 		return nil
 	case priceunit.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case priceunit.FieldMetadata:
+		m.ClearMetadata()
 		return nil
 	}
 	return fmt.Errorf("unknown PriceUnit nullable field %s", name)
@@ -39229,6 +39299,9 @@ func (m *PriceUnitMutation) ResetField(name string) error {
 		return nil
 	case priceunit.FieldEnvironmentID:
 		m.ResetEnvironmentID()
+		return nil
+	case priceunit.FieldMetadata:
+		m.ResetMetadata()
 		return nil
 	case priceunit.FieldName:
 		m.ResetName()
