@@ -22,6 +22,7 @@ type Handlers struct {
 	Environment              *v1.EnvironmentHandler
 	Health                   *v1.HealthHandler
 	Price                    *v1.PriceHandler
+	PriceUnit                *v1.PriceUnitHandler
 	Customer                 *v1.CustomerHandler
 	Connection               *v1.ConnectionHandler
 	Plan                     *v1.PlanHandler
@@ -158,6 +159,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 
+			// Price unit routes
+			price.POST("/units", handlers.PriceUnit.CreatePriceUnit)
+			price.GET("/units", handlers.PriceUnit.ListPriceUnits)
+			price.GET("/units/:id", handlers.PriceUnit.GetPriceUnit)
+			price.GET("/units/code/:code", handlers.PriceUnit.GetPriceUnitByCode)
+			price.PUT("/units/:id", handlers.PriceUnit.UpdatePriceUnit)
+			price.DELETE("/units/:id", handlers.PriceUnit.DeletePriceUnit)
 		}
 
 		customer := v1Private.Group("/customers")

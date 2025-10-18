@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -13,11 +12,11 @@ import (
 )
 
 type PriceUnitHandler struct {
-	service *service.PriceUnitService
+	service service.PriceUnitService
 	log     *logger.Logger
 }
 
-func NewPriceUnitHandler(service *service.PriceUnitService, log *logger.Logger) *PriceUnitHandler {
+func NewPriceUnitHandler(service service.PriceUnitService, log *logger.Logger) *PriceUnitHandler {
 	return &PriceUnitHandler{
 		service: service,
 		log:     log,
@@ -32,7 +31,7 @@ func NewPriceUnitHandler(service *service.PriceUnitService, log *logger.Logger) 
 // @Security ApiKeyAuth
 // @Produce json
 // @Param body body dto.CreatePriceUnitRequest true "Price unit details"
-// @Success 201 {object} dto.PriceUnitResponse
+// @Success 201 {object} dto.CreatePriceUnitResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Router /prices/units [post]
 func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
@@ -49,7 +48,7 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 		return
 	}
 
-	unit, err := h.service.Create(c.Request.Context(), &req)
+	unit, err := h.service.CreatePriceUnit(c.Request.Context(), req)
 	if err != nil {
 		h.log.Error("Failed to create price unit", "error", err)
 		c.Error(err)
@@ -59,7 +58,95 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 	c.JSON(http.StatusCreated, unit)
 }
 
-// GetPriceUnits handles listing price units with pagination and filtering
+// GetPriceUnit handles getting a price unit by ID
+// @Summary Get a price unit by ID
+// @Description Get a price unit by ID
+// @Tags Price Units
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Price unit ID"
+// @Success 200 {object} dto.PriceUnitResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Router /prices/units/{id} [get]
+func (h *PriceUnitHandler) GetPriceUnit(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("id is required").
+			WithMessage("missing id parameter").
+			WithHint("Price unit ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	unit, err := h.service.GetPriceUnit(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to get price unit", "error", err, "id", id)
+
+		if ierr.IsNotFound(err) {
+			c.Error(ierr.NewError("price unit not found").
+				WithMessage("price unit not found").
+				WithHint("The specified price unit ID does not exist").
+				WithReportableDetails(map[string]interface{}{
+					"id": id,
+				}).
+				Mark(ierr.ErrNotFound))
+			return
+		}
+
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, unit)
+}
+
+// GetPriceUnitByCode handles getting a price unit by code
+// @Summary Get a price unit by code
+// @Description Get a price unit by code
+// @Tags Price Units
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param code path string true "Price unit code"
+// @Success 200 {object} dto.PriceUnitResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Router /prices/units/code/{code} [get]
+func (h *PriceUnitHandler) GetPriceUnitByCode(c *gin.Context) {
+	code := c.Param("code")
+	if code == "" {
+		c.Error(ierr.NewError("code is required").
+			WithMessage("missing code parameter").
+			WithHint("Price unit code is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	unit, err := h.service.GetPriceUnitByCode(c.Request.Context(), code)
+	if err != nil {
+		h.log.Error("Failed to get price unit by code", "error", err, "code", code)
+
+		if ierr.IsNotFound(err) {
+			c.Error(ierr.NewError("price unit not found").
+				WithMessage("price unit not found").
+				WithHint("The specified price unit code does not exist").
+				WithReportableDetails(map[string]interface{}{
+					"code": code,
+				}).
+				Mark(ierr.ErrNotFound))
+			return
+		}
+
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, unit)
+}
+
+// ListPriceUnits handles listing price units with pagination and filtering
 // @Summary List price units
 // @Description Get a paginated list of price units with optional filtering
 // @Tags Price Units
@@ -74,8 +161,8 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 // @Success 200 {object} dto.ListPriceUnitsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Router /prices/units [get]
-func (h *PriceUnitHandler) GetPriceUnits(c *gin.Context) {
-	var filter priceunit.PriceUnitFilter
+func (h *PriceUnitHandler) ListPriceUnits(c *gin.Context) {
+	var filter types.PriceUnitFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid filter parameters").
@@ -93,9 +180,9 @@ func (h *PriceUnitHandler) GetPriceUnits(c *gin.Context) {
 		"offset", filter.GetOffset(),
 		"sort", filter.GetSort(),
 		"order", filter.GetOrder(),
-		"status", filter.Status)
+		"status", filter.GetStatus())
 
-	response, err := h.service.List(c.Request.Context(), &filter)
+	response, err := h.service.ListPriceUnits(c.Request.Context(), &filter)
 	if err != nil {
 		h.log.Error("Failed to list price units", "error", err)
 		c.Error(err)
@@ -114,7 +201,7 @@ func (h *PriceUnitHandler) GetPriceUnits(c *gin.Context) {
 
 // UpdatePriceUnit handles updating an existing price unit
 // @Summary Update a price unit
-// @Description Update an existing price unit with the provided details. Only name, symbol, precision, and conversion_rate can be updated. Status changes are not allowed.
+// @Description Update an existing price unit with the provided details. Only name and metadata can be updated.
 // @Tags Price Units
 // @Accept json
 // @Produce json
@@ -148,7 +235,7 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 		return
 	}
 
-	unit, err := h.service.Update(c.Request.Context(), id, &req)
+	unit, err := h.service.UpdatePriceUnit(c.Request.Context(), id, req)
 	if err != nil {
 		h.log.Error("Failed to update price unit", "error", err)
 		c.Error(err)
@@ -158,15 +245,15 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 	c.JSON(http.StatusOK, unit)
 }
 
-// DeletePriceUnit handles archiving a price unit
-// @Summary Archive a price unit
-// @Description Archive an existing price unit. The unit will be marked as archived and cannot be used in new prices.
+// DeletePriceUnit handles deleting a price unit
+// @Summary Delete a price unit
+// @Description Delete an existing price unit. The unit will be marked as deleted and cannot be used in new prices.
 // @Tags Price Units
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Price unit ID"
-// @Success 200 {object} dto.SuccessResponse
+// @Success 200 {object} gin.H
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Router /prices/units/{id} [delete]
@@ -180,9 +267,9 @@ func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 		return
 	}
 
-	err := h.service.Delete(c.Request.Context(), id)
+	err := h.service.DeletePriceUnit(c.Request.Context(), id)
 	if err != nil {
-		h.log.Error("Failed to archive price unit", "error", err, "id", id)
+		h.log.Error("Failed to delete price unit", "error", err, "id", id)
 
 		// Handle specific error types
 		if ierr.IsNotFound(err) {
@@ -200,130 +287,5 @@ func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Price unit archived successfully"})
-}
-
-// @Summary Get a price unit by ID
-// @Description Get a price unit by ID
-// @Tags Price Units
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Price unit ID"
-// @Success 200 {object} dto.PriceUnitResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /prices/units/{id} [get]
-// GetByID handles GET /prices/units/:id
-func (h *PriceUnitHandler) GetByID(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.Error(ierr.NewError("id is required").
-			WithMessage("missing id parameter").
-			WithHint("Price unit ID is required").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	unit, err := h.service.GetByID(c.Request.Context(), id)
-	if err != nil {
-		h.log.Error("Failed to get price unit", "error", err, "id", id)
-
-		if ierr.IsNotFound(err) {
-			c.Error(ierr.NewError("price unit not found").
-				WithMessage("price unit not found").
-				WithHint("The specified price unit ID does not exist").
-				WithReportableDetails(map[string]interface{}{
-					"id": id,
-				}).
-				Mark(ierr.ErrNotFound))
-			return
-		}
-
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, unit)
-}
-
-// @Summary Get a price unit by code
-// @Description Get a price unit by code
-// @Tags Price Units
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param code path string true "Price unit code"
-// @Success 200 {object} dto.PriceUnitResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /prices/units/code/{code} [get]
-// GetByCode handles GET /prices/units/code/:code
-func (h *PriceUnitHandler) GetByCode(c *gin.Context) {
-	code := c.Param("code")
-	if code == "" {
-		c.Error(ierr.NewError("code is required").
-			WithMessage("missing code parameter").
-			WithHint("Price unit code is required").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	tenantID := types.GetTenantID(c.Request.Context())
-	environmentID := types.GetEnvironmentID(c.Request.Context())
-
-	unit, err := h.service.GetByCode(c.Request.Context(), code, tenantID, environmentID)
-	if err != nil {
-		h.log.Error("Failed to get price unit by code", "error", err, "code", code, "tenantID", tenantID, "environmentID", environmentID)
-
-		if ierr.IsNotFound(err) {
-			c.Error(ierr.NewError("price unit not found").
-				WithMessage("price unit not found").
-				WithHint("The specified price unit code does not exist").
-				WithReportableDetails(map[string]interface{}{
-					"code": code,
-				}).
-				Mark(ierr.ErrNotFound))
-			return
-		}
-
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, unit)
-}
-
-// @Summary List price units by filter
-// @Description List price units by filter
-// @Tags Price Units
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter body priceunit.PriceUnitFilter true "Filter"
-// @Success 200 {object} dto.ListPriceUnitsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /prices/units/search [post]
-func (h *PriceUnitHandler) ListPriceUnitsByFilter(c *gin.Context) {
-	var filter priceunit.PriceUnitFilter
-	if err := c.ShouldBindJSON(&filter); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid filter parameters").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	if filter.GetLimit() == 0 {
-		filter.QueryFilter = types.NewDefaultQueryFilter()
-	}
-
-	response, err := h.service.List(c.Request.Context(), &filter)
-	if err != nil {
-		h.log.Error("Failed to list price units by filter", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, gin.H{"message": "Price unit deleted successfully"})
 }
