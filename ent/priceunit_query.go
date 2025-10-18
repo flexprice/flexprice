@@ -425,12 +425,9 @@ func (puq *PriceUnitQuery) loadPrices(ctx context.Context, query *PriceQuery, no
 	}
 	for _, n := range neighbors {
 		fk := n.PriceUnitID
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "price_unit_id" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		node, ok := nodeids[fk]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "price_unit_id" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected referenced foreign-key "price_unit_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

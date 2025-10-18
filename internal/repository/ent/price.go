@@ -58,8 +58,34 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	priceBuilder := client.Price.Create().
 		SetID(p.ID).
 		SetTenantID(p.TenantID).
-		SetAmount(p.Amount.InexactFloat64()).
+		SetAmount(p.Amount).
 		SetCurrency(p.Currency).
+		SetDisplayAmount(p.DisplayAmount).
+		SetType(string(p.Type)).
+		SetBillingPeriod(string(p.BillingPeriod)).
+		SetBillingPeriodCount(p.BillingPeriodCount).
+		SetBillingModel(string(p.BillingModel)).
+		SetBillingCadence(string(p.BillingCadence)).
+		SetNillableStartDate(p.StartDate).
+		SetNillableEndDate(p.EndDate).
+		SetNillableMeterID(lo.ToPtr(p.MeterID)).
+		SetInvoiceCadence(string(p.InvoiceCadence)).
+		SetTrialPeriod(p.TrialPeriod).
+		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
+		SetTiers(p.ToEntTiers()).
+		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
+		SetLookupKey(p.LookupKey).
+		SetDescription(p.Description).
+		SetMetadata(map[string]string(p.Metadata)).
+		SetStatus(string(p.Status)).
+		SetCreatedAt(p.CreatedAt).
+		SetUpdatedAt(p.UpdatedAt).
+		SetCreatedBy(p.CreatedBy).
+		SetUpdatedBy(p.CreatedBy).
+		SetEnvironmentID(p.EnvironmentID).
+		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
+		SetEntityType(string(p.EntityType)).
+		SetEntityID(p.EntityID).
 		SetDisplayAmount(p.DisplayAmount).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
@@ -260,7 +286,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 			price.TenantID(p.TenantID),
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetAmount(p.Amount.InexactFloat64()).
+		SetAmount(p.Amount).
 		SetDisplayAmount(p.DisplayAmount).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
@@ -374,7 +400,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 		builders[i] = client.Price.Create().
 			SetID(p.ID).
 			SetTenantID(p.TenantID).
-			SetAmount(p.Amount.InexactFloat64()).
+			SetAmount(p.Amount).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
 			SetEntityID(p.EntityID).

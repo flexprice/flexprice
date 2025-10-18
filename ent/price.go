@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Price is the model entity for the Price schema.
@@ -35,11 +36,23 @@ type Price struct {
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// Amount holds the value of the "amount" field.
-	Amount float64 `json:"amount,omitempty"`
+	Amount decimal.Decimal `json:"amount,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
+	// PriceUnitType holds the value of the "price_unit_type" field.
+	PriceUnitType string `json:"price_unit_type,omitempty"`
+	// PriceUnitID holds the value of the "price_unit_id" field.
+	PriceUnitID string `json:"price_unit_id,omitempty"`
+	// PriceUnit holds the value of the "price_unit" field.
+	PriceUnit string `json:"price_unit,omitempty"`
+	// PriceUnitAmount holds the value of the "price_unit_amount" field.
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
+	// DisplayPriceUnitAmount holds the value of the "display_price_unit_amount" field.
+	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
+	// ConversionRate holds the value of the "conversion_rate" field.
+	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty"`
 	// Type holds the value of the "type" field.
 	Type string `json:"type,omitempty"`
 	// BillingPeriod holds the value of the "billing_period" field.
@@ -82,8 +95,6 @@ type Price struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *string `json:"group_id,omitempty"`
-	// PriceUnitID holds the value of the "price_unit_id" field.
-	PriceUnitID *string `json:"price_unit_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
@@ -126,13 +137,15 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case price.FieldPriceUnitAmount, price.FieldConversionRate:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case price.FieldFilterValues, price.FieldTiers, price.FieldTransformQuantity, price.FieldMetadata:
 			values[i] = new([]byte)
 		case price.FieldAmount:
-			values[i] = new(sql.NullFloat64)
+			values[i] = new(decimal.Decimal)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID, price.FieldPriceUnitID:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -200,10 +213,10 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.EnvironmentID = value.String
 			}
 		case price.FieldAmount:
-			if value, ok := values[i].(*sql.NullFloat64); !ok {
+			if value, ok := values[i].(*decimal.Decimal); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
-			} else if value.Valid {
-				pr.Amount = value.Float64
+			} else if value != nil {
+				pr.Amount = *value
 			}
 		case price.FieldCurrency:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -216,6 +229,44 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field display_amount", values[i])
 			} else if value.Valid {
 				pr.DisplayAmount = value.String
+			}
+		case price.FieldPriceUnitType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_type", values[i])
+			} else if value.Valid {
+				pr.PriceUnitType = value.String
+			}
+		case price.FieldPriceUnitID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
+			} else if value.Valid {
+				pr.PriceUnitID = value.String
+			}
+		case price.FieldPriceUnit:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
+			} else if value.Valid {
+				pr.PriceUnit = value.String
+			}
+		case price.FieldPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_amount", values[i])
+			} else if value.Valid {
+				pr.PriceUnitAmount = new(decimal.Decimal)
+				*pr.PriceUnitAmount = *value.S.(*decimal.Decimal)
+			}
+		case price.FieldDisplayPriceUnitAmount:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field display_price_unit_amount", values[i])
+			} else if value.Valid {
+				pr.DisplayPriceUnitAmount = value.String
+			}
+		case price.FieldConversionRate:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
+			} else if value.Valid {
+				pr.ConversionRate = new(decimal.Decimal)
+				*pr.ConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case price.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -359,13 +410,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.GroupID = new(string)
 				*pr.GroupID = value.String
 			}
-		case price.FieldPriceUnitID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
-			} else if value.Valid {
-				pr.PriceUnitID = new(string)
-				*pr.PriceUnitID = value.String
-			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
 		}
@@ -441,6 +485,28 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("display_amount=")
 	builder.WriteString(pr.DisplayAmount)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit_type=")
+	builder.WriteString(pr.PriceUnitType)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit_id=")
+	builder.WriteString(pr.PriceUnitID)
+	builder.WriteString(", ")
+	builder.WriteString("price_unit=")
+	builder.WriteString(pr.PriceUnit)
+	builder.WriteString(", ")
+	if v := pr.PriceUnitAmount; v != nil {
+		builder.WriteString("price_unit_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("display_price_unit_amount=")
+	builder.WriteString(pr.DisplayPriceUnitAmount)
+	builder.WriteString(", ")
+	if v := pr.ConversionRate; v != nil {
+		builder.WriteString("conversion_rate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(pr.Type)
@@ -518,11 +584,6 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	if v := pr.GroupID; v != nil {
 		builder.WriteString("group_id=")
-		builder.WriteString(*v)
-	}
-	builder.WriteString(", ")
-	if v := pr.PriceUnitID; v != nil {
-		builder.WriteString("price_unit_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
