@@ -39,6 +39,7 @@ import (
 	"github.com/flexprice/flexprice/ent/paymentattempt"
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -141,6 +142,7 @@ func checkColumn(table, column string) error {
 			paymentattempt.Table:            paymentattempt.ValidColumn,
 			plan.Table:                      plan.ValidColumn,
 			price.Table:                     price.ValidColumn,
+			priceunit.Table:                 priceunit.ValidColumn,
 			secret.Table:                    secret.ValidColumn,
 			settings.Table:                  settings.ValidColumn,
 			subscription.Table:              subscription.ValidColumn,

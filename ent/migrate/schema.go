@@ -1265,7 +1265,6 @@ var (
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "display_amount", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "price_unit_type", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "price_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "price_unit_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "display_price_unit_amount", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
@@ -1292,6 +1291,7 @@ var (
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "addon_prices", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "price_unit_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// PricesTable holds the schema information for the "prices" table.
 	PricesTable = &schema.Table{
@@ -1301,8 +1301,14 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "prices_addons_prices",
-				Columns:    []*schema.Column{PricesColumns[38]},
+				Columns:    []*schema.Column{PricesColumns[37]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "prices_price_units_price_unit_edge",
+				Columns:    []*schema.Column{PricesColumns[38]},
+				RefColumns: []*schema.Column{PriceUnitsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -1310,7 +1316,7 @@ var (
 			{
 				Name:    "price_tenant_id_environment_id_lookup_key",
 				Unique:  true,
-				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[30]},
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[29]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
 				},
@@ -1323,7 +1329,45 @@ var (
 			{
 				Name:    "price_start_date_end_date",
 				Unique:  false,
-				Columns: []*schema.Column{PricesColumns[36], PricesColumns[37]},
+				Columns: []*schema.Column{PricesColumns[35], PricesColumns[36]},
+			},
+		},
+	}
+	// PriceUnitsColumns holds the columns for the "price_units" table.
+	PriceUnitsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "code", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "symbol", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
+		{Name: "base_currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
+		{Name: "conversion_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
+		{Name: "precision", Type: field.TypeInt, Default: 0},
+	}
+	// PriceUnitsTable holds the schema information for the "price_units" table.
+	PriceUnitsTable = &schema.Table{
+		Name:       "price_units",
+		Columns:    PriceUnitsColumns,
+		PrimaryKey: []*schema.Column{PriceUnitsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "priceunit_code_tenant_id_environment_id",
+				Unique:  true,
+				Columns: []*schema.Column{PriceUnitsColumns[9], PriceUnitsColumns[1], PriceUnitsColumns[7]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "priceunit_tenant_id_environment_id",
+				Unique:  false,
+				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7]},
 			},
 		},
 	}
@@ -2106,6 +2150,7 @@ var (
 		PaymentAttemptsTable,
 		PlansTable,
 		PricesTable,
+		PriceUnitsTable,
 		SecretsTable,
 		SettingsTable,
 		SubscriptionsTable,
@@ -2145,6 +2190,7 @@ func init() {
 	InvoiceLineItemsTable.ForeignKeys[0].RefTable = InvoicesTable
 	PaymentAttemptsTable.ForeignKeys[0].RefTable = PaymentsTable
 	PricesTable.ForeignKeys[0].RefTable = AddonsTable
+	PricesTable.ForeignKeys[1].RefTable = PriceUnitsTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable
