@@ -303,7 +303,6 @@ func (p *CSVFeatureProcessor) createPrice(ctx context.Context, record CSVFeature
 		EntityType:         entityType,
 		EntityID:           entityID,
 		Type:               types.PRICE_TYPE_USAGE,
-		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,

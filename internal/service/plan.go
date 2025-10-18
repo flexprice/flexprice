@@ -48,50 +48,24 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 
 		// 2. Create prices in bulk if present
 		if len(req.Prices) > 0 {
-			prices := make([]*domainPrice.Price, len(req.Prices))
-			for i, planPriceReq := range req.Prices {
-				var price *domainPrice.Price
-				var err error
+			priceService := NewPriceService(s.ServiceParams)
 
-				// Skip if the price request is nil
-				if planPriceReq.CreatePriceRequest == nil {
-					return ierr.NewError("price request cannot be nil").
-						WithHint("Please provide valid price configuration").
-						Mark(ierr.ErrValidation)
+			// Convert CreatePlanPriceRequest to CreatePriceRequest
+			priceRequests := make([]dto.CreatePriceRequest, 0, len(req.Prices))
+			for _, planPrice := range req.Prices {
+				if planPrice.CreatePriceRequest != nil {
+					price := *planPrice.CreatePriceRequest
+					price.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+					price.EntityID = plan.ID
+					priceRequests = append(priceRequests, price)
 				}
-
-				// If price unit config is provided, use price unit handling logic
-				if planPriceReq.PriceUnitConfig != nil {
-					// Create a price service instance for price unit handling
-					priceService := NewPriceService(s.ServiceParams)
-					priceResp, err := priceService.CreatePrice(ctx, *planPriceReq.CreatePriceRequest)
-					if err != nil {
-						return ierr.WithError(err).
-							WithHint("Failed to create price with unit config").
-							Mark(ierr.ErrValidation)
-					}
-					price = priceResp.Price
-				} else {
-					// For regular prices without unit config, use ToPrice
-					price, err = planPriceReq.CreatePriceRequest.ToPrice(ctx)
-					if err != nil {
-						return ierr.WithError(err).
-							WithHint("Failed to create price").
-							Mark(ierr.ErrValidation)
-					}
-				}
-
-				price.EntityType = types.PRICE_ENTITY_TYPE_PLAN
-				price.EntityID = plan.ID
-				prices[i] = price
 			}
 
-			// Create prices in bulk
-			if err := s.PriceRepo.CreateBulk(ctx, prices); err != nil {
+			_, err := priceService.CreateBulkPrice(ctx, dto.CreateBulkPriceRequest{Items: priceRequests})
+			if err != nil {
 				return err
 			}
 		}
-
 		// 3. Create entitlements in bulk if present
 		// TODO: add feature validations - maybe by cerating a bulk create method
 		// in the entitlement service that can own this for create and updates
@@ -417,54 +391,22 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 			}
 
 			// Create new prices
-			bulkCreatePrices := make([]*domainPrice.Price, 0) // Slice for bulk creation
-
 			for _, reqPrice := range req.Prices {
 				if reqPrice.ID == "" {
-					var newPrice *domainPrice.Price
-					var err error
+					// Set plan ID before creating price
+					reqPrice.CreatePriceRequest.EntityID = plan.ID
+					reqPrice.CreatePriceRequest.EntityType = types.PRICE_ENTITY_TYPE_PLAN
 
-					// If price unit config is provided, handle it through the price service
-					if reqPrice.PriceUnitConfig != nil {
-						// Set plan ID before creating price
-						reqPrice.CreatePriceRequest.EntityID = plan.ID
-						reqPrice.CreatePriceRequest.EntityType = types.PRICE_ENTITY_TYPE_PLAN
-
-						priceService := NewPriceService(s.ServiceParams)
-						priceResp, err := priceService.CreatePrice(ctx, *reqPrice.CreatePriceRequest)
-						if err != nil {
-							return ierr.WithError(err).
-								WithHint("Failed to create price with unit config").
-								Mark(ierr.ErrValidation)
-						}
-						newPrice = priceResp.Price
-						// Price is already created through the price service
-					} else {
-						// For regular prices without unit config, use ToPrice
-						// Ensure price unit type is set, default to FIAT if not provided
-						if reqPrice.PriceUnitType == "" {
-							reqPrice.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
-						}
-						newPrice, err = reqPrice.ToPrice(ctx)
-						if err != nil {
-							return ierr.WithError(err).
-								WithHint("Failed to create price").
-								Mark(ierr.ErrValidation)
-						}
-						newPrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
-						newPrice.EntityID = plan.ID
-						// Add to bulkCreatePrices for bulk creation
-						bulkCreatePrices = append(bulkCreatePrices, newPrice)
+					priceService := NewPriceService(s.ServiceParams)
+					_, err := priceService.CreatePrice(ctx, *reqPrice.CreatePriceRequest)
+					if err != nil {
+						return ierr.WithError(err).
+							WithHint("Failed to create price").
+							Mark(ierr.ErrValidation)
 					}
 				}
 			}
 
-			// Only bulk create prices that weren't already created through the price service
-			if len(bulkCreatePrices) > 0 {
-				if err := s.PriceRepo.CreateBulk(ctx, bulkCreatePrices); err != nil {
-					return err
-				}
-			}
 		}
 
 		// 3. Handle entitlements
