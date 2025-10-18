@@ -70,6 +70,7 @@ func (r *priceUnitRepository) Create(ctx context.Context, priceUnit *domainPrice
 		SetCreatedBy(priceUnit.CreatedBy).
 		SetUpdatedBy(priceUnit.UpdatedBy).
 		SetEnvironmentID(priceUnit.EnvironmentID).
+		SetMetadata(priceUnit.Metadata).
 		Save(ctx)
 
 	if err != nil {
@@ -251,6 +252,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 		SetStatus(string(priceUnit.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
+		SetMetadata(priceUnit.Metadata).
 		Save(ctx)
 
 	if err != nil {

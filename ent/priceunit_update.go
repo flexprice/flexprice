@@ -70,6 +70,18 @@ func (puu *PriceUnitUpdate) ClearUpdatedBy() *PriceUnitUpdate {
 	return puu
 }
 
+// SetMetadata sets the "metadata" field.
+func (puu *PriceUnitUpdate) SetMetadata(m map[string]string) *PriceUnitUpdate {
+	puu.mutation.SetMetadata(m)
+	return puu
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (puu *PriceUnitUpdate) ClearMetadata() *PriceUnitUpdate {
+	puu.mutation.ClearMetadata()
+	return puu
+}
+
 // SetName sets the "name" field.
 func (puu *PriceUnitUpdate) SetName(s string) *PriceUnitUpdate {
 	puu.mutation.SetName(s)
@@ -298,6 +310,12 @@ func (puu *PriceUnitUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if puu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(priceunit.FieldEnvironmentID, field.TypeString)
 	}
+	if value, ok := puu.mutation.Metadata(); ok {
+		_spec.SetField(priceunit.FieldMetadata, field.TypeJSON, value)
+	}
+	if puu.mutation.MetadataCleared() {
+		_spec.ClearField(priceunit.FieldMetadata, field.TypeJSON)
+	}
 	if value, ok := puu.mutation.Name(); ok {
 		_spec.SetField(priceunit.FieldName, field.TypeString, value)
 	}
@@ -421,6 +439,18 @@ func (puuo *PriceUnitUpdateOne) SetNillableUpdatedBy(s *string) *PriceUnitUpdate
 // ClearUpdatedBy clears the value of the "updated_by" field.
 func (puuo *PriceUnitUpdateOne) ClearUpdatedBy() *PriceUnitUpdateOne {
 	puuo.mutation.ClearUpdatedBy()
+	return puuo
+}
+
+// SetMetadata sets the "metadata" field.
+func (puuo *PriceUnitUpdateOne) SetMetadata(m map[string]string) *PriceUnitUpdateOne {
+	puuo.mutation.SetMetadata(m)
+	return puuo
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (puuo *PriceUnitUpdateOne) ClearMetadata() *PriceUnitUpdateOne {
+	puuo.mutation.ClearMetadata()
 	return puuo
 }
 
@@ -681,6 +711,12 @@ func (puuo *PriceUnitUpdateOne) sqlSave(ctx context.Context) (_node *PriceUnit, 
 	}
 	if puuo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(priceunit.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := puuo.mutation.Metadata(); ok {
+		_spec.SetField(priceunit.FieldMetadata, field.TypeJSON, value)
+	}
+	if puuo.mutation.MetadataCleared() {
+		_spec.ClearField(priceunit.FieldMetadata, field.TypeJSON)
 	}
 	if value, ok := puuo.mutation.Name(); ok {
 		_spec.SetField(priceunit.FieldName, field.TypeString, value)
