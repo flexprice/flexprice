@@ -175,8 +175,6 @@ var (
 	DisplayAmountValidator func(string) error
 	// DefaultPriceUnitType holds the default value on creation for the "price_unit_type" field.
 	DefaultPriceUnitType types.PriceUnitType
-	// PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
-	PriceUnitTypeValidator func(string) error
 	// DefaultPriceUnitAmount holds the default value on creation for the "price_unit_amount" field.
 	DefaultPriceUnitAmount decimal.Decimal
 	// DefaultConversionRate holds the default value on creation for the "conversion_rate" field.

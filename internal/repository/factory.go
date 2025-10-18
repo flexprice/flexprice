@@ -27,7 +27,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
-	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -190,10 +189,6 @@ func NewTaxAssociationRepository(p RepositoryParams) taxassociation.Repository {
 
 func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
 	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.Cache)
-}
-
-func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
-	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewAddonRepository(p RepositoryParams) addon.Repository {

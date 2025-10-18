@@ -43,29 +43,9 @@ type Price struct {
 	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
 	Currency string `db:"currency" json:"currency"`
 
-	// PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
-	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
-
-	// PriceUnitID is the id of the price unit
-	PriceUnitID string `db:"price_unit_id" json:"price_unit_id,omitempty"`
-
-	// PriceUnitAmount is the amount stored in price unit
-	// For BTC: 0.00000001 means 0.00000001 BTC
-	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty" swaggertype:"string"`
-
-	// DisplayPriceUnitAmount is the formatted amount with price unit symbol
-	// For BTC: 0.00000001 BTC
-	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount,omitempty"`
-
-	// PriceUnit 3 digit ISO currency code in lowercase ex btc
-	// For BTC: btc
-	PriceUnit string `db:"price_unit" json:"price_unit,omitempty"`
-
-	// ConversionRate is the rate of the price unit to the base currency
-	// For BTC: 1 BTC = 100000000 USD
-	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
-
 	Type types.PriceType `db:"type" json:"type"`
+
+	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
 
 	BillingPeriod types.BillingPeriod `db:"billing_period" json:"billing_period"`
 
@@ -91,9 +71,6 @@ type Price struct {
 	TierMode types.BillingTier `db:"tier_mode" json:"tier_mode,omitempty"`
 
 	Tiers JSONBTiers `db:"tiers,jsonb" json:"tiers,omitempty"`
-
-	// PriceUnitTiers are the tiers for the price unit
-	PriceUnitTiers JSONBTiers `db:"price_unit_tiers,jsonb" json:"price_unit_tiers,omitempty"`
 
 	// MeterID is the id of the meter for usage based pricing
 	MeterID string `db:"meter_id" json:"meter_id"`
@@ -364,57 +341,34 @@ func FromEnt(e *ent.Price) *Price {
 		}
 	}
 
-	// Convert price unit tiers from ent model to price tiers
-	var priceUnitTiers JSONBTiers
-	if len(e.PriceUnitTiers) > 0 {
-		priceUnitTiers = make(JSONBTiers, len(e.PriceUnitTiers))
-		for i, tier := range e.PriceUnitTiers {
-			priceUnitTiers[i] = PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: tier.UnitAmount,
-			}
-			if tier.FlatAmount != nil {
-				flatAmount := tier.FlatAmount
-				priceUnitTiers[i].FlatAmount = flatAmount
-			}
-		}
-	}
-
 	return &Price{
-		ID:                     e.ID,
-		Amount:                 e.Amount,
-		Currency:               e.Currency,
-		DisplayAmount:          e.DisplayAmount,
-		PriceUnitType:          e.PriceUnitType,
-		Type:                   e.Type,
-		BillingPeriod:          e.BillingPeriod,
-		BillingPeriodCount:     e.BillingPeriodCount,
-		BillingModel:           e.BillingModel,
-		DisplayName:            e.DisplayName,
-		BillingCadence:         e.BillingCadence,
-		InvoiceCadence:         e.InvoiceCadence,
-		TrialPeriod:            e.TrialPeriod,
-		TierMode:               lo.FromPtr(e.TierMode),
-		Tiers:                  tiers,
-		PriceUnitTiers:         priceUnitTiers,
-		MeterID:                lo.FromPtr(e.MeterID),
-		LookupKey:              e.LookupKey,
-		Description:            e.Description,
-		TransformQuantity:      JSONBTransformQuantity(e.TransformQuantity),
-		Metadata:               JSONBMetadata(e.Metadata),
-		EnvironmentID:          e.EnvironmentID,
-		PriceUnitID:            lo.FromPtr(e.PriceUnitID),
-		PriceUnit:              e.PriceUnit,
-		PriceUnitAmount:        lo.FromPtrOr(e.PriceUnitAmount, decimal.Zero),
-		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
-		ConversionRate:         lo.FromPtrOr(e.ConversionRate, decimal.Zero),
-		EntityType:             lo.FromPtr(e.EntityType),
-		EntityID:               lo.FromPtr(e.EntityID),
-		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
-		GroupID:                lo.FromPtr(e.GroupID),
-		StartDate:              e.StartDate,
-		EndDate:                e.EndDate,
-		MinQuantity:            e.MinQuantity,
+		ID:                 e.ID,
+		Amount:             e.Amount,
+		Currency:           e.Currency,
+		DisplayAmount:      e.DisplayAmount,
+		Type:               types.PriceType(e.Type),
+		BillingPeriod:      types.BillingPeriod(e.BillingPeriod),
+		BillingPeriodCount: e.BillingPeriodCount,
+		BillingModel:       types.BillingModel(e.BillingModel),
+		DisplayName:        e.DisplayName,
+		BillingCadence:     types.BillingCadence(e.BillingCadence),
+		InvoiceCadence:     types.InvoiceCadence(e.InvoiceCadence),
+		TrialPeriod:        e.TrialPeriod,
+		TierMode:           types.BillingTier(lo.FromPtr(e.TierMode)),
+		Tiers:              tiers,
+		MeterID:            lo.FromPtr(e.MeterID),
+		LookupKey:          e.LookupKey,
+		Description:        e.Description,
+		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
+		Metadata:           JSONBMetadata(e.Metadata),
+		EnvironmentID:      e.EnvironmentID,
+		EntityType:         types.PriceEntityType(lo.FromPtr(e.EntityType)),
+		EntityID:           lo.FromPtr(e.EntityID),
+		ParentPriceID:      lo.FromPtr(e.ParentPriceID),
+		GroupID:            lo.FromPtr(e.GroupID),
+		StartDate:          e.StartDate,
+		EndDate:            e.EndDate,
+		MinQuantity:        e.MinQuantity,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -446,23 +400,6 @@ func (p *Price) ToEntTiers() []*types.PriceTier {
 
 	tiers := make([]*types.PriceTier, len(p.Tiers))
 	for i, tier := range p.Tiers {
-		tiers[i] = &types.PriceTier{
-			UpTo:       tier.UpTo,
-			UnitAmount: tier.UnitAmount,
-			FlatAmount: tier.FlatAmount,
-		}
-	}
-	return tiers
-}
-
-// ToPriceUnitTiers converts domain price unit tiers to ent tiers
-func (p *Price) ToPriceUnitTiers() []*types.PriceTier {
-	if len(p.PriceUnitTiers) == 0 {
-		return nil
-	}
-
-	tiers := make([]*types.PriceTier, len(p.PriceUnitTiers))
-	for i, tier := range p.PriceUnitTiers {
 		tiers[i] = &types.PriceTier{
 			UpTo:       tier.UpTo,
 			UnitAmount: tier.UnitAmount,

@@ -65,7 +65,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
 			}).
-			NotEmpty().
+			Immutable().
 			Default(string(types.PRICE_UNIT_TYPE_FIAT)).
 			GoType(types.PriceUnitType("")),
 

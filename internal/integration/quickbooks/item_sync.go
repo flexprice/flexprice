@@ -117,7 +117,7 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	}
 
 	// Set unit price based on price type:
-	// - For usage-based prices: use PriceUnitAmount (per-unit rate)
+	// - For usage-based prices: use Amount (per-unit rate)
 	// - For recurring prices: use Amount (fixed recurring amount)
 	// - For tiered prices: use first tier's unit amount
 	var unitPrice decimal.Decimal
@@ -128,15 +128,9 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 		"billing_model", priceToSync.BillingModel)
 
 	if priceToSync.Type == types.PRICE_TYPE_USAGE {
-		// Usage-based: use per-unit price
-		if !priceToSync.PriceUnitAmount.IsZero() {
-			unitPrice = priceToSync.PriceUnitAmount
-			s.Logger.Infow("using PriceUnitAmount for usage-based price", "unit_price", unitPrice)
-		} else if !priceToSync.Amount.IsZero() {
-			// Fallback to Amount if PriceUnitAmount is not set
-			unitPrice = priceToSync.Amount
-			s.Logger.Infow("using Amount as fallback for usage-based price", "unit_price", unitPrice)
-		}
+		// Usage-based: use per-unit price (stored in Amount)
+		unitPrice = priceToSync.Amount
+		s.Logger.Infow("using Amount for usage-based price", "unit_price", unitPrice)
 	} else if priceToSync.BillingModel == types.BILLING_MODEL_TIERED && len(priceToSync.Tiers) > 0 {
 		// Tiered pricing: use first tier's unit amount as default
 		unitPrice = priceToSync.Tiers[0].UnitAmount

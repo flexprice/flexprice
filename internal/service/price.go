@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"time"
 
@@ -62,12 +61,6 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 
 	// Get display name if needed (before price creation)
 	s.getDisplayName(ctx, &req)
-
-	// Handle price unit config case
-	if req.PriceUnitConfig != nil {
-		return s.createPriceWithUnitConfig(ctx, req)
-	}
-
 	// Handle regular price case
 	p, err := req.ToPrice(ctx)
 	if err != nil {
@@ -215,24 +208,19 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 			Items: make([]*dto.PriceResponse, 0),
 		}
 
-		// Separate prices that need price unit config handling from regular prices
+		// Process all prices
 		var regularPrices []*price.Price
-		var priceUnitConfigPrices []dto.CreatePriceRequest
 
 		for _, priceReq := range req.Items {
-			if priceReq.PriceUnitConfig != nil {
-				priceUnitConfigPrices = append(priceUnitConfigPrices, priceReq)
-			} else {
-				// Handle regular prices
-				s.getDisplayName(txCtx, &priceReq)
-				price, err := priceReq.ToPrice(txCtx)
-				if err != nil {
-					return ierr.WithError(err).
-						WithHint("Failed to create price").
-						Mark(ierr.ErrValidation)
-				}
-				regularPrices = append(regularPrices, price)
+			// Handle regular prices
+			s.getDisplayName(txCtx, &priceReq)
+			price, err := priceReq.ToPrice(txCtx)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to create price").
+					Mark(ierr.ErrValidation)
 			}
+			regularPrices = append(regularPrices, price)
 		}
 
 		// Create regular prices in bulk if any exist
@@ -252,18 +240,6 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 				priceResp := &dto.PriceResponse{Price: p}
 				response.Items = append(response.Items, priceResp)
 			}
-		}
-
-		// Handle price unit config prices individually (they need special processing)
-		for _, priceReq := range priceUnitConfigPrices {
-			s.getDisplayName(txCtx, &priceReq)
-			priceResp, err := s.createPriceWithUnitConfig(txCtx, priceReq)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to create price with unit config").
-					Mark(ierr.ErrValidation)
-			}
-			response.Items = append(response.Items, priceResp)
 		}
 
 		return nil
@@ -310,237 +286,6 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 	return response, nil
 }
 
-// createPriceWithUnitConfig- a private helper method to create a price with a price unit config
-func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error) {
-
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	// Get display name if needed (before price creation)
-	s.getDisplayName(ctx, &req)
-
-	// Parse price unit amount - this is the amount in the price unit currency
-	priceUnitAmount := decimal.Zero
-	if req.BillingModel != types.BILLING_MODEL_TIERED {
-		if req.PriceUnitConfig.Amount == "" {
-			return nil, ierr.NewError("price_unit_config.amount is required when billing model is not TIERED").
-				WithHint("Amount in price unit currency is required for price unit config").
-				Mark(ierr.ErrValidation)
-		}
-
-		var err error
-		priceUnitAmount, err = decimal.NewFromString(req.PriceUnitConfig.Amount)
-		if err != nil {
-			return nil, ierr.WithError(err).
-				WithHint("Price unit amount must be a valid decimal number").
-				WithReportableDetails(map[string]interface{}{"amount": req.PriceUnitConfig.Amount}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Fetch the price unit by code, tenant, and environment
-	tenantID := types.GetTenantID(ctx)
-	envID := types.GetEnvironmentID(ctx)
-	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, string(types.StatusPublished))
-	if err != nil || priceUnit == nil {
-		return nil, ierr.NewError("invalid or unpublished price unit").
-			WithHint("Price unit must exist and be published").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Convert FROM price unit TO base currency
-	baseAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, priceUnitAmount)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to convert price unit amount to base currency").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Round to the price unit's precision
-	priceUnitAmount = priceUnitAmount.Round(int32(priceUnit.Precision))
-
-	// Format display price unit amount
-	displayPriceUnitAmount := formatDisplayPriceUnitAmount(priceUnitAmount, priceUnit.Precision, priceUnit.Symbol)
-
-	// Build the price model
-	metadata := make(map[string]string)
-	if req.Metadata != nil {
-		metadata = req.Metadata
-	}
-
-	var transformQuantity price.JSONBTransformQuantity
-	if req.TransformQuantity != nil {
-		transformQuantity = price.JSONBTransformQuantity(*req.TransformQuantity)
-	}
-
-	var tiers price.JSONBTiers
-	var priceUnitTiers price.JSONBTiers
-	if req.PriceUnitConfig != nil && req.PriceUnitConfig.PriceUnitTiers != nil {
-		// Process price unit tiers - convert amounts from price unit to base currency
-		priceTiers := make([]price.PriceTier, len(req.PriceUnitConfig.PriceUnitTiers))
-		priceUnitTiers = make(price.JSONBTiers, len(req.PriceUnitConfig.PriceUnitTiers))
-		for i, tier := range req.PriceUnitConfig.PriceUnitTiers {
-			// Parse the tier unit amount (in price unit currency)
-			unitAmount, err := decimal.NewFromString(tier.UnitAmount)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Tier unit amount must be a valid decimal number").
-					WithReportableDetails(map[string]interface{}{"unit_amount": tier.UnitAmount}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// Store original price unit tier
-			priceUnitTiers[i] = price.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: unitAmount,
-			}
-
-			// Convert tier unit amount from price unit to base currency
-			convertedUnitAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, unitAmount)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Failed to convert tier unit amount to base currency").
-					WithReportableDetails(map[string]interface{}{
-						"tier_index":  i,
-						"unit_amount": tier.UnitAmount,
-						"price_unit":  req.PriceUnitConfig.PriceUnit,
-					}).
-					Mark(ierr.ErrInternal)
-			}
-
-			var flatAmount *decimal.Decimal
-			var priceUnitFlatAmount *decimal.Decimal
-			if tier.FlatAmount != nil {
-				// Parse the tier flat amount (in price unit currency)
-				parsed, err := decimal.NewFromString(*tier.FlatAmount)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithHint("Tier flat amount must be a valid decimal number").
-						WithReportableDetails(map[string]interface{}{"flat_amount": tier.FlatAmount}).
-						Mark(ierr.ErrValidation)
-				}
-
-				// Store original price unit flat amount
-				priceUnitFlatAmount = &parsed
-				priceUnitTiers[i].FlatAmount = priceUnitFlatAmount
-
-				// Convert tier flat amount from price unit to base currency
-				convertedFlatAmount, err := s.PriceUnitRepo.ConvertToBaseCurrency(ctx, req.PriceUnitConfig.PriceUnit, tenantID, envID, parsed)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithHint("Failed to convert tier flat amount to base currency").
-						WithReportableDetails(map[string]interface{}{
-							"tier_index":  i,
-							"flat_amount": tier.FlatAmount,
-							"price_unit":  req.PriceUnitConfig.PriceUnit,
-						}).
-						Mark(ierr.ErrInternal)
-				}
-				flatAmount = &convertedFlatAmount
-			}
-
-			priceTiers[i] = price.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: convertedUnitAmount, // Store converted amount
-				FlatAmount: flatAmount,          // Store converted flat amount
-			}
-		}
-		tiers = price.JSONBTiers(priceTiers)
-	} else if req.Tiers != nil {
-		// Process regular tiers (when not using price unit config)
-		priceTiers := make([]price.PriceTier, len(req.Tiers))
-		for i, tier := range req.Tiers {
-			unitAmount, err := decimal.NewFromString(tier.UnitAmount)
-			if err != nil {
-				return nil, ierr.WithError(err).
-					WithHint("Unit amount must be a valid decimal number").
-					WithReportableDetails(map[string]interface{}{"unit_amount": tier.UnitAmount}).
-					Mark(ierr.ErrValidation)
-			}
-			var flatAmount *decimal.Decimal
-			if tier.FlatAmount != nil {
-				parsed, err := decimal.NewFromString(*tier.FlatAmount)
-				if err != nil {
-					return nil, ierr.WithError(err).
-						WithHint("Flat amount must be a valid decimal number").
-						WithReportableDetails(map[string]interface{}{"flat_amount": tier.FlatAmount}).
-						Mark(ierr.ErrValidation)
-				}
-				flatAmount = &parsed
-			}
-			priceTiers[i] = price.PriceTier{
-				UpTo:       tier.UpTo,
-				UnitAmount: unitAmount,
-				FlatAmount: flatAmount,
-			}
-		}
-		tiers = price.JSONBTiers(priceTiers)
-	}
-
-	p := &price.Price{
-		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		Amount:             baseAmount,
-		Currency:           req.Currency,
-		PriceUnitType:      req.PriceUnitType,
-		EntityType:         req.EntityType,
-		EntityID:           req.EntityID,
-		Type:               req.Type,
-		BillingPeriod:      req.BillingPeriod,
-		BillingPeriodCount: req.BillingPeriodCount,
-		BillingModel:       req.BillingModel,
-		BillingCadence:     req.BillingCadence,
-		InvoiceCadence:     req.InvoiceCadence,
-		TrialPeriod:        req.TrialPeriod,
-		MeterID:            req.MeterID,
-		LookupKey:          req.LookupKey,
-		Description:        req.Description,
-		Metadata:           metadata,
-		TierMode:           req.TierMode,
-		Tiers:              tiers,
-		PriceUnitTiers:     priceUnitTiers,
-		TransformQuantity:  transformQuantity,
-		ParentPriceID:      req.ParentPriceID,
-		EnvironmentID:      envID,
-		BaseModel:          types.GetDefaultBaseModel(ctx),
-		// Price unit fields - set all from the fetched price unit
-		PriceUnit:              priceUnit.Code,
-		PriceUnitID:            priceUnit.ID,
-		PriceUnitAmount:        priceUnitAmount,
-		DisplayPriceUnitAmount: displayPriceUnitAmount,
-		ConversionRate:         priceUnit.ConversionRate,
-	}
-
-	p.DisplayAmount = p.GetDisplayAmount()
-
-	if err := s.PriceRepo.Create(ctx, p); err != nil {
-		return nil, err
-	}
-
-	response := &dto.PriceResponse{Price: p}
-
-	// Sync new price to Chargebee if it belongs to a plan
-	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
-	}
-
-	// Sync new price to QuickBooks if it belongs to a plan
-	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		s.syncPriceToQuickBooksIfEnabled(ctx, p.ID, p.EntityID)
-	}
-
-	return response, nil
-}
-
-// Helper to format display price unit amount
-func formatDisplayPriceUnitAmount(amount decimal.Decimal, precision int, symbol string) string {
-	// Round the amount to the specified precision
-	roundedAmount := amount.Round(int32(precision))
-	// Convert to float64 for proper formatting
-	amountFloat := roundedAmount.InexactFloat64()
-	return fmt.Sprintf("%s%.*f", symbol, precision, amountFloat)
-}
-
 func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error) {
 	if id == "" {
 		return nil, ierr.NewError("price_id is required").
@@ -569,15 +314,6 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		response.Meter = dto.ToMeterResponse(meter)
 	}
 
-	if price.PriceUnitID != "" {
-		priceUnit, err := s.PriceUnitRepo.GetByID(ctx, price.PriceUnitID)
-		if err != nil {
-			s.Logger.Warnw("failed to fetch price unit", "price_unit_id", price.PriceUnitID, "error", err)
-			return nil, err
-		}
-		response.PricingUnit = &dto.PriceUnitResponse{PriceUnit: priceUnit}
-	}
-
 	if price.GroupID != "" {
 		groupService := NewGroupService(s.ServiceParams)
 		group, err := groupService.GetGroup(ctx, price.GroupID)
@@ -602,7 +338,7 @@ func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesB
 		WithStatus(types.StatusPublished).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 		WithAllowExpiredPrices(req.AllowExpired).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit) + "," + string(types.ExpandGroups))
+		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandGroups))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -625,7 +361,7 @@ func (s *priceService) GetPricesBySubscriptionID(ctx context.Context, subscripti
 		WithSubscriptionID(subscriptionID).
 		WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION).
 		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithExpand(string(types.ExpandMeters))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -647,7 +383,7 @@ func (s *priceService) GetPricesByAddonID(ctx context.Context, addonID string) (
 		WithEntityIDs([]string{addonID}).
 		WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
 		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithExpand(string(types.ExpandMeters))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -668,7 +404,7 @@ func (s *priceService) GetPricesByCostsheetID(ctx context.Context, costsheetID s
 		WithEntityIDs([]string{costsheetID}).
 		WithStatus(types.StatusPublished).
 		WithEntityType(types.PRICE_ENTITY_TYPE_COSTSHEET).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithExpand(string(types.ExpandMeters))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -727,30 +463,6 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		}
 
 		s.Logger.Debugw("fetched meters for prices", "count", len(metersResponse.Items))
-	}
-
-	// If price units are requested to be expanded, fetch all price units in one query
-	var priceUnitsByID map[string]*dto.PriceUnitResponse
-	if filter.GetExpand().Has(types.ExpandPriceUnit) && len(prices) > 0 {
-		// Collect unique price unit IDs
-		priceUnitIDs := make(map[string]bool)
-		for _, p := range prices {
-			if p.PriceUnitID != "" {
-				priceUnitIDs[p.PriceUnitID] = true
-			}
-		}
-
-		priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
-		for priceUnitID := range priceUnitIDs {
-			priceUnit, err := s.PriceUnitRepo.GetByID(ctx, priceUnitID)
-			if err != nil {
-				s.Logger.Warnw("failed to fetch price unit", "price_unit_id", priceUnitID, "error", err)
-				continue
-			}
-			priceUnitsByID[priceUnitID] = &dto.PriceUnitResponse{PriceUnit: priceUnit}
-		}
-
-		s.Logger.Debugw("fetched price units for prices", "count", len(priceUnitsByID))
 	}
 
 	// Collect entity IDs based on entity type for efficient bulk fetching
@@ -849,13 +561,6 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		if filter.GetExpand().Has(types.ExpandMeters) && p.MeterID != "" {
 			if m, ok := metersByID[p.MeterID]; ok {
 				response.Items[i].Meter = m
-			}
-		}
-
-		// Add price unit if requested and available
-		if filter.GetExpand().Has(types.ExpandPriceUnit) && p.PriceUnitID != "" {
-			if pu, ok := priceUnitsByID[p.PriceUnitID]; ok {
-				response.Items[i].PricingUnit = pu
 			}
 		}
 
@@ -1079,7 +784,7 @@ func (s *priceService) calculateSingletonCost(ctx context.Context, price *price.
 	if quantity.IsZero() {
 		return cost
 	}
- 
+
 	switch price.BillingModel {
 	case types.BILLING_MODEL_FLAT_FEE:
 		cost = price.CalculateAmount(quantity)

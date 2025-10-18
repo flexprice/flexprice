@@ -133,20 +133,6 @@ func (pu *PriceUpdate) SetNillableDisplayAmount(s *string) *PriceUpdate {
 	return pu
 }
 
-// SetPriceUnitType sets the "price_unit_type" field.
-func (pu *PriceUpdate) SetPriceUnitType(tut types.PriceUnitType) *PriceUpdate {
-	pu.mutation.SetPriceUnitType(tut)
-	return pu
-}
-
-// SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceUpdate {
-	if tut != nil {
-		pu.SetPriceUnitType(*tut)
-	}
-	return pu
-}
-
 // SetPriceUnitID sets the "price_unit_id" field.
 func (pu *PriceUpdate) SetPriceUnitID(s string) *PriceUpdate {
 	pu.mutation.SetPriceUnitID(s)
@@ -597,11 +583,6 @@ func (pu *PriceUpdate) check() error {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if v, ok := pu.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
-			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
-		}
-	}
 	if v, ok := pu.mutation.GetType(); ok {
 		if err := price.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
@@ -679,9 +660,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := pu.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
-	}
-	if value, ok := pu.mutation.PriceUnitType(); ok {
-		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
 	}
 	if value, ok := pu.mutation.PriceUnitID(); ok {
 		_spec.SetField(price.FieldPriceUnitID, field.TypeString, value)
@@ -946,20 +924,6 @@ func (puo *PriceUpdateOne) SetDisplayAmount(s string) *PriceUpdateOne {
 func (puo *PriceUpdateOne) SetNillableDisplayAmount(s *string) *PriceUpdateOne {
 	if s != nil {
 		puo.SetDisplayAmount(*s)
-	}
-	return puo
-}
-
-// SetPriceUnitType sets the "price_unit_type" field.
-func (puo *PriceUpdateOne) SetPriceUnitType(tut types.PriceUnitType) *PriceUpdateOne {
-	puo.mutation.SetPriceUnitType(tut)
-	return puo
-}
-
-// SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceUpdateOne {
-	if tut != nil {
-		puo.SetPriceUnitType(*tut)
 	}
 	return puo
 }
@@ -1427,11 +1391,6 @@ func (puo *PriceUpdateOne) check() error {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if v, ok := puo.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
-			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
-		}
-	}
 	if v, ok := puo.mutation.GetType(); ok {
 		if err := price.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
@@ -1526,9 +1485,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if value, ok := puo.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
-	}
-	if value, ok := puo.mutation.PriceUnitType(); ok {
-		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
 	}
 	if value, ok := puo.mutation.PriceUnitID(); ok {
 		_spec.SetField(price.FieldPriceUnitID, field.TypeString, value)

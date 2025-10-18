@@ -131,28 +131,12 @@ func (s *billingService) CalculateFixedCharges(
 		}
 		amount = proratedAmount
 
-		// Calculate price unit amount if price unit is available
-		var priceUnitAmount *decimal.Decimal
-		if item.PriceUnit != "" {
-			convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), amount)
-			if err != nil {
-				s.Logger.Warnw("failed to convert amount to price unit",
-					"error", err,
-					"price_unit", item.PriceUnit,
-					"amount", amount)
-			} else {
-				priceUnitAmount = &convertedAmount
-			}
-		}
-
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
 			EntityID:        lo.ToPtr(item.EntityID),
 			EntityType:      lo.ToPtr(string(item.EntityType)),
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
 			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
-			PriceUnit:       lo.ToPtr(item.PriceUnit),
-			PriceUnitAmount: priceUnitAmount,
 			DisplayName:     lo.ToPtr(item.DisplayName),
 			Amount:          amount,
 			Quantity:        item.Quantity,
@@ -619,21 +603,7 @@ func (s *billingService) CalculateUsageCharges(
 				"is_overage", matchingCharge.IsOverage,
 				"subscription_id", sub.ID,
 				"line_item_id", item.ID,
-				"price_id", item.PriceID)
-
-			// Calculate price unit amount if price unit is available
-			var priceUnitAmount *decimal.Decimal
-			if item.PriceUnit != "" {
-				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), lineItemAmount)
-				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
-						"error", err,
-						"price_unit", item.PriceUnit,
-						"amount", lineItemAmount)
-				} else {
-					priceUnitAmount = &convertedAmount
-				}
-			}
+				"price_id", item.PriceID)	
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				EntityID:         lo.ToPtr(item.EntityID),
@@ -643,8 +613,6 @@ func (s *billingService) CalculateUsageCharges(
 				PriceID:          lo.ToPtr(item.PriceID),
 				MeterID:          lo.ToPtr(item.MeterID),
 				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-				PriceUnit:        lo.ToPtr(item.PriceUnit),
-				PriceUnitAmount:  priceUnitAmount,
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,
 				Quantity:         quantityForCalculation,

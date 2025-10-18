@@ -42,7 +42,6 @@ type Handlers struct {
 	CreditNote               *v1.CreditNoteHandler
 	Tax                      *v1.TaxHandler
 	Coupon                   *v1.CouponHandler
-	PriceUnit                *v1.PriceUnitHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	EntityIntegrationMapping *v1.EntityIntegrationMappingHandler
@@ -159,16 +158,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 
-			priceUnit := price.Group("/units")
-			{
-				priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
-				priceUnit.GET("", handlers.PriceUnit.GetPriceUnits)
-				priceUnit.GET("/:id", handlers.PriceUnit.GetByID)
-				priceUnit.GET("/code/:code", handlers.PriceUnit.GetByCode)
-				priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
-				priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
-				priceUnit.POST("/search", handlers.PriceUnit.ListPriceUnitsByFilter)
-			}
 		}
 
 		customer := v1Private.Group("/customers")

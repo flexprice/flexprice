@@ -35,7 +35,16 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 
 	plan := req.ToPlan(ctx)
 
-	if err := s.PlanRepo.Create(ctx, plan); err != nil {
+	// Start a transaction to create plan, prices, and entitlements
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// 1. Create the plan
+		if err := s.PlanRepo.Create(ctx, plan); err != nil {
+			return err
+		}
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
 

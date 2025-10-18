@@ -61,8 +61,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetAmount(p.Amount).
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPriceUnitType(p.PriceUnitType).
 		SetType(p.Type).
+		SetPriceUnitType(p.PriceUnitType).
 		SetBillingPeriod(p.BillingPeriod).
 		SetBillingPeriodCount(p.BillingPeriodCount).
 		SetBillingModel(p.BillingModel).
@@ -75,7 +75,6 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetTrialPeriod(p.TrialPeriod).
 		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
-		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetDescription(p.Description).
@@ -90,22 +89,6 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
 		SetEntityType(p.EntityType).
 		SetEntityID(p.EntityID)
-
-	if p.PriceUnitID != "" {
-		priceBuilder.SetPriceUnitID(p.PriceUnitID)
-	}
-	if p.PriceUnit != "" {
-		priceBuilder.SetPriceUnit(p.PriceUnit)
-	}
-	if !p.PriceUnitAmount.IsZero() {
-		priceBuilder.SetPriceUnitAmount(p.PriceUnitAmount)
-	}
-	if p.DisplayPriceUnitAmount != "" {
-		priceBuilder.SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount)
-	}
-	if !p.ConversionRate.IsZero() {
-		priceBuilder.SetConversionRate(p.ConversionRate)
-	}
 
 	price, err := priceBuilder.Save(ctx)
 
@@ -282,16 +265,14 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		).
 		SetAmount(p.Amount).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPriceUnitType(p.PriceUnitType).
 		SetType(p.Type).
-		SetBillingPeriod(p.BillingPeriod).
+		SetBillingPeriod((p.BillingPeriod)).
 		SetBillingPeriodCount(p.BillingPeriodCount).
 		SetBillingModel(p.BillingModel).
 		SetBillingCadence(p.BillingCadence).
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
 		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
-		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetDisplayName(p.DisplayName).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
@@ -415,7 +396,6 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
 			SetNillableTierMode(lo.ToPtr(p.TierMode)).
 			SetTiers(p.ToEntTiers()).
-			SetPriceUnitTiers(p.ToPriceUnitTiers()).
 			SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 			SetLookupKey(p.LookupKey).
 			SetDescription(p.Description).
