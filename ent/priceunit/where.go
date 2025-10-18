@@ -566,6 +566,16 @@ func EnvironmentIDContainsFold(v string) predicate.PriceUnit {
 	return predicate.PriceUnit(sql.FieldContainsFold(FieldEnvironmentID, v))
 }
 
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.PriceUnit {
+	return predicate.PriceUnit(sql.FieldIsNull(FieldMetadata))
+}
+
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.PriceUnit {
+	return predicate.PriceUnit(sql.FieldNotNull(FieldMetadata))
+}
+
 // NameEQ applies the EQ predicate on the "name" field.
 func NameEQ(v string) predicate.PriceUnit {
 	return predicate.PriceUnit(sql.FieldEQ(FieldName, v))

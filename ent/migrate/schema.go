@@ -1404,6 +1404,7 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "code", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "symbol", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
@@ -1418,17 +1419,14 @@ var (
 		PrimaryKey: []*schema.Column{PriceUnitsColumns[0]},
 		Indexes: []*schema.Index{
 			{
-				Name:    "priceunit_code_tenant_id_environment_id",
+				Name:    "priceunit_tenant_id_environment_id_code",
 				Unique:  true,
-				Columns: []*schema.Column{PriceUnitsColumns[9], PriceUnitsColumns[1], PriceUnitsColumns[7]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
+				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7], PriceUnitsColumns[10]},
 			},
 			{
-				Name:    "priceunit_tenant_id_environment_id",
+				Name:    "priceunit_tenant_id_environment_id_code",
 				Unique:  false,
-				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7]},
+				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7], PriceUnitsColumns[10]},
 			},
 		},
 	}

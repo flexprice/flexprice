@@ -112,6 +112,12 @@ func (puc *PriceUnitCreate) SetNillableEnvironmentID(s *string) *PriceUnitCreate
 	return puc
 }
 
+// SetMetadata sets the "metadata" field.
+func (puc *PriceUnitCreate) SetMetadata(m map[string]string) *PriceUnitCreate {
+	puc.mutation.SetMetadata(m)
+	return puc
+}
+
 // SetName sets the "name" field.
 func (puc *PriceUnitCreate) SetName(s string) *PriceUnitCreate {
 	puc.mutation.SetName(s)
@@ -370,6 +376,10 @@ func (puc *PriceUnitCreate) createSpec() (*PriceUnit, *sqlgraph.CreateSpec) {
 	if value, ok := puc.mutation.EnvironmentID(); ok {
 		_spec.SetField(priceunit.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
+	}
+	if value, ok := puc.mutation.Metadata(); ok {
+		_spec.SetField(priceunit.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
 	if value, ok := puc.mutation.Name(); ok {
 		_spec.SetField(priceunit.FieldName, field.TypeString, value)
