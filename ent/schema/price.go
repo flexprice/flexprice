@@ -182,6 +182,13 @@ func (Price) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+
+		field.String("price_unit_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 

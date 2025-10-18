@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/price"
+	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -86,6 +87,8 @@ type Price struct {
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID *string `json:"group_id,omitempty"`
+	// PriceUnitID holds the value of the "price_unit_id" field.
+	PriceUnitID *string `json:"price_unit_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
@@ -96,9 +99,11 @@ type Price struct {
 type PriceEdges struct {
 	// Costsheet holds the value of the costsheet edge.
 	Costsheet []*Costsheet `json:"costsheet,omitempty"`
+	// PriceUnitEdge holds the value of the price_unit_edge edge.
+	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // CostsheetOrErr returns the Costsheet value or an error if the edge
@@ -108,6 +113,17 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 		return e.Costsheet, nil
 	}
 	return nil, &NotLoadedError{edge: "costsheet"}
+}
+
+// PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
+	if e.PriceUnitEdge != nil {
+		return e.PriceUnitEdge, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: priceunit.Label}
+	}
+	return nil, &NotLoadedError{edge: "price_unit_edge"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -123,7 +139,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldDisplayName, price.FieldCurrency, price.FieldDisplayAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID, price.FieldPriceUnitID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -363,6 +379,13 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.GroupID = new(string)
 				*pr.GroupID = value.String
 			}
+		case price.FieldPriceUnitID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
+			} else if value.Valid {
+				pr.PriceUnitID = new(string)
+				*pr.PriceUnitID = value.String
+			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
 		}
@@ -379,6 +402,11 @@ func (pr *Price) Value(name string) (ent.Value, error) {
 // QueryCostsheet queries the "costsheet" edge of the Price entity.
 func (pr *Price) QueryCostsheet() *CostsheetQuery {
 	return NewPriceClient(pr.config).QueryCostsheet(pr)
+}
+
+// QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
+func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
+	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
 }
 
 // Update returns a builder for updating this Price.
@@ -518,6 +546,11 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	if v := pr.GroupID; v != nil {
 		builder.WriteString("group_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := pr.PriceUnitID; v != nil {
+		builder.WriteString("price_unit_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
