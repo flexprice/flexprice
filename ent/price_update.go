@@ -17,6 +17,7 @@ import (
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // PriceUpdate is the builder for updating Price entities.
@@ -73,23 +74,16 @@ func (pu *PriceUpdate) ClearUpdatedBy() *PriceUpdate {
 }
 
 // SetAmount sets the "amount" field.
-func (pu *PriceUpdate) SetAmount(f float64) *PriceUpdate {
-	pu.mutation.ResetAmount()
-	pu.mutation.SetAmount(f)
+func (pu *PriceUpdate) SetAmount(d decimal.Decimal) *PriceUpdate {
+	pu.mutation.SetAmount(d)
 	return pu
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableAmount(f *float64) *PriceUpdate {
-	if f != nil {
-		pu.SetAmount(*f)
+func (pu *PriceUpdate) SetNillableAmount(d *decimal.Decimal) *PriceUpdate {
+	if d != nil {
+		pu.SetAmount(*d)
 	}
-	return pu
-}
-
-// AddAmount adds f to the "amount" field.
-func (pu *PriceUpdate) AddAmount(f float64) *PriceUpdate {
-	pu.mutation.AddAmount(f)
 	return pu
 }
 
@@ -176,23 +170,16 @@ func (pu *PriceUpdate) ClearPriceUnit() *PriceUpdate {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (pu *PriceUpdate) SetPriceUnitAmount(f float64) *PriceUpdate {
-	pu.mutation.ResetPriceUnitAmount()
-	pu.mutation.SetPriceUnitAmount(f)
+func (pu *PriceUpdate) SetPriceUnitAmount(d decimal.Decimal) *PriceUpdate {
+	pu.mutation.SetPriceUnitAmount(d)
 	return pu
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePriceUnitAmount(f *float64) *PriceUpdate {
-	if f != nil {
-		pu.SetPriceUnitAmount(*f)
+func (pu *PriceUpdate) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceUpdate {
+	if d != nil {
+		pu.SetPriceUnitAmount(*d)
 	}
-	return pu
-}
-
-// AddPriceUnitAmount adds f to the "price_unit_amount" field.
-func (pu *PriceUpdate) AddPriceUnitAmount(f float64) *PriceUpdate {
-	pu.mutation.AddPriceUnitAmount(f)
 	return pu
 }
 
@@ -223,23 +210,16 @@ func (pu *PriceUpdate) ClearDisplayPriceUnitAmount() *PriceUpdate {
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (pu *PriceUpdate) SetConversionRate(f float64) *PriceUpdate {
-	pu.mutation.ResetConversionRate()
-	pu.mutation.SetConversionRate(f)
+func (pu *PriceUpdate) SetConversionRate(d decimal.Decimal) *PriceUpdate {
+	pu.mutation.SetConversionRate(d)
 	return pu
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableConversionRate(f *float64) *PriceUpdate {
-	if f != nil {
-		pu.SetConversionRate(*f)
+func (pu *PriceUpdate) SetNillableConversionRate(d *decimal.Decimal) *PriceUpdate {
+	if d != nil {
+		pu.SetConversionRate(*d)
 	}
-	return pu
-}
-
-// AddConversionRate adds f to the "conversion_rate" field.
-func (pu *PriceUpdate) AddConversionRate(f float64) *PriceUpdate {
-	pu.mutation.AddConversionRate(f)
 	return pu
 }
 
@@ -704,10 +684,7 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.ClearField(price.FieldEnvironmentID, field.TypeString)
 	}
 	if value, ok := pu.mutation.Amount(); ok {
-		_spec.SetField(price.FieldAmount, field.TypeFloat64, value)
-	}
-	if value, ok := pu.mutation.AddedAmount(); ok {
-		_spec.AddField(price.FieldAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 	}
 	if value, ok := pu.mutation.Currency(); ok {
 		_spec.SetField(price.FieldCurrency, field.TypeString, value)
@@ -725,13 +702,10 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
 	}
 	if value, ok := pu.mutation.PriceUnitAmount(); ok {
-		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
-	}
-	if value, ok := pu.mutation.AddedPriceUnitAmount(); ok {
-		_spec.AddField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
 	}
 	if pu.mutation.PriceUnitAmountCleared() {
-		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeFloat64)
+		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeOther)
 	}
 	if value, ok := pu.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
@@ -740,13 +714,10 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.ClearField(price.FieldDisplayPriceUnitAmount, field.TypeString)
 	}
 	if value, ok := pu.mutation.ConversionRate(); ok {
-		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
-	}
-	if value, ok := pu.mutation.AddedConversionRate(); ok {
-		_spec.AddField(price.FieldConversionRate, field.TypeFloat64, value)
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
 	}
 	if pu.mutation.ConversionRateCleared() {
-		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
+		_spec.ClearField(price.FieldConversionRate, field.TypeOther)
 	}
 	if value, ok := pu.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -989,23 +960,16 @@ func (puo *PriceUpdateOne) ClearUpdatedBy() *PriceUpdateOne {
 }
 
 // SetAmount sets the "amount" field.
-func (puo *PriceUpdateOne) SetAmount(f float64) *PriceUpdateOne {
-	puo.mutation.ResetAmount()
-	puo.mutation.SetAmount(f)
+func (puo *PriceUpdateOne) SetAmount(d decimal.Decimal) *PriceUpdateOne {
+	puo.mutation.SetAmount(d)
 	return puo
 }
 
 // SetNillableAmount sets the "amount" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableAmount(f *float64) *PriceUpdateOne {
-	if f != nil {
-		puo.SetAmount(*f)
+func (puo *PriceUpdateOne) SetNillableAmount(d *decimal.Decimal) *PriceUpdateOne {
+	if d != nil {
+		puo.SetAmount(*d)
 	}
-	return puo
-}
-
-// AddAmount adds f to the "amount" field.
-func (puo *PriceUpdateOne) AddAmount(f float64) *PriceUpdateOne {
-	puo.mutation.AddAmount(f)
 	return puo
 }
 
@@ -1092,23 +1056,16 @@ func (puo *PriceUpdateOne) ClearPriceUnit() *PriceUpdateOne {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (puo *PriceUpdateOne) SetPriceUnitAmount(f float64) *PriceUpdateOne {
-	puo.mutation.ResetPriceUnitAmount()
-	puo.mutation.SetPriceUnitAmount(f)
+func (puo *PriceUpdateOne) SetPriceUnitAmount(d decimal.Decimal) *PriceUpdateOne {
+	puo.mutation.SetPriceUnitAmount(d)
 	return puo
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePriceUnitAmount(f *float64) *PriceUpdateOne {
-	if f != nil {
-		puo.SetPriceUnitAmount(*f)
+func (puo *PriceUpdateOne) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceUpdateOne {
+	if d != nil {
+		puo.SetPriceUnitAmount(*d)
 	}
-	return puo
-}
-
-// AddPriceUnitAmount adds f to the "price_unit_amount" field.
-func (puo *PriceUpdateOne) AddPriceUnitAmount(f float64) *PriceUpdateOne {
-	puo.mutation.AddPriceUnitAmount(f)
 	return puo
 }
 
@@ -1139,23 +1096,16 @@ func (puo *PriceUpdateOne) ClearDisplayPriceUnitAmount() *PriceUpdateOne {
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (puo *PriceUpdateOne) SetConversionRate(f float64) *PriceUpdateOne {
-	puo.mutation.ResetConversionRate()
-	puo.mutation.SetConversionRate(f)
+func (puo *PriceUpdateOne) SetConversionRate(d decimal.Decimal) *PriceUpdateOne {
+	puo.mutation.SetConversionRate(d)
 	return puo
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableConversionRate(f *float64) *PriceUpdateOne {
-	if f != nil {
-		puo.SetConversionRate(*f)
+func (puo *PriceUpdateOne) SetNillableConversionRate(d *decimal.Decimal) *PriceUpdateOne {
+	if d != nil {
+		puo.SetConversionRate(*d)
 	}
-	return puo
-}
-
-// AddConversionRate adds f to the "conversion_rate" field.
-func (puo *PriceUpdateOne) AddConversionRate(f float64) *PriceUpdateOne {
-	puo.mutation.AddConversionRate(f)
 	return puo
 }
 
@@ -1650,10 +1600,7 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		_spec.ClearField(price.FieldEnvironmentID, field.TypeString)
 	}
 	if value, ok := puo.mutation.Amount(); ok {
-		_spec.SetField(price.FieldAmount, field.TypeFloat64, value)
-	}
-	if value, ok := puo.mutation.AddedAmount(); ok {
-		_spec.AddField(price.FieldAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 	}
 	if value, ok := puo.mutation.Currency(); ok {
 		_spec.SetField(price.FieldCurrency, field.TypeString, value)
@@ -1671,13 +1618,10 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
 	}
 	if value, ok := puo.mutation.PriceUnitAmount(); ok {
-		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
-	}
-	if value, ok := puo.mutation.AddedPriceUnitAmount(); ok {
-		_spec.AddField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
 	}
 	if puo.mutation.PriceUnitAmountCleared() {
-		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeFloat64)
+		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeOther)
 	}
 	if value, ok := puo.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
@@ -1686,13 +1630,10 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		_spec.ClearField(price.FieldDisplayPriceUnitAmount, field.TypeString)
 	}
 	if value, ok := puo.mutation.ConversionRate(); ok {
-		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
-	}
-	if value, ok := puo.mutation.AddedConversionRate(); ok {
-		_spec.AddField(price.FieldConversionRate, field.TypeFloat64, value)
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
 	}
 	if puo.mutation.ConversionRateCleared() {
-		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
+		_spec.ClearField(price.FieldConversionRate, field.TypeOther)
 	}
 	if value, ok := puo.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)

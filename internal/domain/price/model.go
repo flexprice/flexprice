@@ -332,7 +332,7 @@ func FromEnt(e *ent.Price) *Price {
 
 	return &Price{
 		ID:                 e.ID,
-		Amount:             decimal.NewFromFloat(e.Amount),
+		Amount:             e.Amount,
 		Currency:           e.Currency,
 		DisplayAmount:      e.DisplayAmount,
 		Type:               types.PriceType(e.Type),
