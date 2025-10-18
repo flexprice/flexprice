@@ -803,7 +803,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingCycle:       types.BillingCycleAnniversary,
-				CollectionMethod:   lo.ToPtr(types.CollectionMethodSendInvoice),
+				CollectionMethod:   lo.ToPtr(types.CollectionMethodChargeAutomatically),
 			},
 			wantErr: false,
 		},
@@ -913,7 +913,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithCollectionMethod() 
 		},
 		{
 			name:                  "charge_automatically_creates_active_subscription_when_no_invoice",
-			collectionMethod:      lo.ToPtr(types.CollectionMethodSendInvoice),
+			collectionMethod:      lo.ToPtr(types.CollectionMethodChargeAutomatically),
 			expectedStatus:        types.SubscriptionStatusActive,
 			expectedStatusMessage: "charge_automatically should create active subscription when no invoice is created",
 			description:           "Subscription with charge_automatically should be active when no invoice is created (usage-based plan with advance cadence)",
@@ -982,7 +982,7 @@ func (s *SubscriptionServiceSuite) TestCollectionMethodValidation() {
 		},
 		{
 			name:             "valid_charge_automatically",
-			collectionMethod: types.CollectionMethodSendInvoice,
+			collectionMethod: types.CollectionMethodChargeAutomatically,
 			expectError:      false,
 			description:      "charge_automatically should be a valid collection method",
 		},
