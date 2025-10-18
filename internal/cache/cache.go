@@ -64,6 +64,7 @@ const (
 	PrefixSettings                 = "settings:v1:"
 	PrefixSubscriptionLineItem     = "subscription_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
+	PrefixPriceUnit                = "price_unit:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

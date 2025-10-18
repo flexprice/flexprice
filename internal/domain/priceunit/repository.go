@@ -3,8 +3,8 @@ package priceunit
 import (
 	"context"
 
-	"github.com/shopspring/decimal"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Repository defines the interface for price unit persistence
@@ -23,8 +23,8 @@ type Repository interface {
 	// Update updates an existing pricing unit and returns the updated price unit
 	Update(ctx context.Context, priceUnit *PriceUnit) (*PriceUnit, error)
 
-	// Delete deletes a pricing unit by its ID
-	Delete(ctx context.Context, id string) error
+	// Delete deletes a pricing unit
+	Delete(ctx context.Context, priceUnit *PriceUnit) error
 
 	// Get operations
 
@@ -51,5 +51,4 @@ type Repository interface {
 	// ConvertToPriceUnit converts an amount from base currency to custom pricing unit
 	// amount in pricing unit = amount in fiat currency / conversion_rate
 	ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error)
-}
 }
