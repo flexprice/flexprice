@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -32,6 +33,8 @@ type PriceUnit struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata map[string]string `json:"metadata,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Code holds the value of the "code" field.
@@ -73,6 +76,8 @@ func (*PriceUnit) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case priceunit.FieldMetadata:
+			values[i] = new([]byte)
 		case priceunit.FieldConversionRate:
 			values[i] = new(decimal.Decimal)
 		case priceunit.FieldPrecision:
@@ -143,6 +148,14 @@ func (pu *PriceUnit) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field environment_id", values[i])
 			} else if value.Valid {
 				pu.EnvironmentID = value.String
+			}
+		case priceunit.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &pu.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
 			}
 		case priceunit.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -241,6 +254,9 @@ func (pu *PriceUnit) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("environment_id=")
 	builder.WriteString(pu.EnvironmentID)
+	builder.WriteString(", ")
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", pu.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(pu.Name)

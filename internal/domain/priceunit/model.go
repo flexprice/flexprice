@@ -20,10 +20,15 @@ type PriceUnit struct {
 	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
 	Precision      int             `json:"precision,omitempty"`
 	EnvironmentID  string          `json:"environment_id,omitempty"`
+	Metadata       types.Metadata  `json:"metadata,omitempty"`
 	types.BaseModel
 }
 
 func FromEnt(ent *ent.PriceUnit) *PriceUnit {
+	if ent == nil {
+		return nil
+	}
+
 	return &PriceUnit{
 		ID:             ent.ID,
 		Name:           ent.Name,
@@ -33,6 +38,7 @@ func FromEnt(ent *ent.PriceUnit) *PriceUnit {
 		ConversionRate: ent.ConversionRate,
 		Precision:      ent.Precision,
 		EnvironmentID:  ent.EnvironmentID,
+		Metadata:       ent.Metadata,
 		BaseModel: types.BaseModel{
 			CreatedAt: ent.CreatedAt,
 			UpdatedAt: ent.UpdatedAt,
