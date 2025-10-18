@@ -73,7 +73,7 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			NotEmpty().
-			Default(string("")),
+			Default(string(types.PRICE_UNIT_TYPE_FIAT)),
 
 		// price_unit_id is the id of the price unit
 		field.String("price_unit_id").

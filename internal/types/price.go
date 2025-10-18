@@ -63,6 +63,35 @@ func (p PriceEntityType) Validate() error {
 	return nil
 }
 
+// PriceUnitType is the type of the price unit ex FIAT, CUSTOM
+type PriceUnitType string
+
+const (
+	PRICE_UNIT_TYPE_FIAT   PriceUnitType = "FIAT"
+	PRICE_UNIT_TYPE_CUSTOM PriceUnitType = "CUSTOM"
+)
+
+func (p PriceUnitType) Validate() error {
+	allowed := []PriceUnitType{
+		PRICE_UNIT_TYPE_FIAT,
+		PRICE_UNIT_TYPE_CUSTOM,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid price unit type").
+			WithHint("Invalid price unit type").
+			WithReportableDetails(map[string]interface{}{
+				"price_unit_type": p,
+				"allowed":         allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (p PriceUnitType) String() string {
+	return string(p)
+}
+
 // Additional types needed for JSON fields
 type PriceTier struct {
 	// up_to is the quantity up to which this tier applies. It is null for the last tier.

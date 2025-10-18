@@ -43,6 +43,24 @@ type Price struct {
 	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
 	Currency string `db:"currency" json:"currency"`
 
+	// PriceUnitType is the type of the price unit (FIAT, CUSTOM)
+	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
+
+	// PriceUnitID is the id of the price unit (for CUSTOM type)
+	PriceUnitID string `db:"price_unit_id" json:"price_unit_id,omitempty"`
+
+	// PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
+	PriceUnit string `db:"price_unit" json:"price_unit,omitempty"`
+
+	// PriceUnitAmount is the amount of the price unit
+	PriceUnitAmount *decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
+
+	// DisplayPriceUnitAmount is the formatted amount of the price unit
+	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount,omitempty"`
+
+	// ConversionRate is the conversion rate of the price unit to the fiat currency
+	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty"`
+
 	Type types.PriceType `db:"type" json:"type"`
 
 	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
@@ -71,6 +89,9 @@ type Price struct {
 	TierMode types.BillingTier `db:"tier_mode" json:"tier_mode,omitempty"`
 
 	Tiers JSONBTiers `db:"tiers,jsonb" json:"tiers,omitempty"`
+
+	// PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED
+	PriceUnitTiers JSONBTiers `db:"price_unit_tiers,jsonb" json:"price_unit_tiers"`
 
 	// MeterID is the id of the meter for usage based pricing
 	MeterID string `db:"meter_id" json:"meter_id"`
