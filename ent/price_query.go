@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -11,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 )
@@ -18,10 +20,11 @@ import (
 // PriceQuery is the builder for querying Price entities.
 type PriceQuery struct {
 	config
-	ctx        *QueryContext
-	order      []price.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Price
+	ctx           *QueryContext
+	order         []price.OrderOption
+	inters        []Interceptor
+	predicates    []predicate.Price
+	withCostsheet *CostsheetQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +59,28 @@ func (pq *PriceQuery) Unique(unique bool) *PriceQuery {
 func (pq *PriceQuery) Order(o ...price.OrderOption) *PriceQuery {
 	pq.order = append(pq.order, o...)
 	return pq
+}
+
+// QueryCostsheet chains the current query on the "costsheet" edge.
+func (pq *PriceQuery) QueryCostsheet() *CostsheetQuery {
+	query := (&CostsheetClient{config: pq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := pq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := pq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(price.Table, price.FieldID, selector),
+			sqlgraph.To(costsheet.Table, costsheet.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, price.CostsheetTable, price.CostsheetColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(pq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Price entity from the query.
@@ -245,15 +270,27 @@ func (pq *PriceQuery) Clone() *PriceQuery {
 		return nil
 	}
 	return &PriceQuery{
-		config:     pq.config,
-		ctx:        pq.ctx.Clone(),
-		order:      append([]price.OrderOption{}, pq.order...),
-		inters:     append([]Interceptor{}, pq.inters...),
-		predicates: append([]predicate.Price{}, pq.predicates...),
+		config:        pq.config,
+		ctx:           pq.ctx.Clone(),
+		order:         append([]price.OrderOption{}, pq.order...),
+		inters:        append([]Interceptor{}, pq.inters...),
+		predicates:    append([]predicate.Price{}, pq.predicates...),
+		withCostsheet: pq.withCostsheet.Clone(),
 		// clone intermediate query.
 		sql:  pq.sql.Clone(),
 		path: pq.path,
 	}
+}
+
+// WithCostsheet tells the query-builder to eager-load the nodes that are connected to
+// the "costsheet" edge. The optional arguments are used to configure the query builder of the edge.
+func (pq *PriceQuery) WithCostsheet(opts ...func(*CostsheetQuery)) *PriceQuery {
+	query := (&CostsheetClient{config: pq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	pq.withCostsheet = query
+	return pq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +369,11 @@ func (pq *PriceQuery) prepareQuery(ctx context.Context) error {
 
 func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price, error) {
 	var (
-		nodes = []*Price{}
-		_spec = pq.querySpec()
+		nodes       = []*Price{}
+		_spec       = pq.querySpec()
+		loadedTypes = [1]bool{
+			pq.withCostsheet != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Price).scanValues(nil, columns)
@@ -341,6 +381,7 @@ func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price,
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Price{config: pq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +393,46 @@ func (pq *PriceQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Price,
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := pq.withCostsheet; query != nil {
+		if err := pq.loadCostsheet(ctx, query, nodes,
+			func(n *Price) { n.Edges.Costsheet = []*Costsheet{} },
+			func(n *Price, e *Costsheet) { n.Edges.Costsheet = append(n.Edges.Costsheet, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (pq *PriceQuery) loadCostsheet(ctx context.Context, query *CostsheetQuery, nodes []*Price, init func(*Price), assign func(*Price, *Costsheet)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Price)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	query.withFKs = true
+	query.Where(predicate.Costsheet(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(price.CostsheetColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.price_costsheet
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "price_costsheet" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "price_costsheet" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
 }
 
 func (pq *PriceQuery) sqlCount(ctx context.Context) (int, error) {

@@ -4634,6 +4634,22 @@ func (c *PriceClient) GetX(ctx context.Context, id string) *Price {
 	return obj
 }
 
+// QueryCostsheet queries the costsheet edge of a Price.
+func (c *PriceClient) QueryCostsheet(pr *Price) *CostsheetQuery {
+	query := (&CostsheetClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := pr.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(price.Table, price.FieldID, id),
+			sqlgraph.To(costsheet.Table, costsheet.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, price.CostsheetTable, price.CostsheetColumn),
+		)
+		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *PriceClient) Hooks() []Hook {
 	return c.hooks.Price

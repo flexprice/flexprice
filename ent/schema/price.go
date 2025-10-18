@@ -5,6 +5,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -60,54 +61,6 @@ func (Price) Fields() []ent.Field {
 			}).
 			NotEmpty(),
 
-		// price_unit_type is the type of the price unit- Fiat, Custom
-		field.String("price_unit_type").
-			SchemaType(map[string]string{
-				"postgres": "varchar(20)",
-			}).
-			Immutable().
-			Default(string(types.PRICE_UNIT_TYPE_FIAT)).
-			GoType(types.PriceUnitType("")),
-
-		// price_unit_id is the id of the price unit
-		field.String("price_unit_id").
-			SchemaType(map[string]string{
-				"postgres": "varchar(50)",
-			}).
-			Optional().
-			Nillable(),
-		// price_unit is the code of the price unit
-		field.String("price_unit").
-			SchemaType(map[string]string{
-				"postgres": "varchar(3)",
-			}).
-			Optional(),
-
-		// price_unit_amount is the amount of the price unit
-		field.Other("price_unit_amount", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(25,15)",
-			}).
-			Optional().
-			Nillable().
-			Default(decimal.Zero),
-
-		// display_price_unit_amount is the amount of the price unit in the display currency
-		field.String("display_price_unit_amount").
-			SchemaType(map[string]string{
-				"postgres": "varchar(255)",
-			}).
-			Optional(),
-
-		// conversion_rate is the conversion rate of the price unit to the fiat currency
-		field.Other("conversion_rate", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(25,15)",
-			}).
-			Optional().
-			Nillable().
-			Default(decimal.Zero),
-
 		// min_quantity is the minimum quantity of the price
 		field.Other("min_quantity", decimal.Decimal{}).
 			SchemaType(map[string]string{
@@ -116,7 +69,6 @@ func (Price) Fields() []ent.Field {
 			Immutable().
 			Optional().
 			Nillable(),
-
 		field.String("type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
@@ -177,9 +129,6 @@ func (Price) Fields() []ent.Field {
 			Nillable().
 			GoType(types.BillingTier("")),
 		field.JSON("tiers", []*types.PriceTier{}).
-			Optional(),
-
-		field.JSON("price_unit_tiers", []*types.PriceTier{}).
 			Optional(),
 
 		field.JSON("transform_quantity", types.TransformQuantity{}).
@@ -244,7 +193,9 @@ func (Price) Fields() []ent.Field {
 
 // Edges of the Price.
 func (Price) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.To("costsheet", Costsheet.Type),
+	}
 }
 
 // Indexes of the Price.

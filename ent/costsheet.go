@@ -39,8 +39,9 @@ type Costsheet struct {
 	// LookupKey holds the value of the "lookup_key" field.
 	LookupKey string `json:"lookup_key,omitempty"`
 	// Description holds the value of the "description" field.
-	Description  string `json:"description,omitempty"`
-	selectValues sql.SelectValues
+	Description     string `json:"description,omitempty"`
+	price_costsheet *string
+	selectValues    sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -54,6 +55,8 @@ func (*Costsheet) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case costsheet.FieldCreatedAt, costsheet.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
+		case costsheet.ForeignKeys[0]: // price_costsheet
+			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -142,6 +145,13 @@ func (c *Costsheet) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field description", values[i])
 			} else if value.Valid {
 				c.Description = value.String
+			}
+		case costsheet.ForeignKeys[0]:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field price_costsheet", values[i])
+			} else if value.Valid {
+				c.price_costsheet = new(string)
+				*c.price_costsheet = value.String
 			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
