@@ -40,6 +40,18 @@ const (
 	FieldDisplayAmount = "display_amount"
 	// FieldMinQuantity holds the string denoting the min_quantity field in the database.
 	FieldMinQuantity = "min_quantity"
+	// FieldPriceUnitType holds the string denoting the price_unit_type field in the database.
+	FieldPriceUnitType = "price_unit_type"
+	// FieldPriceUnitID holds the string denoting the price_unit_id field in the database.
+	FieldPriceUnitID = "price_unit_id"
+	// FieldPriceUnit holds the string denoting the price_unit field in the database.
+	FieldPriceUnit = "price_unit"
+	// FieldPriceUnitAmount holds the string denoting the price_unit_amount field in the database.
+	FieldPriceUnitAmount = "price_unit_amount"
+	// FieldDisplayPriceUnitAmount holds the string denoting the display_price_unit_amount field in the database.
+	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
+	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
+	FieldConversionRate = "conversion_rate"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -82,8 +94,6 @@ const (
 	FieldEndDate = "end_date"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
-	// FieldPriceUnitID holds the string denoting the price_unit_id field in the database.
-	FieldPriceUnitID = "price_unit_id"
 	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
 	EdgeCostsheet = "costsheet"
 	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
@@ -121,6 +131,12 @@ var Columns = []string{
 	FieldCurrency,
 	FieldDisplayAmount,
 	FieldMinQuantity,
+	FieldPriceUnitType,
+	FieldPriceUnitID,
+	FieldPriceUnit,
+	FieldPriceUnitAmount,
+	FieldDisplayPriceUnitAmount,
+	FieldConversionRate,
 	FieldType,
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
@@ -142,7 +158,6 @@ var Columns = []string{
 	FieldStartDate,
 	FieldEndDate,
 	FieldGroupID,
-	FieldPriceUnitID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -174,6 +189,10 @@ var (
 	CurrencyValidator func(string) error
 	// DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
 	DisplayAmountValidator func(string) error
+	// DefaultPriceUnitType holds the default value on creation for the "price_unit_type" field.
+	DefaultPriceUnitType string
+	// PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
+	PriceUnitTypeValidator func(string) error
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
@@ -260,6 +279,36 @@ func ByMinQuantity(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMinQuantity, opts...).ToFunc()
 }
 
+// ByPriceUnitType orders the results by the price_unit_type field.
+func ByPriceUnitType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitType, opts...).ToFunc()
+}
+
+// ByPriceUnitID orders the results by the price_unit_id field.
+func ByPriceUnitID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitID, opts...).ToFunc()
+}
+
+// ByPriceUnit orders the results by the price_unit field.
+func ByPriceUnit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnit, opts...).ToFunc()
+}
+
+// ByPriceUnitAmount orders the results by the price_unit_amount field.
+func ByPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPriceUnitAmount, opts...).ToFunc()
+}
+
+// ByDisplayPriceUnitAmount orders the results by the display_price_unit_amount field.
+func ByDisplayPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDisplayPriceUnitAmount, opts...).ToFunc()
+}
+
+// ByConversionRate orders the results by the conversion_rate field.
+func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
+}
+
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
@@ -343,11 +392,6 @@ func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 // ByGroupID orders the results by the group_id field.
 func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
-}
-
-// ByPriceUnitID orders the results by the price_unit_id field.
-func ByPriceUnitID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriceUnitID, opts...).ToFunc()
 }
 
 // ByCostsheetCount orders the results by costsheet count.

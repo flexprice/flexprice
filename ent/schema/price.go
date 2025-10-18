@@ -42,7 +42,6 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			Optional(),
-
 		field.Other("amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
@@ -66,7 +65,50 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
-			Immutable().
+			Immutable(),
+
+		// price_unit_type is the type of the price unit- Fiat, Custom
+		field.String("price_unit_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			NotEmpty().
+			Default(string("")),
+
+		// price_unit_id is the id of the price unit
+		field.String("price_unit_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional(),
+
+		// price_unit is the code of the price unit
+		field.String("price_unit").
+			SchemaType(map[string]string{
+				"postgres": "varchar(3)",
+			}).
+			Optional(),
+
+		// price_unit_amount is the amount of the price unit
+		field.Other("price_unit_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
+			Optional().
+			Nillable(),
+
+		// display_price_unit_amount is the amount of the price unit in the display currency
+		field.String("display_price_unit_amount").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional(),
+
+		// conversion_rate is the conversion rate of the price unit to the fiat currency
+		field.Other("conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(25,15)",
+			}).
 			Optional().
 			Nillable(),
 		field.String("type").
@@ -183,13 +225,6 @@ func (Price) Fields() []ent.Field {
 			Nillable(),
 
 		field.String("group_id").
-			SchemaType(map[string]string{
-				"postgres": "varchar(50)",
-			}).
-			Optional().
-			Nillable(),
-
-		field.String("price_unit_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).

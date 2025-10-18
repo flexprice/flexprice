@@ -1301,36 +1301,42 @@ func init() {
 	priceDescDisplayAmount := priceFields[4].Descriptor()
 	// price.DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
 	price.DisplayAmountValidator = priceDescDisplayAmount.Validators[0].(func(string) error)
+	// priceDescPriceUnitType is the schema descriptor for price_unit_type field.
+	priceDescPriceUnitType := priceFields[6].Descriptor()
+	// price.DefaultPriceUnitType holds the default value on creation for the price_unit_type field.
+	price.DefaultPriceUnitType = priceDescPriceUnitType.Default.(string)
+	// price.PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
+	price.PriceUnitTypeValidator = priceDescPriceUnitType.Validators[0].(func(string) error)
 	// priceDescType is the schema descriptor for type field.
-	priceDescType := priceFields[6].Descriptor()
+	priceDescType := priceFields[12].Descriptor()
 	// price.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	price.TypeValidator = priceDescType.Validators[0].(func(string) error)
 	// priceDescBillingPeriod is the schema descriptor for billing_period field.
-	priceDescBillingPeriod := priceFields[7].Descriptor()
+	priceDescBillingPeriod := priceFields[13].Descriptor()
 	// price.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
 	price.BillingPeriodValidator = priceDescBillingPeriod.Validators[0].(func(string) error)
 	// priceDescBillingPeriodCount is the schema descriptor for billing_period_count field.
-	priceDescBillingPeriodCount := priceFields[8].Descriptor()
+	priceDescBillingPeriodCount := priceFields[14].Descriptor()
 	// price.BillingPeriodCountValidator is a validator for the "billing_period_count" field. It is called by the builders before save.
 	price.BillingPeriodCountValidator = priceDescBillingPeriodCount.Validators[0].(func(int) error)
 	// priceDescBillingModel is the schema descriptor for billing_model field.
-	priceDescBillingModel := priceFields[9].Descriptor()
+	priceDescBillingModel := priceFields[15].Descriptor()
 	// price.BillingModelValidator is a validator for the "billing_model" field. It is called by the builders before save.
 	price.BillingModelValidator = priceDescBillingModel.Validators[0].(func(string) error)
 	// priceDescBillingCadence is the schema descriptor for billing_cadence field.
-	priceDescBillingCadence := priceFields[10].Descriptor()
+	priceDescBillingCadence := priceFields[16].Descriptor()
 	// price.BillingCadenceValidator is a validator for the "billing_cadence" field. It is called by the builders before save.
 	price.BillingCadenceValidator = priceDescBillingCadence.Validators[0].(func(string) error)
 	// priceDescTrialPeriod is the schema descriptor for trial_period field.
-	priceDescTrialPeriod := priceFields[12].Descriptor()
+	priceDescTrialPeriod := priceFields[18].Descriptor()
 	// price.DefaultTrialPeriod holds the default value on creation for the trial_period field.
 	price.DefaultTrialPeriod = priceDescTrialPeriod.Default.(int)
 	// priceDescEntityType is the schema descriptor for entity_type field.
-	priceDescEntityType := priceFields[21].Descriptor()
+	priceDescEntityType := priceFields[27].Descriptor()
 	// price.DefaultEntityType holds the default value on creation for the entity_type field.
 	price.DefaultEntityType = types.PriceEntityType(priceDescEntityType.Default.(string))
 	// priceDescStartDate is the schema descriptor for start_date field.
-	priceDescStartDate := priceFields[24].Descriptor()
+	priceDescStartDate := priceFields[30].Descriptor()
 	// price.DefaultStartDate holds the default value on creation for the start_date field.
 	price.DefaultStartDate = priceDescStartDate.Default.(func() time.Time)
 	priceunitMixin := schema.PriceUnit{}.Mixin()

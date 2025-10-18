@@ -160,10 +160,86 @@ func (pc *PriceCreate) SetMinQuantity(d decimal.Decimal) *PriceCreate {
 	return pc
 }
 
-// SetNillableMinQuantity sets the "min_quantity" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableMinQuantity(d *decimal.Decimal) *PriceCreate {
+// SetPriceUnitType sets the "price_unit_type" field.
+func (pc *PriceCreate) SetPriceUnitType(s string) *PriceCreate {
+	pc.mutation.SetPriceUnitType(s)
+	return pc
+}
+
+// SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitType(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnitType(*s)
+	}
+	return pc
+}
+
+// SetPriceUnitID sets the "price_unit_id" field.
+func (pc *PriceCreate) SetPriceUnitID(s string) *PriceCreate {
+	pc.mutation.SetPriceUnitID(s)
+	return pc
+}
+
+// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitID(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnitID(*s)
+	}
+	return pc
+}
+
+// SetPriceUnit sets the "price_unit" field.
+func (pc *PriceCreate) SetPriceUnit(s string) *PriceCreate {
+	pc.mutation.SetPriceUnit(s)
+	return pc
+}
+
+// SetNillablePriceUnit sets the "price_unit" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnit(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetPriceUnit(*s)
+	}
+	return pc
+}
+
+// SetPriceUnitAmount sets the "price_unit_amount" field.
+func (pc *PriceCreate) SetPriceUnitAmount(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetPriceUnitAmount(d)
+	return pc
+}
+
+// SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceCreate {
 	if d != nil {
-		pc.SetMinQuantity(*d)
+		pc.SetPriceUnitAmount(*d)
+	}
+	return pc
+}
+
+// SetDisplayPriceUnitAmount sets the "display_price_unit_amount" field.
+func (pc *PriceCreate) SetDisplayPriceUnitAmount(s string) *PriceCreate {
+	pc.mutation.SetDisplayPriceUnitAmount(s)
+	return pc
+}
+
+// SetNillableDisplayPriceUnitAmount sets the "display_price_unit_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableDisplayPriceUnitAmount(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetDisplayPriceUnitAmount(*s)
+	}
+	return pc
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (pc *PriceCreate) SetConversionRate(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetConversionRate(d)
+	return pc
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableConversionRate(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetConversionRate(*d)
 	}
 	return pc
 }
@@ -398,20 +474,6 @@ func (pc *PriceCreate) SetNillableGroupID(s *string) *PriceCreate {
 	return pc
 }
 
-// SetPriceUnitID sets the "price_unit_id" field.
-func (pc *PriceCreate) SetPriceUnitID(s string) *PriceCreate {
-	pc.mutation.SetPriceUnitID(s)
-	return pc
-}
-
-// SetNillablePriceUnitID sets the "price_unit_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetPriceUnitID(*s)
-	}
-	return pc
-}
-
 // SetID sets the "id" field.
 func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	pc.mutation.SetID(s)
@@ -507,6 +569,10 @@ func (pc *PriceCreate) defaults() {
 		v := price.DefaultAmount
 		pc.mutation.SetAmount(v)
 	}
+	if _, ok := pc.mutation.PriceUnitType(); !ok {
+		v := price.DefaultPriceUnitType
+		pc.mutation.SetPriceUnitType(v)
+	}
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		v := price.DefaultTrialPeriod
 		pc.mutation.SetTrialPeriod(v)
@@ -557,6 +623,17 @@ func (pc *PriceCreate) check() error {
 	if v, ok := pc.mutation.DisplayAmount(); ok {
 		if err := price.DisplayAmountValidator(v); err != nil {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
+		}
+	}
+	if _, ok := pc.mutation.MinQuantity(); !ok {
+		return &ValidationError{Name: "min_quantity", err: errors.New(`ent: missing required field "Price.min_quantity"`)}
+	}
+	if _, ok := pc.mutation.PriceUnitType(); !ok {
+		return &ValidationError{Name: "price_unit_type", err: errors.New(`ent: missing required field "Price.price_unit_type"`)}
+	}
+	if v, ok := pc.mutation.PriceUnitType(); ok {
+		if err := price.PriceUnitTypeValidator(v); err != nil {
+			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
 	if _, ok := pc.mutation.GetType(); !ok {
@@ -698,7 +775,27 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := pc.mutation.MinQuantity(); ok {
 		_spec.SetField(price.FieldMinQuantity, field.TypeOther, value)
-		_node.MinQuantity = &value
+		_node.MinQuantity = value
+	}
+	if value, ok := pc.mutation.PriceUnitType(); ok {
+		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
+		_node.PriceUnitType = value
+	}
+	if value, ok := pc.mutation.PriceUnit(); ok {
+		_spec.SetField(price.FieldPriceUnit, field.TypeString, value)
+		_node.PriceUnit = value
+	}
+	if value, ok := pc.mutation.PriceUnitAmount(); ok {
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
+		_node.PriceUnitAmount = &value
+	}
+	if value, ok := pc.mutation.DisplayPriceUnitAmount(); ok {
+		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
+		_node.DisplayPriceUnitAmount = value
+	}
+	if value, ok := pc.mutation.ConversionRate(); ok {
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
+		_node.ConversionRate = &value
 	}
 	if value, ok := pc.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -814,7 +911,7 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
-		_node.PriceUnitID = &nodes[0]
+		_node.PriceUnitID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
