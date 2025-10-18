@@ -34,18 +34,6 @@ const (
 	FieldCurrency = "currency"
 	// FieldDisplayAmount holds the string denoting the display_amount field in the database.
 	FieldDisplayAmount = "display_amount"
-	// FieldPriceUnitType holds the string denoting the price_unit_type field in the database.
-	FieldPriceUnitType = "price_unit_type"
-	// FieldPriceUnitID holds the string denoting the price_unit_id field in the database.
-	FieldPriceUnitID = "price_unit_id"
-	// FieldPriceUnit holds the string denoting the price_unit field in the database.
-	FieldPriceUnit = "price_unit"
-	// FieldPriceUnitAmount holds the string denoting the price_unit_amount field in the database.
-	FieldPriceUnitAmount = "price_unit_amount"
-	// FieldDisplayPriceUnitAmount holds the string denoting the display_price_unit_amount field in the database.
-	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
-	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
-	FieldConversionRate = "conversion_rate"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -68,8 +56,6 @@ const (
 	FieldTierMode = "tier_mode"
 	// FieldTiers holds the string denoting the tiers field in the database.
 	FieldTiers = "tiers"
-	// FieldPriceUnitTiers holds the string denoting the price_unit_tiers field in the database.
-	FieldPriceUnitTiers = "price_unit_tiers"
 	// FieldTransformQuantity holds the string denoting the transform_quantity field in the database.
 	FieldTransformQuantity = "transform_quantity"
 	// FieldLookupKey holds the string denoting the lookup_key field in the database.
@@ -90,17 +76,17 @@ const (
 	FieldEndDate = "end_date"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
-	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
-	EdgePriceUnitEdge = "price_unit_edge"
+	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
+	EdgeCostsheet = "costsheet"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
-	// PriceUnitEdgeTable is the table that holds the price_unit_edge relation/edge.
-	PriceUnitEdgeTable = "prices"
-	// PriceUnitEdgeInverseTable is the table name for the PriceUnit entity.
-	// It exists in this package in order to avoid circular dependency with the "priceunit" package.
-	PriceUnitEdgeInverseTable = "price_units"
-	// PriceUnitEdgeColumn is the table column denoting the price_unit_edge relation/edge.
-	PriceUnitEdgeColumn = "price_unit_id"
+	// CostsheetTable is the table that holds the costsheet relation/edge.
+	CostsheetTable = "costsheets"
+	// CostsheetInverseTable is the table name for the Costsheet entity.
+	// It exists in this package in order to avoid circular dependency with the "costsheet" package.
+	CostsheetInverseTable = "costsheets"
+	// CostsheetColumn is the table column denoting the costsheet relation/edge.
+	CostsheetColumn = "price_costsheet"
 )
 
 // Columns holds all SQL columns for price fields.
@@ -116,12 +102,6 @@ var Columns = []string{
 	FieldAmount,
 	FieldCurrency,
 	FieldDisplayAmount,
-	FieldPriceUnitType,
-	FieldPriceUnitID,
-	FieldPriceUnit,
-	FieldPriceUnitAmount,
-	FieldDisplayPriceUnitAmount,
-	FieldConversionRate,
 	FieldType,
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
@@ -133,7 +113,6 @@ var Columns = []string{
 	FieldFilterValues,
 	FieldTierMode,
 	FieldTiers,
-	FieldPriceUnitTiers,
 	FieldTransformQuantity,
 	FieldLookupKey,
 	FieldDescription,
@@ -173,10 +152,6 @@ var (
 	CurrencyValidator func(string) error
 	// DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
 	DisplayAmountValidator func(string) error
-	// DefaultPriceUnitType holds the default value on creation for the "price_unit_type" field.
-	DefaultPriceUnitType string
-	// PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
-	PriceUnitTypeValidator func(string) error
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
@@ -251,36 +226,6 @@ func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByDisplayAmount orders the results by the display_amount field.
 func ByDisplayAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisplayAmount, opts...).ToFunc()
-}
-
-// ByPriceUnitType orders the results by the price_unit_type field.
-func ByPriceUnitType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriceUnitType, opts...).ToFunc()
-}
-
-// ByPriceUnitID orders the results by the price_unit_id field.
-func ByPriceUnitID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriceUnitID, opts...).ToFunc()
-}
-
-// ByPriceUnit orders the results by the price_unit field.
-func ByPriceUnit(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriceUnit, opts...).ToFunc()
-}
-
-// ByPriceUnitAmount orders the results by the price_unit_amount field.
-func ByPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriceUnitAmount, opts...).ToFunc()
-}
-
-// ByDisplayPriceUnitAmount orders the results by the display_price_unit_amount field.
-func ByDisplayPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDisplayPriceUnitAmount, opts...).ToFunc()
-}
-
-// ByConversionRate orders the results by the conversion_rate field.
-func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
 }
 
 // ByType orders the results by the type field.
@@ -368,16 +313,23 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
-// ByPriceUnitEdgeField orders the results by price_unit_edge field.
-func ByPriceUnitEdgeField(field string, opts ...sql.OrderTermOption) OrderOption {
+// ByCostsheetCount orders the results by costsheet count.
+func ByCostsheetCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPriceUnitEdgeStep(), sql.OrderByField(field, opts...))
+		sqlgraph.OrderByNeighborsCount(s, newCostsheetStep(), opts...)
 	}
 }
-func newPriceUnitEdgeStep() *sqlgraph.Step {
+
+// ByCostsheet orders the results by costsheet terms.
+func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newCostsheetStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newCostsheetStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PriceUnitEdgeInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, PriceUnitEdgeTable, PriceUnitEdgeColumn),
+		sqlgraph.To(CostsheetInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
 	)
 }
