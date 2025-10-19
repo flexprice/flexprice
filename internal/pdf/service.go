@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/pdf"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/typst"
 )
 
@@ -35,7 +36,7 @@ func NewGenerator(config *config.Configuration, typst typst.Compiler) Generator 
 // RenderPdf implements Service.RenderPdf
 func (s *service) RenderInvoicePdf(ctx context.Context, data *pdf.InvoiceData) ([]byte, error) {
 	// todo: template management from caller
-	templateName := "invoice.typ"
+	templateName := types.TemplateInvoiceDefault
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {

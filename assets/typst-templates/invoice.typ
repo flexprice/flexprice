@@ -4,6 +4,7 @@
 
 #show: template.default-invoice.with(
   currency: invoice-data.at("currency", default: "$"),
+  precision: invoice-data.at("precision", default: 2),
   banner-image: if "banner_image" in invoice-data {
     image(invoice-data.banner_image, width: 30%)
   },
