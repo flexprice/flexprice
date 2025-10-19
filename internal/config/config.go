@@ -16,27 +16,30 @@ import (
 )
 
 type Configuration struct {
-	Deployment           DeploymentConfig           `validate:"required"`
-	Server               ServerConfig               `validate:"required"`
-	Auth                 AuthConfig                 `validate:"required"`
-	Kafka                KafkaConfig                `validate:"required"`
-	ClickHouse           ClickHouseConfig           `validate:"required"`
-	Logging              LoggingConfig              `validate:"required"`
-	Postgres             PostgresConfig             `validate:"required"`
-	Sentry               SentryConfig               `validate:"required"`
-	Pyroscope            PyroscopeConfig            `validate:"required"`
-	Event                EventConfig                `validate:"required"`
-	DynamoDB             DynamoDBConfig             `validate:"required"`
-	Temporal             TemporalConfig             `validate:"required"`
-	Webhook              Webhook                    `validate:"omitempty"`
-	Secrets              SecretsConfig              `validate:"required"`
-	Billing              BillingConfig              `validate:"omitempty"`
-	S3                   S3Config                   `validate:"required"`
-	Cache                CacheConfig                `validate:"required"`
-	EventPostProcessing  EventPostProcessingConfig  `mapstructure:"event_post_processing" validate:"required"`
-	FeatureUsageTracking FeatureUsageTrackingConfig `mapstructure:"feature_usage_tracking" validate:"required"`
-	EnvAccess            EnvAccessConfig            `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
-	FeatureFlag          FeatureFlagConfig          `mapstructure:"feature_flag" validate:"required"`
+	Deployment               DeploymentConfig               `validate:"required"`
+	Server                   ServerConfig                   `validate:"required"`
+	Auth                     AuthConfig                     `validate:"required"`
+	Kafka                    KafkaConfig                    `validate:"required"`
+	ClickHouse               ClickHouseConfig               `validate:"required"`
+	Logging                  LoggingConfig                  `validate:"required"`
+	Postgres                 PostgresConfig                 `validate:"required"`
+	Sentry                   SentryConfig                   `validate:"required"`
+	Pyroscope                PyroscopeConfig                `validate:"required"`
+	Event                    EventConfig                    `validate:"required"`
+	DynamoDB                 DynamoDBConfig                 `validate:"required"`
+	Temporal                 TemporalConfig                 `validate:"required"`
+	Webhook                  Webhook                        `validate:"omitempty"`
+	Secrets                  SecretsConfig                  `validate:"required"`
+	Billing                  BillingConfig                  `validate:"omitempty"`
+	S3                       S3Config                       `validate:"required"`
+	Cache                    CacheConfig                    `validate:"required"`
+	EventProcessing          EventProcessingConfig          `mapstructure:"event_processing" validate:"required"`
+	EventProcessingLazy      EventProcessingLazyConfig      `mapstructure:"event_processing_lazy" validate:"required"`
+	EventPostProcessing      EventPostProcessingConfig      `mapstructure:"event_post_processing" validate:"required"`
+	FeatureUsageTracking     FeatureUsageTrackingConfig     `mapstructure:"feature_usage_tracking" validate:"required"`
+	FeatureUsageTrackingLazy FeatureUsageTrackingLazyConfig `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
+	EnvAccess                EnvAccessConfig                `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
+	FeatureFlag              FeatureFlagConfig              `mapstructure:"feature_flag" validate:"required"`
 }
 
 type CacheConfig struct {
@@ -76,15 +79,17 @@ type SupabaseConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers       []string             `mapstructure:"brokers" validate:"required"`
-	ConsumerGroup string               `mapstructure:"consumer_group" validate:"required"`
-	Topic         string               `mapstructure:"topic" validate:"required"`
-	TLS           bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
-	UseSASL       bool                 `mapstructure:"use_sasl"`
-	SASLMechanism sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
-	SASLUser      string               `mapstructure:"sasl_user"`
-	SASLPassword  string               `mapstructure:"sasl_password"`
-	ClientID      string               `mapstructure:"client_id" validate:"required"`
+	Brokers                []string             `mapstructure:"brokers" validate:"required"`
+	ConsumerGroup          string               `mapstructure:"consumer_group" validate:"required"`
+	Topic                  string               `mapstructure:"topic" validate:"required"`
+	TopicLazy              string               `mapstructure:"topic_lazy" validate:"required"`
+	TLS                    bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
+	UseSASL                bool                 `mapstructure:"use_sasl"`
+	SASLMechanism          sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
+	SASLUser               string               `mapstructure:"sasl_user"`
+	SASLPassword           string               `mapstructure:"sasl_password"`
+	ClientID               string               `mapstructure:"client_id" validate:"required"`
+	RouteTenantsOnLazyMode []string             `mapstructure:"route_tenants_on_lazy_mode" validate:"omitempty"`
 }
 
 type ClickHouseConfig struct {
@@ -160,6 +165,16 @@ type BillingConfig struct {
 	EnvironmentID string `mapstructure:"environment_id" validate:"omitempty"`
 }
 
+type EventProcessingConfig struct {
+	// Rate limit in messages consumed per second
+	Topic                 string `mapstructure:"topic" default:"events"`
+	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_event_processing"`
+	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_backfill"`
+	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
+	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_backfill"`
+}
+
 type EventPostProcessingConfig struct {
 	// Rate limit in messages consumed per second
 	Topic                 string `mapstructure:"topic" default:"events_post_processing"`
@@ -170,6 +185,14 @@ type EventPostProcessingConfig struct {
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_events_post_processing_backfill"`
 }
 
+type EventProcessingLazyConfig struct {
+	Topic                 string `mapstructure:"topic" default:"events_lazy"`
+	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_event_processing_lazy"`
+	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_lazy_backfill"`
+	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
+	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_lazy_backfill"`
+}
 type FeatureUsageTrackingConfig struct {
 	// Rate limit in messages consumed per second
 	Topic                 string `mapstructure:"topic" default:"events"`
@@ -179,12 +202,23 @@ type FeatureUsageTrackingConfig struct {
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
 }
+
+type FeatureUsageTrackingLazyConfig struct {
+	Topic                 string `mapstructure:"topic" default:"events_lazy"`
+	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_realtime"`
+	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
+	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
+	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
+}
+
 type EnvAccessConfig struct {
 	UserEnvMapping map[string]map[string][]string `mapstructure:"user_env_mapping" json:"user_env_mapping" validate:"omitempty"`
 }
 
 type FeatureFlagConfig struct {
-	EnableFeatureUsageForAnalytics bool `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
+	EnableFeatureUsageForAnalytics bool   `mapstructure:"enable_feature_usage_for_analytics" validate:"required"`
+	ForceV1ForTenant               string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
 }
 
 func NewConfig() (*Configuration, error) {

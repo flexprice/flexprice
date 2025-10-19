@@ -84,7 +84,8 @@ type CreateSubscriptionRequest struct {
 	BillingAnchor *time.Time `json:"-"`
 
 	// Workflow
-	Workflow *types.TemporalWorkflowType `json:"-"`
+	Workflow           *types.TemporalWorkflowType `json:"-"`
+	SubscriptionStatus types.SubscriptionStatus    `json:"-,omitempty"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon

@@ -2,10 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api"
@@ -39,11 +36,7 @@ import (
 	"github.com/flexprice/flexprice/internal/webhook"
 	"go.uber.org/fx"
 
-	lambdaEvents "github.com/aws/aws-lambda-go/events"
-	"github.com/aws/aws-lambda-go/lambda"
-	ginadapter "github.com/awslabs/aws-lambda-go-api-proxy/gin"
 	_ "github.com/flexprice/flexprice/docs/swagger"
-	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
@@ -191,6 +184,7 @@ func main() {
 			service.NewMeterService,
 			service.NewEventService,
 			service.NewEventPostProcessingService,
+			service.NewEventConsumptionService,
 			service.NewFeatureUsageTrackingService,
 			service.NewPriceService,
 			service.NewCustomerService,
@@ -386,15 +380,14 @@ func startServer(
 	cfg *config.Configuration,
 	r *gin.Engine,
 	consumer kafka.MessageConsumer,
-	eventRepo events.Repository,
 	temporalClient client.TemporalClient,
 	temporalService temporalservice.TemporalService,
 	webhookService *webhook.WebhookService,
 	router *pubsubRouter.Router,
 	onboardingService service.OnboardingService,
 	log *logger.Logger,
-	sentryService *sentry.Service,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	eventConsumptionSvc service.EventConsumptionService,
 	featureUsageSvc service.FeatureUsageTrackingService,
 	params service.ServiceParams,
 ) {
@@ -409,17 +402,16 @@ func startServer(
 			log.Fatal("Kafka consumer required for local mode")
 		}
 		startAPIServer(lc, r, cfg, log)
-		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
-		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, false)
+		// Register all handlers and start router once (no event consumption)
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, false)
 		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
@@ -428,19 +420,10 @@ func startServer(
 		if consumer == nil {
 			log.Fatal("Kafka consumer required for consumer mode")
 		}
-		startConsumer(lc, consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, true)
 		startRouter(lc, router, log)
-	case types.ModeAWSLambdaAPI:
-		startAWSLambdaAPI(r)
-
-		// Register basic handlers and start router once
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, featureUsageSvc, cfg, false)
-		startRouter(lc, router, log)
-	case types.ModeAWSLambdaConsumer:
-		startAWSLambdaConsumer(eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -497,216 +480,12 @@ func startAPIServer(
 	})
 }
 
-func startConsumer(
-	lc fx.Lifecycle,
-	consumer kafka.MessageConsumer,
-	eventRepo events.Repository,
-	cfg *config.Configuration,
-	log *logger.Logger,
-	sentryService *sentry.Service,
-	eventPostProcessingSvc service.EventPostProcessingService,
-) {
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			go consumeMessages(consumer, eventRepo, cfg, log, sentryService, eventPostProcessingSvc)
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			log.Info("Shutting down consumer...")
-			return nil
-		},
-	})
-}
-
-func startAWSLambdaAPI(r *gin.Engine) {
-	ginLambda := ginadapter.New(r)
-	lambda.Start(ginLambda.ProxyWithContext)
-}
-
-func startAWSLambdaConsumer(eventRepo events.Repository, cfg *config.Configuration, log *logger.Logger, sentryService *sentry.Service, eventPostProcessingSvc service.EventPostProcessingService) {
-	handler := func(ctx context.Context, kafkaEvent lambdaEvents.KafkaEvent) error {
-		log.Debugf("Received Kafka event: %+v", kafkaEvent)
-
-		for _, record := range kafkaEvent.Records {
-			for _, r := range record {
-				log.Debugf("Processing record: topic=%s, partition=%d, offset=%d",
-					r.Topic, r.Partition, r.Offset)
-
-				// TODO decide the repository to use based on the event topic and properties
-				// For now we will use the event repository from the events topic
-
-				// Decode base64 payload first
-				decodedPayload, err := base64.StdEncoding.DecodeString(string(r.Value))
-				if err != nil {
-					log.Errorf("Failed to decode base64 payload: %v", err)
-					continue
-				}
-
-				if err := handleEventConsumption(ctx, cfg, log, eventRepo, decodedPayload, sentryService, eventPostProcessingSvc); err != nil {
-					log.Errorf("Failed to process event: %v, payload: %s", err, string(decodedPayload))
-					continue
-				}
-
-				log.Infof("Successfully processed event: topic=%s, partition=%d, offset=%d",
-					r.Topic, r.Partition, r.Offset)
-			}
-		}
-		return nil
-	}
-
-	lambda.Start(handler)
-}
-
-func consumeMessages(consumer kafka.MessageConsumer, eventRepo events.Repository, cfg *config.Configuration, log *logger.Logger, sentryService *sentry.Service, eventPostProcessingSvc service.EventPostProcessingService) {
-	messages, err := consumer.Subscribe(cfg.Kafka.Topic)
-	if err != nil {
-		log.Fatalf("Failed to subscribe to topic %s: %v", cfg.Kafka.Topic, err)
-	}
-
-	log.Infof("Successfully subscribed to topic %s", cfg.Kafka.Topic)
-
-	for msg := range messages {
-		ctx := context.Background()
-		if err := handleEventConsumption(ctx, cfg, log, eventRepo, msg.Payload, sentryService, eventPostProcessingSvc); err != nil {
-			log.Errorf("Failed to process event: %v, payload: %s", err, string(msg.Payload))
-
-			// Don't immediately Nack, retry processing a few times before giving up
-			if shouldRetry(err) {
-				// Only Nack (negative acknowledge) if it's a retriable error
-				// This will cause the message to be redelivered
-				log.Warnf("Nacking message to retry later")
-				msg.Nack()
-			} else {
-				// For non-retriable errors, we acknowledge the message to avoid
-				// endless reprocessing of problematic messages
-				log.Warnf("Error not retriable, acknowledging message to avoid blocking: %v", err)
-				msg.Ack()
-
-				// Record this message as a dead letter for later inspection
-				recordDeadLetterMessage(ctx, msg.Payload, err, log, sentryService)
-			}
-			continue
-		}
-
-		// Successfully processed the message
-		log.Debugf("Successfully processed message, acknowledging it")
-		msg.Ack()
-	}
-}
-
-// shouldRetry determines if an error should trigger a message retry
-func shouldRetry(err error) bool {
-	// Add logic to determine if this error is transient and worth retrying
-	// Examples: database connection issues, temporary unavailability, etc.
-
-	// For now, retry all errors except parsing errors which are not likely to succeed on retry
-	if strings.Contains(err.Error(), "unmarshal") ||
-		strings.Contains(err.Error(), "parse") {
-		return false
-	}
-	return true
-}
-
-// recordDeadLetterMessage records problematic messages for later inspection
-func recordDeadLetterMessage(_ context.Context, payload []byte, processingErr error, log *logger.Logger, sentryService *sentry.Service) {
-	// In a production system, you would send this to a dead letter queue
-	// or record it in a database table for later inspection
-
-	// For now, just log it with a special tag for monitoring
-	log.Errorf("DEAD_LETTER_MESSAGE: %v, payload: %s", processingErr, string(payload))
-
-	// Capture the error in Sentry for monitoring
-	if sentryService != nil {
-		sentryService.CaptureException(fmt.Errorf("dead letter message: %w", processingErr))
-	}
-}
-
-func handleEventConsumption(ctx context.Context, cfg *config.Configuration, log *logger.Logger, eventRepo events.Repository, payload []byte, sentryService *sentry.Service, eventPostProcessingSvc service.EventPostProcessingService) error {
-	// Start a transaction for this event processing
-	transaction, ctx := sentryService.StartTransaction(ctx, "event.process")
-	if transaction != nil {
-		defer transaction.Finish()
-	}
-
-	// Start a Kafka consumer span
-	kafkaSpan, ctx := sentryService.StartKafkaConsumerSpan(ctx, cfg.Kafka.Topic)
-	if kafkaSpan != nil {
-		defer kafkaSpan.Finish()
-	}
-
-	var event events.Event
-	if err := json.Unmarshal(payload, &event); err != nil {
-		log.Errorf("Failed to unmarshal event: %v, payload: %s", err, string(payload))
-		sentryService.CaptureException(err)
-		return err
-	}
-
-	log.Debugf("Starting to process event: %+v", event)
-
-	// Start an event processing span
-	// eventSpan, ctx := sentryService.MonitorEventProcessing(
-	// 	ctx,
-	// 	event.EventName,
-	// 	event.Timestamp,
-	// 	map[string]interface{}{
-	// 		"event_id":       event.ID,
-	// 		"tenant_id":      event.TenantID,
-	// 		"source":         event.Source,
-	// 		"environment_id": event.EnvironmentID,
-	// 	},
-	// )
-	// if eventSpan != nil {
-	// 	defer eventSpan.Finish()
-	// }
-
-	eventsToInsert := []*events.Event{&event}
-
-	if cfg.Billing.TenantID != "" {
-		// Create a billing copy with the tenant ID as the external customer ID
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			cfg.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
-			cfg.Billing.EnvironmentID,
-		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
-
-	// Insert both events in a single operation
-	if err := eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		log.Errorf("Failed to insert events: %v, original event: %+v", err, event)
-		return err
-	}
-
-	// Publish event to post-processing service
-	if err := eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-		log.Errorf("Failed to publish event to post-processing service: %v, original event: %+v", err, event)
-		return err
-	}
-
-	log.Debugf(
-		"Successfully processed event with lag : %v ms : %+v",
-		time.Since(event.Timestamp).Milliseconds(), event,
-	)
-	return nil
-}
-
 func registerRouterHandlers(
 	router *pubsubRouter.Router,
 	webhookService *webhook.WebhookService,
 	onboardingService service.OnboardingService,
 	eventPostProcessingSvc service.EventPostProcessingService,
+	eventConsumptionSvc service.EventConsumptionService,
 	featureUsageSvc service.FeatureUsageTrackingService,
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
@@ -717,8 +496,12 @@ func registerRouterHandlers(
 
 	// Only register processing handlers when needed
 	if includeProcessingHandlers {
+		// Register post-processing handlers
+		eventConsumptionSvc.RegisterHandler(router, cfg)
+		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		eventPostProcessingSvc.RegisterHandler(router, cfg)
 		featureUsageSvc.RegisterHandler(router, cfg)
+		featureUsageSvc.RegisterHandlerLazy(router, cfg)
 	}
 }
 

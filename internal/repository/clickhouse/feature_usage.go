@@ -522,7 +522,7 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		AND environment_id = ?
 		AND customer_id = ?
 		AND timestamp >= ?
-		AND timestamp <= ?
+		AND timestamp < ?
 		AND sign != 0
 	`, strings.Join(selectColumns, ",\n\t\t\t"))
 
@@ -726,15 +726,14 @@ func (r *FeatureUsageRepository) getMaxBucketAnalytics(ctx context.Context, para
 			return nil, err
 		}
 
-		// Get window-based time series points
-		if params.WindowSize != "" {
-			points, err := r.getMaxBucketPoints(ctx, &featureParams, featureInfo)
-			if err != nil {
-				return nil, err
-			}
-
-			// Combine totals with points
+		// Get window-based time series points for each group
+		if featureInfo.BucketSize != "" {
+			// Need to get points per group to match totals
 			for _, total := range totals {
+				points, err := r.getMaxBucketPointsForGroup(ctx, &featureParams, featureInfo, total)
+				if err != nil {
+					return nil, err
+				}
 				total.Points = points
 				allResults = append(allResults, total)
 			}
@@ -753,21 +752,24 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 
 	// Build group by columns based on request parameters
 	groupByColumns := []string{"bucket_start", "feature_id"}
-	selectColumns := []string{"feature_id"}
+	innerSelectColumns := []string{"feature_id"} // For inner query (has access to properties column)
+	outerSelectColumns := []string{"feature_id"} // For outer query (only has aliased columns)
 
 	// Add grouping columns
 	for _, groupBy := range params.GroupBy {
 		switch groupBy {
 		case "source":
 			groupByColumns = append(groupByColumns, "source")
-			selectColumns = append(selectColumns, "source")
+			innerSelectColumns = append(innerSelectColumns, "source")
+			outerSelectColumns = append(outerSelectColumns, "source")
 		case "feature_id":
 			// Already included
 		default:
 			if strings.HasPrefix(groupBy, "properties.") {
 				propertyName := strings.TrimPrefix(groupBy, "properties.")
 				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				selectColumns = append(selectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
+				innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
+				outerSelectColumns = append(outerSelectColumns, propertyName) // Just the alias
 			}
 		}
 	}
@@ -775,7 +777,7 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 	// Build the query for bucket-based MAX aggregation
 	// For MAX with bucket, we need to:
 	// 1. Find the max value within each bucket (grouped by requested fields)
-	// 2. Sum all bucket maxes to get the total
+	// 2. Aggregate across all buckets to get totals
 
 	// Build inner query with filters
 	innerQuery := fmt.Sprintf(`
@@ -783,6 +785,8 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			%s as bucket_start,
 			%s,
 			max(qty_total * sign) as bucket_max,
+			argMax(qty_total, timestamp) as bucket_latest,
+			count(DISTINCT unique_hash) as bucket_count_unique,
 			count(DISTINCT id) as event_count
 		FROM feature_usage
 		WHERE tenant_id = ?
@@ -790,8 +794,8 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		AND customer_id = ?
 		AND feature_id = ?
 		AND timestamp >= ?
-		AND timestamp <= ?
-		AND sign != 0`, bucketWindowExpr, strings.Join(selectColumns, ", "))
+		AND timestamp < ?
+		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -848,12 +852,15 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		SELECT
 			%s,
 			sum(bucket_max) as total_usage,
+			max(bucket_max) as max_usage,
+			argMax(bucket_latest, bucket_start) as latest_usage,
+			sum(bucket_count_unique) as count_unique_usage,
 			sum(event_count) as event_count
 		FROM bucket_maxes
-	`, innerQuery, strings.Join(selectColumns, ", "))
+	`, innerQuery, strings.Join(outerSelectColumns, ", "))
 
 	// Add GROUP BY clause
-	query += " GROUP BY " + strings.Join(selectColumns, ", ")
+	query += " GROUP BY " + strings.Join(outerSelectColumns, ", ")
 
 	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
 	if err != nil {
@@ -878,20 +885,23 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			Properties:      make(map[string]string),
 		}
 
-		// Build scan targets dynamically based on selectColumns structure
-		// The query selects: selectColumns + total_usage + event_count
-		totalSelectColumns := len(selectColumns) + 2 // +2 for total_usage and event_count
+		// Build scan targets dynamically based on outerSelectColumns structure
+		// The query selects: outerSelectColumns + total_usage + max_usage + latest_usage + count_unique_usage + event_count
+		totalSelectColumns := len(outerSelectColumns) + 5 // +5 for total_usage, max_usage, latest_usage, count_unique_usage, event_count
 		scanTargets := make([]interface{}, totalSelectColumns)
 
 		// Create string targets for all select columns
-		selectValues := make([]string, len(selectColumns))
+		selectValues := make([]string, len(outerSelectColumns))
 		for i := range selectValues {
 			scanTargets[i] = &selectValues[i]
 		}
 
-		// Add usage and event count targets
-		scanTargets[len(selectColumns)] = &analytics.TotalUsage
-		scanTargets[len(selectColumns)+1] = &analytics.EventCount
+		// Add usage metrics targets
+		scanTargets[len(outerSelectColumns)] = &analytics.TotalUsage
+		scanTargets[len(outerSelectColumns)+1] = &analytics.MaxUsage
+		scanTargets[len(outerSelectColumns)+2] = &analytics.LatestUsage
+		scanTargets[len(outerSelectColumns)+3] = &analytics.CountUniqueUsage
+		scanTargets[len(outerSelectColumns)+4] = &analytics.EventCount
 
 		err := rows.Scan(scanTargets...)
 		if err != nil {
@@ -900,8 +910,8 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 				Mark(ierr.ErrDatabase)
 		}
 
-		// Populate fields based on selectColumns order
-		for i, selectCol := range selectColumns {
+		// Populate fields based on outerSelectColumns order
+		for i, selectCol := range outerSelectColumns {
 			value := selectValues[i]
 			switch selectCol {
 			case "feature_id":
@@ -909,16 +919,9 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			case "source":
 				analytics.Source = value
 			default:
-				// For properties fields, extract the property name from the alias
-				if strings.Contains(selectCol, " as ") {
-					// Extract alias from "JSONExtractString(properties, 'property_name') as property_name"
-					parts := strings.Split(selectCol, " as ")
-					if len(parts) == 2 {
-						propertyName := strings.TrimSpace(parts[1])
-						if value != "" {
-							analytics.Properties[propertyName] = value
-						}
-					}
+				// For property columns, the selectCol is just the property name (alias)
+				if value != "" {
+					analytics.Properties[selectCol] = value
 				}
 			}
 		}
@@ -929,14 +932,14 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 	return results, nil
 }
 
-// getMaxBucketPoints calculates time series points using request window size for MAX features
-func (r *FeatureUsageRepository) getMaxBucketPoints(ctx context.Context, params *events.UsageAnalyticsParams, featureInfo *events.MaxBucketFeatureInfo) ([]events.UsageAnalyticPoint, error) {
+// getMaxBucketPointsForGroup calculates time series points for a specific group
+func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context, params *events.UsageAnalyticsParams, featureInfo *events.MaxBucketFeatureInfo, group *events.DetailedUsageAnalytic) ([]events.UsageAnalyticPoint, error) {
 	// Build window expression based on request window size
-	windowExpr := r.formatWindowSize(params.WindowSize, params.BillingAnchor)
+	windowExpr := r.formatWindowSize(featureInfo.BucketSize, params.BillingAnchor)
 
 	// For MAX with bucket features, we need to first get max within each bucket,
 	// then aggregate those maxes within the request window
-	// Note: For time series points, we aggregate across all groups within each time window
+	// This version filters by the specific group's attributes (source, properties, etc.)
 
 	// Build inner query with filters
 	innerQuery := fmt.Sprintf(`
@@ -953,7 +956,7 @@ func (r *FeatureUsageRepository) getMaxBucketPoints(ctx context.Context, params 
 		AND customer_id = ?
 		AND feature_id = ?
 		AND timestamp >= ?
-		AND timestamp <= ?
+		AND timestamp < ?
 		AND sign != 0`, r.formatWindowSize(featureInfo.BucketSize, nil), windowExpr)
 
 	queryParams := []interface{}{
@@ -965,19 +968,23 @@ func (r *FeatureUsageRepository) getMaxBucketPoints(ctx context.Context, params 
 		params.EndTime,
 	}
 
-	// Add filters for sources to inner query
-	if len(params.Sources) > 0 {
-		placeholders := make([]string, len(params.Sources))
-		for i := range params.Sources {
-			placeholders[i] = "?"
-		}
-		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
-		for _, source := range params.Sources {
-			queryParams = append(queryParams, source)
+	// Add filter for this specific group's source
+	if group.Source != "" {
+		innerQuery += " AND source = ?"
+		queryParams = append(queryParams, group.Source)
+	}
+
+	// Add filters for this specific group's properties
+	if len(group.Properties) > 0 {
+		for propertyName, propertyValue := range group.Properties {
+			if propertyValue != "" {
+				innerQuery += " AND JSONExtractString(properties, ?) = ?"
+				queryParams = append(queryParams, propertyName, propertyValue)
+			}
 		}
 	}
 
-	// Add property filters to inner query
+	// Add general property filters from params
 	if len(params.PropertyFilters) > 0 {
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
@@ -1167,7 +1174,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		AND environment_id = ?
 		AND customer_id = ?
 		AND timestamp >= ?
-		AND timestamp <= ?
+		AND timestamp < ?
 		AND sign != 0
 	`, strings.Join(selectColumns, ",\n\t\t\t"))
 

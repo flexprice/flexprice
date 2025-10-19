@@ -24,12 +24,15 @@ kafka:
   # Will be overridden by FLEXPRICE_KAFKA_BROKERS env var in Docker
   consumer_group: "flexprice-consumer-local"
   topic: "events"
+  topic_lazy: "events_lazy"
   tls: false
   use_sasl: false
   sasl_mechanism: ""
   sasl_user: ""
   sasl_password: ""
   client_id: "flexprice-client-local"
+  route_tenants_on_lazy_mode: []
+
 
 clickhouse:
   address: 127.0.0.1:9000 # For local mode
@@ -141,6 +144,17 @@ s3:
 cache:
   enabled: false
 
+event_processing:
+  topic: "events"
+  rate_limit: 12
+  consumer_group: "flexprice-consumer-local"
+
+event_processing_lazy:
+  topic: "events_lazy"
+  rate_limit: 12
+  consumer_group: "v1_event_processing_lazy"
+
+
 event_post_processing:
   topic: "events_post_processing"
   rate_limit: 12
@@ -157,6 +171,13 @@ feature_usage_tracking:
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
 
+feature_usage_tracking_lazy:
+  topic: "events_lazy"
+  rate_limit: 1
+  consumer_group: "v1_feature_tracking_service_lazy"
+
 feature_flag:
   # This flag is used to enable/disable feature usage for analytics
   enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025
+  # Tenant ID to force use v1 analytics service (empty string means no tenant is forced to v1)
+  force_v1_for_tenant: ""

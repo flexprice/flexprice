@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -57,11 +58,21 @@ func (p *EventPublisher) Publish(ctx context.Context, event *events.Event) error
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("partition_key", partitionKey)
-
-	if err := p.producer.Publish(p.config.Topic, msg); err != nil {
+	/*
+		TODO: Once we support multiple event import integrations (e.g., S3, Postgres, etc.),
+		route those imported events to the lazy topic.
+	*/
+	if err := p.producer.Publish(p.determineTopic(event), msg); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to publish event").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+func (p *EventPublisher) determineTopic(event *events.Event) string {
+	if slices.Contains(p.config.RouteTenantsOnLazyMode, event.TenantID) {
+		return p.config.TopicLazy
+	}
+	return p.config.Topic
 }
