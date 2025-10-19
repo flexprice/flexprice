@@ -1037,6 +1037,13 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 		req.ReferencePoint,
 	)
 	if err != nil {
+		if ierr.IsInvalidOperation(err) {
+			// Log and skip this subscription - no charges to invoice (e.g., zero amount)
+			s.Logger.Warnw("skipping subscription invoice - no charges to invoice",
+				"subscription_id", req.SubscriptionID,
+				"error", err.Error())
+			return nil, subscription, nil
+		}
 		return nil, nil, err
 	}
 
