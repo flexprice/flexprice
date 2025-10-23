@@ -55,6 +55,7 @@ type FeatureFilter struct {
 	FeatureIDs   []string `form:"feature_ids" json:"feature_ids"`
 	MeterIDs     []string `form:"meter_ids" json:"meter_ids"`
 	LookupKey    string   `form:"lookup_key" json:"lookup_key"`
+	LookupKeys   []string `form:"lookup_keys" json:"lookup_keys"`
 	NameContains string   `form:"name_contains" json:"name_contains"`
 }
 

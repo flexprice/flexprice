@@ -451,6 +451,11 @@ func (o FeatureQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 		query = query.Where(feature.LookupKey(f.LookupKey))
 	}
 
+	// Apply lookup keys filter if specified
+	if len(f.LookupKeys) > 0 {
+		query = query.Where(feature.LookupKeyIn(f.LookupKeys...))
+	}
+
 	if f.NameContains != "" {
 		query = query.Where(feature.NameContainsFold(f.NameContains))
 	}
