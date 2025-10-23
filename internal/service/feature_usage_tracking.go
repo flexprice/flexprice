@@ -413,16 +413,20 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	// Collect all price IDs and meter IDs from subscription line items
 	priceIDs := make([]string, 0)
 	meterIDs := make([]string, 0)
-	subLineItemMap := make(map[string]*subscription.SubscriptionLineItem) // Map price_id -> line item
+	// Map subscription_id -> price_id -> line item
+	subLineItemMap := make(map[string]map[string]*subscription.SubscriptionLineItem)
 
-	// Extract price IDs and meter IDs from all subscription line items in a single pass
+	// Extract price IDs from all subscription line items in a single pass
 	for _, sub := range subscriptions {
+		if _, ok := subLineItemMap[sub.ID]; !ok {
+			subLineItemMap[sub.ID] = make(map[string]*subscription.SubscriptionLineItem)
+		}
 		for _, item := range sub.LineItems {
 			if !item.IsUsage() || !item.IsActive(event.Timestamp) {
 				continue
 			}
 
-			subLineItemMap[item.PriceID] = item
+			subLineItemMap[sub.ID][item.PriceID] = item
 			priceIDs = append(priceIDs, item.PriceID)
 		}
 	}
@@ -529,12 +533,9 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			continue
 		}
 
-		// Get active usage-based line items
-		subscriptionLineItems := lo.Filter(sub.LineItems, func(item *subscription.SubscriptionLineItem, _ int) bool {
-			return item.IsUsage() && item.IsActive(event.Timestamp)
-		})
-
-		if len(subscriptionLineItems) == 0 {
+		// Collect relevant prices for matching from precomputed active usage-based items
+		lineItemsByPrice, ok := subLineItemMap[sub.ID]
+		if !ok || len(lineItemsByPrice) == 0 {
 			s.Logger.Debugw("no active usage-based line items found for subscription",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
@@ -542,20 +543,16 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			continue
 		}
 
-		// Collect relevant prices for matching
-		prices := make([]*price.Price, 0, len(subscriptionLineItems))
-		for _, item := range subscriptionLineItems {
-			if price, ok := priceMap[item.PriceID]; ok {
-				if event.Timestamp.Before(item.StartDate) || (!item.EndDate.IsZero() && event.Timestamp.After(item.EndDate)) {
-					continue
-				}
+		prices := make([]*price.Price, 0, len(lineItemsByPrice))
+		for priceID, item := range lineItemsByPrice {
+			if price, ok := priceMap[priceID]; ok {
 				prices = append(prices, price)
 			} else {
 				s.Logger.Warnw("price not found for subscription line item",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"line_item_id", item.ID,
-					"price_id", item.PriceID,
+					"price_id", priceID,
 				)
 				// Skip this item but continue with others - don't fail the whole batch
 				continue
@@ -575,10 +572,11 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		}
 
 		for _, match := range matches {
-			// Find the corresponding line item
-			lineItem, ok := subLineItemMap[match.Price.ID]
+			// Find the corresponding line item in this subscription
+			lineItemsByPrice := subLineItemMap[sub.ID]
+			lineItem, ok := lineItemsByPrice[match.Price.ID]
 			if !ok {
-				s.Logger.Warnw("line item not found for price",
+				s.Logger.Warnw("line item not found for price in subscription",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"price_id", match.Price.ID,
@@ -625,6 +623,13 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 					"calculated_quantity", quantity.String(),
 				)
 				quantity = decimal.Zero
+			}
+
+			// Derive sign from quantity: 0 for zero qty, 1 otherwise
+			if quantity.IsZero() {
+				featureUsageCopy.Sign = 0
+			} else {
+				featureUsageCopy.Sign = 1
 			}
 
 			// Store original quantity

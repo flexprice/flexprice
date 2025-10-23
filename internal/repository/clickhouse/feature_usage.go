@@ -52,11 +52,8 @@ func (r *FeatureUsageRepository) InsertProcessedEvent(ctx context.Context, event
 			Mark(ierr.ErrValidation)
 	}
 
-	// Default sign to 1 if not set
+	// Preserve sign as provided (0, 1, or -1)
 	sign := event.Sign
-	if sign == 0 {
-		sign = 1
-	}
 
 	args := []interface{}{
 		event.ID,
@@ -129,11 +126,8 @@ func (r *FeatureUsageRepository) BulkInsertProcessedEvents(ctx context.Context, 
 					Mark(ierr.ErrValidation)
 			}
 
-			// Default sign to 1 if not set
+			// Preserve sign as provided (0, 1, or -1)
 			sign := event.Sign
-			if sign == 0 {
-				sign = 1
-			}
 
 			err = batch.Append(
 				event.ID,
