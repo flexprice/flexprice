@@ -164,3 +164,11 @@ func CheckEnvironmentFilter(ctx context.Context, itemEnvID string) bool {
 	// or the environment IDs match, then the item passes the filter
 	return environmentID == "" || itemEnvID == "" || itemEnvID == environmentID
 }
+
+// CheckTenantFilter is a helper function to check if an item matches the tenant filter
+func CheckTenantFilter(ctx context.Context, itemTenantID string) bool {
+	tenantID := types.GetTenantID(ctx)
+	// If no tenant ID is set in the context, or the item doesn't have a tenant ID,
+	// or the tenant IDs match, then the item passes the filter
+	return tenantID == "" || itemTenantID == "" || itemTenantID == tenantID
+}

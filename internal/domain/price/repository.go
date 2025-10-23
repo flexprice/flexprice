@@ -21,4 +21,9 @@ type Repository interface {
 	// Bulk operations
 	CreateBulk(ctx context.Context, prices []*Price) error
 	DeleteBulk(ctx context.Context, ids []string) error
+
+	// Group-related operations (minimal set)
+	GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*Price, error)
+	UpdateGroupIDBulk(ctx context.Context, ids []string, groupID *string) error
+	ClearGroupIDBulk(ctx context.Context, ids []string) error
 }

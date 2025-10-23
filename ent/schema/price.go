@@ -203,6 +203,13 @@ func (Price) Fields() []ent.Field {
 		field.Time("end_date").
 			Optional().
 			Nillable(),
+
+		field.String("group_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -212,6 +219,9 @@ func (Price) Edges() []ent.Edge {
 		edge.To("costsheet", Costsheet.Type),
 		edge.To("price_unit_edge", PriceUnit.Type).
 			Field("price_unit_id").
+			Unique(),
+		edge.To("group", Group.Type).
+			Field("group_id").
 			Unique(),
 	}
 }
@@ -224,5 +234,7 @@ func (Price) Indexes() []ent.Index {
 			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id"),
 		index.Fields("start_date", "end_date"),
+		index.Fields("group_id"),
+		index.Fields("tenant_id", "environment_id", "group_id"),
 	}
 }

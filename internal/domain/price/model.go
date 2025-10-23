@@ -114,6 +114,9 @@ type Price struct {
 	// ParentPriceID references the root price (always set for price lineage tracking)
 	ParentPriceID string `db:"parent_price_id" json:"parent_price_id,omitempty"`
 
+	// GroupID references the group this price belongs to
+	GroupID string `db:"group_id" json:"group_id,omitempty"`
+
 	// StartDate is the start date of the price
 	StartDate *time.Time `db:"start_date" json:"start_date,omitempty"`
 
@@ -401,6 +404,7 @@ func FromEnt(e *ent.Price) *Price {
 		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
 		EntityID:               lo.FromPtr(e.EntityID),
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
+		GroupID:                lo.FromPtr(e.GroupID),
 		StartDate:              e.StartDate,
 		EndDate:                e.EndDate,
 		BaseModel: types.BaseModel{
