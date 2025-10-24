@@ -3,7 +3,6 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -16,18 +15,12 @@ type PriceUnit struct {
 	ent.Schema
 }
 
-// Annotations of the PriceUnit.
-func (PriceUnit) Annotations() []schema.Annotation {
-	return []schema.Annotation{
-		entsql.Annotation{Table: "price_unit"},
-	}
-}
-
 // Mixin of the PriceUnit.
 func (PriceUnit) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},
 		baseMixin.EnvironmentMixin{},
+		baseMixin.MetadataMixin{},
 	}
 }
 
@@ -83,9 +76,9 @@ func (PriceUnit) Edges() []ent.Edge {
 // Indexes of the PriceUnit.
 func (PriceUnit) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("code", "tenant_id", "environment_id").
+		index.Fields("tenant_id", "environment_id", "code").
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published'")),
-		index.Fields("tenant_id", "environment_id"),
+		index.Fields("tenant_id", "environment_id", "code"),
 	}
 }

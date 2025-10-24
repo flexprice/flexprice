@@ -29,6 +29,8 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldEnvironmentID holds the string denoting the environment_id field in the database.
 	FieldEnvironmentID = "environment_id"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
 	// FieldCode holds the string denoting the code field in the database.
@@ -44,7 +46,7 @@ const (
 	// EdgePrices holds the string denoting the prices edge name in mutations.
 	EdgePrices = "prices"
 	// Table holds the table name of the priceunit in the database.
-	Table = "price_unit"
+	Table = "price_units"
 	// PricesTable is the table that holds the prices relation/edge.
 	PricesTable = "prices"
 	// PricesInverseTable is the table name for the Price entity.
@@ -64,6 +66,7 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedBy,
 	FieldEnvironmentID,
+	FieldMetadata,
 	FieldName,
 	FieldCode,
 	FieldSymbol,

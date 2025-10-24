@@ -190,10 +190,6 @@ func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
 	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.Cache)
 }
 
-func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
-	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
-}
-
 func NewAddonRepository(p RepositoryParams) addon.Repository {
 	return entRepo.NewAddonRepository(p.EntClient, p.Logger, p.Cache)
 }
@@ -208,4 +204,8 @@ func NewSettingsRepository(p RepositoryParams) settings.Repository {
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
+	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
 }

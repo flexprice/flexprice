@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/temporal/activities"
+	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -25,7 +25,7 @@ func PriceSyncWorkflow(ctx workflow.Context, in models.PriceSyncWorkflowInput) (
 	}
 
 	// Create activity input with context
-	activityInput := activities.SyncPlanPricesInput{
+	activityInput := planActivities.SyncPlanPricesInput{
 		PlanID:        in.PlanID,
 		TenantID:      in.TenantID,
 		EnvironmentID: in.EnvironmentID,

@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Price holds the schema definition for the Price entity.
@@ -35,7 +36,7 @@ func (Price) Fields() []ent.Field {
 			Unique().
 			Immutable(),
 
-		field.Float("amount").
+		field.Other("amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}),
@@ -74,11 +75,12 @@ func (Price) Fields() []ent.Field {
 			Optional(),
 
 		// price_unit_amount is the amount of the price unit
-		field.Float("price_unit_amount").
+		field.Other("price_unit_amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
-			Optional(),
+			Optional().
+			Nillable(),
 
 		// display_price_unit_amount is the amount of the price unit in the display currency
 		field.String("display_price_unit_amount").
@@ -88,11 +90,12 @@ func (Price) Fields() []ent.Field {
 			Optional(),
 
 		// conversion_rate is the conversion rate of the price unit to the fiat currency
-		field.Float("conversion_rate").
+		field.Other("conversion_rate", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
-			Optional(),
+			Optional().
+			Nillable(),
 
 		field.String("type").
 			SchemaType(map[string]string{
