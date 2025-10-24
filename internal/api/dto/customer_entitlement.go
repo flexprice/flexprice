@@ -95,8 +95,10 @@ type EntitlementSource struct {
 
 // GetCustomerUsageSummaryRequest represents the request for getting customer usage summary
 type GetCustomerUsageSummaryRequest struct {
-	FeatureIDs      []string `json:"feature_ids,omitempty" form:"feature_ids"`
-	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	CustomerID        string   `json:"customer_id,omitempty" form:"customer_id"`
+	CustomerLookupKey string   `json:"customer_lookup_key,omitempty" form:"customer_lookup_key"`
+	FeatureIDs        []string `json:"feature_ids,omitempty" form:"feature_ids"`
+	SubscriptionIDs   []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
 }
 
 func (r *GetCustomerUsageSummaryRequest) Validate() error {

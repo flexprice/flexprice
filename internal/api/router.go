@@ -171,7 +171,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			// New endpoints for entitlements and usage
 			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
-			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary)
+			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)     // New route with query parameters (must come first!)
+			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary) // Deprecated route with path parameter
 
 			// other routes for customer
 			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)

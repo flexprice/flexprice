@@ -235,31 +235,92 @@ func (h *CustomerHandler) GetCustomerEntitlements(c *gin.Context) {
 }
 
 // @Summary Get customer usage summary
-// @Description Get customer usage summary
+// @Description Get customer usage summary by customer_id or customer_lookup_key (external_customer_id)
 // @Tags Customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param id path string true "Customer ID"
-// @Param filter query dto.GetCustomerUsageSummaryRequest false "Filter"
+// @Param customer_id query string false "Customer ID"
+// @Param customer_lookup_key query string false "Customer Lookup Key (external_customer_id)"
+// @Param feature_ids query []string false "Feature IDs"
+// @Param subscription_ids query []string false "Subscription IDs"
 // @Success 200 {object} dto.CustomerUsageSummaryResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /customers/{id}/usage [get]
+// @Router /customers/usage [get]
 func (h *CustomerHandler) GetCustomerUsageSummary(c *gin.Context) {
-	id := c.Param("id")
-
-	// Parse query parameters using binding
 	var req dto.GetCustomerUsageSummaryRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid query parameters").
-			Mark(ierr.ErrValidation))
-		return
+
+	// Check if the deprecated path parameter route was used
+	pathParamID := c.Param("id")
+	if pathParamID != "" {
+		// Deprecated route: /customers/:id/usage
+		c.Header("Deprecation", "true")
+		c.Header("Sunset", "2026-04-01")
+		c.Header("Warning", "299 - \"Deprecated endpoint. Please use GET /v1/customers/usage with query parameters instead.\"")
+		h.log.Warnw("Deprecated endpoint used",
+			"path", c.Request.URL.Path,
+			"deprecation_notice", "GET /v1/customers/:id/usage is deprecated",
+		)
+
+		// Still bind query parameters for other fields (feature_ids, subscription_ids, etc)
+		if err := c.ShouldBindQuery(&req); err != nil {
+			c.Error(ierr.WithError(err).
+				WithHint("Invalid query parameters").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		// If client also provided customer_id in query, ensure it matches the path id
+		if req.CustomerID != "" && req.CustomerID != pathParamID {
+			c.Error(ierr.NewError("path id and query customer_id refer to different customers").
+				WithHint("Do not mix different identifiers on the deprecated route; use /v1/customers/usage").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		// For backward compatibility, ensure customer_id is set from path param
+		req.CustomerID = pathParamID
+	} else {
+		// Route in-place: /customers/usage with query parameters
+		// Parse query parameters using binding
+		if err := c.ShouldBindQuery(&req); err != nil {
+			c.Error(ierr.WithError(err).
+				WithHint("Invalid query parameters").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		// Validate that at least one customer identifier is provided
+		if req.CustomerID == "" && req.CustomerLookupKey == "" {
+			c.Error(ierr.NewError("either customer_id or customer_lookup_key is required").
+				WithHint("Provide customer_id or customer_lookup_key").
+				Mark(ierr.ErrValidation))
+			return
+		}
 	}
 
-	// Call billing service instead of customer service
-	response, err := h.billing.GetCustomerUsageSummary(c.Request.Context(), id, &req)
+	// Resolve customer_lookup_key to customer_id if provided
+	if req.CustomerLookupKey != "" {
+		customer, err := h.service.GetCustomerByLookupKey(c.Request.Context(), req.CustomerLookupKey)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		// Case: when both customer_id and customer_lookup_key are provided, ensure they refer to the same customer
+		if req.CustomerID != "" && customer.ID != req.CustomerID {
+			c.Error(ierr.NewError("customer_id and customer_lookup_key refer to different customers").
+				WithHint("Providing either customer_id or customer_lookup_key is sufficient. But when providing both, ensure both identifiers refer to the same customer.").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		req.CustomerID = customer.ID
+	}
+
+	// Call billing service
+	response, err := h.billing.GetCustomerUsageSummary(c.Request.Context(), req.CustomerID, &req)
 	if err != nil {
 		c.Error(err)
 		return
