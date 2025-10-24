@@ -4,7 +4,8 @@ import (
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/temporal/activities"
+	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
+	taskActivities "github.com/flexprice/flexprice/internal/temporal/activities/task"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	"github.com/flexprice/flexprice/internal/types"
@@ -21,10 +22,10 @@ type WorkerConfig struct {
 func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams) error {
 	// Create activity instances with dependencies
 	planService := service.NewPlanService(params)
-	planActivities := activities.NewPlanActivities(planService)
+	planActivities := planActivities.NewPlanActivities(planService)
 
 	taskService := service.NewTaskService(params)
-	taskActivities := activities.NewTaskActivities(taskService)
+	taskActivities := taskActivities.NewTaskActivities(taskService)
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
@@ -38,7 +39,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 }
 
 // buildWorkerConfig creates a worker configuration for a specific task queue
-func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *activities.PlanActivities, taskActivities *activities.TaskActivities) WorkerConfig {
+func buildWorkerConfig(taskQueue types.TemporalTaskQueue, planActivities *planActivities.PlanActivities, taskActivities *taskActivities.TaskActivities) WorkerConfig {
 	workflowsList := []interface{}{}
 	activitiesList := []interface{}{}
 

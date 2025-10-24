@@ -90,6 +90,7 @@ func (s *BillingServiceSuite) setupService() {
 		CouponAssociationRepo: s.GetStores().CouponAssociationRepo,
 		CouponRepo:            s.GetStores().CouponRepo,
 		CouponApplicationRepo: s.GetStores().CouponApplicationRepo,
+		AddonAssociationRepo:  s.GetStores().AddonAssociationRepo,
 		TaxRateRepo:           s.GetStores().TaxRateRepo,
 		TaxAssociationRepo:    s.GetStores().TaxAssociationRepo,
 		TaxAppliedRepo:        s.GetStores().TaxAppliedRepo,
@@ -318,6 +319,9 @@ func (s *BillingServiceSuite) setupTestData() {
 	}
 
 	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), s.testData.subscription, lineItems))
+
+	// Update the subscription object to include the line items
+	s.testData.subscription.LineItems = lineItems
 
 	// Create test events
 	for i := 0; i < 500; i++ {
@@ -1004,26 +1008,27 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 
 	// Initialize billing service
 	s.service = NewBillingService(ServiceParams{
-		Logger:              s.GetLogger(),
-		Config:              s.GetConfig(),
-		DB:                  s.GetDB(),
-		SubRepo:             s.GetStores().SubscriptionRepo,
-		PlanRepo:            s.GetStores().PlanRepo,
-		PriceRepo:           s.GetStores().PriceRepo,
-		EventRepo:           s.GetStores().EventRepo,
-		MeterRepo:           s.GetStores().MeterRepo,
-		CustomerRepo:        s.GetStores().CustomerRepo,
-		InvoiceRepo:         s.GetStores().InvoiceRepo,
-		EntitlementRepo:     s.GetStores().EntitlementRepo,
-		EnvironmentRepo:     s.GetStores().EnvironmentRepo,
-		FeatureRepo:         s.GetStores().FeatureRepo,
-		TenantRepo:          s.GetStores().TenantRepo,
-		UserRepo:            s.GetStores().UserRepo,
-		AuthRepo:            s.GetStores().AuthRepo,
-		WalletRepo:          s.GetStores().WalletRepo,
-		PaymentRepo:         s.GetStores().PaymentRepo,
-		EventPublisher:      s.GetPublisher(),
-		ProrationCalculator: s.GetCalculator(),
+		Logger:               s.GetLogger(),
+		Config:               s.GetConfig(),
+		DB:                   s.GetDB(),
+		SubRepo:              s.GetStores().SubscriptionRepo,
+		PlanRepo:             s.GetStores().PlanRepo,
+		PriceRepo:            s.GetStores().PriceRepo,
+		EventRepo:            s.GetStores().EventRepo,
+		MeterRepo:            s.GetStores().MeterRepo,
+		CustomerRepo:         s.GetStores().CustomerRepo,
+		InvoiceRepo:          s.GetStores().InvoiceRepo,
+		EntitlementRepo:      s.GetStores().EntitlementRepo,
+		EnvironmentRepo:      s.GetStores().EnvironmentRepo,
+		FeatureRepo:          s.GetStores().FeatureRepo,
+		TenantRepo:           s.GetStores().TenantRepo,
+		UserRepo:             s.GetStores().UserRepo,
+		AuthRepo:             s.GetStores().AuthRepo,
+		WalletRepo:           s.GetStores().WalletRepo,
+		PaymentRepo:          s.GetStores().PaymentRepo,
+		AddonAssociationRepo: s.GetStores().AddonAssociationRepo,
+		EventPublisher:       s.GetPublisher(),
+		ProrationCalculator:  s.GetCalculator(),
 	})
 
 	tests := []struct {
@@ -1648,9 +1653,14 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 				BaseModel:        types.GetDefaultBaseModel(ctx),
 			}
 
-			// Update subscription with new line item
+			// Update subscription with new line item - save to repository
 			s.testData.subscription.LineItems = append(s.testData.subscription.LineItems, lineItem)
 			s.NoError(s.GetStores().SubscriptionRepo.Update(ctx, s.testData.subscription))
+
+			// Create a copy of the subscription with the updated line items for CalculateUsageCharges
+			subscriptionWithLineItems := *s.testData.subscription
+			subscriptionWithLineItems.LineItems = make([]*subscription.SubscriptionLineItem, len(s.testData.subscription.LineItems))
+			copy(subscriptionWithLineItems.LineItems, s.testData.subscription.LineItems)
 
 			// Create mock usage data with bucketed results
 			usage := &dto.GetUsageBySubscriptionResponse{
@@ -1671,10 +1681,10 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 			// Calculate charges
 			lineItems, totalAmount, err := s.service.CalculateUsageCharges(
 				ctx,
-				s.testData.subscription,
+				&subscriptionWithLineItems,
 				usage,
-				s.testData.subscription.CurrentPeriodStart,
-				s.testData.subscription.CurrentPeriodEnd,
+				subscriptionWithLineItems.CurrentPeriodStart,
+				subscriptionWithLineItems.CurrentPeriodEnd,
 			)
 
 			s.NoError(err, "Should not error for %s", tt.name)
