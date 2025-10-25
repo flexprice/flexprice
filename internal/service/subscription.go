@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -3733,7 +3734,7 @@ func (s *subscriptionService) ActivateIncompleteSubscription(ctx context.Context
 // GetSubscriptionConfig retrieves the subscription configuration from settings
 
 // isEligibleForAutoCancellation checks if an active subscription is eligible for auto-cancellation
-func (s *subscriptionService) isEligibleForAutoCancellation(ctx context.Context, sub *subscription.Subscription, config *types.SubscriptionConfig) bool {
+func (s *subscriptionService) isEligibleForAutoCancellation(ctx context.Context, sub *subscription.Subscription, config *typesSettings.SubscriptionConfig) bool {
 	// First check if auto-cancellation is enabled
 	if !config.AutoCancellationEnabled {
 		s.Logger.Debugw("auto-cancellation not enabled for subscription",
