@@ -112,11 +112,31 @@ func NewFeatureUsageTrackingService(
 
 // PublishEvent publishes an event to the feature usage tracking topic
 func (s *featureUsageTrackingService) PublishEvent(ctx context.Context, event *events.Event, isBackfill bool) error {
+	// Basic validation guards
+	if event == nil {
+		return ierr.NewError("nil event").WithHint("PublishEvent received nil event").Mark(ierr.ErrValidation)
+	}
+	if event.TenantID == "" || event.EnvironmentID == "" || event.EventName == "" || event.ID == "" {
+		return ierr.NewError("missing required event fields").
+			WithHint("tenant_id, environment_id, event_name, and id must be set").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":       event.ID,
+				"tenant_id":      event.TenantID,
+				"environment_id": event.EnvironmentID,
+				"event_name":     event.EventName,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// Create message payload
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to marshal event for feature usage tracking").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -253,16 +273,43 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		structured := ierr.WithError(err).
+			WithHint("Failed to unmarshal event for feature usage tracking").
+			WithReportableDetails(map[string]interface{}{
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("failed to unmarshal event for feature usage tracking",
-			"error", err,
+			"error", structured,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on unmarshal errors
 	}
 
+	// Fallback to event metadata if message metadata is missing
+	if tenantID == "" && event.TenantID != "" {
+		tenantID = event.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID == "" && event.EnvironmentID != "" {
+		environmentID = event.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
 	// validate tenant id
 	if event.TenantID != tenantID {
+		structured := ierr.NewError("invalid tenant id").
+			WithHint("tenant_id mismatch between message and event").
+			WithReportableDetails(map[string]interface{}{
+				"expected":      tenantID,
+				"actual":        event.TenantID,
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("invalid tenant id",
+			"error", structured,
 			"expected", tenantID,
 			"actual", event.TenantID,
 			"message_uuid", msg.UUID,
@@ -270,10 +317,37 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 		return nil // Don't retry on invalid tenant id
 	}
 
+	// validate environment id
+	if event.EnvironmentID != environmentID {
+		structured := ierr.NewError("invalid environment id").
+			WithHint("environment_id mismatch between message and event").
+			WithReportableDetails(map[string]interface{}{
+				"expected":      environmentID,
+				"actual":        event.EnvironmentID,
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
+		s.Logger.Errorw("invalid environment id",
+			"error", structured,
+			"expected", environmentID,
+			"actual", event.EnvironmentID,
+			"message_uuid", msg.UUID,
+		)
+		return nil // Don't retry on invalid environment id
+	}
+
 	// Process the event
 	if err := s.processEvent(ctx, &event); err != nil {
+		structured := ierr.WithError(err).
+			WithHint("Failed to process event for feature usage tracking").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrSystem)
 		s.Logger.Errorw("failed to process event for feature usage tracking",
-			"error", err,
+			"error", structured,
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
@@ -320,16 +394,22 @@ func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *e
 // 1. event_name + event_id // for non COUNT_UNIQUE aggregation types
 // 2. event_name + event_field_name + event_field_value // for COUNT_UNIQUE aggregation types
 func (s *featureUsageTrackingService) generateUniqueHash(event *events.Event, meter *meter.Meter) string {
-	hashStr := fmt.Sprintf("%s:%s", event.EventName, event.ID)
+	var b strings.Builder
+	b.Grow(len(event.EventName) + len(event.ID) + 64)
+	b.WriteString(event.EventName)
+	b.WriteString(":")
+	b.WriteString(event.ID)
 
-	// For meters with field-based aggregation, include the field value in the hash
 	if meter.Aggregation.Type == types.AggregationCountUnique && meter.Aggregation.Field != "" {
 		if fieldValue, ok := event.Properties[meter.Aggregation.Field]; ok {
-			hashStr = fmt.Sprintf("%s:%s:%v", event.EventName, meter.Aggregation.Field, fieldValue)
+			b.WriteString(":")
+			b.WriteString(meter.Aggregation.Field)
+			b.WriteString(":")
+			b.WriteString(stableString(fieldValue))
 		}
 	}
 
-	hash := sha256.Sum256([]byte(hashStr))
+	hash := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(hash[:])
 }
 
@@ -393,7 +473,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	}
 
 	// Filter subscriptions to only include those that are active for the event timestamp
-	validSubscriptions := make([]*dto.SubscriptionResponse, 0)
+	validSubscriptions := make([]*dto.SubscriptionResponse, 0, len(subscriptions))
 	for _, sub := range subscriptions {
 		if s.isSubscriptionValidForEvent(sub, event) {
 			validSubscriptions = append(validSubscriptions, sub)
@@ -414,7 +494,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	priceIDs := make([]string, 0)
 	meterIDs := make([]string, 0)
 	// Map subscription_id -> price_id -> line item
-	subLineItemMap := make(map[string]map[string]*subscription.SubscriptionLineItem)
+	subLineItemMap := make(map[string]map[string]*subscription.SubscriptionLineItem, len(subscriptions))
 
 	// Extract price IDs from all subscription line items in a single pass
 	for _, sub := range subscriptions {
@@ -451,7 +531,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	}
 
 	// Build price map and collect meter IDs
-	priceMap := make(map[string]*price.Price)
+	priceMap := make(map[string]*price.Price, len(prices))
 	for _, p := range prices {
 		if !p.IsUsage() {
 			continue
@@ -480,7 +560,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	}
 
 	// Build meter map
-	meterMap := make(map[string]*meter.Meter)
+	meterMap := make(map[string]*meter.Meter, len(meters))
 	for _, m := range meters {
 		meterMap[m.ID] = m
 	}
@@ -658,7 +738,8 @@ func (s *featureUsageTrackingService) findMatchingPricesForEvent(
 	prices []*price.Price,
 	meterMap map[string]*meter.Meter,
 ) []PriceMatch {
-	matches := make([]PriceMatch, 0)
+	matches := make([]PriceMatch, 0, len(prices))
+	filterCache := make(map[string]bool)
 
 	// Find prices with associated meters
 	for _, price := range prices {
@@ -681,8 +762,13 @@ func (s *featureUsageTrackingService) findMatchingPricesForEvent(
 			continue
 		}
 
-		// Check meter filters
-		if !s.checkMeterFilters(event, meter.Filters) {
+		// Check meter filters with per-call cache keyed by meter ID
+		allowed, cached := filterCache[meter.ID]
+		if !cached {
+			allowed = s.checkMeterFilters(event, meter.Filters)
+			filterCache[meter.ID] = allowed
+		}
+		if !allowed {
 			continue
 		}
 

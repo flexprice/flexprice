@@ -198,9 +198,38 @@ func (s *EventPostProcessingSuite) TestGenerateUniqueHash_Count_IgnoresField() {
 	s.Equal(s.impl.generateUniqueHash(evtA, m), s.impl.generateUniqueHash(evtB, m), "count aggregation should ignore field values")
 }
 
+func (s *EventPostProcessingSuite) TestGenerateUniqueHash_CountUnique_MapOrderStable() {
+	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "payload"}}
+	props1 := map[string]interface{}{"a": 1, "b": 2}
+	props2 := map[string]interface{}{"b": 2, "a": 1}
+	evt1 := events.NewEvent("map_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"payload": props1}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	evt2 := events.NewEvent("map_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"payload": props2}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	h1 := s.impl.generateUniqueHash(evt1, m)
+	h2 := s.impl.generateUniqueHash(evt2, m)
+	s.Equal(h1, h2)
+}
+
+func (s *EventPostProcessingSuite) TestGenerateUniqueHash_CountUnique_ArrayStableAndDistinct() {
+	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "list"}}
+	evtA := events.NewEvent("arr_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"list": []int{1, 2}}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	evtB := events.NewEvent("arr_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"list": []int{1, 2}}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	evtC := events.NewEvent("arr_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"list": []int{2, 1}}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	s.Equal(s.impl.generateUniqueHash(evtA, m), s.impl.generateUniqueHash(evtB, m), "same array produces same hash")
+	s.NotEqual(s.impl.generateUniqueHash(evtA, m), s.impl.generateUniqueHash(evtC, m), "different array order/content produces different hash")
+}
+
+func (s *EventPostProcessingSuite) TestGenerateUniqueHash_CountUnique_BoolAndNil() {
+	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationCountUnique, Field: "flag"}}
+	evtTrue := events.NewEvent("bool_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"flag": true}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	evtFalse := events.NewEvent("bool_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"flag": false}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	evtNil := events.NewEvent("bool_evt", types.GetTenantID(s.ctx), "cust", map[string]interface{}{"flag": nil}, time.Now().UTC(), "evt-id", "", "test", types.GetEnvironmentID(s.ctx))
+	s.NotEqual(s.impl.generateUniqueHash(evtTrue, m), s.impl.generateUniqueHash(evtFalse, m), "true vs false should differ")
+	// nil should produce deterministic string "null" via stableString(JSON), so compare against itself
+	s.Equal(s.impl.generateUniqueHash(evtNil, m), s.impl.generateUniqueHash(evtNil, m))
+}
+
 func (s *EventPostProcessingSuite) TestExtractQuantityFromEvent_Sum_Types() {
 	m := &meter.Meter{Aggregation: meter.Aggregation{Type: types.AggregationSum, Field: "value"}}
-
 	cases := []struct {
 		props    map[string]interface{}
 		wantDec string
@@ -211,6 +240,7 @@ func (s *EventPostProcessingSuite) TestExtractQuantityFromEvent_Sum_Types() {
 		{map[string]interface{}{"value": int(2)}, "2", "2"},
 		{map[string]interface{}{"value": uint(3)}, "3", "3"},
 		{map[string]interface{}{"value": int64(4)}, "4", "4"},
+		{map[string]interface{}{"value": int32(7)}, "7", "7"},
 		{map[string]interface{}{"value": json.Number("5.75")}, "5.75", "5.75"},
 		{map[string]interface{}{"value": "6.5"}, "6.5", "6.5"},
 	}
@@ -271,6 +301,37 @@ func (s *EventPostProcessingSuite) TestExtractQuantityFromEvent_Count() {
 	dec, str := s.impl.extractQuantityFromEvent(evt, m)
 	s.Equal("1", dec.String())
 	s.Equal("", str)
+}
+
+func (s *EventPostProcessingSuite) TestStableString_Formats() {
+	// arrays are marshaled to JSON with commas
+	s.Equal("[1,2]", stableString([]int{1, 2}))
+
+	// nil becomes JSON null
+	s.Equal("null", stableString(nil))
+
+	// booleans marshal to JSON booleans
+	s.Equal("true", stableString(true))
+	s.Equal("false", stableString(false))
+
+	// strings and json.Number are used as-is
+	s.Equal("abc", stableString("abc"))
+	s.Equal("123.45", stableString(json.Number("123.45")))
+
+	// numeric types use decimal-backed canonical strings
+	s.Equal("1.25", stableString(float64(1.25)))
+	s.Equal("1.25", stableString(float32(1.25)))
+	s.Equal("42", stableString(int32(42)))
+	s.Equal("42", stableString(int64(42)))
+	s.Equal("42", stableString(uint64(42)))
+
+	// maps produce stable JSON; order independence is preserved
+	m1 := map[string]int{"a": 1, "b": 2}
+	m2 := map[string]int{"b": 2, "a": 1}
+	s.Equal(stableString(m1), stableString(m2))
+
+	// unsupported types fall back to fmt.Sprintf
+	s.Equal("(1+2i)", stableString(complex64(1+2i)))
 }
 
 func (s *EventPostProcessingSuite) TestPublishEvent_TopicAndMetadata() {

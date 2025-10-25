@@ -115,6 +115,12 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	if event.TenantID == "" || event.EnvironmentID == "" || event.EventName == "" || event.ID == "" {
 		return ierr.NewError("missing required event fields").
 			WithHint("tenant_id, environment_id, event_name, and id must be set").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"tenant_id":  event.TenantID,
+				"environment_id": event.EnvironmentID,
+				"event_name": event.EventName,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -123,6 +129,10 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to marshal event for post-processing").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": event.ID,
+				"event_name": event.EventName,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -143,6 +153,8 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("partition_key", partitionKey)
+	msg.Metadata.Set("event_id", event.ID)
+	msg.Metadata.Set("event_name", event.EventName)
 
 	// TODO: use partition key in the producer
 
@@ -158,6 +170,14 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 			WithHint("Please check the config").
 			Mark(ierr.ErrSystem)
 	}
+	if strings.TrimSpace(topic) == "" {
+		return ierr.NewError("post-processing topic not configured").
+			WithHint("EventPostProcessing.Topic or TopicBackfill must be set").
+			WithReportableDetails(map[string]interface{}{
+				"is_backfill": isBackfill,
+			}).
+			Mark(ierr.ErrSystem)
+	}
 
 	s.Logger.Debugw("publishing event for post-processing",
 		"event_id", event.ID,
@@ -170,6 +190,11 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	if err := pubSub.Publish(ctx, topic, msg); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to publish event for post-processing").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": event.ID,
+				"event_name": event.EventName,
+				"topic": topic,
+			}).
 			Mark(ierr.ErrSystem)
 	}
 	return nil
@@ -243,8 +268,15 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		structured := ierr.WithError(err).
+			WithHint("Failed to unmarshal event for post-processing").
+			WithReportableDetails(map[string]interface{}{
+				"message_uuid": msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("failed to unmarshal event for post-processing",
-			"error", err,
+			"error", structured,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on unmarshal errors
@@ -262,14 +294,29 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 			ExternalCustomerID: event.ExternalCustomerID,
 		})
 		if err != nil {
+			structured := ierr.WithError(err).
+				WithHint("Failed to update event with ingested_at").
+				WithReportableDetails(map[string]interface{}{
+					"event_id":             event.ID,
+					"external_customer_id": event.ExternalCustomerID,
+				}).
+				Mark(ierr.ErrDatabase)
 			s.Logger.Errorw("failed to update event with ingested_at",
-				"error", err,
+				"error", structured,
 			)
-			return err
+			return structured
 		}
 
 		if len(events) == 0 {
+			structured := ierr.NewError("event not found").
+				WithHint("Event not found when updating ingested_at").
+				WithReportableDetails(map[string]interface{}{
+					"event_id":             event.ID,
+					"external_customer_id": event.ExternalCustomerID,
+				}).
+				Mark(ierr.ErrNotFound)
 			s.Logger.Errorw("event not found",
+				"error", structured,
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
@@ -281,11 +328,31 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		foundEvent = &event
 	}
 
+	// Fallback to event metadata if message metadata is missing
+	if tenantID == "" && foundEvent.TenantID != "" {
+		tenantID = foundEvent.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID == "" && foundEvent.EnvironmentID != "" {
+		environmentID = foundEvent.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
 	// validate tenant id
 	if foundEvent.TenantID != tenantID {
+		structured := ierr.NewError("invalid tenant id").
+			WithHint("tenant_id mismatch between message and event").
+			WithReportableDetails(map[string]interface{}{
+				"expected":      tenantID,
+				"actual":        foundEvent.TenantID,
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("invalid tenant id",
+			"error", structured,
 			"expected", tenantID,
-			"actual", event.TenantID,
+			"actual", foundEvent.TenantID,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on invalid tenant id
@@ -293,9 +360,19 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 	// validate environment id
 	if foundEvent.EnvironmentID != environmentID {
+		structured := ierr.NewError("invalid environment id").
+			WithHint("environment_id mismatch between message and event").
+			WithReportableDetails(map[string]interface{}{
+				"expected":      environmentID,
+				"actual":        foundEvent.EnvironmentID,
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("invalid environment id",
+			"error", structured,
 			"expected", environmentID,
-			"actual", event.EnvironmentID,
+			"actual", foundEvent.EnvironmentID,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on invalid environment id
@@ -303,12 +380,19 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 
 	// Process the event
 	if err := s.processEvent(ctx, foundEvent); err != nil {
+		structured := ierr.WithError(err).
+			WithHint("Failed to process event").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   foundEvent.ID,
+				"event_name": foundEvent.EventName,
+			}).
+			Mark(ierr.ErrSystem)
 		s.Logger.Errorw("failed to process event",
-			"error", err,
+			"error", structured,
 			"event_id", foundEvent.ID,
 			"event_name", foundEvent.EventName,
 		)
-		return err // Return error for retry
+		return err // Return original error for retry
 	}
 
 	s.Logger.Infow("event processed successfully",
