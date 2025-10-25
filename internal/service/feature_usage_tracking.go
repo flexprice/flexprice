@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -31,6 +32,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/sourcegraph/conc/pool"
 )
 
 // FeatureUsageTrackingService handles feature usage tracking operations for metered events
@@ -1895,24 +1897,37 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 			break
 		}
 
-		// Publish each event to the feature usage tracking topic
-		for _, event := range unprocessedEvents {
-			// hardcoded delay to avoid rate limiting
-			// TODO: remove this to make it configurable
-			if err := s.PublishEvent(ctx, event, true); err != nil {
-				s.Logger.Errorw("failed to publish event for reprocessing for feature usage tracking",
-					"event_id", event.ID,
-					"error", err,
-				)
-				// Continue with other events instead of failing the whole batch
-				continue
-			}
-			totalEventsPublished++
-
-			// Update the last seen ID and timestamp for next batch
-			lastID = event.ID
-			lastTimestamp = event.Timestamp
+		// Publish events with bounded concurrency
+		workers64 := s.Config.FeatureUsageTracking.RateLimitBackfill
+		workers := int(workers64)
+		if workers <= 0 {
+			workers = 10
 		}
+		p := pool.New().WithMaxGoroutines(workers)
+		publishedCount := 0
+		var mu sync.Mutex
+		for _, ev := range unprocessedEvents {
+			e := ev
+			p.Go(func() {
+				if err := s.PublishEvent(ctx, e, true); err != nil {
+					s.Logger.Errorw("failed to publish event for reprocessing for feature usage tracking",
+						"event_id", e.ID,
+						"error", err,
+					)
+					return
+				}
+				mu.Lock()
+				publishedCount++
+				mu.Unlock()
+			})
+		}
+		p.Wait()
+
+		// Update totals and keyset for next batch using the last event in the batch
+		totalEventsPublished += publishedCount
+		lastEvent := unprocessedEvents[len(unprocessedEvents)-1]
+		lastID = lastEvent.ID
+		lastTimestamp = lastEvent.Timestamp
 
 		s.Logger.Infow("published events for reprocessing for feature usage tracking",
 			"batch", processedBatches,
