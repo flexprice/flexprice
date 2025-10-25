@@ -676,7 +676,71 @@ func (s *InMemoryEventStore) Clear() {
 }
 
 func (s *InMemoryEventStore) FindUnprocessedEvents(ctx context.Context, params *events.FindUnprocessedEventsParams) ([]*events.Event, error) {
-	return nil, ierr.NewError("not implemented").
-		WithHint("not implemented").
-		Mark(ierr.ErrSystem)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if params == nil {
+		return nil, ierr.NewError("params cannot be nil").
+			WithHint("FindUnprocessedEvents requires non-nil params").
+			Mark(ierr.ErrValidation)
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	var filtered []*events.Event
+	for _, e := range s.events {
+		// Filter by tenant and environment from context
+		if tenantID != "" && e.TenantID != tenantID {
+			continue
+		}
+		if environmentID != "" && e.EnvironmentID != environmentID {
+			continue
+		}
+
+		// Apply optional filters
+		if params.ExternalCustomerID != "" && e.ExternalCustomerID != params.ExternalCustomerID {
+			continue
+		}
+		if params.EventName != "" && e.EventName != params.EventName {
+			continue
+		}
+		if !params.StartTime.IsZero() && e.Timestamp.Before(params.StartTime) {
+			continue
+		}
+		if !params.EndTime.IsZero() && e.Timestamp.After(params.EndTime) {
+			continue
+		}
+
+		// Keyset pagination: only include records strictly less than the last (timestamp,id)
+		if params.LastID != "" && !params.LastTimestamp.IsZero() {
+			if !e.Timestamp.Before(params.LastTimestamp) {
+				// If timestamp equals, require ID to be lexically smaller for deterministic order
+				if !(e.Timestamp.Equal(params.LastTimestamp) && e.ID < params.LastID) {
+					continue
+				}
+			}
+		}
+
+		filtered = append(filtered, e)
+	}
+
+	// Sort by timestamp DESC, then id DESC to mirror production implementation
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].Timestamp.Equal(filtered[j].Timestamp) {
+			return filtered[i].ID > filtered[j].ID
+		}
+		return filtered[i].Timestamp.After(filtered[j].Timestamp)
+	})
+
+	// Apply batch size limit with default 100
+	limit := params.BatchSize
+	if limit <= 0 {
+		limit = 100
+	}
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
+	return filtered, nil
 }
