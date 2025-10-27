@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,8 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/costsheet"
-	"github.com/flexprice/flexprice/ent/meter"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // Costsheet is the model entity for the Costsheet schema.
@@ -33,47 +32,15 @@ type Costsheet struct {
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// EnvironmentID holds the value of the "environment_id" field.
 	EnvironmentID string `json:"environment_id,omitempty"`
-	// MeterID holds the value of the "meter_id" field.
-	MeterID string `json:"meter_id,omitempty"`
-	// PriceID holds the value of the "price_id" field.
-	PriceID string `json:"price_id,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the CostsheetQuery when eager-loading is set.
-	Edges        CostsheetEdges `json:"edges"`
+	// Metadata holds the value of the "metadata" field.
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// Name holds the value of the "name" field.
+	Name string `json:"name,omitempty"`
+	// LookupKey holds the value of the "lookup_key" field.
+	LookupKey string `json:"lookup_key,omitempty"`
+	// Description holds the value of the "description" field.
+	Description  string `json:"description,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// CostsheetEdges holds the relations/edges for other nodes in the graph.
-type CostsheetEdges struct {
-	// Meter holds the value of the meter edge.
-	Meter *Meter `json:"meter,omitempty"`
-	// Price holds the value of the price edge.
-	Price *Price `json:"price,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
-}
-
-// MeterOrErr returns the Meter value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e CostsheetEdges) MeterOrErr() (*Meter, error) {
-	if e.Meter != nil {
-		return e.Meter, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: meter.Label}
-	}
-	return nil, &NotLoadedError{edge: "meter"}
-}
-
-// PriceOrErr returns the Price value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e CostsheetEdges) PriceOrErr() (*Price, error) {
-	if e.Price != nil {
-		return e.Price, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: price.Label}
-	}
-	return nil, &NotLoadedError{edge: "price"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -81,7 +48,9 @@ func (*Costsheet) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case costsheet.FieldID, costsheet.FieldTenantID, costsheet.FieldStatus, costsheet.FieldCreatedBy, costsheet.FieldUpdatedBy, costsheet.FieldEnvironmentID, costsheet.FieldMeterID, costsheet.FieldPriceID:
+		case costsheet.FieldMetadata:
+			values[i] = new([]byte)
+		case costsheet.FieldID, costsheet.FieldTenantID, costsheet.FieldStatus, costsheet.FieldCreatedBy, costsheet.FieldUpdatedBy, costsheet.FieldEnvironmentID, costsheet.FieldName, costsheet.FieldLookupKey, costsheet.FieldDescription:
 			values[i] = new(sql.NullString)
 		case costsheet.FieldCreatedAt, costsheet.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -148,17 +117,31 @@ func (c *Costsheet) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				c.EnvironmentID = value.String
 			}
-		case costsheet.FieldMeterID:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field meter_id", values[i])
-			} else if value.Valid {
-				c.MeterID = value.String
+		case costsheet.FieldMetadata:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field metadata", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &c.Metadata); err != nil {
+					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
 			}
-		case costsheet.FieldPriceID:
+		case costsheet.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field price_id", values[i])
+				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
-				c.PriceID = value.String
+				c.Name = value.String
+			}
+		case costsheet.FieldLookupKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field lookup_key", values[i])
+			} else if value.Valid {
+				c.LookupKey = value.String
+			}
+		case costsheet.FieldDescription:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field description", values[i])
+			} else if value.Valid {
+				c.Description = value.String
 			}
 		default:
 			c.selectValues.Set(columns[i], values[i])
@@ -171,16 +154,6 @@ func (c *Costsheet) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (c *Costsheet) Value(name string) (ent.Value, error) {
 	return c.selectValues.Get(name)
-}
-
-// QueryMeter queries the "meter" edge of the Costsheet entity.
-func (c *Costsheet) QueryMeter() *MeterQuery {
-	return NewCostsheetClient(c.config).QueryMeter(c)
-}
-
-// QueryPrice queries the "price" edge of the Costsheet entity.
-func (c *Costsheet) QueryPrice() *PriceQuery {
-	return NewCostsheetClient(c.config).QueryPrice(c)
 }
 
 // Update returns a builder for updating this Costsheet.
@@ -227,11 +200,17 @@ func (c *Costsheet) String() string {
 	builder.WriteString("environment_id=")
 	builder.WriteString(c.EnvironmentID)
 	builder.WriteString(", ")
-	builder.WriteString("meter_id=")
-	builder.WriteString(c.MeterID)
+	builder.WriteString("metadata=")
+	builder.WriteString(fmt.Sprintf("%v", c.Metadata))
 	builder.WriteString(", ")
-	builder.WriteString("price_id=")
-	builder.WriteString(c.PriceID)
+	builder.WriteString("name=")
+	builder.WriteString(c.Name)
+	builder.WriteString(", ")
+	builder.WriteString("lookup_key=")
+	builder.WriteString(c.LookupKey)
+	builder.WriteString(", ")
+	builder.WriteString("description=")
+	builder.WriteString(c.Description)
 	builder.WriteByte(')')
 	return builder.String()
 }

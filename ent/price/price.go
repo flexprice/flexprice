@@ -88,19 +88,10 @@ const (
 	FieldStartDate = "start_date"
 	// FieldEndDate holds the string denoting the end_date field in the database.
 	FieldEndDate = "end_date"
-	// EdgeCostsheet holds the string denoting the costsheet edge name in mutations.
-	EdgeCostsheet = "costsheet"
 	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
 	EdgePriceUnitEdge = "price_unit_edge"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
-	// CostsheetTable is the table that holds the costsheet relation/edge.
-	CostsheetTable = "costsheet"
-	// CostsheetInverseTable is the table name for the Costsheet entity.
-	// It exists in this package in order to avoid circular dependency with the "costsheet" package.
-	CostsheetInverseTable = "costsheet"
-	// CostsheetColumn is the table column denoting the costsheet relation/edge.
-	CostsheetColumn = "price_id"
 	// PriceUnitEdgeTable is the table that holds the price_unit_edge relation/edge.
 	PriceUnitEdgeTable = "prices"
 	// PriceUnitEdgeInverseTable is the table name for the PriceUnit entity.
@@ -380,32 +371,11 @@ func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
 }
 
-// ByCostsheetCount orders the results by costsheet count.
-func ByCostsheetCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newCostsheetStep(), opts...)
-	}
-}
-
-// ByCostsheet orders the results by costsheet terms.
-func ByCostsheet(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newCostsheetStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByPriceUnitEdgeField orders the results by price_unit_edge field.
 func ByPriceUnitEdgeField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newPriceUnitEdgeStep(), sql.OrderByField(field, opts...))
 	}
-}
-func newCostsheetStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(CostsheetInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
-	)
 }
 func newPriceUnitEdgeStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

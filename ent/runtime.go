@@ -309,14 +309,10 @@ func init() {
 	costsheetDescEnvironmentID := costsheetMixinFields1[0].Descriptor()
 	// costsheet.DefaultEnvironmentID holds the default value on creation for the environment_id field.
 	costsheet.DefaultEnvironmentID = costsheetDescEnvironmentID.Default.(string)
-	// costsheetDescMeterID is the schema descriptor for meter_id field.
-	costsheetDescMeterID := costsheetFields[1].Descriptor()
-	// costsheet.MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
-	costsheet.MeterIDValidator = costsheetDescMeterID.Validators[0].(func(string) error)
-	// costsheetDescPriceID is the schema descriptor for price_id field.
-	costsheetDescPriceID := costsheetFields[2].Descriptor()
-	// costsheet.PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
-	costsheet.PriceIDValidator = costsheetDescPriceID.Validators[0].(func(string) error)
+	// costsheetDescName is the schema descriptor for name field.
+	costsheetDescName := costsheetFields[1].Descriptor()
+	// costsheet.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	costsheet.NameValidator = costsheetDescName.Validators[0].(func(string) error)
 	couponMixin := schema.Coupon{}.Mixin()
 	couponMixinFields0 := couponMixin[0].Fields()
 	_ = couponMixinFields0

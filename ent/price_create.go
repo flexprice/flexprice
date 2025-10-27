@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
@@ -443,21 +442,6 @@ func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	return pc
 }
 
-// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
-func (pc *PriceCreate) AddCostsheetIDs(ids ...string) *PriceCreate {
-	pc.mutation.AddCostsheetIDs(ids...)
-	return pc
-}
-
-// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
-func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
-	ids := make([]string, len(c))
-	for i := range c {
-		ids[i] = c[i].ID
-	}
-	return pc.AddCostsheetIDs(ids...)
-}
-
 // SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
 func (pc *PriceCreate) SetPriceUnitEdgeID(id string) *PriceCreate {
 	pc.mutation.SetPriceUnitEdgeID(id)
@@ -813,22 +797,6 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.EndDate(); ok {
 		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
-	}
-	if nodes := pc.mutation.CostsheetIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   price.CostsheetTable,
-			Columns: []string{price.CostsheetColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := pc.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

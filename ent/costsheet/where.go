@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -100,14 +99,19 @@ func EnvironmentID(v string) predicate.Costsheet {
 	return predicate.Costsheet(sql.FieldEQ(FieldEnvironmentID, v))
 }
 
-// MeterID applies equality check predicate on the "meter_id" field. It's identical to MeterIDEQ.
-func MeterID(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldEQ(FieldMeterID, v))
+// Name applies equality check predicate on the "name" field. It's identical to NameEQ.
+func Name(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEQ(FieldName, v))
 }
 
-// PriceID applies equality check predicate on the "price_id" field. It's identical to PriceIDEQ.
-func PriceID(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldEQ(FieldPriceID, v))
+// LookupKey applies equality check predicate on the "lookup_key" field. It's identical to LookupKeyEQ.
+func LookupKey(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEQ(FieldLookupKey, v))
+}
+
+// Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
+func Description(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEQ(FieldDescription, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -545,180 +549,229 @@ func EnvironmentIDContainsFold(v string) predicate.Costsheet {
 	return predicate.Costsheet(sql.FieldContainsFold(FieldEnvironmentID, v))
 }
 
-// MeterIDEQ applies the EQ predicate on the "meter_id" field.
-func MeterIDEQ(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldEQ(FieldMeterID, v))
+// MetadataIsNil applies the IsNil predicate on the "metadata" field.
+func MetadataIsNil() predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldIsNull(FieldMetadata))
 }
 
-// MeterIDNEQ applies the NEQ predicate on the "meter_id" field.
-func MeterIDNEQ(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldNEQ(FieldMeterID, v))
+// MetadataNotNil applies the NotNil predicate on the "metadata" field.
+func MetadataNotNil() predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNotNull(FieldMetadata))
 }
 
-// MeterIDIn applies the In predicate on the "meter_id" field.
-func MeterIDIn(vs ...string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldIn(FieldMeterID, vs...))
+// NameEQ applies the EQ predicate on the "name" field.
+func NameEQ(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEQ(FieldName, v))
 }
 
-// MeterIDNotIn applies the NotIn predicate on the "meter_id" field.
-func MeterIDNotIn(vs ...string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldNotIn(FieldMeterID, vs...))
+// NameNEQ applies the NEQ predicate on the "name" field.
+func NameNEQ(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNEQ(FieldName, v))
 }
 
-// MeterIDGT applies the GT predicate on the "meter_id" field.
-func MeterIDGT(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldGT(FieldMeterID, v))
+// NameIn applies the In predicate on the "name" field.
+func NameIn(vs ...string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldIn(FieldName, vs...))
 }
 
-// MeterIDGTE applies the GTE predicate on the "meter_id" field.
-func MeterIDGTE(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldGTE(FieldMeterID, v))
+// NameNotIn applies the NotIn predicate on the "name" field.
+func NameNotIn(vs ...string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNotIn(FieldName, vs...))
 }
 
-// MeterIDLT applies the LT predicate on the "meter_id" field.
-func MeterIDLT(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldLT(FieldMeterID, v))
+// NameGT applies the GT predicate on the "name" field.
+func NameGT(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldGT(FieldName, v))
 }
 
-// MeterIDLTE applies the LTE predicate on the "meter_id" field.
-func MeterIDLTE(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldLTE(FieldMeterID, v))
+// NameGTE applies the GTE predicate on the "name" field.
+func NameGTE(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldGTE(FieldName, v))
 }
 
-// MeterIDContains applies the Contains predicate on the "meter_id" field.
-func MeterIDContains(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldContains(FieldMeterID, v))
+// NameLT applies the LT predicate on the "name" field.
+func NameLT(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldLT(FieldName, v))
 }
 
-// MeterIDHasPrefix applies the HasPrefix predicate on the "meter_id" field.
-func MeterIDHasPrefix(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldHasPrefix(FieldMeterID, v))
+// NameLTE applies the LTE predicate on the "name" field.
+func NameLTE(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldLTE(FieldName, v))
 }
 
-// MeterIDHasSuffix applies the HasSuffix predicate on the "meter_id" field.
-func MeterIDHasSuffix(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldHasSuffix(FieldMeterID, v))
+// NameContains applies the Contains predicate on the "name" field.
+func NameContains(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldContains(FieldName, v))
 }
 
-// MeterIDEqualFold applies the EqualFold predicate on the "meter_id" field.
-func MeterIDEqualFold(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldEqualFold(FieldMeterID, v))
+// NameHasPrefix applies the HasPrefix predicate on the "name" field.
+func NameHasPrefix(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldHasPrefix(FieldName, v))
 }
 
-// MeterIDContainsFold applies the ContainsFold predicate on the "meter_id" field.
-func MeterIDContainsFold(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldContainsFold(FieldMeterID, v))
+// NameHasSuffix applies the HasSuffix predicate on the "name" field.
+func NameHasSuffix(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldHasSuffix(FieldName, v))
 }
 
-// PriceIDEQ applies the EQ predicate on the "price_id" field.
-func PriceIDEQ(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldEQ(FieldPriceID, v))
+// NameEqualFold applies the EqualFold predicate on the "name" field.
+func NameEqualFold(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEqualFold(FieldName, v))
 }
 
-// PriceIDNEQ applies the NEQ predicate on the "price_id" field.
-func PriceIDNEQ(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldNEQ(FieldPriceID, v))
+// NameContainsFold applies the ContainsFold predicate on the "name" field.
+func NameContainsFold(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldContainsFold(FieldName, v))
 }
 
-// PriceIDIn applies the In predicate on the "price_id" field.
-func PriceIDIn(vs ...string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldIn(FieldPriceID, vs...))
+// LookupKeyEQ applies the EQ predicate on the "lookup_key" field.
+func LookupKeyEQ(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEQ(FieldLookupKey, v))
 }
 
-// PriceIDNotIn applies the NotIn predicate on the "price_id" field.
-func PriceIDNotIn(vs ...string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldNotIn(FieldPriceID, vs...))
+// LookupKeyNEQ applies the NEQ predicate on the "lookup_key" field.
+func LookupKeyNEQ(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNEQ(FieldLookupKey, v))
 }
 
-// PriceIDGT applies the GT predicate on the "price_id" field.
-func PriceIDGT(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldGT(FieldPriceID, v))
+// LookupKeyIn applies the In predicate on the "lookup_key" field.
+func LookupKeyIn(vs ...string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldIn(FieldLookupKey, vs...))
 }
 
-// PriceIDGTE applies the GTE predicate on the "price_id" field.
-func PriceIDGTE(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldGTE(FieldPriceID, v))
+// LookupKeyNotIn applies the NotIn predicate on the "lookup_key" field.
+func LookupKeyNotIn(vs ...string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNotIn(FieldLookupKey, vs...))
 }
 
-// PriceIDLT applies the LT predicate on the "price_id" field.
-func PriceIDLT(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldLT(FieldPriceID, v))
+// LookupKeyGT applies the GT predicate on the "lookup_key" field.
+func LookupKeyGT(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldGT(FieldLookupKey, v))
 }
 
-// PriceIDLTE applies the LTE predicate on the "price_id" field.
-func PriceIDLTE(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldLTE(FieldPriceID, v))
+// LookupKeyGTE applies the GTE predicate on the "lookup_key" field.
+func LookupKeyGTE(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldGTE(FieldLookupKey, v))
 }
 
-// PriceIDContains applies the Contains predicate on the "price_id" field.
-func PriceIDContains(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldContains(FieldPriceID, v))
+// LookupKeyLT applies the LT predicate on the "lookup_key" field.
+func LookupKeyLT(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldLT(FieldLookupKey, v))
 }
 
-// PriceIDHasPrefix applies the HasPrefix predicate on the "price_id" field.
-func PriceIDHasPrefix(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldHasPrefix(FieldPriceID, v))
+// LookupKeyLTE applies the LTE predicate on the "lookup_key" field.
+func LookupKeyLTE(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldLTE(FieldLookupKey, v))
 }
 
-// PriceIDHasSuffix applies the HasSuffix predicate on the "price_id" field.
-func PriceIDHasSuffix(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldHasSuffix(FieldPriceID, v))
+// LookupKeyContains applies the Contains predicate on the "lookup_key" field.
+func LookupKeyContains(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldContains(FieldLookupKey, v))
 }
 
-// PriceIDEqualFold applies the EqualFold predicate on the "price_id" field.
-func PriceIDEqualFold(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldEqualFold(FieldPriceID, v))
+// LookupKeyHasPrefix applies the HasPrefix predicate on the "lookup_key" field.
+func LookupKeyHasPrefix(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldHasPrefix(FieldLookupKey, v))
 }
 
-// PriceIDContainsFold applies the ContainsFold predicate on the "price_id" field.
-func PriceIDContainsFold(v string) predicate.Costsheet {
-	return predicate.Costsheet(sql.FieldContainsFold(FieldPriceID, v))
+// LookupKeyHasSuffix applies the HasSuffix predicate on the "lookup_key" field.
+func LookupKeyHasSuffix(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldHasSuffix(FieldLookupKey, v))
 }
 
-// HasMeter applies the HasEdge predicate on the "meter" edge.
-func HasMeter() predicate.Costsheet {
-	return predicate.Costsheet(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, MeterTable, MeterColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
+// LookupKeyIsNil applies the IsNil predicate on the "lookup_key" field.
+func LookupKeyIsNil() predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldIsNull(FieldLookupKey))
 }
 
-// HasMeterWith applies the HasEdge predicate on the "meter" edge with a given conditions (other predicates).
-func HasMeterWith(preds ...predicate.Meter) predicate.Costsheet {
-	return predicate.Costsheet(func(s *sql.Selector) {
-		step := newMeterStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
+// LookupKeyNotNil applies the NotNil predicate on the "lookup_key" field.
+func LookupKeyNotNil() predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNotNull(FieldLookupKey))
 }
 
-// HasPrice applies the HasEdge predicate on the "price" edge.
-func HasPrice() predicate.Costsheet {
-	return predicate.Costsheet(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, PriceTable, PriceColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
+// LookupKeyEqualFold applies the EqualFold predicate on the "lookup_key" field.
+func LookupKeyEqualFold(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEqualFold(FieldLookupKey, v))
 }
 
-// HasPriceWith applies the HasEdge predicate on the "price" edge with a given conditions (other predicates).
-func HasPriceWith(preds ...predicate.Price) predicate.Costsheet {
-	return predicate.Costsheet(func(s *sql.Selector) {
-		step := newPriceStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
+// LookupKeyContainsFold applies the ContainsFold predicate on the "lookup_key" field.
+func LookupKeyContainsFold(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldContainsFold(FieldLookupKey, v))
+}
+
+// DescriptionEQ applies the EQ predicate on the "description" field.
+func DescriptionEQ(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEQ(FieldDescription, v))
+}
+
+// DescriptionNEQ applies the NEQ predicate on the "description" field.
+func DescriptionNEQ(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNEQ(FieldDescription, v))
+}
+
+// DescriptionIn applies the In predicate on the "description" field.
+func DescriptionIn(vs ...string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldIn(FieldDescription, vs...))
+}
+
+// DescriptionNotIn applies the NotIn predicate on the "description" field.
+func DescriptionNotIn(vs ...string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNotIn(FieldDescription, vs...))
+}
+
+// DescriptionGT applies the GT predicate on the "description" field.
+func DescriptionGT(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldGT(FieldDescription, v))
+}
+
+// DescriptionGTE applies the GTE predicate on the "description" field.
+func DescriptionGTE(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldGTE(FieldDescription, v))
+}
+
+// DescriptionLT applies the LT predicate on the "description" field.
+func DescriptionLT(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldLT(FieldDescription, v))
+}
+
+// DescriptionLTE applies the LTE predicate on the "description" field.
+func DescriptionLTE(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldLTE(FieldDescription, v))
+}
+
+// DescriptionContains applies the Contains predicate on the "description" field.
+func DescriptionContains(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldContains(FieldDescription, v))
+}
+
+// DescriptionHasPrefix applies the HasPrefix predicate on the "description" field.
+func DescriptionHasPrefix(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldHasPrefix(FieldDescription, v))
+}
+
+// DescriptionHasSuffix applies the HasSuffix predicate on the "description" field.
+func DescriptionHasSuffix(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldHasSuffix(FieldDescription, v))
+}
+
+// DescriptionIsNil applies the IsNil predicate on the "description" field.
+func DescriptionIsNil() predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldIsNull(FieldDescription))
+}
+
+// DescriptionNotNil applies the NotNil predicate on the "description" field.
+func DescriptionNotNil() predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldNotNull(FieldDescription))
+}
+
+// DescriptionEqualFold applies the EqualFold predicate on the "description" field.
+func DescriptionEqualFold(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldEqualFold(FieldDescription, v))
+}
+
+// DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
+func DescriptionContainsFold(v string) predicate.Costsheet {
+	return predicate.Costsheet(sql.FieldContainsFold(FieldDescription, v))
 }
 
 // And groups predicates with the AND operator between them.

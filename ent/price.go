@@ -103,22 +103,11 @@ type Price struct {
 
 // PriceEdges holds the relations/edges for other nodes in the graph.
 type PriceEdges struct {
-	// Costsheet holds the value of the costsheet edge.
-	Costsheet []*Costsheet `json:"costsheet,omitempty"`
 	// PriceUnitEdge holds the value of the price_unit_edge edge.
 	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
-}
-
-// CostsheetOrErr returns the Costsheet value or an error if the edge
-// was not loaded in eager-loading.
-func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
-	if e.loadedTypes[0] {
-		return e.Costsheet, nil
-	}
-	return nil, &NotLoadedError{edge: "costsheet"}
+	loadedTypes [1]bool
 }
 
 // PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
@@ -126,7 +115,7 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
 	if e.PriceUnitEdge != nil {
 		return e.PriceUnitEdge, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: priceunit.Label}
 	}
 	return nil, &NotLoadedError{edge: "price_unit_edge"}
@@ -427,11 +416,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pr *Price) Value(name string) (ent.Value, error) {
 	return pr.selectValues.Get(name)
-}
-
-// QueryCostsheet queries the "costsheet" edge of the Price entity.
-func (pr *Price) QueryCostsheet() *CostsheetQuery {
-	return NewPriceClient(pr.config).QueryCostsheet(pr)
 }
 
 // QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.

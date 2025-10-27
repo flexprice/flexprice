@@ -212,8 +212,8 @@ var (
 			},
 		},
 	}
-	// CostsheetColumns holds the columns for the "costsheet" table.
-	CostsheetColumns = []*schema.Column{
+	// CostsheetsColumns holds the columns for the "costsheets" table.
+	CostsheetsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
@@ -222,41 +222,29 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "meter_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "price_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 	}
-	// CostsheetTable holds the schema information for the "costsheet" table.
-	CostsheetTable = &schema.Table{
-		Name:       "costsheet",
-		Columns:    CostsheetColumns,
-		PrimaryKey: []*schema.Column{CostsheetColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "costsheet_meters_costsheet",
-				Columns:    []*schema.Column{CostsheetColumns[8]},
-				RefColumns: []*schema.Column{MetersColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-			{
-				Symbol:     "costsheet_prices_costsheet",
-				Columns:    []*schema.Column{CostsheetColumns[9]},
-				RefColumns: []*schema.Column{PricesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
+	// CostsheetsTable holds the schema information for the "costsheets" table.
+	CostsheetsTable = &schema.Table{
+		Name:       "costsheets",
+		Columns:    CostsheetsColumns,
+		PrimaryKey: []*schema.Column{CostsheetsColumns[0]},
 		Indexes: []*schema.Index{
+			{
+				Name:    "idx_costsheet_tenant_environment_lookup_key",
+				Unique:  true,
+				Columns: []*schema.Column{CostsheetsColumns[1], CostsheetsColumns[7], CostsheetsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''",
+				},
+			},
 			{
 				Name:    "costsheet_tenant_id_environment_id",
 				Unique:  false,
-				Columns: []*schema.Column{CostsheetColumns[1], CostsheetColumns[7]},
-			},
-			{
-				Name:    "costsheet_meter_id_price_id",
-				Unique:  true,
-				Columns: []*schema.Column{CostsheetColumns[8], CostsheetColumns[9]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "status = 'published'",
-				},
+				Columns: []*schema.Column{CostsheetsColumns[1], CostsheetsColumns[7]},
 			},
 		},
 	}
@@ -2184,7 +2172,7 @@ var (
 		AuthsTable,
 		BillingSequencesTable,
 		ConnectionsTable,
-		CostsheetTable,
+		CostsheetsTable,
 		CouponsTable,
 		CouponApplicationsTable,
 		CouponAssociationsTable,
@@ -2227,11 +2215,6 @@ var (
 )
 
 func init() {
-	CostsheetTable.ForeignKeys[0].RefTable = MetersTable
-	CostsheetTable.ForeignKeys[1].RefTable = PricesTable
-	CostsheetTable.Annotation = &entsql.Annotation{
-		Table: "costsheet",
-	}
 	CouponApplicationsTable.ForeignKeys[0].RefTable = CouponsTable
 	CouponApplicationsTable.ForeignKeys[1].RefTable = InvoicesTable
 	CouponApplicationsTable.ForeignKeys[2].RefTable = InvoiceLineItemsTable

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -28,30 +27,16 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldEnvironmentID holds the string denoting the environment_id field in the database.
 	FieldEnvironmentID = "environment_id"
-	// FieldMeterID holds the string denoting the meter_id field in the database.
-	FieldMeterID = "meter_id"
-	// FieldPriceID holds the string denoting the price_id field in the database.
-	FieldPriceID = "price_id"
-	// EdgeMeter holds the string denoting the meter edge name in mutations.
-	EdgeMeter = "meter"
-	// EdgePrice holds the string denoting the price edge name in mutations.
-	EdgePrice = "price"
+	// FieldMetadata holds the string denoting the metadata field in the database.
+	FieldMetadata = "metadata"
+	// FieldName holds the string denoting the name field in the database.
+	FieldName = "name"
+	// FieldLookupKey holds the string denoting the lookup_key field in the database.
+	FieldLookupKey = "lookup_key"
+	// FieldDescription holds the string denoting the description field in the database.
+	FieldDescription = "description"
 	// Table holds the table name of the costsheet in the database.
-	Table = "costsheet"
-	// MeterTable is the table that holds the meter relation/edge.
-	MeterTable = "costsheet"
-	// MeterInverseTable is the table name for the Meter entity.
-	// It exists in this package in order to avoid circular dependency with the "meter" package.
-	MeterInverseTable = "meters"
-	// MeterColumn is the table column denoting the meter relation/edge.
-	MeterColumn = "meter_id"
-	// PriceTable is the table that holds the price relation/edge.
-	PriceTable = "costsheet"
-	// PriceInverseTable is the table name for the Price entity.
-	// It exists in this package in order to avoid circular dependency with the "price" package.
-	PriceInverseTable = "prices"
-	// PriceColumn is the table column denoting the price relation/edge.
-	PriceColumn = "price_id"
+	Table = "costsheets"
 )
 
 // Columns holds all SQL columns for costsheet fields.
@@ -64,8 +49,10 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedBy,
 	FieldEnvironmentID,
-	FieldMeterID,
-	FieldPriceID,
+	FieldMetadata,
+	FieldName,
+	FieldLookupKey,
+	FieldDescription,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -91,10 +78,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
-	// MeterIDValidator is a validator for the "meter_id" field. It is called by the builders before save.
-	MeterIDValidator func(string) error
-	// PriceIDValidator is a validator for the "price_id" field. It is called by the builders before save.
-	PriceIDValidator func(string) error
+	// NameValidator is a validator for the "name" field. It is called by the builders before save.
+	NameValidator func(string) error
 )
 
 // OrderOption defines the ordering options for the Costsheet queries.
@@ -140,40 +125,17 @@ func ByEnvironmentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnvironmentID, opts...).ToFunc()
 }
 
-// ByMeterID orders the results by the meter_id field.
-func ByMeterID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMeterID, opts...).ToFunc()
+// ByName orders the results by the name field.
+func ByName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldName, opts...).ToFunc()
 }
 
-// ByPriceID orders the results by the price_id field.
-func ByPriceID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriceID, opts...).ToFunc()
+// ByLookupKey orders the results by the lookup_key field.
+func ByLookupKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLookupKey, opts...).ToFunc()
 }
 
-// ByMeterField orders the results by meter field.
-func ByMeterField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newMeterStep(), sql.OrderByField(field, opts...))
-	}
-}
-
-// ByPriceField orders the results by price field.
-func ByPriceField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPriceStep(), sql.OrderByField(field, opts...))
-	}
-}
-func newMeterStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(MeterInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, MeterTable, MeterColumn),
-	)
-}
-func newPriceStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PriceInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, true, PriceTable, PriceColumn),
-	)
+// ByDescription orders the results by the description field.
+func ByDescription(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDescription, opts...).ToFunc()
 }

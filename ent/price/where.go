@@ -2310,29 +2310,6 @@ func EndDateNotNil() predicate.Price {
 	return predicate.Price(sql.FieldNotNull(FieldEndDate))
 }
 
-// HasCostsheet applies the HasEdge predicate on the "costsheet" edge.
-func HasCostsheet() predicate.Price {
-	return predicate.Price(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, CostsheetTable, CostsheetColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasCostsheetWith applies the HasEdge predicate on the "costsheet" edge with a given conditions (other predicates).
-func HasCostsheetWith(preds ...predicate.Costsheet) predicate.Price {
-	return predicate.Price(func(s *sql.Selector) {
-		step := newCostsheetStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasPriceUnitEdge applies the HasEdge predicate on the "price_unit_edge" edge.
 func HasPriceUnitEdge() predicate.Price {
 	return predicate.Price(func(s *sql.Selector) {

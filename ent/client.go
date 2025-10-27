@@ -1505,38 +1505,6 @@ func (c *CostsheetClient) GetX(ctx context.Context, id string) *Costsheet {
 	return obj
 }
 
-// QueryMeter queries the meter edge of a Costsheet.
-func (c *CostsheetClient) QueryMeter(co *Costsheet) *MeterQuery {
-	query := (&MeterClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := co.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(costsheet.Table, costsheet.FieldID, id),
-			sqlgraph.To(meter.Table, meter.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, costsheet.MeterTable, costsheet.MeterColumn),
-		)
-		fromV = sqlgraph.Neighbors(co.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryPrice queries the price edge of a Costsheet.
-func (c *CostsheetClient) QueryPrice(co *Costsheet) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := co.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(costsheet.Table, costsheet.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, costsheet.PriceTable, costsheet.PriceColumn),
-		)
-		fromV = sqlgraph.Neighbors(co.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *CostsheetClient) Hooks() []Hook {
 	return c.hooks.Costsheet
@@ -3969,22 +3937,6 @@ func (c *MeterClient) GetX(ctx context.Context, id string) *Meter {
 	return obj
 }
 
-// QueryCostsheet queries the costsheet edge of a Meter.
-func (c *MeterClient) QueryCostsheet(m *Meter) *CostsheetQuery {
-	query := (&CostsheetClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(meter.Table, meter.FieldID, id),
-			sqlgraph.To(costsheet.Table, costsheet.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, meter.CostsheetTable, meter.CostsheetColumn),
-		)
-		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *MeterClient) Hooks() []Hook {
 	return c.hooks.Meter
@@ -4563,22 +4515,6 @@ func (c *PriceClient) GetX(ctx context.Context, id string) *Price {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryCostsheet queries the costsheet edge of a Price.
-func (c *PriceClient) QueryCostsheet(pr *Price) *CostsheetQuery {
-	query := (&CostsheetClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pr.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(price.Table, price.FieldID, id),
-			sqlgraph.To(costsheet.Table, costsheet.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, price.CostsheetTable, price.CostsheetColumn),
-		)
-		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // QueryPriceUnitEdge queries the price_unit_edge edge of a Price.

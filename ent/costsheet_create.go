@@ -11,8 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
-	"github.com/flexprice/flexprice/ent/meter"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // CostsheetCreate is the builder for creating a Costsheet entity.
@@ -112,15 +110,43 @@ func (cc *CostsheetCreate) SetNillableEnvironmentID(s *string) *CostsheetCreate 
 	return cc
 }
 
-// SetMeterID sets the "meter_id" field.
-func (cc *CostsheetCreate) SetMeterID(s string) *CostsheetCreate {
-	cc.mutation.SetMeterID(s)
+// SetMetadata sets the "metadata" field.
+func (cc *CostsheetCreate) SetMetadata(m map[string]string) *CostsheetCreate {
+	cc.mutation.SetMetadata(m)
 	return cc
 }
 
-// SetPriceID sets the "price_id" field.
-func (cc *CostsheetCreate) SetPriceID(s string) *CostsheetCreate {
-	cc.mutation.SetPriceID(s)
+// SetName sets the "name" field.
+func (cc *CostsheetCreate) SetName(s string) *CostsheetCreate {
+	cc.mutation.SetName(s)
+	return cc
+}
+
+// SetLookupKey sets the "lookup_key" field.
+func (cc *CostsheetCreate) SetLookupKey(s string) *CostsheetCreate {
+	cc.mutation.SetLookupKey(s)
+	return cc
+}
+
+// SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
+func (cc *CostsheetCreate) SetNillableLookupKey(s *string) *CostsheetCreate {
+	if s != nil {
+		cc.SetLookupKey(*s)
+	}
+	return cc
+}
+
+// SetDescription sets the "description" field.
+func (cc *CostsheetCreate) SetDescription(s string) *CostsheetCreate {
+	cc.mutation.SetDescription(s)
+	return cc
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (cc *CostsheetCreate) SetNillableDescription(s *string) *CostsheetCreate {
+	if s != nil {
+		cc.SetDescription(*s)
+	}
 	return cc
 }
 
@@ -128,16 +154,6 @@ func (cc *CostsheetCreate) SetPriceID(s string) *CostsheetCreate {
 func (cc *CostsheetCreate) SetID(s string) *CostsheetCreate {
 	cc.mutation.SetID(s)
 	return cc
-}
-
-// SetMeter sets the "meter" edge to the Meter entity.
-func (cc *CostsheetCreate) SetMeter(m *Meter) *CostsheetCreate {
-	return cc.SetMeterID(m.ID)
-}
-
-// SetPrice sets the "price" edge to the Price entity.
-func (cc *CostsheetCreate) SetPrice(p *Price) *CostsheetCreate {
-	return cc.SetPriceID(p.ID)
 }
 
 // Mutation returns the CostsheetMutation object of the builder.
@@ -212,27 +228,13 @@ func (cc *CostsheetCreate) check() error {
 	if _, ok := cc.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Costsheet.updated_at"`)}
 	}
-	if _, ok := cc.mutation.MeterID(); !ok {
-		return &ValidationError{Name: "meter_id", err: errors.New(`ent: missing required field "Costsheet.meter_id"`)}
+	if _, ok := cc.mutation.Name(); !ok {
+		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Costsheet.name"`)}
 	}
-	if v, ok := cc.mutation.MeterID(); ok {
-		if err := costsheet.MeterIDValidator(v); err != nil {
-			return &ValidationError{Name: "meter_id", err: fmt.Errorf(`ent: validator failed for field "Costsheet.meter_id": %w`, err)}
+	if v, ok := cc.mutation.Name(); ok {
+		if err := costsheet.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Costsheet.name": %w`, err)}
 		}
-	}
-	if _, ok := cc.mutation.PriceID(); !ok {
-		return &ValidationError{Name: "price_id", err: errors.New(`ent: missing required field "Costsheet.price_id"`)}
-	}
-	if v, ok := cc.mutation.PriceID(); ok {
-		if err := costsheet.PriceIDValidator(v); err != nil {
-			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "Costsheet.price_id": %w`, err)}
-		}
-	}
-	if len(cc.mutation.MeterIDs()) == 0 {
-		return &ValidationError{Name: "meter", err: errors.New(`ent: missing required edge "Costsheet.meter"`)}
-	}
-	if len(cc.mutation.PriceIDs()) == 0 {
-		return &ValidationError{Name: "price", err: errors.New(`ent: missing required edge "Costsheet.price"`)}
 	}
 	return nil
 }
@@ -297,39 +299,21 @@ func (cc *CostsheetCreate) createSpec() (*Costsheet, *sqlgraph.CreateSpec) {
 		_spec.SetField(costsheet.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
-	if nodes := cc.mutation.MeterIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.MeterTable,
-			Columns: []string{costsheet.MeterColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(meter.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.MeterID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
+	if value, ok := cc.mutation.Metadata(); ok {
+		_spec.SetField(costsheet.FieldMetadata, field.TypeJSON, value)
+		_node.Metadata = value
 	}
-	if nodes := cc.mutation.PriceIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.PriceTable,
-			Columns: []string{costsheet.PriceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.PriceID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
+	if value, ok := cc.mutation.Name(); ok {
+		_spec.SetField(costsheet.FieldName, field.TypeString, value)
+		_node.Name = value
+	}
+	if value, ok := cc.mutation.LookupKey(); ok {
+		_spec.SetField(costsheet.FieldLookupKey, field.TypeString, value)
+		_node.LookupKey = value
+	}
+	if value, ok := cc.mutation.Description(); ok {
+		_spec.SetField(costsheet.FieldDescription, field.TypeString, value)
+		_node.Description = value
 	}
 	return _node, _spec
 }
