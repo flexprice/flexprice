@@ -43,6 +43,7 @@ type InvoiceService interface {
 type PlanService interface {
 	CreatePlan(ctx context.Context, req dto.CreatePlanRequest) (*dto.CreatePlanResponse, error)
 	GetPlan(ctx context.Context, id string) (*dto.PlanResponse, error)
+	GetPlanByLookupKey(ctx context.Context, lookupKey string) (*dto.PlanResponse, error)
 	GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error)
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error

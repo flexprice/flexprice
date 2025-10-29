@@ -192,6 +192,48 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 	return response, nil
 }
 
+func (s *planService) GetPlanByLookupKey(ctx context.Context, lookupKey string) (*dto.PlanResponse, error) {
+	if lookupKey == "" {
+		return nil, ierr.NewError("lookup key is required").
+			WithHint("Lookup key is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	plan, err := s.PlanRepo.GetByLookupKey(ctx, lookupKey)
+	if err != nil {
+		return nil, err
+	}
+
+	priceService := NewPriceService(s.ServiceParams)
+	entitlementService := NewEntitlementService(s.ServiceParams)
+
+	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch prices for plan", "plan_id", plan.ID, "error", err)
+		return nil, err
+	}
+
+	entitlements, err := entitlementService.GetPlanEntitlements(ctx, plan.ID)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch entitlements for plan", "plan_id", plan.ID, "error", err)
+		return nil, err
+	}
+
+	creditGrants, err := NewCreditGrantService(s.ServiceParams).GetCreditGrantsByPlan(ctx, plan.ID)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch credit grants for plan", "plan_id", plan.ID, "error", err)
+		return nil, err
+	}
+
+	response := &dto.PlanResponse{
+		Plan:         plan,
+		Prices:       pricesResponse.Items,
+		Entitlements: entitlements.Items,
+		CreditGrants: creditGrants.Items,
+	}
+	return response, nil
+}
+
 func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error) {
 	if filter == nil {
 		filter = types.NewPlanFilter()

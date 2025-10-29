@@ -96,6 +96,37 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get a plan by lookup key
+// @Description Get a plan by lookup key
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param lookup_key path string true "Plan Lookup Key"
+// @Success 200 {object} dto.PlanResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /plans/lookup/{lookup_key} [get]
+func (h *PlanHandler) GetPlanByLookupKey(c *gin.Context) {
+	lookupKey := c.Param("lookup_key")
+	if lookupKey == "" {
+		c.Error(ierr.NewError("lookup key is required").
+			WithHint("Lookup key is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Get plan by lookup key
+	plan, err := h.service.GetPlanByLookupKey(c.Request.Context(), lookupKey)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, plan)
+}
+
 // @Summary Get plans
 // @Description Get plans with optional filtering
 // @Tags Plans

@@ -982,6 +982,40 @@ func (s *PlanServiceSuite) TestGetPlan() {
 	s.Nil(resp)
 }
 
+func (s *PlanServiceSuite) TestGetPlanByLookupKey() {
+	s.Run("plan_found_by_lookup_key", func() {
+		// Create a plan with lookup key
+		testPlan := &plan.Plan{
+			ID:          "plan-lookup-1",
+			LookupKey:   "ext-plan-1",
+			Name:        "Test Plan with Lookup Key",
+			Description: "A plan that can be found by lookup key",
+			BaseModel:   types.GetDefaultBaseModel(s.GetContext()),
+		}
+		err := s.GetStores().PlanRepo.Create(s.GetContext(), testPlan)
+		s.NoError(err)
+
+		resp, err := s.service.GetPlanByLookupKey(s.GetContext(), "ext-plan-1")
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal(testPlan.Name, resp.Plan.Name)
+		s.Equal(testPlan.LookupKey, resp.Plan.LookupKey)
+		s.Equal(testPlan.ID, resp.Plan.ID)
+	})
+
+	s.Run("plan_not_found", func() {
+		resp, err := s.service.GetPlanByLookupKey(s.GetContext(), "nonexistent-lookup-key")
+		s.Error(err)
+		s.Nil(resp)
+	})
+
+	s.Run("empty_lookup_key", func() {
+		resp, err := s.service.GetPlanByLookupKey(s.GetContext(), "")
+		s.Error(err)
+		s.Nil(resp)
+	})
+}
+
 func (s *PlanServiceSuite) TestGetPlans() {
 	// Prepopulate the repository with plans
 	_ = s.GetStores().PlanRepo.Create(s.GetContext(), &plan.Plan{

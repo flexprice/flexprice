@@ -190,6 +190,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.POST("", handlers.Plan.CreatePlan)
 			plan.GET("", handlers.Plan.GetPlans)
 			plan.GET("/:id", handlers.Plan.GetPlan)
+			plan.GET("/lookup/:lookup_key", handlers.Plan.GetPlanByLookupKey)
 			plan.PUT("/:id", handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", handlers.Plan.DeletePlan)
 			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
@@ -197,6 +198,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)
 			plan.GET("/:id/creditgrants", handlers.Plan.GetPlanCreditGrants)
+
 		}
 
 		addon := v1Private.Group("/addons")
