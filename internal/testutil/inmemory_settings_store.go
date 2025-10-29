@@ -7,6 +7,7 @@ import (
 	domainSettings "github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 )
 
 // InMemorySettingsStore implements an in-memory settings repository for testing
@@ -107,15 +108,15 @@ func (s *InMemorySettingsStore) Clear() {
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments
-func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error) {
+func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*typesSettings.TenantEnvConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var configs []*types.TenantEnvConfig
+	var configs []*typesSettings.TenantEnvConfig
 
 	for _, setting := range s.items {
 		if setting.Key == key && setting.Status == types.StatusPublished {
-			config := &types.TenantEnvConfig{
+			config := &typesSettings.TenantEnvConfig{
 				TenantID:      setting.TenantID,
 				EnvironmentID: setting.EnvironmentID,
 				Config:        setting.Value,
@@ -128,18 +129,18 @@ func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Contex
 }
 
 // GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
-func (s *InMemorySettingsStore) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
-	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig.String())
+func (s *InMemorySettingsStore) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*typesSettings.TenantEnvSubscriptionConfig, error) {
+	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, typesSettings.SettingKeySubscriptionConfig.String())
 	if err != nil {
 		return nil, err
 	}
 
-	var subscriptionConfigs []*types.TenantEnvSubscriptionConfig
+	var subscriptionConfigs []*typesSettings.TenantEnvSubscriptionConfig
 	for _, config := range configs {
-		subscriptionConfig := &types.TenantEnvSubscriptionConfig{
+		subscriptionConfig := &typesSettings.TenantEnvSubscriptionConfig{
 			TenantID:      config.TenantID,
 			EnvironmentID: config.EnvironmentID,
-			SubscriptionConfig: &types.SubscriptionConfig{
+			SubscriptionConfig: &typesSettings.SubscriptionConfig{
 				GracePeriodDays:         config.Config["grace_period_days"].(int),
 				AutoCancellationEnabled: config.Config["auto_cancellation_enabled"].(bool),
 			},

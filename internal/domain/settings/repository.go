@@ -3,7 +3,7 @@ package settings
 import (
 	"context"
 
-	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 )
 
 // Repository defines the interface for settings persistence operations
@@ -19,6 +19,6 @@ type Repository interface {
 	DeleteByKey(ctx context.Context, key string) error
 
 	// Config operations
-	ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error)
-	GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error)
+	ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*typesSettings.TenantEnvConfig, error)
+	GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*typesSettings.TenantEnvSubscriptionConfig, error)
 }

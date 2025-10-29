@@ -1,10 +1,7 @@
 package settings
 
 import (
-	"encoding/json"
-
 	"github.com/flexprice/flexprice/ent"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -67,51 +64,51 @@ func FromEntList(settings []*ent.Settings) []*Setting {
 	return result
 }
 
-// GetValue retrieves a value by key and unmarshals it into the target
-func (s *Setting) GetValue(key string, target interface{}) error {
-	if s.Value == nil {
-		return ierr.NewErrorf("no value found for key '%s'", key).
-			Mark(ierr.ErrNotFound)
-	}
+// // GetValue retrieves a value by key and unmarshals it into the target
+// func (s *Setting) GetValue(key string, target interface{}) error {
+// 	if s.Value == nil {
+// 		return ierr.NewErrorf("no value found for key '%s'", key).
+// 			Mark(ierr.ErrNotFound)
+// 	}
 
-	value, exists := s.Value[key]
-	if !exists {
-		return ierr.NewErrorf("key '%s' not found in setting", key).
-			Mark(ierr.ErrNotFound)
-	}
+// 	value, exists := s.Value[key]
+// 	if !exists {
+// 		return ierr.NewErrorf("key '%s' not found in setting", key).
+// 			Mark(ierr.ErrNotFound)
+// 	}
 
-	// Marshal and unmarshal to convert interface{} to target type
-	jsonBytes, err := json.Marshal(value)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHintf("failed to marshal value for key '%s'", key).
-			Mark(ierr.ErrValidation)
-	}
+// 	// Marshal and unmarshal to convert interface{} to target type
+// 	jsonBytes, err := json.Marshal(value)
+// 	if err != nil {
+// 		return ierr.WithError(err).
+// 			WithHintf("failed to marshal value for key '%s'", key).
+// 			Mark(ierr.ErrValidation)
+// 	}
 
-	err = json.Unmarshal(jsonBytes, target)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHintf("failed to unmarshal value for key '%s'", key).
-			Mark(ierr.ErrValidation)
-	}
+// 	err = json.Unmarshal(jsonBytes, target)
+// 	if err != nil {
+// 		return ierr.WithError(err).
+// 			WithHintf("failed to unmarshal value for key '%s'", key).
+// 			Mark(ierr.ErrValidation)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
-// SetValue sets a value for a specific key
-func (s *Setting) SetValue(key string, value interface{}) {
-	if s.Value == nil {
-		s.Value = make(map[string]interface{})
-	}
-	s.Value[key] = value
-}
+// // SetValue sets a value for a specific key
+// func (s *Setting) SetValue(key string, value interface{}) {
+// 	if s.Value == nil {
+// 		s.Value = make(map[string]interface{})
+// 	}
+// 	s.Value[key] = value
+// }
 
-// Validate validates the setting
-func (s *Setting) Validate() error {
-	if s.Key == "" {
-		return ierr.NewError("setting key is required").
-			Mark(ierr.ErrValidation)
-	}
+// // Validate validates the setting
+// func (s *Setting) Validate() error {
+// 	if s.Key == "" {
+// 		return ierr.NewError("setting key is required").
+// 			Mark(ierr.ErrValidation)
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
