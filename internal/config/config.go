@@ -246,7 +246,7 @@ func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
 	// Step 1: Load `.env` if it exists
-	_ = godotenv.Load("")
+	_ = godotenv.Load()
 
 	// Step 2: Initialize Viper
 	v.SetConfigName("config")
