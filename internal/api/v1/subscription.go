@@ -315,11 +315,7 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 		return
 	}
 
-	if req.Reason == "" {
-		req.Reason = "user_requested"
-	}
-
-	if err := h.service.RemoveAddonFromSubscription(c.Request.Context(), req.SubscriptionID, req.AddonID, req.Reason); err != nil {
+	if err := h.service.RemoveAddonFromSubscription(c.Request.Context(), &req); err != nil {
 		h.log.Error("Failed to remove addon from subscription", "error", err)
 		c.Error(err)
 		return
