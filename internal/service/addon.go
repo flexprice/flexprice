@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addon"
+	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -117,13 +118,13 @@ func (s *addonService) GetAddonByLookupKey(ctx context.Context, lookupKey string
 	priceService := NewPriceService(s.ServiceParams)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
-	pricesResponse, err := s.getPricesByAddonID(ctx, priceService, domainAddon.ID)
+	pricesResponse, err := priceService.GetPricesByAddonID(ctx, domainAddon.ID)
 	if err != nil {
 		s.Logger.Errorw("failed to fetch prices for addon", "addon_id", domainAddon.ID, "error", err)
 		return nil, err
 	}
 
-	entitlements, err := s.getAddonEntitlements(ctx, entitlementService, domainAddon.ID)
+	entitlements, err := entitlementService.GetAddonEntitlements(ctx, domainAddon.ID)
 	if err != nil {
 		s.Logger.Errorw("failed to fetch entitlements for addon", "addon_id", domainAddon.ID, "error", err)
 		return nil, err
@@ -351,52 +352,6 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 	return nil
 }
 
-// getPricesByAddonID fetches prices for a specific addon
-func (s *addonService) getPricesByAddonID(ctx context.Context, priceService PriceService, addonID string) (*dto.ListPricesResponse, error) {
-	if addonID == "" {
-		return nil, ierr.NewError("addon_id is required").
-			WithHint("Addon ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Use unlimited filter to fetch addon-scoped prices only
-	priceFilter := types.NewNoLimitPriceFilter().
-		WithEntityIDs([]string{addonID}).
-		WithEntityType(types.PRICE_ENTITY_TYPE_ADDON).
-		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandMeters))
-
-	response, err := priceService.GetPrices(ctx, priceFilter)
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
-// getAddonEntitlements fetches entitlements for a specific addon
-func (s *addonService) getAddonEntitlements(ctx context.Context, entitlementService EntitlementService, addonID string) (*dto.ListEntitlementsResponse, error) {
-	if addonID == "" {
-		return nil, ierr.NewError("addon_id is required").
-			WithHint("Addon ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Use unlimited filter to fetch addon-scoped entitlements only
-	entFilter := types.NewNoLimitEntitlementFilter().
-		WithEntityIDs([]string{addonID}).
-		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON).
-		WithStatus(types.StatusPublished).
-		WithExpand(string(types.ExpandFeatures))
-
-	response, err := entitlementService.ListEntitlements(ctx, entFilter)
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
 // GetActiveAddonAssociation retrieves active addon associations for a given entity at a point in time
 func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) ([]*dto.AddonAssociationResponse, error) {
 	if err := req.Validate(); err != nil {
@@ -413,18 +368,20 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 	// Get active addon associations from repository (filtered at DB level)
 	associations, err := s.AddonAssociationRepo.ListActive(ctx, req.EntityID, req.EntityType, periodStart)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch addon associations").
-			Mark(ierr.ErrSystem)
+		return nil, err
+	}
+
+	// Early return for empty results
+	if len(associations) == 0 {
+		return []*dto.AddonAssociationResponse{}, nil
 	}
 
 	// Convert to response format
-	activeAssociations := make([]*dto.AddonAssociationResponse, len(associations))
-	for i, association := range associations {
-		activeAssociations[i] = &dto.AddonAssociationResponse{
+	responses := lo.Map(associations, func(association *addonassociation.AddonAssociation, _ int) *dto.AddonAssociationResponse {
+		return &dto.AddonAssociationResponse{
 			AddonAssociation: association,
 		}
-	}
+	})
 
-	return activeAssociations, nil
+	return responses, nil
 }
