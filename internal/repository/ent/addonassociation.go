@@ -532,7 +532,7 @@ func (r *addonAssociationRepository) ListActive(ctx context.Context, entityID st
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.AddonAssociation.Query().
 		Where(
 			addonassociation.EntityID(entityID),
