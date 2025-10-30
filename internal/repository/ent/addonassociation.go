@@ -539,8 +539,12 @@ func (r *addonAssociationRepository) GetActiveAddonAssociation(ctx context.Conte
 			addonassociation.TenantID(types.GetTenantID(ctx)),
 			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 			addonassociation.AddonStatus(string(types.AddonStatusActive)),
-			addonassociation.AddonIDIn(addonIds...),
 		)
+
+
+	if len(addonIds) > 0 {
+		query = query.Where(addonassociation.AddonIDIn(addonIds...))
+	}
 
 	// Apply the active filter
 	query = r.queryOpts.applyActiveAddonAssociationFilter(query, periodStart)
