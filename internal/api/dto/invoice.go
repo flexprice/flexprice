@@ -1311,8 +1311,8 @@ type GetInvoiceWithBreakdownRequest struct {
 	// ID is the unique identifier of the invoice
 	ID string `json:"id" validate:"required"`
 
-	// GroupByParams contains the grouping parameters for flexible usage breakdown
-	GroupByParams []string `json:"group_by,omitempty"`
+	// GroupBy contains the grouping parameters for flexible usage breakdown
+	GroupBy []string `json:"group_by,omitempty"`
 }
 
 func (r *GetInvoiceWithBreakdownRequest) Validate() error {

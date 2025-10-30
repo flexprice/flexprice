@@ -81,8 +81,8 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 
 	// Use the new service method that handles breakdown logic internally
 	req := dto.GetInvoiceWithBreakdownRequest{
-		ID:            id,
-		GroupByParams: groupByParams,
+		ID:      id,
+		GroupBy: groupByParams,
 	}
 
 	invoice, err := h.invoiceService.GetInvoiceWithBreakdown(c.Request.Context(), req)

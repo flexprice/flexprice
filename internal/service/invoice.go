@@ -1590,7 +1590,7 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 	req := dto.GetInvoiceWithBreakdownRequest{ID: id}
 
 	// Get properly typed values (type conversion is handled in GetSettingWithDefaults)
-	req.GroupByParams = settings.Value["group_by"].([]string)
+	req.GroupBy = settings.Value["group_by"].([]string)
 	templateName := types.TemplateName(settings.Value["template_name"].(string))
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -2770,9 +2770,9 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 	}
 
 	// Handle usage breakdown - prioritize group_by over expand_by_source for flexibility
-	if len(req.GroupByParams) > 0 {
+	if len(req.GroupBy) > 0 {
 		// Use flexible grouping
-		usageBreakdown, err := s.CalculateUsageBreakdown(ctx, invoice, req.GroupByParams)
+		usageBreakdown, err := s.CalculateUsageBreakdown(ctx, invoice, req.GroupBy)
 		if err != nil {
 			return nil, err
 		}
