@@ -3269,54 +3269,6 @@ func (s *subscriptionService) AddSubscriptionPhase(ctx context.Context, subscrip
 	return s.AddSchedulePhase(ctx, schedule.ID, req)
 }
 
-// TODO: This is not used anywhere
-// HandleSubscriptionStateChange handles subscription state changes for credit grants
-func (s *subscriptionService) HandleSubscriptionStateChange(ctx context.Context, subscriptionID string, oldStatus, newStatus types.SubscriptionStatus) error {
-	s.Logger.Infow("handling subscription state change for credit grants",
-		"subscription_id", subscriptionID,
-		"old_status", oldStatus,
-		"new_status", newStatus)
-
-	switch {
-	case newStatus == types.SubscriptionStatusActive && oldStatus != types.SubscriptionStatusActive:
-		return s.handleSubscriptionActivation(ctx, subscriptionID)
-
-	case newStatus == types.SubscriptionStatusCancelled:
-		return s.handleSubscriptionCancellation(ctx, subscriptionID)
-
-	case newStatus == types.SubscriptionStatusPaused:
-		return s.handleSubscriptionPause(ctx, subscriptionID)
-
-	case oldStatus == types.SubscriptionStatusPaused && newStatus == types.SubscriptionStatusActive:
-		return s.handleSubscriptionResume(ctx, subscriptionID)
-
-	default:
-		s.Logger.Debugw("no action required for subscription state change",
-			"subscription_id", subscriptionID,
-			"old_status", oldStatus,
-			"new_status", newStatus)
-	}
-
-	return nil
-}
-
-func (s *subscriptionService) handleSubscriptionActivation(ctx context.Context, subscriptionID string) error {
-	// Process any deferred credits and trigger immediate processing for newly active subscription
-	return nil
-}
-
-func (s *subscriptionService) handleSubscriptionCancellation(ctx context.Context, subscriptionID string) error {
-	// Future: Cancel scheduled applications if we implement full application tracking
-	s.Logger.Infow("subscription cancelled, future recurring grants will not be processed", "subscription_id", subscriptionID)
-	return nil
-}
-
-func (s *subscriptionService) handleSubscriptionPause(ctx context.Context, subscriptionID string) error {
-	// Future: Defer scheduled applications if we implement full application tracking
-	s.Logger.Infow("subscription paused, recurring grants will be deferred", "subscription_id", subscriptionID)
-	return nil
-}
-
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
 	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
