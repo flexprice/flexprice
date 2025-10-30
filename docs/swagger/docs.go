@@ -2750,13 +2750,11 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Customer ID",
                         "name": "customer_id",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Customer Lookup Key (external_customer_id)",
                         "name": "customer_lookup_key",
                         "in": "query"
                     },
@@ -2766,7 +2764,6 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Feature IDs",
                         "name": "feature_ids",
                         "in": "query"
                     },
@@ -2776,7 +2773,15 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
-                        "description": "Subscription IDs",
+                        "name": "feature_lookup_keys",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
                         "name": "subscription_ids",
                         "in": "query"
                     }

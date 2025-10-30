@@ -9827,23 +9827,25 @@ paths:
       description: Get customer usage summary by customer_id or customer_lookup_key
         (external_customer_id)
       parameters:
-      - description: Customer ID
-        in: query
+      - in: query
         name: customer_id
         type: string
-      - description: Customer Lookup Key (external_customer_id)
-        in: query
+      - in: query
         name: customer_lookup_key
         type: string
       - collectionFormat: csv
-        description: Feature IDs
         in: query
         items:
           type: string
         name: feature_ids
         type: array
       - collectionFormat: csv
-        description: Subscription IDs
+        in: query
+        items:
+          type: string
+        name: feature_lookup_keys
+        type: array
+      - collectionFormat: csv
         in: query
         items:
           type: string
