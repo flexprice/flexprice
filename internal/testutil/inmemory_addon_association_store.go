@@ -205,8 +205,8 @@ func addonAssociationSortFn(i, j *addonassociation.AddonAssociation) bool {
 	return i.CreatedAt.After(j.CreatedAt)
 }
 
-// ListActive retrieves active addon associations for a given entity and optional time point
-func (s *InMemoryAddonAssociationStore) ListActive(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*addonassociation.AddonAssociation, error) {
+// GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
+func (s *InMemoryAddonAssociationStore) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*addonassociation.AddonAssociation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

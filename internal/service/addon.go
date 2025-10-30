@@ -366,7 +366,7 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 	}
 
 	// Get active addon associations from repository (filtered at DB level)
-	associations, err := s.AddonAssociationRepo.ListActive(ctx, req.EntityID, req.EntityType, periodStart)
+	associations, err := s.AddonAssociationRepo.GetActiveAddonAssociation(ctx, req.EntityID, req.EntityType, periodStart, req.AddonIds)
 	if err != nil {
 		return nil, err
 	}

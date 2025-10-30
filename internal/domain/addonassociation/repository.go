@@ -17,6 +17,6 @@ type Repository interface {
 	List(ctx context.Context, filter *types.AddonAssociationFilter) ([]*AddonAssociation, error)
 	Count(ctx context.Context, filter *types.AddonAssociationFilter) (int, error)
 
-	// ListActive retrieves active addon associations for a given entity and optional time point
-	ListActive(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*AddonAssociation, error)
+	// GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
+	GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time, addonIds []string) ([]*AddonAssociation, error)
 }

@@ -36,7 +36,6 @@ func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, 
 
 // applyActiveAddonAssociationFilter applies the filter to ensure only active addon associations are returned
 // Active addon associations are those where EndDate > periodStart or EndDate is nil
-// This follows the same pattern as subscription line items
 func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *ent.AddonAssociationQuery, periodStart *time.Time) *ent.AddonAssociationQuery {
 	if periodStart == nil {
 		// No period specified, just return published associations
@@ -522,8 +521,8 @@ func (r *addonAssociationRepository) DeleteCache(ctx context.Context, addonAssoc
 	r.cache.Delete(ctx, cacheKey)
 }
 
-// ListActive retrieves active addon associations for a given entity and optional time point
-func (r *addonAssociationRepository) ListActive(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*domainAddonAssociation.AddonAssociation, error) {
+// GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
+func (r *addonAssociationRepository) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time, addonIds []string) ([]*domainAddonAssociation.AddonAssociation, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "addon_association", "list_active", map[string]interface{}{
 		"entity_id":    entityID,
@@ -540,6 +539,7 @@ func (r *addonAssociationRepository) ListActive(ctx context.Context, entityID st
 			addonassociation.TenantID(types.GetTenantID(ctx)),
 			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
 			addonassociation.AddonStatus(string(types.AddonStatusActive)),
+			addonassociation.AddonIDIn(addonIds...),
 		)
 
 	// Apply the active filter
