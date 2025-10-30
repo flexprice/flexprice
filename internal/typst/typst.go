@@ -11,12 +11,13 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type Compiler interface {
 	Compile(opts CompileOpts) (string, error)
 	CompileToBytes(opts CompileOpts) ([]byte, error)
-	CompileTemplate(templateName string, data []byte, opts ...CompileOptsBuilder) ([]byte, error)
+	CompileTemplate(templateName types.TemplateName, data []byte, opts ...CompileOptsBuilder) ([]byte, error)
 	CleanupGeneratedFiles(files ...string)
 }
 
@@ -168,12 +169,12 @@ func (c *compiler) CompileToBytes(opts CompileOpts) ([]byte, error) {
 //
 //	data := "invoice-data={\"invoice_id\": \"1234567890\", \"invoice_number\": \"INV-1234567890\", \"customer_id\": \"1234567890\"}"
 func (c *compiler) CompileTemplate(
-	templateName string,
+	templateName types.TemplateName,
 	data []byte,
 	opts ...CompileOptsBuilder,
 ) ([]byte, error) {
-	// Ensure template exists
-	templatePath := filepath.Join(c.templateDir, templateName)
+	// Ensure template exists - normalize template name to prevent path traversal
+	templatePath := filepath.Join(c.templateDir, filepath.Base(templateName.String()))
 	if _, err := os.Stat(templatePath); os.IsNotExist(err) {
 		return nil, ierr.WithError(err).
 			WithMessagef("template not found: %s", templatePath).

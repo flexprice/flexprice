@@ -13,6 +13,7 @@ type SettingKey string
 const (
 	SettingKeyInvoiceConfig      SettingKey = "invoice_config"
 	SettingKeySubscriptionConfig SettingKey = "subscription_config"
+	SettingKeyInvoicePDFConfig   SettingKey = "invoice_pdf_config"
 )
 
 func (s SettingKey) String() string {
@@ -125,6 +126,15 @@ func GetDefaultSettings() map[SettingKey]DefaultSettingValue {
 			Description: "Default configuration for subscription auto-cancellation (grace period and enabled flag)",
 			Required:    true,
 		},
+		SettingKeyInvoicePDFConfig: {
+			Key: SettingKeyInvoicePDFConfig,
+			DefaultValue: map[string]interface{}{
+				"template_name": TemplateInvoiceDefault,
+				"group_by":      []string{},
+			},
+			Description: "Default configuration for invoice PDF generation",
+			Required:    true,
+		},
 	}
 }
 
@@ -145,6 +155,8 @@ func ValidateSettingValue(key string, value map[string]interface{}) error {
 		return ValidateInvoiceConfig(value)
 	case SettingKeySubscriptionConfig:
 		return ValidateSubscriptionConfig(value)
+	case SettingKeyInvoicePDFConfig:
+		return ValidateInvoicePDFConfig(value)
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -334,6 +346,58 @@ func ValidateInvoiceConfig(value map[string]interface{}) error {
 		return ierr.NewErrorf("invoice_config: 'suffix_length' must be between 1 and 10").
 			WithHintf("Invoice config suffix length must be between 1 and 10").
 			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+func ValidateInvoicePDFConfig(value map[string]interface{}) error {
+
+	if value == nil {
+		return errors.New("invoice_pdf_config value cannot be nil")
+	}
+
+	// Validate template_name
+	templateNameRaw, exists := value["template_name"]
+	if !exists {
+		return ierr.NewErrorf("invoice_pdf_config: 'template_name' is required").
+			WithHintf("Invoice PDF config template name is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate template name
+	templateName, ok := templateNameRaw.(string)
+	if !ok {
+		return ierr.NewErrorf("invoice_pdf_config: 'template_name' must be a string, got %T", templateNameRaw).
+			WithHintf("Invoice PDF config template name must be a string, got %T", templateNameRaw).
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := TemplateName(templateName).Validate(); err != nil {
+		return err
+	}
+
+	// Validate group_by
+
+	// Validate group by if provided
+	if groupByRaw, exists := value["group_by"]; exists {
+		switch v := groupByRaw.(type) {
+		case []string:
+			// Already correct type - no validation needed
+		case []interface{}:
+			// Convert []interface{} to []string and validate each element
+			for i, item := range v {
+				if _, ok := item.(string); !ok {
+					return ierr.NewErrorf("invoice_pdf_config: 'group_by' element %d must be a string, got %T", i, item).
+						WithHintf("Invoice PDF config group by elements must be strings").
+						Mark(ierr.ErrValidation)
+				}
+			}
+		default:
+			return ierr.NewErrorf("invoice_pdf_config: 'group_by' must be an array of strings, got %T", groupByRaw).
+				WithHintf("Invoice PDF config group by must be an array of strings, got %T", groupByRaw).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil

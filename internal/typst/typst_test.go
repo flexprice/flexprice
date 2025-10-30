@@ -8,6 +8,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -55,6 +56,10 @@ func (s *TypstCompilerSuite) SetupTest() {
 	currentDir, err := os.Getwd()
 	s.Require().NoError(err)
 	err = CopyDir(filepath.Join(currentDir, "../../assets", "typst-templates"), s.templateDir)
+	s.Require().NoError(err)
+
+	// copy fonts from ../../assets/fonts dir to temp fonts dir
+	err = CopyDir(filepath.Join(currentDir, "../../assets", "fonts"), s.fontsDir)
 	s.Require().NoError(err)
 
 	// Create a sample Typst file
@@ -196,7 +201,7 @@ func (s *TypstCompilerSuite) TestInvoiceCompilation() {
 	}`)
 
 	// Compile the invoice template
-	_, err := s.compiler.CompileTemplate("invoice.typ", invoiceJSON)
+	_, err := s.compiler.CompileTemplate(types.TemplateInvoiceDefault, invoiceJSON)
 
 	// Ensure invoice compilation does not fail
 	s.NoError(err)
@@ -253,7 +258,7 @@ func (s *TypstCompilerSuite) TestOneTimeInvoiceCompilation() {
 	}`)
 
 	// Compile the invoice template
-	_, err := s.compiler.CompileTemplate("invoice.typ", invoiceJSON)
+	_, err := s.compiler.CompileTemplate(types.TemplateInvoiceDefault, invoiceJSON)
 
 	// Ensure one-time invoice compilation does not fail
 	s.NoError(err)
