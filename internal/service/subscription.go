@@ -3523,89 +3523,59 @@ func (s *subscriptionService) addAddonToSubscription(
 }
 
 // validateEntitlementCompatibility checks if addon entitlements are compatible with existing subscription entitlements
-// It ensures that entitlements with the same feature ID have the same usage reset period
+// It ensures that metered features with the same feature ID have the same usage reset period
 func (s *subscriptionService) validateEntitlementCompatibility(ctx context.Context, subscriptionID, addonID string) error {
-	// Get entitlements for the addon we're trying to add first
+	// Get entitlements for the addon we're trying to add
 	entitlementService := NewEntitlementService(s.ServiceParams)
 	addonEntitlements, err := entitlementService.GetAddonEntitlements(ctx, addonID)
 	if err != nil {
 		return err
 	}
 
-	// Early return if addon has no entitlements
-	if len(addonEntitlements.Items) == 0 {
-		return nil
-	}
-
-	// Filter addon entitlements to only those with feature IDs and usage reset periods
-	relevantAddonEntitlements := make([]*dto.EntitlementResponse, 0, len(addonEntitlements.Items))
+	// Filter to metered features only (only metered features have usage reset periods that matter)
+	meteredAddonEntitlements := make([]*dto.EntitlementResponse, 0)
 	for _, addonEnt := range addonEntitlements.Items {
-		if addonEnt.FeatureID != "" && addonEnt.UsageResetPeriod != "" {
-			relevantAddonEntitlements = append(relevantAddonEntitlements, addonEnt)
+		if addonEnt.FeatureType == types.FeatureTypeMetered {
+			meteredAddonEntitlements = append(meteredAddonEntitlements, addonEnt)
 		}
 	}
 
-	// Early return if no relevant entitlements to check
-	if len(relevantAddonEntitlements) == 0 {
+	// Early return if no metered entitlements to check
+	if len(meteredAddonEntitlements) == 0 {
 		return nil
 	}
 
-	// Now fetch subscription entitlements (only if we have relevant addon entitlements to check)
+	// Fetch subscription entitlements
 	subscriptionEntitlements, err := s.GetSubscriptionEntitlements(ctx, subscriptionID)
 	if err != nil {
 		return err
 	}
 
-	s.Logger.Debugw("validating entitlement compatibility",
-		"subscription_id", subscriptionID,
-		"addon_id", addonID,
-		"subscription_entitlements_count", len(subscriptionEntitlements),
-		"relevant_addon_entitlements_count", len(relevantAddonEntitlements))
-
-	// Build a map of feature_id to usage_reset_period for existing subscription entitlements
-	featureUsageResetMap := make(map[string]types.EntitlementUsageResetPeriod, len(subscriptionEntitlements))
+	// Build map of feature_id to usage_reset_period for metered features in subscription
+	featureResetMap := make(map[string]types.EntitlementUsageResetPeriod)
 	for _, ent := range subscriptionEntitlements {
-		if ent.FeatureID != "" && ent.UsageResetPeriod != "" {
-			featureUsageResetMap[ent.FeatureID] = ent.UsageResetPeriod
+		if ent.FeatureType == types.FeatureTypeMetered {
+			featureResetMap[ent.FeatureID] = ent.UsageResetPeriod
 		}
 	}
 
-	// Check each relevant addon entitlement against existing subscription entitlements
-	for _, addonEnt := range relevantAddonEntitlements {
-		existingResetPeriod, exists := featureUsageResetMap[addonEnt.FeatureID]
+	// Check for conflicts
+	for _, addonEnt := range meteredAddonEntitlements {
+
+		existingResetPeriod, exists := featureResetMap[addonEnt.FeatureID]
+
 		if exists && existingResetPeriod != addonEnt.UsageResetPeriod {
-			// Found a conflict: same feature ID but different usage reset period
-			featureName := addonEnt.FeatureID
-			if addonEnt.Feature != nil {
-				featureName = addonEnt.Feature.Name
-			}
 
-			s.Logger.Warnw("entitlement usage reset period conflict detected",
-				"subscription_id", subscriptionID,
-				"addon_id", addonID,
-				"feature_id", addonEnt.FeatureID,
-				"feature_name", featureName,
-				"existing_reset_period", existingResetPeriod,
-				"addon_reset_period", addonEnt.UsageResetPeriod)
-
-			return ierr.NewError("entitlement usage reset period conflict").
-				WithHint(fmt.Sprintf("Feature '%s' has conflicting usage reset periods: existing '%s' vs addon '%s'",
-					featureName, existingResetPeriod, addonEnt.UsageResetPeriod)).
+			return ierr.NewError("metered feature usage reset period conflict").
+				WithHint(fmt.Sprintf("Feature '%s' has conflicting reset periods: %s vs %s", addonEnt.FeatureID, existingResetPeriod, addonEnt.UsageResetPeriod)).
 				WithReportableDetails(map[string]interface{}{
-					"subscription_id":       subscriptionID,
-					"addon_id":              addonID,
-					"feature_id":            addonEnt.FeatureID,
-					"feature_name":          featureName,
-					"existing_reset_period": existingResetPeriod,
-					"addon_reset_period":    addonEnt.UsageResetPeriod,
+					"subscription_id": subscriptionID,
+					"addon_id":        addonID,
+					"feature_id":      addonEnt.FeatureID,
 				}).
 				Mark(ierr.ErrValidation)
 		}
 	}
-
-	s.Logger.Debugw("entitlement compatibility validation passed",
-		"subscription_id", subscriptionID,
-		"addon_id", addonID)
 
 	return nil
 }
