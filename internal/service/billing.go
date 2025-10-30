@@ -1347,7 +1347,7 @@ func (s *billingService) AggregateEntitlements(entitlements []*dto.EntitlementRe
 			SubscriptionID: sourceSubscriptionID,
 			EntityID:       ent.EntityID,
 			EntityType:     entityType,
-			EntitiyName:    entityName,
+			EntityName:     entityName,
 			Quantity:       1, // Default to 1, could be refined based on addon occurrences
 			EntitlementID:  ent.ID,
 			IsEnabled:      ent.IsEnabled,
