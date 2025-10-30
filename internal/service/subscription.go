@@ -3358,6 +3358,12 @@ func (s *subscriptionService) handleSubscriptionAddons(
 
 	// Process each addon request
 	for _, addonReq := range addonRequests {
+
+		// check if start date is given else mark it as subscription start date
+		if addonReq.StartDate == nil {
+			addonReq.StartDate = &subscription.StartDate
+		}
+
 		_, err := s.addAddonToSubscription(ctx, subscription, lo.ToPtr(addonReq))
 		if err != nil {
 			return err
