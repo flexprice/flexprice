@@ -3589,7 +3589,12 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 	association.EndDate = req.EffectiveFrom
 
 	// Get line items to terminate
-	_, lineItems, err := s.SubRepo.GetWithLineItems(ctx, association.EntityID)
+	lineItemFilter := types.NewSubscriptionLineItemFilter()
+	lineItemFilter.SubscriptionIDs = []string{association.EntityID}
+	lineItemFilter.EntityIDs = []string{association.AddonID}
+	lineItemFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
 	if err != nil {
 		return err
 	}
@@ -3601,10 +3606,8 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 
 		deleteReq := dto.DeleteSubscriptionLineItemRequest{EndDate: req.EffectiveFrom}
 		for _, lineItem := range lineItems {
-			if lineItem.EntityID == association.AddonID {
-				if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
-					return err
-				}
+			if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+				return err
 			}
 		}
 
