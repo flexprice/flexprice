@@ -3419,7 +3419,7 @@ func (s *subscriptionService) addAddonToSubscription(
 	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
 		EntityID:   sub.ID,
 		EntityType: types.AddonAssociationEntityTypeSubscription,
-		StartDate:  lo.ToPtr(time.Now()),
+		StartDate:  req.StartDate,
 		AddonIds:   []string{req.AddonID},
 	})
 	if err != nil {
@@ -3580,118 +3580,63 @@ func (s *subscriptionService) validateEntitlementCompatibility(ctx context.Conte
 	return nil
 }
 
-// RemoveAddonFromSubscription removes an addon from a subscription
-func (s *subscriptionService) RemoveAddonFromSubscription(
-	ctx context.Context,
-	subscriptionID string,
-	addonID string,
-	reason string,
-) error {
-	// Get subscription addon
-	filter := types.NewAddonAssociationFilter()
-	filter.AddonIDs = []string{addonID}
-	filter.EntityIDs = []string{subscriptionID}
-	filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+// RemoveAddonFromSubscription removes an addon from a subscription by addon association ID
+func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error {
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return err
+	}
 
-	subscriptionAddons, err := s.AddonAssociationRepo.List(ctx, filter)
+	// Get association association
+	association, err := s.AddonAssociationRepo.GetByID(ctx, req.AddonAssociationID)
 	if err != nil {
 		return err
 	}
 
-	var targetAddon *addonassociation.AddonAssociation
-	for _, sa := range subscriptionAddons {
-		if sa.AddonStatus == types.AddonStatusActive {
-			targetAddon = sa
-			break
-		}
+	// check if association already has end date i.e. scheduled to be removed
+	if association.EndDate != nil {
+		return ierr.NewError("addon is already scheduled to be removed").
+			WithHint("This addon is already marked for removal").
+			WithReportableDetails(map[string]interface{}{
+				"addon_association_id": association.ID,
+				"end_date":             association.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	if targetAddon == nil {
-		return ierr.NewError("addon not found on subscription").
-			WithHint("Addon is not active on this subscription").
-			Mark(ierr.ErrNotFound)
+	// If end date is not provided, set it to now
+	if req.EffectiveFrom == nil {
+		now := time.Now().UTC()
+		req.EffectiveFrom = &now
 	}
 
-	// Get addon to determine its type
-	addonService := NewAddonService(s.ServiceParams)
-	addonResp, err := addonService.GetAddon(ctx, addonID)
+	association.AddonStatus = types.AddonStatusCancelled
+	association.CancellationReason = req.Reason
+	association.CancelledAt = req.EffectiveFrom
+	association.EndDate = req.EffectiveFrom
+
+	// Get line items to terminate
+	_, lineItems, err := s.SubRepo.GetWithLineItems(ctx, association.EntityID)
 	if err != nil {
 		return err
 	}
 
-	// Update addon status to cancelled
-	now := time.Now()
-	targetAddon.AddonStatus = types.AddonStatusCancelled
-	targetAddon.CancellationReason = reason
-	targetAddon.CancelledAt = &now
-	targetAddon.EndDate = &now
-
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Update subscription addon association
-		err = s.AddonAssociationRepo.Update(ctx, targetAddon)
-		if err != nil {
+	return s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if err := s.AddonAssociationRepo.Update(ctx, association); err != nil {
 			return err
 		}
 
-		{
-			// Get subscription with line items
-			subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
-			if err != nil {
-				return err
-			}
-			subscription.LineItems = lineItems
-
-			lineItemsEnded := 0
-			for _, lineItem := range subscription.LineItems {
-				// Check if line item belongs to this addon
-				if lineItem.EntityType == types.SubscriptionLineItemEntityTypeAddon &&
-					lineItem.EntityID == addonID &&
-					lineItem.Status == types.StatusPublished {
-
-					s.Logger.Infow("terminating line item for addon removal",
-						"subscription_id", subscriptionID,
-						"addon_id", addonID,
-						"line_item_id", lineItem.ID,
-						"addon_type", addonResp.Addon.Type)
-
-					// Terminate the line item using service method
-					deleteReq := dto.DeleteSubscriptionLineItemRequest{
-						EndDate: &now,
-					}
-					_, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq)
-					if err != nil {
-						s.Logger.Errorw("failed to terminate line item for addon",
-							"subscription_id", subscriptionID,
-							"addon_id", addonID,
-							"line_item_id", lineItem.ID,
-							"error", err)
-						return err
-					}
-					lineItemsEnded++
+		deleteReq := dto.DeleteSubscriptionLineItemRequest{EndDate: req.EffectiveFrom}
+		for _, lineItem := range lineItems {
+			if lineItem.EntityID == association.AddonID {
+				if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+					return err
 				}
 			}
-
-			s.Logger.Infow("terminated line items for addon removal",
-				"subscription_id", subscriptionID,
-				"addon_id", addonID,
-				"addon_type", addonResp.Addon.Type,
-				"line_items_terminated", lineItemsEnded,
-				"removal_reason", reason)
 		}
 
 		return nil
 	})
-
-	if err != nil {
-		return err
-	}
-
-	s.Logger.Infow("removed addon from subscription",
-		"subscription_id", subscriptionID,
-		"addon_id", addonID,
-	)
-
-	return nil
 }
 
 // createLineItemFromPrice creates a subscription line item from a price for addon additions
