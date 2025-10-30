@@ -71,11 +71,6 @@ func (r *addonAssociationRepository) Create(ctx context.Context, a *domainAddonA
 	})
 	defer FinishSpan(span)
 
-	// Set environment ID from context if not already set
-	if a.EnvironmentID == "" {
-		a.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
-
 	_, err := client.AddonAssociation.Create().
 		SetID(a.ID).
 		SetTenantID(types.GetTenantID(ctx)).

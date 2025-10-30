@@ -3539,24 +3539,21 @@ func (s *subscriptionService) addAddonToSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Check if addon is already added to subscription only for single instance addons
-	if a.Addon.Type == types.AddonTypeOnetime {
-		filter := types.NewAddonAssociationFilter()
-		filter.AddonIDs = []string{req.AddonID}
-		filter.EntityIDs = []string{sub.ID}
-		filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
-		filter.Limit = lo.ToPtr(1)
+	filter := types.NewAddonAssociationFilter()
+	filter.AddonIDs = []string{req.AddonID}
+	filter.EntityIDs = []string{sub.ID}
+	filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
+	filter.Limit = lo.ToPtr(1)
 
-		existingAddons, err := s.AddonAssociationRepo.List(ctx, filter)
-		if err != nil {
-			return nil, err
-		}
+	existingAddons, err := s.AddonAssociationRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
 
-		if len(existingAddons) > 0 {
-			return nil, ierr.NewError("addon is already added to subscription").
-				WithHint("Cannot add addon to subscription that already has an active instance").
-				Mark(ierr.ErrValidation)
-		}
+	if len(existingAddons) > 0 {
+		return nil, ierr.NewError("addon is already added to subscription").
+			WithHint("Cannot add addon to subscription that already has an active instance").
+			Mark(ierr.ErrValidation)
 	}
 
 	// Validate entitlement compatibility if check is not skipped
@@ -3604,28 +3601,11 @@ func (s *subscriptionService) addAddonToSubscription(
 		}
 	}
 
-	// Check if active line items already exist for this addon (for multiple addons)
-	existingActiveLineItems := make([]*subscription.SubscriptionLineItem, 0)
-	if a.Addon.Type == types.AddonTypeMultiple {
-		for _, lineItem := range sub.LineItems {
-			if lineItem.EntityType == types.SubscriptionLineItemEntityTypeAddon &&
-				lineItem.EntityID == req.AddonID &&
-				lineItem.Status == types.StatusPublished &&
-				lineItem.IsActive(time.Now()) {
-				existingActiveLineItems = append(existingActiveLineItems, lineItem)
-			}
-		}
-	}
-
-	// Create line items only if they don't already exist (for multiple addons)
+	// Create line items for addon prices
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
-	shouldCreateLineItems := len(existingActiveLineItems) == 0
-
-	if shouldCreateLineItems {
-		for _, priceResponse := range validPrices {
-			lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, a.Addon.Name)
-			lineItems = append(lineItems, lineItem)
-		}
+	for _, priceResponse := range validPrices {
+		lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, a.Addon.Name)
+		lineItems = append(lineItems, lineItem)
 	}
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
@@ -3635,13 +3615,11 @@ func (s *subscriptionService) addAddonToSubscription(
 			return err
 		}
 
-		// Create line items only if needed
-		if shouldCreateLineItems {
-			for _, lineItem := range lineItems {
-				err = s.SubscriptionLineItemRepo.Create(ctx, lineItem)
-				if err != nil {
-					return err
-				}
+		// Create line items
+		for _, lineItem := range lineItems {
+			err = s.SubscriptionLineItemRepo.Create(ctx, lineItem)
+			if err != nil {
+				return err
 			}
 		}
 
@@ -3658,7 +3636,6 @@ func (s *subscriptionService) addAddonToSubscription(
 		"addon_type", a.Addon.Type,
 		"prices_count", len(validPrices),
 		"line_items_created", len(lineItems),
-		"line_items_reused", len(existingActiveLineItems),
 	)
 
 	return addonAssociation, nil
@@ -3798,24 +3775,6 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 	targetAddon.CancelledAt = &now
 	targetAddon.EndDate = &now
 
-	// Determine if we should terminate line items
-	shouldTerminateLineItems := false
-	if addonResp.Addon.Type == types.AddonTypeOnetime {
-		// For one-time addons, always terminate line items
-		shouldTerminateLineItems = true
-	} else {
-		// For multiple addons, check if there are other active associations
-		// Count remaining active associations (excluding the one being cancelled)
-		remainingActiveCount := 0
-		for _, sa := range subscriptionAddons {
-			if sa.ID != targetAddon.ID && sa.AddonStatus == types.AddonStatusActive {
-				remainingActiveCount++
-			}
-		}
-		// Only terminate if this is the last active association
-		shouldTerminateLineItems = remainingActiveCount == 0
-	}
-
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Update subscription addon association
 		err = s.AddonAssociationRepo.Update(ctx, targetAddon)
@@ -3823,8 +3782,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 			return err
 		}
 
-		// Terminate line items only if needed
-		if shouldTerminateLineItems {
+		{
 			// Get subscription with line items
 			subscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
 			if err != nil {
@@ -3868,12 +3826,6 @@ func (s *subscriptionService) RemoveAddonFromSubscription(
 				"addon_type", addonResp.Addon.Type,
 				"line_items_terminated", lineItemsEnded,
 				"removal_reason", reason)
-		} else {
-			s.Logger.Infow("skipped line item termination for multiple addon",
-				"subscription_id", subscriptionID,
-				"addon_id", addonID,
-				"addon_type", addonResp.Addon.Type,
-				"reason", "other active associations exist")
 		}
 
 		return nil
@@ -4436,25 +4388,6 @@ func (s *subscriptionService) calculateProrationDaysFromResult(result *proration
 	return remainingDays
 }
 
-func (s *subscriptionService) generateProrationDescription(
-	cancellationType types.CancellationType,
-	effectiveDate time.Time,
-	creditAmount decimal.Decimal,
-) string {
-	switch cancellationType {
-	case types.CancellationTypeImmediate:
-		if creditAmount.IsNegative() {
-			return fmt.Sprintf("Credit for unused time (cancelled %s)", effectiveDate.Format("2006-01-02"))
-		}
-		return fmt.Sprintf("Immediate cancellation (%s)", effectiveDate.Format("2006-01-02"))
-
-	case types.CancellationTypeEndOfPeriod:
-		return fmt.Sprintf("End of period cancellation (%s)", effectiveDate.Format("2006-01-02"))
-	default:
-		return "Cancellation proration"
-	}
-}
-
 func (s *subscriptionService) generateProrationDescriptionFromResult(
 	result *proration.ProrationResult,
 	creditAmount decimal.Decimal,
@@ -4824,11 +4757,6 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("fetched plan entitlements for subscription",
-		"subscription_id", subscriptionID,
-		"plan_id", sub.PlanID,
-		"plan_entitlements_count", len(planEntitlements.Items))
-
 	// Step 2: Get active addon associations using current period start
 	addonService := NewAddonService(s.ServiceParams)
 	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
@@ -4845,83 +4773,31 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("fetched active addon associations for subscription",
-		"subscription_id", subscriptionID,
-		"active_addons_count", len(activeAddons))
+	// Step 3: Extract unique addon IDs
+	addonIDs := lo.Uniq(lo.Map(activeAddons, func(assoc *dto.AddonAssociationResponse, _ int) string {
+		return assoc.AddonID
+	}))
 
-	// Step 3: Group addons by ID and type to handle one-time vs multiple
-	addonOccurrences := make(map[string]int)       // addon_id -> count
-	addonTypes := make(map[string]types.AddonType) // addon_id -> type
-
-	for _, addonAssoc := range activeAddons {
-		addonID := addonAssoc.AddonID
-		addonOccurrences[addonID]++
-
-		// Get addon details to determine type (only once per addon)
-		if _, exists := addonTypes[addonID]; !exists {
-			addon, err := addonService.GetAddon(ctx, addonID)
-			if err != nil {
-				s.Logger.Warnw("failed to get addon details, skipping",
-					"subscription_id", subscriptionID,
-					"addon_id", addonID,
-					"error", err)
-				continue
-			}
-			addonTypes[addonID] = addon.Addon.Type
-		}
-	}
-
-	s.Logger.Infow("grouped addon occurrences",
-		"subscription_id", subscriptionID,
-		"unique_addons", len(addonOccurrences))
-
-	// Step 4: Collect addon entitlements based on type and occurrences
+	// Step 4: Fetch all addon entitlements in a single bulk query
 	allEntitlements := planEntitlements.Items
 
-	for addonID, count := range addonOccurrences {
-		addonType := addonTypes[addonID]
-
-		// Get entitlements for this addon
-		addonEntitlements, err := entitlementService.GetAddonEntitlements(ctx, addonID)
-		if err != nil {
-			s.Logger.Warnw("failed to get addon entitlements, skipping",
-				"subscription_id", subscriptionID,
-				"addon_id", addonID,
-				"error", err)
-			continue
-		}
-
-		// Add entitlements based on addon type
-		if addonType == types.AddonTypeOnetime {
-			// One-time addons: add entitlements only once
-			allEntitlements = append(allEntitlements, addonEntitlements.Items...)
-
-			s.Logger.Debugw("added one-time addon entitlements",
-				"subscription_id", subscriptionID,
-				"addon_id", addonID,
-				"entitlements_count", len(addonEntitlements.Items))
-		} else {
-			// Multiple addons: add entitlements for each occurrence
-			for i := 0; i < count; i++ {
-				allEntitlements = append(allEntitlements, addonEntitlements.Items...)
-			}
-
-			s.Logger.Debugw("added multiple addon entitlements",
-				"subscription_id", subscriptionID,
-				"addon_id", addonID,
-				"occurrences", count,
-				"entitlements_per_occurrence", len(addonEntitlements.Items),
-				"total_added", len(addonEntitlements.Items)*count)
-		}
+	if len(addonIDs) == 0 {
+		return allEntitlements, nil
 	}
 
-	// Step 5: Return aggregated entitlements
-	s.Logger.Infow("completed subscription entitlements aggregation",
-		"subscription_id", subscriptionID,
-		"plan_entitlements", len(planEntitlements.Items),
-		"unique_addons", len(addonOccurrences),
-		"total_entitlements", len(allEntitlements))
+	// Create filter for bulk fetching addon entitlements
+	addonEntFilter := types.NewNoLimitEntitlementFilter().
+		WithEntityIDs(addonIDs).
+		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON).
+		WithStatus(types.StatusPublished).
+		WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
 
+	addonEntitlements, err := entitlementService.ListEntitlements(ctx, addonEntFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	allEntitlements = append(allEntitlements, addonEntitlements.Items...)
 	return allEntitlements, nil
 }
 
@@ -4941,12 +4817,7 @@ func (s *subscriptionService) GetAggregatedSubscriptionEntitlements(ctx context.
 	// Get the subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get subscription").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-			}).
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 
 	// Get all entitlements for the subscription
