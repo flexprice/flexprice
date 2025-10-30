@@ -3590,7 +3590,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 		return err
 	}
 
-	// Get association association
+	// Get addon association
 	association, err := s.AddonAssociationRepo.GetByID(ctx, req.AddonAssociationID)
 	if err != nil {
 		return err
