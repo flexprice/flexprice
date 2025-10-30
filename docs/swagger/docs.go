@@ -429,6 +429,61 @@ const docTemplate = `{
                 }
             }
         },
+        "/addons/{id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all entitlements for an addon",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Entitlements"
+                ],
+                "summary": "Get addon entitlements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Addon ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListEntitlementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/login": {
             "post": {
                 "description": "Login a user",
@@ -573,13 +628,15 @@ const docTemplate = `{
                         "enum": [
                             "flexprice",
                             "stripe",
-                            "s3"
+                            "s3",
+                            "hubspot"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
                             "SecretProviderFlexPrice",
                             "SecretProviderStripe",
-                            "SecretProviderS3"
+                            "SecretProviderS3",
+                            "SecretProviderHubSpot"
                         ],
                         "name": "provider_type",
                         "in": "query"
@@ -2727,6 +2784,80 @@ const docTemplate = `{
                 }
             }
         },
+        "/customers/usage": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get customer usage summary by customer_id or customer_lookup_key (external_customer_id)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Get customer usage summary",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Customer Lookup Key (external_customer_id)",
+                        "name": "customer_lookup_key",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Feature IDs",
+                        "name": "feature_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Subscription IDs",
+                        "name": "subscription_ids",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CustomerUsageSummaryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/customers/wallets": {
             "get": {
                 "security": [
@@ -3042,73 +3173,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.CustomerMultiCurrencyInvoiceSummary"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/customers/{id}/usage": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get customer usage summary",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Customers"
-                ],
-                "summary": "Get customer usage summary",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Customer ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "feature_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "subscription_ids",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.CustomerUsageSummaryResponse"
                         }
                     },
                     "400": {
@@ -4510,6 +4574,15 @@ const docTemplate = `{
                             "type": "string"
                         },
                         "collectionFormat": "csv",
+                        "name": "lookup_keys",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
                         "name": "meter_ids",
                         "in": "query"
                     },
@@ -4824,6 +4897,246 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/gin.H"
                         }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/groups": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new group for organizing entities (prices, plans, customers, etc.)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Create a group",
+                "parameters": [
+                    {
+                        "description": "Group",
+                        "name": "group",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateGroupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GroupResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/groups/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get groups with optional filtering via query parameters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Get groups",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by entity type (e.g., 'price')",
+                        "name": "entity_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by group name (contains search)",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by lookup key (exact match)",
+                        "name": "lookup_key",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items to return (default: 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of items to skip (default: 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Field to sort by (name, created_at, updated_at)",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Sort order (asc, desc)",
+                        "name": "sort_order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListGroupsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/groups/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a group by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Get a group",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GroupResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a group and remove all entity associations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Groups"
+                ],
+                "summary": "Delete a group",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "Bad Request",
@@ -6130,6 +6443,11 @@ const docTemplate = `{
                         "minimum": 1,
                         "type": "integer",
                         "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "name": "lookup_key",
                         "in": "query"
                     },
                     {
@@ -8458,6 +8776,71 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.SubscriptionChangePreviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all entitlements for a subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription entitlements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Feature IDs to filter by",
+                        "name": "feature_ids",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionEntitlementsResponse"
                         }
                     },
                     "400": {
@@ -10816,6 +11199,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhooks/hubspot/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming HubSpot webhook events for deal closed won and customer creation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle HubSpot webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "HubSpot webhook signature",
+                        "name": "X-HubSpot-Signature-v3",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook received (always returns 200)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/stripe/{tenant_id}/{environment_id}": {
             "post": {
                 "description": "Process incoming Stripe webhook events for payment status updates and customer creation",
@@ -11668,7 +12098,7 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.CostPoint"
                     }
                 },
-                "costsheet_v2_id": {
+                "costsheet_id": {
                     "type": "string"
                 },
                 "currency": {
@@ -12613,6 +13043,25 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreateGroupRequest": {
+            "type": "object",
+            "required": [
+                "entity_type",
+                "lookup_key",
+                "name"
+            ],
+            "properties": {
+                "entity_type": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CreateIntegrationRequest": {
             "type": "object",
             "required": [
@@ -13058,6 +13507,10 @@ const docTemplate = `{
                         }
                     }
                 },
+                "group_id": {
+                    "description": "GroupID is the id of the group to add the price to",
+                    "type": "string"
+                },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
                 },
@@ -13204,6 +13657,10 @@ const docTemplate = `{
                             "type": "string"
                         }
                     }
+                },
+                "group_id": {
+                    "description": "GroupID is the id of the group to add the price to",
+                    "type": "string"
                 },
                 "invoice_cadence": {
                     "$ref": "#/definitions/types.InvoiceCadence"
@@ -14876,6 +15333,44 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GroupResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.IngestEventRequest": {
             "type": "object",
             "required": [
@@ -15568,6 +16063,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ListGroupsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.GroupResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "dto.ListInvoicesResponse": {
             "type": "object",
             "properties": {
@@ -16173,6 +16682,13 @@ const docTemplate = `{
                 },
                 "environment_id": {
                     "description": "EnvironmentID is the environment identifier for the price",
+                    "type": "string"
+                },
+                "group": {
+                    "$ref": "#/definitions/dto.GroupResponse"
+                },
+                "group_id": {
+                    "description": "GroupID references the group this price belongs to",
                     "type": "string"
                 },
                 "id": {
@@ -16796,6 +17312,23 @@ const docTemplate = `{
                 },
                 "target_plan_id": {
                     "description": "target_plan_id is the ID of the new plan to change to (required)",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionEntitlementsResponse": {
+            "type": "object",
+            "properties": {
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AggregatedFeature"
+                    }
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
                     "type": "string"
                 }
             }
@@ -18266,6 +18799,10 @@ const docTemplate = `{
                         }
                     }
                 },
+                "group_id": {
+                    "description": "GroupID is the id of the group to add the price to",
+                    "type": "string"
+                },
                 "id": {
                     "description": "The ID of the price to update (present if the price is being updated)",
                     "type": "string"
@@ -18370,6 +18907,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "effective_from": {
+                    "type": "string"
+                },
+                "group_id": {
+                    "description": "GroupID is the id of the group to update the price in",
                     "type": "string"
                 },
                 "lookup_key": {
@@ -18647,7 +19188,7 @@ const docTemplate = `{
                     "description": "Full price object (only if expand includes \"price\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/price.Price"
+                            "$ref": "#/definitions/dto.PriceResponse"
                         }
                     ]
                 },
@@ -19346,6 +19887,10 @@ const docTemplate = `{
                     "description": "EnvironmentID is the environment identifier for the price",
                     "type": "string"
                 },
+                "group_id": {
+                    "description": "GroupID references the group this price belongs to",
+                    "type": "string"
+                },
                 "id": {
                     "description": "ID uuid identifier for the price",
                     "type": "string"
@@ -20024,6 +20569,9 @@ const docTemplate = `{
                 "generic": {
                     "$ref": "#/definitions/types.GenericConnectionMetadata"
                 },
+                "hubspot": {
+                    "$ref": "#/definitions/types.HubSpotConnectionMetadata"
+                },
                 "s3": {
                     "$ref": "#/definitions/types.S3ConnectionMetadata"
                 },
@@ -20423,6 +20971,12 @@ const docTemplate = `{
                 "lookup_key": {
                     "type": "string"
                 },
+                "lookup_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "meter_ids": {
                     "type": "array",
                     "items": {
@@ -20527,6 +21081,23 @@ const docTemplate = `{
                 "data": {
                     "type": "object",
                     "additionalProperties": true
+                }
+            }
+        },
+        "types.HubSpotConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "Private App Access Token (encrypted)",
+                    "type": "string"
+                },
+                "app_id": {
+                    "description": "HubSpot App ID (optional, not encrypted)",
+                    "type": "string"
+                },
+                "client_secret": {
+                    "description": "Private App Client Secret for webhook verification (encrypted)",
+                    "type": "string"
                 }
             }
         },
@@ -20847,6 +21418,9 @@ const docTemplate = `{
                     "maximum": 1000,
                     "minimum": 1
                 },
+                "lookup_key": {
+                    "type": "string"
+                },
                 "offset": {
                     "type": "integer",
                     "minimum": 0
@@ -21112,12 +21686,14 @@ const docTemplate = `{
             "enum": [
                 "flexprice",
                 "stripe",
-                "s3"
+                "s3",
+                "hubspot"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
                 "SecretProviderStripe",
-                "SecretProviderS3"
+                "SecretProviderS3",
+                "SecretProviderHubSpot"
             ]
         },
         "types.SecretType": {
@@ -21336,6 +21912,14 @@ const docTemplate = `{
         "types.SyncConfig": {
             "type": "object",
             "properties": {
+                "deal": {
+                    "description": "CRM sync (HubSpot, Salesforce, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.EntitySyncConfig"
+                        }
+                    ]
+                },
                 "invoice": {
                     "$ref": "#/definitions/types.EntitySyncConfig"
                 },
