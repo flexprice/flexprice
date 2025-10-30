@@ -129,6 +129,7 @@ type AddonAssociationResponse struct {
 
 // GetActiveAddonAssociationRequest represents the request to get active addon associations
 type GetActiveAddonAssociationRequest struct {
+	AddonIds   []string                         `json:"addon_ids,omitempty"`
 	EntityID   string                           `json:"entity_id" validate:"required"`
 	EntityType types.AddonAssociationEntityType `json:"entity_type" validate:"required"`
 	StartDate  *time.Time                       `json:"start_date,omitempty"`
@@ -143,6 +144,5 @@ func (r *GetActiveAddonAssociationRequest) Validate() error {
 	if err := r.EntityType.Validate(); err != nil {
 		return err
 	}
-
 	return nil
 }

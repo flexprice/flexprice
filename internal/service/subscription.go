@@ -3386,42 +3386,12 @@ func (s *subscriptionService) handleSubscriptionAddons(
 		"subscription_id", subscription.ID,
 		"addons_count", len(addonRequests))
 
-	// Validate and create subscription addons
+	// Process each addon request
 	for _, addonReq := range addonRequests {
-		// Validate the addon request
-		if err := addonReq.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Invalid addon request").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Get addon to ensure it's valid and active
-		addonService := NewAddonService(s.ServiceParams)
-		addonResponse, err := addonService.GetAddon(ctx, addonReq.AddonID)
+		_, err := s.addAddonToSubscription(ctx, subscription, lo.ToPtr(addonReq))
 		if err != nil {
 			return err
 		}
-
-		if addonResponse.Addon.Status != types.StatusPublished {
-			return ierr.NewError("addon is not published").
-				WithHint("Cannot add unpublished addon to subscription").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscription.ID,
-					"addon_id":        addonReq.AddonID,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Create subscription addon using the validated prices
-		_, err = s.addAddonToSubscription(ctx, subscription, lo.ToPtr(addonReq))
-		if err != nil {
-			return err
-		}
-
 	}
 
 	return nil
@@ -3475,20 +3445,25 @@ func (s *subscriptionService) addAddonToSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	filter := types.NewAddonAssociationFilter()
-	filter.AddonIDs = []string{req.AddonID}
-	filter.EntityIDs = []string{sub.ID}
-	filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
-	filter.Limit = lo.ToPtr(1)
-
-	existingAddons, err := s.AddonAssociationRepo.List(ctx, filter)
+	// Check if addon is already active on this subscription
+	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
+		EntityID:   sub.ID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+		StartDate:  lo.ToPtr(time.Now()),
+		AddonIds:   []string{req.AddonID},
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	if len(existingAddons) > 0 {
+	if len(activeAddons) > 0 {
 		return nil, ierr.NewError("addon is already added to subscription").
 			WithHint("Cannot add addon to subscription that already has an active instance").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": sub.ID,
+				"addon_id":        req.AddonID,
+				"active_addons":   activeAddons,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -3499,13 +3474,13 @@ func (s *subscriptionService) addAddonToSubscription(
 		}
 	}
 
-	// Validate and filter prices for the addon using the same pattern as plans
+	// Validate and filter prices for the addon
 	validPrices, err := s.ValidateAndFilterPricesForSubscription(ctx, req.AddonID, types.PRICE_ENTITY_TYPE_ADDON, sub, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create subscription addon
+	// Create subscription addon association
 	addonAssociation := req.ToAddonAssociation(
 		ctx,
 		sub.ID,
