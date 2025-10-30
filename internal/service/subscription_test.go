@@ -845,7 +845,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscription() {
 
 			// Verify collection method behavior
 			if tc.input.CollectionMethod != nil {
-				if *tc.input.CollectionMethod == types.CollectionMethodSendInvoice {
+				if *tc.input.CollectionMethod == types.CollectionMethodChargeAutomatically {
 					// charge_automatically should create active subscription when no invoice is created
 					// (usage-based plan with advance cadence doesn't create invoice at subscription time)
 					s.Equal(types.SubscriptionStatusActive, resp.SubscriptionStatus,

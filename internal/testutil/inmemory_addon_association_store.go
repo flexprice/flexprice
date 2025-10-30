@@ -206,7 +206,7 @@ func addonAssociationSortFn(i, j *addonassociation.AddonAssociation) bool {
 }
 
 // GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
-func (s *InMemoryAddonAssociationStore) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time) ([]*addonassociation.AddonAssociation, error) {
+func (s *InMemoryAddonAssociationStore) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time, addonIds []string) ([]*addonassociation.AddonAssociation, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -223,6 +223,20 @@ func (s *InMemoryAddonAssociationStore) GetActiveAddonAssociation(ctx context.Co
 		// Filter by entity
 		if aa.EntityID != entityID || aa.EntityType != entityType {
 			continue
+		}
+
+		// Filter by addon IDs if provided
+		if len(addonIds) > 0 {
+			found := false
+			for _, id := range addonIds {
+				if aa.AddonID == id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
 		}
 
 		// Filter by active status
