@@ -1,0 +1,371 @@
+# Default values for flexprice
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: flexprice-app
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ServiceAccount for the pods
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Security context for containers
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+# Application configuration
+deployment:
+  mode: "api" # "api", "consumer", "temporal_worker", or "local" (for testing)
+
+# API deployment configuration
+api:
+  enabled: true
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Consumer deployment configuration
+consumer:
+  enabled: true
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# Temporal Worker deployment configuration
+worker:
+  enabled: true
+  replicaCount: 2
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: flexprice.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: flexprice-tls
+  #   hosts:
+  #     - flexprice.example.com
+
+# Server configuration
+server:
+  address: ":8080"
+
+# Auth configuration
+auth:
+  provider: "flexprice" # "flexprice" or "supabase"
+  secret: "" # Set via secret
+  supabase:
+    baseUrl: ""
+    serviceKey: "" # Set via secret
+  apiKey:
+    header: "x-api-key"
+    keys: {} # Map of hashed API keys to details
+
+# Database configuration
+postgres:
+  host: "postgres-service"
+  port: 5432
+  user: "flexprice"
+  password: "" # Set via secret
+  dbname: "flexprice"
+  sslmode: "require"
+  maxOpenConns: 10
+  maxIdleConns: 5
+  connMaxLifetimeMinutes: 60
+  autoMigrate: false
+  readerHost: "" # Optional: for read replicas
+  readerPort: 5432
+
+# ClickHouse configuration
+clickhouse:
+  address: "clickhouse-service:9000"
+  tls: false
+  username: "flexprice"
+  password: "" # Set via secret
+  database: "flexprice"
+
+# Kafka configuration
+kafka:
+  brokers:
+    - "kafka-service:9092"
+  consumerGroup: "flexprice-consumer"
+  topic: "events"
+  topicLazy: "events_lazy"
+  tls: false
+  useSASL: false
+  saslMechanism: ""
+  saslUser: ""
+  saslPassword: "" # Set via secret
+  clientId: "flexprice-client"
+  routeTenantsOnLazyMode: []
+
+# Temporal configuration
+temporal:
+  address: "temporal-service:7233"
+  taskQueue: "billing-task-queue"
+  namespace: "default"
+  apiKey: "" # Set via secret
+  apiKeyName: ""
+  tls: false
+
+# Logging configuration
+logging:
+  level: "info" # "debug", "info", "warn", "error"
+
+# Sentry configuration
+sentry:
+  enabled: false
+  dsn: "" # Set via secret
+  environment: "production"
+  sampleRate: 1.0
+
+# Pyroscope configuration
+pyroscope:
+  enabled: false
+  serverAddress: ""
+  applicationName: "flexprice"
+  basicAuthUser: ""
+  basicAuthPassword: "" # Set via secret
+  sampleRate: 100
+  disableGCRuns: false
+  profileTypes:
+    - "cpu"
+    - "memory"
+
+# S3 configuration
+s3:
+  enabled: false
+  region: "ap-south-1"
+  invoice:
+    bucket: "flexprice-invoices"
+    presignExpiryDuration: "1h"
+    keyPrefix: ""
+
+# Cache configuration
+cache:
+  enabled: false
+
+# Event processing configuration
+eventProcessing:
+  topic: "events"
+  rateLimit: 12
+  consumerGroup: "flexprice-consumer"
+
+eventProcessingLazy:
+  topic: "events_lazy"
+  rateLimit: 12
+  consumerGroup: "v1_event_processing_lazy"
+
+eventPostProcessing:
+  topic: "events_post_processing"
+  rateLimit: 12
+  consumerGroup: "v1_events_post_processing"
+  topicBackfill: "events_post_processing_backfill"
+  rateLimitBackfill: 1
+  consumerGroupBackfill: "v1_events_post_processing_backfill"
+
+featureUsageTracking:
+  topic: "events"
+  rateLimit: 1
+  consumerGroup: "v1_feature_tracking_service"
+  topicBackfill: "events_post_processing_backfill"
+  rateLimitBackfill: 1
+  consumerGroupBackfill: "v1_feature_tracking_service_backfill"
+
+featureUsageTrackingLazy:
+  topic: "events_lazy"
+  rateLimit: 1
+  consumerGroup: "v1_feature_tracking_service_lazy"
+
+# DynamoDB configuration
+dynamodb:
+  inUse: false
+  region: "us-east-1"
+  eventTableName: "events"
+
+# Event configuration
+event:
+  publishDestination: "kafka"
+
+# Webhook configuration
+webhook:
+  enabled: true
+  topic: "system_events"
+  pubsub: "memory"
+  consumerGroup: "webhook-consumer"
+  maxRetries: 3
+  initialInterval: "1s"
+  maxInterval: "10s"
+  multiplier: 2.0
+  maxElapsedTime: "2m"
+  tenants: {}
+  svixConfig:
+    enabled: false
+    authToken: "" # Set via secret
+    baseUrl: "https://api.us.svix.com"
+
+# Secrets configuration
+secrets:
+  encryptionKey: "" # Set via secret
+
+# Billing configuration
+billing:
+  tenantId: ""
+  environmentId: ""
+
+# Email configuration
+email:
+  enabled: false
+  resendApiKey: "" # Set via secret
+  fromAddress: ""
+  replyTo: ""
+  calendarUrl: ""
+
+# Feature flag configuration
+featureFlag:
+  enableFeatureUsageForAnalytics: true
+  forceV1ForTenant: ""
+
+# Environment access configuration
+envAccess:
+  userEnvMapping: {}
+
+# Pod annotations
+podAnnotations: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Liveness probe
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Readiness probe
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Startup probe
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+# Additional environment variables
+extraEnv: []
+# - name: CUSTOM_VAR
+#   value: "custom-value"
+
+# Additional volumes
+extraVolumes: []
+# - name: extra-volume
+#   configMap:
+#     name: extra-config
+
+# Additional volume mounts
+extraVolumeMounts: []
+# - name: extra-volume
+#   mountPath: /extra
+
+# Resource labels
+labels: {}
+
+# Service monitor for Prometheus (if using Prometheus Operator)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
