@@ -8,6 +8,13 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+const (
+	// Workflow name - must match the function name
+	WorkflowHubSpotInvoiceSync = "HubSpotInvoiceSyncWorkflow"
+	// Activity names - must match the registered method names
+	ActivitySyncInvoiceToHubSpot = "SyncInvoiceToHubSpot"
+)
+
 // HubSpotInvoiceSyncWorkflow orchestrates the HubSpot invoice synchronization process
 // Steps:
 // 1. Sleep for 5 seconds to allow invoice to be committed to database
@@ -51,7 +58,7 @@ func HubSpotInvoiceSyncWorkflow(ctx workflow.Context, input models.HubSpotInvoic
 	// Step 2: Sync invoice to HubSpot
 	logger.Info("Step 2: Syncing invoice to HubSpot", "invoice_id", input.InvoiceID)
 
-	err = workflow.ExecuteActivity(ctx, "SyncInvoiceToHubSpot", input).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToHubSpot, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to sync invoice to HubSpot",
 			"error", err,
