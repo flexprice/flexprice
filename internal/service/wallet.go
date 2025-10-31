@@ -867,9 +867,17 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 	// Log the alert
 	alertService := NewAlertLogsService(s.ServiceParams)
+	
+	// Get customer ID from wallet if available
+	var customerID *string
+	if w.CustomerID != "" {
+		customerID = lo.ToPtr(w.CustomerID)
+	}
+	
 	logAlertReq := &LogAlertRequest{
 		EntityType:  types.AlertEntityTypeWallet,
 		EntityID:    w.ID,
+		CustomerID:  customerID,
 		AlertType:   types.AlertTypeLowCreditBalance,
 		AlertStatus: alertStatus,
 		AlertInfo:   alertInfo,

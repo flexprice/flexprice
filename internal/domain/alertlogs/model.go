@@ -12,6 +12,7 @@ type AlertLog struct {
 	EntityID         string                `db:"entity_id" json:"entity_id"`
 	ParentEntityType *string               `db:"parent_entity_type" json:"parent_entity_type,omitempty"`
 	ParentEntityID   *string               `db:"parent_entity_id" json:"parent_entity_id,omitempty"`
+	CustomerID       *string               `db:"customer_id" json:"customer_id,omitempty"`
 	AlertType        types.AlertType       `db:"alert_type" json:"alert_type"`
 	AlertStatus      types.AlertState      `db:"alert_status" json:"alert_status"`
 	AlertInfo        types.AlertInfo       `db:"alert_info" json:"alert_info"`
@@ -30,6 +31,7 @@ func FromEnt(e *ent.AlertLogs) *AlertLog {
 		EntityID:         e.EntityID,
 		ParentEntityType: e.ParentEntityType,
 		ParentEntityID:   e.ParentEntityID,
+		CustomerID:       e.CustomerID,
 		AlertType:        types.AlertType(e.AlertType),
 		AlertStatus:      types.AlertState(e.AlertStatus),
 		AlertInfo:        e.AlertInfo,

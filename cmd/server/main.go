@@ -332,6 +332,7 @@ func provideHandlers(
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
+		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
 	}
 }
 

@@ -49,6 +49,7 @@ type Handlers struct {
 	SetupIntent              *v1.SetupIntentHandler
 	Group                    *v1.GroupHandler
 	ScheduledTask            *v1.ScheduledTaskHandler
+	AlertLogsHandler         *v1.AlertLogsHandler
 
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
@@ -519,6 +520,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		settings.GET("/:key", handlers.Settings.GetSettingByKey)
 		settings.PUT("/:key", handlers.Settings.UpdateSettingByKey)
 		settings.DELETE("/:key", handlers.Settings.DeleteSettingByKey)
+	}
+
+	// Alert routes
+	alert := v1Private.Group("/alerts")
+	{
+		// list alert logs by filter
+		alert.POST("/search", handlers.AlertLogsHandler.ListAlertLogsByFilter)
 	}
 
 	return router

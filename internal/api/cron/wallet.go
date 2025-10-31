@@ -276,20 +276,27 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 						"alert_status", alertStatus,
 					)
 
-					// Log the alert using AlertLogsService (includes state transition logic and webhook publishing)
-					err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
-						EntityType:       types.AlertEntityTypeFeature,
-						EntityID:         feature.ID,
-						ParentEntityType: lo.ToPtr("wallet"),  // Parent entity is the wallet
-						ParentEntityID:   lo.ToPtr(wallet.ID), // Wallet ID as parent entity ID
-						AlertType:        types.AlertTypeFeatureWalletBalance,
-						AlertStatus:      alertStatus,
-						AlertInfo: types.AlertInfo{
-							AlertSettings: feature.AlertSettings, // Include full alert settings
-							ValueAtTime:   *ongoingBalance,       // Ongoing balance at time of check
-							Timestamp:     time.Now().UTC(),
-						},
-					})
+				// Log the alert using AlertLogsService (includes state transition logic and webhook publishing)
+				// Get customer ID from wallet if available
+				var customerID *string
+				if wallet.CustomerID != "" {
+					customerID = lo.ToPtr(wallet.CustomerID)
+				}
+				
+				err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
+					EntityType:       types.AlertEntityTypeFeature,
+					EntityID:         feature.ID,
+					ParentEntityType: lo.ToPtr("wallet"),  // Parent entity is the wallet
+					ParentEntityID:   lo.ToPtr(wallet.ID), // Wallet ID as parent entity ID
+					CustomerID:       customerID,          // Customer ID from wallet
+					AlertType:        types.AlertTypeFeatureWalletBalance,
+					AlertStatus:      alertStatus,
+					AlertInfo: types.AlertInfo{
+						AlertSettings: feature.AlertSettings, // Include full alert settings
+						ValueAtTime:   *ongoingBalance,       // Ongoing balance at time of check
+						Timestamp:     time.Now().UTC(),
+					},
+				})
 					if err != nil {
 						h.logger.Errorw("failed to check feature alert",
 							"feature_id", feature.ID,
@@ -340,25 +347,32 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 					"ongoing_balance_alert_state", wallet.AlertState,
 				)
 
-				// Use AlertLogsService to handle alert logging and webhook publishing
-				// For wallet alerts, we store the threshold info in AlertSettings format for consistency
-				err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
-					EntityType:  types.AlertEntityTypeWallet,
-					EntityID:    wallet.ID,
-					AlertType:   types.AlertTypeLowOngoingBalance,
-					AlertStatus: alertStatus,
-					AlertInfo: types.AlertInfo{
-						AlertSettings: &types.AlertSettings{
-							Critical: &types.AlertThreshold{
-								Threshold: wallet.AlertConfig.Threshold.Value,
-								Condition: types.AlertConditionBelow, // Wallet alerts are "below" threshold
-							},
-							AlertEnabled: lo.ToPtr(true),
+			// Use AlertLogsService to handle alert logging and webhook publishing
+			// For wallet alerts, we store the threshold info in AlertSettings format for consistency
+			// Get customer ID from wallet if available
+			var customerID *string
+			if wallet.CustomerID != "" {
+				customerID = lo.ToPtr(wallet.CustomerID)
+			}
+			
+			err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
+				EntityType:  types.AlertEntityTypeWallet,
+				EntityID:    wallet.ID,
+				CustomerID:  customerID, // Customer ID from wallet
+				AlertType:   types.AlertTypeLowOngoingBalance,
+				AlertStatus: alertStatus,
+				AlertInfo: types.AlertInfo{
+					AlertSettings: &types.AlertSettings{
+						Critical: &types.AlertThreshold{
+							Threshold: wallet.AlertConfig.Threshold.Value,
+							Condition: types.AlertConditionBelow, // Wallet alerts are "below" threshold
 						},
-						ValueAtTime: *ongoingBalance,
-						Timestamp:   time.Now().UTC(),
+						AlertEnabled: lo.ToPtr(true),
 					},
-				})
+					ValueAtTime: *ongoingBalance,
+					Timestamp:   time.Now().UTC(),
+				},
+			})
 				if err != nil {
 					h.logger.Errorw("failed to check wallet ongoing balance alert",
 						"wallet_id", wallet.ID,

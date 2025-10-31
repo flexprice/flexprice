@@ -119,6 +119,11 @@ func ParentEntityID(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldEQ(FieldParentEntityID, v))
 }
 
+// CustomerID applies equality check predicate on the "customer_id" field. It's identical to CustomerIDEQ.
+func CustomerID(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldCustomerID, v))
+}
+
 // AlertType applies equality check predicate on the "alert_type" field. It's identical to AlertTypeEQ.
 func AlertType(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldEQ(FieldAlertType, v))
@@ -842,6 +847,81 @@ func ParentEntityIDEqualFold(v string) predicate.AlertLogs {
 // ParentEntityIDContainsFold applies the ContainsFold predicate on the "parent_entity_id" field.
 func ParentEntityIDContainsFold(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldContainsFold(FieldParentEntityID, v))
+}
+
+// CustomerIDEQ applies the EQ predicate on the "customer_id" field.
+func CustomerIDEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldCustomerID, v))
+}
+
+// CustomerIDNEQ applies the NEQ predicate on the "customer_id" field.
+func CustomerIDNEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNEQ(FieldCustomerID, v))
+}
+
+// CustomerIDIn applies the In predicate on the "customer_id" field.
+func CustomerIDIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIn(FieldCustomerID, vs...))
+}
+
+// CustomerIDNotIn applies the NotIn predicate on the "customer_id" field.
+func CustomerIDNotIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotIn(FieldCustomerID, vs...))
+}
+
+// CustomerIDGT applies the GT predicate on the "customer_id" field.
+func CustomerIDGT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGT(FieldCustomerID, v))
+}
+
+// CustomerIDGTE applies the GTE predicate on the "customer_id" field.
+func CustomerIDGTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGTE(FieldCustomerID, v))
+}
+
+// CustomerIDLT applies the LT predicate on the "customer_id" field.
+func CustomerIDLT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLT(FieldCustomerID, v))
+}
+
+// CustomerIDLTE applies the LTE predicate on the "customer_id" field.
+func CustomerIDLTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLTE(FieldCustomerID, v))
+}
+
+// CustomerIDContains applies the Contains predicate on the "customer_id" field.
+func CustomerIDContains(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContains(FieldCustomerID, v))
+}
+
+// CustomerIDHasPrefix applies the HasPrefix predicate on the "customer_id" field.
+func CustomerIDHasPrefix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasPrefix(FieldCustomerID, v))
+}
+
+// CustomerIDHasSuffix applies the HasSuffix predicate on the "customer_id" field.
+func CustomerIDHasSuffix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasSuffix(FieldCustomerID, v))
+}
+
+// CustomerIDIsNil applies the IsNil predicate on the "customer_id" field.
+func CustomerIDIsNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIsNull(FieldCustomerID))
+}
+
+// CustomerIDNotNil applies the NotNil predicate on the "customer_id" field.
+func CustomerIDNotNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotNull(FieldCustomerID))
+}
+
+// CustomerIDEqualFold applies the EqualFold predicate on the "customer_id" field.
+func CustomerIDEqualFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEqualFold(FieldCustomerID, v))
+}
+
+// CustomerIDContainsFold applies the ContainsFold predicate on the "customer_id" field.
+func CustomerIDContainsFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContainsFold(FieldCustomerID, v))
 }
 
 // AlertTypeEQ applies the EQ predicate on the "alert_type" field.

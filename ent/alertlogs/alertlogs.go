@@ -35,6 +35,8 @@ const (
 	FieldParentEntityType = "parent_entity_type"
 	// FieldParentEntityID holds the string denoting the parent_entity_id field in the database.
 	FieldParentEntityID = "parent_entity_id"
+	// FieldCustomerID holds the string denoting the customer_id field in the database.
+	FieldCustomerID = "customer_id"
 	// FieldAlertType holds the string denoting the alert_type field in the database.
 	FieldAlertType = "alert_type"
 	// FieldAlertStatus holds the string denoting the alert_status field in the database.
@@ -59,6 +61,7 @@ var Columns = []string{
 	FieldEntityID,
 	FieldParentEntityType,
 	FieldParentEntityID,
+	FieldCustomerID,
 	FieldAlertType,
 	FieldAlertStatus,
 	FieldAlertInfo,
@@ -158,6 +161,11 @@ func ByParentEntityType(opts ...sql.OrderTermOption) OrderOption {
 // ByParentEntityID orders the results by the parent_entity_id field.
 func ByParentEntityID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentEntityID, opts...).ToFunc()
+}
+
+// ByCustomerID orders the results by the customer_id field.
+func ByCustomerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomerID, opts...).ToFunc()
 }
 
 // ByAlertType orders the results by the alert_type field.

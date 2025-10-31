@@ -109,6 +109,8 @@ type AlertLogFilter struct {
 	EntityID    string             `json:"entity_id,omitempty" form:"entity_id" validate:"omitempty"`
 	AlertType   AlertType          `json:"alert_type,omitempty" form:"alert_type" validate:"omitempty"`
 	AlertStatus AlertState         `json:"alert_status,omitempty" form:"alert_status" validate:"omitempty"`
+	CustomerID  string             `json:"customer_id,omitempty" form:"customer_id" validate:"omitempty"`
+	Expand      *string            `json:"expand,omitempty" form:"expand" validate:"omitempty"`
 }
 
 // NewDefaultAlertLogFilter creates a new AlertLogFilter with default values
@@ -168,6 +170,14 @@ func (f *AlertLogFilter) GetOffset() int {
 		return NewDefaultQueryFilter().GetOffset()
 	}
 	return f.QueryFilter.GetOffset()
+}
+
+// GetExpand returns the Expand for the filter
+func (f *AlertLogFilter) GetExpand() Expand {
+	if f.Expand == nil || *f.Expand == "" {
+		return NewExpand("")
+	}
+	return NewExpand(*f.Expand)
 }
 
 type AlertSettings struct {

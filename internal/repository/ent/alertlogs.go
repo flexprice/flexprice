@@ -30,6 +30,38 @@ func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger, cache c
 	}
 }
 
+// applyFilters applies common filter logic to an AlertLogs query
+func (r *alertLogsRepository) applyFilters(query *ent.AlertLogsQuery, filter *types.AlertLogFilter) *ent.AlertLogsQuery {
+	// Apply filters
+	if filter.EntityType != "" {
+		query = query.Where(alertlogs.EntityType(string(filter.EntityType)))
+	}
+	if filter.EntityID != "" {
+		query = query.Where(alertlogs.EntityID(filter.EntityID))
+	}
+	if filter.AlertType != "" {
+		query = query.Where(alertlogs.AlertType(string(filter.AlertType)))
+	}
+	if filter.AlertStatus != "" {
+		query = query.Where(alertlogs.AlertStatus(string(filter.AlertStatus)))
+	}
+	if filter.CustomerID != "" {
+		query = query.Where(alertlogs.CustomerID(filter.CustomerID))
+	}
+
+	// Apply time range filters if provided
+	if filter.TimeRangeFilter != nil {
+		if filter.TimeRangeFilter.StartTime != nil {
+			query = query.Where(alertlogs.CreatedAtGTE(*filter.TimeRangeFilter.StartTime))
+		}
+		if filter.TimeRangeFilter.EndTime != nil {
+			query = query.Where(alertlogs.CreatedAtLTE(*filter.TimeRangeFilter.EndTime))
+		}
+	}
+
+	return query
+}
+
 func (r *alertLogsRepository) Create(ctx context.Context, al *domainAlertLogs.AlertLog) error {
 	client := r.client.Writer(ctx)
 
@@ -77,6 +109,10 @@ func (r *alertLogsRepository) Create(ctx context.Context, al *domainAlertLogs.Al
 	}
 	if al.ParentEntityID != nil {
 		createQuery = createQuery.SetParentEntityID(*al.ParentEntityID)
+	}
+	// Set customer ID if provided
+	if al.CustomerID != nil {
+		createQuery = createQuery.SetCustomerID(*al.CustomerID)
 	}
 
 	_, err := createQuery.Save(ctx)
@@ -164,19 +200,8 @@ func (r *alertLogsRepository) List(ctx context.Context, filter *types.AlertLogFi
 		alertlogs.EnvironmentID(types.GetEnvironmentID(ctx)),
 	)
 
-	// Apply filters
-	if filter.EntityType != "" {
-		query = query.Where(alertlogs.EntityType(string(filter.EntityType)))
-	}
-	if filter.EntityID != "" {
-		query = query.Where(alertlogs.EntityID(filter.EntityID))
-	}
-	if filter.AlertType != "" {
-		query = query.Where(alertlogs.AlertType(string(filter.AlertType)))
-	}
-	if filter.AlertStatus != "" {
-		query = query.Where(alertlogs.AlertStatus(string(filter.AlertStatus)))
-	}
+	// Apply common filters
+	query = r.applyFilters(query, filter)
 
 	// Apply pagination
 	if filter.GetLimit() > 0 {
@@ -213,19 +238,8 @@ func (r *alertLogsRepository) Count(ctx context.Context, filter *types.AlertLogF
 		alertlogs.EnvironmentID(types.GetEnvironmentID(ctx)),
 	)
 
-	// Apply filters
-	if filter.EntityType != "" {
-		query = query.Where(alertlogs.EntityType(string(filter.EntityType)))
-	}
-	if filter.EntityID != "" {
-		query = query.Where(alertlogs.EntityID(filter.EntityID))
-	}
-	if filter.AlertType != "" {
-		query = query.Where(alertlogs.AlertType(string(filter.AlertType)))
-	}
-	if filter.AlertStatus != "" {
-		query = query.Where(alertlogs.AlertStatus(string(filter.AlertStatus)))
-	}
+	// Apply common filters
+	query = r.applyFilters(query, filter)
 
 	count, err := query.Count(ctx)
 	if err != nil {

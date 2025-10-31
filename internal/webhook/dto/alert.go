@@ -3,9 +3,10 @@ package webhookDto
 import "github.com/flexprice/flexprice/internal/api/dto"
 
 type InternalAlertEvent struct {
-	FeatureID   string `json:"feature_id,omitempty"`
-	WalletID    string `json:"wallet_id,omitempty"`
-	AlertType   string `json:"alert_type"`
+	FeatureID  string `json:"feature_id,omitempty"`
+	WalletID   string `json:"wallet_id,omitempty"`
+	CustomerID string `json:"customer_id,omitempty"`
+	AlertType  string `json:"alert_type"`
 	AlertStatus string `json:"alert_status"`
 }
 

@@ -151,6 +151,20 @@ func (alc *AlertLogsCreate) SetNillableParentEntityID(s *string) *AlertLogsCreat
 	return alc
 }
 
+// SetCustomerID sets the "customer_id" field.
+func (alc *AlertLogsCreate) SetCustomerID(s string) *AlertLogsCreate {
+	alc.mutation.SetCustomerID(s)
+	return alc
+}
+
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (alc *AlertLogsCreate) SetNillableCustomerID(s *string) *AlertLogsCreate {
+	if s != nil {
+		alc.SetCustomerID(*s)
+	}
+	return alc
+}
+
 // SetAlertType sets the "alert_type" field.
 func (alc *AlertLogsCreate) SetAlertType(s string) *AlertLogsCreate {
 	alc.mutation.SetAlertType(s)
@@ -360,6 +374,10 @@ func (alc *AlertLogsCreate) createSpec() (*AlertLogs, *sqlgraph.CreateSpec) {
 	if value, ok := alc.mutation.ParentEntityID(); ok {
 		_spec.SetField(alertlogs.FieldParentEntityID, field.TypeString, value)
 		_node.ParentEntityID = &value
+	}
+	if value, ok := alc.mutation.CustomerID(); ok {
+		_spec.SetField(alertlogs.FieldCustomerID, field.TypeString, value)
+		_node.CustomerID = &value
 	}
 	if value, ok := alc.mutation.AlertType(); ok {
 		_spec.SetField(alertlogs.FieldAlertType, field.TypeString, value)

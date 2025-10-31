@@ -24,6 +24,20 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 		return nil, err
 	}
 
+	// Fetch customer data if customer_id is provided
+	var customer *dto.CustomerResponse
+	if internalEvent.CustomerID != "" {
+		customerData, err := b.services.CustomerService.GetCustomer(ctx, internalEvent.CustomerID)
+		if err != nil {
+			// Log error but don't fail the webhook if customer fetch fails
+			// Customer is optional in the payload
+			b.services.Sentry.CaptureException(err)
+			customer = nil
+		} else {
+			customer = customerData
+		}
+	}
+
 	// Feature alert: needs both feature and wallet
 	if internalEvent.FeatureID != "" && internalEvent.WalletID != "" {
 		// Fetch feature
@@ -36,20 +50,6 @@ func (b *AlertPayloadBuilder) BuildPayload(ctx context.Context, eventType string
 		wallet, err := b.services.WalletService.GetWalletByID(ctx, internalEvent.WalletID)
 		if err != nil {
 			return nil, err
-		}
-
-		// Fetch customer data
-		var customer *dto.CustomerResponse
-		if wallet.CustomerID != "" {
-			customerData, err := b.services.CustomerService.GetCustomer(ctx, wallet.CustomerID)
-			if err != nil {
-				// Log error but don't fail the webhook if customer fetch fails
-				// Customer is optional in the payload
-				b.services.Sentry.CaptureException(err)
-				customer = nil
-			} else {
-				customer = customerData
-			}
 		}
 
 		// Build the complete alert webhook payload with both entities and customer

@@ -41,6 +41,8 @@ type AlertLogs struct {
 	ParentEntityType *string `json:"parent_entity_type,omitempty"`
 	// ParentEntityID holds the value of the "parent_entity_id" field.
 	ParentEntityID *string `json:"parent_entity_id,omitempty"`
+	// CustomerID holds the value of the "customer_id" field.
+	CustomerID *string `json:"customer_id,omitempty"`
 	// AlertType holds the value of the "alert_type" field.
 	AlertType string `json:"alert_type,omitempty"`
 	// AlertStatus holds the value of the "alert_status" field.
@@ -57,7 +59,7 @@ func (*AlertLogs) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case alertlogs.FieldAlertInfo:
 			values[i] = new([]byte)
-		case alertlogs.FieldID, alertlogs.FieldTenantID, alertlogs.FieldStatus, alertlogs.FieldCreatedBy, alertlogs.FieldUpdatedBy, alertlogs.FieldEnvironmentID, alertlogs.FieldEntityType, alertlogs.FieldEntityID, alertlogs.FieldParentEntityType, alertlogs.FieldParentEntityID, alertlogs.FieldAlertType, alertlogs.FieldAlertStatus:
+		case alertlogs.FieldID, alertlogs.FieldTenantID, alertlogs.FieldStatus, alertlogs.FieldCreatedBy, alertlogs.FieldUpdatedBy, alertlogs.FieldEnvironmentID, alertlogs.FieldEntityType, alertlogs.FieldEntityID, alertlogs.FieldParentEntityType, alertlogs.FieldParentEntityID, alertlogs.FieldCustomerID, alertlogs.FieldAlertType, alertlogs.FieldAlertStatus:
 			values[i] = new(sql.NullString)
 		case alertlogs.FieldCreatedAt, alertlogs.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -150,6 +152,13 @@ func (al *AlertLogs) assignValues(columns []string, values []any) error {
 				al.ParentEntityID = new(string)
 				*al.ParentEntityID = value.String
 			}
+		case alertlogs.FieldCustomerID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
+			} else if value.Valid {
+				al.CustomerID = new(string)
+				*al.CustomerID = value.String
+			}
 		case alertlogs.FieldAlertType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field alert_type", values[i])
@@ -240,6 +249,11 @@ func (al *AlertLogs) String() string {
 	builder.WriteString(", ")
 	if v := al.ParentEntityID; v != nil {
 		builder.WriteString("parent_entity_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := al.CustomerID; v != nil {
+		builder.WriteString("customer_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

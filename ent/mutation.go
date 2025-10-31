@@ -2549,6 +2549,7 @@ type AlertLogsMutation struct {
 	entity_id          *string
 	parent_entity_type *string
 	parent_entity_id   *string
+	customer_id        *string
 	alert_type         *string
 	alert_status       *string
 	alert_info         *types.AlertInfo
@@ -3123,6 +3124,55 @@ func (m *AlertLogsMutation) ResetParentEntityID() {
 	delete(m.clearedFields, alertlogs.FieldParentEntityID)
 }
 
+// SetCustomerID sets the "customer_id" field.
+func (m *AlertLogsMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *AlertLogsMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the AlertLogs entity.
+// If the AlertLogs object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AlertLogsMutation) OldCustomerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ClearCustomerID clears the value of the "customer_id" field.
+func (m *AlertLogsMutation) ClearCustomerID() {
+	m.customer_id = nil
+	m.clearedFields[alertlogs.FieldCustomerID] = struct{}{}
+}
+
+// CustomerIDCleared returns if the "customer_id" field was cleared in this mutation.
+func (m *AlertLogsMutation) CustomerIDCleared() bool {
+	_, ok := m.clearedFields[alertlogs.FieldCustomerID]
+	return ok
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *AlertLogsMutation) ResetCustomerID() {
+	m.customer_id = nil
+	delete(m.clearedFields, alertlogs.FieldCustomerID)
+}
+
 // SetAlertType sets the "alert_type" field.
 func (m *AlertLogsMutation) SetAlertType(s string) {
 	m.alert_type = &s
@@ -3265,7 +3315,7 @@ func (m *AlertLogsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AlertLogsMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.tenant_id != nil {
 		fields = append(fields, alertlogs.FieldTenantID)
 	}
@@ -3298,6 +3348,9 @@ func (m *AlertLogsMutation) Fields() []string {
 	}
 	if m.parent_entity_id != nil {
 		fields = append(fields, alertlogs.FieldParentEntityID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, alertlogs.FieldCustomerID)
 	}
 	if m.alert_type != nil {
 		fields = append(fields, alertlogs.FieldAlertType)
@@ -3338,6 +3391,8 @@ func (m *AlertLogsMutation) Field(name string) (ent.Value, bool) {
 		return m.ParentEntityType()
 	case alertlogs.FieldParentEntityID:
 		return m.ParentEntityID()
+	case alertlogs.FieldCustomerID:
+		return m.CustomerID()
 	case alertlogs.FieldAlertType:
 		return m.AlertType()
 	case alertlogs.FieldAlertStatus:
@@ -3375,6 +3430,8 @@ func (m *AlertLogsMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldParentEntityType(ctx)
 	case alertlogs.FieldParentEntityID:
 		return m.OldParentEntityID(ctx)
+	case alertlogs.FieldCustomerID:
+		return m.OldCustomerID(ctx)
 	case alertlogs.FieldAlertType:
 		return m.OldAlertType(ctx)
 	case alertlogs.FieldAlertStatus:
@@ -3467,6 +3524,13 @@ func (m *AlertLogsMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetParentEntityID(v)
 		return nil
+	case alertlogs.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
 	case alertlogs.FieldAlertType:
 		v, ok := value.(string)
 		if !ok {
@@ -3533,6 +3597,9 @@ func (m *AlertLogsMutation) ClearedFields() []string {
 	if m.FieldCleared(alertlogs.FieldParentEntityID) {
 		fields = append(fields, alertlogs.FieldParentEntityID)
 	}
+	if m.FieldCleared(alertlogs.FieldCustomerID) {
+		fields = append(fields, alertlogs.FieldCustomerID)
+	}
 	return fields
 }
 
@@ -3561,6 +3628,9 @@ func (m *AlertLogsMutation) ClearField(name string) error {
 		return nil
 	case alertlogs.FieldParentEntityID:
 		m.ClearParentEntityID()
+		return nil
+	case alertlogs.FieldCustomerID:
+		m.ClearCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown AlertLogs nullable field %s", name)
@@ -3602,6 +3672,9 @@ func (m *AlertLogsMutation) ResetField(name string) error {
 		return nil
 	case alertlogs.FieldParentEntityID:
 		m.ResetParentEntityID()
+		return nil
+	case alertlogs.FieldCustomerID:
+		m.ResetCustomerID()
 		return nil
 	case alertlogs.FieldAlertType:
 		m.ResetAlertType()
