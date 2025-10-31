@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -275,13 +277,18 @@ type PriceFilter struct {
 	*TimeRangeFilter
 	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
 	// Price override filtering fields
-	PlanIDs            []string         `json:"plan_ids,omitempty" form:"plan_ids"`
+	PlanIDs []string `json:"plan_ids,omitempty" form:"plan_ids"`
+
+	// @deprecated use EntityTypes instead
 	EntityType         *PriceEntityType `json:"entity_type,omitempty" form:"entity_type"`
 	EntityIDs          []string         `json:"entity_ids,omitempty" form:"entity_ids"`
 	SubscriptionID     *string          `json:"subscription_id,omitempty" form:"subscription_id"`
 	ParentPriceID      *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
+
+	EntityTypes []PriceEntityType `json:"entity_types,omitempty" form:"entity_types"`
+	StartDateLT *time.Time        `json:"start_date_lt,omitempty" form:"start_date_lt"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
