@@ -277,9 +277,7 @@ type PriceFilter struct {
 	*TimeRangeFilter
 	PriceIDs []string `json:"price_ids,omitempty" form:"price_ids"`
 	// Price override filtering fields
-	PlanIDs []string `json:"plan_ids,omitempty" form:"plan_ids"`
-
-	// @deprecated use EntityTypes instead
+	PlanIDs            []string         `json:"plan_ids,omitempty" form:"plan_ids"`
 	EntityType         *PriceEntityType `json:"entity_type,omitempty" form:"entity_type"`
 	EntityIDs          []string         `json:"entity_ids,omitempty" form:"entity_ids"`
 	SubscriptionID     *string          `json:"subscription_id,omitempty" form:"subscription_id"`
