@@ -99,7 +99,6 @@ type Price struct {
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
-	addon_prices *string
 	selectValues sql.SelectValues
 }
 
@@ -138,8 +137,6 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
-		case price.ForeignKeys[0]: // addon_prices
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -406,13 +403,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.GroupID = new(string)
 				*pr.GroupID = value.String
-			}
-		case price.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field addon_prices", values[i])
-			} else if value.Valid {
-				pr.addon_prices = new(string)
-				*pr.addon_prices = value.String
 			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])

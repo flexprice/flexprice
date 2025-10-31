@@ -137,9 +137,6 @@ type AddonMutation struct {
 	_type               *string
 	metadata            *map[string]interface{}
 	clearedFields       map[string]struct{}
-	prices              map[string]struct{}
-	removedprices       map[string]struct{}
-	clearedprices       bool
 	entitlements        map[string]struct{}
 	removedentitlements map[string]struct{}
 	clearedentitlements bool
@@ -749,60 +746,6 @@ func (m *AddonMutation) ResetMetadata() {
 	delete(m.clearedFields, addon.FieldMetadata)
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by ids.
-func (m *AddonMutation) AddPriceIDs(ids ...string) {
-	if m.prices == nil {
-		m.prices = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.prices[ids[i]] = struct{}{}
-	}
-}
-
-// ClearPrices clears the "prices" edge to the Price entity.
-func (m *AddonMutation) ClearPrices() {
-	m.clearedprices = true
-}
-
-// PricesCleared reports if the "prices" edge to the Price entity was cleared.
-func (m *AddonMutation) PricesCleared() bool {
-	return m.clearedprices
-}
-
-// RemovePriceIDs removes the "prices" edge to the Price entity by IDs.
-func (m *AddonMutation) RemovePriceIDs(ids ...string) {
-	if m.removedprices == nil {
-		m.removedprices = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.prices, ids[i])
-		m.removedprices[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedPrices returns the removed IDs of the "prices" edge to the Price entity.
-func (m *AddonMutation) RemovedPricesIDs() (ids []string) {
-	for id := range m.removedprices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// PricesIDs returns the "prices" edge IDs in the mutation.
-func (m *AddonMutation) PricesIDs() (ids []string) {
-	for id := range m.prices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetPrices resets all changes to the "prices" edge.
-func (m *AddonMutation) ResetPrices() {
-	m.prices = nil
-	m.clearedprices = false
-	m.removedprices = nil
-}
-
 // AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by ids.
 func (m *AddonMutation) AddEntitlementIDs(ids ...string) {
 	if m.entitlements == nil {
@@ -1210,10 +1153,7 @@ func (m *AddonMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AddonMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.prices != nil {
-		edges = append(edges, addon.EdgePrices)
-	}
+	edges := make([]string, 0, 1)
 	if m.entitlements != nil {
 		edges = append(edges, addon.EdgeEntitlements)
 	}
@@ -1224,12 +1164,6 @@ func (m *AddonMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *AddonMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case addon.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.prices))
-		for id := range m.prices {
-			ids = append(ids, id)
-		}
-		return ids
 	case addon.EdgeEntitlements:
 		ids := make([]ent.Value, 0, len(m.entitlements))
 		for id := range m.entitlements {
@@ -1242,10 +1176,7 @@ func (m *AddonMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AddonMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.removedprices != nil {
-		edges = append(edges, addon.EdgePrices)
-	}
+	edges := make([]string, 0, 1)
 	if m.removedentitlements != nil {
 		edges = append(edges, addon.EdgeEntitlements)
 	}
@@ -1256,12 +1187,6 @@ func (m *AddonMutation) RemovedEdges() []string {
 // the given name in this mutation.
 func (m *AddonMutation) RemovedIDs(name string) []ent.Value {
 	switch name {
-	case addon.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.removedprices))
-		for id := range m.removedprices {
-			ids = append(ids, id)
-		}
-		return ids
 	case addon.EdgeEntitlements:
 		ids := make([]ent.Value, 0, len(m.removedentitlements))
 		for id := range m.removedentitlements {
@@ -1274,10 +1199,7 @@ func (m *AddonMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AddonMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.clearedprices {
-		edges = append(edges, addon.EdgePrices)
-	}
+	edges := make([]string, 0, 1)
 	if m.clearedentitlements {
 		edges = append(edges, addon.EdgeEntitlements)
 	}
@@ -1288,8 +1210,6 @@ func (m *AddonMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *AddonMutation) EdgeCleared(name string) bool {
 	switch name {
-	case addon.EdgePrices:
-		return m.clearedprices
 	case addon.EdgeEntitlements:
 		return m.clearedentitlements
 	}
@@ -1308,9 +1228,6 @@ func (m *AddonMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *AddonMutation) ResetEdge(name string) error {
 	switch name {
-	case addon.EdgePrices:
-		m.ResetPrices()
-		return nil
 	case addon.EdgeEntitlements:
 		m.ResetEntitlements()
 		return nil

@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/entitlement"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // AddonCreate is the builder for creating a Addon entity.
@@ -154,21 +153,6 @@ func (ac *AddonCreate) SetMetadata(m map[string]interface{}) *AddonCreate {
 func (ac *AddonCreate) SetID(s string) *AddonCreate {
 	ac.mutation.SetID(s)
 	return ac
-}
-
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (ac *AddonCreate) AddPriceIDs(ids ...string) *AddonCreate {
-	ac.mutation.AddPriceIDs(ids...)
-	return ac
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (ac *AddonCreate) AddPrices(p ...*Price) *AddonCreate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return ac.AddPriceIDs(ids...)
 }
 
 // AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
@@ -364,22 +348,6 @@ func (ac *AddonCreate) createSpec() (*Addon, *sqlgraph.CreateSpec) {
 	if value, ok := ac.mutation.Metadata(); ok {
 		_spec.SetField(addon.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
-	}
-	if nodes := ac.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := ac.mutation.EntitlementsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

@@ -685,22 +685,6 @@ func (c *AddonClient) GetX(ctx context.Context, id string) *Addon {
 	return obj
 }
 
-// QueryPrices queries the prices edge of a Addon.
-func (c *AddonClient) QueryPrices(a *Addon) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := a.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(addon.Table, addon.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, addon.PricesTable, addon.PricesColumn),
-		)
-		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryEntitlements queries the entitlements edge of a Addon.
 func (c *AddonClient) QueryEntitlements(a *Addon) *EntitlementQuery {
 	query := (&EntitlementClient{config: c.config}).Query()

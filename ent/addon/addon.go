@@ -38,19 +38,10 @@ const (
 	FieldType = "type"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
-	// EdgePrices holds the string denoting the prices edge name in mutations.
-	EdgePrices = "prices"
 	// EdgeEntitlements holds the string denoting the entitlements edge name in mutations.
 	EdgeEntitlements = "entitlements"
 	// Table holds the table name of the addon in the database.
 	Table = "addons"
-	// PricesTable is the table that holds the prices relation/edge.
-	PricesTable = "prices"
-	// PricesInverseTable is the table name for the Price entity.
-	// It exists in this package in order to avoid circular dependency with the "price" package.
-	PricesInverseTable = "prices"
-	// PricesColumn is the table column denoting the prices relation/edge.
-	PricesColumn = "addon_prices"
 	// EntitlementsTable is the table that holds the entitlements relation/edge.
 	EntitlementsTable = "entitlements"
 	// EntitlementsInverseTable is the table name for the Entitlement entity.
@@ -171,20 +162,6 @@ func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
 }
 
-// ByPricesCount orders the results by prices count.
-func ByPricesCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newPricesStep(), opts...)
-	}
-}
-
-// ByPrices orders the results by prices terms.
-func ByPrices(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newPricesStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByEntitlementsCount orders the results by entitlements count.
 func ByEntitlementsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -197,13 +174,6 @@ func ByEntitlements(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newEntitlementsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
-}
-func newPricesStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(PricesInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2M, false, PricesTable, PricesColumn),
-	)
 }
 func newEntitlementsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
