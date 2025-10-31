@@ -287,8 +287,7 @@ type PriceFilter struct {
 	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
 
-	EntityTypes []PriceEntityType `json:"entity_types,omitempty" form:"entity_types"`
-	StartDateLT *time.Time        `json:"start_date_lt,omitempty" form:"start_date_lt"`
+	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values

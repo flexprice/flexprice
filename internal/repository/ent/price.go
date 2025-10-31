@@ -585,11 +585,6 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.StartDateLT(*f.StartDateLT))
 	}
 
-	// Apply entity types filter if specified
-	if len(f.EntityTypes) > 0 {
-		query = query.Where(price.EntityTypeIn(lo.Map(f.EntityTypes, func(entityType types.PriceEntityType, _ int) string { return string(entityType) })...))
-	}
-
 	return query
 }
 

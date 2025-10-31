@@ -98,6 +98,17 @@ func (s *billingService) CalculateFixedCharges(
 			continue
 		}
 
+		// skip if the line item start date is after the period end
+		if item.StartDate.After(periodEnd) {
+			s.Logger.Debugw("skipping fixed charge line item because it starts after the period end",
+				"subscription_id", sub.ID,
+				"line_item_id", item.ID,
+				"price_id", item.PriceID,
+				"start_date", item.StartDate,
+				"period_end", periodEnd)
+			continue
+		}
+
 		price, err := priceService.GetPrice(ctx, item.PriceID)
 		if err != nil {
 			return nil, fixedCost, err
