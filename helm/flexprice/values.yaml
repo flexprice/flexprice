@@ -1,0 +1,509 @@
+# Default values for flexprice
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: shreeda/flexprice-app
+  pullPolicy: Always  # Changed to Always to ensure we pull the latest image
+  tag: "latest"
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# ServiceAccount for the pods
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# Pod security context
+podSecurityContext:
+  fsGroup: 2000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Security context for containers
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+# Application configuration
+deployment:
+  mode: "api" # "api", "consumer", "temporal_worker", or "local" (for testing)
+
+# API deployment configuration
+api:
+  enabled: true
+  replicaCount: 1
+  resources: {}
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+# Consumer deployment configuration
+consumer:
+  enabled: true
+  replicaCount: 1
+  resources: {}
+  autoscaling:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# Temporal Worker deployment configuration
+worker:
+  enabled: true
+  replicaCount: 1
+  resources: {}
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations: {}
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: flexprice.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # - secretName: flexprice-tls
+  #   hosts:
+  #     - flexprice.example.com
+
+# Server configuration
+server:
+  address: ":8080"
+
+# Auth configuration
+auth:
+  provider: "flexprice" # "flexprice" or "supabase"
+  secret: "flexprice123" # Set via secret
+  supabase:
+    baseUrl: ""
+    serviceKey: "" # Set via secret
+  apiKey:
+    header: "x-api-key"
+    keys: {} # Map of hashed API keys to details
+
+# PostgreSQL Configuration
+# Set external.enabled=false to deploy PostgreSQL internally
+postgres:
+  external:
+    enabled: false  # Set to false to deploy PostgreSQL internally
+  # External PostgreSQL configuration (when external.enabled=true)
+  host: "postgres-service"  # Override when using external PostgreSQL
+  port: 5432
+  user: "flexprice"
+  password: "flexprice123" # Set via secret
+  dbname: "flexprice"
+  sslmode: "require"
+  maxOpenConns: 10
+  maxIdleConns: 5
+  connMaxLifetimeMinutes: 60
+  autoMigrate: false
+  readerHost: "" # Optional: for read replicas
+  readerPort: 5432
+  # Internal PostgreSQL configuration (when external.enabled=false)
+  internal:
+    image:
+      repository: postgres
+      tag: "15.3"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Use default storage class if empty
+    resources: {}
+    service:
+      type: ClusterIP
+      port: 5432
+    initScripts:
+      enabled: true
+      # Scripts will be mounted from migrations/postgres directory if available
+
+# ClickHouse Configuration
+# Set external.enabled=false to deploy ClickHouse internally
+clickhouse:
+  external:
+    enabled: false  # Set to false to deploy ClickHouse internally
+  # External ClickHouse configuration (when external.enabled=true)
+  address: "clickhouse-service:9000"  # Override when using external ClickHouse
+  tls: false
+  username: "flexprice"
+  password: "flexprice123" # Set via secret
+  database: "flexprice"
+  # Internal ClickHouse configuration (when external.enabled=false)
+  internal:
+    image:
+      repository: clickhouse/clickhouse-server
+      tag: "24.9-alpine"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: ""  # Use default storage class if empty
+    resources: {}
+    service:
+      type: ClusterIP
+      httpPort: 8123
+      nativePort: 9000
+      interserverPort: 9009
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+# Kafka Configuration
+# Set external.enabled=false to deploy Kafka internally
+kafka:
+  external:
+    enabled: false  # Set to false to deploy Kafka internally
+  # External Kafka configuration (when external.enabled=true)
+  brokers:
+    - "kafka-service:9092"  # Override when using external Kafka
+  consumerGroup: "flexprice-consumer"
+  topic: "events"
+  topicLazy: "events_lazy"
+  tls: false
+  useSASL: false
+  saslMechanism: ""
+  saslUser: ""
+  saslPassword: "flexprice123" # Set via secret
+  clientId: "flexprice-client"
+  routeTenantsOnLazyMode: []
+  # Internal Kafka configuration (when external.enabled=false)
+  internal:
+    replicas: 1
+    image:
+      repository: confluentinc/cp-kafka
+      tag: "7.7.1"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Use default storage class if empty
+    resources: {}
+    service:
+      type: ClusterIP
+      internalPort: 9092
+      externalPort: 29092
+    # Kafka KRaft mode configuration
+    clusterId: "ca497efe-9f82-4b84-890b-d9969a9a2e1c"
+    brokerId: 0
+
+    # Add these lines 👇
+    configOverrides:
+      # make this node both controller + broker and use localhost for the controller RPC
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: "0"
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://flexprice-kafka:9092,EXTERNAL://flexprice-kafka:29092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@flexprice-kafka:9093"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_MIN_INSYNC_REPLICAS: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
+
+# Migration Job Configuration
+# Set enabled=true to run database migrations as a Kubernetes Job
+migration:
+  enabled: true  # Set to true to enable migration job
+  timeout: 300  # Timeout in seconds for migration
+  backoffLimit: 3  # Number of retries before marking job as failed
+  activeDeadlineSeconds: 900  # Maximum time in seconds for the job to run (increased for all migrations)
+  ttlSecondsAfterFinished: 3600  # Time to keep completed job (1 hour)
+  command: ""  # Custom command to run (if empty, uses default migration steps)
+  # Migration steps to run (all enabled by default)
+  steps:
+    postgresSetup: true  # Create schema and extensions in PostgreSQL
+    clickhouse: true  # Run ClickHouse migrations
+    ent: true  # Run Ent framework migrations
+    seed: false  # Run seed data (optional, set to true to enable)
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+
+# Temporal Configuration
+# Set external.enabled=false to deploy Temporal internally
+temporal:
+  external:
+    enabled: false  # Set to false to deploy Temporal internally
+  # External Temporal configuration (when external.enabled=true)
+  address: "temporal-service:7233"  # Override when using external Temporal
+  taskQueue: "billing-task-queue"
+  namespace: "default"
+  apiKey: "flexprice123" # Set via secret (optional, for Temporal Cloud)
+  apiKeyName: ""  # Optional: name of the API key for reference
+  tls: false  # Set to true if using TLS with external Temporal
+  # Internal Temporal configuration (when external.enabled=false)
+  internal:
+    server:
+      image:
+        repository: temporalio/auto-setup
+        tag: "1.26.2"
+        pullPolicy: IfNotPresent
+      resources:
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+      service:
+        type: ClusterIP
+        port: 7233
+      # Temporal uses the same PostgreSQL instance by default
+      # Set temporal.internal.postgres.useExternalPostgres=true to use separate PostgreSQL
+      postgres:
+        useExternalPostgres: false  # Set to true to use separate PostgreSQL instance
+        host: ""  # If empty and useExternalPostgres=false, uses the main postgres.internal service
+        port: 5432
+        user: "flexprice"  # If empty and useExternalPostgres=false, uses the main postgres user
+        password: ""  # If empty, uses the main postgres password from secrets
+        dbname: "temporal"
+    ui:
+      enabled: true  # Set to false to disable Temporal UI
+      image:
+        repository: temporalio/ui
+        tag: "2.31.2"
+        pullPolicy: IfNotPresent
+      resources:
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+      service:
+        type: ClusterIP
+        port: 8088
+
+# Logging configuration
+logging:
+  level: "info" # "debug", "info", "warn", "error"
+
+# Sentry configuration
+sentry:
+  enabled: false
+  dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
+  environment: "production"
+  sampleRate: 1.0
+
+# Pyroscope configuration
+pyroscope:
+  enabled: false
+  serverAddress: ""
+  applicationName: "flexprice"
+  basicAuthUser: ""
+  basicAuthPassword: "flexprice123" # Set via secret
+  sampleRate: 100
+  disableGCRuns: false
+  profileTypes:
+    - "cpu"
+    - "memory"
+
+# S3 configuration
+s3:
+  enabled: false
+  region: "ap-south-1"
+  invoice:
+    bucket: "flexprice-invoices"
+    presignExpiryDuration: "1h"
+    keyPrefix: ""
+
+# Cache configuration
+cache:
+  enabled: false
+
+# Event processing configuration
+eventProcessing:
+  topic: "events"
+  rateLimit: 12
+  consumerGroup: "flexprice-consumer"
+
+eventProcessingLazy:
+  topic: "events_lazy"
+  rateLimit: 12
+  consumerGroup: "v1_event_processing_lazy"
+
+eventPostProcessing:
+  topic: "events_post_processing"
+  rateLimit: 12
+  consumerGroup: "v1_events_post_processing"
+  topicBackfill: "events_post_processing_backfill"
+  rateLimitBackfill: 1
+  consumerGroupBackfill: "v1_events_post_processing_backfill"
+
+featureUsageTracking:
+  topic: "events"
+  rateLimit: 1
+  consumerGroup: "v1_feature_tracking_service"
+  topicBackfill: "events_post_processing_backfill"
+  rateLimitBackfill: 1
+  consumerGroupBackfill: "v1_feature_tracking_service_backfill"
+
+featureUsageTrackingLazy:
+  topic: "events_lazy"
+  rateLimit: 1
+  consumerGroup: "v1_feature_tracking_service_lazy"
+
+# DynamoDB configuration
+dynamodb:
+  inUse: false
+  region: "us-east-1"
+  eventTableName: "events"
+
+# Event configuration
+event:
+  publishDestination: "kafka"
+
+# Webhook configuration
+webhook:
+  enabled: true
+  topic: "system_events"
+  pubsub: "memory"
+  consumerGroup: "webhook-consumer"
+  maxRetries: 3
+  initialInterval: "1s"
+  maxInterval: "10s"
+  multiplier: 2.0
+  maxElapsedTime: "2m"
+  tenants: {}
+  svixConfig:
+    enabled: false
+    authToken: "" # Set via secret
+    baseUrl: "https://api.us.svix.com"
+
+# Secrets configuration
+secrets:
+  encryptionKey: "7aed5e6debca36958b84bf89e10d8c8005721c5d17e428512b37c73dcc70d5da" # Set via secret
+
+# Billing configuration
+billing:
+  tenantId: ""
+  environmentId: ""
+
+# Email configuration
+email:
+  enabled: false
+  resendApiKey: "" # Set via secret
+  fromAddress: ""
+  replyTo: ""
+  calendarUrl: ""
+
+# Feature flag configuration
+featureFlag:
+  enableFeatureUsageForAnalytics: true
+  forceV1ForTenant: ""
+
+# Environment access configuration
+envAccess:
+  userEnvMapping: {}
+
+# Pod annotations
+podAnnotations: {}
+
+# Node selector
+nodeSelector: {}
+
+# Tolerations
+tolerations: []
+
+# Affinity
+affinity: {}
+
+# Liveness probe
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Readiness probe
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Startup probe
+startupProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 0
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+# Additional environment variables
+extraEnv: []
+# - name: CUSTOM_VAR
+#   value: "custom-value"
+
+# Additional volumes
+extraVolumes: []
+# - name: extra-volume
+#   configMap:
+#     name: extra-config
+
+# Additional volume mounts
+extraVolumeMounts: []
+# - name: extra-volume
+#   mountPath: /extra
+
+# Resource labels
+labels: {}
+
+# Service monitor for Prometheus (if using Prometheus Operator)
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+
