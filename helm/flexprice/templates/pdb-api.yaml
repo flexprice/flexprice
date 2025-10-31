@@ -1,0 +1,20 @@
+{{- if and .Values.api.enabled .Values.api.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "flexprice.fullname" . }}-api
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if .Values.api.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.api.podDisruptionBudget.minAvailable }}
+  {{- else if .Values.api.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.api.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+{{- end }}
+
