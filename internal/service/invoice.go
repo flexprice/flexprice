@@ -18,6 +18,8 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -742,25 +744,8 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		}
 	}
 
-	// Sync to HubSpot if HubSpot connection is enabled
-	// Use a background context with timeout to avoid transaction timeout issues
-	// This allows the sync to complete even if the parent transaction times out
-	go func() {
-		// Create a new background context with 30-second timeout
-		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		// Copy tenant and environment IDs to the background context
-		bgCtx = types.SetTenantID(bgCtx, types.GetTenantID(ctx))
-		bgCtx = types.SetEnvironmentID(bgCtx, types.GetEnvironmentID(ctx))
-
-		if err := s.syncInvoiceToHubSpotIfEnabled(bgCtx, inv); err != nil {
-			// Log error but don't fail the entire process
-			s.Logger.Errorw("failed to sync invoice to HubSpot",
-				"error", err,
-				"invoice_id", inv.ID)
-		}
-	}()
+	// Sync to HubSpot if HubSpot connection is enabled (async via Temporal)
+	s.triggerHubSpotInvoiceSyncWorkflow(ctx, inv.ID, inv.CustomerID)
 
 	// try to process payment for the invoice based on behavior and log any errors
 	// Pass the subscription object to avoid extra DB call
@@ -845,44 +830,80 @@ func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *
 	return nil
 }
 
-// syncInvoiceToHubSpotIfEnabled syncs the invoice to HubSpot if HubSpot connection is enabled
-func (s *invoiceService) syncInvoiceToHubSpotIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
-	// Check if HubSpot connection exists
+// triggerHubSpotInvoiceSyncWorkflow triggers the HubSpot invoice sync workflow via Temporal
+func (s *invoiceService) triggerHubSpotInvoiceSyncWorkflow(ctx context.Context, invoiceID, customerID string) {
+	// Copy necessary context values
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	s.Logger.Infow("triggering HubSpot invoice sync workflow",
+		"invoice_id", invoiceID,
+		"customer_id", customerID,
+		"tenant_id", tenantID,
+		"environment_id", envID)
+
+	// Check if HubSpot connection exists and invoice outbound sync is enabled
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
-	if err != nil || conn == nil {
-		return nil // Not an error, just skip sync
+	if err != nil {
+		s.Logger.Debugw("HubSpot connection not found, skipping invoice sync",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
 	}
 
-	// Check if invoice sync is enabled for this connection
 	if !conn.IsInvoiceOutboundEnabled() {
-		return nil // Not an error, just skip sync
+		s.Logger.Debugw("HubSpot invoice outbound sync disabled, skipping invoice sync",
+			"invoice_id", invoiceID,
+			"customer_id", customerID,
+			"connection_id", conn.ID)
+		return
 	}
 
-	// Get HubSpot integration
-	hubspotIntegration, err := s.IntegrationFactory.GetHubSpotIntegration(ctx)
+	// Prepare workflow input with all necessary IDs
+	input := &models.HubSpotInvoiceSyncWorkflowInput{
+		InvoiceID:     invoiceID,
+		CustomerID:    customerID,
+		TenantID:      tenantID,
+		EnvironmentID: envID,
+	}
+
+	// Validate input
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for HubSpot invoice sync",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
+	}
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.Warnw("temporal service not available for HubSpot invoice sync",
+			"invoice_id", invoiceID)
+		return
+	}
+
+	// Start workflow - Temporal handles async execution, no need for goroutines
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalHubSpotInvoiceSyncWorkflow,
+		input,
+	)
 	if err != nil {
-		s.Logger.Errorw("failed to get HubSpot integration",
-			"invoice_id", inv.ID,
-			"error", err)
-		return nil // Don't fail the entire process, just skip invoice sync
+		s.Logger.Errorw("failed to start HubSpot invoice sync workflow",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
 	}
 
-	// Get HubSpot contact ID for the customer
-	hubspotContactID, err := hubspotIntegration.InvoiceSyncSvc.GetHubSpotContactID(ctx, inv.CustomerID)
-	if err != nil {
-		s.Logger.Warnw("customer not synced to HubSpot",
-			"invoice_id", inv.ID,
-			"customer_id", inv.CustomerID)
-		return nil // Don't fail the entire process, just skip invoice sync
-	}
-
-	// Perform the sync
-	err = hubspotIntegration.InvoiceSyncSvc.SyncInvoiceToHubSpot(ctx, inv.ID, hubspotContactID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	s.Logger.Infow("HubSpot invoice sync workflow started successfully",
+		"invoice_id", invoiceID,
+		"customer_id", customerID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
 }
 
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {

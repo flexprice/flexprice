@@ -49,15 +49,20 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 	exportActivity := exportActivities.NewExportActivity(params.FeatureUsageRepo, params.InvoiceRepo, params.ConnectionRepo, params.IntegrationFactory, params.Logger)
 
-	// HubSpot activities - clean and simple, delegates to existing DealSyncService
+	// HubSpot activities - clean and simple, delegates to existing services
 	hubspotDealSyncActivities := hubspotActivities.NewDealSyncActivities(
+		params.IntegrationFactory,
+		params.Logger,
+	)
+
+	hubspotInvoiceSyncActivities := hubspotActivities.NewInvoiceSyncActivities(
 		params.IntegrationFactory,
 		params.Logger,
 	)
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities)
+		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -75,6 +80,7 @@ func buildWorkerConfig(
 	scheduledTaskActivity *exportActivities.ScheduledTaskActivity,
 	exportActivity *exportActivities.ExportActivity,
 	hubspotDealSyncActivities *hubspotActivities.DealSyncActivities,
+	hubspotInvoiceSyncActivities *hubspotActivities.InvoiceSyncActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	activitiesList := []interface{}{}
@@ -84,11 +90,13 @@ func buildWorkerConfig(
 		workflowsList = append(workflowsList,
 			workflows.TaskProcessingWorkflow,
 			workflows.HubSpotDealSyncWorkflow,
+			workflows.HubSpotInvoiceSyncWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			taskActivities.ProcessTask,
 			hubspotDealSyncActivities.CreateLineItems,
 			hubspotDealSyncActivities.UpdateDealAmount,
+			hubspotInvoiceSyncActivities.SyncInvoiceToHubSpot,
 		)
 
 	case types.TemporalTaskQueuePrice:
