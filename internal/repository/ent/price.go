@@ -580,6 +580,11 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		)
 	}
 
+	// Apply start date less than filter if specified
+	if f.StartDateLT != nil {
+		query = query.Where(price.StartDateLT(*f.StartDateLT))
+	}
+
 	return query
 }
 
