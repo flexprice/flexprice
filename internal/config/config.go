@@ -41,6 +41,7 @@ type Configuration struct {
 	EnvAccess                EnvAccessConfig                `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag              FeatureFlagConfig              `mapstructure:"feature_flag" validate:"required"`
 	Email                    EmailConfig                    `mapstructure:"email" validate:"required"`
+	RBAC                     RBACConfig                     `mapstructure:"rbac" validate:"omitempty"`
 }
 
 type CacheConfig struct {
@@ -373,4 +374,8 @@ func (c PostgresConfig) GetReaderDSN() string {
 
 func (c PostgresConfig) HasSeparateReader() bool {
 	return c.ReaderHost != "" && c.ReaderHost != c.Host
+}
+
+type RBACConfig struct {
+	RolesConfigPath string `mapstructure:"roles_config_path" json:"roles_config_path"`
 }

@@ -196,6 +196,26 @@ func (sc *SecretCreate) SetProviderData(m map[string]string) *SecretCreate {
 	return sc
 }
 
+// SetRoles sets the "roles" field.
+func (sc *SecretCreate) SetRoles(s []string) *SecretCreate {
+	sc.mutation.SetRoles(s)
+	return sc
+}
+
+// SetUserType sets the "user_type" field.
+func (sc *SecretCreate) SetUserType(s string) *SecretCreate {
+	sc.mutation.SetUserType(s)
+	return sc
+}
+
+// SetNillableUserType sets the "user_type" field if the given value is not nil.
+func (sc *SecretCreate) SetNillableUserType(s *string) *SecretCreate {
+	if s != nil {
+		sc.SetUserType(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SecretCreate) SetID(s string) *SecretCreate {
 	sc.mutation.SetID(s)
@@ -256,6 +276,14 @@ func (sc *SecretCreate) defaults() {
 	if _, ok := sc.mutation.Permissions(); !ok {
 		v := secret.DefaultPermissions
 		sc.mutation.SetPermissions(v)
+	}
+	if _, ok := sc.mutation.Roles(); !ok {
+		v := secret.DefaultRoles
+		sc.mutation.SetRoles(v)
+	}
+	if _, ok := sc.mutation.UserType(); !ok {
+		v := secret.DefaultUserType
+		sc.mutation.SetUserType(v)
 	}
 }
 
@@ -400,6 +428,14 @@ func (sc *SecretCreate) createSpec() (*Secret, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.ProviderData(); ok {
 		_spec.SetField(secret.FieldProviderData, field.TypeJSON, value)
 		_node.ProviderData = value
+	}
+	if value, ok := sc.mutation.Roles(); ok {
+		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
+		_node.Roles = value
+	}
+	if value, ok := sc.mutation.UserType(); ok {
+		_spec.SetField(secret.FieldUserType, field.TypeString, value)
+		_node.UserType = value
 	}
 	return _node, _spec
 }

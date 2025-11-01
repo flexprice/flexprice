@@ -13,29 +13,29 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// validateAPIKey validates the API key and returns tenant ID and user ID if valid
+// validateAPIKey validates the API key and returns the secret entity if valid
 // First checks the config, then the database
-func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID string, valid bool) {
+func validateAPIKey(ctx context.Context, cfg *config.Configuration, secretService service.SecretService, apiKey string) (tenantID, userID, environmentID string, secretEntity interface{}, valid bool) {
 	if apiKey == "" {
-		return "", "", "", false
+		return "", "", "", nil, false
 	}
 
 	// First check in config
 	tenantID, userID, valid = auth.ValidateAPIKey(cfg, apiKey)
 	if valid {
-		return tenantID, userID, "", true
+		return tenantID, userID, "", nil, true
 	}
 
 	// If not found in config, check in database
 	if secretService != nil {
-		secretEntity, err := secretService.VerifyAPIKey(ctx, apiKey)
-		if err == nil && secretEntity != nil {
+		secret, err := secretService.VerifyAPIKey(ctx, apiKey)
+		if err == nil && secret != nil {
 			// Use the tenant ID from the secret and the creator as the user ID
-			return secretEntity.TenantID, secretEntity.CreatedBy, secretEntity.EnvironmentID, true
+			return secret.TenantID, secret.CreatedBy, secret.EnvironmentID, secret, true
 		}
 	}
 
-	return "", "", "", false
+	return "", "", "", nil, false
 }
 
 // setContextValues sets the tenant ID and user ID and environment ID in the context
@@ -65,7 +65,7 @@ func GuestAuthenticateMiddleware(c *gin.Context) {
 func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.SecretService, logger *logger.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
-		tenantID, userID, environmentID, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
+		tenantID, userID, environmentID, secretEntity, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if !valid {
 			logger.Debugw("invalid api key")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
@@ -74,6 +74,12 @@ func APIKeyAuthMiddleware(cfg *config.Configuration, secretService service.Secre
 		}
 
 		setContextValues(c, tenantID, userID, environmentID)
+
+		// Store secret entity in gin context for permission middleware
+		if secretEntity != nil {
+			c.Set("secret", secretEntity)
+		}
+
 		c.Next()
 	}
 }
@@ -87,9 +93,15 @@ func AuthenticateMiddleware(cfg *config.Configuration, secretService service.Sec
 	return func(c *gin.Context) {
 		// First check for API key
 		apiKey := c.GetHeader(cfg.Auth.APIKey.Header)
-		tenantID, userID, environmentID, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
+		tenantID, userID, environmentID, secretEntity, valid := validateAPIKey(c.Request.Context(), cfg, secretService, apiKey)
 		if valid {
 			setContextValues(c, tenantID, userID, environmentID)
+
+			// Store secret entity in gin context for permission middleware
+			if secretEntity != nil {
+				c.Set("secret", secretEntity)
+			}
+
 			c.Next()
 			return
 		}

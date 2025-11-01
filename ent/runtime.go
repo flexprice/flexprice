@@ -1493,6 +1493,14 @@ func init() {
 	secretDescPermissions := secretFields[6].Descriptor()
 	// secret.DefaultPermissions holds the default value on creation for the permissions field.
 	secret.DefaultPermissions = secretDescPermissions.Default.([]string)
+	// secretDescRoles is the schema descriptor for roles field.
+	secretDescRoles := secretFields[10].Descriptor()
+	// secret.DefaultRoles holds the default value on creation for the roles field.
+	secret.DefaultRoles = secretDescRoles.Default.([]string)
+	// secretDescUserType is the schema descriptor for user_type field.
+	secretDescUserType := secretFields[11].Descriptor()
+	// secret.DefaultUserType holds the default value on creation for the user_type field.
+	secret.DefaultUserType = secretDescUserType.Default.(string)
 	settingsMixin := schema.Settings{}.Mixin()
 	settingsMixinFields0 := settingsMixin[0].Fields()
 	_ = settingsMixinFields0
@@ -2110,10 +2118,14 @@ func init() {
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	user.UpdateDefaultUpdatedAt = userDescUpdatedAt.UpdateDefault.(func() time.Time)
-	// userDescEmail is the schema descriptor for email field.
-	userDescEmail := userFields[1].Descriptor()
-	// user.EmailValidator is a validator for the "email" field. It is called by the builders before save.
-	user.EmailValidator = userDescEmail.Validators[0].(func(string) error)
+	// userDescType is the schema descriptor for type field.
+	userDescType := userFields[2].Descriptor()
+	// user.DefaultType holds the default value on creation for the type field.
+	user.DefaultType = userDescType.Default.(string)
+	// userDescRoles is the schema descriptor for roles field.
+	userDescRoles := userFields[3].Descriptor()
+	// user.DefaultRoles holds the default value on creation for the roles field.
+	user.DefaultRoles = userDescRoles.Default.([]string)
 	walletMixin := schema.Wallet{}.Mixin()
 	walletMixinFields0 := walletMixin[0].Fields()
 	_ = walletMixinFields0

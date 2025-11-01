@@ -6,6 +6,7 @@ import (
 	v1 "github.com/flexprice/flexprice/internal/api/v1"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/rest/middleware"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/gin-gonic/gin"
@@ -49,6 +50,7 @@ type Handlers struct {
 	SetupIntent              *v1.SetupIntentHandler
 	Group                    *v1.GroupHandler
 	ScheduledTask            *v1.ScheduledTaskHandler
+	RBAC                     *v1.RBACHandler
 
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
@@ -59,7 +61,7 @@ type Handlers struct {
 	CronInvoice      *cron.InvoiceHandler
 }
 
-func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
+func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
 	// gin.SetMode(gin.ReleaseMode)
 
 	router := gin.Default()
@@ -69,6 +71,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		middleware.SentryMiddleware(cfg),    // Add Sentry middleware
 		middleware.PyroscopeMiddleware(cfg), // Add Pyroscope middleware
 	)
+
+	// Initialize permission middleware
+	permissionMW := middleware.NewPermissionMiddleware(rbacService, logger)
 
 	// Add middleware to set swagger host dynamically
 	router.Use(func(c *gin.Context) {
@@ -105,6 +110,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		user := v1Private.Group("/users")
 		{
 			user.GET("/me", handlers.User.GetUserInfo)
+			user.POST("", handlers.User.CreateUser)
+			user.GET("/service-accounts", handlers.RBAC.ListServiceAccounts)
+			user.GET("/service-accounts/:id", handlers.RBAC.GetServiceAccount)
 		}
 
 		environment := v1Private.Group("/environments")
@@ -118,7 +126,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Events routes
 		events := v1Private.Group("/events")
 		{
-			events.POST("", handlers.Events.IngestEvent)
+			events.POST("", permissionMW.RequirePermission("event", "write"), handlers.Events.IngestEvent)
 			events.POST("/bulk", handlers.Events.BulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
 			events.POST("/query", handlers.Events.QueryEvents)
@@ -384,6 +392,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			{
 				apiKeys.GET("", handlers.Secret.ListAPIKeys)
 				apiKeys.POST("", handlers.Secret.CreateAPIKey)
+				apiKeys.POST("/service-account/:id", handlers.Secret.CreateServiceAccountAPIKey)
 				apiKeys.DELETE("/:id", handlers.Secret.DeleteAPIKey)
 			}
 
@@ -519,6 +528,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		settings.GET("/:key", handlers.Settings.GetSettingByKey)
 		settings.PUT("/:key", handlers.Settings.UpdateSettingByKey)
 		settings.DELETE("/:key", handlers.Settings.DeleteSettingByKey)
+	}
+
+	// RBAC routes
+	rbac := v1Private.Group("/rbac")
+	{
+		rbac.GET("/roles", handlers.RBAC.ListRoles)
+		rbac.GET("/roles/:id", handlers.RBAC.GetRole)
 	}
 
 	return router

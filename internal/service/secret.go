@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	"github.com/flexprice/flexprice/internal/domain/user"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/security"
@@ -35,6 +36,7 @@ type SecretService interface {
 
 type secretService struct {
 	repo              secret.Repository
+	userRepo          user.Repository
 	encryptionService security.EncryptionService
 	config            *config.Configuration
 	logger            *logger.Logger
@@ -43,6 +45,7 @@ type secretService struct {
 // NewSecretService creates a new secret service
 func NewSecretService(
 	repo secret.Repository,
+	userRepo user.Repository,
 	config *config.Configuration,
 	logger *logger.Logger,
 ) SecretService {
@@ -53,6 +56,7 @@ func NewSecretService(
 
 	return &secretService{
 		repo:              repo,
+		userRepo:          userRepo,
 		encryptionService: encryptionService,
 		config:            config,
 		logger:            logger,
@@ -102,6 +106,44 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 		permissions = []string{"read", "write"}
 	}
 
+	// Determine which user to get roles from
+	userID := req.UserID
+	if userID == "" {
+		// No user_id provided - use authenticated user from context
+		userID = types.GetUserID(ctx)
+	}
+
+	// Default values for roles and user_type
+	var roles []string
+	userType := "user"
+
+	// If we have a user_id, fetch the user and copy roles
+	if userID != "" {
+		user, err := s.userRepo.GetByID(ctx, userID)
+		if err != nil {
+			s.logger.Warnw("failed to fetch user for role copying", "error", err, "user_id", userID)
+			// Continue without roles - backward compatibility
+			roles = []string{}
+		} else if user != nil {
+			roles = user.Roles
+			userType = user.Type
+
+			// If user_id was explicitly provided, verify it's a service_account
+			if req.UserID != "" && userType != "service_account" {
+				return nil, "", ierr.NewError("provided user_id must be a service_account").
+					WithHint("Only service account user IDs can be explicitly provided").
+					WithReportableDetails(map[string]interface{}{
+						"user_id":   userID,
+						"user_type": userType,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	} else {
+		// No user ID at all - create API key with empty roles (full access)
+		roles = []string{}
+	}
+
 	// Create secret entity
 	secretEntity := &secret.Secret{
 		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SECRET),
@@ -113,6 +155,8 @@ func (s *secretService) CreateAPIKey(ctx context.Context, req *dto.CreateAPIKeyR
 		DisplayID:     generateDisplayID(apiKey),
 		Permissions:   permissions,
 		ExpiresAt:     req.ExpiresAt,
+		Roles:         roles,
+		UserType:      userType,
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 

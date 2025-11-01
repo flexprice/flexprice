@@ -21,6 +21,8 @@ type Secret struct {
 	ExpiresAt     *time.Time
 	LastUsedAt    *time.Time
 	ProviderData  map[string]string
+	Roles         []string // RBAC roles
+	UserType      string   // "user" or "service_account"
 	types.BaseModel
 }
 
@@ -42,6 +44,8 @@ func FromEnt(e *ent.Secret) *Secret {
 		ExpiresAt:     e.ExpiresAt,
 		LastUsedAt:    e.LastUsedAt,
 		ProviderData:  e.ProviderData,
+		Roles:         e.Roles,
+		UserType:      e.UserType,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

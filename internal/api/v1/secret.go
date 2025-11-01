@@ -98,6 +98,55 @@ func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 	})
 }
 
+// CreateServiceAccountAPIKey godoc
+// @Summary Create a new API key for a service account
+// @Description Create a new API key for a specific service account using the service account ID from path parameter
+// @Tags secrets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Service Account User ID"
+// @Param request body dto.CreateAPIKeyRequest true "API key creation request"
+// @Success 201 {object} dto.CreateAPIKeyResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /secrets/api/keys/service-account/{id} [post]
+func (h *SecretHandler) CreateServiceAccountAPIKey(c *gin.Context) {
+	// Get service account ID from path parameter
+	serviceAccountID := c.Param("id")
+	if serviceAccountID == "" {
+		c.Error(ierr.NewError("service account ID is required").
+			WithHint("Please provide a valid service account ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.CreateAPIKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Errorw("failed to bind request", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Override user_id from path parameter
+	req.UserID = serviceAccountID
+
+	secret, apiKey, err := h.service.CreateAPIKey(c.Request.Context(), &req)
+	if err != nil {
+		h.logger.Errorw("failed to create api key for service account", "error", err, "service_account_id", serviceAccountID)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.CreateAPIKeyResponse{
+		Secret: *dto.ToSecretResponse(secret),
+		APIKey: apiKey,
+	})
+}
+
 // DeleteAPIKey godoc
 // @Summary Delete an API key
 // @Description Delete an API key by ID

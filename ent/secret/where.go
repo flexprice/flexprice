@@ -134,6 +134,11 @@ func LastUsedAt(v time.Time) predicate.Secret {
 	return predicate.Secret(sql.FieldEQ(FieldLastUsedAt, v))
 }
 
+// UserType applies equality check predicate on the "user_type" field. It's identical to UserTypeEQ.
+func UserType(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldEQ(FieldUserType, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Secret {
 	return predicate.Secret(sql.FieldEQ(FieldTenantID, v))
@@ -1032,6 +1037,91 @@ func ProviderDataIsNil() predicate.Secret {
 // ProviderDataNotNil applies the NotNil predicate on the "provider_data" field.
 func ProviderDataNotNil() predicate.Secret {
 	return predicate.Secret(sql.FieldNotNull(FieldProviderData))
+}
+
+// RolesIsNil applies the IsNil predicate on the "roles" field.
+func RolesIsNil() predicate.Secret {
+	return predicate.Secret(sql.FieldIsNull(FieldRoles))
+}
+
+// RolesNotNil applies the NotNil predicate on the "roles" field.
+func RolesNotNil() predicate.Secret {
+	return predicate.Secret(sql.FieldNotNull(FieldRoles))
+}
+
+// UserTypeEQ applies the EQ predicate on the "user_type" field.
+func UserTypeEQ(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldEQ(FieldUserType, v))
+}
+
+// UserTypeNEQ applies the NEQ predicate on the "user_type" field.
+func UserTypeNEQ(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldNEQ(FieldUserType, v))
+}
+
+// UserTypeIn applies the In predicate on the "user_type" field.
+func UserTypeIn(vs ...string) predicate.Secret {
+	return predicate.Secret(sql.FieldIn(FieldUserType, vs...))
+}
+
+// UserTypeNotIn applies the NotIn predicate on the "user_type" field.
+func UserTypeNotIn(vs ...string) predicate.Secret {
+	return predicate.Secret(sql.FieldNotIn(FieldUserType, vs...))
+}
+
+// UserTypeGT applies the GT predicate on the "user_type" field.
+func UserTypeGT(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldGT(FieldUserType, v))
+}
+
+// UserTypeGTE applies the GTE predicate on the "user_type" field.
+func UserTypeGTE(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldGTE(FieldUserType, v))
+}
+
+// UserTypeLT applies the LT predicate on the "user_type" field.
+func UserTypeLT(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldLT(FieldUserType, v))
+}
+
+// UserTypeLTE applies the LTE predicate on the "user_type" field.
+func UserTypeLTE(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldLTE(FieldUserType, v))
+}
+
+// UserTypeContains applies the Contains predicate on the "user_type" field.
+func UserTypeContains(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldContains(FieldUserType, v))
+}
+
+// UserTypeHasPrefix applies the HasPrefix predicate on the "user_type" field.
+func UserTypeHasPrefix(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldHasPrefix(FieldUserType, v))
+}
+
+// UserTypeHasSuffix applies the HasSuffix predicate on the "user_type" field.
+func UserTypeHasSuffix(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldHasSuffix(FieldUserType, v))
+}
+
+// UserTypeIsNil applies the IsNil predicate on the "user_type" field.
+func UserTypeIsNil() predicate.Secret {
+	return predicate.Secret(sql.FieldIsNull(FieldUserType))
+}
+
+// UserTypeNotNil applies the NotNil predicate on the "user_type" field.
+func UserTypeNotNil() predicate.Secret {
+	return predicate.Secret(sql.FieldNotNull(FieldUserType))
+}
+
+// UserTypeEqualFold applies the EqualFold predicate on the "user_type" field.
+func UserTypeEqualFold(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldEqualFold(FieldUserType, v))
+}
+
+// UserTypeContainsFold applies the ContainsFold predicate on the "user_type" field.
+func UserTypeContainsFold(v string) predicate.Secret {
+	return predicate.Secret(sql.FieldContainsFold(FieldUserType, v))
 }
 
 // And groups predicates with the AND operator between them.

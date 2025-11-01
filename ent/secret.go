@@ -50,6 +50,10 @@ type Secret struct {
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	// Provider-specific encrypted data (for integrations)
 	ProviderData map[string]string `json:"provider_data,omitempty"`
+	// Roles copied from user at API key creation time
+	Roles []string `json:"roles,omitempty"`
+	// User type copied from user at API key creation time
+	UserType     string `json:"user_type,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -58,9 +62,9 @@ func (*Secret) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case secret.FieldPermissions, secret.FieldProviderData:
+		case secret.FieldPermissions, secret.FieldProviderData, secret.FieldRoles:
 			values[i] = new([]byte)
-		case secret.FieldID, secret.FieldTenantID, secret.FieldStatus, secret.FieldCreatedBy, secret.FieldUpdatedBy, secret.FieldEnvironmentID, secret.FieldName, secret.FieldType, secret.FieldProvider, secret.FieldValue, secret.FieldDisplayID:
+		case secret.FieldID, secret.FieldTenantID, secret.FieldStatus, secret.FieldCreatedBy, secret.FieldUpdatedBy, secret.FieldEnvironmentID, secret.FieldName, secret.FieldType, secret.FieldProvider, secret.FieldValue, secret.FieldDisplayID, secret.FieldUserType:
 			values[i] = new(sql.NullString)
 		case secret.FieldCreatedAt, secret.FieldUpdatedAt, secret.FieldExpiresAt, secret.FieldLastUsedAt:
 			values[i] = new(sql.NullTime)
@@ -187,6 +191,20 @@ func (s *Secret) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field provider_data: %w", err)
 				}
 			}
+		case secret.FieldRoles:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field roles", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &s.Roles); err != nil {
+					return fmt.Errorf("unmarshal field roles: %w", err)
+				}
+			}
+		case secret.FieldUserType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field user_type", values[i])
+			} else if value.Valid {
+				s.UserType = value.String
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -274,6 +292,12 @@ func (s *Secret) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("provider_data=")
 	builder.WriteString(fmt.Sprintf("%v", s.ProviderData))
+	builder.WriteString(", ")
+	builder.WriteString("roles=")
+	builder.WriteString(fmt.Sprintf("%v", s.Roles))
+	builder.WriteString(", ")
+	builder.WriteString("user_type=")
+	builder.WriteString(s.UserType)
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -221,6 +221,44 @@ func (su *SecretUpdate) ClearProviderData() *SecretUpdate {
 	return su
 }
 
+// SetRoles sets the "roles" field.
+func (su *SecretUpdate) SetRoles(s []string) *SecretUpdate {
+	su.mutation.SetRoles(s)
+	return su
+}
+
+// AppendRoles appends s to the "roles" field.
+func (su *SecretUpdate) AppendRoles(s []string) *SecretUpdate {
+	su.mutation.AppendRoles(s)
+	return su
+}
+
+// ClearRoles clears the value of the "roles" field.
+func (su *SecretUpdate) ClearRoles() *SecretUpdate {
+	su.mutation.ClearRoles()
+	return su
+}
+
+// SetUserType sets the "user_type" field.
+func (su *SecretUpdate) SetUserType(s string) *SecretUpdate {
+	su.mutation.SetUserType(s)
+	return su
+}
+
+// SetNillableUserType sets the "user_type" field if the given value is not nil.
+func (su *SecretUpdate) SetNillableUserType(s *string) *SecretUpdate {
+	if s != nil {
+		su.SetUserType(*s)
+	}
+	return su
+}
+
+// ClearUserType clears the value of the "user_type" field.
+func (su *SecretUpdate) ClearUserType() *SecretUpdate {
+	su.mutation.ClearUserType()
+	return su
+}
+
 // Mutation returns the SecretMutation object of the builder.
 func (su *SecretUpdate) Mutation() *SecretMutation {
 	return su.mutation
@@ -361,6 +399,23 @@ func (su *SecretUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.ProviderDataCleared() {
 		_spec.ClearField(secret.FieldProviderData, field.TypeJSON)
+	}
+	if value, ok := su.mutation.Roles(); ok {
+		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
+	}
+	if value, ok := su.mutation.AppendedRoles(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, secret.FieldRoles, value)
+		})
+	}
+	if su.mutation.RolesCleared() {
+		_spec.ClearField(secret.FieldRoles, field.TypeJSON)
+	}
+	if value, ok := su.mutation.UserType(); ok {
+		_spec.SetField(secret.FieldUserType, field.TypeString, value)
+	}
+	if su.mutation.UserTypeCleared() {
+		_spec.ClearField(secret.FieldUserType, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -574,6 +629,44 @@ func (suo *SecretUpdateOne) ClearProviderData() *SecretUpdateOne {
 	return suo
 }
 
+// SetRoles sets the "roles" field.
+func (suo *SecretUpdateOne) SetRoles(s []string) *SecretUpdateOne {
+	suo.mutation.SetRoles(s)
+	return suo
+}
+
+// AppendRoles appends s to the "roles" field.
+func (suo *SecretUpdateOne) AppendRoles(s []string) *SecretUpdateOne {
+	suo.mutation.AppendRoles(s)
+	return suo
+}
+
+// ClearRoles clears the value of the "roles" field.
+func (suo *SecretUpdateOne) ClearRoles() *SecretUpdateOne {
+	suo.mutation.ClearRoles()
+	return suo
+}
+
+// SetUserType sets the "user_type" field.
+func (suo *SecretUpdateOne) SetUserType(s string) *SecretUpdateOne {
+	suo.mutation.SetUserType(s)
+	return suo
+}
+
+// SetNillableUserType sets the "user_type" field if the given value is not nil.
+func (suo *SecretUpdateOne) SetNillableUserType(s *string) *SecretUpdateOne {
+	if s != nil {
+		suo.SetUserType(*s)
+	}
+	return suo
+}
+
+// ClearUserType clears the value of the "user_type" field.
+func (suo *SecretUpdateOne) ClearUserType() *SecretUpdateOne {
+	suo.mutation.ClearUserType()
+	return suo
+}
+
 // Mutation returns the SecretMutation object of the builder.
 func (suo *SecretUpdateOne) Mutation() *SecretMutation {
 	return suo.mutation
@@ -744,6 +837,23 @@ func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err err
 	}
 	if suo.mutation.ProviderDataCleared() {
 		_spec.ClearField(secret.FieldProviderData, field.TypeJSON)
+	}
+	if value, ok := suo.mutation.Roles(); ok {
+		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
+	}
+	if value, ok := suo.mutation.AppendedRoles(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, secret.FieldRoles, value)
+		})
+	}
+	if suo.mutation.RolesCleared() {
+		_spec.ClearField(secret.FieldRoles, field.TypeJSON)
+	}
+	if value, ok := suo.mutation.UserType(); ok {
+		_spec.SetField(secret.FieldUserType, field.TypeString, value)
+	}
+	if suo.mutation.UserTypeCleared() {
+		_spec.ClearField(secret.FieldUserType, field.TypeString)
 	}
 	_node = &Secret{config: suo.config}
 	_spec.Assign = _node.assignValues
