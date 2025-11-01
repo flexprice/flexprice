@@ -99,7 +99,7 @@ Create environment variables from configuration
 - name: FLEXPRICE_POSTGRES_READER_HOST
   value: {{ .Values.postgres.readerHost | quote }}
 - name: FLEXPRICE_POSTGRES_READER_PORT
-  value: {{ .Values.postgres.readerPort | quote }}
+  value: {{ .Values.postgres.readerPort | default "5432" | quote }}
 {{- end }}
 - name: FLEXPRICE_CLICKHOUSE_ADDRESS
   value: {{ if .Values.clickhouse.external.enabled }}{{ .Values.clickhouse.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse:{{ .Values.clickhouse.internal.service.nativePort }}{{ end }}
