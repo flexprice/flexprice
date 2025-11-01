@@ -16,7 +16,6 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
-	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/shopspring/decimal"
 )
 
@@ -540,25 +539,6 @@ func (sc *SubscriptionCreate) AddCreditGrants(c ...*CreditGrant) *SubscriptionCr
 	return sc.AddCreditGrantIDs(ids...)
 }
 
-// SetScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID.
-func (sc *SubscriptionCreate) SetScheduleID(id string) *SubscriptionCreate {
-	sc.mutation.SetScheduleID(id)
-	return sc
-}
-
-// SetNillableScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID if the given value is not nil.
-func (sc *SubscriptionCreate) SetNillableScheduleID(id *string) *SubscriptionCreate {
-	if id != nil {
-		sc = sc.SetScheduleID(*id)
-	}
-	return sc
-}
-
-// SetSchedule sets the "schedule" edge to the SubscriptionSchedule entity.
-func (sc *SubscriptionCreate) SetSchedule(s *SubscriptionSchedule) *SubscriptionCreate {
-	return sc.SetScheduleID(s.ID)
-}
-
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sc *SubscriptionCreate) AddCouponAssociationIDs(ids ...string) *SubscriptionCreate {
 	sc.mutation.AddCouponAssociationIDs(ids...)
@@ -1047,22 +1027,6 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := sc.mutation.ScheduleIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   subscription.ScheduleTable,
-			Columns: []string{subscription.ScheduleColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

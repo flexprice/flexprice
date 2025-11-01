@@ -196,6 +196,11 @@ func EndDate(v time.Time) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldEndDate, v))
 }
 
+// SubscriptionPhaseID applies equality check predicate on the "subscription_phase_id" field. It's identical to SubscriptionPhaseIDEQ.
+func SubscriptionPhaseID(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldSubscriptionPhaseID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -1874,6 +1879,81 @@ func EndDateIsNil() predicate.SubscriptionLineItem {
 // EndDateNotNil applies the NotNil predicate on the "end_date" field.
 func EndDateNotNil() predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldEndDate))
+}
+
+// SubscriptionPhaseIDEQ applies the EQ predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDNEQ applies the NEQ predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDNEQ(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDIn applies the In predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIn(FieldSubscriptionPhaseID, vs...))
+}
+
+// SubscriptionPhaseIDNotIn applies the NotIn predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDNotIn(vs ...string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldSubscriptionPhaseID, vs...))
+}
+
+// SubscriptionPhaseIDGT applies the GT predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDGT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGT(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDGTE applies the GTE predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDGTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDLT applies the LT predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDLT(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLT(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDLTE applies the LTE predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDLTE(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDContains applies the Contains predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDContains(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContains(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDHasPrefix applies the HasPrefix predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDHasPrefix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDHasSuffix applies the HasSuffix predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDHasSuffix(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDIsNil applies the IsNil predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDIsNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldIsNull(FieldSubscriptionPhaseID))
+}
+
+// SubscriptionPhaseIDNotNil applies the NotNil predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDNotNil() predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldNotNull(FieldSubscriptionPhaseID))
+}
+
+// SubscriptionPhaseIDEqualFold applies the EqualFold predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDEqualFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDContainsFold applies the ContainsFold predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDContainsFold(v string) predicate.SubscriptionLineItem {
+	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldSubscriptionPhaseID, v))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.

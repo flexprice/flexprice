@@ -96,10 +96,6 @@ func NewSubscriptionRepository(p RepositoryParams) subscription.Repository {
 	return entRepo.NewSubscriptionRepository(p.EntClient, p.Logger, p.Cache)
 }
 
-func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.SubscriptionScheduleRepository {
-	return entRepo.NewSubscriptionScheduleRepository(p.EntClient, p.Logger, p.Cache)
-}
-
 func NewSubscriptionLineItemRepository(p RepositoryParams) subscription.LineItemRepository {
 	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger, p.Cache)
 }

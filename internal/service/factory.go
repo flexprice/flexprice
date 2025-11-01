@@ -70,7 +70,6 @@ type ServiceParams struct {
 	CustomerRepo                 customer.Repository
 	PlanRepo                     plan.Repository
 	SubRepo                      subscription.Repository
-	SubscriptionScheduleRepo     subscription.SubscriptionScheduleRepository
 	SubscriptionLineItemRepo     subscription.LineItemRepository
 	WalletRepo                   wallet.Repository
 	TenantRepo                   tenant.Repository
@@ -132,7 +131,6 @@ func NewServiceParams(
 	customerRepo customer.Repository,
 	planRepo plan.Repository,
 	subRepo subscription.Repository,
-	subscriptionScheduleRepo subscription.SubscriptionScheduleRepository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
 	walletRepo wallet.Repository,
 	tenantRepo tenant.Repository,
@@ -185,7 +183,6 @@ func NewServiceParams(
 		CustomerRepo:                 customerRepo,
 		PlanRepo:                     planRepo,
 		SubRepo:                      subRepo,
-		SubscriptionScheduleRepo:     subscriptionScheduleRepo,
 		SubscriptionLineItemRepo:     subscriptionLineItemRepo,
 		WalletRepo:                   walletRepo,
 		TenantRepo:                   tenantRepo,
