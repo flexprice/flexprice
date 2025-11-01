@@ -48,8 +48,6 @@ type CreateSubscriptionRequest struct {
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
-	// Phases represents an optional timeline of subscription phases
-	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
@@ -187,8 +185,6 @@ type SubscriptionResponse struct {
 	*subscription.Subscription
 	Plan     *PlanResponse     `json:"plan"`
 	Customer *CustomerResponse `json:"customer"`
-	// Schedule is included when the subscription has a schedule
-	Schedule *SubscriptionScheduleResponse `json:"schedule,omitempty"`
 	// CouponAssociations are the coupon associations for this subscription
 	CouponAssociations []*CouponAssociationResponse `json:"coupon_associations,omitempty"`
 
@@ -387,54 +383,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 
 			if err := grant.Validate(); err != nil {
 				return err
-			}
-		}
-	}
-
-	// Validate phases if provided
-	if len(r.Phases) > 0 {
-		// First phase must start on or after subscription start date
-		if r.Phases[0].StartDate.Before(*r.StartDate) {
-			return ierr.NewError("first phase start date cannot be before subscription start date").
-				WithHint("The first phase must start on or after the subscription start date").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_start_date": *r.StartDate,
-					"first_phase_start_date":  r.Phases[0].StartDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate each phase
-		for i, phase := range r.Phases {
-			// Validate the phase itself
-			if err := phase.Validate(); err != nil {
-				return ierr.NewError(fmt.Sprintf("invalid phase at index %d", i)).
-					WithHint("Phase validation failed").
-					WithReportableDetails(map[string]interface{}{
-						"index": i,
-						"error": err.Error(),
-					}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// Validate phase continuity
-			if i > 0 {
-				prevPhase := r.Phases[i-1]
-				if prevPhase.EndDate == nil {
-					return ierr.NewError(fmt.Sprintf("phase at index %d must have an end date", i-1)).
-						WithHint("All phases except the last one must have an end date").
-						Mark(ierr.ErrValidation)
-				}
-
-				if !prevPhase.EndDate.Equal(phase.StartDate) {
-					return ierr.NewError(fmt.Sprintf("phase at index %d does not start immediately after previous phase", i)).
-						WithHint("Phases must be contiguous").
-						WithReportableDetails(map[string]interface{}{
-							"previous_phase_end":  prevPhase.EndDate,
-							"current_phase_start": phase.StartDate,
-						}).
-						Mark(ierr.ErrValidation)
-				}
 			}
 		}
 	}

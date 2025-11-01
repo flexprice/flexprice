@@ -2265,29 +2265,6 @@ func HasCreditGrantsWith(preds ...predicate.CreditGrant) predicate.Subscription 
 	})
 }
 
-// HasSchedule applies the HasEdge predicate on the "schedule" edge.
-func HasSchedule() predicate.Subscription {
-	return predicate.Subscription(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, ScheduleTable, ScheduleColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasScheduleWith applies the HasEdge predicate on the "schedule" edge with a given conditions (other predicates).
-func HasScheduleWith(preds ...predicate.SubscriptionSchedule) predicate.Subscription {
-	return predicate.Subscription(func(s *sql.Selector) {
-		step := newScheduleStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasCouponAssociations applies the HasEdge predicate on the "coupon_associations" edge.
 func HasCouponAssociations() predicate.Subscription {
 	return predicate.Subscription(func(s *sql.Selector) {

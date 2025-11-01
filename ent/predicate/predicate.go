@@ -111,12 +111,6 @@ type SubscriptionLineItem func(*sql.Selector)
 // SubscriptionPause is the predicate function for subscriptionpause builders.
 type SubscriptionPause func(*sql.Selector)
 
-// SubscriptionSchedule is the predicate function for subscriptionschedule builders.
-type SubscriptionSchedule func(*sql.Selector)
-
-// SubscriptionSchedulePhase is the predicate function for subscriptionschedulephase builders.
-type SubscriptionSchedulePhase func(*sql.Selector)
-
 // Task is the predicate function for task builders.
 type Task func(*sql.Selector)
 
