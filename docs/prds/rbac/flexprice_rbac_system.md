@@ -1,10 +1,11 @@
 # Flexprice RBAC System
 
 ## Document Information
-- **Version**: 1.0
-- **Last Updated**: October 31, 2025
+- **Version**: 2.0
+- **Last Updated**: November 1, 2025
 - **Status**: Draft
 - **Owner**: Engineering Team
+- **Major Changes**: Simplified to explicit permission declarations with set-based lookups. Added name/description to roles for UI/UX.
 
 ---
 
@@ -47,9 +48,9 @@ Flexprice's RBAC (Role-Based Access Control) system introduces fine-grained acce
 
 ### Success Metrics
 - Zero breaking changes for existing users
-- < 5ms latency added for permission checks
-- Ability to add new roles without code changes (configuration-based)
-- 100% API coverage for permission enforcement
+- < 1ms latency added for permission checks (O(roles) with O(1) lookups)
+- Ability to add new roles by editing roles.json (no code changes)
+- Explicit permission declarations at route level
 
 ### Non-Goals (Phase 1)
 - Dynamic role creation by end users
@@ -57,17 +58,19 @@ Flexprice's RBAC (Role-Based Access Control) system introduces fine-grained acce
 - Role hierarchy or inheritance
 - UI for role management
 - Audit logging for permission denials (future phase)
+- Automatic endpoint-to-permission mapping
 
 ---
 
 ## System Overview
 
 ### Architecture Principles
-1. **Static Role Definitions**: Roles are defined in JSON configuration files managed by Flexprice engineering
+1. **Static Role Definitions**: Roles are defined in `roles.json` managed by Flexprice engineering
 2. **API Key-Based Enforcement**: Permissions are checked at the API key level, not user level
-3. **Fail-Open for Regular Users**: Regular users without roles retain full access
-4. **Fail-Closed for Service Accounts**: Service accounts must have explicit roles
-5. **Middleware-Based**: Permission checking happens in HTTP middleware layer
+3. **Explicit Permission Declarations**: Each route explicitly declares required permissions
+4. **Set-Based Lookups**: O(1) permission checks using nested maps
+5. **Fail-Open for Regular Users**: Regular users without roles retain full access
+6. **Fail-Closed for Service Accounts**: Service accounts must have explicit roles
 
 ### Key Components
 ```
@@ -83,11 +86,10 @@ Flexprice's RBAC (Role-Based Access Control) system introduces fine-grained acce
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Permission Middleware (NEW)                    │
-│              1. Fetch user & roles from secrets table       │
-│              2. Load role definitions from JSON             │
-│              3. Check if action allowed for entity          │
-│              4. Return 403 if denied, continue if allowed   │
+│     Permission Middleware: RequirePermission(entity, action)│
+│     1. Get roles from secret (in context)                   │
+│     2. Check: permissions[role][entity][action] == true     │
+│     3. Return 403 if denied, continue if allowed            │
 └───────────────────────────┬─────────────────────────────────┘
                             │
                             ▼
@@ -95,6 +97,27 @@ Flexprice's RBAC (Role-Based Access Control) system introduces fine-grained acce
 │              Route Handler (Business Logic)                 │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Design Philosophy
+
+**Simplicity Over Complexity**
+- No automatic endpoint mapping
+- No regex pattern matching
+- No separate mapping configuration files
+- Permissions declared explicitly in route definitions
+
+**Performance**
+- Set-based lookups: `permissions[role][entity][action]` = O(1)
+- Complexity: O(roles) where roles typically = 1-3
+- No JSON parsing on request path
+- Minimal memory overhead (~16KB for typical setup)
+
+**Role Metadata for UI/UX**
+- Role definitions include `name` and `description` fields
+- Used exclusively for UI dropdowns and documentation
+- **Zero performance impact**: permission checks never touch name/description
+- Stored separately in memory - only accessed for `GET /api/v1/rbac/roles` endpoint
+- Enables dynamic role selection in frontend without hardcoding role lists
 
 ---
 
@@ -161,65 +184,93 @@ type Secret struct {
 
 ### Role Definition File Structure
 
-Roles are defined in a JSON file: `internal/config/rbac/roles.json`
+Roles are defined in a **simple JSON file**: `internal/config/rbac/roles.json`
+
+**Design Principle**: Keep it simple - role definitions include name, description, and permissions. The name and description are used for UI/UX (dropdowns, role selection), while permissions are optimized for fast lookups.
 
 ```json
 {
-  "version": "1.0",
-  "roles": {
-    "event_ingestor": {
-      "name": "Event Ingestor",
-      "description": "Service account role for ingesting events into Flexprice",
-      "permissions": [
-        {
-          "entity": "event",
-          "actions": ["create", "write"]
-        },
-        {
-          "entity": "batch_event",
-          "actions": ["create"]
-        }
-      ]
-    },
-    "metrics_reader": {
-      "name": "Metrics Reader",
-      "description": "Read-only access to metrics and analytics",
-      "permissions": [
-        {
-          "entity": "metrics",
-          "actions": ["read", "list"]
-        },
-        {
-          "entity": "analytics",
-          "actions": ["read"]
-        }
-      ]
-    },
-    "feature_manager": {
-      "name": "Feature Manager",
-      "description": "Manage feature flags and configurations",
-      "permissions": [
-        {
-          "entity": "feature",
-          "actions": ["create", "read", "update", "delete", "list"]
-        },
-        {
-          "entity": "feature_flag",
-          "actions": ["create", "read", "update", "toggle"]
-        }
-      ]
+  "event_ingestor": {
+    "name": "Event Ingestor",
+    "description": "Limited to ingesting events and batch events. Use for services that only send events.",
+    "permissions": {
+      "event": ["create", "write"],
+      "batch_event": ["create"]
+    }
+  },
+  "customer_manager": {
+    "name": "Customer Manager",
+    "description": "Full access to customer data and read-only access to subscriptions and invoices.",
+    "permissions": {
+      "customer": ["create", "read", "update", "delete", "list"],
+      "subscription": ["read", "list"],
+      "invoice": ["read", "list"]
+    }
+  },
+  "metrics_reader": {
+    "name": "Metrics Reader",
+    "description": "Read-only access to metrics, analytics, and dashboards for reporting.",
+    "permissions": {
+      "metrics": ["read", "list"],
+      "analytics": ["read"],
+      "dashboard": ["read"]
+    }
+  },
+  "feature_manager": {
+    "name": "Feature Manager",
+    "description": "Full access to feature flags and configurations.",
+    "permissions": {
+      "feature": ["create", "read", "update", "delete", "list"],
+      "feature_flag": ["create", "read", "update", "toggle", "delete"]
+    }
+  },
+  "billing_admin": {
+    "name": "Billing Administrator",
+    "description": "Manage invoices, subscriptions, and payment operations.",
+    "permissions": {
+      "invoice": ["create", "read", "update", "delete", "list"],
+      "subscription": ["create", "read", "update", "delete", "list"],
+      "payment": ["create", "read", "list"]
+    }
+  },
+  "pricing_admin": {
+    "name": "Pricing Administrator",
+    "description": "Manage pricing models, plans, and pricing calculations.",
+    "permissions": {
+      "pricing": ["create", "read", "update", "delete", "execute"],
+      "pricing_model": ["create", "read", "update", "delete"],
+      "plan": ["create", "read", "update", "delete", "list"]
+    }
+  },
+  "admin": {
+    "name": "Administrator",
+    "description": "Full access to all resources. Use sparingly and only for trusted administrators.",
+    "permissions": {
+      "customer": ["create", "read", "update", "delete", "list"],
+      "subscription": ["create", "read", "update", "delete", "list"],
+      "invoice": ["create", "read", "update", "delete", "list"],
+      "event": ["create", "read", "write", "delete", "list"],
+      "metrics": ["read", "list"],
+      "feature": ["create", "read", "update", "delete", "list"],
+      "pricing": ["create", "read", "update", "delete", "execute"]
     }
   }
 }
 ```
+
+**Why include name and description?**
+- **UI/UX**: When creating service accounts in the frontend, users see friendly names and descriptions in dropdowns
+- **Single source of truth**: Backend owns all role definitions; frontend fetches via API
+- **Maintainability**: Add new role = edit JSON only, no frontend code changes
+- **Zero performance impact**: name/description are never used in permission checks (hot path)
 
 ### Permission Model
 
 #### Entity Definitions
 Entities represent resources in the Flexprice system:
 
-| Entity | Description | Example Endpoints |
-|--------|-------------|-------------------|
+| Entity | Description | Example Routes |
+|--------|-------------|----------------|
 | `event` | Individual events | POST /api/v1/events |
 | `batch_event` | Batch event operations | POST /api/v1/events/batch |
 | `metrics` | Usage metrics | GET /api/v1/metrics |
@@ -227,105 +278,150 @@ Entities represent resources in the Flexprice system:
 | `feature` | Feature configurations | /api/v1/features/* |
 | `customer` | Customer resources | /api/v1/customers/* |
 | `subscription` | Subscription management | /api/v1/subscriptions/* |
+| `invoice` | Invoices | /api/v1/invoices/* |
 | `pricing` | Pricing configurations | /api/v1/pricing/* |
-| `api_key` | API key management | /api/v1/secrets/* |
+| `plan` | Pricing plans | /api/v1/plans/* |
+| `payment` | Payment operations | /api/v1/payments/* |
+| `wallet` | Wallet management | /api/v1/wallets/* |
 
 #### Action Definitions
 Standard CRUD actions plus custom operations:
 
-| Action | HTTP Methods | Description |
-|--------|--------------|-------------|
-| `create` | POST | Create new resources |
-| `read` | GET (single) | Read single resource |
-| `list` | GET (collection) | List/query resources |
-| `update` | PUT, PATCH | Modify existing resources |
-| `delete` | DELETE | Remove resources |
-| `write` | POST, PUT, PATCH | Combined create/update (for event ingestion) |
-| `execute` | POST | Execute operations (e.g., calculate pricing) |
-| `toggle` | POST | Toggle states (e.g., enable/disable) |
-
-### Endpoint to Entity Mapping
-
-Create a mapping configuration: `internal/config/rbac/endpoint_entity_mapping.json`
-
-```json
-{
-  "mappings": [
-    {
-      "pattern": "^/api/v1/events$",
-      "method": "POST",
-      "entity": "event",
-      "action": "write"
-    },
-    {
-      "pattern": "^/api/v1/events/batch$",
-      "method": "POST",
-      "entity": "batch_event",
-      "action": "create"
-    },
-    {
-      "pattern": "^/api/v1/metrics",
-      "method": "GET",
-      "entity": "metrics",
-      "action": "read"
-    },
-    {
-      "pattern": "^/api/v1/features$",
-      "method": "GET",
-      "entity": "feature",
-      "action": "list"
-    },
-    {
-      "pattern": "^/api/v1/features$",
-      "method": "POST",
-      "entity": "feature",
-      "action": "create"
-    },
-    {
-      "pattern": "^/api/v1/features/[^/]+$",
-      "method": "GET",
-      "entity": "feature",
-      "action": "read"
-    },
-    {
-      "pattern": "^/api/v1/features/[^/]+$",
-      "method": "PUT",
-      "entity": "feature",
-      "action": "update"
-    },
-    {
-      "pattern": "^/api/v1/features/[^/]+$",
-      "method": "DELETE",
-      "entity": "feature",
-      "action": "delete"
-    }
-  ]
-}
+| Action | Description | Typical HTTP Methods |
+|--------|-------------|---------------------|
+| `create` | Create new resources | POST |
+| `read` | Read single resource | GET /:id |
+| `list` | List/query resources | GET / |
+| `update` | Modify existing resources | PUT, PATCH |
+| `delete` | Remove resources | DELETE |
+| `write` | Combined create/update | POST, PUT |
+| `execute` | Execute operations | POST |
+| `toggle` | Toggle states | POST |
 ```
 
-### Role Loading and Caching
+### RBAC Service Implementation
+
+**Core Implementation**: Load roles.json at startup, store metadata separately, and convert permissions to set-based structure for O(1) lookups.
+
+**Key Design**: Permission checks never touch name/description - they're stored separately and only used for API responses.
 
 ```go
-type RBACService interface {
-    // LoadRoles loads role definitions from JSON file
-    LoadRoles() error
+// internal/rbac/service.go
+package rbac
+
+import (
+    "encoding/json"
+    "os"
+)
+
+// Service handles permission checks with set-based lookups
+type Service struct {
+    // Fast lookup for permission checks (hot path - O(1))
+    permissions map[string]map[string]map[string]bool
     
-    // GetRole returns role definition by name
-    GetRole(roleName string) (*Role, error)
+    // Metadata for API responses (cold path - rarely accessed)
+    roles map[string]*Role
+}
+
+// Role represents a role with metadata
+type Role struct {
+    ID          string              `json:"id"`
+    Name        string              `json:"name"`
+    Description string              `json:"description"`
+    Permissions map[string][]string `json:"permissions"`
+}
+
+// NewService loads roles.json and optimizes for fast lookups
+func NewService(configPath string) (*Service, error) {
+    // Load JSON
+    data, err := os.ReadFile(configPath)
+    if err != nil {
+        return nil, err
+    }
     
-    // CheckPermission checks if roles have permission for entity/action
-    CheckPermission(roles []string, entity string, action string) bool
+    // Parse as: role_id -> role definition (with name, description, permissions)
+    var rawConfig map[string]*Role
+    if err := json.Unmarshal(data, &rawConfig); err != nil {
+        return nil, err
+    }
     
-    // GetEntityAction maps HTTP request to entity and action
-    GetEntityAction(method string, path string) (entity string, action string, err error)
+    // Convert to optimized set-based structure for permission checks
+    permissions := make(map[string]map[string]map[string]bool)
+    
+    for roleID, role := range rawConfig {
+        role.ID = roleID // Set ID from map key
+        permissions[roleID] = make(map[string]map[string]bool)
+        
+        for entity, actions := range role.Permissions {
+            permissions[roleID][entity] = make(map[string]bool)
+            
+            // Convert array to set for O(1) lookup
+            for _, action := range actions {
+                permissions[roleID][entity][action] = true
+            }
+        }
+    }
+    
+    return &Service{
+        permissions: permissions,
+        roles:       rawConfig,
+    }, nil
+}
+
+// HasPermission checks if any of the user's roles grant permission
+// Complexity: O(roles) with O(1) lookups = ~3 operations for typical use
+// NOTE: Never touches role.Name or role.Description - zero overhead
+func (s *Service) HasPermission(roles []string, entity string, action string) bool {
+    // Empty roles = full access (backward compatibility)
+    if len(roles) == 0 {
+        return true
+    }
+    
+    // Check each role - if ANY role grants permission, allow
+    for _, role := range roles {
+        if s.permissions[role] != nil && 
+           s.permissions[role][entity] != nil && 
+           s.permissions[role][entity][action] {
+            return true
+        }
+    }
+    
+    return false
+}
+
+// ValidateRole checks if role exists in definitions
+func (s *Service) ValidateRole(roleName string) bool {
+    _, exists := s.permissions[roleName]
+    return exists
+}
+
+// GetAllRoles returns all roles with metadata (for API endpoint)
+// This is called rarely (only when fetching available roles for UI)
+func (s *Service) GetAllRoles() []*Role {
+    result := make([]*Role, 0, len(s.roles))
+    for _, role := range s.roles {
+        result = append(result, role)
+    }
+    return result
+}
+
+// GetRole returns a specific role with metadata
+func (s *Service) GetRole(roleID string) (*Role, bool) {
+    role, exists := s.roles[roleID]
+    return role, exists
 }
 ```
+
+**Performance Notes**:
+- `HasPermission()`: O(roles) with O(1) lookups - **never** touches name/description
+- `GetAllRoles()`: Called only when UI needs to show role dropdown - not performance critical
+- Memory overhead: ~1-2 KB for metadata (7 roles × ~200 bytes each)
 
 **Caching Strategy**:
 - Load roles once at application startup
-- Store in memory (config rarely changes)
-- Provide admin endpoint to reload: `POST /internal/rbac/reload` (internal use only)
-- Use file watcher for development mode (optional)
+- Store in memory (roles.json rarely changes)
+- Optional: Provide admin endpoint to reload: `POST /internal/rbac/reload`
+- Optional: Hot-reload with file watcher in development mode
 
 ---
 
@@ -453,23 +549,19 @@ System Flow:
    ├─ Extract API key from Authorization header
    ├─ Query secrets table for key
    ├─ If not found → 401 Unauthorized
-   └─ If found → Load secret object (includes roles)
+   └─ If found → Load secret object (includes roles), add to context
 
-2. Permission Middleware (NEW):
+2. Permission Middleware: RequirePermission("feature", "list")
+   ├─ Get secret from context
    ├─ Check if roles array is empty
-   │  ├─ If empty → ALLOW (full access)
+   │  ├─ If empty → ALLOW (full access - backward compatibility)
    │  └─ If not empty → Continue to permission check
    │
-   ├─ Map endpoint to entity/action
-   │  └─ GET /api/v1/features → entity="feature", action="list"
+   ├─ Call rbacService.HasPermission(secret.Roles, "feature", "list")
+   │  └─ O(1) lookup: permissions[role]["feature"]["list"]
    │
-   ├─ Check permissions
-   │  ├─ For each role in user.roles:
-   │  │  └─ Check if role has permission for (entity, action)
-   │  ├─ If any role grants permission → ALLOW
-   │  └─ If no role grants permission → 403 Forbidden
-   │
-   └─ Return result
+   ├─ If any role grants permission → ALLOW, continue
+   └─ If no role grants permission → 403 Forbidden
 
 3. Route Handler:
    └─ Execute business logic
@@ -479,42 +571,7 @@ Response:
 - 403 Forbidden if permission denied
 ```
 
-#### Permission Check Algorithm
-
-```go
-func CheckPermission(userRoles []string, entity string, action string) (bool, error) {
-    // Empty roles = full access (backward compatibility)
-    if len(userRoles) == 0 {
-        return true, nil
-    }
-    
-    // Load role definitions
-    roleDefinitions := loadRoleDefinitions()
-    
-    // Check each role
-    for _, roleName := range userRoles {
-        role, exists := roleDefinitions[roleName]
-        if !exists {
-            log.Warn("Unknown role: %s", roleName)
-            continue
-        }
-        
-        // Check if role has permission
-        for _, permission := range role.Permissions {
-            if permission.Entity == entity {
-                for _, allowedAction := range permission.Actions {
-                    if allowedAction == action {
-                        return true, nil // Permission granted
-                    }
-                }
-            }
-        }
-    }
-    
-    // No role granted permission
-    return false, nil
-}
-```
+**Key Point**: Permission check is **explicit** in route definition, not automatic mapping.
 
 ### Workflow 4: Managing Service Account Lifecycle
 
@@ -554,85 +611,140 @@ Workflow:
 
 ### Middleware Implementation
 
+**Design**: Explicit permission declarations at route level - no automatic mapping.
+
 #### Permission Middleware Structure
 
 ```go
-// PermissionMiddleware checks if the request is authorized based on RBAC
-func PermissionMiddleware(rbacService *RBACService) gin.HandlerFunc {
+// internal/middleware/permission.go
+package middleware
+
+import (
+    "fmt"
+    "net/http"
+    "github.com/gin-gonic/gin"
+    "github.com/flexprice/flexprice/internal/rbac"
+)
+
+type PermissionMiddleware struct {
+    rbacService *rbac.Service
+}
+
+func NewPermissionMiddleware(rbacService *rbac.Service) *PermissionMiddleware {
+    return &PermissionMiddleware{rbacService: rbacService}
+}
+
+// RequirePermission returns a middleware that checks for specific entity.action
+// This is called explicitly in route definitions
+func (pm *PermissionMiddleware) RequirePermission(entity string, action string) gin.HandlerFunc {
     return func(c *gin.Context) {
         // 1. Get secret from context (set by auth middleware)
-        secret, exists := c.Get("secret")
+        secretInterface, exists := c.Get("secret")
         if !exists {
-            c.AbortWithStatusJSON(401, gin.H{"error": "Unauthorized"})
-            return
-        }
-        
-        secretObj := secret.(*Secret)
-        
-        // 2. Empty roles = full access (backward compatibility)
-        if len(secretObj.Roles) == 0 {
-            c.Next()
-            return
-        }
-        
-        // 3. Map request to entity/action
-        entity, action, err := rbacService.GetEntityAction(
-            c.Request.Method,
-            c.Request.URL.Path,
-        )
-        if err != nil {
-            // Endpoint not mapped → default deny for service accounts
-            log.Warn("Unmapped endpoint: %s %s", c.Request.Method, c.Request.URL.Path)
-            c.AbortWithStatusJSON(403, gin.H{
-                "error": "Forbidden",
-                "message": "Access to this endpoint is not permitted",
+            c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+                "error": "Unauthorized",
             })
             return
         }
         
-        // 4. Check permission
-        allowed := rbacService.CheckPermission(secretObj.Roles, entity, action)
-        if !allowed {
+        secret := secretInterface.(*models.Secret)
+        
+        // 2. Check permission using set-based lookup
+        if !pm.rbacService.HasPermission(secret.Roles, entity, action) {
             log.Info("Permission denied: user=%s, roles=%v, entity=%s, action=%s",
-                secretObj.UserID, secretObj.Roles, entity, action)
+                secret.UserID, secret.Roles, entity, action)
             
-            c.AbortWithStatusJSON(403, gin.H{
+            c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
                 "error": "Forbidden",
                 "message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
             })
             return
         }
         
-        // 5. Permission granted, continue
+        // 3. Permission granted, continue to handler
         c.Next()
     }
 }
 ```
 
-#### Middleware Registration
+**Simplicity**: ~40 lines total. No regex, no mapping files, no complexity.
+
+#### Router Registration
 
 ```go
-// In router setup
-func SetupRouter(rbacService *RBACService) *gin.Engine {
-    r := gin.Default()
+// internal/api/router.go
+func SetupRoutes(
+    router *gin.Engine, 
+    handlers *Handlers, 
+    permMW *middleware.PermissionMiddleware,
+) {
+    v1 := router.Group("/v1")
+    v1.Use(middleware.AuthenticateMiddleware())
     
-    api := r.Group("/api/v1")
+    // Customer routes - explicit permission declarations
+    customer := v1.Group("/customers")
     {
-        // Authentication middleware (existing)
-        api.Use(AuthMiddleware())
-        
-        // Permission middleware (NEW)
-        api.Use(PermissionMiddleware(rbacService))
-        
-        // Routes
-        api.POST("/events", handleCreateEvent)
-        api.GET("/features", handleListFeatures)
-        // ... more routes
+        customer.POST("", 
+            permMW.RequirePermission("customer", "create"), 
+            handlers.Customer.CreateCustomer)
+            
+        customer.GET("", 
+            permMW.RequirePermission("customer", "list"), 
+            handlers.Customer.ListCustomers)
+            
+        customer.GET("/:id", 
+            permMW.RequirePermission("customer", "read"), 
+            handlers.Customer.GetCustomer)
+            
+        customer.PUT("/:id", 
+            permMW.RequirePermission("customer", "update"), 
+            handlers.Customer.UpdateCustomer)
+            
+        customer.DELETE("/:id", 
+            permMW.RequirePermission("customer", "delete"), 
+            handlers.Customer.DeleteCustomer)
     }
     
-    return r
+    // Event routes
+    events := v1.Group("/events")
+    {
+        events.POST("", 
+            permMW.RequirePermission("event", "create"), 
+            handlers.Events.CreateEvent)
+            
+        events.POST("/batch", 
+            permMW.RequirePermission("batch_event", "create"), 
+            handlers.Events.CreateBatchEvents)
+    }
+    
+    // Subscription routes
+    subscription := v1.Group("/subscriptions")
+    {
+        subscription.POST("", 
+            permMW.RequirePermission("subscription", "create"), 
+            handlers.Subscription.Create)
+            
+        subscription.GET("", 
+            permMW.RequirePermission("subscription", "list"), 
+            handlers.Subscription.List)
+            
+        subscription.GET("/:id", 
+            permMW.RequirePermission("subscription", "read"), 
+            handlers.Subscription.Get)
+            
+        subscription.PUT("/:id", 
+            permMW.RequirePermission("subscription", "update"), 
+            handlers.Subscription.Update)
+    }
 }
 ```
+
+**Benefits**:
+- ✅ Self-documenting - see permission at route definition
+- ✅ No configuration drift - route and permission always in sync
+- ✅ Easy to review - see all permissions in router file
+- ✅ Type-safe - compiler catches typos
+- ✅ No regex overhead
 
 ### Error Responses
 
@@ -659,33 +771,37 @@ func SetupRouter(rbacService *RBACService) *gin.Engine {
 
 ### Bypassing Permission Checks
 
-#### Internal/Admin Endpoints
+#### Exempt Endpoints
 
-Some endpoints should bypass permission checks:
-- Internal health checks: `/health`, `/metrics`
-- Admin console endpoints (require different auth)
-- Public endpoints (no auth required)
+Some endpoints don't require permission checks:
+- Public health checks: `/health`, `/metrics`
+- Public auth endpoints: `/auth/login`, `/auth/signup`
+- Swagger documentation: `/swagger/*`
+
+**Implementation**: Simply don't add `RequirePermission` middleware to these routes.
 
 ```go
-// Exempt endpoints from permission checks
-var exemptPaths = map[string]bool{
-    "/health": true,
-    "/metrics": true,
-    "/api/internal/*": true,
-}
+// Public routes - no auth, no permissions
+router.GET("/health", handlers.Health)
+router.GET("/metrics", handlers.Metrics)
 
-func PermissionMiddleware(rbacService *RBACService) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        // Check if path is exempt
-        if isExemptPath(c.Request.URL.Path) {
-            c.Next()
-            return
-        }
-        
-        // ... permission checking logic
-    }
+// Public auth routes - auth but no permissions
+public := router.Group("/v1")
+public.POST("/auth/login", handlers.Auth.Login)
+public.POST("/auth/signup", handlers.Auth.Signup)
+
+// Protected routes - add RequirePermission explicitly
+v1 := router.Group("/v1")
+v1.Use(middleware.AuthenticateMiddleware())
+{
+    // Only these have permission checks
+    v1.POST("/customers", 
+        permMW.RequirePermission("customer", "create"),
+        handlers.Customer.Create)
 }
 ```
+
+**No global middleware approach** - permissions are opt-in per route.
 
 ---
 
@@ -779,28 +895,51 @@ Response: 200 OK
     {
       "id": "event_ingestor",
       "name": "Event Ingestor",
-      "description": "Service account role for ingesting events",
-      "permissions": [
-        {
-          "entity": "event",
-          "actions": ["create", "write"]
-        }
-      ]
+      "description": "Limited to ingesting events and batch events. Use for services that only send events.",
+      "permissions": {
+        "event": ["create", "write"],
+        "batch_event": ["create"]
+      }
+    },
+    {
+      "id": "customer_manager",
+      "name": "Customer Manager",
+      "description": "Full access to customer data and read-only access to subscriptions and invoices.",
+      "permissions": {
+        "customer": ["create", "read", "update", "delete", "list"],
+        "subscription": ["read", "list"],
+        "invoice": ["read", "list"]
+      }
     },
     {
       "id": "metrics_reader",
       "name": "Metrics Reader",
-      "description": "Read-only access to metrics",
-      "permissions": [
-        {
-          "entity": "metrics",
-          "actions": ["read", "list"]
-        }
-      ]
+      "description": "Read-only access to metrics, analytics, and dashboards for reporting.",
+      "permissions": {
+        "metrics": ["read", "list"],
+        "analytics": ["read"],
+        "dashboard": ["read"]
+      }
+    },
+    {
+      "id": "admin",
+      "name": "Administrator",
+      "description": "Full access to all resources. Use sparingly and only for trusted administrators.",
+      "permissions": {
+        "customer": ["create", "read", "update", "delete", "list"],
+        "subscription": ["create", "read", "update", "delete", "list"],
+        "invoice": ["create", "read", "update", "delete", "list"],
+        "event": ["create", "read", "write", "delete", "list"],
+        "metrics": ["read", "list"],
+        "feature": ["create", "read", "update", "delete", "list"],
+        "pricing": ["create", "read", "update", "delete", "execute"]
+      }
     }
   ]
 }
 ```
+
+**Use Case**: Frontend calls this endpoint when displaying the "Create Service Account" form to populate the role dropdown with friendly names and descriptions.
 
 ### API Key Management
 
@@ -872,10 +1011,11 @@ Authorization: Bearer {internal_token}
 Response: 200 OK
 {
   "message": "RBAC configuration reloaded successfully",
-  "roles_loaded": 3,
-  "endpoints_mapped": 25
+  "roles_loaded": 7
 }
 ```
+
+**Note**: This endpoint reloads `roles.json` without restarting the application. Useful for hot-reloading role changes in development.
 
 ---
 
@@ -1256,55 +1396,67 @@ func (s *RBACService) CheckPermission(roles []string, entity string, action stri
 
 ### Role Definition System
 - [ ] Create `internal/config/rbac/` directory
-- [ ] Create `roles.json` with initial roles
-- [ ] Create `endpoint_entity_mapping.json`
-- [ ] Implement role loader service
-- [ ] Add unit tests for role definitions
+- [ ] Create `roles.json` with simplified format (role -> entity -> actions)
+- [ ] Implement RBAC service with set-based lookups
+- [ ] Add unit tests for HasPermission() function
+- [ ] Test role validation
 
 ### Permission Middleware
-- [ ] Implement `PermissionMiddleware` function
-- [ ] Implement `GetEntityAction` mapping logic
-- [ ] Implement `CheckPermission` algorithm
-- [ ] Add middleware to router
-- [ ] Handle exempt paths
+- [ ] Implement `PermissionMiddleware` struct with `RequirePermission(entity, action)`
+- [ ] Add middleware instance to router initialization
+- [ ] No endpoint mapping needed - explicit declarations only
+- [ ] Test middleware with various permission scenarios
+
+### Router Updates
+- [ ] Add explicit `RequirePermission` calls to all protected routes
+- [ ] Identify public routes (no auth/permissions needed)
+- [ ] Review each endpoint and assign entity/action
+- [ ] Document entity and action names used
 
 ### API Endpoints
 - [ ] Update `POST /api/v1/users` to accept type and roles
 - [ ] Update `PATCH /api/v1/users/{id}` to update roles
 - [ ] Update `POST /api/v1/secrets` to copy roles from user
 - [ ] Create `GET /api/v1/rbac/roles` endpoint
-- [ ] Create `POST /internal/rbac/reload` endpoint
+- [ ] Optional: Create `POST /internal/rbac/reload` endpoint
 
 ### Testing
-- [ ] Unit tests for permission checking logic
-- [ ] Unit tests for role loading
-- [ ] Integration tests for each endpoint
+- [ ] Unit tests for HasPermission() with set-based lookups
+- [ ] Unit tests for role loading and validation
+- [ ] Integration tests for protected endpoints
 - [ ] Test service account creation
 - [ ] Test API key inheritance
 - [ ] Test permission denial (403)
-- [ ] Test backward compatibility (empty roles)
-- [ ] Load test permission middleware
+- [ ] Test backward compatibility (empty roles = full access)
+- [ ] Load test permission middleware (target < 1ms latency)
 
 ### Documentation
-- [ ] API documentation (OpenAPI/Swagger)
-- [ ] Developer guide for adding new roles
+- [ ] Update API documentation (OpenAPI/Swagger)
+- [ ] Developer guide: "How to add a new protected route"
+- [ ] Developer guide: "How to add a new role"
 - [ ] Runbook for permission issues
 - [ ] Security documentation
-- [ ] User guide for service accounts
 
 ### Monitoring & Observability
 - [ ] Add metrics: permission_check_duration_ms
-- [ ] Add metrics: permission_denied_total (by entity, action)
+- [ ] Add metrics: permission_denied_total (by entity, action, role)
 - [ ] Add logs for permission denials
 - [ ] Add alerts for unusual 403 rates
 - [ ] Dashboard for RBAC metrics
 
 ### Deployment
-- [ ] Feature flag for RBAC system
+- [ ] Feature flag for RBAC system (optional)
 - [ ] Gradual rollout plan
 - [ ] Rollback procedures documented
 - [ ] Smoke tests for production
 - [ ] Communication plan for users
+
+**Estimated Implementation Time**: 
+- Database migrations: 1 day
+- RBAC service + middleware: 2 days  
+- Router updates: 3-5 days (depends on number of routes)
+- Testing: 2-3 days
+- Total: ~1.5-2 weeks
 
 ---
 
@@ -1402,79 +1554,210 @@ func (s *RBACService) CheckPermission(roles []string, entity string, action stri
 
 ```json
 {
-  "version": "1.0",
-  "last_updated": "2025-10-31",
-  "roles": {
-    "event_ingestor": {
-      "name": "Event Ingestor",
-      "description": "Limited to ingesting events and batch events",
-      "permissions": [
-        {"entity": "event", "actions": ["create", "write"]},
-        {"entity": "batch_event", "actions": ["create"]}
-      ]
-    },
-    "metrics_reader": {
-      "name": "Metrics Reader",
-      "description": "Read-only access to metrics and analytics",
-      "permissions": [
-        {"entity": "metrics", "actions": ["read", "list"]},
-        {"entity": "analytics", "actions": ["read"]},
-        {"entity": "dashboard", "actions": ["read"]}
-      ]
-    },
-    "feature_manager": {
-      "name": "Feature Manager",
-      "description": "Full access to feature flags and configurations",
-      "permissions": [
-        {"entity": "feature", "actions": ["create", "read", "update", "delete", "list"]},
-        {"entity": "feature_flag", "actions": ["create", "read", "update", "toggle", "delete"]}
-      ]
-    },
-    "billing_reader": {
-      "name": "Billing Reader",
-      "description": "Read-only access to invoices and subscriptions",
-      "permissions": [
-        {"entity": "invoice", "actions": ["read", "list"]},
-        {"entity": "subscription", "actions": ["read", "list"]},
-        {"entity": "payment", "actions": ["read", "list"]}
-      ]
-    },
-    "pricing_admin": {
-      "name": "Pricing Admin",
-      "description": "Manage pricing models and calculations",
-      "permissions": [
-        {"entity": "pricing", "actions": ["create", "read", "update", "delete", "execute"]},
-        {"entity": "pricing_model", "actions": ["create", "read", "update", "delete"]},
-        {"entity": "pricing_calculation", "actions": ["execute", "read"]}
-      ]
-    },
-    "customer_support": {
-      "name": "Customer Support",
-      "description": "Read customer data and limited modification",
-      "permissions": [
-        {"entity": "customer", "actions": ["read", "list", "update"]},
-        {"entity": "subscription", "actions": ["read", "list", "update"]},
-        {"entity": "invoice", "actions": ["read", "list"]},
-        {"entity": "support_ticket", "actions": ["create", "read", "update", "list"]}
-      ]
-    },
-    "api_key_manager": {
-      "name": "API Key Manager",
-      "description": "Manage API keys and secrets",
-      "permissions": [
-        {"entity": "api_key", "actions": ["create", "read", "delete", "list"]},
-        {"entity": "secret", "actions": ["create", "read", "delete", "list"]}
-      ]
+  "event_ingestor": {
+    "name": "Event Ingestor",
+    "description": "Limited to ingesting events and batch events. Use for services that only send events.",
+    "permissions": {
+      "event": ["create", "write"],
+      "batch_event": ["create"]
+    }
+  },
+  "metrics_reader": {
+    "name": "Metrics Reader",
+    "description": "Read-only access to metrics, analytics, and dashboards for reporting.",
+    "permissions": {
+      "metrics": ["read", "list"],
+      "analytics": ["read"],
+      "dashboard": ["read"]
+    }
+  },
+  "feature_manager": {
+    "name": "Feature Manager",
+    "description": "Full access to feature flags and configurations.",
+    "permissions": {
+      "feature": ["create", "read", "update", "delete", "list"],
+      "feature_flag": ["create", "read", "update", "toggle", "delete"]
+    }
+  },
+  "billing_reader": {
+    "name": "Billing Reader",
+    "description": "Read-only access to invoices, subscriptions, and payment information.",
+    "permissions": {
+      "invoice": ["read", "list"],
+      "subscription": ["read", "list"],
+      "payment": ["read", "list"]
+    }
+  },
+  "billing_admin": {
+    "name": "Billing Administrator",
+    "description": "Manage invoices, subscriptions, and payment operations.",
+    "permissions": {
+      "invoice": ["create", "read", "update", "delete", "list"],
+      "subscription": ["create", "read", "update", "delete", "list"],
+      "payment": ["create", "read", "list"]
+    }
+  },
+  "pricing_admin": {
+    "name": "Pricing Administrator",
+    "description": "Manage pricing models, plans, and pricing calculations.",
+    "permissions": {
+      "pricing": ["create", "read", "update", "delete", "execute"],
+      "pricing_model": ["create", "read", "update", "delete"],
+      "pricing_calculation": ["execute", "read"],
+      "plan": ["create", "read", "update", "delete", "list"]
+    }
+  },
+  "customer_support": {
+    "name": "Customer Support",
+    "description": "Read customer data with limited modification rights. Can update customer info and create support tickets.",
+    "permissions": {
+      "customer": ["read", "list", "update"],
+      "subscription": ["read", "list", "update"],
+      "invoice": ["read", "list"],
+      "support_ticket": ["create", "read", "update", "list"]
+    }
+  },
+  "customer_manager": {
+    "name": "Customer Manager",
+    "description": "Full access to customer data and read-only access to subscriptions and invoices.",
+    "permissions": {
+      "customer": ["create", "read", "update", "delete", "list"],
+      "subscription": ["read", "list"],
+      "invoice": ["read", "list"]
+    }
+  },
+  "api_key_manager": {
+    "name": "API Key Manager",
+    "description": "Manage API keys and secrets for service accounts.",
+    "permissions": {
+      "api_key": ["create", "read", "delete", "list"],
+      "secret": ["create", "read", "delete", "list"]
+    }
+  },
+  "admin": {
+    "name": "Administrator",
+    "description": "Full access to all resources. Use sparingly and only for trusted administrators.",
+    "permissions": {
+      "customer": ["create", "read", "update", "delete", "list"],
+      "subscription": ["create", "read", "update", "delete", "list"],
+      "invoice": ["create", "read", "update", "delete", "list"],
+      "event": ["create", "read", "write", "delete", "list"],
+      "metrics": ["read", "list"],
+      "feature": ["create", "read", "update", "delete", "list"],
+      "pricing": ["create", "read", "update", "delete", "execute"],
+      "api_key": ["create", "read", "delete", "list"],
+      "wallet": ["create", "read", "update", "delete", "list"]
     }
   }
 }
 ```
 
+**Notes**:
+- **Name**: User-friendly name displayed in UI dropdowns
+- **Description**: Helpful text shown when selecting roles in the frontend
+- **Permissions**: Entity-action mappings converted to set-based structure at startup
+- **Performance**: Name/description are never used in permission checks (hot path)
+- **UI/UX**: Frontend fetches this via `GET /api/v1/rbac/roles` to populate role selection
+
 ### Code Examples
+
+#### Complete RBAC Service
+
+```go
+// internal/rbac/service.go
+package rbac
+
+import (
+    "encoding/json"
+    "fmt"
+    "os"
+)
+
+type Service struct {
+    // Fast lookup for permission checks (hot path - never touches metadata)
+    permissions map[string]map[string]map[string]bool
+    
+    // Full role definitions with metadata (for API responses)
+    roles map[string]*Role
+}
+
+type Role struct {
+    ID          string              `json:"id"`
+    Name        string              `json:"name"`
+    Description string              `json:"description"`
+    Permissions map[string][]string `json:"permissions"`
+}
+
+func NewService(configPath string) (*Service, error) {
+    data, err := os.ReadFile(configPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to read config: %w", err)
+    }
+    
+    var rawConfig map[string]*Role
+    if err := json.Unmarshal(data, &rawConfig); err != nil {
+        return nil, fmt.Errorf("failed to parse config: %w", err)
+    }
+    
+    permissions := make(map[string]map[string]map[string]bool)
+    
+    for roleID, role := range rawConfig {
+        role.ID = roleID
+        permissions[roleID] = make(map[string]map[string]bool)
+        
+        for entity, actions := range role.Permissions {
+            permissions[roleID][entity] = make(map[string]bool)
+            for _, action := range actions {
+                permissions[roleID][entity][action] = true
+            }
+        }
+    }
+    
+    return &Service{
+        permissions: permissions,
+        roles:       rawConfig,
+    }, nil
+}
+
+func (s *Service) HasPermission(roles []string, entity string, action string) bool {
+    if len(roles) == 0 {
+        return true // Backward compatibility
+    }
+    
+    for _, role := range roles {
+        if s.permissions[role] != nil && 
+           s.permissions[role][entity] != nil && 
+           s.permissions[role][entity][action] {
+            return true
+        }
+    }
+    
+    return false
+}
+
+func (s *Service) ValidateRole(roleName string) bool {
+    _, exists := s.permissions[roleName]
+    return exists
+}
+
+func (s *Service) GetAllRoles() []*Role {
+    result := make([]*Role, 0, len(s.roles))
+    for _, role := range s.roles {
+        result = append(result, role)
+    }
+    return result
+}
+
+func (s *Service) GetRole(roleID string) (*Role, bool) {
+    role, exists := s.roles[roleID]
+    return role, exists
+}
+```
 
 #### Complete Permission Middleware
 
 ```go
+// internal/middleware/permission.go
 package middleware
 
 import (
@@ -1482,18 +1765,24 @@ import (
     "net/http"
     
     "github.com/gin-gonic/gin"
-    "flexprice/internal/service"
+    "github.com/flexprice/flexprice/internal/rbac"
+    "github.com/flexprice/flexprice/internal/logger"
 )
 
-func PermissionMiddleware(rbacService *service.RBACService) gin.HandlerFunc {
+type PermissionMiddleware struct {
+    rbacService *rbac.Service
+    logger      *logger.Logger
+}
+
+func NewPermissionMiddleware(rbacService *rbac.Service, logger *logger.Logger) *PermissionMiddleware {
+    return &PermissionMiddleware{
+        rbacService: rbacService,
+        logger:      logger,
+    }
+}
+
+func (pm *PermissionMiddleware) RequirePermission(entity string, action string) gin.HandlerFunc {
     return func(c *gin.Context) {
-        // Skip for exempt paths
-        if isExemptPath(c.Request.URL.Path) {
-            c.Next()
-            return
-        }
-        
-        // Get secret from context (set by auth middleware)
         secretInterface, exists := c.Get("secret")
         if !exists {
             c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -1510,89 +1799,72 @@ func PermissionMiddleware(rbacService *service.RBACService) gin.HandlerFunc {
             return
         }
         
-        // Empty roles = full access (backward compatibility)
-        if len(secret.Roles) == 0 {
-            c.Next()
-            return
-        }
-        
-        // Map request to entity/action
-        entity, action, err := rbacService.GetEntityAction(
-            c.Request.Method,
-            c.Request.URL.Path,
-        )
-        if err != nil {
-            // Unmapped endpoint - deny for service accounts
-            logPermissionDenial(c, secret, "", "", "unmapped_endpoint")
-            c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-                "error": "Forbidden",
-                "message": "Access to this endpoint is not configured",
-            })
-            return
-        }
-        
-        // Check permission
-        allowed, err := rbacService.CheckPermission(secret.Roles, entity, action)
-        if err != nil {
-            // Error checking permissions - fail closed
-            logPermissionError(c, secret, entity, action, err)
-            c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-                "error": "Forbidden",
-                "message": "Unable to verify permissions",
-            })
-            return
-        }
-        
-        if !allowed {
-            // Permission denied
-            logPermissionDenial(c, secret, entity, action, "insufficient_permissions")
+        if !pm.rbacService.HasPermission(secret.Roles, entity, action) {
+            pm.logger.Info("Permission denied",
+                "user_id", secret.UserID,
+                "roles", secret.Roles,
+                "entity", entity,
+                "action", action,
+                "path", c.Request.URL.Path,
+            )
+            
             c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
                 "error": "Forbidden",
                 "message": fmt.Sprintf("Insufficient permissions to %s %s", action, entity),
-                "details": gin.H{
-                    "required_permission": gin.H{
-                        "entity": entity,
-                        "action": action,
-                    },
-                    "user_roles": secret.Roles,
-                },
             })
             return
         }
         
-        // Permission granted
         c.Next()
     }
 }
+```
 
-func isExemptPath(path string) bool {
-    exemptPaths := []string{
-        "/health",
-        "/metrics",
-        "/api/internal/",
-    }
-    
-    for _, exempt := range exemptPaths {
-        if strings.HasPrefix(path, exempt) {
-            return true
-        }
-    }
-    return false
-}
+#### Frontend UI Example
 
-func logPermissionDenial(c *gin.Context, secret *models.Secret, entity, action, reason string) {
-    log.WithFields(log.Fields{
-        "user_id": secret.UserID,
-        "roles": secret.Roles,
-        "entity": entity,
-        "action": action,
-        "reason": reason,
-        "path": c.Request.URL.Path,
-        "method": c.Request.Method,
-        "ip": c.ClientIP(),
-    }).Warn("Permission denied")
+**Use Case**: Create Service Account form with role selection dropdown
+
+```typescript
+// Frontend: Create Service Account Component
+import { useQuery } from '@tanstack/react-query';
+import { Select, SelectItem } from '@/components/ui/select';
+
+function CreateServiceAccountForm() {
+  // Fetch available roles from backend
+  const { data: rolesData } = useQuery({
+    queryKey: ['rbac-roles'],
+    queryFn: () => fetch('/api/v1/rbac/roles').then(res => res.json())
+  });
+
+  return (
+    <form>
+      <Input label="Name" name="name" />
+      <Input label="Email" name="email" />
+      
+      <Select label="Account Type" name="type">
+        <SelectItem value="user">User</SelectItem>
+        <SelectItem value="service_account">Service Account</SelectItem>
+      </Select>
+      
+      {/* Dynamic role dropdown - fetched from backend */}
+      <Select label="Role" name="roles">
+        {rolesData?.roles.map(role => (
+          <SelectItem key={role.id} value={role.id}>
+            <div className="flex flex-col">
+              <span className="font-medium">{role.name}</span>
+              <span className="text-sm text-gray-500">{role.description}</span>
+            </div>
+          </SelectItem>
+        ))}
+      </Select>
+      
+      <Button type="submit">Create Service Account</Button>
+    </form>
+  );
 }
 ```
+
+**Result**: When adding a new role to `roles.json`, frontend automatically shows it in the dropdown - no frontend code changes needed!
 
 ---
 
@@ -1620,6 +1892,8 @@ func logPermissionDenial(c *gin.Context, secret *models.Secret, entity, action, 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-10-31 | Engineering Team | Initial draft based on design specifications |
+| 2.0 | 2025-11-01 | Engineering Team | Major update: Simplified to explicit permission declarations with set-based lookups. Removed automatic endpoint mapping system. |
+| 2.1 | 2025-11-01 | Engineering Team | Added name and description fields to role definitions for UI/UX. Updated RBAC service to store metadata separately. Clarified zero performance impact on permission checks. |
 
 ---
 
