@@ -73,9 +73,9 @@ Create environment variables from configuration
 - name: FLEXPRICE_SERVER_ADDRESS
   value: {{ .Values.server.address | quote }}
 - name: FLEXPRICE_POSTGRES_HOST
-  value: {{ .Values.postgres.host | quote }}
+  value: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
 - name: FLEXPRICE_POSTGRES_PORT
-  value: {{ .Values.postgres.port | quote | default "5432" }}
+  value: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port | quote }}{{ else }}{{ .Values.postgres.internal.service.port | quote }}{{ end }}
 - name: FLEXPRICE_POSTGRES_USER
   value: {{ .Values.postgres.user | quote }}
 - name: FLEXPRICE_POSTGRES_PASSWORD
@@ -86,7 +86,7 @@ Create environment variables from configuration
 - name: FLEXPRICE_POSTGRES_DBNAME
   value: {{ .Values.postgres.dbname | quote }}
 - name: FLEXPRICE_POSTGRES_SSLMODE
-  value: {{ .Values.postgres.sslmode | quote }}
+  value: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.sslmode | quote }}{{ else }}"disable"{{ end }}
 - name: FLEXPRICE_POSTGRES_MAX_OPEN_CONNS
   value: {{ .Values.postgres.maxOpenConns | quote }}
 - name: FLEXPRICE_POSTGRES_MAX_IDLE_CONNS
@@ -102,7 +102,7 @@ Create environment variables from configuration
   value: {{ .Values.postgres.readerPort | quote }}
 {{- end }}
 - name: FLEXPRICE_CLICKHOUSE_ADDRESS
-  value: {{ .Values.clickhouse.address | quote }}
+  value: {{ if .Values.clickhouse.external.enabled }}{{ .Values.clickhouse.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse:{{ .Values.clickhouse.internal.service.nativePort }}{{ end }}
 - name: FLEXPRICE_CLICKHOUSE_USERNAME
   value: {{ .Values.clickhouse.username | quote }}
 - name: FLEXPRICE_CLICKHOUSE_PASSWORD
@@ -115,7 +115,7 @@ Create environment variables from configuration
 - name: FLEXPRICE_CLICKHOUSE_TLS
   value: {{ .Values.clickhouse.tls | quote }}
 - name: FLEXPRICE_KAFKA_BROKERS
-  value: {{ join "," .Values.kafka.brokers | quote }}
+  value: {{ if .Values.kafka.external.enabled }}{{ join "," .Values.kafka.brokers | quote }}{{ else }}{{ include "flexprice.fullname" . }}-kafka:{{ .Values.kafka.internal.service.internalPort }}{{ end }}
 - name: FLEXPRICE_KAFKA_CONSUMER_GROUP
   value: {{ .Values.kafka.consumerGroup | quote }}
 - name: FLEXPRICE_KAFKA_TOPIC
@@ -138,7 +138,7 @@ Create environment variables from configuration
       key: kafka-sasl-password
 {{- end }}
 - name: FLEXPRICE_TEMPORAL_ADDRESS
-  value: {{ .Values.temporal.address | quote }}
+  value: {{ if .Values.temporal.external.enabled }}{{ .Values.temporal.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-temporal:{{ .Values.temporal.internal.server.service.port }}{{ end }}
 - name: FLEXPRICE_TEMPORAL_TASK_QUEUE
   value: {{ .Values.temporal.taskQueue | quote }}
 - name: FLEXPRICE_TEMPORAL_NAMESPACE

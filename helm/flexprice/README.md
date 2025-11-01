@@ -6,10 +6,17 @@ This Helm chart deploys the FlexPrice billing and pricing platform on a Kubernet
 
 - Kubernetes 1.24+
 - Helm 3.0+
-- PostgreSQL database (or external managed PostgreSQL service)
-- ClickHouse database (or external managed ClickHouse service)
-- Kafka cluster (or external managed Kafka service)
-- Temporal service (or external managed Temporal service)
+
+### External Services (Optional)
+
+You can either use external services or deploy them internally with the chart:
+
+- **PostgreSQL**: Managed database service (RDS, Cloud SQL, etc.) or internal deployment
+- **ClickHouse**: Managed database service or internal deployment
+- **Kafka**: Managed Kafka service (MSK, Confluent Cloud, etc.) or internal deployment
+- **Temporal**: Managed Temporal service or internal deployment
+
+**Note**: For production environments, it's recommended to use external managed services for better reliability and scalability.
 
 ## Installation
 
@@ -90,35 +97,65 @@ The following table lists the configurable parameters and their default values.
 | `worker.resources` | Resource requests/limits | See values.yaml |
 | `worker.autoscaling.enabled` | Enable HPA | `false` |
 
-### Database Configuration
+### Service Configuration (External vs Internal)
+
+The chart supports both external managed services and internal deployments. Use `{service}.external.enabled=false` to deploy services internally.
+
+#### PostgreSQL Configuration
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `postgres.host` | PostgreSQL host | `postgres-service` |
+| `postgres.external.enabled` | Use external PostgreSQL | `true` |
+| `postgres.host` | PostgreSQL host (external) | `postgres-service` |
 | `postgres.port` | PostgreSQL port | `5432` |
 | `postgres.user` | PostgreSQL user | `flexprice` |
 | `postgres.password` | PostgreSQL password | **(required)** |
 | `postgres.dbname` | PostgreSQL database name | `flexprice` |
-| `clickhouse.address` | ClickHouse address | `clickhouse-service:9000` |
-| `clickhouse.username` | ClickHouse username | `flexprice` |
-| `clickhouse.password` | ClickHouse password | **(required)** |
+| `postgres.sslmode` | SSL mode (external only) | `require` |
+| `postgres.internal.image.repository` | Internal PostgreSQL image | `postgres` |
+| `postgres.internal.image.tag` | Internal PostgreSQL tag | `15.3` |
+| `postgres.internal.persistence.enabled` | Enable persistent storage | `true` |
+| `postgres.internal.persistence.size` | Storage size | `20Gi` |
 
-### Kafka Configuration
+#### ClickHouse Configuration
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `kafka.brokers` | Kafka broker addresses | `["kafka-service:9092"]` |
+| `clickhouse.external.enabled` | Use external ClickHouse | `true` |
+| `clickhouse.address` | ClickHouse address (external) | `clickhouse-service:9000` |
+| `clickhouse.username` | ClickHouse username | `flexprice` |
+| `clickhouse.password` | ClickHouse password | **(required)** |
+| `clickhouse.database` | ClickHouse database | `flexprice` |
+| `clickhouse.internal.image.repository` | Internal ClickHouse image | `clickhouse/clickhouse-server` |
+| `clickhouse.internal.image.tag` | Internal ClickHouse tag | `24.9-alpine` |
+| `clickhouse.internal.persistence.enabled` | Enable persistent storage | `true` |
+| `clickhouse.internal.persistence.size` | Storage size | `50Gi` |
+
+#### Kafka Configuration
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `kafka.external.enabled` | Use external Kafka | `true` |
+| `kafka.brokers` | Kafka broker addresses (external) | `["kafka-service:9092"]` |
 | `kafka.consumerGroup` | Kafka consumer group | `flexprice-consumer` |
 | `kafka.topic` | Kafka topic for events | `events` |
 | `kafka.topicLazy` | Kafka topic for lazy events | `events_lazy` |
+| `kafka.internal.image.repository` | Internal Kafka image | `confluentinc/cp-kafka` |
+| `kafka.internal.image.tag` | Internal Kafka tag | `7.7.1` |
+| `kafka.internal.persistence.enabled` | Enable persistent storage | `true` |
+| `kafka.internal.persistence.size` | Storage size | `20Gi` |
 
-### Temporal Configuration
+#### Temporal Configuration
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `temporal.address` | Temporal server address | `temporal-service:7233` |
+| `temporal.external.enabled` | Use external Temporal | `true` |
+| `temporal.address` | Temporal server address (external) | `temporal-service:7233` |
 | `temporal.taskQueue` | Temporal task queue | `billing-task-queue` |
 | `temporal.namespace` | Temporal namespace | `default` |
+| `temporal.internal.server.image.repository` | Internal Temporal image | `temporalio/auto-setup` |
+| `temporal.internal.server.image.tag` | Internal Temporal tag | `1.26.2` |
+| `temporal.internal.ui.enabled` | Enable Temporal UI | `true` |
 
 ### Ingress Configuration
 
@@ -188,6 +225,68 @@ The chart supports integration with:
 - **Prometheus**: Metrics via ServiceMonitor (if enabled)
 
 ## Examples
+
+### Using External Services
+
+```yaml
+# values-external.yaml
+postgres:
+  external:
+    enabled: true
+  host: "my-rds-instance.region.rds.amazonaws.com"
+  port: 5432
+  sslmode: "require"
+
+clickhouse:
+  external:
+    enabled: true
+  address: "clickhouse-managed.example.com:9000"
+
+kafka:
+  external:
+    enabled: true
+  brokers:
+    - "kafka-cluster.example.com:9092"
+
+temporal:
+  external:
+    enabled: true
+  address: "temporal-managed.example.com:7233"
+```
+
+### Using Internal Services
+
+```yaml
+# values-internal.yaml
+postgres:
+  external:
+    enabled: false
+  internal:
+    persistence:
+      size: 50Gi
+      storageClass: "fast-ssd"
+
+clickhouse:
+  external:
+    enabled: false
+  internal:
+    persistence:
+      size: 100Gi
+
+kafka:
+  external:
+    enabled: false
+  internal:
+    persistence:
+      size: 50Gi
+
+temporal:
+  external:
+    enabled: false
+  internal:
+    ui:
+      enabled: true
+```
 
 ### Production Deployment
 

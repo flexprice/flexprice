@@ -132,9 +132,13 @@ auth:
     header: "x-api-key"
     keys: {} # Map of hashed API keys to details
 
-# Database configuration
+# PostgreSQL Configuration
+# Set external.enabled=false to deploy PostgreSQL internally
 postgres:
-  host: "postgres-service"
+  external:
+    enabled: true  # Set to false to deploy PostgreSQL internally
+  # External PostgreSQL configuration (when external.enabled=true)
+  host: "postgres-service"  # Override when using external PostgreSQL
   port: 5432
   user: "flexprice"
   password: "" # Set via secret
@@ -146,19 +150,76 @@ postgres:
   autoMigrate: false
   readerHost: "" # Optional: for read replicas
   readerPort: 5432
+  # Internal PostgreSQL configuration (when external.enabled=false)
+  internal:
+    image:
+      repository: postgres
+      tag: "15.3"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Use default storage class if empty
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+    service:
+      type: ClusterIP
+      port: 5432
+    initScripts:
+      enabled: true
+      # Scripts will be mounted from migrations/postgres directory if available
 
-# ClickHouse configuration
+# ClickHouse Configuration
+# Set external.enabled=false to deploy ClickHouse internally
 clickhouse:
-  address: "clickhouse-service:9000"
+  external:
+    enabled: true  # Set to false to deploy ClickHouse internally
+  # External ClickHouse configuration (when external.enabled=true)
+  address: "clickhouse-service:9000"  # Override when using external ClickHouse
   tls: false
   username: "flexprice"
   password: "" # Set via secret
   database: "flexprice"
+  # Internal ClickHouse configuration (when external.enabled=false)
+  internal:
+    image:
+      repository: clickhouse/clickhouse-server
+      tag: "24.9-alpine"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: ""  # Use default storage class if empty
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    service:
+      type: ClusterIP
+      httpPort: 8123
+      nativePort: 9000
+      interserverPort: 9009
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
 
-# Kafka configuration
+# Kafka Configuration
+# Set external.enabled=false to deploy Kafka internally
 kafka:
+  external:
+    enabled: true  # Set to false to deploy Kafka internally
+  # External Kafka configuration (when external.enabled=true)
   brokers:
-    - "kafka-service:9092"
+    - "kafka-service:9092"  # Override when using external Kafka
   consumerGroup: "flexprice-consumer"
   topic: "events"
   topicLazy: "events_lazy"
@@ -169,15 +230,85 @@ kafka:
   saslPassword: "" # Set via secret
   clientId: "flexprice-client"
   routeTenantsOnLazyMode: []
+  # Internal Kafka configuration (when external.enabled=false)
+  internal:
+    image:
+      repository: confluentinc/cp-kafka
+      tag: "7.7.1"
+      pullPolicy: IfNotPresent
+    persistence:
+      enabled: true
+      size: 20Gi
+      storageClass: ""  # Use default storage class if empty
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+    service:
+      type: ClusterIP
+      internalPort: 9092
+      externalPort: 29092
+    # Kafka KRaft mode configuration
+    clusterId: "ca497efe-9f82-4b84-890b-d9969a9a2e1c"
+    brokerId: 0
 
-# Temporal configuration
+# Temporal Configuration
+# Set external.enabled=false to deploy Temporal internally
 temporal:
-  address: "temporal-service:7233"
+  external:
+    enabled: true  # Set to false to deploy Temporal internally
+  # External Temporal configuration (when external.enabled=true)
+  address: "temporal-service:7233"  # Override when using external Temporal
   taskQueue: "billing-task-queue"
   namespace: "default"
   apiKey: "" # Set via secret
   apiKeyName: ""
   tls: false
+  # Internal Temporal configuration (when external.enabled=false)
+  internal:
+    server:
+      image:
+        repository: temporalio/auto-setup
+        tag: "1.26.2"
+        pullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          cpu: 2000m
+          memory: 2Gi
+      service:
+        type: ClusterIP
+        port: 7233
+      # Temporal uses the same PostgreSQL instance
+      # Set temporal.internal.postgres.useExternalPostgres=true to use separate PostgreSQL
+      postgres:
+        useExternalPostgres: false
+        host: ""  # If empty, uses the main postgres.internal service
+        port: 5432
+        user: "flexprice"
+        password: ""  # If empty, uses the main postgres password
+        dbname: "temporal"
+    ui:
+      enabled: true
+      image:
+        repository: temporalio/ui
+        tag: "2.31.2"
+        pullPolicy: IfNotPresent
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      service:
+        type: ClusterIP
+        port: 8088
 
 # Logging configuration
 logging:

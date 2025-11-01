@@ -22,11 +22,11 @@ data:
     {{- end }}
     
     postgres:
-      host: {{ .Values.postgres.host | quote }}
-      port: {{ .Values.postgres.port }}
+      host: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
+      port: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port }}{{ else }}{{ .Values.postgres.internal.service.port }}{{ end }}
       user: {{ .Values.postgres.user | quote }}
       dbname: {{ .Values.postgres.dbname | quote }}
-      sslmode: {{ .Values.postgres.sslmode | quote }}
+      sslmode: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.sslmode | quote }}{{ else }}"disable"{{ end }}
       max_open_conns: {{ .Values.postgres.maxOpenConns }}
       max_idle_conns: {{ .Values.postgres.maxIdleConns }}
       conn_max_lifetime_minutes: {{ .Values.postgres.connMaxLifetimeMinutes }}
@@ -37,15 +37,19 @@ data:
     {{- end }}
     
     clickhouse:
-      address: {{ .Values.clickhouse.address | quote }}
+      address: {{ if .Values.clickhouse.external.enabled }}{{ .Values.clickhouse.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse:{{ .Values.clickhouse.internal.service.nativePort }}{{ end }}
       tls: {{ .Values.clickhouse.tls }}
       username: {{ .Values.clickhouse.username | quote }}
       database: {{ .Values.clickhouse.database | quote }}
     
     kafka:
       brokers:
+        {{- if .Values.kafka.external.enabled }}
         {{- range .Values.kafka.brokers }}
         - {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - {{ include "flexprice.fullname" . }}-kafka:{{ .Values.kafka.internal.service.internalPort | quote }}
         {{- end }}
       consumer_group: {{ .Values.kafka.consumerGroup | quote }}
       topic: {{ .Values.kafka.topic | quote }}
@@ -62,7 +66,7 @@ data:
     {{- end }}
     
     temporal:
-      address: {{ .Values.temporal.address | quote }}
+      address: {{ if .Values.temporal.external.enabled }}{{ .Values.temporal.address | quote }}{{ else }}{{ include "flexprice.fullname" . }}-temporal:{{ .Values.temporal.internal.server.service.port }}{{ end }}
       task_queue: {{ .Values.temporal.taskQueue | quote }}
       namespace: {{ .Values.temporal.namespace | quote }}
       tls: {{ .Values.temporal.tls }}
