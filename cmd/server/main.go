@@ -345,9 +345,14 @@ func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *log
 	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
 }
 
-func provideRBACService() (*rbac.RBACService, error) {
+func provideRBACService(cfg *config.Configuration) (*rbac.RBACService, error) {
 	// Load roles.json from config directory
-	return rbac.NewRBACService("internal/config/rbac/roles.json")
+	// Use absolute path from config or fallback to relative path for development
+	rolesPath := cfg.RBAC.RolesConfigPath
+	if rolesPath == "" {
+		rolesPath = "internal/config/rbac/roles.json"
+	}
+	return rbac.NewRBACService(rolesPath)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {

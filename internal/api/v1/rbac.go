@@ -130,9 +130,9 @@ func (h *RBACHandler) GetServiceAccount(c *gin.Context) {
 	// Get user
 	user, err := h.userService.GetByID(c.Request.Context(), userID, tenantID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Service account not found",
-		})
+		// Check if it's a not found error or a backend failure
+		h.logger.Error("Failed to fetch service account", "error", err)
+		c.Error(err) // Use error handler middleware to determine status code
 		return
 	}
 

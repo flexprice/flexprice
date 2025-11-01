@@ -99,6 +99,16 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	email := req.Email
 	userType := user.UserType(req.Type)
 
+	// Default type to "user" if empty
+	if userType == "" {
+		userType = user.UserTypeUser
+	}
+
+	// Validate user type
+	if err := userType.Validate(); err != nil {
+		return nil, err
+	}
+
 	// Service accounts have NO email
 	if userType == user.UserTypeServiceAccount {
 		email = "" // No email for service accounts
@@ -106,7 +116,13 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 
 	// Check if user already exists (only for regular users with emails)
 	if userType == user.UserTypeUser && email != "" {
-		existingUser, _ := s.userRepo.GetByEmail(ctx, email)
+		existingUser, err := s.userRepo.GetByEmail(ctx, email)
+		if err != nil {
+			// Only ignore not found errors, propagate others (like DB errors)
+			if !ierr.IsNotFound(err) {
+				return nil, err
+			}
+		}
 		if existingUser != nil {
 			return nil, ierr.NewError("user already exists").
 				WithHint("A user with this email already exists").
@@ -126,8 +142,8 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 	// Create user with RBAC fields
 	newUser := &user.User{
 		ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
-		Email: email, // Empty for service accounts
-		Type:  req.Type,
+		Email: email,            // Empty for service accounts
+		Type:  string(userType), // Use validated and defaulted type
 		Roles: req.Roles,
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,
