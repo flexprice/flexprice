@@ -211,6 +211,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			addon.GET("/:id", handlers.Addon.GetAddon)
 			addon.GET("/lookup/:lookup_key", handlers.Addon.GetAddonByLookupKey)
 			addon.PUT("/:id", handlers.Addon.UpdateAddon)
+			addon.GET("/:id/entitlements", handlers.Addon.GetAddonEntitlements)
 			addon.DELETE("/:id", handlers.Addon.DeleteAddon)
 		}
 
@@ -235,6 +236,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/resume", handlers.SubscriptionPause.ResumeSubscription)
 			subscription.GET("/:id/pauses", handlers.SubscriptionPause.ListPauses)
 			subscription.POST("/:id/phases", handlers.Subscription.AddSubscriptionPhase)
+			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
 
 			// Addon management for subscriptions - moved under subscription handler
 			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
@@ -246,6 +248,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			// Subscription line item management
 			subscription.PUT("/lineitems/:id", handlers.Subscription.UpdateSubscriptionLineItem)
+			subscription.DELETE("/lineitems/:id", handlers.Subscription.DeleteSubscriptionLineItem)
 
 		}
 

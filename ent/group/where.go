@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -763,29 +762,6 @@ func LookupKeyEqualFold(v string) predicate.Group {
 // LookupKeyContainsFold applies the ContainsFold predicate on the "lookup_key" field.
 func LookupKeyContainsFold(v string) predicate.Group {
 	return predicate.Group(sql.FieldContainsFold(FieldLookupKey, v))
-}
-
-// HasPrices applies the HasEdge predicate on the "prices" edge.
-func HasPrices() predicate.Group {
-	return predicate.Group(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, PricesTable, PricesColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasPricesWith applies the HasEdge predicate on the "prices" edge with a given conditions (other predicates).
-func HasPricesWith(preds ...predicate.Price) predicate.Group {
-	return predicate.Group(func(s *sql.Selector) {
-		step := newPricesStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

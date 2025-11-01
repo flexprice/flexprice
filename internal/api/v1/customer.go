@@ -240,10 +240,7 @@ func (h *CustomerHandler) GetCustomerEntitlements(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param customer_id query string false "Customer ID"
-// @Param customer_lookup_key query string false "Customer Lookup Key (external_customer_id)"
-// @Param feature_ids query []string false "Feature IDs"
-// @Param subscription_ids query []string false "Subscription IDs"
+// @Param filter query dto.GetCustomerUsageSummaryRequest false "Filter"
 // @Success 200 {object} dto.CustomerUsageSummaryResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse

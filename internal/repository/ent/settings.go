@@ -202,14 +202,14 @@ func (r *settingsRepository) Get(ctx context.Context, id string) (*domainSetting
 	return setting, nil
 }
 
-func (r *settingsRepository) GetByKey(ctx context.Context, key string) (*domainSettings.Setting, error) {
+func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 
 	client := r.client.Reader(ctx)
 	r.log.Debugw("getting setting by key", "key", key)
 
 	s, err := client.Settings.Query().
 		Where(
-			settings.Key(key),
+			settings.Key(key.String()),
 			settings.TenantID(types.GetTenantID(ctx)),
 			settings.EnvironmentID(types.GetEnvironmentID(ctx)),
 			settings.Status(string(types.StatusPublished)),
@@ -219,9 +219,9 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key string) (*domainS
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, ierr.WithError(err).
-				WithHintf("Setting with key %s was not found", key).
+				WithHintf("Setting with key %s was not found", key.String()).
 				WithReportableDetails(map[string]any{
-					"key": key,
+					"key": key.String(),
 				}).
 				Mark(ierr.ErrNotFound)
 		}
@@ -234,7 +234,7 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key string) (*domainS
 	return setting, nil
 }
 
-func (r *settingsRepository) DeleteByKey(ctx context.Context, key string) error {
+func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingKey) error {
 	// Get the setting first for cache invalidation
 	setting, err := r.GetByKey(ctx, key)
 	if err != nil {
@@ -243,11 +243,11 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key string) error 
 
 	client := r.client.Writer(ctx)
 
-	r.log.Debugw("deleting setting by key", "key", key)
+	r.log.Debugw("deleting setting by key", "key", key.String())
 
 	_, err = client.Settings.Update().
 		Where(
-			settings.Key(key),
+			settings.Key(key.String()),
 			settings.TenantID(types.GetTenantID(ctx)),
 			settings.EnvironmentID(types.GetEnvironmentID(ctx)),
 			settings.Status(string(types.StatusPublished)),
@@ -260,9 +260,9 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key string) error 
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return ierr.WithError(err).
-				WithHintf("Setting with key %s was not found", key).
+				WithHintf("Setting with key %s was not found", key.String()).
 				WithReportableDetails(map[string]any{
-					"key": key,
+					"key": key.String(),
 				}).
 				Mark(ierr.ErrNotFound)
 		}
@@ -331,10 +331,10 @@ func (r *settingsRepository) DeleteCache(ctx context.Context, setting *domainSet
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments
-func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error) {
-	if !types.IsValidSettingKey(key) {
+func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, key types.SettingKey) ([]*types.TenantEnvConfig, error) {
+	if !types.IsValidSettingKey(key.String()) {
 		return nil, ierr.WithError(errors.New("invalid setting key")).
-			WithHintf("Invalid setting key: %s", key).
+			WithHintf("Invalid setting key: %s", key.String()).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -343,13 +343,13 @@ func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, 
 	// Query all settings for the given key
 	settings, err := client.Settings.Query().
 		Where(
-			settings.Key(key),
+			settings.Key(key.String()),
 			settings.Status(string(types.StatusPublished)),
 		).All(ctx)
 
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHintf("Failed to list settings for key %s", key).
+			WithHintf("Failed to list settings for key %s", key.String()).
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -370,7 +370,7 @@ func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, 
 // ListSubscriptionConfigs returns all subscription configs across all tenants and environments
 func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
 	// Get all configs for subscription key
-	configs, err := r.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig.String())
+	configs, err := r.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,8 @@ import (
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -45,6 +47,7 @@ type InvoiceService interface {
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error)
+	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
 }
@@ -174,7 +177,7 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			invoiceNumber = *req.InvoiceNumber
 		} else {
 			settingsService := NewSettingsService(s.ServiceParams)
-			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig.String())
+			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig)
 			if err != nil {
 				return err
 			}
@@ -741,25 +744,8 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 		}
 	}
 
-	// Sync to HubSpot if HubSpot connection is enabled
-	// Use a background context with timeout to avoid transaction timeout issues
-	// This allows the sync to complete even if the parent transaction times out
-	go func() {
-		// Create a new background context with 30-second timeout
-		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		// Copy tenant and environment IDs to the background context
-		bgCtx = types.SetTenantID(bgCtx, types.GetTenantID(ctx))
-		bgCtx = types.SetEnvironmentID(bgCtx, types.GetEnvironmentID(ctx))
-
-		if err := s.syncInvoiceToHubSpotIfEnabled(bgCtx, inv); err != nil {
-			// Log error but don't fail the entire process
-			s.Logger.Errorw("failed to sync invoice to HubSpot",
-				"error", err,
-				"invoice_id", inv.ID)
-		}
-	}()
+	// Sync to HubSpot if HubSpot connection is enabled (async via Temporal)
+	s.triggerHubSpotInvoiceSyncWorkflow(ctx, inv.ID, inv.CustomerID)
 
 	// try to process payment for the invoice based on behavior and log any errors
 	// Pass the subscription object to avoid extra DB call
@@ -844,44 +830,80 @@ func (s *invoiceService) syncInvoiceToStripeIfEnabled(ctx context.Context, inv *
 	return nil
 }
 
-// syncInvoiceToHubSpotIfEnabled syncs the invoice to HubSpot if HubSpot connection is enabled
-func (s *invoiceService) syncInvoiceToHubSpotIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
-	// Check if HubSpot connection exists
+// triggerHubSpotInvoiceSyncWorkflow triggers the HubSpot invoice sync workflow via Temporal
+func (s *invoiceService) triggerHubSpotInvoiceSyncWorkflow(ctx context.Context, invoiceID, customerID string) {
+	// Copy necessary context values
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	s.Logger.Infow("triggering HubSpot invoice sync workflow",
+		"invoice_id", invoiceID,
+		"customer_id", customerID,
+		"tenant_id", tenantID,
+		"environment_id", envID)
+
+	// Check if HubSpot connection exists and invoice outbound sync is enabled
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderHubSpot)
-	if err != nil || conn == nil {
-		return nil // Not an error, just skip sync
+	if err != nil {
+		s.Logger.Debugw("HubSpot connection not found, skipping invoice sync",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
 	}
 
-	// Check if invoice sync is enabled for this connection
 	if !conn.IsInvoiceOutboundEnabled() {
-		return nil // Not an error, just skip sync
+		s.Logger.Debugw("HubSpot invoice outbound sync disabled, skipping invoice sync",
+			"invoice_id", invoiceID,
+			"customer_id", customerID,
+			"connection_id", conn.ID)
+		return
 	}
 
-	// Get HubSpot integration
-	hubspotIntegration, err := s.IntegrationFactory.GetHubSpotIntegration(ctx)
+	// Prepare workflow input with all necessary IDs
+	input := &models.HubSpotInvoiceSyncWorkflowInput{
+		InvoiceID:     invoiceID,
+		CustomerID:    customerID,
+		TenantID:      tenantID,
+		EnvironmentID: envID,
+	}
+
+	// Validate input
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for HubSpot invoice sync",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
+	}
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.Warnw("temporal service not available for HubSpot invoice sync",
+			"invoice_id", invoiceID)
+		return
+	}
+
+	// Start workflow - Temporal handles async execution, no need for goroutines
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalHubSpotInvoiceSyncWorkflow,
+		input,
+	)
 	if err != nil {
-		s.Logger.Errorw("failed to get HubSpot integration",
-			"invoice_id", inv.ID,
-			"error", err)
-		return nil // Don't fail the entire process, just skip invoice sync
+		s.Logger.Errorw("failed to start HubSpot invoice sync workflow",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
 	}
 
-	// Get HubSpot contact ID for the customer
-	hubspotContactID, err := hubspotIntegration.InvoiceSyncSvc.GetHubSpotContactID(ctx, inv.CustomerID)
-	if err != nil {
-		s.Logger.Warnw("customer not synced to HubSpot",
-			"invoice_id", inv.ID,
-			"customer_id", inv.CustomerID)
-		return nil // Don't fail the entire process, just skip invoice sync
-	}
-
-	// Perform the sync
-	err = hubspotIntegration.InvoiceSyncSvc.SyncInvoiceToHubSpot(ctx, inv.ID, hubspotContactID)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	s.Logger.Infow("HubSpot invoice sync workflow started successfully",
+		"invoice_id", invoiceID,
+		"customer_id", customerID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
 }
 
 func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error {
@@ -1558,21 +1580,14 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 
 	key := fmt.Sprintf("%s/%s", inv.TenantID, id)
 
-	exists, err := s.S3.Exists(ctx, key, s3.DocumentTypeInvoice)
+	data, err := s.GetInvoicePDF(ctx, id)
 	if err != nil {
 		return "", err
 	}
 
-	if !exists {
-		data, err := s.GetInvoicePDF(ctx, id)
-		if err != nil {
-			return "", err
-		}
-
-		err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
-		if err != nil {
-			return "", err
-		}
+	err = s.S3.UploadDocument(ctx, s3.NewPdfDocument(key, data, s3.DocumentTypeInvoice))
+	if err != nil {
+		return "", err
 	}
 
 	url, err := s.S3.GetPresignedUrl(ctx, key, s3.DocumentTypeInvoice)
@@ -1585,8 +1600,25 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 
 // GetInvoicePDF implements InvoiceService.
 func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, error) {
+
+	settingsService := NewSettingsService(s.ServiceParams)
+	settings, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoicePDFConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// validate request
+	req := dto.GetInvoiceWithBreakdownRequest{ID: id}
+
+	// Get properly typed values (type conversion is handled in GetSettingWithDefaults)
+	req.GroupBy = settings.Value["group_by"].([]string)
+	templateName := types.TemplateName(settings.Value["template_name"].(string))
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	// get invoice by id
-	inv, err := s.InvoiceRepo.Get(ctx, id)
+	inv, err := s.GetInvoiceWithBreakdown(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -1609,13 +1641,13 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 	}
 
 	// generate pdf
-	return s.PDFGenerator.RenderInvoicePdf(ctx, invoiceData)
+	return s.PDFGenerator.RenderInvoicePdf(ctx, invoiceData, lo.ToPtr(templateName))
 
 }
 
 func (s *invoiceService) getInvoiceDataForPDFGen(
 	ctx context.Context,
-	inv *invoice.Invoice,
+	inv *dto.InvoiceResponse,
 	customer *customer.Customer,
 	tenant *tenant.Tenant,
 ) (*pdf.InvoiceData, error) {
@@ -1624,10 +1656,12 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		invoiceNum = *inv.InvoiceNumber
 	}
 
-	subtotal, _ := inv.Subtotal.Float64()
-	totalDiscount, _ := inv.TotalDiscount.Float64()
-	totalTax, _ := inv.TotalTax.Float64()
-	total, _ := inv.Total.Float64()
+	// Round to currency precision before converting to float64
+	precision := types.GetCurrencyPrecision(inv.Currency)
+	subtotal, _ := inv.Subtotal.Round(precision).Float64()
+	totalDiscount, _ := inv.TotalDiscount.Round(precision).Float64()
+	totalTax, _ := inv.TotalTax.Round(precision).Float64()
+	total, _ := inv.Total.Round(precision).Float64()
 
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
@@ -1635,6 +1669,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		InvoiceNumber: invoiceNum,
 		InvoiceStatus: string(inv.InvoiceStatus),
 		Currency:      types.GetCurrencySymbol(inv.Currency),
+		Precision:     types.GetCurrencyPrecision(inv.Currency),
 		AmountDue:     total,
 		Subtotal:      subtotal,
 		TotalDiscount: totalDiscount,
@@ -1643,6 +1678,8 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		Notes:         "",  // resolved from invoice metadata
 		VAT:           0.0, // resolved from invoice metadata
 		Biller:        s.getBillerInfo(tenant),
+		PeriodStart:   pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
+		PeriodEnd:     pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
 		Recipient:     s.getRecipientInfo(customer),
 	}
 
@@ -1675,8 +1712,17 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 	// Prepare line items
 	var lineItems []pdf.LineItemData
 
-	// Process line items
+	// Process line items - filter out zero-amount items for PDF
 	for _, item := range inv.LineItems {
+		// Skip line items with zero amount for PDF generation
+		if item.Amount.IsZero() {
+			s.Logger.Debugw("skipping zero-amount line item for PDF",
+				"line_item_id", item.ID,
+				"plan_display_name", lo.FromPtrOr(item.PlanDisplayName, ""),
+				"amount", item.Amount.String())
+			continue
+		}
+
 		planDisplayName := ""
 		if item.PlanDisplayName != nil {
 			planDisplayName = *item.PlanDisplayName
@@ -1686,8 +1732,9 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			displayName = *item.DisplayName
 		}
 
-		amount, _ := item.Amount.Float64()
-		quantity, _ := item.Quantity.Float64()
+		// Round to currency precision before converting to float64
+		precision := types.GetCurrencyPrecision(item.Currency)
+		amount, _ := item.Amount.Round(precision).Float64()
 
 		description := ""
 		if item.Metadata != nil {
@@ -1715,7 +1762,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 			DisplayName:     displayName,
 			Description:     description,
 			Amount:          amount, // Keep original sign
-			Quantity:        quantity,
+			Quantity:        item.Quantity.InexactFloat64(),
 			Currency:        types.GetCurrencySymbol(item.Currency),
 			Type:            itemType,
 		}
@@ -1729,6 +1776,10 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		}
 		if item.PeriodEnd != nil {
 			lineItem.PeriodEnd = pdf.CustomTime{Time: *item.PeriodEnd}
+		}
+
+		if item.UsageBreakdown != nil {
+			lineItem.UsageBreakdown = item.UsageBreakdown
 		}
 
 		lineItems = append(lineItems, lineItem)
@@ -1747,6 +1798,8 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		appliedTaxes = []pdf.AppliedTaxData{}
 	}
 	data.AppliedTaxes = appliedTaxes
+
+	// No need to process usage breakdown here as it's already handled in LineItemData
 
 	appliedDiscounts, err := s.getAppliedDiscountsForPDF(ctx, inv)
 	if err != nil {
@@ -2370,55 +2423,6 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 	return nil
 }
 
-// convertProrationToLineItems converts proration results to invoice line items
-func (s *invoiceService) convertProrationToLineItems(prorationResult *dto.ProrationResult) ([]dto.CreateInvoiceLineItemRequest, error) {
-	var lineItems []dto.CreateInvoiceLineItemRequest
-
-	for lineItemID, result := range prorationResult.LineItemResults {
-		// Process credit items
-		for _, creditItem := range result.CreditItems {
-			lineItem := dto.CreateInvoiceLineItemRequest{
-				EntityID:    &lineItemID,
-				EntityType:  lo.ToPtr("subscription_line_item"),
-				PriceID:     &creditItem.PriceID,
-				DisplayName: &creditItem.Description,
-				Amount:      creditItem.Amount, // Already negative for credits
-				Quantity:    creditItem.Quantity,
-				PeriodStart: &creditItem.StartDate,
-				PeriodEnd:   &creditItem.EndDate,
-				Metadata: types.Metadata{
-					"proration_type":    "credit",
-					"line_item_id":      lineItemID,
-					"original_price_id": creditItem.PriceID,
-				},
-			}
-			lineItems = append(lineItems, lineItem)
-		}
-
-		// Process charge items
-		for _, chargeItem := range result.ChargeItems {
-			lineItem := dto.CreateInvoiceLineItemRequest{
-				EntityID:    &lineItemID,
-				EntityType:  lo.ToPtr("subscription_line_item"),
-				PriceID:     &chargeItem.PriceID,
-				DisplayName: &chargeItem.Description,
-				Amount:      chargeItem.Amount, // Positive for charges
-				Quantity:    chargeItem.Quantity,
-				PeriodStart: &chargeItem.StartDate,
-				PeriodEnd:   &chargeItem.EndDate,
-				Metadata: types.Metadata{
-					"proration_type":    "charge",
-					"line_item_id":      lineItemID,
-					"original_price_id": chargeItem.PriceID,
-				},
-			}
-			lineItems = append(lineItems, lineItem)
-		}
-	}
-
-	return lineItems, nil
-}
-
 // generateProrationInvoiceDescription creates a description for proration invoices
 func (s *invoiceService) generateProrationInvoiceDescription(cancellationType, cancellationReason string, totalAmount decimal.Decimal) string {
 	if totalAmount.IsNegative() {
@@ -2773,6 +2777,32 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 	return usageBreakdownResponse, nil
 }
 
+// GetInvoiceWithBreakdown retrieves an invoice with optional usage breakdown
+func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error) {
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the invoice first
+	invoice, err := s.GetInvoice(ctx, req.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Handle usage breakdown - prioritize group_by over expand_by_source for flexibility
+	if len(req.GroupBy) > 0 {
+		// Use flexible grouping
+		usageBreakdown, err := s.CalculateUsageBreakdown(ctx, invoice, req.GroupBy)
+		if err != nil {
+			return nil, err
+		}
+		invoice.WithUsageBreakdown(usageBreakdown)
+	}
+
+	return invoice, nil
+}
+
 // getAppliedTaxesForPDF retrieves and formats applied tax data for PDF generation
 func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID string) ([]pdf.AppliedTaxData, error) {
 	// Get applied taxes for this invoice with tax rate details expanded - SINGLE DB CALL!
@@ -2802,8 +2832,10 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 	// Convert to PDF format using expanded tax rate data
 	appliedTaxes := make([]pdf.AppliedTaxData, 0, len(appliedTaxesResponse.Items))
 	for _, appliedTax := range appliedTaxesResponse.Items {
-		taxableAmount, _ := appliedTax.TaxableAmount.Float64()
-		taxAmount, _ := appliedTax.TaxAmount.Float64()
+		// Round to currency precision before converting to float64
+		precision := types.GetCurrencyPrecision(appliedTax.Currency)
+		taxableAmount, _ := appliedTax.TaxableAmount.Round(precision).Float64()
+		taxAmount, _ := appliedTax.TaxAmount.Round(precision).Float64()
 
 		// Use expanded tax rate data if available
 		var taxName, taxCode, taxType string
@@ -2815,9 +2847,9 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 			taxCode = appliedTax.TaxRate.Code
 			taxType = string(appliedTax.TaxRate.TaxRateType)
 			if appliedTax.TaxRate.TaxRateType == types.TaxRateTypePercentage && appliedTax.TaxRate.PercentageValue != nil {
-				taxRateValue, _ = appliedTax.TaxRate.PercentageValue.Float64()
+				taxRateValue, _ = appliedTax.TaxRate.PercentageValue.Round(precision).Float64()
 			} else if appliedTax.TaxRate.TaxRateType == types.TaxRateTypeFixed && appliedTax.TaxRate.FixedValue != nil {
-				taxRateValue, _ = appliedTax.TaxRate.FixedValue.Float64()
+				taxRateValue, _ = appliedTax.TaxRate.FixedValue.Round(precision).Float64()
 			}
 		} else {
 			// Fallback if tax rate not expanded - this should not happen if expand works
@@ -2845,7 +2877,7 @@ func (s *invoiceService) getAppliedTaxesForPDF(ctx context.Context, invoiceID st
 }
 
 // getAppliedDiscountsForPDF retrieves and formats applied discount data for PDF generation
-func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *invoice.Invoice) ([]pdf.AppliedDiscountData, error) {
+func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *dto.InvoiceResponse) ([]pdf.AppliedDiscountData, error) {
 	// Get coupon applications for this invoice
 	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
 	couponApplications, err := couponApplicationService.GetCouponApplicationsByInvoice(ctx, inv.ID)
@@ -2863,7 +2895,9 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *inv
 	// Convert to PDF format using coupon application data
 	appliedDiscounts := make([]pdf.AppliedDiscountData, 0, len(couponApplications))
 	for _, couponApp := range couponApplications {
-		discountAmount, _ := couponApp.DiscountedAmount.Float64()
+		// Round to currency precision before converting to float64
+		precision := types.GetCurrencyPrecision(couponApp.Currency)
+		discountAmount, _ := couponApp.DiscountedAmount.Round(precision).Float64()
 
 		discountName := "Discount"
 		// Get coupon name from coupon service
@@ -2875,7 +2909,7 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *inv
 		var discountValue float64
 		discountType := string(couponApp.DiscountType)
 		if couponApp.DiscountType == types.CouponTypePercentage && couponApp.DiscountPercentage != nil {
-			discountValue, _ = couponApp.DiscountPercentage.Float64()
+			discountValue, _ = couponApp.DiscountPercentage.Round(precision).Float64()
 		} else if couponApp.DiscountType == types.CouponTypeFixed {
 			// For fixed discounts, use the actual discount amount as the value
 			discountValue = discountAmount

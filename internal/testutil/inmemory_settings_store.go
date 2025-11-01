@@ -50,7 +50,7 @@ func (s *InMemorySettingsStore) Get(ctx context.Context, id string) (*domainSett
 }
 
 // GetByKey retrieves a setting by key for a specific tenant and environment
-func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key string) (*domainSettings.Setting, error) {
+func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
@@ -61,7 +61,7 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key string) (*doma
 	for _, setting := range s.items {
 		if setting.TenantID == tenantID &&
 			setting.EnvironmentID == environmentID &&
-			setting.Key == key &&
+			setting.Key == key.String() &&
 			setting.Status == types.StatusPublished {
 			return setting, nil
 		}
@@ -71,7 +71,7 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key string) (*doma
 }
 
 // DeleteByKey deletes a setting by key for a specific tenant and environment
-func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key string) error {
+func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key types.SettingKey) error {
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
@@ -82,7 +82,7 @@ func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key string) err
 	for id, setting := range s.items {
 		if setting.TenantID == tenantID &&
 			setting.EnvironmentID == environmentID &&
-			setting.Key == key &&
+			setting.Key == key.String() &&
 			setting.Status == types.StatusPublished {
 			delete(s.items, id)
 			return nil
@@ -107,14 +107,14 @@ func (s *InMemorySettingsStore) Clear() {
 }
 
 // ListAllTenantEnvSettingsByKey returns all settings for a given key across all tenants and environments
-func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error) {
+func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Context, key types.SettingKey) ([]*types.TenantEnvConfig, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	var configs []*types.TenantEnvConfig
 
 	for _, setting := range s.items {
-		if setting.Key == key && setting.Status == types.StatusPublished {
+		if setting.Key == key.String() && setting.Status == types.StatusPublished {
 			config := &types.TenantEnvConfig{
 				TenantID:      setting.TenantID,
 				EnvironmentID: setting.EnvironmentID,
@@ -129,7 +129,7 @@ func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Contex
 
 // GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
 func (s *InMemorySettingsStore) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
-	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig.String())
+	configs, err := s.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
 	if err != nil {
 		return nil, err
 	}

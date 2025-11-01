@@ -327,7 +327,7 @@ func provideHandlers(
 		PriceUnit:                v1.NewPriceUnitHandler(priceUnitService, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db),
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
-		Addon:                    v1.NewAddonHandler(addonService, logger),
+		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),

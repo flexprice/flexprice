@@ -12,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
-	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
@@ -565,11 +564,6 @@ func (pu *PriceUpdate) SetPriceUnitEdge(p *PriceUnit) *PriceUpdate {
 	return pu.SetPriceUnitEdgeID(p.ID)
 }
 
-// SetGroup sets the "group" edge to the Group entity.
-func (pu *PriceUpdate) SetGroup(g *Group) *PriceUpdate {
-	return pu.SetGroupID(g.ID)
-}
-
 // Mutation returns the PriceMutation object of the builder.
 func (pu *PriceUpdate) Mutation() *PriceMutation {
 	return pu.mutation
@@ -578,12 +572,6 @@ func (pu *PriceUpdate) Mutation() *PriceMutation {
 // ClearPriceUnitEdge clears the "price_unit_edge" edge to the PriceUnit entity.
 func (pu *PriceUpdate) ClearPriceUnitEdge() *PriceUpdate {
 	pu.mutation.ClearPriceUnitEdge()
-	return pu
-}
-
-// ClearGroup clears the "group" edge to the Group entity.
-func (pu *PriceUpdate) ClearGroup() *PriceUpdate {
-	pu.mutation.ClearGroup()
 	return pu
 }
 
@@ -849,6 +837,12 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.EndDateCleared() {
 		_spec.ClearField(price.FieldEndDate, field.TypeTime)
 	}
+	if value, ok := pu.mutation.GroupID(); ok {
+		_spec.SetField(price.FieldGroupID, field.TypeString, value)
+	}
+	if pu.mutation.GroupIDCleared() {
+		_spec.ClearField(price.FieldGroupID, field.TypeString)
+	}
 	if pu.mutation.PriceUnitEdgeCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -871,35 +865,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if pu.mutation.GroupCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   price.GroupTable,
-			Columns: []string{price.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := pu.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   price.GroupTable,
-			Columns: []string{price.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1460,11 +1425,6 @@ func (puo *PriceUpdateOne) SetPriceUnitEdge(p *PriceUnit) *PriceUpdateOne {
 	return puo.SetPriceUnitEdgeID(p.ID)
 }
 
-// SetGroup sets the "group" edge to the Group entity.
-func (puo *PriceUpdateOne) SetGroup(g *Group) *PriceUpdateOne {
-	return puo.SetGroupID(g.ID)
-}
-
 // Mutation returns the PriceMutation object of the builder.
 func (puo *PriceUpdateOne) Mutation() *PriceMutation {
 	return puo.mutation
@@ -1473,12 +1433,6 @@ func (puo *PriceUpdateOne) Mutation() *PriceMutation {
 // ClearPriceUnitEdge clears the "price_unit_edge" edge to the PriceUnit entity.
 func (puo *PriceUpdateOne) ClearPriceUnitEdge() *PriceUpdateOne {
 	puo.mutation.ClearPriceUnitEdge()
-	return puo
-}
-
-// ClearGroup clears the "group" edge to the Group entity.
-func (puo *PriceUpdateOne) ClearGroup() *PriceUpdateOne {
-	puo.mutation.ClearGroup()
 	return puo
 }
 
@@ -1774,6 +1728,12 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if puo.mutation.EndDateCleared() {
 		_spec.ClearField(price.FieldEndDate, field.TypeTime)
 	}
+	if value, ok := puo.mutation.GroupID(); ok {
+		_spec.SetField(price.FieldGroupID, field.TypeString, value)
+	}
+	if puo.mutation.GroupIDCleared() {
+		_spec.ClearField(price.FieldGroupID, field.TypeString)
+	}
 	if puo.mutation.PriceUnitEdgeCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -1796,35 +1756,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(priceunit.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if puo.mutation.GroupCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   price.GroupTable,
-			Columns: []string{price.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := puo.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   price.GroupTable,
-			Columns: []string{price.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

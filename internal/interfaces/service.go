@@ -102,7 +102,7 @@ type SubscriptionService interface {
 
 	// Addon management for subscriptions
 	AddAddonToSubscription(ctx context.Context, subscriptionID string, req *dto.AddAddonToSubscriptionRequest) (*addonassociation.AddonAssociation, error)
-	RemoveAddonFromSubscription(ctx context.Context, subscriptionID string, addonID string, reason string) error
+	RemoveAddonFromSubscription(ctx context.Context, req *dto.RemoveAddonRequest) error
 
 	// Line item management
 	AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error)
@@ -116,6 +116,9 @@ type SubscriptionService interface {
 
 	// Feature usage tracking
 	GetFeatureUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error)
+
+	GetSubscriptionEntitlements(ctx context.Context, subscriptionID string) ([]*dto.EntitlementResponse, error)
+	GetAggregatedSubscriptionEntitlements(ctx context.Context, subscriptionID string, req *dto.GetSubscriptionEntitlementsRequest) (*dto.SubscriptionEntitlementsResponse, error)
 }
 
 type ServiceDependencies struct {

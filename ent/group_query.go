@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -14,7 +13,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // GroupQuery is the builder for querying Group entities.
@@ -24,7 +22,6 @@ type GroupQuery struct {
 	order      []group.OrderOption
 	inters     []Interceptor
 	predicates []predicate.Group
-	withPrices *PriceQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -59,28 +56,6 @@ func (gq *GroupQuery) Unique(unique bool) *GroupQuery {
 func (gq *GroupQuery) Order(o ...group.OrderOption) *GroupQuery {
 	gq.order = append(gq.order, o...)
 	return gq
-}
-
-// QueryPrices chains the current query on the "prices" edge.
-func (gq *GroupQuery) QueryPrices() *PriceQuery {
-	query := (&PriceClient{config: gq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := gq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := gq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(group.Table, group.FieldID, selector),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, group.PricesTable, group.PricesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(gq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // First returns the first Group entity from the query.
@@ -275,22 +250,10 @@ func (gq *GroupQuery) Clone() *GroupQuery {
 		order:      append([]group.OrderOption{}, gq.order...),
 		inters:     append([]Interceptor{}, gq.inters...),
 		predicates: append([]predicate.Group{}, gq.predicates...),
-		withPrices: gq.withPrices.Clone(),
 		// clone intermediate query.
 		sql:  gq.sql.Clone(),
 		path: gq.path,
 	}
-}
-
-// WithPrices tells the query-builder to eager-load the nodes that are connected to
-// the "prices" edge. The optional arguments are used to configure the query builder of the edge.
-func (gq *GroupQuery) WithPrices(opts ...func(*PriceQuery)) *GroupQuery {
-	query := (&PriceClient{config: gq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	gq.withPrices = query
-	return gq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -369,11 +332,8 @@ func (gq *GroupQuery) prepareQuery(ctx context.Context) error {
 
 func (gq *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group, error) {
 	var (
-		nodes       = []*Group{}
-		_spec       = gq.querySpec()
-		loadedTypes = [1]bool{
-			gq.withPrices != nil,
-		}
+		nodes = []*Group{}
+		_spec = gq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Group).scanValues(nil, columns)
@@ -381,7 +341,6 @@ func (gq *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Group{config: gq.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -393,49 +352,7 @@ func (gq *GroupQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Group,
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := gq.withPrices; query != nil {
-		if err := gq.loadPrices(ctx, query, nodes,
-			func(n *Group) { n.Edges.Prices = []*Price{} },
-			func(n *Group, e *Price) { n.Edges.Prices = append(n.Edges.Prices, e) }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
-}
-
-func (gq *GroupQuery) loadPrices(ctx context.Context, query *PriceQuery, nodes []*Group, init func(*Group), assign func(*Group, *Price)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Group)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	query.withFKs = true
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(price.FieldGroupID)
-	}
-	query.Where(predicate.Price(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(group.PricesColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.GroupID
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "group_id" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "group_id" returned %v for node %v`, *fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
 }
 
 func (gq *GroupQuery) sqlCount(ctx context.Context) (int, error) {

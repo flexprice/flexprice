@@ -165,7 +165,10 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 	priceService := NewPriceService(s.ServiceParams)
 	entitlementService := NewEntitlementService(s.ServiceParams)
 
-	pricesResponse, err := priceService.GetPricesByPlanID(ctx, plan.ID)
+	pricesResponse, err := priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
+		PlanID:       plan.ID,
+		AllowExpired: true,
+	})
 	if err != nil {
 		s.Logger.Errorw("failed to fetch prices for plan", "plan_id", plan.ID, "error", err)
 		return nil, err
@@ -904,7 +907,7 @@ func (s *planService) SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyn
 			}
 
 			// Line item exists and needs termination
-			deleteReq := dto.DeleteSubscriptionLineItemRequest{EndDate: planPrice.EndDate}
+			deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: planPrice.EndDate}
 			if _, err := subscriptionService.DeleteSubscriptionLineItem(params.Context, lineItem.ID, deleteReq); err != nil {
 				s.Logger.Errorw("Failed to terminate line item",
 					"subscription_id", params.Subscription.ID,

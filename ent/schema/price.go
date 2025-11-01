@@ -219,9 +219,6 @@ func (Price) Edges() []ent.Edge {
 		edge.To("price_unit_edge", PriceUnit.Type).
 			Field("price_unit_id").
 			Unique(),
-		edge.To("group", Group.Type).
-			Field("group_id").
-			Unique(),
 	}
 }
 

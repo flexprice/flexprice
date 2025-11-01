@@ -26,6 +26,15 @@ type CreatePlanRequest struct {
 	Metadata     types.Metadata                 `json:"metadata"`
 }
 
+type GetPricesByPlanRequest struct {
+	PlanID       string `json:"plan_id" validate:"required"`
+	AllowExpired bool   `json:"allow_expired,omitempty"`
+}
+
+func (r *GetPricesByPlanRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
 type CreatePlanPriceRequest struct {
 	*CreatePriceRequest
 }

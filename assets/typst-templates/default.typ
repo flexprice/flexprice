@@ -31,11 +31,31 @@
 }
 
 
-#let format-number = (num) => {
+#let format-number = (num, precision: 2) => {
   let str-num = str(num)
   let parts = str-num.split(".")
   let integer-part = str(parts.at(0))
-  let decimal-part = if parts.len() > 1 { "." + parts.at(1) } else { "" }
+  let decimal-part = if parts.len() > 1 { 
+    let raw-decimal = parts.at(1)
+    // Ensure exactly the specified precision decimal places
+    if raw-decimal.len() < precision {
+      let zeros = ""
+      for i in range(precision - raw-decimal.len()) {
+        zeros += "0"
+      }
+      raw-decimal + zeros
+    } else if raw-decimal.len() > precision {
+      raw-decimal.slice(0, precision)
+    } else {
+      raw-decimal
+    }
+  } else { 
+    let zeros = ""
+    for i in range(precision) {
+      zeros += "0"
+    }
+    zeros
+  }
 
   // Add commas every 3 digits from the right
   let chars = integer-part.rev().clusters()
@@ -47,19 +67,31 @@
     result += c
   }
 
-  result.rev() + decimal-part
+  if precision > 0 {
+    result.rev() + "." + decimal-part
+  } else {
+    result.rev()
+  }
+}
+
+#let format-currency = (num, precision: 2) => {
+  let multiplier = calc.pow(10.0, precision)
+  let rounded = calc.round(num * multiplier) / multiplier
+  format-number(rounded, precision: precision)
 }
 
 // Define the default-invoice function
 #let default-invoice(
   language: "en",
   currency: "$",
+  precision: 2,
   title: none,
   banner-image: none,
   invoice-status: "DRAFT",       // DRAFT, FINALIZED, VOIDED
   invoice-number: none,
   issuing-date: "",
   due-date: none,
+  service-period: none,              // Service period for billing
   amount-due: 0,  
   notes: "",
   biller: (:),                  // Company info
@@ -76,20 +108,42 @@
 ) = {
   // Set styling defaults
   styling.font = styling.at("font", default: "Inter")
-  styling.font-size = styling.at("font-size", default: 10pt)
-  styling.primary-color = styling.at("primary-color", default: rgb("#4361ee"))
+  styling.font-size = styling.at("font-size", default: 9pt)
+  styling.primary-color = styling.at("primary-color", default: rgb("#000000"))
   styling.margin = styling.at("margin", default: (
-    top: 15mm,
-    right: 15mm,
-    bottom: 15mm,
-    left: 15mm,
+    top: 12mm,
+    right: 10mm,
+    bottom: 10mm,
+    left: 10mm,
   ))
-  styling.line-color = styling.at("line-color", default: rgb("#eee"))
-  styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#666666")))
+  styling.line-color = styling.at("line-color", default: rgb("#e0e0e0"))
+  styling.secondary-color = rgb(styling.at("secondary-color", default: rgb("#707070")))
+  styling.table-header-bg = rgb("#f8f9fa")
+  styling.table-header-color = rgb("#2c3e50")
+  styling.table-header-border = rgb("#dee2e6")
 
   // Set document properties
   let issuing-date-value = if issuing-date != "" { issuing-date }
         else { datetime.today().display("[year]-[month]-[day]") }
+
+  // Initialize service period from items if not provided
+  let service-period-value = if service-period != none { 
+    service-period 
+  } else if items.len() > 0 {
+    // Extract period from first item that has period information
+    let first-item-with-period = items.find(item => 
+      item.at("period_start", default: "") != "" and item.at("period_end", default: "") != ""
+    )
+    if first-item-with-period != none {
+      let period-start = first-item-with-period.at("period_start")
+      let period-end = first-item-with-period.at("period_end")
+      format-date(parse-date(period-start)) + " - " + format-date(parse-date(period-end))
+    } else {
+      "--"
+    }
+  } else {
+    "--"
+  }
 
   set document(
     title: if title != none { title } else { "Invoice " + invoice-number },
@@ -119,109 +173,172 @@
         #banner-image
       ],
       [
-        #text(weight: "medium", size: 2em)[Invoice]
+        #text(weight: "medium", size: 1.6em)[Invoice]
       ]
     )
-    v(1em)
+    v(0.8em)
   } else {
-    text(weight: "bold", size: 2em)[Invoice]
+    text(weight: "bold", size: 2.2em, fill: styling.primary-color)[Invoice]
   }
 
-  grid(
-    columns: (1fr, 1fr, 1fr),
-    gutter: 0.5em,
-    align: auto,
-    [
-      #text(weight: "regular", fill: styling.secondary-color)[Invoice Number]\
-      #text(weight: "regular")[#invoice-number]
-    ],
-    [
-      #text(weight: "regular", fill: styling.secondary-color)[Date of Issue]\
-      #text(weight: "regular")[#issuing-date-value]
-    ],
-    [
-      #text(weight: "regular", fill: styling.secondary-color)[Date Due]\
-      #text(weight: "regular")[#due-date]
-    ],
-  )
+  v(0.8em)
 
-  line(length: 100%, stroke: styling.line-color)
+  // Invoice details in vertical format
+  [
+    #text(weight: "medium", size: 10pt)[Invoice number:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#invoice-number] \
+    #text(weight: "medium", size: 10pt)[Date of issue:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#issuing-date-value] \
+    #text(weight: "medium", size: 10pt)[Date due:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#due-date] \
+    #text(weight: "medium", size: 10pt)[Service period:] #text(weight: "regular", size: 10pt, fill: rgb("#666666"))[#service-period-value]
+  ]
 
-  v(2em)
+  line(length: 100%, stroke: 0.5pt + styling.line-color)
+
+  v(1.2em)
 
   // Biller and Recipient Information
   grid(
     columns: (1fr, 1fr),
-    gutter: 1em,
+    gutter: 0.8em,
     [
-      #text(weight: "semibold", size: 12pt)[From]
-      #v(0.25em)
-      #text(weight: "medium")[#biller.name] \
-      #text(fill: gray)[#biller.at("email", default: "--")] \
-      #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("street", default: "--")] \
-      #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("city", default: "--")] \
-      #text(fill: styling.secondary-color)[#biller.at("address", default: (:)).at("postal-code", default: "--")]
+      #text(weight: "semibold", size: 11pt)[From]
+      #v(0.3em)
+      #text(weight: "semibold", size: 10pt)[#biller.name] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("email", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("street", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("city", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#biller.at("address", default: (:)).at("postal-code", default: "--")]
     ],
     [
-      #text(weight: "semibold", size: 12pt)[Bill to]
-      #v(0.25em)
-      #text(weight: "medium")[#recipient.name] \
-      #text(fill: gray)[#recipient.at("email", default: "--")] \
-      #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("street", default: "--")] \
-      #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("city", default: "--")] \
-      #text(fill: styling.secondary-color)[#recipient.at("address", default: (:)).at("postal-code", default: "--")]
+      #text(weight: "semibold", size: 11pt)[Bill to]
+      #v(0.3em)
+      #text(weight: "semibold", size: 10pt)[#recipient.name] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("email", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("street", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("city", default: "--")] \
+      #text(weight: "regular", size: 9pt, fill: rgb("#666666"))[#recipient.at("address", default: (:)).at("postal-code", default: "--")]
     ]
   )
 
-  v(2em)
-  line(length: 100%, stroke: styling.line-color)
-  v(1em)
-
-  // Order Details
-  [== Order Details]
-  v(1em)
-
-  table(
-    columns: (1fr, 2fr, 1fr, 1fr, 1fr),
-    inset: 8pt,
-    align: (left, left, left, center, right),
-    fill: white,
-    stroke: (x, y) => (
-      bottom: if y == 0 { 1pt + styling.line-color } else { 1pt + styling.line-color },
-    ),
-    table.header(
-      [*Item*],
-      [*Description*],
-      [*Interval*],
-      [*Quantity*],
-      [*Amount*],
-    ),
-    ..items.map((item) => {
-      let line-total = item.quantity * item.amount
-      let amount-display = if line-total < 0 {
-        [−#currency #format-number(calc.abs(line-total))]
-      } else {
-        [#currency #format-number(line-total)]
-      }
-      
-      (
-        item.at("plan_display_name", default: "Plan"),
-        if item.at("description", default: "Recurring") != "" {
-          item.at("description", default: "Recurring")
-        } else {
-          "-"
-        },
-        if item.at("period_start", default: "") != "" and 
-         item.at("period_end", default: "") != "" {
-          [#format-date(parse-date(item.at("period_start"))) - #format-date(parse-date(item.at("period_end")))]
-        } else {
-          "-"
-        },
-        format-number(item.quantity),
-        amount-display,
+  v(1.5em)
+  // Main line items table with integrated usage breakdowns
+  for (i, item) in items.enumerate() {
+    // Amount is already the total line amount, not unit price
+    let line-total = item.amount
+    let amount-display = if line-total < 0 {
+      [−#currency #format-currency(calc.abs(line-total), precision: precision)]
+    } else {
+      [#currency #format-currency(line-total, precision: precision)]
+    }
+    
+    let description = if item.at("description", default: "Recurring") != "" {
+      item.at("description", default: "Recurring")
+    } else {
+      "-"
+    }
+    
+    let has_period = item.at("period_start", default: "") != "" and item.at("period_end", default: "") != ""
+    let interval = if has_period {
+      [#format-date(parse-date(item.at("period_start"))) - #format-date(parse-date(item.at("period_end")))]
+    } else {
+      "-"
+    }
+    
+    // Display the main line item
+    if i == 0 {
+      // Add header only for the first item
+      table(
+        columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
+        inset: (top: 12pt, bottom: 12pt, left: 8pt, right: 8pt),
+        align: (left, left, center, right),
+        fill: (x, y) => if y == 0 { rgb("#f8f9fa") } else { white },
+        stroke: (x, y) => (
+          bottom: if y == 0 { 1pt + rgb("#e9ecef") } else { 0.5pt + rgb("#e9ecef") },
+        ),
+      table.header(
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Item]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Interval]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Quantity]],
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[Amount]],
+      ),
+        [#item.at("display_name", default: item.at("plan_display_name", default: "Plan"))], 
+        [#interval],
+        [#format-number(item.quantity)],
+        [#amount-display]
       )
-    }).flatten(),
-  )
+    } else {
+      // Just the row for subsequent items
+      table(
+        columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
+        inset: (top: 10pt, bottom: 10pt, left: 8pt, right: 8pt),
+        align: (left, left, center, right),
+        fill: white,
+        stroke: (x, y) => (
+          bottom: 0.5pt + rgb("#e9ecef"),
+        ),
+        [#item.at("display_name", default: item.at("plan_display_name", default: "Plan"))], 
+        [#interval],
+        [#format-number(item.quantity)],
+        [#amount-display]
+      )
+    }
+    
+    // Check if this item has usage breakdown and add it directly below
+    let has_usage_breakdown = "usage_breakdown" in item and item.usage_breakdown != none and item.usage_breakdown.len() > 0
+    
+    if has_usage_breakdown {
+      // Show usage breakdown as sub-rows within the same table structure
+      for usage_item in item.usage_breakdown {
+        // Check if grouped_by exists
+        if "grouped_by" in usage_item {
+          // Extract data from the usage breakdown item
+          let grouped_by = usage_item.at("grouped_by", default: none)
+          let cost = usage_item.at("cost", default: none)
+          let usage = usage_item.at("usage", default: none)
+          
+          // Only proceed if grouped_by is not none
+          if grouped_by != none {
+            // Extract resource name from grouped_by map - try multiple fields
+            let resource_name = grouped_by.at("resource_name", default: 
+              grouped_by.at("type", default: 
+                grouped_by.at("feature_id", default: 
+                  grouped_by.at("source", default: "—"))))
+            
+            // Parse cost string to float safely
+            let cost_value = 0.0
+            if cost != none {
+              cost_value = float(str(cost))
+            }
+            
+            // Parse usage/units safely
+            let usage_value = 0.0
+            if usage != none {
+              usage_value = float(str(usage))
+            }
+            
+            // Display usage breakdown as a sub-row with indentation
+            table(
+              columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
+              inset: (top: 6pt, bottom: 6pt, left: 2em, right: 8pt),
+              align: (left, left, center, right),
+              fill: rgb("#f8f9fa"),
+              stroke: none,
+              [#text(size: 0.85em, fill: rgb("#666666"), weight: "regular")[└─ #resource_name]],
+              [],  // Empty interval column
+              [#text(size: 0.9em, weight: "medium")[#format-number(usage_value)]],
+            [#text(size: 0.9em, weight: "medium")[#currency #format-currency(cost_value, precision: precision)]]
+            )
+          }
+        }
+      }
+    }
+    
+    // Only add spacing if there's usage breakdown or if it's not the last item
+    if has_usage_breakdown or i < items.len() - 1 {
+      v(0.5em)
+    }
+  }
+  
+  // End of line items with usage breakdowns
 
   v(1em)
 
@@ -233,16 +350,16 @@
       inset: 6pt,
       stroke: none,
       // Always show subtotal
-      [Subtotal], [#currency#format-number(subtotal)],
+      [Subtotal], [#currency#format-currency(subtotal, precision: precision)],
       
       // Show discount row only if there's a discount
-      ..if discount > 0 { ([Discount], [−#currency#format-number(discount)]) } else { () },
+      ..if discount > 0 { ([Discount], [−#currency#format-currency(discount, precision: precision)]) } else { () },
       
       // Show tax row only if there's tax
-      ..if tax > 0 { ([Tax], [#currency#format-number(tax)]) } else { () },
+      ..if tax > 0 { ([Tax], [#currency#format-currency(tax, precision: precision)]) } else { () },
       
-      table.hline(stroke: 1pt + styling.line-color),
-      [*Net Payable*], [*#currency#format-number(subtotal - discount + tax)*],
+      table.hline(stroke: 0.5pt + black),
+      [*Net Payable*], [*#currency#format-currency(subtotal - discount + tax, precision: precision)*],
     )
   )
 
@@ -250,7 +367,7 @@
 
   // Applied Discounts section (if any discounts were applied)
   if applied-discounts.len() > 0 {
-    [== Applied Discounts]
+    text(weight: "medium", size: 1.1em)[Applied Discounts]
     v(0.5em)
 
     table(
@@ -270,16 +387,16 @@
       ),
       ..applied-discounts.map((discount) => {
         let value-display = if discount.type == "percentage" {
-          [#format-number(discount.value)%]
+          [#format-currency(discount.value, precision: precision)%]
         } else {
-          [#currency#format-number(discount.value)]
+          [#currency#format-currency(discount.value, precision: precision)]
         }
         
         (
           discount.discount_name,
           discount.type,
           value-display,
-          [#currency#format-number(discount.discount_amount)],
+          [#currency#format-currency(discount.discount_amount, precision: precision)],
           discount.line_item_ref,
         )
       }).flatten(),
@@ -290,7 +407,7 @@
 
   // Applied Taxes section (if any taxes were applied)
   if applied-taxes.len() > 0 {
-    [== Applied Taxes]
+    text(weight: "medium", size: 1.1em)[Applied Taxes]
     v(0.5em)
 
     table(
@@ -312,9 +429,9 @@
       ),
       ..applied-taxes.map((tax) => {
         let rate-display = if tax.tax_type == "percentage" {
-          [#format-number(tax.tax_rate)%]
+          [#format-currency(tax.tax_rate, precision: precision)%]
         } else {
-          [#currency#format-number(tax.tax_rate)]
+          [#currency#format-currency(tax.tax_rate, precision: precision)]
         }
         
         (
@@ -322,8 +439,8 @@
           tax.tax_code,
           tax.tax_type,
           rate-display,
-          [#currency#format-number(tax.taxable_amount)],
-          [#currency#format-number(tax.tax_amount)],
+          [#currency#format-currency(tax.taxable_amount, precision: precision)],
+          [#currency#format-currency(tax.tax_amount, precision: precision)],
           // tax.applied_at,
         )
       }).flatten(),
@@ -334,8 +451,8 @@
 
   // Payment information
   if invoice-status == "FINALIZED" {
-    [== Payment Information]
-    v(1em)
+    text(weight: "medium", size: 1.1em)[Payment Information]
+    v(0.8em)
 
     [We kindly request that you complete the payment by the due date of #due-date. Your prompt attention to this matter is greatly appreciated.]
 
@@ -348,7 +465,7 @@
   // Notes
   if notes != "" {
     v(1em)
-    [== Notes]
+    text(weight: "medium", size: 1.1em)[Notes]
     v(0.5em)
     notes
   }

@@ -1223,20 +1223,21 @@ func (s *PriceServiceSuite) TestDeletePrice_Comprehensive() {
 		}
 		_ = s.priceRepo.Create(s.ctx, price)
 
-		// Update with new end date
+		// Try to update with new end date - should fail because price is already terminated
 		newEndDate := time.Now().UTC().AddDate(0, 0, 10) // 10 days from now
 		req := dto.DeletePriceRequest{
 			EndDate: lo.ToPtr(newEndDate),
 		}
 
 		err := s.priceService.DeletePrice(s.ctx, price.ID, req)
-		s.NoError(err)
+		s.Error(err)
+		s.Contains(err.Error(), "price is already terminated")
 
-		// Verify price end date is updated to new date
+		// Verify price end date remains unchanged
 		updatedPrice, err := s.priceRepo.Get(s.ctx, price.ID)
 		s.NoError(err)
 		s.NotNil(updatedPrice.EndDate)
-		s.Equal(newEndDate.Unix(), updatedPrice.EndDate.Unix())
+		s.Equal(existingEndDate.Unix(), updatedPrice.EndDate.Unix())
 	})
 
 	s.Run("TC-DEL-010_Price_With_Different_Statuses", func() {

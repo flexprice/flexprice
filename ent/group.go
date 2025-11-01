@@ -39,29 +39,8 @@ type Group struct {
 	// EntityType holds the value of the "entity_type" field.
 	EntityType string `json:"entity_type,omitempty"`
 	// Idempotency key for group creation
-	LookupKey string `json:"lookup_key,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the GroupQuery when eager-loading is set.
-	Edges        GroupEdges `json:"edges"`
+	LookupKey    string `json:"lookup_key,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// GroupEdges holds the relations/edges for other nodes in the graph.
-type GroupEdges struct {
-	// Prices holds the value of the prices edge.
-	Prices []*Price `json:"prices,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// PricesOrErr returns the Prices value or an error if the edge
-// was not loaded in eager-loading.
-func (e GroupEdges) PricesOrErr() ([]*Price, error) {
-	if e.loadedTypes[0] {
-		return e.Prices, nil
-	}
-	return nil, &NotLoadedError{edge: "prices"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -175,11 +154,6 @@ func (gr *Group) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (gr *Group) Value(name string) (ent.Value, error) {
 	return gr.selectValues.Get(name)
-}
-
-// QueryPrices queries the "prices" edge of the Group entity.
-func (gr *Group) QueryPrices() *PriceQuery {
-	return NewGroupClient(gr.config).QueryPrices(gr)
 }
 
 // Update returns a builder for updating this Group.

@@ -92,8 +92,6 @@ const (
 	FieldGroupID = "group_id"
 	// EdgePriceUnitEdge holds the string denoting the price_unit_edge edge name in mutations.
 	EdgePriceUnitEdge = "price_unit_edge"
-	// EdgeGroup holds the string denoting the group edge name in mutations.
-	EdgeGroup = "group"
 	// Table holds the table name of the price in the database.
 	Table = "prices"
 	// PriceUnitEdgeTable is the table that holds the price_unit_edge relation/edge.
@@ -103,13 +101,6 @@ const (
 	PriceUnitEdgeInverseTable = "price_unit"
 	// PriceUnitEdgeColumn is the table column denoting the price_unit_edge relation/edge.
 	PriceUnitEdgeColumn = "price_unit_id"
-	// GroupTable is the table that holds the group relation/edge.
-	GroupTable = "prices"
-	// GroupInverseTable is the table name for the Group entity.
-	// It exists in this package in order to avoid circular dependency with the "group" package.
-	GroupInverseTable = "groups"
-	// GroupColumn is the table column denoting the group relation/edge.
-	GroupColumn = "group_id"
 )
 
 // Columns holds all SQL columns for price fields.
@@ -155,21 +146,10 @@ var Columns = []string{
 	FieldGroupID,
 }
 
-// ForeignKeys holds the SQL foreign-keys that are owned by the "prices"
-// table and are not defined as standalone fields in the schema.
-var ForeignKeys = []string{
-	"addon_prices",
-}
-
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
 	for i := range Columns {
 		if column == Columns[i] {
-			return true
-		}
-	}
-	for i := range ForeignKeys {
-		if column == ForeignKeys[i] {
 			return true
 		}
 	}
@@ -394,24 +374,10 @@ func ByPriceUnitEdgeField(field string, opts ...sql.OrderTermOption) OrderOption
 		sqlgraph.OrderByNeighborTerms(s, newPriceUnitEdgeStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByGroupField orders the results by group field.
-func ByGroupField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newGroupStep(), sql.OrderByField(field, opts...))
-	}
-}
 func newPriceUnitEdgeStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PriceUnitEdgeInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, PriceUnitEdgeTable, PriceUnitEdgeColumn),
-	)
-}
-func newGroupStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(GroupInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, GroupTable, GroupColumn),
 	)
 }

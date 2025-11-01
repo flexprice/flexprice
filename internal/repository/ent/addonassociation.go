@@ -34,6 +34,23 @@ func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, 
 	}
 }
 
+// applyActiveAddonAssociationFilter applies the filter to ensure only active addon associations are returned
+// Active addon associations are those where EndDate > periodStart or EndDate is nil
+func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *ent.AddonAssociationQuery, periodStart *time.Time) *ent.AddonAssociationQuery {
+	if periodStart == nil {
+		// No period specified, just return published associations
+		return query.Where(addonassociation.Status(string(types.StatusPublished)))
+	}
+
+	return query.Where(
+		addonassociation.Status(string(types.StatusPublished)),
+		addonassociation.Or(
+			addonassociation.EndDateGT(*periodStart),
+			addonassociation.EndDateIsNil(),
+		),
+	)
+}
+
 func (r *addonAssociationRepository) Create(ctx context.Context, a *domainAddonAssociation.AddonAssociation) error {
 	client := r.client.Writer(ctx)
 
@@ -52,11 +69,6 @@ func (r *addonAssociationRepository) Create(ctx context.Context, a *domainAddonA
 		"entity_type":          a.EntityType,
 	})
 	defer FinishSpan(span)
-
-	// Set environment ID from context if not already set
-	if a.EnvironmentID == "" {
-		a.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
 
 	_, err := client.AddonAssociation.Create().
 		SetID(a.ID).
@@ -507,4 +519,48 @@ func (r *addonAssociationRepository) DeleteCache(ctx context.Context, addonAssoc
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, tenantID, environmentID, addonAssociationID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+// GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
+func (r *addonAssociationRepository) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time, addonIds []string) ([]*domainAddonAssociation.AddonAssociation, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "addon_association", "list_active", map[string]interface{}{
+		"entity_id":    entityID,
+		"entity_type":  entityType,
+		"period_start": periodStart,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+	query := client.AddonAssociation.Query().
+		Where(
+			addonassociation.EntityID(entityID),
+			addonassociation.EntityType(string(entityType)),
+			addonassociation.TenantID(types.GetTenantID(ctx)),
+			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
+			addonassociation.AddonStatus(string(types.AddonStatusActive)),
+		)
+
+
+	if len(addonIds) > 0 {
+		query = query.Where(addonassociation.AddonIDIn(addonIds...))
+	}
+
+	// Apply the active filter
+	query = r.queryOpts.applyActiveAddonAssociationFilter(query, periodStart)
+
+	addonAssociations, err := query.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list active addon associations").
+			WithReportableDetails(map[string]any{
+				"entity_id":   entityID,
+				"entity_type": entityType,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return domainAddonAssociation.FromEntList(addonAssociations), nil
 }

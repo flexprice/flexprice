@@ -95,11 +95,38 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 		return nil, err
 	}
 
-	// Set end date and update
-	lineItem.EndDate = req.EndDate.UTC()
-	if lineItem.EndDate.IsZero() {
-		lineItem.EndDate = time.Now().UTC()
+	// Check if line item is already terminated
+	if !lineItem.EndDate.IsZero() {
+		return nil, ierr.NewError("line item is already terminated").
+			WithHint("Cannot terminate a line item that has already been terminated").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id": lineItemID,
+				"end_date":     lineItem.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
+
+	// Set end date and update
+	var effectiveFrom time.Time
+	if req.EffectiveFrom != nil {
+		effectiveFrom = req.EffectiveFrom.UTC()
+	} else {
+		effectiveFrom = time.Now().UTC()
+	}
+
+	// Validate effective from date is after start date
+	if effectiveFrom.Before(lineItem.StartDate) {
+		return nil, ierr.NewError("effective from date must be after start date").
+			WithHint("The effective from date must be after the line item's start date").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id":   lineItemID,
+				"start_date":     lineItem.StartDate,
+				"effective_from": effectiveFrom,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	lineItem.EndDate = effectiveFrom
 
 	if err := s.SubscriptionLineItemRepo.Update(ctx, lineItem); err != nil {
 		return nil, err
@@ -203,7 +230,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 			// Terminate the existing line item using existing method
 			deleteReq := dto.DeleteSubscriptionLineItemRequest{
-				EndDate: &endDate,
+				EffectiveFrom: &endDate,
 			}
 			_, err := s.DeleteSubscriptionLineItem(ctx, lineItemID, deleteReq)
 			if err != nil {

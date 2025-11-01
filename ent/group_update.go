@@ -13,7 +13,6 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // GroupUpdate is the builder for updating Group entities.
@@ -115,45 +114,9 @@ func (gu *GroupUpdate) ClearLookupKey() *GroupUpdate {
 	return gu
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (gu *GroupUpdate) AddPriceIDs(ids ...string) *GroupUpdate {
-	gu.mutation.AddPriceIDs(ids...)
-	return gu
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (gu *GroupUpdate) AddPrices(p ...*Price) *GroupUpdate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return gu.AddPriceIDs(ids...)
-}
-
 // Mutation returns the GroupMutation object of the builder.
 func (gu *GroupUpdate) Mutation() *GroupMutation {
 	return gu.mutation
-}
-
-// ClearPrices clears all "prices" edges to the Price entity.
-func (gu *GroupUpdate) ClearPrices() *GroupUpdate {
-	gu.mutation.ClearPrices()
-	return gu
-}
-
-// RemovePriceIDs removes the "prices" edge to Price entities by IDs.
-func (gu *GroupUpdate) RemovePriceIDs(ids ...string) *GroupUpdate {
-	gu.mutation.RemovePriceIDs(ids...)
-	return gu
-}
-
-// RemovePrices removes "prices" edges to Price entities.
-func (gu *GroupUpdate) RemovePrices(p ...*Price) *GroupUpdate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return gu.RemovePriceIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -246,51 +209,6 @@ func (gu *GroupUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if gu.mutation.LookupKeyCleared() {
 		_spec.ClearField(group.FieldLookupKey, field.TypeString)
-	}
-	if gu.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := gu.mutation.RemovedPricesIDs(); len(nodes) > 0 && !gu.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := gu.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, gu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -398,45 +316,9 @@ func (guo *GroupUpdateOne) ClearLookupKey() *GroupUpdateOne {
 	return guo
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (guo *GroupUpdateOne) AddPriceIDs(ids ...string) *GroupUpdateOne {
-	guo.mutation.AddPriceIDs(ids...)
-	return guo
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (guo *GroupUpdateOne) AddPrices(p ...*Price) *GroupUpdateOne {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return guo.AddPriceIDs(ids...)
-}
-
 // Mutation returns the GroupMutation object of the builder.
 func (guo *GroupUpdateOne) Mutation() *GroupMutation {
 	return guo.mutation
-}
-
-// ClearPrices clears all "prices" edges to the Price entity.
-func (guo *GroupUpdateOne) ClearPrices() *GroupUpdateOne {
-	guo.mutation.ClearPrices()
-	return guo
-}
-
-// RemovePriceIDs removes the "prices" edge to Price entities by IDs.
-func (guo *GroupUpdateOne) RemovePriceIDs(ids ...string) *GroupUpdateOne {
-	guo.mutation.RemovePriceIDs(ids...)
-	return guo
-}
-
-// RemovePrices removes "prices" edges to Price entities.
-func (guo *GroupUpdateOne) RemovePrices(p ...*Price) *GroupUpdateOne {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return guo.RemovePriceIDs(ids...)
 }
 
 // Where appends a list predicates to the GroupUpdate builder.
@@ -559,51 +441,6 @@ func (guo *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error
 	}
 	if guo.mutation.LookupKeyCleared() {
 		_spec.ClearField(group.FieldLookupKey, field.TypeString)
-	}
-	if guo.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := guo.mutation.RemovedPricesIDs(); len(nodes) > 0 && !guo.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := guo.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Group{config: guo.config}
 	_spec.Assign = _node.assignValues

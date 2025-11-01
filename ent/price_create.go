@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
@@ -476,11 +475,6 @@ func (pc *PriceCreate) SetPriceUnitEdge(p *PriceUnit) *PriceCreate {
 	return pc.SetPriceUnitEdgeID(p.ID)
 }
 
-// SetGroup sets the "group" edge to the Group entity.
-func (pc *PriceCreate) SetGroup(g *Group) *PriceCreate {
-	return pc.SetGroupID(g.ID)
-}
-
 // Mutation returns the PriceMutation object of the builder.
 func (pc *PriceCreate) Mutation() *PriceMutation {
 	return pc.mutation
@@ -818,6 +812,10 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
 	}
+	if value, ok := pc.mutation.GroupID(); ok {
+		_spec.SetField(price.FieldGroupID, field.TypeString, value)
+		_node.GroupID = &value
+	}
 	if nodes := pc.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -833,23 +831,6 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.PriceUnitID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := pc.mutation.GroupIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   price.GroupTable,
-			Columns: []string{price.GroupColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(group.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.GroupID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

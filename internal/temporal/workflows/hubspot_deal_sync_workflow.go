@@ -8,6 +8,14 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+const (
+	// Workflow name - must match the function name
+	WorkflowHubSpotDealSync = "HubSpotDealSyncWorkflow"
+	// Activity names - must match the registered method names
+	ActivityCreateLineItems  = "CreateLineItems"
+	ActivityUpdateDealAmount = "UpdateDealAmount"
+)
+
 // HubSpotDealSyncWorkflow orchestrates the HubSpot deal synchronization process
 // Steps:
 // 1. Create line items in HubSpot deal
@@ -39,7 +47,7 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 	// Step 1: Create HubSpot line items
 	logger.Info("Step 1: Creating line items in HubSpot", "subscription_id", input.SubscriptionID)
 
-	err := workflow.ExecuteActivity(ctx, "CreateLineItems", input).Get(ctx, nil)
+	err := workflow.ExecuteActivity(ctx, ActivityCreateLineItems, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to create line items",
 			"error", err,
@@ -65,7 +73,7 @@ func HubSpotDealSyncWorkflow(ctx workflow.Context, input models.HubSpotDealSyncW
 	// Step 3: Update deal amount with ACV
 	logger.Info("Step 3: Updating deal amount with ACV", "subscription_id", input.SubscriptionID)
 
-	err = workflow.ExecuteActivity(ctx, "UpdateDealAmount", input).Get(ctx, nil)
+	err = workflow.ExecuteActivity(ctx, ActivityUpdateDealAmount, input).Get(ctx, nil)
 	if err != nil {
 		logger.Error("Failed to update deal amount",
 			"error", err,

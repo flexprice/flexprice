@@ -15,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // AddonQuery is the builder for querying Addon entities.
@@ -25,7 +24,6 @@ type AddonQuery struct {
 	order            []addon.OrderOption
 	inters           []Interceptor
 	predicates       []predicate.Addon
-	withPrices       *PriceQuery
 	withEntitlements *EntitlementQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
@@ -61,28 +59,6 @@ func (aq *AddonQuery) Unique(unique bool) *AddonQuery {
 func (aq *AddonQuery) Order(o ...addon.OrderOption) *AddonQuery {
 	aq.order = append(aq.order, o...)
 	return aq
-}
-
-// QueryPrices chains the current query on the "prices" edge.
-func (aq *AddonQuery) QueryPrices() *PriceQuery {
-	query := (&PriceClient{config: aq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := aq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := aq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(addon.Table, addon.FieldID, selector),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, addon.PricesTable, addon.PricesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(aq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // QueryEntitlements chains the current query on the "entitlements" edge.
@@ -299,23 +275,11 @@ func (aq *AddonQuery) Clone() *AddonQuery {
 		order:            append([]addon.OrderOption{}, aq.order...),
 		inters:           append([]Interceptor{}, aq.inters...),
 		predicates:       append([]predicate.Addon{}, aq.predicates...),
-		withPrices:       aq.withPrices.Clone(),
 		withEntitlements: aq.withEntitlements.Clone(),
 		// clone intermediate query.
 		sql:  aq.sql.Clone(),
 		path: aq.path,
 	}
-}
-
-// WithPrices tells the query-builder to eager-load the nodes that are connected to
-// the "prices" edge. The optional arguments are used to configure the query builder of the edge.
-func (aq *AddonQuery) WithPrices(opts ...func(*PriceQuery)) *AddonQuery {
-	query := (&PriceClient{config: aq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	aq.withPrices = query
-	return aq
 }
 
 // WithEntitlements tells the query-builder to eager-load the nodes that are connected to
@@ -407,8 +371,7 @@ func (aq *AddonQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Addon,
 	var (
 		nodes       = []*Addon{}
 		_spec       = aq.querySpec()
-		loadedTypes = [2]bool{
-			aq.withPrices != nil,
+		loadedTypes = [1]bool{
 			aq.withEntitlements != nil,
 		}
 	)
@@ -430,13 +393,6 @@ func (aq *AddonQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Addon,
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := aq.withPrices; query != nil {
-		if err := aq.loadPrices(ctx, query, nodes,
-			func(n *Addon) { n.Edges.Prices = []*Price{} },
-			func(n *Addon, e *Price) { n.Edges.Prices = append(n.Edges.Prices, e) }); err != nil {
-			return nil, err
-		}
-	}
 	if query := aq.withEntitlements; query != nil {
 		if err := aq.loadEntitlements(ctx, query, nodes,
 			func(n *Addon) { n.Edges.Entitlements = []*Entitlement{} },
@@ -447,37 +403,6 @@ func (aq *AddonQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Addon,
 	return nodes, nil
 }
 
-func (aq *AddonQuery) loadPrices(ctx context.Context, query *PriceQuery, nodes []*Addon, init func(*Addon), assign func(*Addon, *Price)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Addon)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	query.withFKs = true
-	query.Where(predicate.Price(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(addon.PricesColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.addon_prices
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "addon_prices" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "addon_prices" returned %v for node %v`, *fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
 func (aq *AddonQuery) loadEntitlements(ctx context.Context, query *EntitlementQuery, nodes []*Addon, init func(*Addon), assign func(*Addon, *Entitlement)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Addon)

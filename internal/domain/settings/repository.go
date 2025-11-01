@@ -15,10 +15,10 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 
 	// Operations by key
-	GetByKey(ctx context.Context, key string) (*Setting, error)
-	DeleteByKey(ctx context.Context, key string) error
+	GetByKey(ctx context.Context, key types.SettingKey) (*Setting, error)
+	DeleteByKey(ctx context.Context, key types.SettingKey) error
 
 	// Config operations
-	ListAllTenantEnvSettingsByKey(ctx context.Context, key string) ([]*types.TenantEnvConfig, error)
+	ListAllTenantEnvSettingsByKey(ctx context.Context, key types.SettingKey) ([]*types.TenantEnvConfig, error)
 	GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error)
 }

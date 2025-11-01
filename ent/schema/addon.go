@@ -70,7 +70,6 @@ func (Addon) Fields() []ent.Field {
 // Edges of the Addon.
 func (Addon) Edges() []ent.Edge {
 	return []ent.Edge{
-		edge.To("prices", Price.Type),
 		edge.To("entitlements", Entitlement.Type),
 	}
 }

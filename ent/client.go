@@ -685,22 +685,6 @@ func (c *AddonClient) GetX(ctx context.Context, id string) *Addon {
 	return obj
 }
 
-// QueryPrices queries the prices edge of a Addon.
-func (c *AddonClient) QueryPrices(a *Addon) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := a.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(addon.Table, addon.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, addon.PricesTable, addon.PricesColumn),
-		)
-		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryEntitlements queries the entitlements edge of a Addon.
 func (c *AddonClient) QueryEntitlements(a *Addon) *EntitlementQuery {
 	query := (&EntitlementClient{config: c.config}).Query()
@@ -3484,22 +3468,6 @@ func (c *GroupClient) GetX(ctx context.Context, id string) *Group {
 	return obj
 }
 
-// QueryPrices queries the prices edge of a Group.
-func (c *GroupClient) QueryPrices(gr *Group) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := gr.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(group.Table, group.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, group.PricesTable, group.PricesColumn),
-		)
-		fromV = sqlgraph.Neighbors(gr.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *GroupClient) Hooks() []Hook {
 	return c.hooks.Group
@@ -4685,22 +4653,6 @@ func (c *PriceClient) QueryPriceUnitEdge(pr *Price) *PriceUnitQuery {
 			sqlgraph.From(price.Table, price.FieldID, id),
 			sqlgraph.To(priceunit.Table, priceunit.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitEdgeTable, price.PriceUnitEdgeColumn),
-		)
-		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryGroup queries the group edge of a Price.
-func (c *PriceClient) QueryGroup(pr *Price) *GroupQuery {
-	query := (&GroupClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pr.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(price.Table, price.FieldID, id),
-			sqlgraph.To(group.Table, group.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, price.GroupTable, price.GroupColumn),
 		)
 		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
 		return fromV, nil

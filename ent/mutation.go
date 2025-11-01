@@ -137,9 +137,6 @@ type AddonMutation struct {
 	_type               *string
 	metadata            *map[string]interface{}
 	clearedFields       map[string]struct{}
-	prices              map[string]struct{}
-	removedprices       map[string]struct{}
-	clearedprices       bool
 	entitlements        map[string]struct{}
 	removedentitlements map[string]struct{}
 	clearedentitlements bool
@@ -749,60 +746,6 @@ func (m *AddonMutation) ResetMetadata() {
 	delete(m.clearedFields, addon.FieldMetadata)
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by ids.
-func (m *AddonMutation) AddPriceIDs(ids ...string) {
-	if m.prices == nil {
-		m.prices = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.prices[ids[i]] = struct{}{}
-	}
-}
-
-// ClearPrices clears the "prices" edge to the Price entity.
-func (m *AddonMutation) ClearPrices() {
-	m.clearedprices = true
-}
-
-// PricesCleared reports if the "prices" edge to the Price entity was cleared.
-func (m *AddonMutation) PricesCleared() bool {
-	return m.clearedprices
-}
-
-// RemovePriceIDs removes the "prices" edge to the Price entity by IDs.
-func (m *AddonMutation) RemovePriceIDs(ids ...string) {
-	if m.removedprices == nil {
-		m.removedprices = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.prices, ids[i])
-		m.removedprices[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedPrices returns the removed IDs of the "prices" edge to the Price entity.
-func (m *AddonMutation) RemovedPricesIDs() (ids []string) {
-	for id := range m.removedprices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// PricesIDs returns the "prices" edge IDs in the mutation.
-func (m *AddonMutation) PricesIDs() (ids []string) {
-	for id := range m.prices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetPrices resets all changes to the "prices" edge.
-func (m *AddonMutation) ResetPrices() {
-	m.prices = nil
-	m.clearedprices = false
-	m.removedprices = nil
-}
-
 // AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by ids.
 func (m *AddonMutation) AddEntitlementIDs(ids ...string) {
 	if m.entitlements == nil {
@@ -1210,10 +1153,7 @@ func (m *AddonMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *AddonMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.prices != nil {
-		edges = append(edges, addon.EdgePrices)
-	}
+	edges := make([]string, 0, 1)
 	if m.entitlements != nil {
 		edges = append(edges, addon.EdgeEntitlements)
 	}
@@ -1224,12 +1164,6 @@ func (m *AddonMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *AddonMutation) AddedIDs(name string) []ent.Value {
 	switch name {
-	case addon.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.prices))
-		for id := range m.prices {
-			ids = append(ids, id)
-		}
-		return ids
 	case addon.EdgeEntitlements:
 		ids := make([]ent.Value, 0, len(m.entitlements))
 		for id := range m.entitlements {
@@ -1242,10 +1176,7 @@ func (m *AddonMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *AddonMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.removedprices != nil {
-		edges = append(edges, addon.EdgePrices)
-	}
+	edges := make([]string, 0, 1)
 	if m.removedentitlements != nil {
 		edges = append(edges, addon.EdgeEntitlements)
 	}
@@ -1256,12 +1187,6 @@ func (m *AddonMutation) RemovedEdges() []string {
 // the given name in this mutation.
 func (m *AddonMutation) RemovedIDs(name string) []ent.Value {
 	switch name {
-	case addon.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.removedprices))
-		for id := range m.removedprices {
-			ids = append(ids, id)
-		}
-		return ids
 	case addon.EdgeEntitlements:
 		ids := make([]ent.Value, 0, len(m.removedentitlements))
 		for id := range m.removedentitlements {
@@ -1274,10 +1199,7 @@ func (m *AddonMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *AddonMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
-	if m.clearedprices {
-		edges = append(edges, addon.EdgePrices)
-	}
+	edges := make([]string, 0, 1)
 	if m.clearedentitlements {
 		edges = append(edges, addon.EdgeEntitlements)
 	}
@@ -1288,8 +1210,6 @@ func (m *AddonMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *AddonMutation) EdgeCleared(name string) bool {
 	switch name {
-	case addon.EdgePrices:
-		return m.clearedprices
 	case addon.EdgeEntitlements:
 		return m.clearedentitlements
 	}
@@ -1308,9 +1228,6 @@ func (m *AddonMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *AddonMutation) ResetEdge(name string) error {
 	switch name {
-	case addon.EdgePrices:
-		m.ResetPrices()
-		return nil
 	case addon.EdgeEntitlements:
 		m.ResetEntitlements()
 		return nil
@@ -24048,9 +23965,6 @@ type GroupMutation struct {
 	entity_type    *string
 	lookup_key     *string
 	clearedFields  map[string]struct{}
-	prices         map[string]struct{}
-	removedprices  map[string]struct{}
-	clearedprices  bool
 	done           bool
 	oldValue       func(context.Context) (*Group, error)
 	predicates     []predicate.Group
@@ -24621,60 +24535,6 @@ func (m *GroupMutation) ResetLookupKey() {
 	delete(m.clearedFields, group.FieldLookupKey)
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by ids.
-func (m *GroupMutation) AddPriceIDs(ids ...string) {
-	if m.prices == nil {
-		m.prices = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.prices[ids[i]] = struct{}{}
-	}
-}
-
-// ClearPrices clears the "prices" edge to the Price entity.
-func (m *GroupMutation) ClearPrices() {
-	m.clearedprices = true
-}
-
-// PricesCleared reports if the "prices" edge to the Price entity was cleared.
-func (m *GroupMutation) PricesCleared() bool {
-	return m.clearedprices
-}
-
-// RemovePriceIDs removes the "prices" edge to the Price entity by IDs.
-func (m *GroupMutation) RemovePriceIDs(ids ...string) {
-	if m.removedprices == nil {
-		m.removedprices = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.prices, ids[i])
-		m.removedprices[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedPrices returns the removed IDs of the "prices" edge to the Price entity.
-func (m *GroupMutation) RemovedPricesIDs() (ids []string) {
-	for id := range m.removedprices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// PricesIDs returns the "prices" edge IDs in the mutation.
-func (m *GroupMutation) PricesIDs() (ids []string) {
-	for id := range m.prices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetPrices resets all changes to the "prices" edge.
-func (m *GroupMutation) ResetPrices() {
-	m.prices = nil
-	m.clearedprices = false
-	m.removedprices = nil
-}
-
 // Where appends a list predicates to the GroupMutation builder.
 func (m *GroupMutation) Where(ps ...predicate.Group) {
 	m.predicates = append(m.predicates, ps...)
@@ -25011,85 +24871,49 @@ func (m *GroupMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *GroupMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.prices != nil {
-		edges = append(edges, group.EdgePrices)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *GroupMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case group.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.prices))
-		for id := range m.prices {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *GroupMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.removedprices != nil {
-		edges = append(edges, group.EdgePrices)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *GroupMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case group.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.removedprices))
-		for id := range m.removedprices {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *GroupMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedprices {
-		edges = append(edges, group.EdgePrices)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *GroupMutation) EdgeCleared(name string) bool {
-	switch name {
-	case group.EdgePrices:
-		return m.clearedprices
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *GroupMutation) ClearEdge(name string) error {
-	switch name {
-	}
 	return fmt.Errorf("unknown Group unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *GroupMutation) ResetEdge(name string) error {
-	switch name {
-	case group.EdgePrices:
-		m.ResetPrices()
-		return nil
-	}
 	return fmt.Errorf("unknown Group edge %s", name)
 }
 
@@ -36402,11 +36226,10 @@ type PriceMutation struct {
 	parent_price_id           *string
 	start_date                *time.Time
 	end_date                  *time.Time
+	group_id                  *string
 	clearedFields             map[string]struct{}
 	price_unit_edge           *string
 	clearedprice_unit_edge    bool
-	group                     *string
-	clearedgroup              bool
 	done                      bool
 	oldValue                  func(context.Context) (*Price, error)
 	predicates                []predicate.Price
@@ -38283,12 +38106,12 @@ func (m *PriceMutation) ResetEndDate() {
 
 // SetGroupID sets the "group_id" field.
 func (m *PriceMutation) SetGroupID(s string) {
-	m.group = &s
+	m.group_id = &s
 }
 
 // GroupID returns the value of the "group_id" field in the mutation.
 func (m *PriceMutation) GroupID() (r string, exists bool) {
-	v := m.group
+	v := m.group_id
 	if v == nil {
 		return
 	}
@@ -38314,7 +38137,7 @@ func (m *PriceMutation) OldGroupID(ctx context.Context) (v *string, err error) {
 
 // ClearGroupID clears the value of the "group_id" field.
 func (m *PriceMutation) ClearGroupID() {
-	m.group = nil
+	m.group_id = nil
 	m.clearedFields[price.FieldGroupID] = struct{}{}
 }
 
@@ -38326,7 +38149,7 @@ func (m *PriceMutation) GroupIDCleared() bool {
 
 // ResetGroupID resets all changes to the "group_id" field.
 func (m *PriceMutation) ResetGroupID() {
-	m.group = nil
+	m.group_id = nil
 	delete(m.clearedFields, price.FieldGroupID)
 }
 
@@ -38368,33 +38191,6 @@ func (m *PriceMutation) PriceUnitEdgeIDs() (ids []string) {
 func (m *PriceMutation) ResetPriceUnitEdge() {
 	m.price_unit_edge = nil
 	m.clearedprice_unit_edge = false
-}
-
-// ClearGroup clears the "group" edge to the Group entity.
-func (m *PriceMutation) ClearGroup() {
-	m.clearedgroup = true
-	m.clearedFields[price.FieldGroupID] = struct{}{}
-}
-
-// GroupCleared reports if the "group" edge to the Group entity was cleared.
-func (m *PriceMutation) GroupCleared() bool {
-	return m.GroupIDCleared() || m.clearedgroup
-}
-
-// GroupIDs returns the "group" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// GroupID instead. It exists only for internal usage by the builders.
-func (m *PriceMutation) GroupIDs() (ids []string) {
-	if id := m.group; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetGroup resets all changes to the "group" edge.
-func (m *PriceMutation) ResetGroup() {
-	m.group = nil
-	m.clearedgroup = false
 }
 
 // Where appends a list predicates to the PriceMutation builder.
@@ -38543,7 +38339,7 @@ func (m *PriceMutation) Fields() []string {
 	if m.end_date != nil {
 		fields = append(fields, price.FieldEndDate)
 	}
-	if m.group != nil {
+	if m.group_id != nil {
 		fields = append(fields, price.FieldGroupID)
 	}
 	return fields
@@ -39369,12 +39165,9 @@ func (m *PriceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PriceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.price_unit_edge != nil {
 		edges = append(edges, price.EdgePriceUnitEdge)
-	}
-	if m.group != nil {
-		edges = append(edges, price.EdgeGroup)
 	}
 	return edges
 }
@@ -39387,17 +39180,13 @@ func (m *PriceMutation) AddedIDs(name string) []ent.Value {
 		if id := m.price_unit_edge; id != nil {
 			return []ent.Value{*id}
 		}
-	case price.EdgeGroup:
-		if id := m.group; id != nil {
-			return []ent.Value{*id}
-		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PriceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -39409,12 +39198,9 @@ func (m *PriceMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PriceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 1)
 	if m.clearedprice_unit_edge {
 		edges = append(edges, price.EdgePriceUnitEdge)
-	}
-	if m.clearedgroup {
-		edges = append(edges, price.EdgeGroup)
 	}
 	return edges
 }
@@ -39425,8 +39211,6 @@ func (m *PriceMutation) EdgeCleared(name string) bool {
 	switch name {
 	case price.EdgePriceUnitEdge:
 		return m.clearedprice_unit_edge
-	case price.EdgeGroup:
-		return m.clearedgroup
 	}
 	return false
 }
@@ -39438,9 +39222,6 @@ func (m *PriceMutation) ClearEdge(name string) error {
 	case price.EdgePriceUnitEdge:
 		m.ClearPriceUnitEdge()
 		return nil
-	case price.EdgeGroup:
-		m.ClearGroup()
-		return nil
 	}
 	return fmt.Errorf("unknown Price unique edge %s", name)
 }
@@ -39451,9 +39232,6 @@ func (m *PriceMutation) ResetEdge(name string) error {
 	switch name {
 	case price.EdgePriceUnitEdge:
 		m.ResetPriceUnitEdge()
-		return nil
-	case price.EdgeGroup:
-		m.ResetGroup()
 		return nil
 	}
 	return fmt.Errorf("unknown Price edge %s", name)

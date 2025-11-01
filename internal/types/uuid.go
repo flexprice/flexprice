@@ -108,6 +108,7 @@ const (
 	UUID_PREFIX_SETTING                     = "setting"
 	UUID_PREFIX_ALERT_LOG                   = "alert"
 	UUID_PREFIX_GROUP                       = "group"
+	UUID_PREFIX_SUBSCRIPTION_ENTITLEMENT    = "sub_ent"
 
 	// Temporal workflow prefixes
 	UUID_PREFIX_WORKFLOW = "wf"

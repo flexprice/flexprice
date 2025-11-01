@@ -3,11 +3,14 @@ package pdf
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/flexprice/flexprice/internal/api/dto"
 )
 
 // InvoiceData represents the data model for invoice PDF generation
 type InvoiceData struct {
 	Currency      string     `json:"currency"`
+	Precision     int32      `json:"precision"`
 	BannerImage   string     `json:"banner_image,omitempty"`
 	ID            string     `json:"id"`
 	InvoiceStatus string     `json:"invoice_status"`
@@ -21,6 +24,8 @@ type InvoiceData struct {
 	VAT           float64    `json:"vat"`            // VAT percentage as decimal (0.18 = 18%)
 	Notes         string     `json:"notes"`
 	BillingReason string     `json:"billing_reason"`
+	PeriodStart   CustomTime `json:"period_start"`
+	PeriodEnd     CustomTime `json:"period_end"`
 
 	// Company information
 	Biller    *BillerInfo    `json:"biller"`
@@ -64,15 +69,16 @@ type AddressInfo struct {
 
 // LineItemData represents an invoice line item for PDF generation
 type LineItemData struct {
-	PlanDisplayName string     `json:"plan_display_name"`
-	DisplayName     string     `json:"display_name"`
-	Description     string     `json:"description"`
-	PeriodStart     CustomTime `json:"period_start"`
-	PeriodEnd       CustomTime `json:"period_end"`
-	Amount          float64    `json:"amount"` // Positive for charges, negative for discounts
-	Quantity        float64    `json:"quantity"`
-	Currency        string     `json:"currency"`
-	Type            string     `json:"type"` // "subscription", "addon", "discount", "tax"
+	PlanDisplayName string                   `json:"plan_display_name"`
+	DisplayName     string                   `json:"display_name"`
+	Description     string                   `json:"description"`
+	PeriodStart     CustomTime               `json:"period_start"`
+	PeriodEnd       CustomTime               `json:"period_end"`
+	Amount          float64                  `json:"amount"` // Positive for charges, negative for discounts
+	Quantity        float64                  `json:"quantity"`
+	Currency        string                   `json:"currency"`
+	Type            string                   `json:"type"` // "subscription", "addon", "discount", "tax"
+	UsageBreakdown  []dto.UsageBreakdownItem `json:"usage_breakdown,omitempty"`
 }
 
 // AppliedTaxData represents a tax applied to the invoice

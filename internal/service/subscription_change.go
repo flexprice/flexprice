@@ -308,14 +308,20 @@ func (s *subscriptionChangeService) determineChangeType(
 	// Get prices for both plans to compare
 	priceService := NewPriceService(s.serviceParams)
 
-	currentPricesResponse, err := priceService.GetPricesByPlanID(ctx, currentPlan.ID)
+	currentPricesResponse, err := priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
+		PlanID:       currentPlan.ID,
+		AllowExpired: false,
+	})
 	if err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Failed to get current plan prices").
 			Mark(ierr.ErrDatabase)
 	}
 
-	targetPricesResponse, err := priceService.GetPricesByPlanID(ctx, targetPlan.ID)
+	targetPricesResponse, err := priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
+		PlanID:       targetPlan.ID,
+		AllowExpired: false,
+	})
 	if err != nil {
 		return "", ierr.WithError(err).
 			WithHint("Failed to get target plan prices").
@@ -395,7 +401,10 @@ func (s *subscriptionChangeService) calculateNextInvoicePreview(
 ) (*dto.InvoicePreview, error) {
 	// Get target plan prices
 	priceService := NewPriceService(s.serviceParams)
-	targetPricesResponse, err := priceService.GetPricesByPlanID(ctx, targetPlan.ID)
+	targetPricesResponse, err := priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
+		PlanID:       targetPlan.ID,
+		AllowExpired: false,
+	})
 	if err != nil {
 		return nil, err
 	}

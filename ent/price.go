@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
@@ -100,7 +99,6 @@ type Price struct {
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
-	addon_prices *string
 	selectValues sql.SelectValues
 }
 
@@ -108,11 +106,9 @@ type Price struct {
 type PriceEdges struct {
 	// PriceUnitEdge holds the value of the price_unit_edge edge.
 	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
-	// Group holds the value of the group edge.
-	Group *Group `json:"group,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [1]bool
 }
 
 // PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
@@ -124,17 +120,6 @@ func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
 		return nil, &NotFoundError{label: priceunit.Label}
 	}
 	return nil, &NotLoadedError{edge: "price_unit_edge"}
-}
-
-// GroupOrErr returns the Group value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e PriceEdges) GroupOrErr() (*Group, error) {
-	if e.Group != nil {
-		return e.Group, nil
-	} else if e.loadedTypes[1] {
-		return nil, &NotFoundError{label: group.Label}
-	}
-	return nil, &NotLoadedError{edge: "group"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -152,8 +137,6 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
-		case price.ForeignKeys[0]: // addon_prices
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -421,13 +404,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.GroupID = new(string)
 				*pr.GroupID = value.String
 			}
-		case price.ForeignKeys[0]:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field addon_prices", values[i])
-			} else if value.Valid {
-				pr.addon_prices = new(string)
-				*pr.addon_prices = value.String
-			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
 		}
@@ -444,11 +420,6 @@ func (pr *Price) Value(name string) (ent.Value, error) {
 // QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
 func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
 	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
-}
-
-// QueryGroup queries the "group" edge of the Price entity.
-func (pr *Price) QueryGroup() *GroupQuery {
-	return NewPriceClient(pr.config).QueryGroup(pr)
 }
 
 // Update returns a builder for updating this Price.

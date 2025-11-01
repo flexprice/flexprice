@@ -18,7 +18,7 @@ type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
-	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
+	GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
 	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
 	GetPricesByCostsheetID(ctx context.Context, costsheetID string) (*dto.ListPricesResponse, error)
@@ -524,17 +524,16 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 	return response, nil
 }
 
-func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error) {
-	if planID == "" {
-		return nil, ierr.NewError("plan_id is required").
-			WithHint("Plan ID is required").
-			Mark(ierr.ErrValidation)
+func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
 
 	priceFilter := types.NewNoLimitPriceFilter().
-		WithEntityIDs([]string{planID}).
+		WithEntityIDs([]string{req.PlanID}).
 		WithStatus(types.StatusPublished).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+		WithAllowExpiredPrices(req.AllowExpired).
 		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit) + "," + string(types.ExpandGroups))
 
 	response, err := s.GetPrices(ctx, priceFilter)
@@ -932,11 +931,38 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 		return err
 	}
 
-	if req.EndDate != nil {
-		price.EndDate = req.EndDate
-	} else {
-		price.EndDate = lo.ToPtr(time.Now().UTC())
+	// Check if price is already terminated
+	if price.EndDate != nil {
+		return ierr.NewError("price is already terminated").
+			WithHint("Cannot terminate a price that has already been terminated").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": id,
+				"end_date": price.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
+
+	// Set end date and validate
+	var endDate time.Time
+	if req.EndDate != nil {
+		endDate = req.EndDate.UTC()
+	} else {
+		endDate = time.Now().UTC()
+	}
+
+	// Validate end date is after start date
+	if price.StartDate != nil && price.StartDate.After(endDate) {
+		return ierr.NewError("end date must be after start date").
+			WithHint("The termination date must be after the price's start date").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":   id,
+				"start_date": price.StartDate,
+				"end_date":   endDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	price.EndDate = &endDate
 
 	if err := s.PriceRepo.Update(ctx, price); err != nil {
 		return err

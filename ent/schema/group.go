@@ -3,7 +3,6 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -51,14 +50,6 @@ func (Group) Fields() []ent.Field {
 			}).
 			Optional().
 			Comment("Idempotency key for group creation"),
-	}
-}
-
-// Edges of the Group.
-func (Group) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.From("prices", Price.Type).
-			Ref("group"),
 	}
 }
 

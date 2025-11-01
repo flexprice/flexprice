@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -282,6 +284,8 @@ type PriceFilter struct {
 	ParentPriceID      *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
+
+	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values

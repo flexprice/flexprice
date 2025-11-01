@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/group"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // GroupCreate is the builder for creating a Group entity.
@@ -155,21 +154,6 @@ func (gc *GroupCreate) SetNillableLookupKey(s *string) *GroupCreate {
 func (gc *GroupCreate) SetID(s string) *GroupCreate {
 	gc.mutation.SetID(s)
 	return gc
-}
-
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (gc *GroupCreate) AddPriceIDs(ids ...string) *GroupCreate {
-	gc.mutation.AddPriceIDs(ids...)
-	return gc
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (gc *GroupCreate) AddPrices(p ...*Price) *GroupCreate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return gc.AddPriceIDs(ids...)
 }
 
 // Mutation returns the GroupMutation object of the builder.
@@ -337,22 +321,6 @@ func (gc *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := gc.mutation.LookupKey(); ok {
 		_spec.SetField(group.FieldLookupKey, field.TypeString, value)
 		_node.LookupKey = value
-	}
-	if nodes := gc.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   group.PricesTable,
-			Columns: []string{group.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
