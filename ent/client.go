@@ -50,6 +50,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -137,6 +138,8 @@ type Client struct {
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
 	SubscriptionPause *SubscriptionPauseClient
+	// SubscriptionPhase is the client for interacting with the SubscriptionPhase builders.
+	SubscriptionPhase *SubscriptionPhaseClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
 	// TaxApplied is the client for interacting with the TaxApplied builders.
@@ -199,6 +202,7 @@ func (c *Client) init() {
 	c.Subscription = NewSubscriptionClient(c.config)
 	c.SubscriptionLineItem = NewSubscriptionLineItemClient(c.config)
 	c.SubscriptionPause = NewSubscriptionPauseClient(c.config)
+	c.SubscriptionPhase = NewSubscriptionPhaseClient(c.config)
 	c.Task = NewTaskClient(c.config)
 	c.TaxApplied = NewTaxAppliedClient(c.config)
 	c.TaxAssociation = NewTaxAssociationClient(c.config)
@@ -334,6 +338,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Subscription:             NewSubscriptionClient(cfg),
 		SubscriptionLineItem:     NewSubscriptionLineItemClient(cfg),
 		SubscriptionPause:        NewSubscriptionPauseClient(cfg),
+		SubscriptionPhase:        NewSubscriptionPhaseClient(cfg),
 		Task:                     NewTaskClient(cfg),
 		TaxApplied:               NewTaxAppliedClient(cfg),
 		TaxAssociation:           NewTaxAssociationClient(cfg),
@@ -396,6 +401,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Subscription:             NewSubscriptionClient(cfg),
 		SubscriptionLineItem:     NewSubscriptionLineItemClient(cfg),
 		SubscriptionPause:        NewSubscriptionPauseClient(cfg),
+		SubscriptionPhase:        NewSubscriptionPhaseClient(cfg),
 		Task:                     NewTaskClient(cfg),
 		TaxApplied:               NewTaxAppliedClient(cfg),
 		TaxAssociation:           NewTaxAssociationClient(cfg),
@@ -440,8 +446,8 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
 		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
 		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate,
-		c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.SubscriptionPause, c.SubscriptionPhase, c.Task, c.TaxApplied,
+		c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -458,8 +464,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
 		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
 		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
-		c.SubscriptionPause, c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate,
-		c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.SubscriptionPause, c.SubscriptionPhase, c.Task, c.TaxApplied,
+		c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -538,6 +544,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.SubscriptionLineItem.mutate(ctx, m)
 	case *SubscriptionPauseMutation:
 		return c.SubscriptionPause.mutate(ctx, m)
+	case *SubscriptionPhaseMutation:
+		return c.SubscriptionPhase.mutate(ctx, m)
 	case *TaskMutation:
 		return c.Task.mutate(ctx, m)
 	case *TaxAppliedMutation:
@@ -5742,6 +5750,139 @@ func (c *SubscriptionPauseClient) mutate(ctx context.Context, m *SubscriptionPau
 	}
 }
 
+// SubscriptionPhaseClient is a client for the SubscriptionPhase schema.
+type SubscriptionPhaseClient struct {
+	config
+}
+
+// NewSubscriptionPhaseClient returns a client for the SubscriptionPhase from the given config.
+func NewSubscriptionPhaseClient(c config) *SubscriptionPhaseClient {
+	return &SubscriptionPhaseClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `subscriptionphase.Hooks(f(g(h())))`.
+func (c *SubscriptionPhaseClient) Use(hooks ...Hook) {
+	c.hooks.SubscriptionPhase = append(c.hooks.SubscriptionPhase, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `subscriptionphase.Intercept(f(g(h())))`.
+func (c *SubscriptionPhaseClient) Intercept(interceptors ...Interceptor) {
+	c.inters.SubscriptionPhase = append(c.inters.SubscriptionPhase, interceptors...)
+}
+
+// Create returns a builder for creating a SubscriptionPhase entity.
+func (c *SubscriptionPhaseClient) Create() *SubscriptionPhaseCreate {
+	mutation := newSubscriptionPhaseMutation(c.config, OpCreate)
+	return &SubscriptionPhaseCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of SubscriptionPhase entities.
+func (c *SubscriptionPhaseClient) CreateBulk(builders ...*SubscriptionPhaseCreate) *SubscriptionPhaseCreateBulk {
+	return &SubscriptionPhaseCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *SubscriptionPhaseClient) MapCreateBulk(slice any, setFunc func(*SubscriptionPhaseCreate, int)) *SubscriptionPhaseCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &SubscriptionPhaseCreateBulk{err: fmt.Errorf("calling to SubscriptionPhaseClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*SubscriptionPhaseCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &SubscriptionPhaseCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for SubscriptionPhase.
+func (c *SubscriptionPhaseClient) Update() *SubscriptionPhaseUpdate {
+	mutation := newSubscriptionPhaseMutation(c.config, OpUpdate)
+	return &SubscriptionPhaseUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *SubscriptionPhaseClient) UpdateOne(sp *SubscriptionPhase) *SubscriptionPhaseUpdateOne {
+	mutation := newSubscriptionPhaseMutation(c.config, OpUpdateOne, withSubscriptionPhase(sp))
+	return &SubscriptionPhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *SubscriptionPhaseClient) UpdateOneID(id string) *SubscriptionPhaseUpdateOne {
+	mutation := newSubscriptionPhaseMutation(c.config, OpUpdateOne, withSubscriptionPhaseID(id))
+	return &SubscriptionPhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for SubscriptionPhase.
+func (c *SubscriptionPhaseClient) Delete() *SubscriptionPhaseDelete {
+	mutation := newSubscriptionPhaseMutation(c.config, OpDelete)
+	return &SubscriptionPhaseDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *SubscriptionPhaseClient) DeleteOne(sp *SubscriptionPhase) *SubscriptionPhaseDeleteOne {
+	return c.DeleteOneID(sp.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *SubscriptionPhaseClient) DeleteOneID(id string) *SubscriptionPhaseDeleteOne {
+	builder := c.Delete().Where(subscriptionphase.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &SubscriptionPhaseDeleteOne{builder}
+}
+
+// Query returns a query builder for SubscriptionPhase.
+func (c *SubscriptionPhaseClient) Query() *SubscriptionPhaseQuery {
+	return &SubscriptionPhaseQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeSubscriptionPhase},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a SubscriptionPhase entity by its id.
+func (c *SubscriptionPhaseClient) Get(ctx context.Context, id string) (*SubscriptionPhase, error) {
+	return c.Query().Where(subscriptionphase.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *SubscriptionPhaseClient) GetX(ctx context.Context, id string) *SubscriptionPhase {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *SubscriptionPhaseClient) Hooks() []Hook {
+	return c.hooks.SubscriptionPhase
+}
+
+// Interceptors returns the client interceptors.
+func (c *SubscriptionPhaseClient) Interceptors() []Interceptor {
+	return c.inters.SubscriptionPhase
+}
+
+func (c *SubscriptionPhaseClient) mutate(ctx context.Context, m *SubscriptionPhaseMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&SubscriptionPhaseCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&SubscriptionPhaseUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&SubscriptionPhaseUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&SubscriptionPhaseDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown SubscriptionPhase mutation op: %q", m.Op())
+	}
+}
+
 // TaskClient is a client for the Task schema.
 type TaskClient struct {
 	config
@@ -6815,8 +6956,8 @@ type (
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
 		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
 		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, Task, TaxApplied, TaxAssociation, TaxRate, Tenant, User,
-		Wallet, WalletTransaction []ent.Hook
+		SubscriptionPause, SubscriptionPhase, Task, TaxApplied, TaxAssociation,
+		TaxRate, Tenant, User, Wallet, WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
@@ -6825,8 +6966,8 @@ type (
 		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
 		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
 		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
-		SubscriptionPause, Task, TaxApplied, TaxAssociation, TaxRate, Tenant, User,
-		Wallet, WalletTransaction []ent.Interceptor
+		SubscriptionPause, SubscriptionPhase, Task, TaxApplied, TaxAssociation,
+		TaxRate, Tenant, User, Wallet, WalletTransaction []ent.Interceptor
 	}
 )
 

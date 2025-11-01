@@ -41,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -1749,6 +1750,43 @@ func init() {
 	subscriptionpauseDescOriginalPeriodEnd := subscriptionpauseFields[9].Descriptor()
 	// subscriptionpause.DefaultOriginalPeriodEnd holds the default value on creation for the original_period_end field.
 	subscriptionpause.DefaultOriginalPeriodEnd = subscriptionpauseDescOriginalPeriodEnd.Default.(func() time.Time)
+	subscriptionphaseMixin := schema.SubscriptionPhase{}.Mixin()
+	subscriptionphaseMixinFields0 := subscriptionphaseMixin[0].Fields()
+	_ = subscriptionphaseMixinFields0
+	subscriptionphaseMixinFields1 := subscriptionphaseMixin[1].Fields()
+	_ = subscriptionphaseMixinFields1
+	subscriptionphaseFields := schema.SubscriptionPhase{}.Fields()
+	_ = subscriptionphaseFields
+	// subscriptionphaseDescTenantID is the schema descriptor for tenant_id field.
+	subscriptionphaseDescTenantID := subscriptionphaseMixinFields0[0].Descriptor()
+	// subscriptionphase.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	subscriptionphase.TenantIDValidator = subscriptionphaseDescTenantID.Validators[0].(func(string) error)
+	// subscriptionphaseDescStatus is the schema descriptor for status field.
+	subscriptionphaseDescStatus := subscriptionphaseMixinFields0[1].Descriptor()
+	// subscriptionphase.DefaultStatus holds the default value on creation for the status field.
+	subscriptionphase.DefaultStatus = subscriptionphaseDescStatus.Default.(string)
+	// subscriptionphaseDescCreatedAt is the schema descriptor for created_at field.
+	subscriptionphaseDescCreatedAt := subscriptionphaseMixinFields0[2].Descriptor()
+	// subscriptionphase.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subscriptionphase.DefaultCreatedAt = subscriptionphaseDescCreatedAt.Default.(func() time.Time)
+	// subscriptionphaseDescUpdatedAt is the schema descriptor for updated_at field.
+	subscriptionphaseDescUpdatedAt := subscriptionphaseMixinFields0[3].Descriptor()
+	// subscriptionphase.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subscriptionphase.DefaultUpdatedAt = subscriptionphaseDescUpdatedAt.Default.(func() time.Time)
+	// subscriptionphase.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subscriptionphase.UpdateDefaultUpdatedAt = subscriptionphaseDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// subscriptionphaseDescEnvironmentID is the schema descriptor for environment_id field.
+	subscriptionphaseDescEnvironmentID := subscriptionphaseMixinFields1[0].Descriptor()
+	// subscriptionphase.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	subscriptionphase.DefaultEnvironmentID = subscriptionphaseDescEnvironmentID.Default.(string)
+	// subscriptionphaseDescSubscriptionID is the schema descriptor for subscription_id field.
+	subscriptionphaseDescSubscriptionID := subscriptionphaseFields[1].Descriptor()
+	// subscriptionphase.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	subscriptionphase.SubscriptionIDValidator = subscriptionphaseDescSubscriptionID.Validators[0].(func(string) error)
+	// subscriptionphaseDescStartDate is the schema descriptor for start_date field.
+	subscriptionphaseDescStartDate := subscriptionphaseFields[2].Descriptor()
+	// subscriptionphase.DefaultStartDate holds the default value on creation for the start_date field.
+	subscriptionphase.DefaultStartDate = subscriptionphaseDescStartDate.Default.(func() time.Time)
 	taskMixin := schema.Task{}.Mixin()
 	taskMixinFields0 := taskMixin[0].Fields()
 	_ = taskMixinFields0
