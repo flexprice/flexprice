@@ -84,10 +84,6 @@ type Tx struct {
 	SubscriptionLineItem *SubscriptionLineItemClient
 	// SubscriptionPause is the client for interacting with the SubscriptionPause builders.
 	SubscriptionPause *SubscriptionPauseClient
-	// SubscriptionSchedule is the client for interacting with the SubscriptionSchedule builders.
-	SubscriptionSchedule *SubscriptionScheduleClient
-	// SubscriptionSchedulePhase is the client for interacting with the SubscriptionSchedulePhase builders.
-	SubscriptionSchedulePhase *SubscriptionSchedulePhaseClient
 	// Task is the client for interacting with the Task builders.
 	Task *TaskClient
 	// TaxApplied is the client for interacting with the TaxApplied builders.
@@ -270,8 +266,6 @@ func (tx *Tx) init() {
 	tx.Subscription = NewSubscriptionClient(tx.config)
 	tx.SubscriptionLineItem = NewSubscriptionLineItemClient(tx.config)
 	tx.SubscriptionPause = NewSubscriptionPauseClient(tx.config)
-	tx.SubscriptionSchedule = NewSubscriptionScheduleClient(tx.config)
-	tx.SubscriptionSchedulePhase = NewSubscriptionSchedulePhaseClient(tx.config)
 	tx.Task = NewTaskClient(tx.config)
 	tx.TaxApplied = NewTaxAppliedClient(tx.config)
 	tx.TaxAssociation = NewTaxAssociationClient(tx.config)

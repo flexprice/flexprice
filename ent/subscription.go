@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/subscription"
-	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/shopspring/decimal"
 )
 
@@ -108,15 +107,13 @@ type SubscriptionEdges struct {
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
 	// CreditGrants holds the value of the credit_grants edge.
 	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
-	// Schedule holds the value of the schedule edge.
-	Schedule *SubscriptionSchedule `json:"schedule,omitempty"`
 	// Subscription can have multiple coupon associations
 	CouponAssociations []*CouponAssociation `json:"coupon_associations,omitempty"`
 	// Subscription can have multiple coupon applications
 	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [5]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -146,21 +143,10 @@ func (e SubscriptionEdges) CreditGrantsOrErr() ([]*CreditGrant, error) {
 	return nil, &NotLoadedError{edge: "credit_grants"}
 }
 
-// ScheduleOrErr returns the Schedule value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SubscriptionEdges) ScheduleOrErr() (*SubscriptionSchedule, error) {
-	if e.Schedule != nil {
-		return e.Schedule, nil
-	} else if e.loadedTypes[3] {
-		return nil, &NotFoundError{label: subscriptionschedule.Label}
-	}
-	return nil, &NotLoadedError{edge: "schedule"}
-}
-
 // CouponAssociationsOrErr returns the CouponAssociations value or an error if the edge
 // was not loaded in eager-loading.
 func (e SubscriptionEdges) CouponAssociationsOrErr() ([]*CouponAssociation, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[3] {
 		return e.CouponAssociations, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_associations"}
@@ -169,7 +155,7 @@ func (e SubscriptionEdges) CouponAssociationsOrErr() ([]*CouponAssociation, erro
 // CouponApplicationsOrErr returns the CouponApplications value or an error if the edge
 // was not loaded in eager-loading.
 func (e SubscriptionEdges) CouponApplicationsOrErr() ([]*CouponApplication, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[4] {
 		return e.CouponApplications, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_applications"}
@@ -471,11 +457,6 @@ func (s *Subscription) QueryPauses() *SubscriptionPauseQuery {
 // QueryCreditGrants queries the "credit_grants" edge of the Subscription entity.
 func (s *Subscription) QueryCreditGrants() *CreditGrantQuery {
 	return NewSubscriptionClient(s.config).QueryCreditGrants(s)
-}
-
-// QuerySchedule queries the "schedule" edge of the Subscription entity.
-func (s *Subscription) QuerySchedule() *SubscriptionScheduleQuery {
-	return NewSubscriptionClient(s.config).QuerySchedule(s)
 }
 
 // QueryCouponAssociations queries the "coupon_associations" edge of the Subscription entity.

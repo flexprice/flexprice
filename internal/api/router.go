@@ -236,7 +236,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/pause", handlers.SubscriptionPause.PauseSubscription)
 			subscription.POST("/:id/resume", handlers.SubscriptionPause.ResumeSubscription)
 			subscription.GET("/:id/pauses", handlers.SubscriptionPause.ListPauses)
-			subscription.POST("/:id/phases", handlers.Subscription.AddSubscriptionPhase)
 			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
 
 			// Addon management for subscriptions - moved under subscription handler

@@ -64,8 +64,6 @@ func GenerateShortIDWithPrefix(prefix string) string {
 
 const (
 	// Prefixes for all domains and entities
-	UUID_PREFIX_SUBSCRIPTION_SCHEDULE       = "sched"
-	UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE = "phase"
 	UUID_PREFIX_CREDIT_GRANT_APPLICATION    = "cga"
 	UUID_PREFIX_CREDIT_NOTE                 = "cn"
 	UUID_PREFIX_FEATURE                     = "feat"
