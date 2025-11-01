@@ -2472,7 +2472,58 @@ graph TD
 
 ---
 
-### Diagram 12: Complete System State Diagram
+### Diagram 12: RBAC Service Dual Storage Architecture
+
+**Description**: Shows how the RBAC service stores role data in two separate structures - one optimized for fast permission checks (hot path), and one for API responses with metadata (cold path). This illustrates why including name/description has ZERO performance impact.
+
+```mermaid
+graph TB
+    subgraph "roles.json File"
+        JSON["{<br/>  event_ingestor: {<br/>    name: 'Event Ingestor',<br/>    description: '...',<br/>    permissions: {...}<br/>  }<br/>}"]
+    end
+    
+    subgraph "RBAC Service - In Memory"
+        Service[RBAC Service]
+        
+        subgraph "Hot Path - Permission Checks"
+            PermMap["permissions map<br/>role -> entity -> action -> bool<br/><br/>event_ingestor -> event -> create: true<br/>event_ingestor -> event -> write: true"]
+        end
+        
+        subgraph "Cold Path - API Responses"
+            RolesMap["roles map<br/>role -> *Role<br/><br/>event_ingestor -> {<br/>  Name: 'Event Ingestor'<br/>  Description: '...'<br/>  Permissions: {...}<br/>}"]
+        end
+    end
+    
+    subgraph "Usage"
+        HasPerm["HasPermission()<br/>O(1) lookup"]
+        GetRoles["GetAllRoles()<br/>For UI dropdown"]
+    end
+    
+    JSON -->|Parse at startup| Service
+    Service -->|Build optimized| PermMap
+    Service -->|Store metadata| RolesMap
+    
+    PermMap -.->|Every API request| HasPerm
+    RolesMap -.->|Rare - UI calls only| GetRoles
+    
+    HasPerm -.->|"permissions[role][entity][action]"| PermMap
+    GetRoles -.->|Return with name/description| RolesMap
+    
+    style PermMap fill:#90EE90,stroke:#333,stroke-width:3px
+    style RolesMap fill:#87CEEB,stroke:#333,stroke-width:2px
+    style HasPerm fill:#FFD700
+    style GetRoles fill:#FFA07A
+```
+
+**Key Points:**
+- **permissions map**: 3-level nested map for O(1) lookups - never contains name/description
+- **roles map**: Stores full role objects with metadata - only accessed for API responses
+- **HasPermission()**: Only touches permissions map - zero overhead from metadata
+- **GetAllRoles()**: Only touches roles map - called rarely when UI needs role list
+
+---
+
+### Diagram 13: Complete System State Diagram
 
 **Description**: State machine showing the lifecycle of a service account from creation through API key generation to request processing and eventual deactivation. This provides a holistic view of how service accounts move through the system.
 
@@ -2524,7 +2575,7 @@ stateDiagram-v2
 
 ---
 
-### Diagram 13: Backward Compatibility Flow
+### Diagram 14: Backward Compatibility Flow
 
 **Description**: Demonstrates how the RBAC system maintains backward compatibility with existing users who don't have roles assigned, ensuring zero breaking changes during rollout.
 
