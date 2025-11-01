@@ -1,4 +1,4 @@
-# Flexprice RBAC System - Product Requirements Document
+# Flexprice RBAC System
 
 ## Document Information
 - **Version**: 1.0
@@ -1642,6 +1642,658 @@ This is a living document. Please provide feedback on:
 - [OWASP Access Control Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Access_Control_Cheat_Sheet.html)
 - [Permit.io Documentation](https://docs.permit.io/)
 - [The Principle of Least Privilege](https://en.wikipedia.org/wiki/Principle_of_least_privilege)
+
+---
+
+## Visual Diagrams & Flowcharts
+
+This section provides visual representations of the RBAC system architecture, workflows, and data models to aid understanding and implementation.
+
+### Diagram 1: System Architecture Overview
+
+**Description**: This diagram shows the high-level architecture of the Flexprice RBAC system, including how API requests flow through authentication, permission checks, and into business logic. It illustrates the relationship between users, API keys, role definitions, and the permission enforcement layer.
+
+```mermaid
+graph TB
+    subgraph "External"
+        Client[Client Application]
+        ServiceAccount[Service Account]
+    end
+    
+    subgraph "API Gateway"
+        APIRequest[API Request + API Key]
+    end
+    
+    subgraph "Middleware Layer"
+        AuthMiddleware[Authentication Middleware]
+        PermissionMiddleware[Permission Middleware]
+    end
+    
+    subgraph "Data Layer"
+        SecretsTable[(Secrets Table<br/>API Keys + Roles)]
+        UsersTable[(Users Table<br/>Type + Roles)]
+        RoleDefinitions[Role Definitions JSON<br/>roles.json]
+    end
+    
+    subgraph "Business Logic"
+        RouteHandler[Route Handler]
+        BusinessLogic[Business Logic]
+    end
+    
+    Client -->|HTTP Request| APIRequest
+    ServiceAccount -->|HTTP Request| APIRequest
+    APIRequest --> AuthMiddleware
+    AuthMiddleware -->|Validate API Key| SecretsTable
+    SecretsTable -->|API Key Valid + Roles| AuthMiddleware
+    AuthMiddleware --> PermissionMiddleware
+    PermissionMiddleware -->|Load Roles| SecretsTable
+    PermissionMiddleware -->|Load Role Permissions| RoleDefinitions
+    PermissionMiddleware -->|Check Permission| PermissionMiddleware
+    PermissionMiddleware -->|403 Forbidden| APIRequest
+    PermissionMiddleware -->|Allowed| RouteHandler
+    RouteHandler --> BusinessLogic
+    BusinessLogic -->|Response| APIRequest
+    
+    UsersTable -.->|Roles Copied at Creation| SecretsTable
+    
+    style PermissionMiddleware fill:#f9f,stroke:#333,stroke-width:4px
+    style RoleDefinitions fill:#bbf,stroke:#333,stroke-width:2px
+    style SecretsTable fill:#bfb,stroke:#333,stroke-width:2px
+```
+
+---
+
+### Diagram 2: Data Model & Relationships
+
+**Description**: Entity-Relationship diagram showing the database schema changes for RBAC, including the new fields in Users and Secrets tables, and their relationships. This illustrates how roles are denormalized from Users to Secrets for performance.
+
+```mermaid
+erDiagram
+    USERS ||--o{ SECRETS : "has many"
+    USERS {
+        uuid id PK
+        string email
+        string name
+        string type "user|service_account"
+        jsonb roles "array of role names"
+        timestamp created_at
+        timestamp updated_at
+    }
+    
+    SECRETS {
+        uuid id PK
+        uuid user_id FK
+        string api_key "encrypted"
+        string name
+        jsonb roles "copied from users"
+        string user_type "copied from users"
+        timestamp last_used
+        timestamp created_at
+    }
+    
+    ROLE_DEFINITIONS {
+        string role_name PK
+        string display_name
+        string description
+        json permissions "entity+actions"
+    }
+    
+    USERS ||--o{ ROLE_DEFINITIONS : "references"
+    SECRETS ||--o{ ROLE_DEFINITIONS : "references"
+```
+
+---
+
+### Diagram 3: User Creation Workflow
+
+**Description**: Complete workflow for creating users, showing the decision tree based on user type and the validation rules applied. This covers both regular users and service accounts with their different role requirements.
+
+```mermaid
+flowchart TD
+    Start([POST /api/v1/users]) --> CheckType{Type Provided?}
+    
+    CheckType -->|No| SetDefaultUser[Set type = 'user']
+    CheckType -->|Yes| ValidateType{Type Valid?}
+    
+    ValidateType -->|Invalid| Error400[Return 400<br/>Invalid Type]
+    ValidateType -->|Valid| CheckUserType{Type = user OR<br/>service_account?}
+    
+    SetDefaultUser --> CheckRoles{Roles Provided?}
+    
+    CheckUserType -->|type = user| CheckRoles
+    CheckUserType -->|type = service_account| ValidateRolesRequired{Roles Array<br/>Not Empty?}
+    
+    CheckRoles -->|No| SetEmptyRoles[Set roles = empty array]
+    CheckRoles -->|Yes| ValidateRoleNames[Validate Role Names<br/>Against Definitions]
+    
+    ValidateRolesRequired -->|Empty| Error422[Return 422<br/>Service account<br/>requires roles]
+    ValidateRolesRequired -->|Not Empty| ValidateRoleNames
+    
+    ValidateRoleNames -->|Invalid Role| Error400b[Return 400<br/>Unknown Role]
+    ValidateRoleNames -->|Valid| CreateUser[Create User in DB]
+    
+    SetEmptyRoles --> CreateUser
+    
+    CreateUser --> Return201[Return 201 Created<br/>With User Object]
+    
+    Return201 --> End([End])
+    Error400 --> End
+    Error400b --> End
+    Error422 --> End
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Error400 fill:#FF6B6B
+    style Error400b fill:#FF6B6B
+    style Error422 fill:#FF6B6B
+    style ValidateRolesRequired fill:#FFD700
+    style CreateUser fill:#87CEEB
+```
+
+---
+
+### Diagram 4: API Key Creation Workflow
+
+**Description**: Shows how API keys are created with permission inheritance from users. This diagram illustrates the different paths when creating keys for the current user vs. creating keys for service accounts, and how roles are copied to the Secrets table.
+
+```mermaid
+flowchart TD
+    Start([POST /api/v1/secrets]) --> CheckUserID{user_id<br/>Parameter<br/>Provided?}
+    
+    CheckUserID -->|No| GetContextUser[Get user_id from<br/>JWT/Session Context]
+    CheckUserID -->|Yes| CheckAdmin{Current User<br/>is Admin?}
+    
+    CheckAdmin -->|No| Error403[Return 403<br/>Forbidden]
+    CheckAdmin -->|Yes| GetParamUser[Get user_id from<br/>Request Parameter]
+    
+    GetContextUser --> FetchUser1[Fetch User from DB]
+    GetParamUser --> FetchUser2[Fetch User from DB]
+    
+    FetchUser1 --> UserExists1{User Exists?}
+    FetchUser2 --> UserExists2{User Exists?}
+    
+    UserExists1 -->|No| Error404a[Return 404<br/>User Not Found]
+    UserExists2 -->|No| Error404b[Return 404<br/>User Not Found]
+    
+    UserExists1 -->|Yes| CopyRoles1[Copy user.roles<br/>to secret.roles]
+    UserExists2 -->|Yes| ValidateSA{user.type =<br/>service_account?}
+    
+    ValidateSA -->|No| Error400[Return 400<br/>Can only create keys<br/>for service accounts]
+    ValidateSA -->|Yes| CopyRoles2[Copy user.roles<br/>to secret.roles]
+    
+    CopyRoles1 --> CopyType1[Copy user.type<br/>to secret.user_type]
+    CopyRoles2 --> CopyType2[Copy user.type<br/>to secret.user_type]
+    
+    CopyType1 --> GenerateKey[Generate API Key]
+    CopyType2 --> GenerateKey
+    
+    GenerateKey --> SaveSecret[Save to Secrets Table]
+    SaveSecret --> Return201[Return 201 Created<br/>with API Key]
+    
+    Return201 --> End([End])
+    Error403 --> End
+    Error404a --> End
+    Error404b --> End
+    Error400 --> End
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Error403 fill:#FF6B6B
+    style Error404a fill:#FF6B6B
+    style Error404b fill:#FF6B6B
+    style Error400 fill:#FF6B6B
+    style GenerateKey fill:#87CEEB
+    style CopyRoles1 fill:#FFD700
+    style CopyRoles2 fill:#FFD700
+```
+
+---
+
+### Diagram 5: Permission Check Flow (Runtime)
+
+**Description**: Detailed flow of how permission checks are performed during API request processing. This is the core RBAC enforcement logic that runs on every authenticated API request, showing the decision tree for allowing or denying access.
+
+```mermaid
+flowchart TD
+    Start([Incoming API Request]) --> AuthMW[Authentication Middleware]
+    
+    AuthMW --> ValidateKey{API Key Valid?}
+    ValidateKey -->|No| Return401[Return 401<br/>Unauthorized]
+    ValidateKey -->|Yes| LoadSecret[Load Secret + Roles<br/>from Database]
+    
+    LoadSecret --> PermMW[Permission Middleware]
+    PermMW --> CheckExempt{Endpoint<br/>Exempt?}
+    
+    CheckExempt -->|Yes /health, /metrics| AllowRequest[Allow Request]
+    CheckExempt -->|No| CheckRoles{Roles Array<br/>Empty?}
+    
+    CheckRoles -->|Yes Empty| AllowRequest
+    CheckRoles -->|No Not Empty| MapEndpoint[Map HTTP Method + Path<br/>to Entity + Action]
+    
+    MapEndpoint --> MappingExists{Mapping<br/>Exists?}
+    MappingExists -->|No| Return403a[Return 403<br/>Unmapped Endpoint]
+    MappingExists -->|Yes| LoadRoleDefs[Load Role Definitions<br/>from JSON Cache]
+    
+    LoadRoleDefs --> CheckPermLoop{For Each Role<br/>in user.roles}
+    
+    CheckPermLoop --> LoadRole[Load Role Definition]
+    LoadRole --> RoleExists{Role Exists<br/>in Definitions?}
+    
+    RoleExists -->|No| NextRole[Try Next Role]
+    RoleExists -->|Yes| CheckPerms[Check Role Permissions<br/>for Entity + Action]
+    
+    CheckPerms --> HasPermission{Permission<br/>Granted?}
+    HasPermission -->|Yes| LogSuccess[Log Permission Grant]
+    HasPermission -->|No| NextRole
+    
+    NextRole --> MoreRoles{More Roles<br/>to Check?}
+    MoreRoles -->|Yes| CheckPermLoop
+    MoreRoles -->|No| LogDenial[Log Permission Denial]
+    
+    LogDenial --> Return403b[Return 403<br/>Forbidden]
+    LogSuccess --> AllowRequest
+    
+    AllowRequest --> RouteHandler[Route Handler]
+    RouteHandler --> BusinessLogic[Execute Business Logic]
+    BusinessLogic --> Return200[Return 200 OK<br/>with Response]
+    
+    Return200 --> End([End])
+    Return401 --> End
+    Return403a --> End
+    Return403b --> End
+    
+    style Start fill:#90EE90
+    style End fill:#FFB6C1
+    style Return401 fill:#FF6B6B
+    style Return403a fill:#FF6B6B
+    style Return403b fill:#FF6B6B
+    style AllowRequest fill:#87CEEB
+    style CheckRoles fill:#FFD700
+    style HasPermission fill:#FFD700
+```
+
+---
+
+### Diagram 6: Role Permission Evaluation
+
+**Description**: This diagram shows how the system evaluates whether a set of roles has permission for a specific entity and action. It illustrates the logic of checking multiple roles and the "any role grants access" principle.
+
+```mermaid
+flowchart LR
+    subgraph Input
+        Roles[User Roles:<br/>event_ingestor,<br/>metrics_reader]
+        Entity[Entity: event]
+        Action[Action: write]
+    end
+    
+    subgraph "Role Definitions Cache"
+        RoleDef1[event_ingestor:<br/>- event: create, write<br/>- batch_event: create]
+        RoleDef2[metrics_reader:<br/>- metrics: read, list<br/>- analytics: read]
+    end
+    
+    subgraph "Permission Check Logic"
+        CheckRole1{Check event_ingestor<br/>for event.write}
+        CheckRole2{Check metrics_reader<br/>for event.write}
+    end
+    
+    subgraph Output
+        Result{Any Role<br/>Grants Access?}
+        Allow[✅ ALLOW<br/>Continue to Handler]
+        Deny[❌ DENY<br/>Return 403]
+    end
+    
+    Roles --> CheckRole1
+    Roles --> CheckRole2
+    Entity --> CheckRole1
+    Entity --> CheckRole2
+    Action --> CheckRole1
+    Action --> CheckRole2
+    
+    RoleDef1 --> CheckRole1
+    RoleDef2 --> CheckRole2
+    
+    CheckRole1 -->|Match Found| Result
+    CheckRole2 -->|No Match| Result
+    
+    Result -->|Yes| Allow
+    Result -->|No| Deny
+    
+    style CheckRole1 fill:#90EE90
+    style CheckRole2 fill:#FFB6C1
+    style Allow fill:#90EE90
+    style Deny fill:#FF6B6B
+```
+
+---
+
+### Diagram 7: Permit.io Integration Architecture
+
+**Description**: Shows how the Flexprice RBAC system integrates with Permit.io for enhanced authorization capabilities. This diagram illustrates the hybrid approach with fallback to static roles when Permit is unavailable.
+
+```mermaid
+graph TB
+    subgraph "Flexprice Application"
+        PermMW[Permission Middleware]
+        RBACService[RBAC Service]
+        StaticRoles[Static Role Definitions<br/>roles.json]
+    end
+    
+    subgraph "Configuration"
+        Config[Config:<br/>permit.enabled = true/false]
+        EnvVar[ENV:<br/>FLEXPRICE_PERMIT_INTEGRATION]
+    end
+    
+    subgraph "External Services"
+        PermitPDP[Permit.io PDP<br/>Policy Decision Point]
+        PermitAPI[Permit.io API<br/>Management]
+    end
+    
+    subgraph "Database"
+        UsersDB[(Users Table)]
+        SecretsDB[(Secrets Table)]
+    end
+    
+    PermMW --> RBACService
+    Config --> RBACService
+    EnvVar --> Config
+    
+    RBACService --> CheckEnabled{Permit<br/>Enabled?}
+    
+    CheckEnabled -->|No| StaticRoles
+    CheckEnabled -->|Yes| CallPermit[Call Permit PDP<br/>Check Permission]
+    
+    CallPermit --> PermitSuccess{Permit<br/>Available?}
+    
+    PermitSuccess -->|Yes| PermitPDP
+    PermitPDP --> ReturnPermit[Return Decision<br/>from Permit]
+    
+    PermitSuccess -->|No/Error| Fallback[Fallback to<br/>Static Roles]
+    Fallback --> StaticRoles
+    
+    StaticRoles --> ReturnStatic[Return Decision<br/>from Static]
+    
+    ReturnPermit --> Decision{Allow or<br/>Deny?}
+    ReturnStatic --> Decision
+    
+    Decision -->|Allow| Continue[Continue Request]
+    Decision -->|Deny| Return403[Return 403]
+    
+    UsersDB -.->|Sync on Create/Update| PermitAPI
+    PermitAPI -.->|User/Role Sync| PermitPDP
+    
+    style CheckEnabled fill:#FFD700
+    style PermitPDP fill:#87CEEB
+    style StaticRoles fill:#90EE90
+    style Fallback fill:#FFA500
+    style Return403 fill:#FF6B6B
+    style Continue fill:#90EE90
+```
+
+---
+
+### Diagram 8: User & Role Sync with Permit.io
+
+**Description**: Workflow showing how users and their roles are synchronized with Permit.io when the integration is enabled. This ensures Permit has the latest user and role information for authorization decisions.
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant API as Flexprice API
+    participant DB as Database
+    participant Config as Config Manager
+    participant Permit as Permit.io API
+    
+    Admin->>API: POST /api/v1/users<br/>{type: service_account, roles: [event_ingestor]}
+    
+    API->>Config: Check permit.enabled?
+    Config-->>API: enabled = true
+    
+    API->>Permit: GET /roles<br/>Fetch available roles
+    Permit-->>API: [event_ingestor, metrics_reader, ...]
+    
+    API->>API: Validate roles exist in Permit
+    
+    API->>DB: INSERT INTO users<br/>(type, roles)
+    DB-->>API: User created
+    
+    API->>Permit: POST /users<br/>Create user in Permit
+    Permit-->>API: User created in Permit
+    
+    API->>Permit: POST /role-assignments<br/>Assign roles to user
+    Permit-->>API: Roles assigned
+    
+    API-->>Admin: 201 Created<br/>User object
+    
+    Note over API,Permit: If Permit call fails,<br/>log error but continue<br/>(graceful degradation)
+```
+
+---
+
+### Diagram 9: Migration Phases Timeline
+
+**Description**: Visual timeline showing the three phases of RBAC implementation and deployment, from database migrations through feature flag rollout to full production release.
+
+```mermaid
+gantt
+    title RBAC Implementation Timeline
+    dateFormat YYYY-MM-DD
+    section Phase 1: Database
+    Schema Design & Review           :p1_1, 2025-11-01, 3d
+    Create Migrations               :p1_2, after p1_1, 2d
+    Deploy to Staging               :p1_3, after p1_2, 1d
+    Verify & Test                   :p1_4, after p1_3, 2d
+    Deploy to Production            :p1_5, after p1_4, 1d
+    Backfill Data                   :p1_6, after p1_5, 1d
+    
+    section Phase 2: Code Deployment
+    Implement RBAC Service          :p2_1, 2025-11-01, 5d
+    Implement Middleware            :p2_2, after p2_1, 3d
+    Unit Tests                      :p2_3, after p2_1, 5d
+    Integration Tests               :p2_4, after p2_2, 3d
+    Code Review                     :p2_5, after p2_4, 2d
+    Deploy with Flag OFF            :p2_6, after p2_5, 1d
+    Monitor for 24h                 :p2_7, after p2_6, 1d
+    
+    section Phase 3: Feature Rollout
+    Enable Internal (1%)            :p3_1, after p2_7, 1d
+    Monitor & Fix Issues            :p3_2, after p3_1, 2d
+    Enable Staging (100%)           :p3_3, after p3_2, 1d
+    Load Testing                    :p3_4, after p3_3, 2d
+    Production 10%                  :p3_5, after p3_4, 1d
+    Production 50%                  :p3_6, after p3_5, 2d
+    Production 100%                 :p3_7, after p3_6, 2d
+    Post-Launch Monitor             :p3_8, after p3_7, 7d
+```
+
+---
+
+### Diagram 10: Permission Denial Scenarios
+
+**Description**: Decision tree showing all possible scenarios that lead to permission denial (403 Forbidden), helping developers understand when and why access is blocked.
+
+```mermaid
+flowchart TD
+    Request[API Request] --> Auth{Authenticated?}
+    
+    Auth -->|No| E401[❌ 401 Unauthorized<br/>Invalid/Missing API Key]
+    Auth -->|Yes| HasRoles{User has<br/>roles assigned?}
+    
+    HasRoles -->|No Empty Array| Allow[✅ 200 OK<br/>Full Access<br/>Backward Compatibility]
+    HasRoles -->|Yes Not Empty| Mapped{Endpoint<br/>Mapped?}
+    
+    Mapped -->|No| E403_Unmapped[❌ 403 Forbidden<br/>Endpoint not in mapping<br/>Access denied by default]
+    Mapped -->|Yes| HasMatchingRole{Any role has<br/>permission?}
+    
+    HasMatchingRole -->|No| E403_NoPermission[❌ 403 Forbidden<br/>Insufficient permissions<br/>for entity.action]
+    HasMatchingRole -->|Yes| RateLimited{Rate Limit<br/>Exceeded?}
+    
+    RateLimited -->|Yes| E429[❌ 429 Too Many Requests<br/>Rate limit exceeded]
+    RateLimited -->|No| Allow2[✅ 200 OK<br/>Request Allowed]
+    
+    Allow --> Success[Process Request]
+    Allow2 --> Success
+    Success --> Response[Return Response]
+    
+    style E401 fill:#FF6B6B
+    style E403_Unmapped fill:#FF6B6B
+    style E403_NoPermission fill:#FF6B6B
+    style E429 fill:#FFA500
+    style Allow fill:#90EE90
+    style Allow2 fill:#90EE90
+    style Success fill:#87CEEB
+    style HasRoles fill:#FFD700
+    style HasMatchingRole fill:#FFD700
+```
+
+---
+
+### Diagram 11: Role Definition Structure
+
+**Description**: Visual representation of how roles are structured in the JSON configuration file, showing the hierarchy from role to permissions to entities and actions.
+
+```mermaid
+graph TD
+    subgraph "roles.json File"
+        Root[Role Definitions]
+    end
+    
+    Root --> Role1[event_ingestor]
+    Root --> Role2[metrics_reader]
+    Root --> Role3[feature_manager]
+    
+    Role1 --> R1Meta[Metadata:<br/>name, description]
+    Role1 --> R1Perms[Permissions Array]
+    
+    R1Perms --> R1P1[Permission 1]
+    R1Perms --> R1P2[Permission 2]
+    
+    R1P1 --> R1P1E[Entity: event]
+    R1P1 --> R1P1A[Actions: create, write]
+    
+    R1P2 --> R1P2E[Entity: batch_event]
+    R1P2 --> R1P2A[Actions: create]
+    
+    Role2 --> R2Meta[Metadata:<br/>name, description]
+    Role2 --> R2Perms[Permissions Array]
+    
+    R2Perms --> R2P1[Permission 1]
+    R2P1 --> R2P1E[Entity: metrics]
+    R2P1 --> R2P1A[Actions: read, list]
+    
+    Role3 --> R3Meta[Metadata:<br/>name, description]
+    Role3 --> R3Perms[Permissions Array]
+    
+    R3Perms --> R3P1[Permission 1]
+    R3P1 --> R3P1E[Entity: feature]
+    R3P1 --> R3P1A[Actions: create, read,<br/>update, delete, list]
+    
+    style Root fill:#87CEEB
+    style Role1 fill:#90EE90
+    style Role2 fill:#FFD700
+    style Role3 fill:#FFA07A
+    style R1P1E fill:#E6E6FA
+    style R2P1E fill:#E6E6FA
+    style R3P1E fill:#E6E6FA
+```
+
+---
+
+### Diagram 12: Complete System State Diagram
+
+**Description**: State machine showing the lifecycle of a service account from creation through API key generation to request processing and eventual deactivation. This provides a holistic view of how service accounts move through the system.
+
+```mermaid
+stateDiagram-v2
+    [*] --> UserCreated: Admin creates<br/>service account<br/>with roles
+    
+    UserCreated --> APIKeyCreated: Admin generates<br/>API key<br/>(roles copied)
+    
+    APIKeyCreated --> Active: Key ready<br/>for use
+    
+    Active --> RequestProcessing: API request<br/>received
+    
+    RequestProcessing --> PermissionCheck: Check roles<br/>and permissions
+    
+    PermissionCheck --> Allowed: Permission<br/>granted
+    PermissionCheck --> Denied: Permission<br/>denied
+    
+    Allowed --> Active: Continue<br/>processing
+    Denied --> Active: Return 403
+    
+    Active --> RolesUpdated: Admin updates<br/>user roles
+    
+    RolesUpdated --> APIKeyCreated: Regenerate<br/>API key<br/>(new roles)
+    
+    Active --> KeyRevoked: Admin deletes<br/>API key
+    
+    KeyRevoked --> APIKeyCreated: Create new<br/>API key
+    
+    Active --> Deactivated: Admin deletes<br/>service account
+    
+    Deactivated --> [*]: All keys<br/>invalidated
+    
+    note right of UserCreated
+        Service account must
+        have at least one role
+    end note
+    
+    note right of APIKeyCreated
+        Roles are immutable
+        in API key
+    end note
+    
+    note right of PermissionCheck
+        Check against
+        role definitions
+    end note
+```
+
+---
+
+### Diagram 13: Backward Compatibility Flow
+
+**Description**: Demonstrates how the RBAC system maintains backward compatibility with existing users who don't have roles assigned, ensuring zero breaking changes during rollout.
+
+```mermaid
+flowchart LR
+    subgraph "Existing Users (Pre-RBAC)"
+        OldUser1[Regular User<br/>roles = NULL/empty<br/>type = NULL/user]
+        OldAPIKey1[Old API Keys<br/>roles = NULL/empty]
+    end
+    
+    subgraph "Migration"
+        Migration[Schema Migration<br/>+ Backfill]
+    end
+    
+    subgraph "Post-Migration State"
+        NewUser1[Regular User<br/>roles = empty array<br/>type = 'user']
+        NewAPIKey1[Old API Keys<br/>roles = empty array<br/>type = 'user']
+    end
+    
+    subgraph "Runtime Behavior"
+        CheckRoles{Roles<br/>Empty?}
+        FullAccess[✅ Full Access<br/>All Endpoints<br/>No Restrictions]
+        NoBreaking[❌ No Breaking Changes<br/>Existing workflows work]
+    end
+    
+    OldUser1 --> Migration
+    OldAPIKey1 --> Migration
+    
+    Migration --> NewUser1
+    Migration --> NewAPIKey1
+    
+    NewUser1 --> CheckRoles
+    NewAPIKey1 --> CheckRoles
+    
+    CheckRoles -->|Yes| FullAccess
+    FullAccess --> NoBreaking
+    
+    style OldUser1 fill:#FFE4B5
+    style OldAPIKey1 fill:#FFE4B5
+    style Migration fill:#87CEEB
+    style FullAccess fill:#90EE90
+    style NoBreaking fill:#90EE90
+```
 
 ---
 
