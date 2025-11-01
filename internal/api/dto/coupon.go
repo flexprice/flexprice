@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"context"
 	"time"
 
 	coupon "github.com/flexprice/flexprice/internal/domain/coupon"
@@ -118,9 +119,46 @@ func (r *UpdateCouponRequest) Validate() error {
 	return nil
 }
 
+// ToCoupon converts the request to a domain coupon
+func (r *CreateCouponRequest) ToCoupon(ctx context.Context) *coupon.Coupon {
+	currency := ""
+	if r.Currency != nil {
+		currency = *r.Currency
+	}
+
+	return &coupon.Coupon{
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON),
+		Name:              r.Name,
+		RedeemAfter:       r.RedeemAfter,
+		RedeemBefore:      r.RedeemBefore,
+		MaxRedemptions:    r.MaxRedemptions,
+		TotalRedemptions:  0,
+		Rules:             r.Rules,
+		AmountOff:         r.AmountOff,
+		PercentageOff:     r.PercentageOff,
+		Type:              r.Type,
+		Cadence:           r.Cadence,
+		DurationInPeriods: r.DurationInPeriods,
+		Metadata:          r.Metadata,
+		Currency:          currency,
+		BaseModel:         types.GetDefaultBaseModel(ctx),
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+	}
+}
+
 // CouponResponse represents the response for coupon data
 type CouponResponse struct {
 	*coupon.Coupon `json:",inline"`
+}
+
+// NewCouponResponse creates a new coupon response from a domain coupon
+func NewCouponResponse(c *coupon.Coupon) *CouponResponse {
+	if c == nil {
+		return nil
+	}
+	return &CouponResponse{
+		Coupon: c,
+	}
 }
 
 // ListCouponsResponse represents the response for listing coupons
