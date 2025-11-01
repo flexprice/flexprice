@@ -27,6 +27,10 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldEmail holds the string denoting the email field in the database.
 	FieldEmail = "email"
+	// FieldType holds the string denoting the type field in the database.
+	FieldType = "type"
+	// FieldRoles holds the string denoting the roles field in the database.
+	FieldRoles = "roles"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 )
@@ -41,6 +45,8 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedBy,
 	FieldEmail,
+	FieldType,
+	FieldRoles,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -64,8 +70,10 @@ var (
 	DefaultUpdatedAt func() time.Time
 	// UpdateDefaultUpdatedAt holds the default value on update for the "updated_at" field.
 	UpdateDefaultUpdatedAt func() time.Time
-	// EmailValidator is a validator for the "email" field. It is called by the builders before save.
-	EmailValidator func(string) error
+	// DefaultType holds the default value on creation for the "type" field.
+	DefaultType string
+	// DefaultRoles holds the default value on creation for the "roles" field.
+	DefaultRoles []string
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -109,4 +117,9 @@ func ByUpdatedBy(opts ...sql.OrderTermOption) OrderOption {
 // ByEmail orders the results by the email field.
 func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmail, opts...).ToFunc()
+}
+
+// ByType orders the results by the type field.
+func ByType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldType, opts...).ToFunc()
 }

@@ -59,6 +59,15 @@ func (Secret) Fields() []ent.Field {
 		field.JSON("provider_data", map[string]string{}).
 			Optional().
 			Comment("Provider-specific encrypted data (for integrations)"),
+		// RBAC Fields
+		field.Strings("roles").
+			Optional().
+			Default([]string{}).
+			Comment("Roles copied from user at API key creation time"),
+		field.String("user_type").
+			Optional().
+			Default("user").
+			Comment("User type copied from user at API key creation time"),
 	}
 }
 

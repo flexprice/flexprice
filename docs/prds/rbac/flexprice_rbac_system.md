@@ -287,16 +287,11 @@ Entities represent resources in the Flexprice system:
 #### Action Definitions
 Standard CRUD actions plus custom operations:
 
-| Action | Description | Typical HTTP Methods |
-|--------|-------------|---------------------|
-| `create` | Create new resources | POST |
-| `read` | Read single resource | GET /:id |
-| `list` | List/query resources | GET / |
-| `update` | Modify existing resources | PUT, PATCH |
-| `delete` | Remove resources | DELETE |
+| Action | Description | Typical HTTP Methods  |
+|--------|-------------|-----------------------|
+| `read` | Read single resource | GET /:id     |
 | `write` | Combined create/update | POST, PUT |
-| `execute` | Execute operations | POST |
-| `toggle` | Toggle states | POST |
+
 ```
 
 ### RBAC Service Implementation

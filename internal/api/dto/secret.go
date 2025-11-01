@@ -16,6 +16,7 @@ type CreateAPIKeyRequest struct {
 	Type        types.SecretType `json:"type" binding:"required" validate:"required"`
 	Permissions []string         `json:"permissions"`
 	ExpiresAt   *time.Time       `json:"expires_at,omitempty"`
+	UserID      string           `json:"user_id,omitempty"` // Optional: if provided, must be a service_account user_id
 }
 
 func (r *CreateAPIKeyRequest) Validate() error {

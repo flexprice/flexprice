@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/pyroscope"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/sentry"
@@ -77,6 +78,9 @@ func main() {
 
 			// Security
 			security.NewEncryptionService,
+
+			// RBAC
+			provideRBACService,
 
 			// storage
 			s3.NewService,
@@ -290,6 +294,7 @@ func provideHandlers(
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
 	scheduledTaskService service.ScheduledTaskService,
+	rbacService *rbac.RBACService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
@@ -332,11 +337,17 @@ func provideHandlers(
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
 		Group:                    v1.NewGroupHandler(groupService, logger),
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
+		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
 	}
 }
 
-func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
-	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService)
+func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
+	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
+}
+
+func provideRBACService() (*rbac.RBACService, error) {
+	// Load roles.json from config directory
+	return rbac.NewRBACService("internal/config/rbac/roles.json")
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {

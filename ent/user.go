@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -30,7 +31,11 @@ type User struct {
 	// UpdatedBy holds the value of the "updated_by" field.
 	UpdatedBy string `json:"updated_by,omitempty"`
 	// Email holds the value of the "email" field.
-	Email        string `json:"email,omitempty"`
+	Email *string `json:"email,omitempty"`
+	// Type holds the value of the "type" field.
+	Type string `json:"type,omitempty"`
+	// Roles holds the value of the "roles" field.
+	Roles        []string `json:"roles,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -39,7 +44,9 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldID, user.FieldTenantID, user.FieldStatus, user.FieldCreatedBy, user.FieldUpdatedBy, user.FieldEmail:
+		case user.FieldRoles:
+			values[i] = new([]byte)
+		case user.FieldID, user.FieldTenantID, user.FieldStatus, user.FieldCreatedBy, user.FieldUpdatedBy, user.FieldEmail, user.FieldType:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -104,7 +111,22 @@ func (u *User) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field email", values[i])
 			} else if value.Valid {
-				u.Email = value.String
+				u.Email = new(string)
+				*u.Email = value.String
+			}
+		case user.FieldType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field type", values[i])
+			} else if value.Valid {
+				u.Type = value.String
+			}
+		case user.FieldRoles:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field roles", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &u.Roles); err != nil {
+					return fmt.Errorf("unmarshal field roles: %w", err)
+				}
 			}
 		default:
 			u.selectValues.Set(columns[i], values[i])
@@ -160,8 +182,16 @@ func (u *User) String() string {
 	builder.WriteString("updated_by=")
 	builder.WriteString(u.UpdatedBy)
 	builder.WriteString(", ")
-	builder.WriteString("email=")
-	builder.WriteString(u.Email)
+	if v := u.Email; v != nil {
+		builder.WriteString("email=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("type=")
+	builder.WriteString(u.Type)
+	builder.WriteString(", ")
+	builder.WriteString("roles=")
+	builder.WriteString(fmt.Sprintf("%v", u.Roles))
 	builder.WriteByte(')')
 	return builder.String()
 }
