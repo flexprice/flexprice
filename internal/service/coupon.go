@@ -2,10 +2,8 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -41,33 +39,13 @@ func (s *couponService) CreateCoupon(ctx context.Context, req dto.CreateCouponRe
 		return nil, err
 	}
 
-	baseModel := types.GetDefaultBaseModel(ctx)
-	c := &coupon.Coupon{
-		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON),
-		Name:              req.Name,
-		RedeemAfter:       req.RedeemAfter,
-		RedeemBefore:      req.RedeemBefore,
-		MaxRedemptions:    req.MaxRedemptions,
-		TotalRedemptions:  0,
-		Rules:             req.Rules,
-		AmountOff:         req.AmountOff,
-		PercentageOff:     req.PercentageOff,
-		Type:              req.Type,
-		Cadence:           req.Cadence,
-		DurationInPeriods: req.DurationInPeriods,
-		Metadata:          req.Metadata,
-		Currency:          *req.Currency,
-		BaseModel:         baseModel,
-		EnvironmentID:     types.GetEnvironmentID(ctx),
-	}
+	c := req.ToCoupon(ctx)
 
 	if err := s.CouponRepo.Create(ctx, c); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to create coupon").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
-	return s.toCouponResponse(c), nil
+	return dto.NewCouponResponse(c), nil
 }
 
 // GetCoupon retrieves a coupon by ID
@@ -77,7 +55,7 @@ func (s *couponService) GetCoupon(ctx context.Context, id string) (*dto.CouponRe
 		return nil, err
 	}
 
-	return s.toCouponResponse(c), nil
+	return dto.NewCouponResponse(c), nil
 }
 
 // UpdateCoupon updates an existing coupon
@@ -96,16 +74,11 @@ func (s *couponService) UpdateCoupon(ctx context.Context, id string, req dto.Upd
 		c.Metadata = req.Metadata
 	}
 
-	c.UpdatedAt = time.Now()
-	c.UpdatedBy = types.GetUserID(ctx)
-
 	if err := s.CouponRepo.Update(ctx, c); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to update coupon").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
-	return s.toCouponResponse(c), nil
+	return dto.NewCouponResponse(c), nil
 }
 
 // DeleteCoupon deletes a coupon
@@ -125,21 +98,17 @@ func (s *couponService) ListCoupons(ctx context.Context, filter *types.CouponFil
 
 	coupons, err := s.CouponRepo.List(ctx, filter)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list coupons").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	total, err := s.CouponRepo.Count(ctx, filter)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to count coupons").
-			Mark(ierr.ErrInternal)
+		return nil, err
 	}
 
 	responses := make([]*dto.CouponResponse, len(coupons))
 	for i, c := range coupons {
-		responses[i] = s.toCouponResponse(c)
+		responses[i] = dto.NewCouponResponse(c)
 	}
 
 	listResponse := types.NewListResponse(responses, total, filter.GetLimit(), filter.GetOffset())
@@ -213,11 +182,4 @@ func (s *couponService) CalculateDiscount(ctx context.Context, couponID string, 
 		"coupon_type", c.Type)
 
 	return discount, nil
-}
-
-// Helper methods to convert domain models to DTOs
-func (s *couponService) toCouponResponse(c *coupon.Coupon) *dto.CouponResponse {
-	return &dto.CouponResponse{
-		Coupon: c,
-	}
 }
