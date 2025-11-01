@@ -234,6 +234,20 @@ func (ec *EntitlementCreate) SetNillableDisplayOrder(i *int) *EntitlementCreate 
 	return ec
 }
 
+// SetParentEntitlementID sets the "parent_entitlement_id" field.
+func (ec *EntitlementCreate) SetParentEntitlementID(s string) *EntitlementCreate {
+	ec.mutation.SetParentEntitlementID(s)
+	return ec
+}
+
+// SetNillableParentEntitlementID sets the "parent_entitlement_id" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableParentEntitlementID(s *string) *EntitlementCreate {
+	if s != nil {
+		ec.SetParentEntitlementID(*s)
+	}
+	return ec
+}
+
 // SetID sets the "id" field.
 func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	ec.mutation.SetID(s)
@@ -460,6 +474,10 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.DisplayOrder(); ok {
 		_spec.SetField(entitlement.FieldDisplayOrder, field.TypeInt, value)
 		_node.DisplayOrder = value
+	}
+	if value, ok := ec.mutation.ParentEntitlementID(); ok {
+		_spec.SetField(entitlement.FieldParentEntitlementID, field.TypeString, value)
+		_node.ParentEntitlementID = &value
 	}
 	return _node, _spec
 }

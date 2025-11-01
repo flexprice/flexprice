@@ -19457,32 +19457,33 @@ func (m *CustomerMutation) ResetEdge(name string) error {
 // EntitlementMutation represents an operation that mutates the Entitlement nodes in the graph.
 type EntitlementMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *string
-	tenant_id          *string
-	status             *string
-	created_at         *time.Time
-	updated_at         *time.Time
-	created_by         *string
-	updated_by         *string
-	environment_id     *string
-	entity_type        *string
-	entity_id          *string
-	feature_id         *string
-	feature_type       *string
-	is_enabled         *bool
-	usage_limit        *int64
-	addusage_limit     *int64
-	usage_reset_period *string
-	is_soft_limit      *bool
-	static_value       *string
-	display_order      *int
-	adddisplay_order   *int
-	clearedFields      map[string]struct{}
-	done               bool
-	oldValue           func(context.Context) (*Entitlement, error)
-	predicates         []predicate.Entitlement
+	op                    Op
+	typ                   string
+	id                    *string
+	tenant_id             *string
+	status                *string
+	created_at            *time.Time
+	updated_at            *time.Time
+	created_by            *string
+	updated_by            *string
+	environment_id        *string
+	entity_type           *string
+	entity_id             *string
+	feature_id            *string
+	feature_type          *string
+	is_enabled            *bool
+	usage_limit           *int64
+	addusage_limit        *int64
+	usage_reset_period    *string
+	is_soft_limit         *bool
+	static_value          *string
+	display_order         *int
+	adddisplay_order      *int
+	parent_entitlement_id *string
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*Entitlement, error)
+	predicates            []predicate.Entitlement
 }
 
 var _ ent.Mutation = (*EntitlementMutation)(nil)
@@ -20346,6 +20347,55 @@ func (m *EntitlementMutation) ResetDisplayOrder() {
 	m.adddisplay_order = nil
 }
 
+// SetParentEntitlementID sets the "parent_entitlement_id" field.
+func (m *EntitlementMutation) SetParentEntitlementID(s string) {
+	m.parent_entitlement_id = &s
+}
+
+// ParentEntitlementID returns the value of the "parent_entitlement_id" field in the mutation.
+func (m *EntitlementMutation) ParentEntitlementID() (r string, exists bool) {
+	v := m.parent_entitlement_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentEntitlementID returns the old "parent_entitlement_id" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldParentEntitlementID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentEntitlementID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentEntitlementID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentEntitlementID: %w", err)
+	}
+	return oldValue.ParentEntitlementID, nil
+}
+
+// ClearParentEntitlementID clears the value of the "parent_entitlement_id" field.
+func (m *EntitlementMutation) ClearParentEntitlementID() {
+	m.parent_entitlement_id = nil
+	m.clearedFields[entitlement.FieldParentEntitlementID] = struct{}{}
+}
+
+// ParentEntitlementIDCleared returns if the "parent_entitlement_id" field was cleared in this mutation.
+func (m *EntitlementMutation) ParentEntitlementIDCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldParentEntitlementID]
+	return ok
+}
+
+// ResetParentEntitlementID resets all changes to the "parent_entitlement_id" field.
+func (m *EntitlementMutation) ResetParentEntitlementID() {
+	m.parent_entitlement_id = nil
+	delete(m.clearedFields, entitlement.FieldParentEntitlementID)
+}
+
 // Where appends a list predicates to the EntitlementMutation builder.
 func (m *EntitlementMutation) Where(ps ...predicate.Entitlement) {
 	m.predicates = append(m.predicates, ps...)
@@ -20380,7 +20430,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -20432,6 +20482,9 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.display_order != nil {
 		fields = append(fields, entitlement.FieldDisplayOrder)
 	}
+	if m.parent_entitlement_id != nil {
+		fields = append(fields, entitlement.FieldParentEntitlementID)
+	}
 	return fields
 }
 
@@ -20474,6 +20527,8 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.StaticValue()
 	case entitlement.FieldDisplayOrder:
 		return m.DisplayOrder()
+	case entitlement.FieldParentEntitlementID:
+		return m.ParentEntitlementID()
 	}
 	return nil, false
 }
@@ -20517,6 +20572,8 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldStaticValue(ctx)
 	case entitlement.FieldDisplayOrder:
 		return m.OldDisplayOrder(ctx)
+	case entitlement.FieldParentEntitlementID:
+		return m.OldParentEntitlementID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -20645,6 +20702,13 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDisplayOrder(v)
 		return nil
+	case entitlement.FieldParentEntitlementID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentEntitlementID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -20726,6 +20790,9 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlement.FieldStaticValue) {
 		fields = append(fields, entitlement.FieldStaticValue)
 	}
+	if m.FieldCleared(entitlement.FieldParentEntitlementID) {
+		fields = append(fields, entitlement.FieldParentEntitlementID)
+	}
 	return fields
 }
 
@@ -20763,6 +20830,9 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldStaticValue:
 		m.ClearStaticValue()
+		return nil
+	case entitlement.FieldParentEntitlementID:
+		m.ClearParentEntitlementID()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement nullable field %s", name)
@@ -20822,6 +20892,9 @@ func (m *EntitlementMutation) ResetField(name string) error {
 		return nil
 	case entitlement.FieldDisplayOrder:
 		m.ResetDisplayOrder()
+		return nil
+	case entitlement.FieldParentEntitlementID:
+		m.ResetParentEntitlementID()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
