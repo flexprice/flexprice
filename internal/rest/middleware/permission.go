@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/gin-gonic/gin"
@@ -37,7 +37,8 @@ func (pm *PermissionMiddleware) RequirePermission(entity string, action string) 
 			return
 		}
 
-		secret, ok := secretInterface.(*ent.Secret)
+		// Convert to domain secret
+		secretEntity, ok := secretInterface.(*secret.Secret)
 		if !ok {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 				"error": "Internal server error",
@@ -46,10 +47,10 @@ func (pm *PermissionMiddleware) RequirePermission(entity string, action string) 
 		}
 
 		// Check permission using set-based lookup
-		if !pm.rbacService.HasPermission(secret.Roles, entity, action) {
+		if !pm.rbacService.HasPermission(secretEntity.Roles, entity, action) {
 			pm.logger.Info("Permission denied",
-				"user_id", secret.ID,
-				"roles", secret.Roles,
+				"secret_id", secretEntity.ID,
+				"roles", secretEntity.Roles,
 				"entity", entity,
 				"action", action,
 				"path", c.Request.URL.Path,
