@@ -21,8 +21,11 @@ SET row_security = off;
 -- Name: public; Type: SCHEMA; Schema: -; Owner: -
 --
 
-CREATE SCHEMA public;
+CREATE SCHEMA IF NOT EXISTS public;
 
+-- Create extensions schema and install uuid extension
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
 
 --
 -- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: -
@@ -75,7 +78,6 @@ CREATE TABLE public.environments (
     id character varying(50) DEFAULT extensions.uuid_generate_v4() NOT NULL,
     name character varying(255) NOT NULL,
     type character varying(50) NOT NULL,
-    slug character varying(255) NOT NULL,
     tenant_id character varying(50) NOT NULL,
     status character varying(20) DEFAULT 'published'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
@@ -88,28 +90,6 @@ CREATE TABLE public.environments (
 --
 -- Name: invoice_line_items; Type: TABLE; Schema: public; Owner: -
 --
-
-CREATE TABLE public.invoice_line_items (
-    id character varying(50) NOT NULL,
-    tenant_id character varying(50) NOT NULL,
-    status character varying(50) DEFAULT 'published'::character varying NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL,
-    created_by character varying,
-    updated_by character varying,
-    customer_id character varying(50) NOT NULL,
-    subscription_id character varying(50),
-    price_id character varying(50) NOT NULL,
-    meter_id character varying(50),
-    amount numeric(20,8) NOT NULL,
-    quantity numeric(20,8) NOT NULL,
-    currency character varying(10) NOT NULL,
-    period_start timestamp with time zone,
-    period_end timestamp with time zone,
-    metadata jsonb,
-    invoice_id character varying(50) NOT NULL
-);
-
 
 CREATE TABLE public.invoice_line_items (
     id character varying(50) NOT NULL,

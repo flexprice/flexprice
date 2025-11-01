@@ -1531,6 +1531,39 @@ func (s *featureUsageTrackingService) fetchSubscriptionPrices(ctx context.Contex
 			data.Prices[priceResp.ID] = priceResp.Price
 			data.PriceResponses[priceResp.ID] = priceResp
 		}
+
+		// Collect parent price IDs for subscription override prices
+		parentPriceIDs := make([]string, 0)
+		parentPriceIDSet := make(map[string]bool)
+		for _, priceResp := range pricesResponse.Items {
+			if priceResp.EntityType == types.PRICE_ENTITY_TYPE_SUBSCRIPTION && priceResp.ParentPriceID != "" {
+				if !parentPriceIDSet[priceResp.ParentPriceID] {
+					parentPriceIDs = append(parentPriceIDs, priceResp.ParentPriceID)
+					parentPriceIDSet[priceResp.ParentPriceID] = true
+				}
+			}
+		}
+
+		// Fetch parent prices if needed
+		if len(parentPriceIDs) > 0 {
+			parentPriceFilter := types.NewNoLimitPriceFilter()
+			parentPriceFilter.Expand = lo.ToPtr(string(types.ExpandGroups))
+			parentPriceFilter.PriceIDs = parentPriceIDs
+			parentPriceFilter.WithStatus(types.StatusPublished)
+			parentPriceFilter.AllowExpiredPrices = false
+			parentPricesResponse, err := priceService.GetPrices(ctx, parentPriceFilter)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to fetch parent prices for subscription overrides").
+					Mark(ierr.ErrDatabase)
+			}
+
+			// Add parent prices to maps
+			for _, priceResp := range parentPricesResponse.Items {
+				data.Prices[priceResp.ID] = priceResp.Price
+				data.PriceResponses[priceResp.ID] = priceResp
+			}
+		}
 	}
 
 	return nil
@@ -2036,7 +2069,15 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 				case types.PRICE_ENTITY_TYPE_PLAN:
 					item.PlanID = price.EntityID
 				case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
-					item.PlanID = price.ParentPriceID
+					// For subscription override prices, get plan_id from parent_price_id
+					// Parent price should already be fetched in fetchSubscriptionPrices
+					if price.ParentPriceID != "" {
+						if parentPrice, ok := data.PriceResponses[price.ParentPriceID]; ok {
+							if parentPrice.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+								item.PlanID = parentPrice.EntityID
+							}
+						}
+					}
 				}
 				if expandMap["price"] {
 					item.Price = price
