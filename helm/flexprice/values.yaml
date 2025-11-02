@@ -2,10 +2,10 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 2
+replicaCount: 1
 
 image:
-  repository: flexprice-app
+  repository: shreeda/flexprice-app
   pullPolicy: IfNotPresent
   tag: "latest"
 
@@ -41,17 +41,11 @@ deployment:
 # API deployment configuration
 api:
   enabled: true
-  replicaCount: 2
-  resources:
-    limits:
-      cpu: 2000m
-      memory: 2Gi
-    requests:
-      cpu: 500m
-      memory: 512Mi
+  replicaCount: 1
+  resources: {}
   autoscaling:
     enabled: true
-    minReplicas: 2
+    minReplicas: 1
     maxReplicas: 10
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: 80
@@ -62,34 +56,22 @@ api:
 # Consumer deployment configuration
 consumer:
   enabled: true
-  replicaCount: 2
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-    requests:
-      cpu: 200m
-      memory: 256Mi
+  replicaCount: 1
+  resources: {}
   autoscaling:
     enabled: true
-    minReplicas: 2
+    minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
 
 # Temporal Worker deployment configuration
 worker:
   enabled: true
-  replicaCount: 2
-  resources:
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-    requests:
-      cpu: 200m
-      memory: 256Mi
+  replicaCount: 1
+  resources: {}
   autoscaling:
     enabled: false
-    minReplicas: 2
+    minReplicas: 1
     maxReplicas: 5
     targetCPUUtilizationPercentage: 70
 
@@ -124,7 +106,7 @@ server:
 # Auth configuration
 auth:
   provider: "flexprice" # "flexprice" or "supabase"
-  secret: "" # Set via secret
+  secret: "flexprice123" # Set via secret
   supabase:
     baseUrl: ""
     serviceKey: "" # Set via secret
@@ -136,12 +118,12 @@ auth:
 # Set external.enabled=false to deploy PostgreSQL internally
 postgres:
   external:
-    enabled: true  # Set to false to deploy PostgreSQL internally
+    enabled: false  # Set to false to deploy PostgreSQL internally
   # External PostgreSQL configuration (when external.enabled=true)
   host: "postgres-service"  # Override when using external PostgreSQL
   port: 5432
   user: "flexprice"
-  password: "" # Set via secret
+  password: "flexprice123" # Set via secret
   dbname: "flexprice"
   sslmode: "require"
   maxOpenConns: 10
@@ -160,13 +142,7 @@ postgres:
       enabled: true
       size: 20Gi
       storageClass: ""  # Use default storage class if empty
-    resources:
-      requests:
-        cpu: 500m
-        memory: 512Mi
-      limits:
-        cpu: 2000m
-        memory: 2Gi
+    resources: {}
     service:
       type: ClusterIP
       port: 5432
@@ -178,12 +154,12 @@ postgres:
 # Set external.enabled=false to deploy ClickHouse internally
 clickhouse:
   external:
-    enabled: true  # Set to false to deploy ClickHouse internally
+    enabled: false  # Set to false to deploy ClickHouse internally
   # External ClickHouse configuration (when external.enabled=true)
   address: "clickhouse-service:9000"  # Override when using external ClickHouse
   tls: false
   username: "flexprice"
-  password: "" # Set via secret
+  password: "flexprice123" # Set via secret
   database: "flexprice"
   # Internal ClickHouse configuration (when external.enabled=false)
   internal:
@@ -195,13 +171,7 @@ clickhouse:
       enabled: true
       size: 50Gi
       storageClass: ""  # Use default storage class if empty
-    resources:
-      requests:
-        cpu: 500m
-        memory: 1Gi
-      limits:
-        cpu: 2000m
-        memory: 4Gi
+    resources: {}
     service:
       type: ClusterIP
       httpPort: 8123
@@ -216,7 +186,7 @@ clickhouse:
 # Set external.enabled=false to deploy Kafka internally
 kafka:
   external:
-    enabled: true  # Set to false to deploy Kafka internally
+    enabled: false  # Set to false to deploy Kafka internally
   # External Kafka configuration (when external.enabled=true)
   brokers:
     - "kafka-service:9092"  # Override when using external Kafka
@@ -227,11 +197,12 @@ kafka:
   useSASL: false
   saslMechanism: ""
   saslUser: ""
-  saslPassword: "" # Set via secret
+  saslPassword: "flexprice123" # Set via secret
   clientId: "flexprice-client"
   routeTenantsOnLazyMode: []
   # Internal Kafka configuration (when external.enabled=false)
   internal:
+    replicas: 1
     image:
       repository: confluentinc/cp-kafka
       tag: "7.7.1"
@@ -240,13 +211,7 @@ kafka:
       enabled: true
       size: 20Gi
       storageClass: ""  # Use default storage class if empty
-    resources:
-      requests:
-        cpu: 500m
-        memory: 1Gi
-      limits:
-        cpu: 2000m
-        memory: 2Gi
+    resources: {}
     service:
       type: ClusterIP
       internalPort: 9092
@@ -254,6 +219,25 @@ kafka:
     # Kafka KRaft mode configuration
     clusterId: "ca497efe-9f82-4b84-890b-d9969a9a2e1c"
     brokerId: 0
+
+    # Add these lines 👇
+    configOverrides:
+      # make this node both controller + broker and use localhost for the controller RPC
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: "0"
+      KAFKA_LISTENERS: "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://flexprice-kafka:9092,EXTERNAL://flexprice-kafka:29092"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@flexprice-kafka:9093"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_MIN_INSYNC_REPLICAS: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
 
 # Temporal Configuration
 # Set external.enabled=false to deploy Temporal internally
@@ -264,7 +248,7 @@ temporal:
   address: "temporal-service:7233"  # Override when using external Temporal
   taskQueue: "billing-task-queue"
   namespace: "default"
-  apiKey: "" # Set via secret
+  apiKey: "flexprice123" # Set via secret
   apiKeyName: ""
   tls: false
   # Internal Temporal configuration (when external.enabled=false)
@@ -274,13 +258,7 @@ temporal:
         repository: temporalio/auto-setup
         tag: "1.26.2"
         pullPolicy: IfNotPresent
-      resources:
-        requests:
-          cpu: 500m
-          memory: 512Mi
-        limits:
-          cpu: 2000m
-          memory: 2Gi
+      resources: {}
       service:
         type: ClusterIP
         port: 7233
@@ -291,7 +269,7 @@ temporal:
         host: ""  # If empty, uses the main postgres.internal service
         port: 5432
         user: "flexprice"
-        password: ""  # If empty, uses the main postgres password
+        password: "flexprice123"  # If empty, uses the main postgres password
         dbname: "temporal"
     ui:
       enabled: true
@@ -299,13 +277,7 @@ temporal:
         repository: temporalio/ui
         tag: "2.31.2"
         pullPolicy: IfNotPresent
-      resources:
-        requests:
-          cpu: 100m
-          memory: 128Mi
-        limits:
-          cpu: 500m
-          memory: 512Mi
+      resources: {}
       service:
         type: ClusterIP
         port: 8088
@@ -317,7 +289,7 @@ logging:
 # Sentry configuration
 sentry:
   enabled: false
-  dsn: "" # Set via secret
+  dsn: "https://1234567890@sentry.io/1234567890" # Set via secret
   environment: "production"
   sampleRate: 1.0
 
@@ -327,7 +299,7 @@ pyroscope:
   serverAddress: ""
   applicationName: "flexprice"
   basicAuthUser: ""
-  basicAuthPassword: "" # Set via secret
+  basicAuthPassword: "flexprice123" # Set via secret
   sampleRate: 100
   disableGCRuns: false
   profileTypes:
@@ -408,7 +380,7 @@ webhook:
 
 # Secrets configuration
 secrets:
-  encryptionKey: "" # Set via secret
+  encryptionKey: "7aed5e6debca36958b84bf89e10d8c8005721c5d17e428512b37c73dcc70d5da" # Set via secret
 
 # Billing configuration
 billing:

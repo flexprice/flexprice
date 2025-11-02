@@ -220,11 +220,16 @@ Create environment variables from configuration
 - name: FLEXPRICE_CACHE_ENABLED
   value: "true"
 {{- end }}
+{{- if .Values.secrets.encryptionKey }}
+- name: FLEXPRICE_SECRETS_ENCRYPTION_KEY
+  value: {{ .Values.secrets.encryptionKey | quote }}
+{{- else }}
 - name: FLEXPRICE_SECRETS_ENCRYPTION_KEY
   valueFrom:
     secretKeyRef:
       name: {{ include "flexprice.fullname" . }}-secrets
       key: encryption-key
+{{- end }}
 {{- if .Values.email.enabled }}
 - name: FLEXPRICE_EMAIL_ENABLED
   value: "true"
