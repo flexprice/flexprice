@@ -711,6 +711,7 @@ var (
 		{Name: "is_soft_limit", Type: field.TypeBool, Default: false},
 		{Name: "static_value", Type: field.TypeString, Nullable: true},
 		{Name: "display_order", Type: field.TypeInt, Default: 0},
+		{Name: "parent_entitlement_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -721,7 +722,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[18]},
+				Columns:    []*schema.Column{EntitlementsColumns[19]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -744,6 +745,11 @@ var (
 				Name:    "entitlement_tenant_id_environment_id_feature_id",
 				Unique:  false,
 				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[10]},
+			},
+			{
+				Name:    "entitlement_parent_entitlement_id",
+				Unique:  false,
+				Columns: []*schema.Column{EntitlementsColumns[18]},
 			},
 		},
 	}
