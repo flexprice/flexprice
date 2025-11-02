@@ -20,7 +20,7 @@ type GetCostAnalyticsRequest struct {
 	ExternalCustomerID string `json:"external_customer_id,omitempty"` // Optional - for specific customer
 
 	// Additional filters
-	MeterIDs []string `json:"meter_ids,omitempty"`
+	FeatureIDs []string `json:"feature_ids,omitempty"`
 
 	// Expand options - specify which entities to expand
 	Expand []string `json:"expand,omitempty"` // "meter", "price"

@@ -231,11 +231,6 @@ func (s *revenueAnalyticsService) buildMeterUsageRequests(
 			continue
 		}
 
-		// Apply meter ID filter if specified
-		if len(req.MeterIDs) > 0 && !lo.Contains(req.MeterIDs, price.MeterID) {
-			continue
-		}
-
 		usageRequest := &dto.GetUsageByMeterRequest{
 			MeterID:            price.MeterID,
 			PriceID:            price.ID,
@@ -390,6 +385,7 @@ func (s *revenueAnalyticsService) buildEmptyResponse(costsheetID string, req *dt
 func (s *revenueAnalyticsService) buildRevenueRequest(req *dto.GetCostAnalyticsRequest) *dto.GetUsageAnalyticsRequest {
 	return &dto.GetUsageAnalyticsRequest{
 		ExternalCustomerID: req.ExternalCustomerID,
+		FeatureIDs:         req.FeatureIDs,
 		StartTime:          req.StartTime,
 		EndTime:            req.EndTime,
 	}
