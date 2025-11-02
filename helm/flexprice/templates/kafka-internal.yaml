@@ -68,7 +68,11 @@ spec:
             - name: KAFKA_PROCESS_ROLES
               value: "broker,controller"
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              {{- if eq (int .Values.kafka.internal.replicas) 1 }}
+              value: "{{ .Values.kafka.internal.brokerId | default "0" }}@localhost:9093"
+              {{- else }}
               value: "{{ .Values.kafka.internal.brokerId | default "0" }}@{{ include "flexprice.fullname" . }}-kafka:9093"
+              {{- end }}
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: "CONTROLLER"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
@@ -95,25 +99,34 @@ spec:
           resources:
             {{- toYaml .Values.kafka.internal.resources | nindent 12 }}
           livenessProbe:
-            exec:
-              command:
-                - /bin/sh
-                - -c
-                - "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            timeoutSeconds: 5
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 120  # Increased from 60
+            periodSeconds: 30         # Increased from 10
+            timeoutSeconds: 10        # Increased from 5
             failureThreshold: 3
+            successThreshold: 1
           readinessProbe:
             exec:
               command:
                 - /bin/sh
                 - -c
-                - "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"
+                - |
+                  kafka-metadata-quorum --bootstrap-controller localhost:9093 describe --status || \
+                  kafka-broker-api-versions --bootstrap-server localhost:9092
+            initialDelaySeconds: 60   # Increased from 30
+            periodSeconds: 10
+            timeoutSeconds: 10        # Increased from 3
+            failureThreshold: 5       # Increased from 3
+            successThreshold: 1
+          startupProbe:              # Add a startup probe
+            tcpSocket:
+              port: 9092
             initialDelaySeconds: 30
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30     # 30 * 10 = 300 seconds max startup time
+            successThreshold: 1
   {{- if .Values.kafka.internal.persistence.enabled }}
   volumeClaimTemplates:
     - metadata:

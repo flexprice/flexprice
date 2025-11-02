@@ -11,6 +11,8 @@ keywords:
   - invoicing
 maintainers:
   - name: FlexPrice Team
+    email: support@flexprice.io
+    url: https://flexprice.io
 home: https://github.com/flexprice/flexprice
 sources:
   - https://github.com/flexprice/flexprice
