@@ -176,4 +176,7 @@ data:
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
+    
+    # Note: secrets.encryption_key should be set via environment variable FLEXPRICE_SECRETS_ENCRYPTION_KEY
+    # for security reasons. It's not included in this configmap.
 
