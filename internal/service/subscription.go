@@ -311,14 +311,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
-		// Handle subscription phases if provided
-		if len(req.Phases) > 0 {
-			err = s.handleSubscriptionPhases(ctx, sub, req.Phases, plan, validPrices)
-			if err != nil {
-				return err
-			}
-		}
-
 		// Apply coupons to the subscription
 		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, req.SubscriptionCoupons, lineItems); err != nil {
 			return err
@@ -357,6 +349,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Handle subscription phases if provided
+	if len(req.Phases) > 0 {
+		err = s.handleSubscriptionPhases(ctx, sub, req.Phases, plan, validPrices)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Update response to ensure it has the latest subscription data
@@ -561,7 +561,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 		// Create line items from plan prices - reusing DTO's ToSubscriptionLineItem logic (same as AddSubscriptionLineItem)
 		phaseLineItems := lo.Map(validPrices, func(priceResp *dto.PriceResponse, _ int) *subscription.SubscriptionLineItem {
-			// Build line item params 
+			// Build line item params
 			params := dto.LineItemParams{
 				Subscription: sub,
 				Price:        priceResp,
@@ -578,8 +578,8 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			req := dto.CreateSubscriptionLineItemRequest{
 				PriceID:             priceResp.Price.ID,
 				SubscriptionPhaseID: lo.ToPtr(phase.ID),
-				StartDate: lo.ToPtr(startDate),
-				EndDate:   phaseReq.EndDate,
+				StartDate:           lo.ToPtr(startDate),
+				EndDate:             phaseReq.EndDate,
 			}
 
 			lineItem := req.ToSubscriptionLineItem(ctx, params)
