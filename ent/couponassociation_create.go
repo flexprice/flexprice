@@ -140,6 +140,48 @@ func (cac *CouponAssociationCreate) SetNillableSubscriptionLineItemID(s *string)
 	return cac
 }
 
+// SetSubscriptionPhaseID sets the "subscription_phase_id" field.
+func (cac *CouponAssociationCreate) SetSubscriptionPhaseID(s string) *CouponAssociationCreate {
+	cac.mutation.SetSubscriptionPhaseID(s)
+	return cac
+}
+
+// SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
+func (cac *CouponAssociationCreate) SetNillableSubscriptionPhaseID(s *string) *CouponAssociationCreate {
+	if s != nil {
+		cac.SetSubscriptionPhaseID(*s)
+	}
+	return cac
+}
+
+// SetStartDate sets the "start_date" field.
+func (cac *CouponAssociationCreate) SetStartDate(t time.Time) *CouponAssociationCreate {
+	cac.mutation.SetStartDate(t)
+	return cac
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (cac *CouponAssociationCreate) SetNillableStartDate(t *time.Time) *CouponAssociationCreate {
+	if t != nil {
+		cac.SetStartDate(*t)
+	}
+	return cac
+}
+
+// SetEndDate sets the "end_date" field.
+func (cac *CouponAssociationCreate) SetEndDate(t time.Time) *CouponAssociationCreate {
+	cac.mutation.SetEndDate(t)
+	return cac
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (cac *CouponAssociationCreate) SetNillableEndDate(t *time.Time) *CouponAssociationCreate {
+	if t != nil {
+		cac.SetEndDate(*t)
+	}
+	return cac
+}
+
 // SetMetadata sets the "metadata" field.
 func (cac *CouponAssociationCreate) SetMetadata(m map[string]string) *CouponAssociationCreate {
 	cac.mutation.SetMetadata(m)
@@ -233,6 +275,10 @@ func (cac *CouponAssociationCreate) defaults() {
 		v := couponassociation.DefaultEnvironmentID
 		cac.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := cac.mutation.StartDate(); !ok {
+		v := couponassociation.DefaultStartDate()
+		cac.mutation.SetStartDate(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -269,6 +315,9 @@ func (cac *CouponAssociationCreate) check() error {
 		if err := couponassociation.SubscriptionIDValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "CouponAssociation.subscription_id": %w`, err)}
 		}
+	}
+	if _, ok := cac.mutation.StartDate(); !ok {
+		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "CouponAssociation.start_date"`)}
 	}
 	if len(cac.mutation.CouponIDs()) == 0 {
 		return &ValidationError{Name: "coupon", err: errors.New(`ent: missing required edge "CouponAssociation.coupon"`)}
@@ -338,6 +387,18 @@ func (cac *CouponAssociationCreate) createSpec() (*CouponAssociation, *sqlgraph.
 	if value, ok := cac.mutation.EnvironmentID(); ok {
 		_spec.SetField(couponassociation.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
+	}
+	if value, ok := cac.mutation.SubscriptionPhaseID(); ok {
+		_spec.SetField(couponassociation.FieldSubscriptionPhaseID, field.TypeString, value)
+		_node.SubscriptionPhaseID = &value
+	}
+	if value, ok := cac.mutation.StartDate(); ok {
+		_spec.SetField(couponassociation.FieldStartDate, field.TypeTime, value)
+		_node.StartDate = value
+	}
+	if value, ok := cac.mutation.EndDate(); ok {
+		_spec.SetField(couponassociation.FieldEndDate, field.TypeTime, value)
+		_node.EndDate = &value
 	}
 	if value, ok := cac.mutation.Metadata(); ok {
 		_spec.SetField(couponassociation.FieldMetadata, field.TypeJSON, value)

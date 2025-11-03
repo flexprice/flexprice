@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
@@ -46,6 +48,18 @@ func (CouponAssociation) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
+			Optional().
+			Nillable(),
+		field.String("subscription_phase_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		field.Time("start_date").
+			Immutable().
+			Default(time.Now),
+		field.Time("end_date").
 			Optional().
 			Nillable(),
 		field.JSON("metadata", map[string]string{}).
