@@ -51,8 +51,44 @@ func NewNoLimitCouponFilter() *CouponFilter {
 	}
 }
 
-// Validate validates the coupon filter
-func (f CouponFilter) Validate() error {
+// CouponAssociationFilter represents filters for coupon association queries
+type CouponAssociationFilter struct {
+	*QueryFilter
+
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
+	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
+
+	// SubscriptionIDs filters by subscription IDs (can be a single ID in array)
+	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	// CouponIDs filters by coupon IDs (can be a single ID in array)
+	CouponIDs []string `json:"coupon_ids,omitempty" form:"coupon_ids"`
+	// SubscriptionLineItemIDs filters by subscription line item IDs (can be a single ID in array)
+	SubscriptionLineItemIDs []string `json:"subscription_line_item_ids,omitempty" form:"subscription_line_item_ids"`
+	// SubscriptionLineItemIDIsNil filters for subscription-level associations (no line items)
+	// When true, returns associations with no line item. When false, returns associations with line items.
+	SubscriptionLineItemIDIsNil *bool `json:"subscription_line_item_id_is_nil,omitempty" form:"subscription_line_item_id_is_nil"`
+	// SubscriptionPhaseIDs filters by subscription phase IDs (can be a single ID in array)
+	SubscriptionPhaseIDs []string `json:"subscription_phase_ids,omitempty" form:"subscription_phase_ids"`
+	// WithCoupon includes coupon relation in the response
+	WithCoupon bool `json:"with_coupon,omitempty" form:"with_coupon"`
+}
+
+// NewCouponAssociationFilter creates a new CouponAssociationFilter with default values
+func NewCouponAssociationFilter() *CouponAssociationFilter {
+	return &CouponAssociationFilter{
+		QueryFilter: NewDefaultQueryFilter(),
+	}
+}
+
+// NewNoLimitCouponAssociationFilter creates a new CouponAssociationFilter with no pagination limits
+func NewNoLimitCouponAssociationFilter() *CouponAssociationFilter {
+	return &CouponAssociationFilter{
+		QueryFilter: NewNoLimitQueryFilter(),
+	}
+}
+
+// Validate validates the coupon association filter
+func (f *CouponAssociationFilter) Validate() error {
 	if f.QueryFilter != nil {
 		if err := f.QueryFilter.Validate(); err != nil {
 			return err
@@ -71,13 +107,62 @@ func (f CouponFilter) Validate() error {
 		}
 	}
 
-	for _, couponID := range f.CouponIDs {
-		if err := ValidateCouponID(couponID); err != nil {
-			return err
-		}
-	}
-
 	return nil
+}
+
+// GetLimit implements BaseFilter interface for CouponAssociationFilter
+func (f *CouponAssociationFilter) GetLimit() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetLimit()
+	}
+	return f.QueryFilter.GetLimit()
+}
+
+// GetOffset implements BaseFilter interface for CouponAssociationFilter
+func (f *CouponAssociationFilter) GetOffset() int {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOffset()
+	}
+	return f.QueryFilter.GetOffset()
+}
+
+// GetSort implements BaseFilter interface for CouponAssociationFilter
+func (f *CouponAssociationFilter) GetSort() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetSort()
+	}
+	return f.QueryFilter.GetSort()
+}
+
+// GetOrder implements BaseFilter interface for CouponAssociationFilter
+func (f *CouponAssociationFilter) GetOrder() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetOrder()
+	}
+	return f.QueryFilter.GetOrder()
+}
+
+// GetStatus implements BaseFilter interface for CouponAssociationFilter
+func (f *CouponAssociationFilter) GetStatus() string {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetStatus()
+	}
+	return f.QueryFilter.GetStatus()
+}
+
+// GetExpand implements BaseFilter interface for CouponAssociationFilter
+func (f *CouponAssociationFilter) GetExpand() Expand {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().GetExpand()
+	}
+	return f.QueryFilter.GetExpand()
+}
+
+func (f *CouponAssociationFilter) IsUnlimited() bool {
+	if f.QueryFilter == nil {
+		return NewDefaultQueryFilter().IsUnlimited()
+	}
+	return f.QueryFilter.IsUnlimited()
 }
 
 // GetLimit implements BaseFilter interface

@@ -107,46 +107,134 @@ func (s *InMemoryCouponAssociationStore) Delete(ctx context.Context, id string) 
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemoryCouponAssociationStore) GetBySubscription(ctx context.Context, subscriptionID string) ([]*coupon_association.CouponAssociation, error) {
-	// Create a filter function that matches by subscription_id
-	filterFn := func(ctx context.Context, ca *coupon_association.CouponAssociation, _ interface{}) bool {
-		return ca.SubscriptionID == subscriptionID &&
-			ca.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
+func (s *InMemoryCouponAssociationStore) List(ctx context.Context, filter *types.CouponAssociationFilter) ([]*coupon_association.CouponAssociation, error) {
+	if filter == nil {
+		filter = types.NewCouponAssociationFilter()
 	}
 
-	// List all coupon associations with our filter
-	associations, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
+	items, err := s.InMemoryStore.List(ctx, filter, couponAssociationFilterFn, couponAssociationSortFn)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list coupon associations").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
-	return lo.Map(associations, func(ca *coupon_association.CouponAssociation, _ int) *coupon_association.CouponAssociation {
+	return lo.Map(items, func(ca *coupon_association.CouponAssociation, _ int) *coupon_association.CouponAssociation {
 		return copyCouponAssociation(ca)
 	}), nil
+}
+
+func (s *InMemoryCouponAssociationStore) GetBySubscription(ctx context.Context, subscriptionID string) ([]*coupon_association.CouponAssociation, error) {
+	// Use List method with filter for backwards compatibility
+	filter := types.NewNoLimitCouponAssociationFilter()
+	subscriptionLineItemIDIsNil := true
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
+	filter.WithCoupon = true
+	return s.List(ctx, filter)
 }
 
 // GetBySubscriptionForLineItems retrieves coupon associations that target specific subscription line items
 // for a given subscription. It excludes invoice-level associations (those without SubscriptionLineItemID).
 func (s *InMemoryCouponAssociationStore) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*coupon_association.CouponAssociation, error) {
-	// Filter function: same subscription, line-item level only, correct tenant/env
-	filterFn := func(ctx context.Context, ca *coupon_association.CouponAssociation, _ interface{}) bool {
-		return ca.SubscriptionID == subscriptionID &&
-			ca.SubscriptionLineItemID != nil &&
-			ca.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
+	// Use List method with filter for backwards compatibility
+	filter := types.NewNoLimitCouponAssociationFilter()
+	subscriptionLineItemIDIsNil := false
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
+	return s.List(ctx, filter)
+}
+
+// couponAssociationFilterFn implements filtering logic for coupon associations
+func couponAssociationFilterFn(ctx context.Context, ca *coupon_association.CouponAssociation, filter interface{}) bool {
+	f, ok := filter.(*types.CouponAssociationFilter)
+	if !ok {
+		return false
 	}
 
-	associations, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list coupon associations").
-			Mark(ierr.ErrDatabase)
+	// Apply tenant filter
+	tenantID := types.GetTenantID(ctx)
+	if tenantID != "" && ca.TenantID != tenantID {
+		return false
 	}
 
-	return lo.Map(associations, func(ca *coupon_association.CouponAssociation, _ int) *coupon_association.CouponAssociation {
-		return copyCouponAssociation(ca)
-	}), nil
+	// Apply environment filter
+	if !CheckEnvironmentFilter(ctx, ca.EnvironmentID) {
+		return false
+	}
+
+	// Apply subscription IDs filter
+	if len(f.SubscriptionIDs) > 0 && !lo.Contains(f.SubscriptionIDs, ca.SubscriptionID) {
+		return false
+	}
+
+	// Apply coupon IDs filter
+	if len(f.CouponIDs) > 0 && !lo.Contains(f.CouponIDs, ca.CouponID) {
+		return false
+	}
+
+	// Apply subscription line item ID filters
+	if f.SubscriptionLineItemIDIsNil != nil {
+		if *f.SubscriptionLineItemIDIsNil && ca.SubscriptionLineItemID != nil {
+			return false
+		}
+		if !*f.SubscriptionLineItemIDIsNil && ca.SubscriptionLineItemID == nil {
+			return false
+		}
+	} else if len(f.SubscriptionLineItemIDs) > 0 {
+		if ca.SubscriptionLineItemID == nil {
+			return false
+		}
+		if !lo.Contains(f.SubscriptionLineItemIDs, *ca.SubscriptionLineItemID) {
+			return false
+		}
+	}
+
+	// Apply subscription phase ID filters
+	if len(f.SubscriptionPhaseIDs) > 0 {
+		if ca.SubscriptionPhaseID == nil {
+			return false
+		}
+		if !lo.Contains(f.SubscriptionPhaseIDs, *ca.SubscriptionPhaseID) {
+			return false
+		}
+	}
+
+	// Apply filter conditions if any
+	if f.Filters != nil {
+		for _, condition := range f.Filters {
+			if !applyCouponAssociationFilterCondition(ca, condition) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+// applyCouponAssociationFilterCondition applies a single filter condition
+func applyCouponAssociationFilterCondition(ca *coupon_association.CouponAssociation, condition *types.FilterCondition) bool {
+	if condition.Field == nil {
+		return true
+	}
+
+	switch *condition.Field {
+	case "status":
+		if condition.Value != nil && condition.Value.String != nil {
+			return string(ca.Status) == *condition.Value.String
+		}
+	case "created_at":
+		if condition.Value != nil && condition.Value.Date != nil {
+			// Implement date comparison logic if needed
+			return true
+		}
+	default:
+		return true
+	}
+
+	return true
+}
+
+// couponAssociationSortFn implements sorting logic for coupon associations
+func couponAssociationSortFn(i, j *coupon_association.CouponAssociation) bool {
+	// Default sort by created_at desc
+	return i.CreatedAt.After(j.CreatedAt)
 }
