@@ -110,6 +110,7 @@ func (s *SubscriptionPhaseServiceSuite) TestCreateSubscriptionPhase_WithoutDates
 	ctx := s.GetContext()
 	ctx = types.SetEnvironmentID(ctx, "test-env-id")
 
+	// Create phase without start date - should return validation error
 	req := dto.CreateSubscriptionPhaseRequest{
 		SubscriptionID: s.testData.subscription.ID,
 		Metadata: types.Metadata{
@@ -118,11 +119,9 @@ func (s *SubscriptionPhaseServiceSuite) TestCreateSubscriptionPhase_WithoutDates
 	}
 
 	resp, err := s.service.CreateSubscriptionPhase(ctx, req)
-	s.NoError(err)
-	s.NotNil(resp)
-	s.NotEmpty(resp.ID)
-	s.NotEmpty(resp.StartDate) // Should default to now
-	s.Nil(resp.EndDate)        // Should be nil for indefinite phase
+	s.Error(err)
+	s.Nil(resp)
+	s.True(ierr.IsValidation(err))
 }
 
 func (s *SubscriptionPhaseServiceSuite) TestCreateSubscriptionPhase_ValidationError_EmptySubscriptionID() {
@@ -161,8 +160,10 @@ func (s *SubscriptionPhaseServiceSuite) TestCreateSubscriptionPhase_Subscription
 	ctx := s.GetContext()
 	ctx = types.SetEnvironmentID(ctx, "test-env-id")
 
+	startDate := time.Now().UTC()
 	req := dto.CreateSubscriptionPhaseRequest{
 		SubscriptionID: "non-existent-subscription",
+		StartDate:      &startDate,
 	}
 
 	resp, err := s.service.CreateSubscriptionPhase(ctx, req)
