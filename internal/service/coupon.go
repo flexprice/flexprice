@@ -92,6 +92,11 @@ func (s *couponService) ListCoupons(ctx context.Context, filter *types.CouponFil
 		filter = types.NewCouponFilter()
 	}
 
+	// Ensure QueryFilter is initialized
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
 	if err := filter.Validate(); err != nil {
 		return nil, err
 	}

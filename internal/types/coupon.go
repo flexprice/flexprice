@@ -179,6 +179,40 @@ func (f *CouponAssociationFilter) IsUnlimited() bool {
 	return f.QueryFilter.IsUnlimited()
 }
 
+// Validate validates the coupon filter
+func (f *CouponFilter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	for _, filter := range f.Filters {
+		if filter != nil {
+			if err := filter.Validate(); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, sort := range f.Sort {
+		if sort != nil {
+			if err := sort.Validate(); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Validate coupon IDs if provided
+	for _, id := range f.CouponIDs {
+		if err := ValidateCouponID(id); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // GetLimit implements BaseFilter interface
 func (f *CouponFilter) GetLimit() int {
 	if f.QueryFilter == nil {
