@@ -94,6 +94,8 @@ const (
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
 	EdgePauses = "pauses"
+	// EdgePhases holds the string denoting the phases edge name in mutations.
+	EdgePhases = "phases"
 	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
 	EdgeCreditGrants = "credit_grants"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
@@ -116,6 +118,13 @@ const (
 	PausesInverseTable = "subscription_pauses"
 	// PausesColumn is the table column denoting the pauses relation/edge.
 	PausesColumn = "subscription_id"
+	// PhasesTable is the table that holds the phases relation/edge.
+	PhasesTable = "subscription_phases"
+	// PhasesInverseTable is the table name for the SubscriptionPhase entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionphase" package.
+	PhasesInverseTable = "subscription_phases"
+	// PhasesColumn is the table column denoting the phases relation/edge.
+	PhasesColumn = "subscription_id"
 	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
 	CreditGrantsTable = "credit_grants"
 	// CreditGrantsInverseTable is the table name for the CreditGrant entity.
@@ -516,6 +525,20 @@ func ByPauses(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByPhasesCount orders the results by phases count.
+func ByPhasesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newPhasesStep(), opts...)
+	}
+}
+
+// ByPhases orders the results by phases terms.
+func ByPhases(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPhasesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByCreditGrantsCount orders the results by credit_grants count.
 func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -569,6 +592,13 @@ func newPausesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PausesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PausesTable, PausesColumn),
+	)
+}
+func newPhasesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PhasesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, PhasesTable, PhasesColumn),
 	)
 }
 func newCreditGrantsStep() *sqlgraph.Step {

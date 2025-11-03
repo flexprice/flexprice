@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 )
 
@@ -156,6 +157,11 @@ func (spc *SubscriptionPhaseCreate) SetID(s string) *SubscriptionPhaseCreate {
 	return spc
 }
 
+// SetSubscription sets the "subscription" edge to the Subscription entity.
+func (spc *SubscriptionPhaseCreate) SetSubscription(s *Subscription) *SubscriptionPhaseCreate {
+	return spc.SetSubscriptionID(s.ID)
+}
+
 // Mutation returns the SubscriptionPhaseMutation object of the builder.
 func (spc *SubscriptionPhaseCreate) Mutation() *SubscriptionPhaseMutation {
 	return spc.mutation
@@ -243,6 +249,9 @@ func (spc *SubscriptionPhaseCreate) check() error {
 	if _, ok := spc.mutation.StartDate(); !ok {
 		return &ValidationError{Name: "start_date", err: errors.New(`ent: missing required field "SubscriptionPhase.start_date"`)}
 	}
+	if len(spc.mutation.SubscriptionIDs()) == 0 {
+		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionPhase.subscription"`)}
+	}
 	return nil
 }
 
@@ -310,10 +319,6 @@ func (spc *SubscriptionPhaseCreate) createSpec() (*SubscriptionPhase, *sqlgraph.
 		_spec.SetField(subscriptionphase.FieldMetadata, field.TypeJSON, value)
 		_node.Metadata = value
 	}
-	if value, ok := spc.mutation.SubscriptionID(); ok {
-		_spec.SetField(subscriptionphase.FieldSubscriptionID, field.TypeString, value)
-		_node.SubscriptionID = value
-	}
 	if value, ok := spc.mutation.StartDate(); ok {
 		_spec.SetField(subscriptionphase.FieldStartDate, field.TypeTime, value)
 		_node.StartDate = value
@@ -321,6 +326,23 @@ func (spc *SubscriptionPhaseCreate) createSpec() (*SubscriptionPhase, *sqlgraph.
 	if value, ok := spc.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionphase.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
+	}
+	if nodes := spc.mutation.SubscriptionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   subscriptionphase.SubscriptionTable,
+			Columns: []string{subscriptionphase.SubscriptionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.SubscriptionID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

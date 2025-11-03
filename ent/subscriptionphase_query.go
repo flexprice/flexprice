@@ -12,16 +12,18 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 )
 
 // SubscriptionPhaseQuery is the builder for querying SubscriptionPhase entities.
 type SubscriptionPhaseQuery struct {
 	config
-	ctx        *QueryContext
-	order      []subscriptionphase.OrderOption
-	inters     []Interceptor
-	predicates []predicate.SubscriptionPhase
+	ctx              *QueryContext
+	order            []subscriptionphase.OrderOption
+	inters           []Interceptor
+	predicates       []predicate.SubscriptionPhase
+	withSubscription *SubscriptionQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +58,28 @@ func (spq *SubscriptionPhaseQuery) Unique(unique bool) *SubscriptionPhaseQuery {
 func (spq *SubscriptionPhaseQuery) Order(o ...subscriptionphase.OrderOption) *SubscriptionPhaseQuery {
 	spq.order = append(spq.order, o...)
 	return spq
+}
+
+// QuerySubscription chains the current query on the "subscription" edge.
+func (spq *SubscriptionPhaseQuery) QuerySubscription() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: spq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := spq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := spq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionphase.Table, subscriptionphase.FieldID, selector),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionphase.SubscriptionTable, subscriptionphase.SubscriptionColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(spq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first SubscriptionPhase entity from the query.
@@ -245,15 +269,27 @@ func (spq *SubscriptionPhaseQuery) Clone() *SubscriptionPhaseQuery {
 		return nil
 	}
 	return &SubscriptionPhaseQuery{
-		config:     spq.config,
-		ctx:        spq.ctx.Clone(),
-		order:      append([]subscriptionphase.OrderOption{}, spq.order...),
-		inters:     append([]Interceptor{}, spq.inters...),
-		predicates: append([]predicate.SubscriptionPhase{}, spq.predicates...),
+		config:           spq.config,
+		ctx:              spq.ctx.Clone(),
+		order:            append([]subscriptionphase.OrderOption{}, spq.order...),
+		inters:           append([]Interceptor{}, spq.inters...),
+		predicates:       append([]predicate.SubscriptionPhase{}, spq.predicates...),
+		withSubscription: spq.withSubscription.Clone(),
 		// clone intermediate query.
 		sql:  spq.sql.Clone(),
 		path: spq.path,
 	}
+}
+
+// WithSubscription tells the query-builder to eager-load the nodes that are connected to
+// the "subscription" edge. The optional arguments are used to configure the query builder of the edge.
+func (spq *SubscriptionPhaseQuery) WithSubscription(opts ...func(*SubscriptionQuery)) *SubscriptionPhaseQuery {
+	query := (&SubscriptionClient{config: spq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	spq.withSubscription = query
+	return spq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +368,11 @@ func (spq *SubscriptionPhaseQuery) prepareQuery(ctx context.Context) error {
 
 func (spq *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*SubscriptionPhase, error) {
 	var (
-		nodes = []*SubscriptionPhase{}
-		_spec = spq.querySpec()
+		nodes       = []*SubscriptionPhase{}
+		_spec       = spq.querySpec()
+		loadedTypes = [1]bool{
+			spq.withSubscription != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*SubscriptionPhase).scanValues(nil, columns)
@@ -341,6 +380,7 @@ func (spq *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &SubscriptionPhase{config: spq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +392,43 @@ func (spq *SubscriptionPhaseQuery) sqlAll(ctx context.Context, hooks ...queryHoo
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := spq.withSubscription; query != nil {
+		if err := spq.loadSubscription(ctx, query, nodes, nil,
+			func(n *SubscriptionPhase, e *Subscription) { n.Edges.Subscription = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (spq *SubscriptionPhaseQuery) loadSubscription(ctx context.Context, query *SubscriptionQuery, nodes []*SubscriptionPhase, init func(*SubscriptionPhase), assign func(*SubscriptionPhase, *Subscription)) error {
+	ids := make([]string, 0, len(nodes))
+	nodeids := make(map[string][]*SubscriptionPhase)
+	for i := range nodes {
+		fk := nodes[i].SubscriptionID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(subscription.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "subscription_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (spq *SubscriptionPhaseQuery) sqlCount(ctx context.Context) (int, error) {
@@ -379,6 +455,9 @@ func (spq *SubscriptionPhaseQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != subscriptionphase.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if spq.withSubscription != nil {
+			_spec.Node.AddColumnOnce(subscriptionphase.FieldSubscriptionID)
 		}
 	}
 	if ps := spq.predicates; len(ps) > 0 {

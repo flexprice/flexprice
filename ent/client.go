@@ -5363,6 +5363,22 @@ func (c *SubscriptionClient) QueryPauses(s *Subscription) *SubscriptionPauseQuer
 	return query
 }
 
+// QueryPhases queries the phases edge of a Subscription.
+func (c *SubscriptionClient) QueryPhases(s *Subscription) *SubscriptionPhaseQuery {
+	query := (&SubscriptionPhaseClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(subscriptionphase.Table, subscriptionphase.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.PhasesTable, subscription.PhasesColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryCreditGrants queries the credit_grants edge of a Subscription.
 func (c *SubscriptionClient) QueryCreditGrants(s *Subscription) *CreditGrantQuery {
 	query := (&CreditGrantClient{config: c.config}).Query()
@@ -5856,6 +5872,22 @@ func (c *SubscriptionPhaseClient) GetX(ctx context.Context, id string) *Subscrip
 		panic(err)
 	}
 	return obj
+}
+
+// QuerySubscription queries the subscription edge of a SubscriptionPhase.
+func (c *SubscriptionPhaseClient) QuerySubscription(sp *SubscriptionPhase) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := sp.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionphase.Table, subscriptionphase.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, subscriptionphase.SubscriptionTable, subscriptionphase.SubscriptionColumn),
+		)
+		fromV = sqlgraph.Neighbors(sp.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.

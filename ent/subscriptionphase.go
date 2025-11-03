@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 )
 
@@ -34,13 +35,36 @@ type SubscriptionPhase struct {
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
-	// Reference to the subscription
+	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID string `json:"subscription_id,omitempty"`
 	// StartDate holds the value of the "start_date" field.
 	StartDate time.Time `json:"start_date,omitempty"`
 	// EndDate holds the value of the "end_date" field.
-	EndDate      *time.Time `json:"end_date,omitempty"`
+	EndDate *time.Time `json:"end_date,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the SubscriptionPhaseQuery when eager-loading is set.
+	Edges        SubscriptionPhaseEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// SubscriptionPhaseEdges holds the relations/edges for other nodes in the graph.
+type SubscriptionPhaseEdges struct {
+	// Subscription holds the value of the subscription edge.
+	Subscription *Subscription `json:"subscription,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// SubscriptionOrErr returns the Subscription value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SubscriptionPhaseEdges) SubscriptionOrErr() (*Subscription, error) {
+	if e.Subscription != nil {
+		return e.Subscription, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: subscription.Label}
+	}
+	return nil, &NotLoadedError{edge: "subscription"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -155,6 +179,11 @@ func (sp *SubscriptionPhase) assignValues(columns []string, values []any) error 
 // This includes values selected through modifiers, order, etc.
 func (sp *SubscriptionPhase) Value(name string) (ent.Value, error) {
 	return sp.selectValues.Get(name)
+}
+
+// QuerySubscription queries the "subscription" edge of the SubscriptionPhase entity.
+func (sp *SubscriptionPhase) QuerySubscription() *SubscriptionQuery {
+	return NewSubscriptionPhaseClient(sp.config).QuerySubscription(sp)
 }
 
 // Update returns a builder for updating this SubscriptionPhase.

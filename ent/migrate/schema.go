@@ -1767,15 +1767,23 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
-		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "start_date", Type: field.TypeTime},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionPhasesTable holds the schema information for the "subscription_phases" table.
 	SubscriptionPhasesTable = &schema.Table{
 		Name:       "subscription_phases",
 		Columns:    SubscriptionPhasesColumns,
 		PrimaryKey: []*schema.Column{SubscriptionPhasesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_phases_subscriptions_phases",
+				Columns:    []*schema.Column{SubscriptionPhasesColumns[11]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "subscriptionphase_tenant_id_environment_id",
@@ -2218,6 +2226,7 @@ func init() {
 	}
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
+	SubscriptionPhasesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[0].RefTable = CouponAssociationsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[1].RefTable = CouponApplicationsTable
 }

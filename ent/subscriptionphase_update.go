@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
 )
 
@@ -114,9 +115,20 @@ func (spu *SubscriptionPhaseUpdate) ClearEndDate() *SubscriptionPhaseUpdate {
 	return spu
 }
 
+// SetSubscription sets the "subscription" edge to the Subscription entity.
+func (spu *SubscriptionPhaseUpdate) SetSubscription(s *Subscription) *SubscriptionPhaseUpdate {
+	return spu.SetSubscriptionID(s.ID)
+}
+
 // Mutation returns the SubscriptionPhaseMutation object of the builder.
 func (spu *SubscriptionPhaseUpdate) Mutation() *SubscriptionPhaseMutation {
 	return spu.mutation
+}
+
+// ClearSubscription clears the "subscription" edge to the Subscription entity.
+func (spu *SubscriptionPhaseUpdate) ClearSubscription() *SubscriptionPhaseUpdate {
+	spu.mutation.ClearSubscription()
+	return spu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -162,6 +174,9 @@ func (spu *SubscriptionPhaseUpdate) check() error {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPhase.subscription_id": %w`, err)}
 		}
 	}
+	if spu.mutation.SubscriptionCleared() && len(spu.mutation.SubscriptionIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "SubscriptionPhase.subscription"`)
+	}
 	return nil
 }
 
@@ -201,14 +216,40 @@ func (spu *SubscriptionPhaseUpdate) sqlSave(ctx context.Context) (n int, err err
 	if spu.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionphase.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := spu.mutation.SubscriptionID(); ok {
-		_spec.SetField(subscriptionphase.FieldSubscriptionID, field.TypeString, value)
-	}
 	if value, ok := spu.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionphase.FieldEndDate, field.TypeTime, value)
 	}
 	if spu.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionphase.FieldEndDate, field.TypeTime)
+	}
+	if spu.mutation.SubscriptionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   subscriptionphase.SubscriptionTable,
+			Columns: []string{subscriptionphase.SubscriptionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := spu.mutation.SubscriptionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   subscriptionphase.SubscriptionTable,
+			Columns: []string{subscriptionphase.SubscriptionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, spu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -316,9 +357,20 @@ func (spuo *SubscriptionPhaseUpdateOne) ClearEndDate() *SubscriptionPhaseUpdateO
 	return spuo
 }
 
+// SetSubscription sets the "subscription" edge to the Subscription entity.
+func (spuo *SubscriptionPhaseUpdateOne) SetSubscription(s *Subscription) *SubscriptionPhaseUpdateOne {
+	return spuo.SetSubscriptionID(s.ID)
+}
+
 // Mutation returns the SubscriptionPhaseMutation object of the builder.
 func (spuo *SubscriptionPhaseUpdateOne) Mutation() *SubscriptionPhaseMutation {
 	return spuo.mutation
+}
+
+// ClearSubscription clears the "subscription" edge to the Subscription entity.
+func (spuo *SubscriptionPhaseUpdateOne) ClearSubscription() *SubscriptionPhaseUpdateOne {
+	spuo.mutation.ClearSubscription()
+	return spuo
 }
 
 // Where appends a list predicates to the SubscriptionPhaseUpdate builder.
@@ -377,6 +429,9 @@ func (spuo *SubscriptionPhaseUpdateOne) check() error {
 			return &ValidationError{Name: "subscription_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionPhase.subscription_id": %w`, err)}
 		}
 	}
+	if spuo.mutation.SubscriptionCleared() && len(spuo.mutation.SubscriptionIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "SubscriptionPhase.subscription"`)
+	}
 	return nil
 }
 
@@ -433,14 +488,40 @@ func (spuo *SubscriptionPhaseUpdateOne) sqlSave(ctx context.Context) (_node *Sub
 	if spuo.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionphase.FieldMetadata, field.TypeJSON)
 	}
-	if value, ok := spuo.mutation.SubscriptionID(); ok {
-		_spec.SetField(subscriptionphase.FieldSubscriptionID, field.TypeString, value)
-	}
 	if value, ok := spuo.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionphase.FieldEndDate, field.TypeTime, value)
 	}
 	if spuo.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionphase.FieldEndDate, field.TypeTime)
+	}
+	if spuo.mutation.SubscriptionCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   subscriptionphase.SubscriptionTable,
+			Columns: []string{subscriptionphase.SubscriptionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := spuo.mutation.SubscriptionIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   subscriptionphase.SubscriptionTable,
+			Columns: []string{subscriptionphase.SubscriptionColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &SubscriptionPhase{config: spuo.config}
 	_spec.Assign = _node.assignValues

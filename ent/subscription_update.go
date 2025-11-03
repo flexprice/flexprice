@@ -18,6 +18,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/shopspring/decimal"
 )
 
@@ -449,6 +450,21 @@ func (su *SubscriptionUpdate) AddPauses(s ...*SubscriptionPause) *SubscriptionUp
 	return su.AddPauseIDs(ids...)
 }
 
+// AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by IDs.
+func (su *SubscriptionUpdate) AddPhaseIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddPhaseIDs(ids...)
+	return su
+}
+
+// AddPhases adds the "phases" edges to the SubscriptionPhase entity.
+func (su *SubscriptionUpdate) AddPhases(s ...*SubscriptionPhase) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.AddPhaseIDs(ids...)
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (su *SubscriptionUpdate) AddCreditGrantIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddCreditGrantIDs(ids...)
@@ -539,6 +555,27 @@ func (su *SubscriptionUpdate) RemovePauses(s ...*SubscriptionPause) *Subscriptio
 		ids[i] = s[i].ID
 	}
 	return su.RemovePauseIDs(ids...)
+}
+
+// ClearPhases clears all "phases" edges to the SubscriptionPhase entity.
+func (su *SubscriptionUpdate) ClearPhases() *SubscriptionUpdate {
+	su.mutation.ClearPhases()
+	return su
+}
+
+// RemovePhaseIDs removes the "phases" edge to SubscriptionPhase entities by IDs.
+func (su *SubscriptionUpdate) RemovePhaseIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemovePhaseIDs(ids...)
+	return su
+}
+
+// RemovePhases removes "phases" edges to SubscriptionPhase entities.
+func (su *SubscriptionUpdate) RemovePhases(s ...*SubscriptionPhase) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.RemovePhaseIDs(ids...)
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
@@ -864,6 +901,51 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !su.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1441,6 +1523,21 @@ func (suo *SubscriptionUpdateOne) AddPauses(s ...*SubscriptionPause) *Subscripti
 	return suo.AddPauseIDs(ids...)
 }
 
+// AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by IDs.
+func (suo *SubscriptionUpdateOne) AddPhaseIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddPhaseIDs(ids...)
+	return suo
+}
+
+// AddPhases adds the "phases" edges to the SubscriptionPhase entity.
+func (suo *SubscriptionUpdateOne) AddPhases(s ...*SubscriptionPhase) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.AddPhaseIDs(ids...)
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (suo *SubscriptionUpdateOne) AddCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddCreditGrantIDs(ids...)
@@ -1531,6 +1628,27 @@ func (suo *SubscriptionUpdateOne) RemovePauses(s ...*SubscriptionPause) *Subscri
 		ids[i] = s[i].ID
 	}
 	return suo.RemovePauseIDs(ids...)
+}
+
+// ClearPhases clears all "phases" edges to the SubscriptionPhase entity.
+func (suo *SubscriptionUpdateOne) ClearPhases() *SubscriptionUpdateOne {
+	suo.mutation.ClearPhases()
+	return suo
+}
+
+// RemovePhaseIDs removes the "phases" edge to SubscriptionPhase entities by IDs.
+func (suo *SubscriptionUpdateOne) RemovePhaseIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemovePhaseIDs(ids...)
+	return suo
+}
+
+// RemovePhases removes "phases" edges to SubscriptionPhase entities.
+func (suo *SubscriptionUpdateOne) RemovePhases(s ...*SubscriptionPhase) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.RemovePhaseIDs(ids...)
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
@@ -1886,6 +2004,51 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedPhasesIDs(); len(nodes) > 0 && !suo.mutation.PhasesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

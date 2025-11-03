@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -21,7 +22,7 @@ func (SubscriptionPhase) Mixin() []ent.Mixin {
 	}
 }
 
-// Fields of the ScheduledTask.
+// Fields of the SubscriptionPhase.
 func (SubscriptionPhase) Fields() []ent.Field {
 	return []ent.Field{
 		field.String("id").
@@ -34,14 +35,24 @@ func (SubscriptionPhase) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
-			Comment("Reference to the subscription"),
+			NotEmpty(),
 		field.Time("start_date").
 			Immutable().
 			Default(time.Now),
 		field.Time("end_date").
 			Optional().
 			Nillable(),
+	}
+}
+
+// Edges of the SubscriptionPhase.
+func (SubscriptionPhase) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.From("subscription", Subscription.Type).
+			Ref("phases").
+			Unique().
+			Field("subscription_id").
+			Required(),
 	}
 }
 

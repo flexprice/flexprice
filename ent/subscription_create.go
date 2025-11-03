@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
+	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/shopspring/decimal"
 )
 
@@ -524,6 +525,21 @@ func (sc *SubscriptionCreate) AddPauses(s ...*SubscriptionPause) *SubscriptionCr
 	return sc.AddPauseIDs(ids...)
 }
 
+// AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by IDs.
+func (sc *SubscriptionCreate) AddPhaseIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddPhaseIDs(ids...)
+	return sc
+}
+
+// AddPhases adds the "phases" edges to the SubscriptionPhase entity.
+func (sc *SubscriptionCreate) AddPhases(s ...*SubscriptionPhase) *SubscriptionCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return sc.AddPhaseIDs(ids...)
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (sc *SubscriptionCreate) AddCreditGrantIDs(ids ...string) *SubscriptionCreate {
 	sc.mutation.AddCreditGrantIDs(ids...)
@@ -1011,6 +1027,22 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionpause.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

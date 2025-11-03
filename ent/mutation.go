@@ -43983,6 +43983,9 @@ type SubscriptionMutation struct {
 	pauses                     map[string]struct{}
 	removedpauses              map[string]struct{}
 	clearedpauses              bool
+	phases                     map[string]struct{}
+	removedphases              map[string]struct{}
+	clearedphases              bool
 	credit_grants              map[string]struct{}
 	removedcredit_grants       map[string]struct{}
 	clearedcredit_grants       bool
@@ -45763,6 +45766,60 @@ func (m *SubscriptionMutation) ResetPauses() {
 	m.removedpauses = nil
 }
 
+// AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by ids.
+func (m *SubscriptionMutation) AddPhaseIDs(ids ...string) {
+	if m.phases == nil {
+		m.phases = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.phases[ids[i]] = struct{}{}
+	}
+}
+
+// ClearPhases clears the "phases" edge to the SubscriptionPhase entity.
+func (m *SubscriptionMutation) ClearPhases() {
+	m.clearedphases = true
+}
+
+// PhasesCleared reports if the "phases" edge to the SubscriptionPhase entity was cleared.
+func (m *SubscriptionMutation) PhasesCleared() bool {
+	return m.clearedphases
+}
+
+// RemovePhaseIDs removes the "phases" edge to the SubscriptionPhase entity by IDs.
+func (m *SubscriptionMutation) RemovePhaseIDs(ids ...string) {
+	if m.removedphases == nil {
+		m.removedphases = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.phases, ids[i])
+		m.removedphases[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedPhases returns the removed IDs of the "phases" edge to the SubscriptionPhase entity.
+func (m *SubscriptionMutation) RemovedPhasesIDs() (ids []string) {
+	for id := range m.removedphases {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// PhasesIDs returns the "phases" edge IDs in the mutation.
+func (m *SubscriptionMutation) PhasesIDs() (ids []string) {
+	for id := range m.phases {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetPhases resets all changes to the "phases" edge.
+func (m *SubscriptionMutation) ResetPhases() {
+	m.phases = nil
+	m.clearedphases = false
+	m.removedphases = nil
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by ids.
 func (m *SubscriptionMutation) AddCreditGrantIDs(ids ...string) {
 	if m.credit_grants == nil {
@@ -46784,12 +46841,15 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.line_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
 	if m.pauses != nil {
 		edges = append(edges, subscription.EdgePauses)
+	}
+	if m.phases != nil {
+		edges = append(edges, subscription.EdgePhases)
 	}
 	if m.credit_grants != nil {
 		edges = append(edges, subscription.EdgeCreditGrants)
@@ -46819,6 +46879,12 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgePhases:
+		ids := make([]ent.Value, 0, len(m.phases))
+		for id := range m.phases {
+			ids = append(ids, id)
+		}
+		return ids
 	case subscription.EdgeCreditGrants:
 		ids := make([]ent.Value, 0, len(m.credit_grants))
 		for id := range m.credit_grants {
@@ -46843,12 +46909,15 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.removedline_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
 	if m.removedpauses != nil {
 		edges = append(edges, subscription.EdgePauses)
+	}
+	if m.removedphases != nil {
+		edges = append(edges, subscription.EdgePhases)
 	}
 	if m.removedcredit_grants != nil {
 		edges = append(edges, subscription.EdgeCreditGrants)
@@ -46878,6 +46947,12 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgePhases:
+		ids := make([]ent.Value, 0, len(m.removedphases))
+		for id := range m.removedphases {
+			ids = append(ids, id)
+		}
+		return ids
 	case subscription.EdgeCreditGrants:
 		ids := make([]ent.Value, 0, len(m.removedcredit_grants))
 		for id := range m.removedcredit_grants {
@@ -46902,12 +46977,15 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 5)
+	edges := make([]string, 0, 6)
 	if m.clearedline_items {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
 	if m.clearedpauses {
 		edges = append(edges, subscription.EdgePauses)
+	}
+	if m.clearedphases {
+		edges = append(edges, subscription.EdgePhases)
 	}
 	if m.clearedcredit_grants {
 		edges = append(edges, subscription.EdgeCreditGrants)
@@ -46929,6 +47007,8 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 		return m.clearedline_items
 	case subscription.EdgePauses:
 		return m.clearedpauses
+	case subscription.EdgePhases:
+		return m.clearedphases
 	case subscription.EdgeCreditGrants:
 		return m.clearedcredit_grants
 	case subscription.EdgeCouponAssociations:
@@ -46956,6 +47036,9 @@ func (m *SubscriptionMutation) ResetEdge(name string) error {
 		return nil
 	case subscription.EdgePauses:
 		m.ResetPauses()
+		return nil
+	case subscription.EdgePhases:
+		m.ResetPhases()
 		return nil
 	case subscription.EdgeCreditGrants:
 		m.ResetCreditGrants()
@@ -50704,24 +50787,25 @@ func (m *SubscriptionPauseMutation) ResetEdge(name string) error {
 // SubscriptionPhaseMutation represents an operation that mutates the SubscriptionPhase nodes in the graph.
 type SubscriptionPhaseMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	metadata        *map[string]string
-	subscription_id *string
-	start_date      *time.Time
-	end_date        *time.Time
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*SubscriptionPhase, error)
-	predicates      []predicate.SubscriptionPhase
+	op                  Op
+	typ                 string
+	id                  *string
+	tenant_id           *string
+	status              *string
+	created_at          *time.Time
+	updated_at          *time.Time
+	created_by          *string
+	updated_by          *string
+	environment_id      *string
+	metadata            *map[string]string
+	start_date          *time.Time
+	end_date            *time.Time
+	clearedFields       map[string]struct{}
+	subscription        *string
+	clearedsubscription bool
+	done                bool
+	oldValue            func(context.Context) (*SubscriptionPhase, error)
+	predicates          []predicate.SubscriptionPhase
 }
 
 var _ ent.Mutation = (*SubscriptionPhaseMutation)(nil)
@@ -51170,12 +51254,12 @@ func (m *SubscriptionPhaseMutation) ResetMetadata() {
 
 // SetSubscriptionID sets the "subscription_id" field.
 func (m *SubscriptionPhaseMutation) SetSubscriptionID(s string) {
-	m.subscription_id = &s
+	m.subscription = &s
 }
 
 // SubscriptionID returns the value of the "subscription_id" field in the mutation.
 func (m *SubscriptionPhaseMutation) SubscriptionID() (r string, exists bool) {
-	v := m.subscription_id
+	v := m.subscription
 	if v == nil {
 		return
 	}
@@ -51201,7 +51285,7 @@ func (m *SubscriptionPhaseMutation) OldSubscriptionID(ctx context.Context) (v st
 
 // ResetSubscriptionID resets all changes to the "subscription_id" field.
 func (m *SubscriptionPhaseMutation) ResetSubscriptionID() {
-	m.subscription_id = nil
+	m.subscription = nil
 }
 
 // SetStartDate sets the "start_date" field.
@@ -51289,6 +51373,33 @@ func (m *SubscriptionPhaseMutation) ResetEndDate() {
 	delete(m.clearedFields, subscriptionphase.FieldEndDate)
 }
 
+// ClearSubscription clears the "subscription" edge to the Subscription entity.
+func (m *SubscriptionPhaseMutation) ClearSubscription() {
+	m.clearedsubscription = true
+	m.clearedFields[subscriptionphase.FieldSubscriptionID] = struct{}{}
+}
+
+// SubscriptionCleared reports if the "subscription" edge to the Subscription entity was cleared.
+func (m *SubscriptionPhaseMutation) SubscriptionCleared() bool {
+	return m.clearedsubscription
+}
+
+// SubscriptionIDs returns the "subscription" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SubscriptionID instead. It exists only for internal usage by the builders.
+func (m *SubscriptionPhaseMutation) SubscriptionIDs() (ids []string) {
+	if id := m.subscription; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSubscription resets all changes to the "subscription" edge.
+func (m *SubscriptionPhaseMutation) ResetSubscription() {
+	m.subscription = nil
+	m.clearedsubscription = false
+}
+
 // Where appends a list predicates to the SubscriptionPhaseMutation builder.
 func (m *SubscriptionPhaseMutation) Where(ps ...predicate.SubscriptionPhase) {
 	m.predicates = append(m.predicates, ps...)
@@ -51348,7 +51459,7 @@ func (m *SubscriptionPhaseMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, subscriptionphase.FieldMetadata)
 	}
-	if m.subscription_id != nil {
+	if m.subscription != nil {
 		fields = append(fields, subscriptionphase.FieldSubscriptionID)
 	}
 	if m.start_date != nil {
@@ -51625,19 +51736,28 @@ func (m *SubscriptionPhaseMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionPhaseMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.subscription != nil {
+		edges = append(edges, subscriptionphase.EdgeSubscription)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *SubscriptionPhaseMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case subscriptionphase.EdgeSubscription:
+		if id := m.subscription; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionPhaseMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -51649,25 +51769,42 @@ func (m *SubscriptionPhaseMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionPhaseMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedsubscription {
+		edges = append(edges, subscriptionphase.EdgeSubscription)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *SubscriptionPhaseMutation) EdgeCleared(name string) bool {
+	switch name {
+	case subscriptionphase.EdgeSubscription:
+		return m.clearedsubscription
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *SubscriptionPhaseMutation) ClearEdge(name string) error {
+	switch name {
+	case subscriptionphase.EdgeSubscription:
+		m.ClearSubscription()
+		return nil
+	}
 	return fmt.Errorf("unknown SubscriptionPhase unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *SubscriptionPhaseMutation) ResetEdge(name string) error {
+	switch name {
+	case subscriptionphase.EdgeSubscription:
+		m.ResetSubscription()
+		return nil
+	}
 	return fmt.Errorf("unknown SubscriptionPhase edge %s", name)
 }
 

@@ -160,6 +160,7 @@ func (Subscription) Edges() []ent.Edge {
 	return []ent.Edge{
 		edge.To("line_items", SubscriptionLineItem.Type),
 		edge.To("pauses", SubscriptionPause.Type),
+		edge.To("phases", SubscriptionPhase.Type),
 		edge.To("credit_grants", CreditGrant.Type),
 		edge.To("coupon_associations", CouponAssociation.Type).
 			Comment("Subscription can have multiple coupon associations"),
