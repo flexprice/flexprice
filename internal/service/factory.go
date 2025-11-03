@@ -133,7 +133,6 @@ func NewServiceParams(
 	planRepo plan.Repository,
 	subRepo subscription.Repository,
 	subscriptionLineItemRepo subscription.LineItemRepository,
-	phaseRepo subscription.SubscriptionPhaseRepository,
 	subscriptionPhaseRepo subscription.SubscriptionPhaseRepository,
 	walletRepo wallet.Repository,
 	tenantRepo tenant.Repository,

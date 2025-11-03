@@ -42,7 +42,9 @@ func (o CouponAssociationQueryOptions) ApplySortFilter(query *ent.CouponAssociat
 }
 
 func (o CouponAssociationQueryOptions) ApplyPaginationFilter(query *ent.CouponAssociationQuery, limit int, offset int) *ent.CouponAssociationQuery {
-	query = query.Limit(limit)
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
 	if offset > 0 {
 		query = query.Offset(offset)
 	}
