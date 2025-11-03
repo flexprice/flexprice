@@ -90,6 +90,7 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetBillingPeriod(string(item.BillingPeriod)).
 		SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 		SetNillableEndDate(types.ToNillableTime(item.EndDate)).
+		SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 		SetInvoiceCadence(string(item.InvoiceCadence)).
 		SetTrialPeriod(item.TrialPeriod).
 		SetMetadata(item.Metadata).
@@ -332,6 +333,7 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetTrialPeriod(item.TrialPeriod).
 			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
+			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 			SetMetadata(item.Metadata).
 			SetTenantID(item.TenantID).
 			SetEnvironmentID(item.EnvironmentID).

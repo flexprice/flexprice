@@ -25,6 +25,10 @@ type SubscriptionPhaseCreateRequest struct {
 	// If PriceID is omitted, it's applied at the subscription level
 	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
 
+	// OverrideLineItems allows customizing specific prices for this phase
+	// If not provided, phase will use the same line items as the subscription (plan prices)
+	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
@@ -204,6 +208,9 @@ type CreateSubscriptionRequest struct {
 
 	// Addons represents addons to be added to the subscription during creation
 	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
+
+	// Phases represents subscription phases to be created with the subscription
+	Phases []SubscriptionPhaseCreateRequest `json:"phases,omitempty" validate:"omitempty,dive"`
 
 	// Payment behavior configuration
 	PaymentBehavior        *types.PaymentBehavior `json:"payment_behavior,omitempty"`
