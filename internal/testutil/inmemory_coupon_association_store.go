@@ -122,25 +122,45 @@ func (s *InMemoryCouponAssociationStore) List(ctx context.Context, filter *types
 	}), nil
 }
 
-func (s *InMemoryCouponAssociationStore) GetBySubscription(ctx context.Context, subscriptionID string) ([]*coupon_association.CouponAssociation, error) {
-	// Use List method with filter for backwards compatibility
-	filter := types.NewNoLimitCouponAssociationFilter()
-	subscriptionLineItemIDIsNil := true
-	filter.SubscriptionIDs = []string{subscriptionID}
-	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
-	filter.WithCoupon = true
-	return s.List(ctx, filter)
-}
+// GetBySubscriptionFilter retrieves coupon associations using the domain Filter
+func (s *InMemoryCouponAssociationStore) GetBySubscriptionFilter(ctx context.Context, filter *coupon_association.Filter) ([]*coupon_association.CouponAssociation, error) {
+	if filter == nil {
+		return nil, ierr.NewError("filter is required").
+			WithHint("Please provide a valid filter").
+			Mark(ierr.ErrValidation)
+	}
 
-// GetBySubscriptionForLineItems retrieves coupon associations that target specific subscription line items
-// for a given subscription. It excludes invoice-level associations (those without SubscriptionLineItemID).
-func (s *InMemoryCouponAssociationStore) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*coupon_association.CouponAssociation, error) {
-	// Use List method with filter for backwards compatibility
-	filter := types.NewNoLimitCouponAssociationFilter()
-	subscriptionLineItemIDIsNil := false
-	filter.SubscriptionIDs = []string{subscriptionID}
-	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
-	return s.List(ctx, filter)
+	if filter.SubscriptionID == "" {
+		return nil, ierr.NewError("subscription_id is required").
+			WithHint("Please provide a valid subscription ID in the filter").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Convert domain filter to types filter
+	typesFilter := types.NewNoLimitCouponAssociationFilter()
+	typesFilter.SubscriptionIDs = []string{filter.SubscriptionID}
+
+	// Set subscription line item filter based on IncludeLineItems
+	// false (default) = subscription-level only
+	// true = both subscription-level and line item-level (don't filter by SubscriptionLineItemID)
+	if !filter.IncludeLineItems {
+		// Only subscription-level associations
+		subscriptionLineItemIDIsNil := true
+		typesFilter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
+	}
+	// When IncludeLineItems is true, don't set SubscriptionLineItemIDIsNil filter to get both types
+
+	// Set active filter if requested
+	if filter.ActiveOnly {
+		typesFilter.ActiveOnly = true
+		typesFilter.ActivePeriodStart = filter.ActivePeriodStart
+		typesFilter.ActivePeriodEnd = filter.ActivePeriodEnd
+	}
+
+	// Set with coupon flag
+	typesFilter.WithCoupon = filter.WithCoupon
+
+	return s.List(ctx, typesFilter)
 }
 
 // couponAssociationFilterFn implements filtering logic for coupon associations
@@ -194,6 +214,41 @@ func couponAssociationFilterFn(ctx context.Context, ca *coupon_association.Coupo
 			return false
 		}
 		if !lo.Contains(f.SubscriptionPhaseIDs, *ca.SubscriptionPhaseID) {
+			return false
+		}
+	}
+
+	// Apply active filter based on start_date and end_date
+	if f.ActiveOnly {
+		var periodStart, periodEnd time.Time
+
+		if f.ActivePeriodStart != nil && f.ActivePeriodEnd != nil {
+			// Use provided period
+			periodStart = f.ActivePeriodStart.UTC()
+			periodEnd = f.ActivePeriodEnd.UTC()
+		} else if f.ActivePeriodStart != nil {
+			// Only ActivePeriodStart provided, use it for both checks
+			periodStart = f.ActivePeriodStart.UTC()
+			periodEnd = periodStart
+		} else if f.ActivePeriodEnd != nil {
+			// Only ActivePeriodEnd provided, use it for both checks
+			periodEnd = f.ActivePeriodEnd.UTC()
+			periodStart = periodEnd
+		} else {
+			// No period provided, use current time
+			now := time.Now().UTC()
+			periodStart = now
+			periodEnd = now
+		}
+
+		// Check if association is active during the period
+		// Association is active if:
+		// - start_date <= period_end (association started before or during the period)
+		// - AND (end_date IS NULL OR end_date >= period_start) (association hasn't ended before the period or is indefinite)
+		if ca.StartDate.After(periodEnd) {
+			return false
+		}
+		if ca.EndDate != nil && ca.EndDate.Before(periodStart) {
 			return false
 		}
 	}

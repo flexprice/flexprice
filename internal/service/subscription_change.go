@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
@@ -817,10 +818,24 @@ func (s *subscriptionChangeService) generateChangeInvoiceChargesOnly(
 }
 
 func (s *subscriptionChangeService) transferCoupons(ctx context.Context, oldSubscriptionID string) ([]string, error) {
-	// Create filter to get coupon associations for the subscription
+	// Get the old subscription to use its current period for active filter
+	oldSub, err := s.serviceParams.SubRepo.Get(ctx, oldSubscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch old subscription for coupon transfer").
+			Mark(ierr.ErrDatabase)
+	}
 
-	// Get coupon associations
-	couponAssociations, err := s.serviceParams.CouponAssociationRepo.GetBySubscription(ctx, oldSubscriptionID)
+	// Get coupon associations that are active during the subscription's current billing period
+	subscriptionFilter := &coupon_association.Filter{
+		SubscriptionID:    oldSub.ID,
+		ActiveOnly:        true,
+		ActivePeriodStart: &oldSub.CurrentPeriodStart,
+		ActivePeriodEnd:   &oldSub.CurrentPeriodEnd,
+		IncludeLineItems:  false,
+		WithCoupon:        false,
+	}
+	couponAssociations, err := s.serviceParams.CouponAssociationRepo.GetBySubscriptionFilter(ctx, subscriptionFilter)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to fetch coupon associations").
@@ -925,9 +940,25 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 	oldSubscriptionID, newSubscriptionID string,
 	oldLineItems, newLineItems []*subscription.SubscriptionLineItem,
 ) error {
-	// Get line item coupon associations from old subscription
+	// Get the old subscription to use its current period for active filter
+	oldSub, err := s.serviceParams.SubRepo.Get(ctx, oldSubscriptionID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to fetch old subscription for line item coupon transfer").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Get line item coupon associations that are active during the subscription's current billing period
+	lineItemFilter := &coupon_association.Filter{
+		SubscriptionID:    oldSub.ID,
+		ActiveOnly:        true,
+		ActivePeriodStart: &oldSub.CurrentPeriodStart,
+		ActivePeriodEnd:   &oldSub.CurrentPeriodEnd,
+		IncludeLineItems:  true,
+		WithCoupon:        false,
+	}
 	couponAssociationRepo := s.serviceParams.CouponAssociationRepo
-	lineItemCoupons, err := couponAssociationRepo.GetBySubscriptionForLineItems(ctx, oldSubscriptionID)
+	lineItemCoupons, err := couponAssociationRepo.GetBySubscriptionFilter(ctx, lineItemFilter)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to fetch line item coupon associations").
