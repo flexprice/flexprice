@@ -10632,6 +10632,9 @@ type CouponAssociationMutation struct {
 	created_by                    *string
 	updated_by                    *string
 	environment_id                *string
+	subscription_phase_id         *string
+	start_date                    *time.Time
+	end_date                      *time.Time
 	metadata                      *map[string]string
 	clearedFields                 map[string]struct{}
 	coupon                        *string
@@ -11164,6 +11167,140 @@ func (m *CouponAssociationMutation) ResetSubscriptionLineItemID() {
 	delete(m.clearedFields, couponassociation.FieldSubscriptionLineItemID)
 }
 
+// SetSubscriptionPhaseID sets the "subscription_phase_id" field.
+func (m *CouponAssociationMutation) SetSubscriptionPhaseID(s string) {
+	m.subscription_phase_id = &s
+}
+
+// SubscriptionPhaseID returns the value of the "subscription_phase_id" field in the mutation.
+func (m *CouponAssociationMutation) SubscriptionPhaseID() (r string, exists bool) {
+	v := m.subscription_phase_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionPhaseID returns the old "subscription_phase_id" field's value of the CouponAssociation entity.
+// If the CouponAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CouponAssociationMutation) OldSubscriptionPhaseID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionPhaseID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionPhaseID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionPhaseID: %w", err)
+	}
+	return oldValue.SubscriptionPhaseID, nil
+}
+
+// ClearSubscriptionPhaseID clears the value of the "subscription_phase_id" field.
+func (m *CouponAssociationMutation) ClearSubscriptionPhaseID() {
+	m.subscription_phase_id = nil
+	m.clearedFields[couponassociation.FieldSubscriptionPhaseID] = struct{}{}
+}
+
+// SubscriptionPhaseIDCleared returns if the "subscription_phase_id" field was cleared in this mutation.
+func (m *CouponAssociationMutation) SubscriptionPhaseIDCleared() bool {
+	_, ok := m.clearedFields[couponassociation.FieldSubscriptionPhaseID]
+	return ok
+}
+
+// ResetSubscriptionPhaseID resets all changes to the "subscription_phase_id" field.
+func (m *CouponAssociationMutation) ResetSubscriptionPhaseID() {
+	m.subscription_phase_id = nil
+	delete(m.clearedFields, couponassociation.FieldSubscriptionPhaseID)
+}
+
+// SetStartDate sets the "start_date" field.
+func (m *CouponAssociationMutation) SetStartDate(t time.Time) {
+	m.start_date = &t
+}
+
+// StartDate returns the value of the "start_date" field in the mutation.
+func (m *CouponAssociationMutation) StartDate() (r time.Time, exists bool) {
+	v := m.start_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartDate returns the old "start_date" field's value of the CouponAssociation entity.
+// If the CouponAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CouponAssociationMutation) OldStartDate(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartDate: %w", err)
+	}
+	return oldValue.StartDate, nil
+}
+
+// ResetStartDate resets all changes to the "start_date" field.
+func (m *CouponAssociationMutation) ResetStartDate() {
+	m.start_date = nil
+}
+
+// SetEndDate sets the "end_date" field.
+func (m *CouponAssociationMutation) SetEndDate(t time.Time) {
+	m.end_date = &t
+}
+
+// EndDate returns the value of the "end_date" field in the mutation.
+func (m *CouponAssociationMutation) EndDate() (r time.Time, exists bool) {
+	v := m.end_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndDate returns the old "end_date" field's value of the CouponAssociation entity.
+// If the CouponAssociation object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CouponAssociationMutation) OldEndDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndDate: %w", err)
+	}
+	return oldValue.EndDate, nil
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (m *CouponAssociationMutation) ClearEndDate() {
+	m.end_date = nil
+	m.clearedFields[couponassociation.FieldEndDate] = struct{}{}
+}
+
+// EndDateCleared returns if the "end_date" field was cleared in this mutation.
+func (m *CouponAssociationMutation) EndDateCleared() bool {
+	_, ok := m.clearedFields[couponassociation.FieldEndDate]
+	return ok
+}
+
+// ResetEndDate resets all changes to the "end_date" field.
+func (m *CouponAssociationMutation) ResetEndDate() {
+	m.end_date = nil
+	delete(m.clearedFields, couponassociation.FieldEndDate)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *CouponAssociationMutation) SetMetadata(value map[string]string) {
 	m.metadata = &value
@@ -11382,7 +11519,7 @@ func (m *CouponAssociationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CouponAssociationMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 14)
 	if m.tenant_id != nil {
 		fields = append(fields, couponassociation.FieldTenantID)
 	}
@@ -11412,6 +11549,15 @@ func (m *CouponAssociationMutation) Fields() []string {
 	}
 	if m.subscription_line_item != nil {
 		fields = append(fields, couponassociation.FieldSubscriptionLineItemID)
+	}
+	if m.subscription_phase_id != nil {
+		fields = append(fields, couponassociation.FieldSubscriptionPhaseID)
+	}
+	if m.start_date != nil {
+		fields = append(fields, couponassociation.FieldStartDate)
+	}
+	if m.end_date != nil {
+		fields = append(fields, couponassociation.FieldEndDate)
 	}
 	if m.metadata != nil {
 		fields = append(fields, couponassociation.FieldMetadata)
@@ -11444,6 +11590,12 @@ func (m *CouponAssociationMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionID()
 	case couponassociation.FieldSubscriptionLineItemID:
 		return m.SubscriptionLineItemID()
+	case couponassociation.FieldSubscriptionPhaseID:
+		return m.SubscriptionPhaseID()
+	case couponassociation.FieldStartDate:
+		return m.StartDate()
+	case couponassociation.FieldEndDate:
+		return m.EndDate()
 	case couponassociation.FieldMetadata:
 		return m.Metadata()
 	}
@@ -11475,6 +11627,12 @@ func (m *CouponAssociationMutation) OldField(ctx context.Context, name string) (
 		return m.OldSubscriptionID(ctx)
 	case couponassociation.FieldSubscriptionLineItemID:
 		return m.OldSubscriptionLineItemID(ctx)
+	case couponassociation.FieldSubscriptionPhaseID:
+		return m.OldSubscriptionPhaseID(ctx)
+	case couponassociation.FieldStartDate:
+		return m.OldStartDate(ctx)
+	case couponassociation.FieldEndDate:
+		return m.OldEndDate(ctx)
 	case couponassociation.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -11556,6 +11714,27 @@ func (m *CouponAssociationMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetSubscriptionLineItemID(v)
 		return nil
+	case couponassociation.FieldSubscriptionPhaseID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionPhaseID(v)
+		return nil
+	case couponassociation.FieldStartDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartDate(v)
+		return nil
+	case couponassociation.FieldEndDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndDate(v)
+		return nil
 	case couponassociation.FieldMetadata:
 		v, ok := value.(map[string]string)
 		if !ok {
@@ -11605,6 +11784,12 @@ func (m *CouponAssociationMutation) ClearedFields() []string {
 	if m.FieldCleared(couponassociation.FieldSubscriptionLineItemID) {
 		fields = append(fields, couponassociation.FieldSubscriptionLineItemID)
 	}
+	if m.FieldCleared(couponassociation.FieldSubscriptionPhaseID) {
+		fields = append(fields, couponassociation.FieldSubscriptionPhaseID)
+	}
+	if m.FieldCleared(couponassociation.FieldEndDate) {
+		fields = append(fields, couponassociation.FieldEndDate)
+	}
 	if m.FieldCleared(couponassociation.FieldMetadata) {
 		fields = append(fields, couponassociation.FieldMetadata)
 	}
@@ -11633,6 +11818,12 @@ func (m *CouponAssociationMutation) ClearField(name string) error {
 		return nil
 	case couponassociation.FieldSubscriptionLineItemID:
 		m.ClearSubscriptionLineItemID()
+		return nil
+	case couponassociation.FieldSubscriptionPhaseID:
+		m.ClearSubscriptionPhaseID()
+		return nil
+	case couponassociation.FieldEndDate:
+		m.ClearEndDate()
 		return nil
 	case couponassociation.FieldMetadata:
 		m.ClearMetadata()
@@ -11674,6 +11865,15 @@ func (m *CouponAssociationMutation) ResetField(name string) error {
 		return nil
 	case couponassociation.FieldSubscriptionLineItemID:
 		m.ResetSubscriptionLineItemID()
+		return nil
+	case couponassociation.FieldSubscriptionPhaseID:
+		m.ResetSubscriptionPhaseID()
+		return nil
+	case couponassociation.FieldStartDate:
+		m.ResetStartDate()
+		return nil
+	case couponassociation.FieldEndDate:
+		m.ResetEndDate()
 		return nil
 	case couponassociation.FieldMetadata:
 		m.ResetMetadata()

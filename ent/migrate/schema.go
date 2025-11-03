@@ -384,6 +384,9 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_phase_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "coupon_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -397,19 +400,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "coupon_associations_coupons_coupon_associations",
-				Columns:    []*schema.Column{CouponAssociationsColumns[9]},
+				Columns:    []*schema.Column{CouponAssociationsColumns[12]},
 				RefColumns: []*schema.Column{CouponsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "coupon_associations_subscriptions_coupon_associations",
-				Columns:    []*schema.Column{CouponAssociationsColumns[10]},
+				Columns:    []*schema.Column{CouponAssociationsColumns[13]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "coupon_associations_subscription_line_items_coupon_associations",
-				Columns:    []*schema.Column{CouponAssociationsColumns[11]},
+				Columns:    []*schema.Column{CouponAssociationsColumns[14]},
 				RefColumns: []*schema.Column{SubscriptionLineItemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -423,17 +426,17 @@ var (
 			{
 				Name:    "couponassociation_tenant_id_environment_id_coupon_id",
 				Unique:  false,
-				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[9]},
+				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[12]},
 			},
 			{
 				Name:    "couponassociation_tenant_id_environment_id_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[10]},
+				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[13]},
 			},
 			{
 				Name:    "couponassociation_tenant_id_environment_id_subscription_id_subscription_line_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[10], CouponAssociationsColumns[11]},
+				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[13], CouponAssociationsColumns[14]},
 			},
 		},
 	}

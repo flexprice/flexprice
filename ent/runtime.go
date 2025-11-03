@@ -452,6 +452,10 @@ func init() {
 	couponassociationDescSubscriptionID := couponassociationFields[2].Descriptor()
 	// couponassociation.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
 	couponassociation.SubscriptionIDValidator = couponassociationDescSubscriptionID.Validators[0].(func(string) error)
+	// couponassociationDescStartDate is the schema descriptor for start_date field.
+	couponassociationDescStartDate := couponassociationFields[5].Descriptor()
+	// couponassociation.DefaultStartDate holds the default value on creation for the start_date field.
+	couponassociation.DefaultStartDate = couponassociationDescStartDate.Default.(func() time.Time)
 	creditgrantMixin := schema.CreditGrant{}.Mixin()
 	creditgrantMixinFields0 := creditgrantMixin[0].Fields()
 	_ = creditgrantMixinFields0
