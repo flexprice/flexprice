@@ -3,6 +3,7 @@ package ent
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/couponassociation"
@@ -63,6 +64,45 @@ func (o CouponAssociationQueryOptions) GetFieldName(field string) string {
 	}
 }
 
+// applyActiveOnlyFilter applies a filter to return only coupon associations active during the specified period
+// When ActiveOnly is true, the association must overlap with the period specified by ActivePeriodStart and ActivePeriodEnd
+// If ActivePeriodStart/ActivePeriodEnd are not provided, uses current time (now())
+// An association is active during a period if:
+// - start_date <= active_period_end (association started before or during the period)
+// - AND (end_date IS NULL OR end_date >= active_period_start) (association hasn't ended before the period or is indefinite)
+func applyActiveOnlyFilter(query *ent.CouponAssociationQuery, activePeriodStart, activePeriodEnd *time.Time) *ent.CouponAssociationQuery {
+	var periodStart, periodEnd time.Time
+
+	if activePeriodStart != nil && activePeriodEnd != nil {
+		// Use provided period
+		periodStart = activePeriodStart.UTC()
+		periodEnd = activePeriodEnd.UTC()
+	} else if activePeriodStart != nil {
+		// Only ActivePeriodStart provided, use it for both checks
+		periodStart = activePeriodStart.UTC()
+		periodEnd = periodStart
+	} else if activePeriodEnd != nil {
+		// Only ActivePeriodEnd provided, use it for both checks
+		periodEnd = activePeriodEnd.UTC()
+		periodStart = periodEnd
+	} else {
+		// No period provided, use current time
+		now := time.Now().UTC()
+		periodStart = now
+		periodEnd = now
+	}
+
+	return query.Where(
+		couponassociation.And(
+			couponassociation.StartDateLTE(periodEnd),
+			couponassociation.Or(
+				couponassociation.EndDateGTE(periodStart),
+				couponassociation.EndDateIsNil(),
+			),
+		),
+	)
+}
+
 // applyEntityQueryOptions applies entity-specific filters from CouponAssociationFilter
 func (o CouponAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CouponAssociationFilter, query *ent.CouponAssociationQuery) (*ent.CouponAssociationQuery, error) {
 	if f == nil {
@@ -110,6 +150,11 @@ func (o CouponAssociationQueryOptions) applyEntityQueryOptions(_ context.Context
 		} else {
 			query = query.Where(couponassociation.SubscriptionPhaseIDIn(f.SubscriptionPhaseIDs...))
 		}
+	}
+
+	// Apply active filter based on start_date and end_date
+	if f.ActiveOnly {
+		query = applyActiveOnlyFilter(query, f.ActivePeriodStart, f.ActivePeriodEnd)
 	}
 
 	// Load coupon relation if requested
@@ -429,21 +474,43 @@ func (r *couponAssociationRepository) List(ctx context.Context, filter *types.Co
 	return domainCouponAssociation.FromEntList(associations), nil
 }
 
-func (r *couponAssociationRepository) GetBySubscription(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
-	// Use List method with filter for backwards compatibility
-	filter := types.NewNoLimitCouponAssociationFilter()
-	subscriptionLineItemIDIsNil := true
-	filter.SubscriptionIDs = []string{subscriptionID}
-	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
-	filter.WithCoupon = true
-	return r.List(ctx, filter)
-}
+// GetBySubscriptionFilter retrieves coupon associations using the domain Filter
+func (r *couponAssociationRepository) GetBySubscriptionFilter(ctx context.Context, filter *domainCouponAssociation.Filter) ([]*domainCouponAssociation.CouponAssociation, error) {
+	if filter == nil {
+		return nil, ierr.NewError("filter is required").
+			WithHint("Please provide a valid filter").
+			Mark(ierr.ErrValidation)
+	}
 
-func (r *couponAssociationRepository) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
-	// Use List method with filter for backwards compatibility
-	filter := types.NewNoLimitCouponAssociationFilter()
-	subscriptionLineItemIDIsNil := false
-	filter.SubscriptionIDs = []string{subscriptionID}
-	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
-	return r.List(ctx, filter)
+	if filter.SubscriptionID == "" {
+		return nil, ierr.NewError("subscription_id is required").
+			WithHint("Please provide a valid subscription ID in the filter").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Convert domain filter to types filter
+	typesFilter := types.NewNoLimitCouponAssociationFilter()
+	typesFilter.SubscriptionIDs = []string{filter.SubscriptionID}
+
+	// Set subscription line item filter based on IncludeLineItems
+	// false (default) = subscription-level only
+	// true = both subscription-level and line item-level (don't filter by SubscriptionLineItemID)
+	if !filter.IncludeLineItems {
+		// Only subscription-level associations
+		subscriptionLineItemIDIsNil := true
+		typesFilter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
+	}
+	// When IncludeLineItems is true, don't set SubscriptionLineItemIDIsNil filter to get both types
+
+	// Set active filter if requested
+	if filter.ActiveOnly {
+		typesFilter.ActiveOnly = true
+		typesFilter.ActivePeriodStart = filter.ActivePeriodStart
+		typesFilter.ActivePeriodEnd = filter.ActivePeriodEnd
+	}
+
+	// Set with coupon flag
+	typesFilter.WithCoupon = filter.WithCoupon
+
+	return r.List(ctx, typesFilter)
 }

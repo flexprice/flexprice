@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
@@ -71,6 +72,19 @@ type CouponAssociationFilter struct {
 	SubscriptionPhaseIDs []string `json:"subscription_phase_ids,omitempty" form:"subscription_phase_ids"`
 	// WithCoupon includes coupon relation in the response
 	WithCoupon bool `json:"with_coupon,omitempty" form:"with_coupon"`
+	// ActiveOnly filters to only return active associations based on start_date and end_date
+	// When ActiveOnly is true, the association must overlap with the period specified by ActivePeriodStart and ActivePeriodEnd
+	// If ActivePeriodStart/ActivePeriodEnd are not provided, uses current time (now())
+	// An association is active during a period if:
+	// - start_date <= active_period_end (association started before or during the period)
+	// - AND (end_date IS NULL OR end_date >= active_period_start) (association hasn't ended before the period or is indefinite)
+	ActiveOnly bool `json:"active_only,omitempty" form:"active_only"`
+	// ActivePeriodStart is the start of the period to check if associations are active (used with ActiveOnly)
+	// If not provided and ActiveOnly is true, uses current time
+	ActivePeriodStart *time.Time `json:"active_period_start,omitempty" form:"active_period_start"`
+	// ActivePeriodEnd is the end of the period to check if associations are active (used with ActiveOnly)
+	// If not provided and ActiveOnly is true, uses current time
+	ActivePeriodEnd *time.Time `json:"active_period_end,omitempty" form:"active_period_end"`
 }
 
 // NewCouponAssociationFilter creates a new CouponAssociationFilter with default values

@@ -14,8 +14,7 @@ type CouponAssociationService interface {
 	CreateCouponAssociation(ctx context.Context, req dto.CreateCouponAssociationRequest) (*dto.CouponAssociationResponse, error)
 	GetCouponAssociation(ctx context.Context, id string) (*dto.CouponAssociationResponse, error)
 	DeleteCouponAssociation(ctx context.Context, id string) error
-	GetCouponAssociationsBySubscription(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error)
-	GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error)
+	GetCouponAssociationsBySubscriptionFilter(ctx context.Context, filter *coupon_association.Filter) ([]*dto.CouponAssociationResponse, error)
 	ApplyCouponToSubscription(ctx context.Context, couponIDs []string, subscriptionID string) error
 
 	// Line item coupon association methods
@@ -112,24 +111,9 @@ func (s *couponAssociationService) DeleteCouponAssociation(ctx context.Context, 
 	return s.CouponAssociationRepo.Delete(ctx, id)
 }
 
-// GetCouponAssociationsBySubscription retrieves coupon associations for a subscription
-func (s *couponAssociationService) GetCouponAssociationsBySubscription(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error) {
-	associations, err := s.CouponAssociationRepo.GetBySubscription(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	responses := make([]*dto.CouponAssociationResponse, len(associations))
-	for i, ca := range associations {
-		responses[i] = s.toCouponAssociationResponse(ca)
-	}
-
-	return responses, nil
-}
-
-// GetCouponAssociationsBySubscriptionLineItem retrieves coupon associations for a subscription line item
-func (s *couponAssociationService) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*dto.CouponAssociationResponse, error) {
-	associations, err := s.CouponAssociationRepo.GetBySubscriptionForLineItems(ctx, subscriptionID)
+// GetCouponAssociationsBySubscriptionFilter retrieves coupon associations using the domain Filter
+func (s *couponAssociationService) GetCouponAssociationsBySubscriptionFilter(ctx context.Context, filter *coupon_association.Filter) ([]*dto.CouponAssociationResponse, error) {
+	associations, err := s.CouponAssociationRepo.GetBySubscriptionFilter(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
