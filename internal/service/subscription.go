@@ -535,10 +535,12 @@ func (s *subscriptionService) handleSubscriptionPhases(
 		"phases_count", len(phaseRequests))
 
 	// Create a map from price ID to price for quick lookup
-	phasePriceMap := make(map[string]*dto.PriceResponse, len(validPrices))
-	for _, p := range validPrices {
-		phasePriceMap[p.Price.ID] = p
-	}
+	priceMap := lo.SliceToMap(validPrices, func(p *dto.PriceResponse) (string, *dto.PriceResponse) {
+		return p.Price.ID, p
+	})
+
+	// Create plan response wrapper (reusing DTO conversion pattern from AddSubscriptionLineItem)
+	planResponse := &dto.PlanResponse{Plan: plan}
 
 	// Process each phase
 	for phaseIdx, phaseReq := range phaseRequests {
@@ -557,39 +559,41 @@ func (s *subscriptionService) handleSubscriptionPhases(
 				Mark(ierr.ErrInternal)
 		}
 
-		// Determine which line items to create for this phase
-		var phaseLineItems []*subscription.SubscriptionLineItem
-		var phasePriceMapForOverrides map[string]*dto.PriceResponse
+		// Create line items from plan prices - reusing DTO's ToSubscriptionLineItem logic (same as AddSubscriptionLineItem)
+		phaseLineItems := lo.Map(validPrices, func(priceResp *dto.PriceResponse, _ int) *subscription.SubscriptionLineItem {
+			// Build line item params 
+			params := dto.LineItemParams{
+				Subscription: sub,
+				Price:        priceResp,
+				Plan:         planResponse,
+				EntityType:   types.SubscriptionLineItemEntityTypePlan,
+			}
 
-		// If phase has override line items, use those; otherwise use plan prices
+			// Create request with phase dates
+			startDate := phaseReq.StartDate
+			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
+				startDate = lo.FromPtr(priceResp.Price.StartDate)
+			}
+
+			req := dto.CreateSubscriptionLineItemRequest{
+				PriceID:             priceResp.Price.ID,
+				SubscriptionPhaseID: lo.ToPtr(phase.ID),
+				StartDate: lo.ToPtr(startDate),
+				EndDate:   phaseReq.EndDate,
+			}
+
+			lineItem := req.ToSubscriptionLineItem(ctx, params)
+			return lineItem
+		})
+
+		// Process phase-specific price overrides if present
 		if len(phaseReq.OverrideLineItems) > 0 {
-			// Create line items from plan prices first (base)
-			phaseLineItems = make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
-			for _, priceResp := range validPrices {
-				lineItem := s.createPhaseLineItemFromPrice(ctx, priceResp, sub, plan, phase.ID, phaseReq.StartDate, phaseReq.EndDate)
-				phaseLineItems = append(phaseLineItems, lineItem)
-			}
-
-			// Create price map for overrides
-			phasePriceMapForOverrides = make(map[string]*dto.PriceResponse, len(validPrices))
-			for _, p := range validPrices {
-				phasePriceMapForOverrides[p.Price.ID] = p
-			}
-
-			// Process phase-specific price overrides
-			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, phaseReq.OverrideLineItems, phaseLineItems, phasePriceMapForOverrides); err != nil {
+			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, phaseReq.OverrideLineItems, phaseLineItems, priceMap); err != nil {
 				return err
-			}
-		} else {
-			// Use same line items as subscription (from plan prices)
-			phaseLineItems = make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
-			for _, priceResp := range validPrices {
-				lineItem := s.createPhaseLineItemFromPrice(ctx, priceResp, sub, plan, phase.ID, phaseReq.StartDate, phaseReq.EndDate)
-				phaseLineItems = append(phaseLineItems, lineItem)
 			}
 		}
 
-		// Create phase line items
+		// Create phase line items in database
 		for _, lineItem := range phaseLineItems {
 			if err := s.SubscriptionLineItemRepo.Create(ctx, lineItem); err != nil {
 				return ierr.WithError(err).
@@ -605,22 +609,17 @@ func (s *subscriptionService) handleSubscriptionPhases(
 
 		// Handle phase coupons - set dates from phase if not provided
 		if len(phaseReq.SubscriptionCoupons) > 0 {
-			phaseCoupons := make([]dto.SubscriptionCouponRequest, len(phaseReq.SubscriptionCoupons))
-			for i, couponReq := range phaseReq.SubscriptionCoupons {
-				phaseCoupons[i] = couponReq
-				// Set phase ID
-				phaseCoupons[i].SubscriptionPhaseID = lo.ToPtr(phase.ID)
-
-				// Set start/end dates from phase if not provided
-				if phaseCoupons[i].StartDate == nil {
-					phaseCoupons[i].StartDate = lo.ToPtr(phaseReq.StartDate)
+			phaseCoupons := lo.Map(phaseReq.SubscriptionCoupons, func(couponReq dto.SubscriptionCouponRequest, _ int) dto.SubscriptionCouponRequest {
+				couponReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
+				if couponReq.StartDate == nil {
+					couponReq.StartDate = lo.ToPtr(phaseReq.StartDate)
 				}
-				if phaseCoupons[i].EndDate == nil && phaseReq.EndDate != nil {
-					phaseCoupons[i].EndDate = phaseReq.EndDate
+				if couponReq.EndDate == nil && phaseReq.EndDate != nil {
+					couponReq.EndDate = phaseReq.EndDate
 				}
-			}
+				return couponReq
+			})
 
-			// Apply coupons to phase line items
 			if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, phaseCoupons, phaseLineItems); err != nil {
 				return err
 			}
@@ -635,66 +634,6 @@ func (s *subscriptionService) handleSubscriptionPhases(
 	}
 
 	return nil
-}
-
-// createPhaseLineItemFromPrice creates a subscription line item from a price for a phase
-func (s *subscriptionService) createPhaseLineItemFromPrice(
-	ctx context.Context,
-	priceResp *dto.PriceResponse,
-	sub *subscription.Subscription,
-	plan *plan.Plan,
-	phaseID string,
-	phaseStartDate time.Time,
-	phaseEndDate *time.Time,
-) *subscription.SubscriptionLineItem {
-	price := priceResp.Price
-
-	lineItem := &subscription.SubscriptionLineItem{
-		ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID:  sub.ID,
-		CustomerID:      sub.CustomerID,
-		EntityID:        plan.ID,
-		EntityType:      types.SubscriptionLineItemEntityTypePlan,
-		PlanDisplayName: plan.Name,
-		PriceID:         price.ID,
-		PriceType:       price.Type,
-		Currency:        sub.Currency,
-		BillingPeriod:   sub.BillingPeriod,
-		InvoiceCadence:  price.InvoiceCadence,
-		TrialPeriod:     price.TrialPeriod,
-		PriceUnitID:     price.PriceUnitID,
-		PriceUnit:       price.PriceUnit,
-		EnvironmentID:   types.GetEnvironmentID(ctx),
-		BaseModel:       types.GetDefaultBaseModel(ctx),
-	}
-
-	// Set start date - use phase start date or price start date if later
-	if price.StartDate != nil && price.StartDate.After(phaseStartDate) {
-		lineItem.StartDate = lo.FromPtr(price.StartDate)
-	} else {
-		lineItem.StartDate = phaseStartDate
-	}
-
-	// Set end date - use phase end date
-	if phaseEndDate != nil {
-		lineItem.EndDate = *phaseEndDate
-	}
-
-	// Set display name and quantity based on price type
-	if price.Type == types.PRICE_TYPE_USAGE && priceResp.Meter != nil {
-		lineItem.MeterID = price.MeterID
-		lineItem.MeterDisplayName = priceResp.Meter.Name
-		lineItem.DisplayName = priceResp.Meter.Name
-		lineItem.Quantity = decimal.Zero
-	} else {
-		lineItem.DisplayName = plan.Name
-		lineItem.Quantity = decimal.NewFromInt(1)
-	}
-
-	// Set subscription phase ID
-	lineItem.SubscriptionPhaseID = lo.ToPtr(phaseID)
-
-	return lineItem
 }
 
 // processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides

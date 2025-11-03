@@ -13,12 +13,13 @@ import (
 
 // CreateSubscriptionLineItemRequest represents the request to create a subscription line item
 type CreateSubscriptionLineItemRequest struct {
-	PriceID     string            `json:"price_id" validate:"required"`
-	Quantity    decimal.Decimal   `json:"quantity,omitempty"`
-	StartDate   *time.Time        `json:"start_date,omitempty"`
-	EndDate     *time.Time        `json:"end_date,omitempty"`
-	Metadata    map[string]string `json:"metadata,omitempty"`
-	DisplayName string            `json:"display_name,omitempty"`
+	PriceID             string            `json:"price_id" validate:"required"`
+	Quantity            decimal.Decimal   `json:"quantity,omitempty"`
+	StartDate           *time.Time        `json:"start_date,omitempty"`
+	EndDate             *time.Time        `json:"end_date,omitempty"`
+	Metadata            map[string]string `json:"metadata,omitempty"`
+	DisplayName         string            `json:"display_name,omitempty"`
+	SubscriptionPhaseID *string           `json:"subscription_phase_id,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -87,22 +88,23 @@ func (r *CreateSubscriptionLineItemRequest) Validate() error {
 // ToSubscriptionLineItem converts the request to a domain subscription line item
 func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, params LineItemParams) *subscription.SubscriptionLineItem {
 	lineItem := &subscription.SubscriptionLineItem{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID: params.Subscription.ID,
-		CustomerID:     params.Subscription.CustomerID,
-		PriceID:        r.PriceID,
-		PriceType:      params.Price.Type,
-		Currency:       params.Subscription.Currency,
-		BillingPeriod:  params.Subscription.BillingPeriod,
-		InvoiceCadence: params.Price.InvoiceCadence,
-		TrialPeriod:    params.Price.TrialPeriod,
-		PriceUnitID:    params.Price.PriceUnitID,
-		PriceUnit:      params.Price.PriceUnit,
-		EntityType:     params.EntityType,
-		DisplayName:    r.DisplayName,
-		Metadata:       r.Metadata,
-		EnvironmentID:  types.GetEnvironmentID(ctx),
-		BaseModel:      types.GetDefaultBaseModel(ctx),
+		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:      params.Subscription.ID,
+		CustomerID:          params.Subscription.CustomerID,
+		PriceID:             r.PriceID,
+		PriceType:           params.Price.Type,
+		Currency:            params.Subscription.Currency,
+		BillingPeriod:       params.Subscription.BillingPeriod,
+		InvoiceCadence:      params.Price.InvoiceCadence,
+		TrialPeriod:         params.Price.TrialPeriod,
+		PriceUnitID:         params.Price.PriceUnitID,
+		PriceUnit:           params.Price.PriceUnit,
+		EntityType:          params.EntityType,
+		DisplayName:         r.DisplayName,
+		Metadata:            r.Metadata,
+		SubscriptionPhaseID: r.SubscriptionPhaseID,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
 	if params.Price != nil && params.Price.Type == types.PRICE_TYPE_USAGE {
