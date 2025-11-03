@@ -32,6 +32,11 @@ func (r *SubscriptionCouponRequest) Validate() error {
 			WithHint("Please provide a valid coupon ID").
 			Mark(ierr.ErrValidation)
 	}
+	if r.StartDate != nil && r.EndDate != nil && r.EndDate.Before(*r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			WithHint("Ensure the coupon end date is on or after the start date").
+			Mark(ierr.ErrValidation)
+	}
 	return nil
 }
 
