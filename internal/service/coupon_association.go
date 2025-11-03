@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
@@ -45,11 +46,19 @@ func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, 
 
 		// Create the coupon association object properly
 		baseModel := types.GetDefaultBaseModel(txCtx)
+		startDate := time.Now()
+		if req.StartDate != nil {
+			startDate = *req.StartDate
+		}
+
 		ca := &coupon_association.CouponAssociation{
 			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
 			CouponID:               req.CouponID,
 			SubscriptionID:         req.SubscriptionID,
 			SubscriptionLineItemID: req.SubscriptionLineItemID,
+			SubscriptionPhaseID:    req.SubscriptionPhaseID,
+			StartDate:              startDate,
+			EndDate:                req.EndDate,
 			Metadata:               req.Metadata,
 			BaseModel:              baseModel,
 			EnvironmentID:          types.GetEnvironmentID(txCtx),

@@ -68,6 +68,7 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 		SetTenantID(ca.TenantID).
 		SetCouponID(ca.CouponID).
 		SetSubscriptionID(ca.SubscriptionID).
+		SetStartDate(ca.StartDate).
 		SetStatus(string(ca.Status)).
 		SetCreatedAt(ca.CreatedAt).
 		SetUpdatedAt(ca.UpdatedAt).
@@ -78,6 +79,16 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 	// Handle optional subscription line item ID
 	if ca.SubscriptionLineItemID != nil {
 		createQuery = createQuery.SetSubscriptionLineItemID(*ca.SubscriptionLineItemID)
+	}
+
+	// Handle optional subscription phase ID
+	if ca.SubscriptionPhaseID != nil {
+		createQuery = createQuery.SetSubscriptionPhaseID(*ca.SubscriptionPhaseID)
+	}
+
+	// Handle optional end date
+	if ca.EndDate != nil {
+		createQuery = createQuery.SetEndDate(*ca.EndDate)
 	}
 
 	// Handle optional metadata
@@ -307,6 +318,9 @@ func (r *couponAssociationRepository) toDomainCouponAssociation(ca *ent.CouponAs
 		CouponID:               ca.CouponID,
 		SubscriptionID:         ca.SubscriptionID,
 		SubscriptionLineItemID: ca.SubscriptionLineItemID,
+		SubscriptionPhaseID:    ca.SubscriptionPhaseID,
+		StartDate:              ca.StartDate,
+		EndDate:                ca.EndDate,
 		Metadata:               ca.Metadata,
 		EnvironmentID:          ca.EnvironmentID,
 		Coupon:                 couponObj,

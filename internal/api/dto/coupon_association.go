@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"time"
 
 	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -13,6 +14,9 @@ type CreateCouponAssociationRequest struct {
 	CouponID               string            `json:"coupon_id" validate:"required"`
 	SubscriptionID         string            `json:"subscription_id" validate:"required"`
 	SubscriptionLineItemID *string           `json:"subscription_line_item_id,omitempty"`
+	SubscriptionPhaseID    *string           `json:"subscription_phase_id,omitempty"`
+	StartDate              *time.Time        `json:"start_date,omitempty"`
+	EndDate                *time.Time        `json:"end_date,omitempty"`
 	Metadata               map[string]string `json:"metadata,omitempty"`
 }
 
@@ -36,11 +40,19 @@ func (r *CreateCouponAssociationRequest) Validate() error {
 }
 
 func (r *CreateCouponAssociationRequest) ToCouponAssociation(ctx context.Context, couponID string, subscriptionID string, subscriptionLineItemID string) *coupon_association.CouponAssociation {
+	startDate := time.Now()
+	if r.StartDate != nil {
+		startDate = *r.StartDate
+	}
+
 	return &coupon_association.CouponAssociation{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
 		CouponID:               couponID,
 		SubscriptionID:         r.SubscriptionID,
 		SubscriptionLineItemID: r.SubscriptionLineItemID,
+		SubscriptionPhaseID:    r.SubscriptionPhaseID,
+		StartDate:              startDate,
+		EndDate:                r.EndDate,
 		Metadata:               r.Metadata,
 		BaseModel:              types.GetDefaultBaseModel(ctx),
 		EnvironmentID:          types.GetEnvironmentID(ctx),
