@@ -19,10 +19,11 @@ import (
 // If PriceID is provided, the coupon is applied to the line item with that price_id
 // If PriceID is omitted, the coupon is applied at the subscription level
 type SubscriptionCouponRequest struct {
-	CouponID  string     `json:"coupon_id" validate:"required"`
-	StartDate *time.Time `json:"start_date,omitempty"`
-	EndDate   *time.Time `json:"end_date,omitempty"`
-	PriceID   *string    `json:"price_id,omitempty"`
+	CouponID            string     `json:"coupon_id" validate:"required"`
+	StartDate           *time.Time `json:"start_date,omitempty"`
+	EndDate             *time.Time `json:"end_date,omitempty"`
+	PriceID             *string    `json:"price_id,omitempty"`
+	SubscriptionPhaseID *string    `json:"subscription_phase_id,omitempty"`
 }
 
 // Validate validates the SubscriptionCouponRequest

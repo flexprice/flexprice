@@ -161,16 +161,14 @@ func (s *couponAssociationService) ApplyCouponToSubscription(ctx context.Context
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	}
 
-	// Apply each coupon with its dates
-	for _, couponReq := range couponRequests {
 		req := dto.CreateCouponAssociationRequest{
-			CouponID:       couponReq.CouponID,
-			SubscriptionID: subscriptionID,
-			StartDate:      couponReq.StartDate,
-			EndDate:        couponReq.EndDate,
-			Metadata:       map[string]string{},
+			CouponID:            couponReq.CouponID,
+			SubscriptionID:      subscriptionID,
+			StartDate:           couponReq.StartDate,
+			EndDate:             couponReq.EndDate,
+			SubscriptionPhaseID: couponReq.SubscriptionPhaseID,
+			Metadata:            map[string]string{},
 		}
 
 		// Create the coupon association
@@ -235,6 +233,7 @@ func (s *couponAssociationService) ApplyCouponToSubscriptionLineItem(ctx context
 			StartDate:              couponReq.StartDate,
 			EndDate:                couponReq.EndDate,
 			Metadata:               map[string]string{},
+			SubscriptionPhaseID:    couponReq.SubscriptionPhaseID,
 		}
 
 		_, err := s.CreateCouponAssociation(ctx, req)
