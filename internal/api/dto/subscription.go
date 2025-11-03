@@ -598,6 +598,65 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
+	// Validate phases continuity if provided
+	if len(r.Phases) > 0 {
+		// First, validate each individual phase
+		for i, phase := range r.Phases {
+			if err := phase.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithHint(fmt.Sprintf("Phase validation failed at index %d", i)).
+					WithReportableDetails(map[string]interface{}{
+						"phase_index": i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// Validate phase continuity
+		for i := 0; i < len(r.Phases); i++ {
+			currentPhase := r.Phases[i]
+			isLastPhase := i == len(r.Phases)-1
+
+			// All phases except the last must have an end date
+			if !isLastPhase && currentPhase.EndDate == nil {
+				return ierr.NewError("phase end_date is required for all phases except the last").
+					WithHint(fmt.Sprintf("Phase at index %d must have an end_date set", i)).
+					WithReportableDetails(map[string]interface{}{
+						"phase_index": i,
+						"phase_start": currentPhase.StartDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// If not the last phase, validate that current phase's end date equals next phase's start date
+			if !isLastPhase {
+				nextPhase := r.Phases[i+1]
+				if currentPhase.EndDate == nil {
+					// This should not happen due to check above, but adding for safety
+					return ierr.NewError("phase end_date is required for continuity").
+						WithHint(fmt.Sprintf("Phase at index %d must have an end_date that matches the start_date of the next phase", i)).
+						WithReportableDetails(map[string]interface{}{
+							"phase_index": i,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+
+				// Check if end date of current phase equals start date of next phase
+				if !currentPhase.EndDate.Equal(nextPhase.StartDate) {
+					return ierr.NewError("phases must be continuous").
+						WithHint(fmt.Sprintf("Phase %d end_date must equal phase %d start_date for continuous phases", i, i+1)).
+						WithReportableDetails(map[string]interface{}{
+							"phase_index":       i,
+							"current_phase_end": *currentPhase.EndDate,
+							"next_phase_index":  i + 1,
+							"next_phase_start":  nextPhase.StartDate,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
