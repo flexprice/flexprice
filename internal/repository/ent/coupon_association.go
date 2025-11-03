@@ -2,11 +2,11 @@ package ent
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/internal/cache"
-	domainCoupon "github.com/flexprice/flexprice/internal/domain/coupon"
 	domainCouponAssociation "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -23,6 +23,101 @@ func (o CouponAssociationQueryOptions) ApplyTenantFilter(ctx context.Context, qu
 
 func (o CouponAssociationQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query *ent.CouponAssociationQuery) *ent.CouponAssociationQuery {
 	return query.Where(couponassociation.EnvironmentID(types.GetEnvironmentID(ctx)))
+}
+
+func (o CouponAssociationQueryOptions) ApplyStatusFilter(query *ent.CouponAssociationQuery, status string) *ent.CouponAssociationQuery {
+	if status == "" {
+		return query.Where(couponassociation.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(couponassociation.Status(status))
+}
+
+func (o CouponAssociationQueryOptions) ApplySortFilter(query *ent.CouponAssociationQuery, field string, order string) *ent.CouponAssociationQuery {
+	orderFunc := ent.Desc
+	if order == "asc" {
+		orderFunc = ent.Asc
+	}
+	return query.Order(orderFunc(o.GetFieldName(field)))
+}
+
+func (o CouponAssociationQueryOptions) ApplyPaginationFilter(query *ent.CouponAssociationQuery, limit int, offset int) *ent.CouponAssociationQuery {
+	query = query.Limit(limit)
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
+}
+
+func (o CouponAssociationQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return couponassociation.FieldCreatedAt
+	case "updated_at":
+		return couponassociation.FieldUpdatedAt
+	case "start_date":
+		return couponassociation.FieldStartDate
+	case "end_date":
+		return couponassociation.FieldEndDate
+	default:
+		return field
+	}
+}
+
+// applyEntityQueryOptions applies entity-specific filters from CouponAssociationFilter
+func (o CouponAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CouponAssociationFilter, query *ent.CouponAssociationQuery) (*ent.CouponAssociationQuery, error) {
+	if f == nil {
+		return query, nil
+	}
+
+	// Apply subscription ID filters (plural handles both single and multiple values)
+	if len(f.SubscriptionIDs) > 0 {
+		if len(f.SubscriptionIDs) == 1 {
+			query = query.Where(couponassociation.SubscriptionID(f.SubscriptionIDs[0]))
+		} else {
+			query = query.Where(couponassociation.SubscriptionIDIn(f.SubscriptionIDs...))
+		}
+	}
+
+	// Apply coupon ID filters (plural handles both single and multiple values)
+	if len(f.CouponIDs) > 0 {
+		if len(f.CouponIDs) == 1 {
+			query = query.Where(couponassociation.CouponID(f.CouponIDs[0]))
+		} else {
+			query = query.Where(couponassociation.CouponIDIn(f.CouponIDs...))
+		}
+	}
+
+	// Apply subscription line item ID filters
+	// Priority: SubscriptionLineItemIDIsNil > SubscriptionLineItemIDs
+	if f.SubscriptionLineItemIDIsNil != nil {
+		if *f.SubscriptionLineItemIDIsNil {
+			query = query.Where(couponassociation.SubscriptionLineItemIDIsNil())
+		} else {
+			query = query.Where(couponassociation.SubscriptionLineItemIDNotNil())
+		}
+	} else if len(f.SubscriptionLineItemIDs) > 0 {
+		if len(f.SubscriptionLineItemIDs) == 1 {
+			query = query.Where(couponassociation.SubscriptionLineItemID(f.SubscriptionLineItemIDs[0]))
+		} else {
+			query = query.Where(couponassociation.SubscriptionLineItemIDIn(f.SubscriptionLineItemIDs...))
+		}
+	}
+
+	// Apply subscription phase ID filters (plural handles both single and multiple values)
+	if len(f.SubscriptionPhaseIDs) > 0 {
+		if len(f.SubscriptionPhaseIDs) == 1 {
+			query = query.Where(couponassociation.SubscriptionPhaseID(f.SubscriptionPhaseIDs[0]))
+		} else {
+			query = query.Where(couponassociation.SubscriptionPhaseIDIn(f.SubscriptionPhaseIDs...))
+		}
+	}
+
+	// Load coupon relation if requested
+	if f.WithCoupon {
+		query = query.WithCoupon()
+	}
+
+	return query, nil
 }
 
 type couponAssociationRepository struct {
@@ -49,6 +144,7 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 		"coupon_id", ca.CouponID,
 		"subscription_id", ca.SubscriptionID,
 		"subscription_line_item_id", ca.SubscriptionLineItemID,
+		"subscription_phase_id", ca.SubscriptionPhaseID,
 	)
 
 	// Start a span for this repository operation
@@ -63,12 +159,12 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 		ca.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	// Build the create query
 	createQuery := client.CouponAssociation.Create().
 		SetID(ca.ID).
 		SetTenantID(ca.TenantID).
 		SetCouponID(ca.CouponID).
 		SetSubscriptionID(ca.SubscriptionID).
-		SetStartDate(ca.StartDate).
 		SetStatus(string(ca.Status)).
 		SetCreatedAt(ca.CreatedAt).
 		SetUpdatedAt(ca.UpdatedAt).
@@ -86,6 +182,12 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 		createQuery = createQuery.SetSubscriptionPhaseID(*ca.SubscriptionPhaseID)
 	}
 
+	// Handle optional start date (nullable in schema)
+	// Note: Since start_date has a default in schema, we only set if provided
+	if !ca.StartDate.IsZero() {
+		createQuery = createQuery.SetStartDate(ca.StartDate)
+	}
+
 	// Handle optional end date
 	if ca.EndDate != nil {
 		createQuery = createQuery.SetEndDate(*ca.EndDate)
@@ -99,6 +201,7 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 	// Create the coupon association
 	_, err := createQuery.Save(ctx)
 	if err != nil {
+		SetSpanError(span, err)
 		return ierr.WithError(err).
 			WithHint("Failed to create coupon association in database").
 			WithReportableDetails(map[string]interface{}{
@@ -108,11 +211,13 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 			Mark(ierr.ErrDatabase)
 	}
 
+	SetSpanSuccess(span)
 	r.log.Infow("created coupon association",
 		"association_id", ca.ID,
 		"coupon_id", ca.CouponID,
 		"subscription_id", ca.SubscriptionID,
-		"subscription_line_item_id", ca.SubscriptionLineItemID)
+		"subscription_line_item_id", ca.SubscriptionLineItemID,
+		"subscription_phase_id", ca.SubscriptionPhaseID)
 
 	return nil
 }
@@ -138,6 +243,7 @@ func (r *couponAssociationRepository) Get(ctx context.Context, id string) (*doma
 
 	if err != nil {
 		if ent.IsNotFound(err) {
+			SetSpanError(span, err)
 			return nil, ierr.NewError("coupon association not found").
 				WithHint("The specified coupon association does not exist").
 				WithReportableDetails(map[string]interface{}{
@@ -145,6 +251,7 @@ func (r *couponAssociationRepository) Get(ctx context.Context, id string) (*doma
 				}).
 				Mark(ierr.ErrNotFound)
 		}
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get coupon association from database").
 			WithReportableDetails(map[string]interface{}{
@@ -153,7 +260,8 @@ func (r *couponAssociationRepository) Get(ctx context.Context, id string) (*doma
 			Mark(ierr.ErrDatabase)
 	}
 
-	return r.toDomainCouponAssociation(ca), nil
+	SetSpanSuccess(span)
+	return domainCouponAssociation.FromEnt(ca), nil
 }
 
 func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCouponAssociation.CouponAssociation) error {
@@ -170,6 +278,7 @@ func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCoup
 	})
 	defer FinishSpan(span)
 
+	// Build the update query
 	updateQuery := client.CouponAssociation.Update().
 		Where(
 			couponassociation.ID(ca.ID),
@@ -184,8 +293,15 @@ func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCoup
 		updateQuery = updateQuery.SetMetadata(ca.Metadata)
 	}
 
-	_, err := updateQuery.Save(ctx)
+	// Handle optional end date (can be updated)
+	if ca.EndDate != nil {
+		updateQuery = updateQuery.SetEndDate(*ca.EndDate)
+	}
+
+	// Execute the update
+	count, err := updateQuery.Save(ctx)
 	if err != nil {
+		SetSpanError(span, err)
 		return ierr.WithError(err).
 			WithHint("Failed to update coupon association in database").
 			WithReportableDetails(map[string]interface{}{
@@ -194,9 +310,22 @@ func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCoup
 			Mark(ierr.ErrDatabase)
 	}
 
+	if count == 0 {
+		notFoundErr := fmt.Errorf("coupon association not found or already updated")
+		SetSpanError(span, notFoundErr)
+		return ierr.NewError("coupon association not found").
+			WithHint("The specified coupon association does not exist or was already updated").
+			WithReportableDetails(map[string]interface{}{
+				"association_id": ca.ID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
 	r.log.Infow("updated coupon association",
 		"association_id", ca.ID,
-		"coupon_id", ca.CouponID)
+		"coupon_id", ca.CouponID,
+		"rows_updated", count)
 
 	return nil
 }
@@ -212,7 +341,7 @@ func (r *couponAssociationRepository) Delete(ctx context.Context, id string) err
 	})
 	defer FinishSpan(span)
 
-	_, err := client.CouponAssociation.Delete().
+	count, err := client.CouponAssociation.Delete().
 		Where(
 			couponassociation.ID(id),
 			couponassociation.TenantID(types.GetTenantID(ctx)),
@@ -221,6 +350,7 @@ func (r *couponAssociationRepository) Delete(ctx context.Context, id string) err
 		Exec(ctx)
 
 	if err != nil {
+		SetSpanError(span, err)
 		return ierr.WithError(err).
 			WithHint("Failed to delete coupon association from database").
 			WithReportableDetails(map[string]interface{}{
@@ -229,108 +359,91 @@ func (r *couponAssociationRepository) Delete(ctx context.Context, id string) err
 			Mark(ierr.ErrDatabase)
 	}
 
-	r.log.Infow("deleted coupon association", "association_id", id)
+	if count == 0 {
+		notFoundErr := fmt.Errorf("coupon association not found")
+		SetSpanError(span, notFoundErr)
+		return ierr.NewError("coupon association not found").
+			WithHint("The specified coupon association does not exist").
+			WithReportableDetails(map[string]interface{}{
+				"association_id": id,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	SetSpanSuccess(span)
+	r.log.Infow("deleted coupon association",
+		"association_id", id,
+		"rows_deleted", count)
 	return nil
 }
 
-func (r *couponAssociationRepository) GetBySubscription(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
-	client := r.client.Reader(ctx)
+// List retrieves coupon associations based on the provided filter
+func (r *couponAssociationRepository) List(ctx context.Context, filter *types.CouponAssociationFilter) ([]*domainCouponAssociation.CouponAssociation, error) {
+	if filter == nil {
+		filter = types.NewCouponAssociationFilter()
+	}
 
-	r.log.Debugw("getting coupon associations by subscription", "subscription_id", subscriptionID)
+	r.log.Debugw("listing coupon associations", "filter", filter)
 
 	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "coupon_association", "get_by_subscription", map[string]interface{}{
-		"subscription_id": subscriptionID,
+	span := StartRepositorySpan(ctx, "coupon_association", "list", map[string]interface{}{
+		"filter": filter,
 	})
 	defer FinishSpan(span)
 
-	associations, err := client.CouponAssociation.Query().
-		Where(
-			couponassociation.SubscriptionID(subscriptionID),
-			couponassociation.SubscriptionLineItemIDIsNil(),
-			couponassociation.TenantID(types.GetTenantID(ctx)),
-			couponassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		WithCoupon().
-		All(ctx)
-
-	if err != nil {
+	if err := filter.Validate(); err != nil {
+		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get coupon associations from database").
+			WithHint("Invalid coupon association filter").
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Reader(ctx)
+	query := client.CouponAssociation.Query()
+
+	// Apply entity-specific filters
+	var err error
+	query, err = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to apply query options").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Apply common query options (tenant, environment, status, pagination, sorting)
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
+
+	associations, err := query.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list coupon associations from database").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
+				"filter": filter,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
 
-	domainAssociations := make([]*domainCouponAssociation.CouponAssociation, len(associations))
-	for i, ca := range associations {
-		domainAssociations[i] = r.toDomainCouponAssociation(ca)
-	}
+	SetSpanSuccess(span)
+	return domainCouponAssociation.FromEntList(associations), nil
+}
 
-	return domainAssociations, nil
+func (r *couponAssociationRepository) GetBySubscription(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
+	// Use List method with filter for backwards compatibility
+	filter := types.NewNoLimitCouponAssociationFilter()
+	subscriptionLineItemIDIsNil := true
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
+	filter.WithCoupon = true
+	return r.List(ctx, filter)
 }
 
 func (r *couponAssociationRepository) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
-	client := r.client.Reader(ctx)
-
-	r.log.Debugw("getting coupon associations by subscription line item", "subscription_id", subscriptionID)
-
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "coupon_association", "get_by_subscription_line_item", map[string]interface{}{
-		"subscription_id": subscriptionID,
-	})
-	defer FinishSpan(span)
-
-	associations, err := client.CouponAssociation.Query().
-		Where(
-			couponassociation.SubscriptionID(subscriptionID),
-			couponassociation.SubscriptionLineItemIDNotNil(),
-			couponassociation.TenantID(types.GetTenantID(ctx)),
-			couponassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		All(ctx)
-
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get coupon associations from database").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	domainAssociations := make([]*domainCouponAssociation.CouponAssociation, len(associations))
-	for i, ca := range associations {
-		domainAssociations[i] = r.toDomainCouponAssociation(ca)
-	}
-
-	return domainAssociations, nil
-}
-
-// Helper method to convert ent.CouponAssociation to domain.CouponAssociation
-func (r *couponAssociationRepository) toDomainCouponAssociation(ca *ent.CouponAssociation) *domainCouponAssociation.CouponAssociation {
-
-	couponObj := domainCoupon.FromEnt(ca.Edges.Coupon)
-
-	return &domainCouponAssociation.CouponAssociation{
-		ID:                     ca.ID,
-		CouponID:               ca.CouponID,
-		SubscriptionID:         ca.SubscriptionID,
-		SubscriptionLineItemID: ca.SubscriptionLineItemID,
-		SubscriptionPhaseID:    ca.SubscriptionPhaseID,
-		StartDate:              ca.StartDate,
-		EndDate:                ca.EndDate,
-		Metadata:               ca.Metadata,
-		EnvironmentID:          ca.EnvironmentID,
-		Coupon:                 couponObj,
-		BaseModel: types.BaseModel{
-			TenantID:  ca.TenantID,
-			Status:    types.Status(ca.Status),
-			CreatedAt: ca.CreatedAt,
-			UpdatedAt: ca.UpdatedAt,
-			CreatedBy: ca.CreatedBy,
-			UpdatedBy: ca.UpdatedBy,
-		},
-	}
+	// Use List method with filter for backwards compatibility
+	filter := types.NewNoLimitCouponAssociationFilter()
+	subscriptionLineItemIDIsNil := false
+	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
+	return r.List(ctx, filter)
 }
