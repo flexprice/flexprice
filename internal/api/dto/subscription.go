@@ -45,6 +45,7 @@ type CreateSubscriptionRequest struct {
 	// customer_id is the flexprice customer id
 	// and it is prioritized over external_customer_id in case both are provided.
 	CustomerID string `json:"customer_id"`
+
 	// external_customer_id is the customer id in your DB
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string               `json:"external_customer_id"`
@@ -59,6 +60,7 @@ type CreateSubscriptionRequest struct {
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
+
 	// BillingCycle is the cycle of the billing anchor.
 	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
 	// If not set, the default value is anniversary. Possible values are anniversary and calendar.
@@ -67,14 +69,19 @@ type CreateSubscriptionRequest struct {
 	// For example, if the billing period is month and the start date is 2025-04-15 then in case of
 	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
 	BillingCycle types.BillingCycle `json:"billing_cycle"`
+
 	// Credit grants to be applied when subscription is created
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
+
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
+
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
+
 	// SubscriptionCoupons is a list of coupon requests to be applied to the subscription
 	// If PriceID is provided in a coupon request, it's applied to that line item
 	// If PriceID is omitted, it's applied at the subscription level
@@ -91,6 +98,7 @@ type CreateSubscriptionRequest struct {
 	// Payment behavior configuration
 	PaymentBehavior        *types.PaymentBehavior `json:"payment_behavior,omitempty"`
 	GatewayPaymentMethodID *string                `json:"gateway_payment_method_id,omitempty"`
+
 	// collection_method determines how invoices are collected
 	// "default_incomplete" - subscription waits for payment confirmation before activation
 	// "send_invoice" - subscription activates immediately, invoice is sent for payment
