@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -28,11 +29,26 @@ func copyCouponAssociation(ca *coupon_association.CouponAssociation) *coupon_ass
 	}
 
 	// Deep copy of coupon association
+	var subscriptionPhaseID *string
+	if ca.SubscriptionPhaseID != nil {
+		phaseID := *ca.SubscriptionPhaseID
+		subscriptionPhaseID = &phaseID
+	}
+
+	var endDate *time.Time
+	if ca.EndDate != nil {
+		endDateVal := *ca.EndDate
+		endDate = &endDateVal
+	}
+
 	copied := &coupon_association.CouponAssociation{
 		ID:                     ca.ID,
 		CouponID:               ca.CouponID,
 		SubscriptionID:         ca.SubscriptionID,
 		SubscriptionLineItemID: ca.SubscriptionLineItemID,
+		SubscriptionPhaseID:    subscriptionPhaseID,
+		StartDate:              ca.StartDate,
+		EndDate:                endDate,
 		Metadata:               lo.Assign(map[string]string{}, ca.Metadata),
 		EnvironmentID:          ca.EnvironmentID,
 		Coupon:                 ca.Coupon,
