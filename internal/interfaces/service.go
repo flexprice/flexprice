@@ -88,7 +88,7 @@ type SubscriptionService interface {
 	CalculateResumeImpact(ctx context.Context, subscriptionID string, req *dto.ResumeSubscriptionRequest) (*types.BillingImpactDetails, error)
 
 	// Coupon-related methods
-	ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, subscriptionCoupons []string, lineItemCoupons map[string][]string, lineItems []*subscription.SubscriptionLineItem) error
+	ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, couponRequests []dto.SubscriptionCouponRequest, lineItems []*subscription.SubscriptionLineItem) error
 
 	ValidateAndFilterPricesForSubscription(ctx context.Context, entityID string, entityType types.PriceEntityType, subscription *subscription.Subscription, workflowType *types.TemporalWorkflowType) ([]*dto.PriceResponse, error)
 

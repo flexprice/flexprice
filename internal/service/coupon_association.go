@@ -15,10 +15,10 @@ type CouponAssociationService interface {
 	GetCouponAssociation(ctx context.Context, id string) (*dto.CouponAssociationResponse, error)
 	DeleteCouponAssociation(ctx context.Context, id string) error
 	GetCouponAssociationsBySubscriptionFilter(ctx context.Context, filter *coupon_association.Filter) ([]*dto.CouponAssociationResponse, error)
-	ApplyCouponToSubscription(ctx context.Context, couponIDs []string, subscriptionID string) error
+	ApplyCouponToSubscription(ctx context.Context, couponRequests []dto.SubscriptionCouponRequest, subscriptionID string) error
 
 	// Line item coupon association methods
-	ApplyCouponToSubscriptionLineItem(ctx context.Context, couponIDs []string, subscriptionID string, priceID string) error
+	ApplyCouponToSubscriptionLineItem(ctx context.Context, couponRequests []dto.SubscriptionCouponRequest, subscriptionID string, lineItemID string) error
 }
 
 type couponAssociationService struct {
@@ -126,12 +126,10 @@ func (s *couponAssociationService) GetCouponAssociationsBySubscriptionFilter(ctx
 	return responses, nil
 }
 
-func (s *couponAssociationService) ApplyCouponToSubscription(ctx context.Context, couponIDs []string, subscriptionID string) error {
+func (s *couponAssociationService) ApplyCouponToSubscription(ctx context.Context, couponRequests []dto.SubscriptionCouponRequest, subscriptionID string) error {
 	// Validate input parameters
-	if len(couponIDs) == 0 {
-		return ierr.NewError("at least one coupon_id is required").
-			WithHint("Please provide at least one coupon ID to apply").
-			Mark(ierr.ErrValidation)
+	if len(couponRequests) == 0 {
+		return nil
 	}
 
 	if subscriptionID == "" {
@@ -142,24 +140,36 @@ func (s *couponAssociationService) ApplyCouponToSubscription(ctx context.Context
 
 	validationService := NewCouponValidationService(s.ServiceParams)
 
-	// Validate each coupon
-	for _, couponID := range couponIDs {
-		if err := validationService.ValidateCoupon(ctx, couponID, &subscriptionID); err != nil {
+	// Validate each coupon request
+	for i, couponReq := range couponRequests {
+		if err := couponReq.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint("Coupon request validation failed").
+				WithReportableDetails(map[string]interface{}{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate coupon applicability
+		if err := validationService.ValidateCoupon(ctx, couponReq.CouponID, &subscriptionID); err != nil {
 			return ierr.WithError(err).
 				WithHint("Coupon validation failed").
 				WithReportableDetails(map[string]interface{}{
-					"coupon_id":       couponID,
+					"coupon_id":       couponReq.CouponID,
 					"subscription_id": subscriptionID,
 				}).
 				Mark(ierr.ErrValidation)
 		}
 	}
 
-	for _, couponID := range couponIDs {
-		// Create coupon association request
+	// Apply each coupon with its dates
+	for _, couponReq := range couponRequests {
 		req := dto.CreateCouponAssociationRequest{
-			CouponID:       couponID,
+			CouponID:       couponReq.CouponID,
 			SubscriptionID: subscriptionID,
+			StartDate:      couponReq.StartDate,
+			EndDate:        couponReq.EndDate,
 			Metadata:       map[string]string{},
 		}
 
@@ -173,11 +183,10 @@ func (s *couponAssociationService) ApplyCouponToSubscription(ctx context.Context
 	return nil
 }
 
-func (s *couponAssociationService) ApplyCouponToSubscriptionLineItem(ctx context.Context, couponIDs []string, subscriptionID string, lineItemID string) error {
-	if len(couponIDs) == 0 {
-		return ierr.NewError("at least one coupon_id is required").
-			WithHint("Please provide at least one coupon ID to apply").
-			Mark(ierr.ErrValidation)
+func (s *couponAssociationService) ApplyCouponToSubscriptionLineItem(ctx context.Context, couponRequests []dto.SubscriptionCouponRequest, subscriptionID string, lineItemID string) error {
+	// Validate input parameters
+	if len(couponRequests) == 0 {
+		return nil
 	}
 
 	if subscriptionID == "" {
@@ -192,11 +201,39 @@ func (s *couponAssociationService) ApplyCouponToSubscriptionLineItem(ctx context
 			Mark(ierr.ErrValidation)
 	}
 
-	for _, couponID := range couponIDs {
+	validationService := NewCouponValidationService(s.ServiceParams)
+
+	// Validate each coupon request
+	for i, couponReq := range couponRequests {
+		if err := couponReq.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint("Coupon request validation failed").
+				WithReportableDetails(map[string]interface{}{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate coupon applicability
+		if err := validationService.ValidateCoupon(ctx, couponReq.CouponID, &subscriptionID); err != nil {
+			return ierr.WithError(err).
+				WithHint("Coupon validation failed").
+				WithReportableDetails(map[string]interface{}{
+					"coupon_id":       couponReq.CouponID,
+					"subscription_id": subscriptionID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Apply each coupon with its dates
+	for _, couponReq := range couponRequests {
 		req := dto.CreateCouponAssociationRequest{
-			CouponID:               couponID,
+			CouponID:               couponReq.CouponID,
 			SubscriptionID:         subscriptionID,
 			SubscriptionLineItemID: &lineItemID,
+			StartDate:              couponReq.StartDate,
+			EndDate:                couponReq.EndDate,
 			Metadata:               map[string]string{},
 		}
 

@@ -15,6 +15,26 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// SubscriptionCouponRequest represents a coupon to be applied to a subscription
+// If PriceID is provided, the coupon is applied to the line item with that price_id
+// If PriceID is omitted, the coupon is applied at the subscription level
+type SubscriptionCouponRequest struct {
+	CouponID  string     `json:"coupon_id" validate:"required"`
+	StartDate *time.Time `json:"start_date,omitempty"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
+	PriceID   *string    `json:"price_id,omitempty"`
+}
+
+// Validate validates the SubscriptionCouponRequest
+func (r *SubscriptionCouponRequest) Validate() error {
+	if r.CouponID == "" {
+		return ierr.NewError("coupon_id is required").
+			WithHint("Please provide a valid coupon ID").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 type CreateSubscriptionRequest struct {
 
 	// customer_id is the flexprice customer id
@@ -50,9 +70,13 @@ type CreateSubscriptionRequest struct {
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
-	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
+	// SubscriptionCoupons is a list of coupon requests to be applied to the subscription
+	// If PriceID is provided in a coupon request, it's applied to that line item
+	// If PriceID is omitted, it's applied at the subscription level
+	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
+	// Coupons is deprecated but kept for backward compatibility - will be converted to SubscriptionCoupons
 	Coupons []string `json:"coupons,omitempty"`
-	// SubscriptionLineItemsCoupons is a list of coupon IDs to be applied to the subscription line items
+	// LineItemCoupons is deprecated but kept for backward compatibility - will be converted to SubscriptionCoupons
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 	// OverrideLineItems allows customizing specific prices for this subscription
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
@@ -402,31 +426,18 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	// Validate subscription coupons if provided
-	if len(r.Coupons) > 0 {
-		// Validate that coupon IDs are not empty
-		for i, couponID := range r.Coupons {
-			if couponID == "" {
-				return ierr.NewError("subscription coupon ID cannot be empty").
-					WithHint("All subscription coupon IDs must be valid").
-					WithReportableDetails(map[string]interface{}{
-						"index": i,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
+	// Normalize coupon fields: convert deprecated fields to new format for backward compatibility
+	r.normalizeCoupons()
 
-	if len(r.LineItemCoupons) > 0 {
-		for priceID, couponIDs := range r.LineItemCoupons {
-			if len(couponIDs) == 0 {
-				return ierr.NewError("subscription line item coupon IDs cannot be empty").
-					WithHint("All subscription line item coupon IDs must be valid").
-					WithReportableDetails(map[string]interface{}{
-						"price_id": priceID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
+	// Validate subscription coupons if provided
+	for i, couponReq := range r.SubscriptionCoupons {
+		if err := couponReq.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHint("Subscription coupon validation failed").
+				WithReportableDetails(map[string]interface{}{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 	// Validate override line items if provided
@@ -458,6 +469,37 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	}
 
 	return nil
+}
+
+// normalizeCoupons converts deprecated Coupons and LineItemCoupons fields to the new SubscriptionCoupons format
+// This provides backward compatibility while using the new unified structure
+func (r *CreateSubscriptionRequest) normalizeCoupons() {
+	// If SubscriptionCoupons is already populated, don't override it
+	if len(r.SubscriptionCoupons) > 0 {
+		return
+	}
+
+	// Convert subscription-level coupons (old format)
+	for _, couponID := range r.Coupons {
+		if couponID != "" {
+			r.SubscriptionCoupons = append(r.SubscriptionCoupons, SubscriptionCouponRequest{
+				CouponID: couponID,
+			})
+		}
+	}
+
+	// Convert line item coupons (old format)
+	for priceID, couponIDs := range r.LineItemCoupons {
+		for _, couponID := range couponIDs {
+			if couponID != "" {
+				priceIDCopy := priceID // Copy to avoid loop variable issue
+				r.SubscriptionCoupons = append(r.SubscriptionCoupons, SubscriptionCouponRequest{
+					CouponID: couponID,
+					PriceID:  lo.ToPtr(priceIDCopy),
+				})
+			}
+		}
+	}
 }
 
 // validatePaymentBehaviorForCollectionMethod validates that payment behavior is compatible with collection method

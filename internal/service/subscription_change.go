@@ -695,245 +695,6 @@ func (s *subscriptionChangeService) convertCancellationProrationToDetails(
 	}
 }
 
-// prepareProrationCreditGrantRequests prepares credit grant requests for proration credits
-func (s *subscriptionChangeService) prepareProrationCreditGrantRequests(
-	cancellationProrationResult *proration.SubscriptionProrationResult,
-	effectiveDate time.Time,
-) []dto.CreateCreditGrantRequest {
-	if cancellationProrationResult == nil {
-		return nil
-	}
-
-	var creditGrantRequests []dto.CreateCreditGrantRequest
-
-	// Process each line item result to create credit grant requests for credit items
-	for lineItemID, prorationResult := range cancellationProrationResult.LineItemResults {
-		for _, creditItem := range prorationResult.CreditItems {
-			// Only create credit grants for positive credit amounts
-			creditAmount := creditItem.Amount.Abs()
-			if creditAmount.IsZero() {
-				continue
-			}
-
-			// Create credit grant request (subscription ID will be set by the subscription service)
-			// Based on the sample API request format
-			creditGrantReq := dto.CreateCreditGrantRequest{
-				Name:                   fmt.Sprintf("Subscription Change Credit - %s", effectiveDate.Format("2006-01-02")),
-				Scope:                  types.CreditGrantScopeSubscription,
-				SubscriptionID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION)),
-				Credits:                creditAmount,
-				Cadence:                types.CreditGrantCadenceOneTime,
-				ExpirationType:         types.CreditGrantExpiryTypeNever,
-				ExpirationDuration:     nil,                                               // Explicitly set to nil for NEVER expiration
-				ExpirationDurationUnit: lo.ToPtr(types.CreditGrantExpiryDurationUnitDays), // Explicitly set to nil for NEVER expiration
-				Priority:               lo.ToPtr(1),
-				Metadata: types.Metadata{
-					"subscription_change":    "true",
-					"original_line_item_id":  lineItemID,
-					"proration_date":         effectiveDate.Format(time.RFC3339),
-					"credit_description":     creditItem.Description,
-					"proration_period_start": creditItem.StartDate.Format(time.RFC3339),
-					"proration_period_end":   creditItem.EndDate.Format(time.RFC3339),
-				},
-			}
-
-			creditGrantRequests = append(creditGrantRequests, creditGrantReq)
-
-			s.serviceParams.Logger.Infow("prepared proration credit grant request",
-				"amount", creditAmount.String(),
-				"line_item_id", lineItemID,
-				"description", creditItem.Description)
-		}
-	}
-
-	return creditGrantRequests
-}
-
-// generateChangeInvoiceChargesOnly generates an invoice with only positive charges (no credits)
-func (s *subscriptionChangeService) generateChangeInvoiceChargesOnly(
-	ctx context.Context,
-	newSub *subscription.Subscription,
-	cancellationProrationResult *proration.SubscriptionProrationResult,
-	effectiveDate time.Time,
-) (*dto.InvoiceResponse, error) {
-	if cancellationProrationResult == nil {
-		return nil, nil
-	}
-
-	// Calculate total charge amount
-	totalChargeAmount := decimal.Zero
-	lineItems := []dto.CreateInvoiceLineItemRequest{}
-
-	// Only add charge items (positive amounts) to the invoice
-	for lineItemID, prorationResult := range cancellationProrationResult.LineItemResults {
-		for _, chargeItem := range prorationResult.ChargeItems {
-			if chargeItem.Amount.GreaterThan(decimal.Zero) {
-				displayName := chargeItem.Description
-				lineItems = append(lineItems, dto.CreateInvoiceLineItemRequest{
-					EntityID:    &lineItemID,
-					EntityType:  lo.ToPtr("subscription_line_item"),
-					DisplayName: &displayName,
-					Amount:      chargeItem.Amount, // Positive charges only
-					Quantity:    chargeItem.Quantity,
-					PeriodStart: &chargeItem.StartDate,
-					PeriodEnd:   &chargeItem.EndDate,
-					Metadata: types.Metadata{
-						"proration_type":        "charge",
-						"subscription_change":   "true",
-						"original_line_item_id": lineItemID,
-					},
-				})
-				totalChargeAmount = totalChargeAmount.Add(chargeItem.Amount)
-			}
-		}
-	}
-
-	// If no charges, don't create an invoice
-	if totalChargeAmount.IsZero() || len(lineItems) == 0 {
-		return nil, nil
-	}
-
-	// Create invoice request for charges only
-	invoiceReq := dto.CreateInvoiceRequest{
-		CustomerID:     newSub.CustomerID,
-		SubscriptionID: &newSub.ID,
-		InvoiceType:    types.InvoiceTypeSubscription,
-		BillingReason:  types.InvoiceBillingReasonSubscriptionUpdate,
-		Description:    fmt.Sprintf("Subscription change charges - %s", effectiveDate.Format("2006-01-02")),
-		Currency:       newSub.Currency,
-		PeriodStart:    &effectiveDate,
-		PeriodEnd:      &effectiveDate,
-		Subtotal:       totalChargeAmount,
-		AmountDue:      totalChargeAmount,
-		LineItems:      lineItems,
-		Metadata: types.Metadata{
-			"subscription_change": "true",
-			"effective_date":      effectiveDate.Format(time.RFC3339),
-			"charges_only":        "true", // Indicate this invoice contains only charges
-		},
-	}
-
-	// Create the invoice
-	return s.invoiceService.CreateInvoice(ctx, invoiceReq)
-}
-
-func (s *subscriptionChangeService) transferCoupons(ctx context.Context, oldSubscriptionID string) ([]string, error) {
-	// Get the old subscription to use its current period for active filter
-	oldSub, err := s.serviceParams.SubRepo.Get(ctx, oldSubscriptionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch old subscription for coupon transfer").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Get coupon associations that are active during the subscription's current billing period
-	subscriptionFilter := &coupon_association.Filter{
-		SubscriptionID:    oldSub.ID,
-		ActiveOnly:        true,
-		ActivePeriodStart: &oldSub.CurrentPeriodStart,
-		ActivePeriodEnd:   &oldSub.CurrentPeriodEnd,
-		IncludeLineItems:  false,
-		WithCoupon:        false,
-	}
-	couponAssociations, err := s.serviceParams.CouponAssociationRepo.GetBySubscriptionFilter(ctx, subscriptionFilter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch coupon associations").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Convert to string format
-	var couponIDs []string
-	for _, association := range couponAssociations {
-		couponIDs = append(couponIDs, association.CouponID)
-	}
-
-	return couponIDs, nil
-}
-
-// transferAddonAssociations fetches and transfers addon associations from old subscription
-func (s *subscriptionChangeService) transferAddonAssociations(ctx context.Context, oldSubscriptionID string) ([]dto.AddAddonToSubscriptionRequest, error) {
-	// Create filter to get addon associations for the subscription
-	filter := types.NewAddonAssociationFilter()
-	filter.EntityIDs = []string{oldSubscriptionID}
-	filter.EntityType = lo.ToPtr(types.AddonAssociationEntityTypeSubscription)
-	filter.AddonStatus = lo.ToPtr(string(types.AddonStatusActive))
-
-	// Get addon associations
-	addonAssociations, err := s.serviceParams.AddonAssociationRepo.List(ctx, filter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch addon associations").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Convert to AddAddonToSubscriptionRequest format
-	var addons []dto.AddAddonToSubscriptionRequest
-	for _, association := range addonAssociations {
-		// Only transfer active addons
-		if association.AddonStatus == types.AddonStatusActive {
-			addon := dto.AddAddonToSubscriptionRequest{
-				AddonID:   association.AddonID,
-				StartDate: association.StartDate,
-				EndDate:   association.EndDate,
-				Metadata:  association.Metadata,
-			}
-			addons = append(addons, addon)
-		}
-	}
-
-	s.serviceParams.Logger.Infow("transferred addon associations",
-		"old_subscription_id", oldSubscriptionID,
-		"addon_count", len(addons))
-
-	return addons, nil
-}
-
-// transferTaxAssociations fetches and transfers tax associations from old subscription
-func (s *subscriptionChangeService) transferTaxAssociations(ctx context.Context, oldSubscriptionID string) ([]*dto.TaxRateOverride, error) {
-	// Create filter to get tax associations for the subscription
-	filter := types.NewNoLimitTaxAssociationFilter()
-	filter.EntityType = types.TaxRateEntityTypeSubscription
-	filter.EntityID = oldSubscriptionID
-
-	// Get tax associations using tax service
-	taxService := NewTaxService(s.serviceParams)
-	taxAssociationsResponse, err := taxService.ListTaxAssociations(ctx, filter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch tax associations").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Convert to TaxRateOverride format
-	var taxRateOverrides []*dto.TaxRateOverride
-	for _, association := range taxAssociationsResponse.Items {
-		// Get the tax rate details
-		taxRate, err := taxService.GetTaxRate(ctx, association.TaxRateID)
-		if err != nil {
-			s.serviceParams.Logger.Warnw("failed to get tax rate details, skipping",
-				"tax_rate_id", association.TaxRateID,
-				"error", err)
-			continue
-		}
-
-		override := &dto.TaxRateOverride{
-			TaxRateCode: taxRate.TaxRate.Code,
-			Priority:    association.Priority,
-			AutoApply:   association.AutoApply,
-			Currency:    association.Currency,
-			Metadata:    association.Metadata,
-		}
-		taxRateOverrides = append(taxRateOverrides, override)
-	}
-
-	s.serviceParams.Logger.Infow("transferred tax associations",
-		"old_subscription_id", oldSubscriptionID,
-		"tax_override_count", len(taxRateOverrides))
-
-	return taxRateOverrides, nil
-}
-
 // transferLineItemCoupons transfers line item specific coupons from old subscription to new subscription
 func (s *subscriptionChangeService) transferLineItemCoupons(
 	ctx context.Context,
@@ -982,12 +743,12 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 		newPriceToLineItem[lineItem.PriceID] = lineItem
 	}
 
-	// Group coupons by old line item ID
-	couponsByOldLineItem := make(map[string][]string)
+	// Group coupons by old line item ID, preserving dates
+	couponsByOldLineItem := make(map[string][]*coupon_association.CouponAssociation)
 	for _, couponAssoc := range lineItemCoupons {
 		if couponAssoc.SubscriptionLineItemID != nil {
 			oldLineItemID := *couponAssoc.SubscriptionLineItemID
-			couponsByOldLineItem[oldLineItemID] = append(couponsByOldLineItem[oldLineItemID], couponAssoc.CouponID)
+			couponsByOldLineItem[oldLineItemID] = append(couponsByOldLineItem[oldLineItemID], couponAssoc)
 		}
 	}
 
@@ -995,7 +756,7 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 	couponAssociationService := NewCouponAssociationService(s.serviceParams)
 	transferredCount := 0
 
-	for oldLineItemID, couponIDs := range couponsByOldLineItem {
+	for oldLineItemID, couponAssociations := range couponsByOldLineItem {
 		// Find the old line item to get its price_id
 		var oldLineItem *subscription.SubscriptionLineItem
 		for _, li := range oldLineItems {
@@ -1020,29 +781,39 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 			continue
 		}
 
-		// Apply coupons to the new line item
-		err := couponAssociationService.ApplyCouponToSubscriptionLineItem(ctx, couponIDs, newSubscriptionID, newLineItem.ID)
+		// Convert coupon associations to subscription coupon requests, preserving dates
+		couponRequests := make([]dto.SubscriptionCouponRequest, len(couponAssociations))
+		for i, oldCouponAssoc := range couponAssociations {
+			couponRequests[i] = dto.SubscriptionCouponRequest{
+				CouponID:  oldCouponAssoc.CouponID,
+				StartDate: &oldCouponAssoc.StartDate,
+				EndDate:   oldCouponAssoc.EndDate,
+			}
+		}
+
+		// Apply coupons to the new line item using the helper method
+		err := couponAssociationService.ApplyCouponToSubscriptionLineItem(ctx, couponRequests, newSubscriptionID, newLineItem.ID)
 		if err != nil {
 			s.serviceParams.Logger.Errorw("failed to transfer line item coupons",
 				"old_line_item_id", oldLineItemID,
 				"new_line_item_id", newLineItem.ID,
-				"coupon_ids", couponIDs,
+				"coupon_count", len(couponAssociations),
 				"error", err)
 			return ierr.WithError(err).
 				WithHint("Failed to apply coupons to new line item").
 				WithReportableDetails(map[string]interface{}{
 					"old_line_item_id": oldLineItemID,
 					"new_line_item_id": newLineItem.ID,
-					"coupon_ids":       couponIDs,
+					"coupon_count":     len(couponAssociations),
 				}).
 				Mark(ierr.ErrDatabase)
 		}
 
-		transferredCount += len(couponIDs)
+		transferredCount += len(couponAssociations)
 		s.serviceParams.Logger.Infow("transferred line item coupons",
 			"old_line_item_id", oldLineItemID,
 			"new_line_item_id", newLineItem.ID,
-			"coupon_count", len(couponIDs))
+			"coupon_count", len(couponAssociations))
 	}
 
 	s.serviceParams.Logger.Infow("completed line item coupon transfer",
