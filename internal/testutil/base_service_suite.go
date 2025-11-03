@@ -56,6 +56,7 @@ type Stores struct {
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	SubscriptionRepo             subscription.Repository
 	SubscriptionLineItemRepo     subscription.LineItemRepository
+	SubscriptionPhaseRepo        subscription.SubscriptionPhaseRepository
 	EventRepo                    events.Repository
 	PlanRepo                     plan.Repository
 	PriceRepo                    price.Repository
@@ -185,6 +186,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	s.stores = Stores{
 		SubscriptionRepo:             NewInMemorySubscriptionStore(),
 		SubscriptionLineItemRepo:     NewInMemorySubscriptionLineItemStore(),
+		SubscriptionPhaseRepo:        NewInMemorySubscriptionPhaseStore(),
 		EventRepo:                    NewInMemoryEventStore(),
 		PlanRepo:                     NewInMemoryPlanStore(),
 		PriceRepo:                    NewInMemoryPriceStore(),
@@ -263,6 +265,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AddonAssociationRepo.(*InMemoryAddonAssociationStore).Clear()
 	s.stores.SettingsRepo.(*InMemorySettingsStore).Clear()
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
+	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 }
 
