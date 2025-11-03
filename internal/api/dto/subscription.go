@@ -15,6 +15,107 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// SubscriptionPhaseCreateRequest represents the request to create a subscription phase
+type SubscriptionPhaseCreateRequest struct {
+	StartDate time.Time  `json:"start_date" validate:"required"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
+
+	// SubscriptionCoupons is a list of coupon requests to be applied to the subscription
+	// If PriceID is provided in a coupon request, it's applied to that line item
+	// If PriceID is omitted, it's applied at the subscription level
+	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
+
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// Validate validates the SubscriptionPhaseCreateRequest
+func (r *SubscriptionPhaseCreateRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			WithHint("Ensure the phase end date is on or after the start date").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate coupons and ensure their dates are within phase bounds
+	for i, coupon := range r.SubscriptionCoupons {
+		if err := coupon.Validate(); err != nil {
+			return err
+		}
+
+		// Validate coupon dates are within phase bounds if provided
+		if coupon.StartDate != nil {
+			if coupon.StartDate.Before(r.StartDate) {
+				return ierr.NewError("coupon start_date cannot be before phase start_date").
+					WithHint(fmt.Sprintf("Coupon at index %d start date must be on or after phase start date", i)).
+					WithReportableDetails(map[string]interface{}{
+						"coupon_index": i,
+						"coupon_start": coupon.StartDate,
+						"phase_start":  r.StartDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// If phase has an end date, coupon start must be before or equal to phase end
+			if r.EndDate != nil && coupon.StartDate.After(*r.EndDate) {
+				return ierr.NewError("coupon start_date cannot be after phase end_date").
+					WithHint(fmt.Sprintf("Coupon at index %d start date must be on or before phase end date", i)).
+					WithReportableDetails(map[string]interface{}{
+						"coupon_index": i,
+						"coupon_start": coupon.StartDate,
+						"phase_end":    *r.EndDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		if coupon.EndDate != nil {
+			// Coupon end must be after phase start
+			if coupon.EndDate.Before(r.StartDate) {
+				return ierr.NewError("coupon end_date cannot be before phase start_date").
+					WithHint(fmt.Sprintf("Coupon at index %d end date must be on or after phase start date", i)).
+					WithReportableDetails(map[string]interface{}{
+						"coupon_index": i,
+						"coupon_end":   coupon.EndDate,
+						"phase_start":  r.StartDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// If phase has an end date, coupon end must be before or equal to phase end
+			if r.EndDate != nil && coupon.EndDate.After(*r.EndDate) {
+				return ierr.NewError("coupon end_date cannot be after phase end_date").
+					WithHint(fmt.Sprintf("Coupon at index %d end date must be on or before phase end date", i)).
+					WithReportableDetails(map[string]interface{}{
+						"coupon_index": i,
+						"coupon_end":   coupon.EndDate,
+						"phase_end":    *r.EndDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	return nil
+}
+
+// ToSubscriptionPhase converts the request to a domain SubscriptionPhase
+
+func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context, subscriptionID string) *subscription.SubscriptionPhase {
+	return &subscription.SubscriptionPhase{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_PHASE),
+		SubscriptionID: subscriptionID,
+		StartDate:      r.StartDate,
+		EndDate:        r.EndDate,
+		Metadata:       r.Metadata,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+}
+
 // SubscriptionCouponRequest represents a coupon to be applied to a subscription
 // If PriceID is provided, the coupon is applied to the line item with that price_id
 // If PriceID is omitted, the coupon is applied at the subscription level
@@ -33,11 +134,16 @@ func (r *SubscriptionCouponRequest) Validate() error {
 			WithHint("Please provide a valid coupon ID").
 			Mark(ierr.ErrValidation)
 	}
-	if r.StartDate != nil && r.EndDate != nil && r.EndDate.Before(*r.StartDate) {
-		return ierr.NewError("end_date cannot be before start_date").
-			WithHint("Ensure the coupon end date is on or after the start date").
-			Mark(ierr.ErrValidation)
+
+	// Validate date range if both dates are provided
+	if r.StartDate != nil && r.EndDate != nil {
+		if r.EndDate.Before(*r.StartDate) {
+			return ierr.NewError("end_date cannot be before start_date").
+				WithHint("Ensure the coupon end date is on or after the start date").
+				Mark(ierr.ErrValidation)
+		}
 	}
+
 	return nil
 }
 
