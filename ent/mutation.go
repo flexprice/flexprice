@@ -48357,7 +48357,7 @@ func (m *SubscriptionLineItemMutation) SubscriptionPhaseID() (r string, exists b
 // OldSubscriptionPhaseID returns the old "subscription_phase_id" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldSubscriptionPhaseID(ctx context.Context) (v string, err error) {
+func (m *SubscriptionLineItemMutation) OldSubscriptionPhaseID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSubscriptionPhaseID is only allowed on UpdateOne operations")
 	}

@@ -128,6 +128,7 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Optional().
+			Nillable().
 			Immutable(),
 		field.JSON("metadata", map[string]string{}).
 			Optional().

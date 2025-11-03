@@ -73,7 +73,7 @@ type SubscriptionLineItem struct {
 	// EndDate holds the value of the "end_date" field.
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// SubscriptionPhaseID holds the value of the "subscription_phase_id" field.
-	SubscriptionPhaseID string `json:"subscription_phase_id,omitempty"`
+	SubscriptionPhaseID *string `json:"subscription_phase_id,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -319,7 +319,8 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field subscription_phase_id", values[i])
 			} else if value.Valid {
-				sli.SubscriptionPhaseID = value.String
+				sli.SubscriptionPhaseID = new(string)
+				*sli.SubscriptionPhaseID = value.String
 			}
 		case subscriptionlineitem.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -473,8 +474,10 @@ func (sli *SubscriptionLineItem) String() string {
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	builder.WriteString("subscription_phase_id=")
-	builder.WriteString(sli.SubscriptionPhaseID)
+	if v := sli.SubscriptionPhaseID; v != nil {
+		builder.WriteString("subscription_phase_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", sli.Metadata))

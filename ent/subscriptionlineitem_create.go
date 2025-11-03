@@ -658,7 +658,7 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	}
 	if value, ok := slic.mutation.SubscriptionPhaseID(); ok {
 		_spec.SetField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString, value)
-		_node.SubscriptionPhaseID = value
+		_node.SubscriptionPhaseID = &value
 	}
 	if value, ok := slic.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
