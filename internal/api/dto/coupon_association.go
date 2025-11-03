@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	coupon_association "github.com/flexprice/flexprice/internal/domain/coupon_association"
+	couponAssociation "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -22,7 +22,7 @@ type CreateCouponAssociationRequest struct {
 
 // CouponAssociationResponse represents the response for coupon association data
 type CouponAssociationResponse struct {
-	*coupon_association.CouponAssociation `json:",inline"`
+	*couponAssociation.CouponAssociation `json:",inline"`
 }
 
 // ListCouponAssociationsResponse represents the response for listing coupon associations
@@ -39,13 +39,13 @@ func (r *CreateCouponAssociationRequest) Validate() error {
 	return nil
 }
 
-func (r *CreateCouponAssociationRequest) ToCouponAssociation(ctx context.Context, couponID string, subscriptionID string, subscriptionLineItemID string) *coupon_association.CouponAssociation {
+func (r *CreateCouponAssociationRequest) ToCouponAssociation(ctx context.Context, couponID string, subscriptionID string, subscriptionLineItemID string) *couponAssociation.CouponAssociation {
 	startDate := time.Now()
 	if r.StartDate != nil {
 		startDate = *r.StartDate
 	}
 
-	return &coupon_association.CouponAssociation{
+	return &couponAssociation.CouponAssociation{
 		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
 		CouponID:               couponID,
 		SubscriptionID:         r.SubscriptionID,

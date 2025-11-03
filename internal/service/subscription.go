@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	couponAssociation "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -735,7 +736,10 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 
 	// expand coupon associations
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, id)
+	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscriptionFilter(ctx, &couponAssociation.Filter{
+		SubscriptionID:   id,
+		IncludeLineItems: true,
+	})
 	if err != nil {
 		s.Logger.Errorw("failed to get coupon associations for subscription",
 			"subscription_id", id,
