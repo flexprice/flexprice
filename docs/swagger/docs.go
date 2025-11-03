@@ -42,13 +42,11 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "onetime",
-                            "multiple"
+                            "onetime"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "AddonTypeOnetime",
-                            "AddonTypeMultiple"
+                            "AddonTypeOnetime"
                         ],
                         "name": "addon_type",
                         "in": "query"
@@ -412,6 +410,112 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/addons/{id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all entitlements for an addon",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Entitlements"
+                ],
+                "summary": "Get addon entitlements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Addon ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListEntitlementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/alert/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List alert logs by filter with optional expand for customer, wallet, and feature",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Alert Logs"
+                ],
+                "summary": "List alert logs by filter",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.AlertLogFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListAlertLogsResponse"
                         }
                     },
                     "400": {
@@ -7033,6 +7137,11 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "name": "start_date_lt",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "name": "start_time",
                         "in": "query"
                     },
@@ -8805,6 +8914,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscriptions/{id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all entitlements for a subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription entitlements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Feature IDs to filter by",
+                        "name": "feature_ids",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionEntitlementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions/{id}/pause": {
             "post": {
                 "security": [
@@ -8906,64 +9080,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/phases": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Add a new phase to a subscription schedule",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Add new phase to subscription schedule",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Add schedule phase request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.AddSchedulePhaseRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11448,6 +11564,10 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "Optional",
+                    "type": "string"
+                },
                 "environment_id": {
                     "type": "string"
                 },
@@ -11460,6 +11580,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "start_date": {
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -11468,6 +11591,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subscription_line_item_id": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "subscription_phase_id": {
                     "description": "Optional",
                     "type": "string"
                 },
@@ -11621,17 +11748,6 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.AddSchedulePhaseRequest": {
-            "type": "object",
-            "required": [
-                "phase"
-            ],
-            "properties": {
-                "phase": {
-                    "$ref": "#/definitions/dto.SubscriptionSchedulePhaseInput"
                 }
             }
         },
@@ -11824,6 +11940,73 @@ const docTemplate = `{
             "properties": {
                 "threshold": {
                     "$ref": "#/definitions/dto.Threshold"
+                }
+            }
+        },
+        "dto.AlertLogResponse": {
+            "type": "object",
+            "properties": {
+                "alert_info": {
+                    "$ref": "#/definitions/types.AlertInfo"
+                },
+                "alert_status": {
+                    "$ref": "#/definitions/types.AlertState"
+                },
+                "alert_type": {
+                    "$ref": "#/definitions/types.AlertType"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "customer": {
+                    "description": "Expanded fields",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CustomerResponse"
+                        }
+                    ]
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.AlertEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "feature": {
+                    "$ref": "#/definitions/dto.FeatureResponse"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "parent_entity_id": {
+                    "type": "string"
+                },
+                "parent_entity_type": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/dto.WalletResponse"
                 }
             }
         },
@@ -12251,6 +12434,10 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "Optional",
+                    "type": "string"
+                },
                 "environment_id": {
                     "type": "string"
                 },
@@ -12263,6 +12450,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "start_date": {
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -12271,6 +12461,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subscription_line_item_id": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "subscription_phase_id": {
                     "description": "Optional",
                     "type": "string"
                 },
@@ -13786,7 +13980,7 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "coupons": {
-                    "description": "SubscriptionCoupons is a list of coupon IDs to be applied to the subscription",
+                    "description": "@deprecated : Use SubscriptionCoupons instead",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -13821,7 +14015,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "line_item_coupons": {
-                    "description": "SubscriptionLineItemsCoupons is a list of coupon IDs to be applied to the subscription line items",
+                    "description": "@deprecated : Use SubscriptionCoupons instead",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -13859,10 +14053,10 @@ const docTemplate = `{
                     ]
                 },
                 "phases": {
-                    "description": "Phases represents an optional timeline of subscription phases",
+                    "description": "Phases represents subscription phases to be created with the subscription",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.SubscriptionSchedulePhaseInput"
+                        "$ref": "#/definitions/dto.SubscriptionPhaseCreateRequest"
                     }
                 },
                 "plan_id": {
@@ -13878,6 +14072,13 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is a list of coupon requests to be applied to the subscription\nIf PriceID is provided in a coupon request, it's applied to that line item\nIf PriceID is omitted, it's applied at the subscription level",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionCouponRequest"
+                    }
                 },
                 "tax_rate_overrides": {
                     "description": "tax_rate_overrides is the tax rate overrides\tto be applied to the subscription",
@@ -14494,7 +14695,7 @@ const docTemplate = `{
         "dto.DeleteSubscriptionLineItemRequest": {
             "type": "object",
             "properties": {
-                "end_date": {
+                "effective_from": {
                     "type": "string"
                 }
             }
@@ -14816,16 +15017,16 @@ const docTemplate = `{
                     "description": "Optional - for specific customer",
                     "type": "string"
                 },
-                "limit": {
-                    "description": "Pagination",
-                    "type": "integer"
-                },
-                "meter_ids": {
+                "feature_ids": {
                     "description": "Additional filters",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "limit": {
+                    "description": "Pagination",
+                    "type": "integer"
                 },
                 "offset": {
                     "type": "integer"
@@ -15852,6 +16053,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.AddonResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "dto.ListAlertLogsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AlertLogResponse"
                     }
                 },
                 "pagination": {
@@ -16887,17 +17102,16 @@ const docTemplate = `{
         "dto.RemoveAddonRequest": {
             "type": "object",
             "required": [
-                "addon_id",
-                "subscription_id"
+                "addon_association_id"
             ],
             "properties": {
-                "addon_id": {
+                "addon_association_id": {
+                    "type": "string"
+                },
+                "effective_from": {
                     "type": "string"
                 },
                 "reason": {
-                    "type": "string"
-                },
-                "subscription_id": {
                     "type": "string"
                 }
             }
@@ -17265,27 +17479,43 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.SubscriptionLineItemRequest": {
+        "dto.SubscriptionCouponRequest": {
             "type": "object",
             "required": [
-                "price_id",
-                "quantity"
+                "coupon_id"
             ],
             "properties": {
-                "display_name": {
+                "coupon_id": {
                     "type": "string"
                 },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
+                "end_date": {
+                    "type": "string"
                 },
                 "price_id": {
                     "type": "string"
                 },
-                "quantity": {
-                    "type": "number"
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_phase_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionEntitlementsResponse": {
+            "type": "object",
+            "properties": {
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AggregatedFeature"
+                    }
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
                 }
             }
         },
@@ -17368,6 +17598,9 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Status"
                 },
                 "subscription_id": {
+                    "type": "string"
+                },
+                "subscription_phase_id": {
                     "type": "string"
                 },
                 "tenant_id": {
@@ -17453,6 +17686,40 @@ const docTemplate = `{
                 },
                 "updated_by": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionPhaseCreateRequest": {
+            "type": "object",
+            "required": [
+                "start_date"
+            ],
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "override_line_items": {
+                    "description": "OverrideLineItems allows customizing specific prices for this phase\nIf not provided, phase will use the same line items as the subscription (plan prices)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.OverrideLineItemRequest"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_coupons": {
+                    "description": "SubscriptionCoupons is a list of coupon requests to be applied to the subscription\nIf PriceID is provided in a coupon request, it's applied to that line item\nIf PriceID is omitted, it's applied at the subscription level",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionCouponRequest"
+                    }
                 }
             }
         },
@@ -17595,6 +17862,12 @@ const docTemplate = `{
                     "description": "PaymentBehavior determines how subscription payments are handled",
                     "type": "string"
                 },
+                "phases": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/subscription.SubscriptionPhase"
+                    }
+                },
                 "plan": {
                     "$ref": "#/definitions/dto.PlanResponse"
                 },
@@ -17604,14 +17877,6 @@ const docTemplate = `{
                 },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
-                },
-                "schedule": {
-                    "description": "Schedule is included when the subscription has a schedule",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
-                        }
-                    ]
                 },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
@@ -17643,126 +17908,6 @@ const docTemplate = `{
                 "version": {
                     "description": "Version is used for optimistic locking",
                     "type": "integer"
-                }
-            }
-        },
-        "dto.SubscriptionSchedulePhaseInput": {
-            "type": "object",
-            "required": [
-                "start_date"
-            ],
-            "properties": {
-                "billing_cycle": {
-                    "$ref": "#/definitions/types.BillingCycle"
-                },
-                "commitment_amount": {
-                    "type": "number"
-                },
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreateCreditGrantRequest"
-                    }
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "line_items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SubscriptionLineItemRequest"
-                    }
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "overage_factor": {
-                    "type": "number"
-                },
-                "start_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.SubscriptionSchedulePhaseResponse": {
-            "type": "object",
-            "properties": {
-                "commitment_amount": {
-                    "type": "number"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreditGrantResponse"
-                    }
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "line_items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
-                    }
-                },
-                "overage_factor": {
-                    "type": "number"
-                },
-                "phase_index": {
-                    "type": "integer"
-                },
-                "schedule_id": {
-                    "type": "string"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.SubscriptionScheduleResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "current_phase_index": {
-                    "type": "integer"
-                },
-                "end_behavior": {
-                    "$ref": "#/definitions/types.ScheduleEndBehavior"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "phases": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SubscriptionSchedulePhaseResponse"
-                    }
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.SubscriptionScheduleStatus"
-                },
-                "subscription_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },
@@ -20074,6 +20219,9 @@ const docTemplate = `{
                 "subscription_id": {
                     "type": "string"
                 },
+                "subscription_phase_id": {
+                    "type": "string"
+                },
                 "tenant_id": {
                     "type": "string"
                 },
@@ -20139,6 +20287,57 @@ const docTemplate = `{
                 },
                 "resumed_at": {
                     "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "description": "SubscriptionID is the identifier for the subscription",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "subscription.SubscriptionPhase": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "EndDate is when the phase ends (nil if phase is still active or indefinite)",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the phase",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the subscription phase",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata contains additional key-value pairs",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "start_date": {
+                    "description": "StartDate is when the phase starts",
                     "type": "string"
                 },
                 "status": {
@@ -20249,12 +20448,10 @@ const docTemplate = `{
         "types.AddonType": {
             "type": "string",
             "enum": [
-                "onetime",
-                "multiple"
+                "onetime"
             ],
             "x-enum-varnames": [
-                "AddonTypeOnetime",
-                "AddonTypeMultiple"
+                "AddonTypeOnetime"
             ]
         },
         "types.AggregationType": {
@@ -20312,6 +20509,92 @@ const docTemplate = `{
                 }
             }
         },
+        "types.AlertEntityType": {
+            "type": "string",
+            "enum": [
+                "wallet",
+                "feature"
+            ],
+            "x-enum-varnames": [
+                "AlertEntityTypeWallet",
+                "AlertEntityTypeFeature"
+            ]
+        },
+        "types.AlertInfo": {
+            "type": "object",
+            "properties": {
+                "alert_settings": {
+                    "$ref": "#/definitions/types.AlertSettings"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "value_at_time": {
+                    "type": "number"
+                }
+            }
+        },
+        "types.AlertLogFilter": {
+            "type": "object",
+            "properties": {
+                "alert_status": {
+                    "$ref": "#/definitions/types.AlertState"
+                },
+                "alert_type": {
+                    "$ref": "#/definitions/types.AlertType"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.AlertEntityType"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.AlertSettings": {
             "type": "object",
             "properties": {
@@ -20328,6 +20611,21 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AlertThreshold"
                 }
             }
+        },
+        "types.AlertState": {
+            "type": "string",
+            "enum": [
+                "ok",
+                "info",
+                "warning",
+                "in_alarm"
+            ],
+            "x-enum-varnames": [
+                "AlertStateOk",
+                "AlertStateInfo",
+                "AlertStateWarning",
+                "AlertStateInAlarm"
+            ]
         },
         "types.AlertThreshold": {
             "type": "object",
@@ -20347,6 +20645,19 @@ const docTemplate = `{
             ],
             "x-enum-varnames": [
                 "AlertThresholdTypeAmount"
+            ]
+        },
+        "types.AlertType": {
+            "type": "string",
+            "enum": [
+                "low_ongoing_balance",
+                "low_credit_balance",
+                "feature_wallet_balance"
+            ],
+            "x-enum-varnames": [
+                "AlertTypeLowOngoingBalance",
+                "AlertTypeLowCreditBalance",
+                "AlertTypeFeatureWalletBalance"
             ]
         },
         "types.AutoTopupTrigger": {
@@ -21576,17 +21887,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.ScheduleEndBehavior": {
-            "type": "string",
-            "enum": [
-                "RELEASE",
-                "CANCEL"
-            ],
-            "x-enum-varnames": [
-                "EndBehaviorRelease",
-                "EndBehaviorCancel"
-            ]
-        },
         "types.ScheduledTaskEntityType": {
             "type": "string",
             "enum": [
@@ -21809,19 +22109,6 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "SubscriptionLineItemEntityTypePlan",
                 "SubscriptionLineItemEntityTypeAddon"
-            ]
-        },
-        "types.SubscriptionScheduleStatus": {
-            "type": "string",
-            "enum": [
-                "ACTIVE",
-                "RELEASED",
-                "CANCELED"
-            ],
-            "x-enum-varnames": [
-                "ScheduleStatusActive",
-                "ScheduleStatusReleased",
-                "ScheduleStatusCanceled"
             ]
         },
         "types.SubscriptionStatus": {

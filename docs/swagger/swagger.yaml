@@ -130,6 +130,9 @@ definitions:
         type: string
       created_by:
         type: string
+      end_date:
+        description: Optional
+        type: string
       environment_id:
         type: string
       id:
@@ -138,12 +141,17 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      start_date:
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
         description: Mandatory
         type: string
       subscription_line_item_id:
+        description: Optional
+        type: string
+      subscription_phase_id:
         description: Optional
         type: string
       tenant_id:
@@ -251,13 +259,6 @@ definitions:
         type: string
     required:
     - addon_id
-    type: object
-  dto.AddSchedulePhaseRequest:
-    properties:
-      phase:
-        $ref: '#/definitions/dto.SubscriptionSchedulePhaseInput'
-    required:
-    - phase
     type: object
   dto.AddonAssociationResponse:
     properties:
@@ -387,6 +388,49 @@ definitions:
     properties:
       threshold:
         $ref: '#/definitions/dto.Threshold'
+    type: object
+  dto.AlertLogResponse:
+    properties:
+      alert_info:
+        $ref: '#/definitions/types.AlertInfo'
+      alert_status:
+        $ref: '#/definitions/types.AlertState'
+      alert_type:
+        $ref: '#/definitions/types.AlertType'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      customer:
+        allOf:
+        - $ref: '#/definitions/dto.CustomerResponse'
+        description: Expanded fields
+      customer_id:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      environment_id:
+        type: string
+      feature:
+        $ref: '#/definitions/dto.FeatureResponse'
+      id:
+        type: string
+      parent_entity_id:
+        type: string
+      parent_entity_type:
+        type: string
+      status:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      wallet:
+        $ref: '#/definitions/dto.WalletResponse'
     type: object
   dto.AuthResponse:
     properties:
@@ -666,6 +710,9 @@ definitions:
         type: string
       created_by:
         type: string
+      end_date:
+        description: Optional
+        type: string
       environment_id:
         type: string
       id:
@@ -674,12 +721,17 @@ definitions:
         additionalProperties:
           type: string
         type: object
+      start_date:
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
         description: Mandatory
         type: string
       subscription_line_item_id:
+        description: Optional
+        type: string
+      subscription_phase_id:
         description: Optional
         type: string
       tenant_id:
@@ -1782,8 +1834,7 @@ definitions:
           paying for a billing period
         type: number
       coupons:
-        description: SubscriptionCoupons is a list of coupon IDs to be applied to
-          the subscription
+        description: '@deprecated : Use SubscriptionCoupons instead'
         items:
           type: string
         type: array
@@ -1818,8 +1869,7 @@ definitions:
           items:
             type: string
           type: array
-        description: SubscriptionLineItemsCoupons is a list of coupon IDs to be applied
-          to the subscription line items
+        description: '@deprecated : Use SubscriptionCoupons instead'
         type: object
       lookup_key:
         type: string
@@ -1842,9 +1892,10 @@ definitions:
         - $ref: '#/definitions/types.PaymentBehavior'
         description: Payment behavior configuration
       phases:
-        description: Phases represents an optional timeline of subscription phases
+        description: Phases represents subscription phases to be created with the
+          subscription
         items:
-          $ref: '#/definitions/dto.SubscriptionSchedulePhaseInput'
+          $ref: '#/definitions/dto.SubscriptionPhaseCreateRequest'
         type: array
       plan_id:
         type: string
@@ -1859,6 +1910,14 @@ definitions:
           This is IGNORED when the billing cycle is anniversary.
       start_date:
         type: string
+      subscription_coupons:
+        description: |-
+          SubscriptionCoupons is a list of coupon requests to be applied to the subscription
+          If PriceID is provided in a coupon request, it's applied to that line item
+          If PriceID is omitted, it's applied at the subscription level
+        items:
+          $ref: '#/definitions/dto.SubscriptionCouponRequest'
+        type: array
       tax_rate_overrides:
         description: "tax_rate_overrides is the tax rate overrides\tto be applied
           to the subscription"
@@ -2319,7 +2378,7 @@ definitions:
     type: object
   dto.DeleteSubscriptionLineItemRequest:
     properties:
-      end_date:
+      effective_from:
         type: string
     type: object
   dto.EntitlementResponse:
@@ -2533,14 +2592,14 @@ definitions:
       external_customer_id:
         description: Optional - for specific customer
         type: string
-      limit:
-        description: Pagination
-        type: integer
-      meter_ids:
+      feature_ids:
         description: Additional filters
         items:
           type: string
         type: array
+      limit:
+        description: Pagination
+        type: integer
       offset:
         type: integer
       start_time:
@@ -3346,6 +3405,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  dto.ListAlertLogsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.AlertLogResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   dto.ListConnectionsResponse:
     properties:
       connections:
@@ -4080,15 +4148,14 @@ definitions:
     type: object
   dto.RemoveAddonRequest:
     properties:
-      addon_id:
+      addon_association_id:
+        type: string
+      effective_from:
         type: string
       reason:
         type: string
-      subscription_id:
-        type: string
     required:
-    - addon_id
-    - subscription_id
+    - addon_association_id
     type: object
   dto.ResumeSubscriptionRequest:
     description: Request object for resuming a paused subscription
@@ -4337,21 +4404,31 @@ definitions:
     - proration_behavior
     - target_plan_id
     type: object
-  dto.SubscriptionLineItemRequest:
+  dto.SubscriptionCouponRequest:
     properties:
-      display_name:
+      coupon_id:
         type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
+      end_date:
+        type: string
       price_id:
         type: string
-      quantity:
-        type: number
+      start_date:
+        type: string
+      subscription_phase_id:
+        type: string
     required:
-    - price_id
-    - quantity
+    - coupon_id
+    type: object
+  dto.SubscriptionEntitlementsResponse:
+    properties:
+      features:
+        items:
+          $ref: '#/definitions/dto.AggregatedFeature'
+        type: array
+      plan_id:
+        type: string
+      subscription_id:
+        type: string
     type: object
   dto.SubscriptionLineItemResponse:
     properties:
@@ -4406,6 +4483,8 @@ definitions:
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
+        type: string
+      subscription_phase_id:
         type: string
       tenant_id:
         type: string
@@ -4468,6 +4547,34 @@ definitions:
         type: string
       updated_by:
         type: string
+    type: object
+  dto.SubscriptionPhaseCreateRequest:
+    properties:
+      end_date:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      override_line_items:
+        description: |-
+          OverrideLineItems allows customizing specific prices for this phase
+          If not provided, phase will use the same line items as the subscription (plan prices)
+        items:
+          $ref: '#/definitions/dto.OverrideLineItemRequest'
+        type: array
+      start_date:
+        type: string
+      subscription_coupons:
+        description: |-
+          SubscriptionCoupons is a list of coupon requests to be applied to the subscription
+          If PriceID is provided in a coupon request, it's applied to that line item
+          If PriceID is omitted, it's applied at the subscription level
+        items:
+          $ref: '#/definitions/dto.SubscriptionCouponRequest'
+        type: array
+    required:
+    - start_date
     type: object
   dto.SubscriptionResponse:
     properties:
@@ -4587,6 +4694,10 @@ definitions:
       payment_behavior:
         description: PaymentBehavior determines how subscription payments are handled
         type: string
+      phases:
+        items:
+          $ref: '#/definitions/subscription.SubscriptionPhase'
+        type: array
       plan:
         $ref: '#/definitions/dto.PlanResponse'
       plan_id:
@@ -4594,10 +4705,6 @@ definitions:
         type: string
       proration_behavior:
         $ref: '#/definitions/types.ProrationBehavior'
-      schedule:
-        allOf:
-        - $ref: '#/definitions/dto.SubscriptionScheduleResponse'
-        description: Schedule is included when the subscription has a schedule
       start_date:
         description: StartDate is the start date of the subscription
         type: string
@@ -4620,85 +4727,6 @@ definitions:
       version:
         description: Version is used for optimistic locking
         type: integer
-    type: object
-  dto.SubscriptionSchedulePhaseInput:
-    properties:
-      billing_cycle:
-        $ref: '#/definitions/types.BillingCycle'
-      commitment_amount:
-        type: number
-      credit_grants:
-        items:
-          $ref: '#/definitions/dto.CreateCreditGrantRequest'
-        type: array
-      end_date:
-        type: string
-      line_items:
-        items:
-          $ref: '#/definitions/dto.SubscriptionLineItemRequest'
-        type: array
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      overage_factor:
-        type: number
-      start_date:
-        type: string
-    required:
-    - start_date
-    type: object
-  dto.SubscriptionSchedulePhaseResponse:
-    properties:
-      commitment_amount:
-        type: number
-      created_at:
-        type: string
-      credit_grants:
-        items:
-          $ref: '#/definitions/dto.CreditGrantResponse'
-        type: array
-      end_date:
-        type: string
-      id:
-        type: string
-      line_items:
-        items:
-          $ref: '#/definitions/dto.SubscriptionLineItemResponse'
-        type: array
-      overage_factor:
-        type: number
-      phase_index:
-        type: integer
-      schedule_id:
-        type: string
-      start_date:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  dto.SubscriptionScheduleResponse:
-    properties:
-      created_at:
-        type: string
-      current_phase_index:
-        type: integer
-      end_behavior:
-        $ref: '#/definitions/types.ScheduleEndBehavior'
-      id:
-        type: string
-      phases:
-        items:
-          $ref: '#/definitions/dto.SubscriptionSchedulePhaseResponse'
-        type: array
-      start_date:
-        type: string
-      status:
-        $ref: '#/definitions/types.SubscriptionScheduleStatus'
-      subscription_id:
-        type: string
-      updated_at:
-        type: string
     type: object
   dto.SubscriptionSummary:
     properties:
@@ -6316,6 +6344,8 @@ definitions:
         $ref: '#/definitions/types.Status'
       subscription_id:
         type: string
+      subscription_phase_id:
+        type: string
       tenant_id:
         type: string
       trial_period:
@@ -6364,6 +6394,41 @@ definitions:
         $ref: '#/definitions/types.ResumeMode'
       resumed_at:
         description: ResumedAt is when the pause was actually ended (if manually resumed)
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_id:
+        description: SubscriptionID is the identifier for the subscription
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  subscription.SubscriptionPhase:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      end_date:
+        description: EndDate is when the phase ends (nil if phase is still active
+          or indefinite)
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the phase
+        type: string
+      id:
+        description: ID is the unique identifier for the subscription phase
+        type: string
+      metadata:
+        allOf:
+        - $ref: '#/definitions/types.Metadata'
+        description: Metadata contains additional key-value pairs
+      start_date:
+        description: StartDate is when the phase starts
         type: string
       status:
         $ref: '#/definitions/types.Status'
@@ -6442,11 +6507,9 @@ definitions:
   types.AddonType:
     enum:
     - onetime
-    - multiple
     type: string
     x-enum-varnames:
     - AddonTypeOnetime
-    - AddonTypeMultiple
   types.AggregationType:
     enum:
     - COUNT
@@ -6491,6 +6554,65 @@ definitions:
       threshold:
         $ref: '#/definitions/types.WalletAlertThreshold'
     type: object
+  types.AlertEntityType:
+    enum:
+    - wallet
+    - feature
+    type: string
+    x-enum-varnames:
+    - AlertEntityTypeWallet
+    - AlertEntityTypeFeature
+  types.AlertInfo:
+    properties:
+      alert_settings:
+        $ref: '#/definitions/types.AlertSettings'
+      timestamp:
+        type: string
+      value_at_time:
+        type: number
+    type: object
+  types.AlertLogFilter:
+    properties:
+      alert_status:
+        $ref: '#/definitions/types.AlertState'
+      alert_type:
+        $ref: '#/definitions/types.AlertType'
+      customer_id:
+        type: string
+      end_time:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.AlertSettings:
     properties:
       alert_enabled:
@@ -6502,6 +6624,18 @@ definitions:
       warning:
         $ref: '#/definitions/types.AlertThreshold'
     type: object
+  types.AlertState:
+    enum:
+    - ok
+    - info
+    - warning
+    - in_alarm
+    type: string
+    x-enum-varnames:
+    - AlertStateOk
+    - AlertStateInfo
+    - AlertStateWarning
+    - AlertStateInAlarm
   types.AlertThreshold:
     properties:
       condition:
@@ -6515,6 +6649,16 @@ definitions:
     type: string
     x-enum-varnames:
     - AlertThresholdTypeAmount
+  types.AlertType:
+    enum:
+    - low_ongoing_balance
+    - low_credit_balance
+    - feature_wallet_balance
+    type: string
+    x-enum-varnames:
+    - AlertTypeLowOngoingBalance
+    - AlertTypeLowCreditBalance
+    - AlertTypeFeatureWalletBalance
   types.AutoTopupTrigger:
     enum:
     - disabled
@@ -7433,14 +7577,6 @@ definitions:
         description: AWS region (e.g., "us-west-2")
         type: string
     type: object
-  types.ScheduleEndBehavior:
-    enum:
-    - RELEASE
-    - CANCEL
-    type: string
-    x-enum-varnames:
-    - EndBehaviorRelease
-    - EndBehaviorCancel
   types.ScheduledTaskEntityType:
     enum:
     - events
@@ -7603,16 +7739,6 @@ definitions:
     x-enum-varnames:
     - SubscriptionLineItemEntityTypePlan
     - SubscriptionLineItemEntityTypeAddon
-  types.SubscriptionScheduleStatus:
-    enum:
-    - ACTIVE
-    - RELEASED
-    - CANCELED
-    type: string
-    x-enum-varnames:
-    - ScheduleStatusActive
-    - ScheduleStatusReleased
-    - ScheduleStatusCanceled
   types.SubscriptionStatus:
     enum:
     - active
@@ -7891,13 +8017,11 @@ paths:
         type: array
       - enum:
         - onetime
-        - multiple
         in: query
         name: addon_type
         type: string
         x-enum-varnames:
         - AddonTypeOnetime
-        - AddonTypeMultiple
       - in: query
         name: end_time
         type: string
@@ -8083,6 +8207,41 @@ paths:
       summary: Update addon
       tags:
       - Addons
+  /addons/{id}/entitlements:
+    get:
+      consumes:
+      - application/json
+      description: Get all entitlements for an addon
+      parameters:
+      - description: Addon ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListEntitlementsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get addon entitlements
+      tags:
+      - Entitlements
   /addons/lookup/{lookup_key}:
     get:
       description: Get an addon by lookup key
@@ -8144,6 +8303,39 @@ paths:
       summary: List addons by filter
       tags:
       - Addons
+  /alert/search:
+    post:
+      consumes:
+      - application/json
+      description: List alert logs by filter with optional expand for customer, wallet,
+        and feature
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.AlertLogFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListAlertLogsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List alert logs by filter
+      tags:
+      - Alert Logs
   /auth/login:
     post:
       consumes:
@@ -12396,6 +12588,9 @@ paths:
         name: sort
         type: string
       - in: query
+        name: start_date_lt
+        type: string
+      - in: query
         name: start_time
         type: string
       - enum:
@@ -13344,6 +13539,48 @@ paths:
       summary: Preview subscription plan change
       tags:
       - Subscriptions
+  /subscriptions/{id}/entitlements:
+    get:
+      consumes:
+      - application/json
+      description: Get all entitlements for a subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: Feature IDs to filter by
+        in: query
+        items:
+          type: string
+        name: feature_ids
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SubscriptionEntitlementsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get subscription entitlements
+      tags:
+      - Subscriptions
   /subscriptions/{id}/pause:
     post:
       consumes:
@@ -13416,43 +13653,6 @@ paths:
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       summary: List all pauses for a subscription
-      tags:
-      - Subscriptions
-  /subscriptions/{id}/phases:
-    post:
-      consumes:
-      - application/json
-      description: Add a new phase to a subscription schedule
-      parameters:
-      - description: Subscription ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Add schedule phase request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.AddSchedulePhaseRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.SubscriptionScheduleResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Add new phase to subscription schedule
       tags:
       - Subscriptions
   /subscriptions/{id}/resume:
