@@ -86,12 +86,15 @@ type CreateSubscriptionRequest struct {
 	// If PriceID is provided in a coupon request, it's applied to that line item
 	// If PriceID is omitted, it's applied at the subscription level
 	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
-	// Coupons is deprecated but kept for backward compatibility - will be converted to SubscriptionCoupons
+
+	// @deprecated : Use SubscriptionCoupons instead
 	Coupons []string `json:"coupons,omitempty"`
-	// LineItemCoupons is deprecated but kept for backward compatibility - will be converted to SubscriptionCoupons
+	// @deprecated : Use SubscriptionCoupons instead
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
+
 	// OverrideLineItems allows customizing specific prices for this subscription
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+
 	// Addons represents addons to be added to the subscription during creation
 	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 
