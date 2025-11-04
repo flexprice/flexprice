@@ -100,6 +100,10 @@ func NewSubscriptionLineItemRepository(p RepositoryParams) subscription.LineItem
 	return entRepo.NewSubscriptionLineItemRepository(p.EntClient, p.Logger, p.Cache)
 }
 
+func NewSubscriptionPhaseRepository(p RepositoryParams) subscription.SubscriptionPhaseRepository {
+	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger, p.Cache)
+}
+
 func NewWalletRepository(p RepositoryParams) wallet.Repository {
 	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.Cache)
 }
