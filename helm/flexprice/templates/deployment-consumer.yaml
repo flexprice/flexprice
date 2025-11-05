@@ -37,6 +37,7 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          workingDir: /app
           ports:
             - name: http
               containerPort: 8080
@@ -45,6 +46,8 @@ spec:
             {{- include "flexprice.env" . | nindent 12 }}
             - name: FLEXPRICE_DEPLOYMENT_MODE
               value: "consumer"
+            - name: TMPDIR
+              value: "/tmp"
           livenessProbe:
             httpGet:
               path: /health
@@ -67,6 +70,8 @@ spec:
             - name: config
               mountPath: /app/config
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
             {{- with .Values.extraVolumeMounts }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -74,6 +79,8 @@ spec:
         - name: config
           configMap:
             name: {{ include "flexprice.fullname" . }}-config
+        - name: tmp
+          emptyDir: {}
         {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
