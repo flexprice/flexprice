@@ -150,8 +150,8 @@ event_processing:
   topic: "events"
   rate_limit: 12
   consumer_group: "flexprice-consumer-local"
-  batch_size: 200 # Number of events to batch before writing to ClickHouse
-  batch_flush_seconds: 300 # Max seconds to wait before flushing batch
+  batch_size: 500 # Number of events to batch before writing to ClickHouse
+  batch_flush_seconds: 5 # Max seconds to wait before flushing batch
 
 event_processing_lazy:
   topic: "events_lazy"
