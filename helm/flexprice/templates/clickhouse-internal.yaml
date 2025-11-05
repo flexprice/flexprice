@@ -80,13 +80,16 @@ spec:
               mountPath: /var/lib/clickhouse
           resources:
             {{- toYaml .Values.clickhouse.internal.resources | nindent 12 }}
+          # Note: ulimits are not directly configurable in Kubernetes securityContext
+          # They are set at the container runtime level. If needed, configure via:
+          # - RuntimeClass with ulimit settings
+          # - Container runtime configuration
+          # - Init container or sidecar
           securityContext:
-            {{- if .Values.clickhouse.internal.ulimits }}
-            ulimits:
-              - name: nofile
-                soft: {{ .Values.clickhouse.internal.ulimits.nofile.soft }}
-                hard: {{ .Values.clickhouse.internal.ulimits.nofile.hard }}
-            {{- end }}
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           livenessProbe:
             httpGet:
               path: /ping

@@ -25,6 +25,9 @@ data:
       host: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host | quote }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}
       port: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port }}{{ else }}{{ .Values.postgres.internal.service.port }}{{ end }}
       user: {{ .Values.postgres.user | quote }}
+      # Password will be overridden by FLEXPRICE_POSTGRES_PASSWORD environment variable
+      # This empty string ensures Viper recognizes the key and can override it
+      password: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.password }}{{ else }}{{ .Values.postgres.internal.service.password }}{{ end }}
       dbname: {{ .Values.postgres.dbname | quote }}
       sslmode: {{ if .Values.postgres.external.enabled }}{{ .Values.postgres.sslmode | quote }}{{ else }}"disable"{{ end }}
       max_open_conns: {{ .Values.postgres.maxOpenConns }}
@@ -176,6 +179,9 @@ data:
     feature_flag:
       enable_feature_usage_for_analytics: {{ .Values.featureFlag.enableFeatureUsageForAnalytics }}
       force_v1_for_tenant: {{ .Values.featureFlag.forceV1ForTenant | quote }}
+    
+    secrets:
+      encryption_key: {{ .Values.secrets.encryptionKey | quote }}
     
     # Note: secrets.encryption_key should be set via environment variable FLEXPRICE_SECRETS_ENCRYPTION_KEY
     # for security reasons. It's not included in this configmap.
