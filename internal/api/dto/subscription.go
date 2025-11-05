@@ -50,30 +50,28 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 			return err
 		}
 
-		// Validate coupon dates are within phase bounds if provided
-		if coupon.StartDate != nil {
-			if coupon.StartDate.Before(r.StartDate) {
-				return ierr.NewError("coupon start_date cannot be before phase start_date").
-					WithHint(fmt.Sprintf("Coupon at index %d start date must be on or after phase start date", i)).
-					WithReportableDetails(map[string]interface{}{
-						"coupon_index": i,
-						"coupon_start": coupon.StartDate,
-						"phase_start":  r.StartDate,
-					}).
-					Mark(ierr.ErrValidation)
-			}
+		// Validate coupon dates are within phase bounds
+		if coupon.StartDate.Before(r.StartDate) {
+			return ierr.NewError("coupon start_date cannot be before phase start_date").
+				WithHint(fmt.Sprintf("Coupon at index %d start date must be on or after phase start date", i)).
+				WithReportableDetails(map[string]interface{}{
+					"coupon_index": i,
+					"coupon_start": coupon.StartDate,
+					"phase_start":  r.StartDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 
-			// If phase has an end date, coupon start must be before or equal to phase end
-			if r.EndDate != nil && coupon.StartDate.After(*r.EndDate) {
-				return ierr.NewError("coupon start_date cannot be after phase end_date").
-					WithHint(fmt.Sprintf("Coupon at index %d start date must be on or before phase end date", i)).
-					WithReportableDetails(map[string]interface{}{
-						"coupon_index": i,
-						"coupon_start": coupon.StartDate,
-						"phase_end":    *r.EndDate,
-					}).
-					Mark(ierr.ErrValidation)
-			}
+		// If phase has an end date, coupon start must be before or equal to phase end
+		if r.EndDate != nil && coupon.StartDate.After(*r.EndDate) {
+			return ierr.NewError("coupon start_date cannot be after phase end_date").
+				WithHint(fmt.Sprintf("Coupon at index %d start date must be on or before phase end date", i)).
+				WithReportableDetails(map[string]interface{}{
+					"coupon_index": i,
+					"coupon_start": coupon.StartDate,
+					"phase_end":    *r.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 
 		if coupon.EndDate != nil {
@@ -125,7 +123,7 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 // If PriceID is omitted, the coupon is applied at the subscription level
 type SubscriptionCouponRequest struct {
 	CouponID            string     `json:"coupon_id" validate:"required"`
-	StartDate           *time.Time `json:"start_date,omitempty"`
+	StartDate           time.Time  `json:"start_date" validate:"required"`
 	EndDate             *time.Time `json:"end_date,omitempty"`
 	PriceID             *string    `json:"price_id,omitempty"`
 	SubscriptionPhaseID *string    `json:"subscription_phase_id,omitempty"`
@@ -139,9 +137,9 @@ func (r *SubscriptionCouponRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate date range if both dates are provided
-	if r.StartDate != nil && r.EndDate != nil {
-		if r.EndDate.Before(*r.StartDate) {
+	// Validate date range if EndDate is provided
+	if r.EndDate != nil {
+		if r.EndDate.Before(r.StartDate) {
 			return ierr.NewError("end_date cannot be before start_date").
 				WithHint("Ensure the coupon end date is on or after the start date").
 				Mark(ierr.ErrValidation)

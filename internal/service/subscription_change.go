@@ -664,7 +664,7 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 		couponRequest := []dto.SubscriptionCouponRequest{{
 			CouponID:  couponAssoc.CouponID,
 			PriceID:   &oldLineItem.PriceID,
-			StartDate: &couponAssoc.StartDate,
+			StartDate: couponAssoc.StartDate,
 			EndDate:   couponAssoc.EndDate,
 		}}
 

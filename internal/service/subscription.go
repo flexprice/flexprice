@@ -310,8 +310,12 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
-		// Apply coupons to the subscription
-		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, req.SubscriptionCoupons, lineItems); err != nil {
+		// Apply coupons to the subscription - set StartDate to subscription StartDate
+		subscriptionCoupons := lo.Map(req.SubscriptionCoupons, func(couponReq dto.SubscriptionCouponRequest, _ int) dto.SubscriptionCouponRequest {
+			couponReq.StartDate = sub.StartDate
+			return couponReq
+		})
+		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, subscriptionCoupons, lineItems); err != nil {
 			return err
 		}
 
@@ -606,13 +610,12 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 		}
 
-		// Handle phase coupons - set dates from phase if not provided
+		// Handle phase coupons - set dates from phase
 		if len(phaseReq.SubscriptionCoupons) > 0 {
 			phaseCoupons := lo.Map(phaseReq.SubscriptionCoupons, func(couponReq dto.SubscriptionCouponRequest, _ int) dto.SubscriptionCouponRequest {
 				couponReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
-				if couponReq.StartDate == nil {
-					couponReq.StartDate = lo.ToPtr(phaseReq.StartDate)
-				}
+				// Set StartDate to phase StartDate
+				couponReq.StartDate = phaseReq.StartDate
 				if couponReq.EndDate == nil && phaseReq.EndDate != nil {
 					couponReq.EndDate = phaseReq.EndDate
 				}

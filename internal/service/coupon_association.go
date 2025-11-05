@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
@@ -40,12 +39,6 @@ func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, 
 
 	// Use transaction for atomic operations
 	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		// Create the coupon association object properly
-		baseModel := types.GetDefaultBaseModel(txCtx)
-		startDate := time.Now().UTC()
-		if req.StartDate != nil {
-			startDate = req.StartDate.UTC()
-		}
 
 		ca := &coupon_association.CouponAssociation{
 			ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
@@ -53,10 +46,10 @@ func (s *couponAssociationService) CreateCouponAssociation(ctx context.Context, 
 			SubscriptionID:         req.SubscriptionID,
 			SubscriptionLineItemID: req.SubscriptionLineItemID,
 			SubscriptionPhaseID:    req.SubscriptionPhaseID,
-			StartDate:              startDate,
+			StartDate:              req.StartDate.UTC(),
 			EndDate:                req.EndDate,
 			Metadata:               req.Metadata,
-			BaseModel:              baseModel,
+			BaseModel:              types.GetDefaultBaseModel(txCtx),
 			EnvironmentID:          types.GetEnvironmentID(txCtx),
 		}
 
@@ -195,7 +188,7 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 			CouponID:               couponReq.CouponID,
 			SubscriptionID:         subscriptionID,
 			SubscriptionLineItemID: subscriptionLineItemID,
-			StartDate:              couponReq.StartDate,
+			StartDate:              couponReq.StartDate.UTC(),
 			EndDate:                couponReq.EndDate,
 			SubscriptionPhaseID:    couponReq.SubscriptionPhaseID,
 			Metadata:               map[string]string{},
