@@ -310,12 +310,9 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
-		// Apply coupons to the subscription - set StartDate to subscription StartDate
-		subscriptionCoupons := lo.Map(req.SubscriptionCoupons, func(couponReq dto.SubscriptionCouponRequest, _ int) dto.SubscriptionCouponRequest {
-			couponReq.StartDate = sub.StartDate
-			return couponReq
-		})
-		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, subscriptionCoupons); err != nil {
+		// handle subscription coupons
+		err = s.handleSubCoupons(ctx, sub, req)
+		if err != nil {
 			return err
 		}
 
@@ -613,9 +610,23 @@ func (s *subscriptionService) handleSubscriptionPhases(
 		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
 		phaseCoupons := s.normalizePhaseCoupons(phaseReq, phase.ID)
 		if len(phaseCoupons) > 0 {
-			if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, phaseCoupons); err != nil {
-				return err
+			s.Logger.Infow("handling subscription and line item coupon associations",
+				"subscription_id", sub.ID,
+				"coupon_count", len(phaseCoupons))
+			couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+			err := couponAssociationService.ApplyCouponsToSubscription(ctx, sub.ID, phaseCoupons)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to apply coupons to subscription").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id": sub.ID,
+						"coupon_count":    len(phaseCoupons),
+					}).
+					Mark(ierr.ErrInternal)
 			}
+			s.Logger.Infow("successfully applied all coupons to subscription",
+				"subscription_id", sub.ID,
+				"coupon_count", len(phaseCoupons))
 		}
 
 		s.Logger.Infow("created subscription phase",
@@ -2810,35 +2821,59 @@ func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Con
 	return nil
 }
 
-// ApplyCouponsToSubscriptionWithLineItems applies both subscription-level and line item-level coupons to a subscription
-func (s *subscriptionService) ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, couponRequests []dto.SubscriptionCouponRequest) error {
-	if len(couponRequests) == 0 {
+// handleSubCoupons processes coupons for a subscription
+// Converts deprecated Coupons and LineItemCoupons fields to SubscriptionCouponRequest format and applies them
+func (s *subscriptionService) handleSubCoupons(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req dto.CreateSubscriptionRequest,
+) error {
+	// Convert deprecated fields to SubscriptionCouponRequest format
+	var subscriptionCoupons []dto.SubscriptionCouponRequest
+	for _, couponID := range req.Coupons {
+		if couponID != "" {
+			subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+				CouponID:  couponID,
+				StartDate: sub.StartDate,
+			})
+		}
+	}
+	for lineItemID, couponIDs := range req.LineItemCoupons {
+		for _, couponID := range couponIDs {
+			if couponID != "" {
+				lineItemIDCopy := lineItemID
+				subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+					CouponID:   couponID,
+					LineItemID: lo.ToPtr(lineItemIDCopy),
+					StartDate:  sub.StartDate,
+				})
+			}
+		}
+	}
+
+	if len(subscriptionCoupons) == 0 {
 		return nil
 	}
 
 	s.Logger.Infow("handling subscription and line item coupon associations",
-		"subscription_id", subscriptionID,
-		"coupon_count", len(couponRequests))
+		"subscription_id", sub.ID,
+		"coupon_count", len(subscriptionCoupons))
 
-	// Create coupon service instance
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-
-	// Apply all coupons using the unified method
-	// LineItemID is already set in couponRequests from normalization
-	err := couponAssociationService.ApplyCouponsToSubscription(ctx, subscriptionID, couponRequests)
+	err := couponAssociationService.ApplyCouponsToSubscription(ctx, sub.ID, subscriptionCoupons)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to apply coupons to subscription").
 			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-				"coupon_count":    len(couponRequests),
+				"subscription_id": sub.ID,
+				"coupon_count":    len(subscriptionCoupons),
 			}).
 			Mark(ierr.ErrInternal)
 	}
 
 	s.Logger.Infow("successfully applied all coupons to subscription",
-		"subscription_id", subscriptionID,
-		"coupon_count", len(couponRequests))
+		"subscription_id", sub.ID,
+		"coupon_count", len(subscriptionCoupons))
 
 	return nil
 }

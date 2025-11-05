@@ -135,13 +135,8 @@ type CreateSubscriptionRequest struct {
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
-	// SubscriptionCoupons is a list of coupon requests to be applied to the subscription
-	// If LineItemID is provided in a coupon request, it's applied to that line item
-	// If LineItemID is omitted, it's applied at the subscription level
-	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
-
 	Coupons []string `json:"coupons,omitempty"`
-	// @deprecated : Use SubscriptionCoupons instead
+
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
 	// OverrideLineItems allows customizing specific prices for this subscription
@@ -497,20 +492,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	// Normalize coupon fields: convert deprecated fields to new format for backward compatibility
-	r.normalizeCoupons()
-
-	// Validate subscription coupons if provided
-	for i, couponReq := range r.SubscriptionCoupons {
-		if err := couponReq.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Subscription coupon validation failed").
-				WithReportableDetails(map[string]interface{}{
-					"index": i,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
 	// Validate override line items if provided
 	if len(r.OverrideLineItems) > 0 {
 		priceIDsSeen := make(map[string]bool)
@@ -599,37 +580,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	}
 
 	return nil
-}
-
-// normalizeCoupons converts deprecated Coupons and LineItemCoupons fields to the new SubscriptionCoupons format
-// This provides backward compatibility while using the new unified structure
-func (r *CreateSubscriptionRequest) normalizeCoupons() {
-	// If SubscriptionCoupons is already populated, don't override it
-	if len(r.SubscriptionCoupons) > 0 {
-		return
-	}
-
-	// Convert subscription-level coupons (old format)
-	for _, couponID := range r.Coupons {
-		if couponID != "" {
-			r.SubscriptionCoupons = append(r.SubscriptionCoupons, SubscriptionCouponRequest{
-				CouponID: couponID,
-			})
-		}
-	}
-
-	// Convert line item coupons (old format)
-	for lineItemID, couponIDs := range r.LineItemCoupons {
-		for _, couponID := range couponIDs {
-			if couponID != "" {
-				lineItemIDCopy := lineItemID // Copy to avoid loop variable issue
-				r.SubscriptionCoupons = append(r.SubscriptionCoupons, SubscriptionCouponRequest{
-					CouponID:   couponID,
-					LineItemID: lo.ToPtr(lineItemIDCopy),
-				})
-			}
-		}
-	}
 }
 
 // validatePaymentBehaviorForCollectionMethod validates that payment behavior is compatible with collection method
