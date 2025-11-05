@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: shreeda/flexprice-app
-  pullPolicy: IfNotPresent
+  pullPolicy: Always  # Changed to Always to ensure we pull the latest image
   tag: "latest"
 
 imagePullSecrets: []
@@ -239,18 +239,41 @@ kafka:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
 
 
+# Migration Job Configuration
+# Set enabled=true to run database migrations as a Kubernetes Job
+migration:
+  enabled: true  # Set to true to enable migration job
+  timeout: 300  # Timeout in seconds for migration
+  backoffLimit: 3  # Number of retries before marking job as failed
+  activeDeadlineSeconds: 900  # Maximum time in seconds for the job to run (increased for all migrations)
+  ttlSecondsAfterFinished: 3600  # Time to keep completed job (1 hour)
+  command: ""  # Custom command to run (if empty, uses default migration steps)
+  # Migration steps to run (all enabled by default)
+  steps:
+    postgresSetup: true  # Create schema and extensions in PostgreSQL
+    clickhouse: true  # Run ClickHouse migrations
+    ent: true  # Run Ent framework migrations
+    seed: false  # Run seed data (optional, set to true to enable)
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+
 # Temporal Configuration
 # Set external.enabled=false to deploy Temporal internally
 temporal:
   external:
-    enabled: true  # Set to false to deploy Temporal internally
+    enabled: false  # Set to false to deploy Temporal internally
   # External Temporal configuration (when external.enabled=true)
   address: "temporal-service:7233"  # Override when using external Temporal
   taskQueue: "billing-task-queue"
   namespace: "default"
-  apiKey: "flexprice123" # Set via secret
-  apiKeyName: ""
-  tls: false
+  apiKey: "flexprice123" # Set via secret (optional, for Temporal Cloud)
+  apiKeyName: ""  # Optional: name of the API key for reference
+  tls: false  # Set to true if using TLS with external Temporal
   # Internal Temporal configuration (when external.enabled=false)
   internal:
     server:
@@ -258,26 +281,38 @@ temporal:
         repository: temporalio/auto-setup
         tag: "1.26.2"
         pullPolicy: IfNotPresent
-      resources: {}
+      resources:
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
       service:
         type: ClusterIP
         port: 7233
-      # Temporal uses the same PostgreSQL instance
+      # Temporal uses the same PostgreSQL instance by default
       # Set temporal.internal.postgres.useExternalPostgres=true to use separate PostgreSQL
       postgres:
-        useExternalPostgres: false
-        host: ""  # If empty, uses the main postgres.internal service
+        useExternalPostgres: false  # Set to true to use separate PostgreSQL instance
+        host: ""  # If empty and useExternalPostgres=false, uses the main postgres.internal service
         port: 5432
-        user: "flexprice"
-        password: "flexprice123"  # If empty, uses the main postgres password
+        user: "flexprice"  # If empty and useExternalPostgres=false, uses the main postgres user
+        password: ""  # If empty, uses the main postgres password from secrets
         dbname: "temporal"
     ui:
-      enabled: true
+      enabled: true  # Set to false to disable Temporal UI
       image:
         repository: temporalio/ui
         tag: "2.31.2"
         pullPolicy: IfNotPresent
-      resources: {}
+      resources:
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
       service:
         type: ClusterIP
         port: 8088

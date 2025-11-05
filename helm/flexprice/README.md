@@ -97,6 +97,41 @@ The following table lists the configurable parameters and their default values.
 | `worker.resources` | Resource requests/limits | See values.yaml |
 | `worker.autoscaling.enabled` | Enable HPA | `false` |
 
+### Migration Job
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `migration.enabled` | Enable migration job | `false` |
+| `migration.timeout` | Timeout in seconds for migration | `300` |
+| `migration.backoffLimit` | Number of retries before marking job as failed | `3` |
+| `migration.activeDeadlineSeconds` | Maximum time in seconds for the job to run | `600` |
+| `migration.ttlSecondsAfterFinished` | Time to keep completed job (seconds) | `3600` |
+| `migration.command` | Custom command to run (if empty, uses default) | `""` |
+| `migration.resources` | Resource requests/limits | See values.yaml |
+
+**Note**: The migration job requires:
+1. A `migrate` binary to be built in your Docker image
+2. The `migrations` directory to be copied to the image
+
+Add this to your Dockerfile:
+
+```dockerfile
+# In the builder stage
+RUN go build -ldflags="-w -s" -o migrate cmd/migrate/main.go
+
+# In the final stage
+COPY --from=builder /app/migrate /app/migrate
+COPY --from=builder /app/migrations /app/migrations
+```
+
+The migration job will:
+- Run PostgreSQL setup (schema and extensions)
+- Run ClickHouse migrations from `/app/migrations/clickhouse/*.sql`
+- Run Ent framework migrations using the `migrate` binary
+- Optionally run seed data from `/app/migrations/postgres/V1__seed.sql`
+
+All steps can be enabled/disabled via `migration.steps.*` configuration.
+
 ### Service Configuration (External vs Internal)
 
 The chart supports both external managed services and internal deployments. Use `{service}.external.enabled=false` to deploy services internally.
@@ -153,9 +188,27 @@ The chart supports both external managed services and internal deployments. Use 
 | `temporal.address` | Temporal server address (external) | `temporal-service:7233` |
 | `temporal.taskQueue` | Temporal task queue | `billing-task-queue` |
 | `temporal.namespace` | Temporal namespace | `default` |
-| `temporal.internal.server.image.repository` | Internal Temporal image | `temporalio/auto-setup` |
-| `temporal.internal.server.image.tag` | Internal Temporal tag | `1.26.2` |
+| `temporal.apiKey` | Temporal API key (optional, for Temporal Cloud) | `""` |
+| `temporal.tls` | Enable TLS for Temporal connection | `false` |
+| `temporal.internal.server.image.repository` | Internal Temporal server image | `temporalio/auto-setup` |
+| `temporal.internal.server.image.tag` | Internal Temporal server tag | `1.26.2` |
+| `temporal.internal.server.service.type` | Internal Temporal service type | `ClusterIP` |
+| `temporal.internal.server.service.port` | Internal Temporal service port | `7233` |
+| `temporal.internal.server.resources` | Internal Temporal server resources | See values.yaml |
+| `temporal.internal.postgres.useExternalPostgres` | Use separate PostgreSQL for Temporal | `false` |
+| `temporal.internal.postgres.host` | PostgreSQL host (if separate) | `""` |
+| `temporal.internal.postgres.port` | PostgreSQL port | `5432` |
+| `temporal.internal.postgres.user` | PostgreSQL user | `flexprice` |
+| `temporal.internal.postgres.password` | PostgreSQL password (if separate) | `""` |
+| `temporal.internal.postgres.dbname` | Temporal database name | `temporal` |
 | `temporal.internal.ui.enabled` | Enable Temporal UI | `true` |
+| `temporal.internal.ui.image.repository` | Internal Temporal UI image | `temporalio/ui` |
+| `temporal.internal.ui.image.tag` | Internal Temporal UI tag | `2.31.2` |
+| `temporal.internal.ui.service.type` | Internal Temporal UI service type | `ClusterIP` |
+| `temporal.internal.ui.service.port` | Internal Temporal UI service port | `8088` |
+| `temporal.internal.ui.resources` | Internal Temporal UI resources | See values.yaml |
+
+**Note**: When using internal Temporal deployment, it shares the same PostgreSQL instance by default. Set `temporal.internal.postgres.useExternalPostgres=true` to use a separate PostgreSQL instance for Temporal.
 
 ### Ingress Configuration
 
@@ -175,6 +228,39 @@ The FlexPrice application supports three deployment modes:
 3. **Worker Mode** (`deployment.mode: "temporal_worker"`): Runs Temporal workers for workflow execution
 
 You can enable/disable each component independently using the `api.enabled`, `consumer.enabled`, and `worker.enabled` flags.
+
+## Database Migrations
+
+The chart includes a Kubernetes Job for running database migrations. To enable migrations:
+
+1. **Build the migrate binary** in your Docker image:
+   ```dockerfile
+   # In the builder stage
+   RUN go build -ldflags="-w -s" -o migrate cmd/migrate/main.go
+   
+   # In the final stage
+   COPY --from=builder /app/migrate /app/migrate
+   ```
+
+2. **Enable the migration job** in your values:
+   ```yaml
+   migration:
+     enabled: true
+     timeout: 300
+   ```
+
+3. **Run migrations before deploying**:
+   ```bash
+   helm upgrade --install flexprice ./helm/flexprice -f values.yaml -f secrets.yaml
+   ```
+
+The migration job will:
+- Wait for PostgreSQL to be ready before running
+- Run database migrations using the Ent framework
+- Retry up to 3 times on failure
+- Clean up automatically after 1 hour (configurable)
+
+**Important**: The migration job runs as a separate Kubernetes Job. Ensure your application deployments have `postgres.autoMigrate=false` to avoid conflicts when using the migration job.
 
 ## Scaling
 
@@ -252,6 +338,10 @@ temporal:
   external:
     enabled: true
   address: "temporal-managed.example.com:7233"
+  taskQueue: "billing-task-queue"
+  namespace: "default"
+  tls: true  # Enable TLS for Temporal Cloud
+  apiKey: "your-temporal-api-key"  # Optional, for Temporal Cloud
 ```
 
 ### Using Internal Services
@@ -284,8 +374,23 @@ temporal:
   external:
     enabled: false
   internal:
+    server:
+      resources:
+        limits:
+          cpu: "1000m"
+          memory: "1Gi"
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
     ui:
       enabled: true
+      resources:
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
 ```
 
 ### Production Deployment
@@ -352,12 +457,41 @@ worker:
   autoscaling:
     enabled: false
 
+migration:
+  enabled: true
+  timeout: 300
+
 logging:
   level: "debug"
 ```
 
 ```bash
 helm install flexprice-dev ./helm/flexprice -f values-dev.yaml
+```
+
+### Running Migrations
+
+```yaml
+# values-with-migration.yaml
+migration:
+  enabled: true
+  timeout: 300
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+
+postgres:
+  autoMigrate: false  # Disable auto-migration in app deployments when using migration job
+```
+
+```bash
+# Install with migration job
+helm upgrade --install flexprice ./helm/flexprice -f values-with-migration.yaml -f secrets.yaml
+
+# Check migration job status
+kubectl get jobs -l app.kubernetes.io/name=flexprice,app.kubernetes.io/component=migration
+
+# View migration logs
+kubectl logs -l app.kubernetes.io/name=flexprice,app.kubernetes.io/component=migration --tail=100
 ```
 
 ## Troubleshooting

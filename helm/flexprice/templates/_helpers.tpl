@@ -68,8 +68,6 @@ Create the name of the service account to use
 Create environment variables from configuration
 */}}
 {{- define "flexprice.env" -}}
-- name: FLEXPRICE_DEPLOYMENT_MODE
-  value: {{ .Values.deployment.mode | quote }}
 - name: FLEXPRICE_SERVER_ADDRESS
   value: {{ .Values.server.address | quote }}
 - name: FLEXPRICE_POSTGRES_HOST

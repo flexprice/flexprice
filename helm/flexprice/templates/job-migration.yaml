@@ -1,0 +1,443 @@
+{{- if .Values.migration.enabled }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "flexprice.fullname" . }}-migration-{{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum | trunc 8 }}
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    # This annotation ensures the job is recreated when the config changes
+    checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+    "helm.sh/hook": pre-upgrade,pre-install
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  {{- if .Values.migration.backoffLimit }}
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  {{- else }}
+  backoffLimit: 3
+  {{- end }}
+  {{- if .Values.migration.activeDeadlineSeconds }}
+  activeDeadlineSeconds: {{ .Values.migration.activeDeadlineSeconds }}
+  {{- end }}
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished | default 3600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "flexprice.serviceAccountName" . }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      restartPolicy: Never
+      initContainers:
+        # Wait for PostgreSQL to be ready
+        - name: wait-for-postgres
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}"
+              POSTGRES_PORT="{{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port }}{{ else }}{{ .Values.postgres.internal.service.port }}{{ end }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              
+              echo "Waiting for PostgreSQL at $${POSTGRES_HOST}:$${POSTGRES_PORT} (user: $${POSTGRES_USER})..."
+              
+              # Wait for PostgreSQL to accept connections
+              # Use pg_isready with explicit host, port, and user
+              # The -h flag requires the hostname, -p requires the port, -U requires the user
+              # pg_isready returns 0 when ready, non-zero otherwise
+              RETRIES=60
+              i=1
+              while [ $$i -le $${RETRIES} ]; do
+                if pg_isready -h "$${POSTGRES_HOST}" -p "$${POSTGRES_PORT}" -U "$${POSTGRES_USER}" >/dev/null 2>&1; then
+                  echo "✅ PostgreSQL is ready at $${POSTGRES_HOST}:$${POSTGRES_PORT}!"
+                  exit 0
+                fi
+                echo "[$$i/$${RETRIES}] Waiting for PostgreSQL to be ready at $${POSTGRES_HOST}:$${POSTGRES_PORT}..."
+                # Try to get more diagnostic info
+                pg_isready -h "$${POSTGRES_HOST}" -p "$${POSTGRES_PORT}" -U "$${POSTGRES_USER}" || true
+                sleep 2
+                i=$$((i + 1))
+              done
+              
+              echo "❌ PostgreSQL failed to become ready after $${RETRIES} attempts"
+              exit 1
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.fullname" . }}-secrets
+                  key: postgres-password
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- if .Values.migration.steps.clickhouse }}
+        # Wait for ClickHouse to be ready
+        - name: wait-for-clickhouse
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z {{ if .Values.clickhouse.external.enabled }}{{ split ":" .Values.clickhouse.address | first }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }} {{ if .Values.clickhouse.external.enabled }}{{ split ":" .Values.clickhouse.address | last | replace "//" "" }}{{ else }}{{ .Values.clickhouse.internal.service.httpPort }}{{ end }}; do
+                echo "Waiting for ClickHouse to be ready..."
+                sleep 2
+              done
+              echo "ClickHouse is ready!"
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+        # Setup PostgreSQL schema and extensions
+        # Run this directly in the postgres container to avoid library issues
+        {{- if .Values.migration.steps.postgresSetup }}
+        - name: setup-postgres-schema
+          image: postgres:15.3-alpine
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              POSTGRES_HOST="{{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}"
+              POSTGRES_PORT="{{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port }}{{ else }}{{ .Values.postgres.internal.service.port }}{{ end }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              
+              echo "Setting up PostgreSQL schema and extensions..."
+              echo "Connecting to: $${POSTGRES_HOST}:$${POSTGRES_PORT} (user: $${POSTGRES_USER}, db: $${POSTGRES_DB})"
+              
+              # PGPASSWORD is already set from the environment variable (secret)
+              psql -h $${POSTGRES_HOST} -p $${POSTGRES_PORT} -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c "CREATE SCHEMA IF NOT EXISTS extensions;" || exit 1
+              psql -h $${POSTGRES_HOST} -p $${POSTGRES_PORT} -U $${POSTGRES_USER} -d $${POSTGRES_DB} -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\" SCHEMA extensions;" || exit 1
+              
+              echo "✅ PostgreSQL schema and extensions setup complete"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.fullname" . }}-secrets
+                  key: postgres-password
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+        {{- if .Values.migration.steps.clickhouse }}
+        # Copy migrations from app image to shared volume for ClickHouse init container
+        - name: copy-clickhouse-migrations
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Copying ClickHouse migrations to shared volume..."
+              if [ -d /app/migrations/clickhouse ]; then
+                mkdir -p /migrations/clickhouse
+                cp -r /app/migrations/clickhouse/* /migrations/clickhouse/ 2>/dev/null || true
+                echo "✅ ClickHouse migrations copied"
+                ls -la /migrations/clickhouse/ || true
+              else
+                echo "⚠️  No ClickHouse migrations directory found at /app/migrations/clickhouse"
+              fi
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        # Run ClickHouse migrations directly in ClickHouse container
+        - name: run-clickhouse-migrations
+          image: clickhouse/clickhouse-server:{{ .Values.clickhouse.internal.image.tag | default "24.9-alpine" }}
+          command:
+            - sh
+            - -c
+            - |
+              CLICKHOUSE_HOST="{{ if .Values.clickhouse.external.enabled }}{{ split ":" .Values.clickhouse.address | first }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              # Use native port (9000) for clickhouse-client, not HTTP port (8123)
+              CLICKHOUSE_PORT="{{ if .Values.clickhouse.external.enabled }}{{ split ":" .Values.clickhouse.address | last | replace "//" "" | replace "8123" "9000" }}{{ else }}{{ .Values.clickhouse.internal.service.nativePort }}{{ end }}"
+              CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
+              CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"
+              
+              echo "Running ClickHouse migrations..."
+              echo "Connecting to: $${CLICKHOUSE_HOST}:$${CLICKHOUSE_PORT} (user: $${CLICKHOUSE_USER}, db: $${CLICKHOUSE_DB})"
+              
+              # Wait for ClickHouse to be ready (using native port for clickhouse-client)
+              echo "Waiting for ClickHouse to be ready..."
+              RETRIES=60
+              i=1
+              while [ $$i -le $${RETRIES} ]; do
+                if clickhouse-client --host=$${CLICKHOUSE_HOST} --port=$${CLICKHOUSE_PORT} --user=$${CLICKHOUSE_USER} --password=$${FLEXPRICE_CLICKHOUSE_PASSWORD} --query="SELECT 1" >/dev/null 2>&1; then
+                  echo "✅ ClickHouse is ready!"
+                  break
+                fi
+                echo "[$$i/$${RETRIES}] Waiting for ClickHouse at $${CLICKHOUSE_HOST}:$${CLICKHOUSE_PORT}..."
+                # Show diagnostic info
+                clickhouse-client --host=$${CLICKHOUSE_HOST} --port=$${CLICKHOUSE_PORT} --user=$${CLICKHOUSE_USER} --password=$${FLEXPRICE_CLICKHOUSE_PASSWORD} --query="SELECT 1" 2>&1 || true
+                sleep 2
+                i=$$((i + 1))
+              done
+              
+              if [ $$i -gt $${RETRIES} ]; then
+                echo "❌ ClickHouse failed to become ready after $${RETRIES} attempts"
+                exit 1
+              fi
+              
+              # Run migrations from mounted volume
+              if [ -d /migrations/clickhouse ]; then
+                for file in /migrations/clickhouse/*.sql; do
+                  if [ -f "$$file" ]; then
+                    echo "Running ClickHouse migration: $$file"
+                    # Run migration and capture output to a temp file to avoid command substitution issues
+                    TEMP_OUTPUT="$$(mktemp)"
+                    EXIT_CODE=0
+                    clickhouse-client --host=$${CLICKHOUSE_HOST} --port=$${CLICKHOUSE_PORT} --user=$${CLICKHOUSE_USER} --password=$${FLEXPRICE_CLICKHOUSE_PASSWORD} --database=$${CLICKHOUSE_DB} --multiquery < "$$file" > "$$TEMP_OUTPUT" 2>&1 || EXIT_CODE=$$?
+                    OUTPUT=""
+                    if [ -f "$$TEMP_OUTPUT" ]; then
+                      OUTPUT="$$(cat "$$TEMP_OUTPUT")"
+                      rm -f "$$TEMP_OUTPUT"
+                    fi
+                    
+                    if [ $$EXIT_CODE -eq 0 ]; then
+                      echo "✅ Migration completed successfully"
+                    else
+                      # Check if error is about "already exists" - these are safe to ignore
+                      # ClickHouse error format: "Code: 44. DB::Exception: ... Cannot add index X: index with this name already exists. (ILLEGAL_COLUMN)"
+                      # ILLEGAL_COLUMN (Code 44) typically indicates "already exists" errors during migrations
+                      # Also check for other common "already exists" patterns
+                      # Normalize the output to a single line for easier matching
+                      OUTPUT_NORMALIZED="$$(echo "$$OUTPUT" | tr '\n' ' ')"
+                      if echo "$$OUTPUT_NORMALIZED" | grep -qiE "already exists|already exist|duplicate|ILLEGAL_COLUMN|Code: 44"; then
+                        echo "⚠️  Migration skipped (object already exists):"
+                        echo "$$OUTPUT" | head -5
+                        echo "Continuing with next migration..."
+                      else
+                        echo "❌ Migration failed with exit code $$EXIT_CODE:"
+                        echo "Full error output:"
+                        echo "$$OUTPUT"
+                        exit 1
+                      fi
+                    fi
+                  fi
+                done
+                echo "✅ ClickHouse migrations complete"
+              else
+                echo "⚠️  ClickHouse migrations directory not found at /migrations/clickhouse"
+                exit 1
+              fi
+          env:
+            - name: FLEXPRICE_CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.fullname" . }}-secrets
+                  key: clickhouse-password
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+        {{- end }}
+      containers:
+        - name: migration
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.migration.command }}
+          command:
+            - /bin/sh
+            - -c
+            - {{ .Values.migration.command | quote }}
+          {{- else }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              
+              POSTGRES_HOST="{{ if .Values.postgres.external.enabled }}{{ .Values.postgres.host }}{{ else }}{{ include "flexprice.fullname" . }}-postgres{{ end }}"
+              POSTGRES_PORT="{{ if .Values.postgres.external.enabled }}{{ .Values.postgres.port }}{{ else }}{{ .Values.postgres.internal.service.port }}{{ end }}"
+              POSTGRES_USER="{{ .Values.postgres.user }}"
+              POSTGRES_DB="{{ .Values.postgres.dbname }}"
+              CLICKHOUSE_HOST="{{ if .Values.clickhouse.external.enabled }}{{ split ":" .Values.clickhouse.address | first }}{{ else }}{{ include "flexprice.fullname" . }}-clickhouse{{ end }}"
+              CLICKHOUSE_PORT="{{ if .Values.clickhouse.external.enabled }}{{ split ":" .Values.clickhouse.address | last | replace "//" "" }}{{ else }}{{ .Values.clickhouse.internal.service.httpPort }}{{ end }}"
+              CLICKHOUSE_USER="{{ .Values.clickhouse.username }}"
+              CLICKHOUSE_DB="{{ .Values.clickhouse.database }}"
+              
+              echo "=========================================="
+              echo "Starting Migration Process"
+              echo "=========================================="
+              echo ""
+              echo "Checking environment variables (before migration steps)..."
+              echo "FLEXPRICE_POSTGRES_HOST=$${FLEXPRICE_POSTGRES_HOST:-not set}"
+              echo "FLEXPRICE_POSTGRES_PORT=$${FLEXPRICE_POSTGRES_PORT:-not set}"
+              echo "FLEXPRICE_POSTGRES_USER=$${FLEXPRICE_POSTGRES_USER:-not set}"
+              echo "FLEXPRICE_POSTGRES_DBNAME=$${FLEXPRICE_POSTGRES_DBNAME:-not set}"
+              echo "FLEXPRICE_POSTGRES_PASSWORD=$(if [ -n "$${FLEXPRICE_POSTGRES_PASSWORD}" ]; then echo "[SET - length: $(echo -n "$${FLEXPRICE_POSTGRES_PASSWORD}" | wc -c)]"; else echo "[NOT SET]"; fi)"
+              echo ""
+              
+              # Step 1: PostgreSQL Setup (schema and extensions)
+              # Note: This step is now handled by the setup-postgres-schema init container
+              {{- if .Values.migration.steps.postgresSetup }}
+              echo ""
+              echo "Step 1: PostgreSQL schema and extensions (already set up by init container)"
+              echo "✅ PostgreSQL setup complete"
+              {{- else }}
+              echo "⏭️  Skipping PostgreSQL setup (disabled)"
+              {{- end }}
+              
+              # Step 2: ClickHouse Migrations
+              # Note: This step is now handled by the run-clickhouse-migrations init container
+              {{- if .Values.migration.steps.clickhouse }}
+              echo ""
+              echo "Step 2: ClickHouse migrations (already run by init container)"
+              echo "✅ ClickHouse migrations complete"
+              {{- else }}
+              echo "⏭️  Skipping ClickHouse migrations (disabled)"
+              {{- end }}
+              
+              # Step 3: Ent Framework Migrations
+              {{- if .Values.migration.steps.ent }}
+              echo ""
+              echo "Step 3: Running Ent framework migrations..."
+              echo "Checking for migrate binary..."
+              echo "Current directory: $(pwd)"
+              echo "Contents of /app:"
+              ls -la /app/ || true
+              echo ""
+              echo "Checking PostgreSQL connection variables..."
+              echo "FLEXPRICE_POSTGRES_HOST=$${FLEXPRICE_POSTGRES_HOST:-not set}"
+              echo "FLEXPRICE_POSTGRES_PORT=$${FLEXPRICE_POSTGRES_PORT:-not set}"
+              echo "FLEXPRICE_POSTGRES_USER=$${FLEXPRICE_POSTGRES_USER:-not set}"
+              echo "FLEXPRICE_POSTGRES_DBNAME=$${FLEXPRICE_POSTGRES_DBNAME:-not set}"
+              echo "FLEXPRICE_POSTGRES_PASSWORD=$(if [ -n "$${FLEXPRICE_POSTGRES_PASSWORD}" ]; then echo "[SET]"; else echo "[NOT SET]"; fi)"
+              echo ""
+              MIGRATE_BINARY=""
+              if [ -f /app/migrate ] && [ -x /app/migrate ]; then
+                MIGRATE_BINARY="/app/migrate"
+                echo "✅ Found migrate binary at /app/migrate"
+              elif [ -f /app/bin/migrate ] && [ -x /app/bin/migrate ]; then
+                MIGRATE_BINARY="/app/bin/migrate"
+                echo "✅ Found migrate binary at /app/bin/migrate"
+              else
+                echo "❌ Error: Migration binary not found."
+                echo ""
+                echo "Please ensure your Dockerfile builds the migrate binary."
+                echo "The Dockerfile should include:"
+                echo ""
+                echo "  # In the builder stage:"
+                echo "  RUN go build -ldflags='-w -s' -o migrate cmd/migrate/main.go"
+                echo ""
+                echo "  # In the final stage:"
+                echo "  COPY --from=builder /app/migrate /app/migrate"
+                echo ""
+                echo "After updating the Dockerfile, rebuild and push your image:"
+                echo "  docker build -f Dockerfile.local -t your-image:tag ."
+                echo "  docker push your-image:tag"
+                echo ""
+                echo "Then update your Helm values.yaml with the new image tag."
+                exit 1
+              fi
+              echo "Running Ent migrations with: $${MIGRATE_BINARY}"
+              $${MIGRATE_BINARY} --timeout {{ .Values.migration.timeout | default 300 }} || exit 1
+              echo "✅ Ent migrations complete"
+              {{- else }}
+              echo "⏭️  Skipping Ent migrations (disabled)"
+              {{- end }}
+              
+              # Step 4: Seed Data (optional)
+              # Note: Seed data execution requires psql, which is handled separately
+              {{- if .Values.migration.steps.seed }}
+              echo ""
+              echo "Step 4: Seed data migration"
+              echo "⚠️  Seed data execution requires psql client."
+              echo "Please use the setup-postgres-schema init container or install psql in your migration image."
+              echo "Skipping seed data for now..."
+              {{- else }}
+              echo "⏭️  Skipping seed data (disabled)"
+              {{- end }}
+              
+              echo ""
+              echo "=========================================="
+              echo "✅ All migrations completed successfully!"
+              echo "=========================================="
+          {{- end }}
+          env:
+            {{- include "flexprice.env" . | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: tools
+              mountPath: /tools
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.migration.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "flexprice.fullname" . }}-config
+        # Shared volume for tools (no longer needed, but kept for compatibility)
+        - name: tools
+          emptyDir: {}
+        # Migrations volume for ClickHouse init container
+        {{- if .Values.migration.steps.clickhouse }}
+        - name: migrations
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
