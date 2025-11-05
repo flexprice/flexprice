@@ -425,14 +425,14 @@ func startServer(
 
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, true)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once (no event consumption)
 		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, false)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 
 	case types.ModeTemporalWorker:
 		startTemporalWorker(lc, temporalService, params)
@@ -443,7 +443,7 @@ func startServer(
 
 		// Register all handlers and start router once
 		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, true)
-		startRouter(lc, router, log)
+		startRouter(lc, router, log, eventConsumptionSvc)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
 	}
@@ -518,10 +518,10 @@ func registerRouterHandlers(
 	if includeProcessingHandlers {
 		// Register handlers
 		eventConsumptionSvc.RegisterHandler(router, cfg)
-		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
-		eventPostProcessingSvc.RegisterHandler(router, cfg)
-		featureUsageSvc.RegisterHandler(router, cfg)
-		featureUsageSvc.RegisterHandlerLazy(router, cfg)
+		// eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
+		// eventPostProcessingSvc.RegisterHandler(router, cfg)
+		// featureUsageSvc.RegisterHandler(router, cfg)
+		// featureUsageSvc.RegisterHandlerLazy(router, cfg)
 	}
 }
 
@@ -529,6 +529,7 @@ func startRouter(
 	lc fx.Lifecycle,
 	router *pubsubRouter.Router,
 	logger *logger.Logger,
+	eventConsumptionSvc service.EventConsumptionService,
 ) {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -542,6 +543,10 @@ func startRouter(
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info("stopping message router")
+			// Shutdown event consumption service to flush remaining events
+			if err := eventConsumptionSvc.Shutdown(ctx); err != nil {
+				logger.Errorw("failed to shutdown event consumption service", "error", err)
+			}
 			return router.Close()
 		},
 	})

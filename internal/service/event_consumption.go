@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -27,8 +28,8 @@ type EventConsumptionService interface {
 	// Register message handler with the router
 	RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration)
 
-	// Process a raw event payload (used for AWS Lambda and direct processing)
-	ProcessRawEvent(ctx context.Context, payload []byte) error
+	// Shutdown gracefully flushes remaining events and stops the service
+	Shutdown(ctx context.Context) error
 }
 
 type eventConsumptionService struct {
@@ -38,6 +39,15 @@ type eventConsumptionService struct {
 	eventRepo              events.Repository
 	sentryService          *sentry.Service
 	eventPostProcessingSvc EventPostProcessingService
+
+	// Batching fields
+	batchMu       sync.Mutex
+	batchBuffer   []*events.Event
+	batchSize     int
+	flushInterval time.Duration
+	flushTicker   *time.Ticker
+	stopCh        chan struct{}
+	wg            sync.WaitGroup
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -52,6 +62,10 @@ func NewEventConsumptionService(
 		eventRepo:              eventRepo,
 		sentryService:          sentryService,
 		eventPostProcessingSvc: eventPostProcessingSvc,
+		batchSize:              params.Config.EventProcessing.BatchSize,
+		flushInterval:          time.Duration(params.Config.EventProcessing.BatchFlushSeconds) * time.Second,
+		batchBuffer:            make([]*events.Event, 0, params.Config.EventProcessing.BatchSize),
+		stopCh:                 make(chan struct{}),
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -75,6 +89,15 @@ func NewEventConsumptionService(
 		return nil
 	}
 	ev.lazyPubSub = lazyPubSub
+
+	// Start the background batch flusher
+	ev.startBatchFlusher()
+
+	params.Logger.Infow("initialized event consumption service with batching",
+		"batch_size", ev.batchSize,
+		"flush_interval", ev.flushInterval,
+	)
+
 	return ev
 }
 
@@ -172,8 +195,8 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		"timestamp", event.Timestamp,
 	)
 
-	// Prepare events to insert
-	eventsToInsert := []*events.Event{&event}
+	// Prepare events to add to batch
+	eventsToAdd := []*events.Event{&event}
 
 	// Create billing event if configured
 	if s.Config.Billing.TenantID != "" {
@@ -194,20 +217,19 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 			"system",
 			s.Config.Billing.EnvironmentID,
 		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
+		eventsToAdd = append(eventsToAdd, billingEvent)
 	}
 
-	// Insert events into ClickHouse
-	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.Errorw("failed to insert events",
+	// Add events to batch
+	if err := s.addToBatch(eventsToAdd); err != nil {
+		s.Logger.Errorw("failed to add events to batch",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
-
 		// Return error for retry
 		return ierr.WithError(err).
-			WithHint("Failed to insert events into ClickHouse").
+			WithHint("Failed to add events to batch").
 			Mark(ierr.ErrSystem)
 	}
 
@@ -237,89 +259,6 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 	return nil
 }
 
-// ProcessRawEvent processes a raw event payload (used for AWS Lambda and direct processing)
-func (s *eventConsumptionService) ProcessRawEvent(ctx context.Context, payload []byte) error {
-	// Start a transaction for this event processing
-	transaction, ctx := s.sentryService.StartTransaction(ctx, "event.process")
-	if transaction != nil {
-		defer transaction.Finish()
-	}
-
-	// Unmarshal the event
-	var event events.Event
-	if err := json.Unmarshal(payload, &event); err != nil {
-		s.Logger.Errorw("failed to unmarshal event",
-			"error", err,
-			"payload", string(payload),
-		)
-		s.sentryService.CaptureException(err)
-		return fmt.Errorf("failed to unmarshal event: %w", err)
-	}
-
-	s.Logger.Debugw("processing raw event",
-		"event_id", event.ID,
-		"event_name", event.EventName,
-		"tenant_id", event.TenantID,
-		"timestamp", event.Timestamp,
-	)
-
-	// Prepare events to insert
-	eventsToInsert := []*events.Event{&event}
-
-	// Create billing event if configured
-	if s.Config.Billing.TenantID != "" {
-		billingEvent := events.NewEvent(
-			"tenant_event", // Standardized event name for billing
-			s.Config.Billing.TenantID,
-			event.TenantID, // Use original tenant ID as external customer ID
-			map[string]interface{}{
-				"original_event_id":   event.ID,
-				"original_event_name": event.EventName,
-				"original_timestamp":  event.Timestamp,
-				"tenant_id":           event.TenantID,
-				"source":              event.Source,
-			},
-			time.Now(),
-			"", // Customer ID will be looked up by external ID
-			"", // Generate new ID
-			"system",
-			s.Config.Billing.EnvironmentID,
-		)
-		eventsToInsert = append(eventsToInsert, billingEvent)
-	}
-
-	// Insert events into ClickHouse
-	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
-		s.Logger.Errorw("failed to insert events",
-			"error", err,
-			"event_id", event.ID,
-			"event_name", event.EventName,
-		)
-		return fmt.Errorf("failed to insert events: %w", err)
-	}
-
-	// Publish event to post-processing service
-	// Only for the tenants that are forced to v1
-	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
-		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Errorw("failed to publish event to post-processing service",
-				"error", err,
-				"event_id", event.ID,
-				"event_name", event.EventName,
-			)
-			return fmt.Errorf("failed to publish event for post-processing: %w", err)
-		}
-	}
-
-	s.Logger.Debugw("successfully processed raw event",
-		"event_id", event.ID,
-		"event_name", event.EventName,
-		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
-	)
-
-	return nil
-}
-
 // shouldRetryError determines if an error should trigger a message retry
 func (s *eventConsumptionService) shouldRetryError(err error) bool {
 	// Don't retry parsing errors which are not likely to succeed on retry
@@ -332,4 +271,115 @@ func (s *eventConsumptionService) shouldRetryError(err error) bool {
 
 	// Retry all other errors (database issues, network issues, etc.)
 	return true
+}
+
+// startBatchFlusher starts a background goroutine that periodically flushes the batch
+func (s *eventConsumptionService) startBatchFlusher() {
+	s.flushTicker = time.NewTicker(s.flushInterval)
+	s.wg.Add(1)
+
+	go func() {
+		defer s.wg.Done()
+		for {
+			select {
+			case <-s.flushTicker.C:
+				s.Logger.Debugw("periodic batch flush triggered")
+				if err := s.flushBatch(); err != nil {
+					s.Logger.Errorw("failed to flush batch on timer", "error", err)
+				}
+			case <-s.stopCh:
+				s.Logger.Infow("stopping batch flusher")
+				s.flushTicker.Stop()
+				return
+			}
+		}
+	}()
+}
+
+// addToBatch adds events to the batch buffer, flushing if batch size is reached
+func (s *eventConsumptionService) addToBatch(events []*events.Event) error {
+	s.batchMu.Lock()
+	defer s.batchMu.Unlock()
+
+	// Add events to buffer
+	s.batchBuffer = append(s.batchBuffer, events...)
+
+	s.Logger.Debugw("added events to batch",
+		"batch_size", len(s.batchBuffer),
+		"events_added", len(events),
+	)
+
+	// Check if we should flush
+	if len(s.batchBuffer) >= s.batchSize {
+		s.Logger.Debugw("batch size reached, flushing",
+			"batch_size", len(s.batchBuffer),
+			"threshold", s.batchSize,
+		)
+		return s.flushBatchUnlocked()
+	}
+
+	return nil
+}
+
+// flushBatch flushes the current batch to ClickHouse (with locking)
+func (s *eventConsumptionService) flushBatch() error {
+	s.batchMu.Lock()
+	defer s.batchMu.Unlock()
+
+	return s.flushBatchUnlocked()
+}
+
+// flushBatchUnlocked flushes the current batch to ClickHouse (caller must hold lock)
+func (s *eventConsumptionService) flushBatchUnlocked() error {
+	if len(s.batchBuffer) == 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+
+	s.Logger.Infow("flushing batch to ClickHouse",
+		"batch_size", len(s.batchBuffer),
+	)
+
+	startTime := time.Now()
+
+	// Insert events into ClickHouse
+	if err := s.eventRepo.BulkInsertEvents(ctx, s.batchBuffer); err != nil {
+		s.Logger.Errorw("failed to flush batch to ClickHouse",
+			"error", err,
+			"batch_size", len(s.batchBuffer),
+		)
+		s.sentryService.CaptureException(err)
+		return fmt.Errorf("failed to flush batch: %w", err)
+	}
+
+	s.Logger.Infow("successfully flushed batch to ClickHouse",
+		"batch_size", len(s.batchBuffer),
+		"duration_ms", time.Since(startTime).Milliseconds(),
+	)
+
+	// Clear the buffer
+	s.batchBuffer = s.batchBuffer[:0]
+
+	return nil
+}
+
+// Shutdown gracefully shuts down the service, flushing any remaining events
+func (s *eventConsumptionService) Shutdown(ctx context.Context) error {
+	s.Logger.Infow("shutting down event consumption service")
+
+	// Signal the flusher to stop
+	close(s.stopCh)
+
+	// Wait for the flusher goroutine to exit
+	s.wg.Wait()
+
+	// Flush any remaining events
+	if err := s.flushBatch(); err != nil {
+		s.Logger.Errorw("failed to flush remaining events on shutdown", "error", err)
+		return err
+	}
+
+	s.Logger.Infow("event consumption service shutdown complete")
+	return nil
 }
