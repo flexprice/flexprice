@@ -35,27 +35,6 @@ func (ca *CouponApplication) IsLineItemLevel() bool {
 	return ca.InvoiceLineItemID != nil
 }
 
-// IsInvoiceLevel returns true if the coupon application is applied at invoice level
-func (ca *CouponApplication) IsInvoiceLevel() bool {
-	return ca.InvoiceLineItemID == nil
-}
-
-// GetDiscountPercentage returns the discount percentage as a decimal
-func (ca *CouponApplication) GetDiscountPercentage() decimal.Decimal {
-	if ca.DiscountPercentage != nil {
-		return *ca.DiscountPercentage
-	}
-	return decimal.Zero
-}
-
-// GetDiscountRate returns the discount rate as a decimal (e.g., 0.10 for 10%)
-func (ca *CouponApplication) GetDiscountRate() decimal.Decimal {
-	if ca.DiscountType == types.CouponTypePercentage {
-		return ca.GetDiscountPercentage().Div(decimal.NewFromInt(100))
-	}
-	return decimal.Zero
-}
-
 func FromEnt(e *ent.CouponApplication) *CouponApplication {
 	if e == nil {
 		return nil
@@ -97,7 +76,6 @@ func FromEnt(e *ent.CouponApplication) *CouponApplication {
 	return ca
 }
 
-// FromEntList converts a list of ent.Coupon to domain Coupons
 func FromEntList(list []*ent.CouponApplication) []*CouponApplication {
 	if list == nil {
 		return nil

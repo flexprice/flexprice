@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -25,18 +24,9 @@ type CouponAssociation struct {
 	types.BaseModel
 }
 
-// Write a validate method for the coupon association
-
-func (ca *CouponAssociation) Validate() error {
-	if ca.CouponID == "" {
-		return ierr.NewError("coupon validation failed").WithHint("coupon is required").Mark(ierr.ErrValidation)
-	}
-
-	if ca.SubscriptionID == "" {
-		return ierr.NewError("subscription_id is required").WithHint("subscription_id is required").Mark(ierr.ErrValidation)
-	}
-
-	return nil
+// IsSubscriptionLineItemLevel returns true if the coupon association is applied at subscription line item level
+func (ca *CouponAssociation) IsSubscriptionLineItemLevel() bool {
+	return ca.SubscriptionLineItemID != nil
 }
 
 func FromEnt(e *ent.CouponAssociation) *CouponAssociation {
@@ -76,31 +66,4 @@ func FromEntList(list []*ent.CouponAssociation) []*CouponAssociation {
 		couponAssociations[i] = FromEnt(item)
 	}
 	return couponAssociations
-}
-
-// Filter represents filter criteria for querying coupon associations
-type Filter struct {
-	// SubscriptionID filters by subscription ID
-	SubscriptionID string `json:"subscription_id"`
-
-	// ActivePeriodStart is the start of the period to check if associations are active
-	// Used when ActiveOnly is true
-	ActivePeriodStart *time.Time `json:"active_period_start,omitempty"`
-
-	// ActivePeriodEnd is the end of the period to check if associations are active
-	// Used when ActiveOnly is true
-	ActivePeriodEnd *time.Time `json:"active_period_end,omitempty"`
-
-	// IncludeLineItems when true, includes both line item-level and subscription-level associations
-	// When false (default), includes only subscription-level associations (those without SubscriptionLineItemID)
-	IncludeLineItems bool `json:"include_line_items"`
-
-	// ActiveOnly when true, filters to only return associations active during ActivePeriodStart/ActivePeriodEnd
-	// An association is active during a period if:
-	// - start_date <= active_period_end (association started before or during the period)
-	// - AND (end_date IS NULL OR end_date >= active_period_start) (association hasn't ended before the period or is indefinite)
-	ActiveOnly bool `json:"active_only"`
-
-	// WithCoupon when true, includes the coupon relation in the response
-	WithCoupon bool `json:"with_coupon"`
 }

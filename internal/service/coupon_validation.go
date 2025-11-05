@@ -249,7 +249,10 @@ func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupo
 
 	// Use optimized query to check if this coupon has already been applied to this subscription
 	// This is much more efficient than fetching all invoices and counting them
-	existingApplicationCount, err := s.CouponApplicationRepo.CountBySubscriptionAndCoupon(ctx, subscription.ID, coupon.ID)
+	filter := types.NewCouponApplicationFilter()
+	filter.SubscriptionIDs = []string{subscription.ID}
+	filter.CouponIDs = []string{coupon.ID}
+	existingApplicationCount, err := s.CouponApplicationRepo.Count(ctx, filter)
 	if err != nil {
 		return &CouponValidationError{
 			Code:    types.CouponValidationErrorCodeDatabaseError,
@@ -320,7 +323,10 @@ func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, c
 
 	// Use optimized query to count existing applications for this coupon and subscription
 	// This is much more efficient than the previous approach of getting all invoices and their applications
-	existingApplicationCount, err := s.CouponApplicationRepo.CountBySubscriptionAndCoupon(ctx, subscription.ID, coupon.ID)
+	filter := types.NewCouponApplicationFilter()
+	filter.SubscriptionIDs = []string{subscription.ID}
+	filter.CouponIDs = []string{coupon.ID}
+	existingApplicationCount, err := s.CouponApplicationRepo.Count(ctx, filter)
 	if err != nil {
 		s.Logger.Warnw("failed to count existing applications for repeated cadence validation",
 			"coupon_id", coupon.ID,

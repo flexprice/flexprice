@@ -122,45 +122,12 @@ func (s *InMemoryCouponAssociationStore) List(ctx context.Context, filter *types
 	}), nil
 }
 
-// GetBySubscriptionFilter retrieves coupon associations using the domain Filter
-func (s *InMemoryCouponAssociationStore) GetBySubscriptionFilter(ctx context.Context, filter *coupon_association.Filter) ([]*coupon_association.CouponAssociation, error) {
+func (s *InMemoryCouponAssociationStore) Count(ctx context.Context, filter *types.CouponAssociationFilter) (int, error) {
 	if filter == nil {
-		return nil, ierr.NewError("filter is required").
-			WithHint("Please provide a valid filter").
-			Mark(ierr.ErrValidation)
+		filter = types.NewCouponAssociationFilter()
 	}
 
-	if filter.SubscriptionID == "" {
-		return nil, ierr.NewError("subscription_id is required").
-			WithHint("Please provide a valid subscription ID in the filter").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Convert domain filter to types filter
-	typesFilter := types.NewNoLimitCouponAssociationFilter()
-	typesFilter.SubscriptionIDs = []string{filter.SubscriptionID}
-
-	// Set subscription line item filter based on IncludeLineItems
-	// false (default) = subscription-level only
-	// true = both subscription-level and line item-level (don't filter by SubscriptionLineItemID)
-	if !filter.IncludeLineItems {
-		// Only subscription-level associations
-		subscriptionLineItemIDIsNil := true
-		typesFilter.SubscriptionLineItemIDIsNil = &subscriptionLineItemIDIsNil
-	}
-	// When IncludeLineItems is true, don't set SubscriptionLineItemIDIsNil filter to get both types
-
-	// Set active filter if requested
-	if filter.ActiveOnly {
-		typesFilter.ActiveOnly = true
-		typesFilter.ActivePeriodStart = filter.ActivePeriodStart
-		typesFilter.ActivePeriodEnd = filter.ActivePeriodEnd
-	}
-
-	// Set with coupon flag
-	typesFilter.WithCoupon = filter.WithCoupon
-
-	return s.List(ctx, typesFilter)
+	return s.InMemoryStore.Count(ctx, filter, couponAssociationFilterFn)
 }
 
 // couponAssociationFilterFn implements filtering logic for coupon associations
@@ -181,6 +148,20 @@ func couponAssociationFilterFn(ctx context.Context, ca *coupon_association.Coupo
 		return false
 	}
 
+	// Apply status filter (default: exclude deleted)
+	if f.QueryFilter != nil {
+		status := f.QueryFilter.GetStatus()
+		if status == "" {
+			if ca.Status == types.StatusDeleted {
+				return false
+			}
+		} else if ca.Status != types.Status(status) {
+			return false
+		}
+	} else if ca.Status == types.StatusDeleted {
+		return false
+	}
+
 	// Apply subscription IDs filter
 	if len(f.SubscriptionIDs) > 0 && !lo.Contains(f.SubscriptionIDs, ca.SubscriptionID) {
 		return false
@@ -192,14 +173,7 @@ func couponAssociationFilterFn(ctx context.Context, ca *coupon_association.Coupo
 	}
 
 	// Apply subscription line item ID filters
-	if f.SubscriptionLineItemIDIsNil != nil {
-		if *f.SubscriptionLineItemIDIsNil && ca.SubscriptionLineItemID != nil {
-			return false
-		}
-		if !*f.SubscriptionLineItemIDIsNil && ca.SubscriptionLineItemID == nil {
-			return false
-		}
-	} else if len(f.SubscriptionLineItemIDs) > 0 {
+	if len(f.SubscriptionLineItemIDs) > 0 {
 		if ca.SubscriptionLineItemID == nil {
 			return false
 		}
@@ -222,17 +196,17 @@ func couponAssociationFilterFn(ctx context.Context, ca *coupon_association.Coupo
 	if f.ActiveOnly {
 		var periodStart, periodEnd time.Time
 
-		if f.ActivePeriodStart != nil && f.ActivePeriodEnd != nil {
+		if f.PeriodStart != nil && f.PeriodEnd != nil {
 			// Use provided period
-			periodStart = f.ActivePeriodStart.UTC()
-			periodEnd = f.ActivePeriodEnd.UTC()
-		} else if f.ActivePeriodStart != nil {
+			periodStart = f.PeriodStart.UTC()
+			periodEnd = f.PeriodEnd.UTC()
+		} else if f.PeriodStart != nil {
 			// Only ActivePeriodStart provided, use it for both checks
-			periodStart = f.ActivePeriodStart.UTC()
+			periodStart = f.PeriodStart.UTC()
 			periodEnd = periodStart
-		} else if f.ActivePeriodEnd != nil {
+		} else if f.PeriodEnd != nil {
 			// Only ActivePeriodEnd provided, use it for both checks
-			periodEnd = f.ActivePeriodEnd.UTC()
+			periodEnd = f.PeriodEnd.UTC()
 			periodStart = periodEnd
 		} else {
 			// No period provided, use current time

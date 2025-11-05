@@ -1,11 +1,7 @@
 package types
 
 import (
-	"fmt"
-	"strings"
 	"time"
-
-	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
 // CouponType represents the type of coupon discount (fixed or percentage)
@@ -61,30 +57,28 @@ type CouponAssociationFilter struct {
 
 	// SubscriptionIDs filters by subscription IDs (can be a single ID in array)
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+
 	// CouponIDs filters by coupon IDs (can be a single ID in array)
 	CouponIDs []string `json:"coupon_ids,omitempty" form:"coupon_ids"`
 	// SubscriptionLineItemIDs filters by subscription line item IDs (can be a single ID in array)
 	SubscriptionLineItemIDs []string `json:"subscription_line_item_ids,omitempty" form:"subscription_line_item_ids"`
-	// SubscriptionLineItemIDIsNil filters for subscription-level associations (no line items)
-	// When true, returns associations with no line item. When false, returns associations with line items.
-	SubscriptionLineItemIDIsNil *bool `json:"subscription_line_item_id_is_nil,omitempty" form:"subscription_line_item_id_is_nil"`
+
 	// SubscriptionPhaseIDs filters by subscription phase IDs (can be a single ID in array)
 	SubscriptionPhaseIDs []string `json:"subscription_phase_ids,omitempty" form:"subscription_phase_ids"`
-	// WithCoupon includes coupon relation in the response
-	WithCoupon bool `json:"with_coupon,omitempty" form:"with_coupon"`
+
 	// ActiveOnly filters to only return active associations based on start_date and end_date
-	// When ActiveOnly is true, the association must overlap with the period specified by ActivePeriodStart and ActivePeriodEnd
-	// If ActivePeriodStart/ActivePeriodEnd are not provided, uses current time (now())
+	// When ActiveOnly is true, the association must overlap with the period specified by PeriodStart and PeriodEnd
+	// If PeriodStart/PeriodEnd are not provided, uses current time (now())
 	// An association is active during a period if:
-	// - start_date <= active_period_end (association started before or during the period)
-	// - AND (end_date IS NULL OR end_date >= active_period_start) (association hasn't ended before the period or is indefinite)
+	// - start_date <= period_end (association started before or during the period)
+	// - AND (end_date IS NULL OR end_date >= period_start) (association hasn't ended before the period or is indefinite)
 	ActiveOnly bool `json:"active_only,omitempty" form:"active_only"`
-	// ActivePeriodStart is the start of the period to check if associations are active (used with ActiveOnly)
+	// PeriodStart is the start of the period to check if associations are active (used with ActiveOnly)
 	// If not provided and ActiveOnly is true, uses current time
-	ActivePeriodStart *time.Time `json:"active_period_start,omitempty" form:"active_period_start"`
-	// ActivePeriodEnd is the end of the period to check if associations are active (used with ActiveOnly)
+	PeriodStart *time.Time `json:"period_start,omitempty" form:"period_start"`
+	// PeriodEnd is the end of the period to check if associations are active (used with ActiveOnly)
 	// If not provided and ActiveOnly is true, uses current time
-	ActivePeriodEnd *time.Time `json:"active_period_end,omitempty" form:"active_period_end"`
+	PeriodEnd *time.Time `json:"period_end,omitempty" form:"period_end"`
 }
 
 // NewCouponAssociationFilter creates a new CouponAssociationFilter with default values
@@ -203,13 +197,6 @@ func (f *CouponFilter) Validate() error {
 		}
 	}
 
-	// Validate coupon IDs if provided
-	for _, id := range f.CouponIDs {
-		if err := ValidateCouponID(id); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -266,34 +253,4 @@ func (f *CouponFilter) IsUnlimited() bool {
 		return NewDefaultQueryFilter().IsUnlimited()
 	}
 	return f.QueryFilter.IsUnlimited()
-}
-
-// Common validation rules for IDs
-func validateCouponID(id string, idType string) error {
-
-	// Sample Constraints for coupon id
-	// 1. Cannot contain invalid characters % and space
-
-	invalidChars := []string{"%", " "}
-	for _, char := range invalidChars {
-		if strings.Contains(id, char) {
-			return ierr.NewError(fmt.Sprintf("invalid %s", idType)).
-				WithHint(fmt.Sprintf("Please provide a valid %s - cannot contain: %s", idType, char)).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	return nil
-}
-
-// ValidateCouponID validates the coupon id
-func ValidateCouponID(id string) error {
-
-	if strings.HasPrefix(id, "_") || strings.HasSuffix(id, "_") {
-		return ierr.NewError("invalid coupon id").
-			WithHint("Please provide a valid coupon id").
-			Mark(ierr.ErrValidation)
-	}
-
-	return validateCouponID(id, "coupon id")
 }

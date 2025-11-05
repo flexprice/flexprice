@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -17,7 +18,7 @@ type CouponService interface {
 	UpdateCoupon(ctx context.Context, id string, req dto.UpdateCouponRequest) (*dto.CouponResponse, error)
 	DeleteCoupon(ctx context.Context, id string) error
 	ListCoupons(ctx context.Context, filter *types.CouponFilter) (*dto.ListCouponsResponse, error)
-	CalculateDiscount(ctx context.Context, couponID string, originalPrice decimal.Decimal) (decimal.Decimal, error)
+	ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal) (dto.DiscountResult, error)
 }
 
 type couponService struct {
@@ -120,71 +121,41 @@ func (s *couponService) ListCoupons(ctx context.Context, filter *types.CouponFil
 	return &listResponse, nil
 }
 
-// CalculateDiscount calculates the discount amount for a given coupon and price
-func (s *couponService) CalculateDiscount(ctx context.Context, couponID string, originalPrice decimal.Decimal) (decimal.Decimal, error) {
-	// Validate input parameters
-	if couponID == "" {
-		return decimal.Zero, ierr.NewError("coupon_id is required").
-			WithHint("Please provide a valid coupon ID").
-			Mark(ierr.ErrValidation)
-	}
+// ApplyDiscount calculates the discount amount for a given coupon and price.
+// The coupon object must be provided (callers should fetch it first).
+func (s *couponService) ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal) (dto.DiscountResult, error) {
 
 	if originalPrice.LessThanOrEqual(decimal.Zero) {
-		return decimal.Zero, ierr.NewError("original_price must be greater than zero").
+		return dto.DiscountResult{}, ierr.NewError("original_price must be greater than zero").
 			WithHint("Please provide a valid original price").
 			WithReportableDetails(map[string]interface{}{
 				"original_price": originalPrice,
+				"coupon_id":      coupon.ID,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
 	s.Logger.Debugw("calculating discount for coupon",
-		"coupon_id", couponID,
+		"coupon_id", coupon.ID,
 		"original_price", originalPrice)
 
-	// Get the coupon
-	c, err := s.CouponRepo.Get(ctx, couponID)
-	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
-			WithHint("Failed to get coupon for discount calculation").
-			WithReportableDetails(map[string]interface{}{
-				"coupon_id": couponID,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-
-	// Validate coupon is active
-	if c.Status != types.StatusPublished {
-		return decimal.Zero, ierr.NewError("only active coupons can be used for discount calculation").
-			WithHint("Please select an active coupon").
-			WithReportableDetails(map[string]interface{}{
-				"coupon_id": couponID,
-				"status":    c.Status,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	// Validate coupon is valid for redemption
-	if !c.IsValid() {
-		return decimal.Zero, ierr.NewError("coupon is not valid for redemption").
+	if !coupon.IsValid() {
+		return dto.DiscountResult{}, ierr.NewError("coupon is not valid for redemption").
 			WithHint("Coupon may be expired, have reached maximum redemptions, or not yet available for redemption").
 			WithReportableDetails(map[string]interface{}{
-				"coupon_id":         couponID,
-				"redeem_after":      c.RedeemAfter,
-				"redeem_before":     c.RedeemBefore,
-				"total_redemptions": c.TotalRedemptions,
-				"max_redemptions":   c.MaxRedemptions,
+				"coupon_id":         coupon.ID,
+				"redeem_after":      coupon.RedeemAfter,
+				"redeem_before":     coupon.RedeemBefore,
+				"total_redemptions": coupon.TotalRedemptions,
+				"max_redemptions":   coupon.MaxRedemptions,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	discount := c.CalculateDiscount(originalPrice)
-
-	s.Logger.Debugw("calculated discount for coupon",
-		"coupon_id", couponID,
-		"original_price", originalPrice,
-		"discount", discount,
-		"coupon_type", c.Type)
-
-	return discount, nil
+	result := coupon.ApplyDiscount(originalPrice)
+	return dto.DiscountResult{
+		Discount:   result.Discount,
+		FinalPrice: result.FinalPrice,
+	}, nil
 }

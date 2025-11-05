@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
-	"github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -1034,22 +1033,19 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	// Apply Coupons if any - both subscription level and line item level
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
-	couponService := NewCouponService(s.ServiceParams)
 
 	// Get all coupon associations (both subscription-level and line item-level) that are active during the subscription's current billing period
 	// Using a single query to fetch both types
-	allCouponsFilter := &coupon_association.Filter{
-		SubscriptionID:    sub.ID,
-		ActiveOnly:        true,
-		ActivePeriodStart: &sub.CurrentPeriodStart,
-		ActivePeriodEnd:   &sub.CurrentPeriodEnd,
-		IncludeLineItems:  true, // true = include both subscription-level and line item-level associations
-		WithCoupon:        true,
-	}
-	allCouponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscriptionFilter(ctx, allCouponsFilter)
+	allCouponsFilter := types.NewCouponAssociationFilter()
+	allCouponsFilter.SubscriptionIDs = []string{sub.ID}
+	allCouponsFilter.ActiveOnly = true
+	allCouponsFilter.PeriodStart = &sub.CurrentPeriodStart
+	allCouponsFilter.PeriodEnd = &sub.CurrentPeriodEnd
+	allCouponAssociationsResponse, err := couponAssociationService.ListCouponAssociations(ctx, allCouponsFilter)
 	if err != nil {
 		return nil, err
 	}
+	allCouponAssociations := allCouponAssociationsResponse.Items
 
 	// Build maps for efficient lookups
 	subLineItemIDToPriceIDMap := make(map[string]string)
@@ -1072,12 +1068,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
 
 	for _, couponAssociation := range allCouponAssociations {
-		// Validate and get coupon details (common for both types)
-		coupon, err := couponService.GetCoupon(ctx, couponAssociation.CouponID)
-		if err != nil {
-			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
-			continue
-		}
+		// Validate coupon (CouponService will fetch and validate when applying)
 		if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &sub.ID); err != nil {
 			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
 			continue
@@ -1088,9 +1079,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			validCoupons = append(validCoupons, dto.InvoiceCoupon{
 				CouponID:            couponAssociation.CouponID,
 				CouponAssociationID: &couponAssociation.ID,
-				AmountOff:           coupon.AmountOff,
-				PercentageOff:       coupon.PercentageOff,
-				Type:                coupon.Type,
 			})
 		} else {
 			// Line item-level coupon - only include if the line item is in the invoice
@@ -1106,9 +1094,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 				LineItemID:          priceID,
 				CouponID:            couponAssociation.CouponID,
 				CouponAssociationID: &couponAssociation.ID,
-				AmountOff:           coupon.AmountOff,
-				PercentageOff:       coupon.PercentageOff,
-				Type:                coupon.Type,
 			})
 		}
 	}

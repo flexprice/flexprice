@@ -9,7 +9,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
-	couponAssociation "github.com/flexprice/flexprice/internal/domain/coupon_association"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -869,16 +868,15 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 
 	// expand coupon associations
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscriptionFilter(ctx, &couponAssociation.Filter{
-		SubscriptionID:   id,
-		IncludeLineItems: true,
-	})
+	couponFilter := types.NewCouponAssociationFilter()
+	couponFilter.SubscriptionIDs = []string{id}
+	couponAssociationsResponse, err := couponAssociationService.ListCouponAssociations(ctx, couponFilter)
 	if err != nil {
 		s.Logger.Errorw("failed to get coupon associations for subscription",
 			"subscription_id", id,
 			"error", err)
 	} else {
-		response.CouponAssociations = couponAssociations
+		response.CouponAssociations = couponAssociationsResponse.Items
 	}
 
 	// expand price for subscription line items
@@ -2792,69 +2790,21 @@ func (s *subscriptionService) ApplyCouponsToSubscriptionWithLineItems(ctx contex
 	// Create coupon service instance
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 
-	// Create mapping from price_id to line item for efficient lookup
-	priceIDToLineItem := make(map[string]*subscription.SubscriptionLineItem)
-	for _, lineItem := range lineItems {
-		priceIDToLineItem[lineItem.PriceID] = lineItem
-	}
-
-	// Group coupons by type (subscription-level vs line-item level) for batch processing
-	var subscriptionLevelCoupons []dto.SubscriptionCouponRequest
-	lineItemCouponsByLineItem := make(map[string][]dto.SubscriptionCouponRequest)
-
-	for _, couponReq := range couponRequests {
-		if couponReq.PriceID != nil {
-			// Line item coupon - find the line item by price_id
-			lineItem, ok := priceIDToLineItem[*couponReq.PriceID]
-			if !ok {
-				return ierr.NewError("line item not found").
-					WithHint("Please provide a valid price ID").
-					WithReportableDetails(map[string]interface{}{
-						"price_id":  *couponReq.PriceID,
-						"coupon_id": couponReq.CouponID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			lineItemCouponsByLineItem[lineItem.ID] = append(lineItemCouponsByLineItem[lineItem.ID], couponReq)
-		} else {
-			// Subscription-level coupon
-			subscriptionLevelCoupons = append(subscriptionLevelCoupons, couponReq)
-		}
-	}
-
-	// Step 1: Apply subscription-level coupons
-	if len(subscriptionLevelCoupons) > 0 {
-		err := couponAssociationService.ApplyCouponToSubscription(ctx, subscriptionLevelCoupons, subscriptionID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to apply subscription-level coupons").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscriptionID,
-					"coupon_count":    len(subscriptionLevelCoupons),
-				}).
-				Mark(ierr.ErrInternal)
-		}
-	}
-
-	// Step 2: Apply line item-level coupons
-	for lineItemID, couponReqs := range lineItemCouponsByLineItem {
-		err := couponAssociationService.ApplyCouponToSubscriptionLineItem(ctx, couponReqs, subscriptionID, lineItemID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to apply line item coupons").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscriptionID,
-					"line_item_id":    lineItemID,
-					"coupon_count":    len(couponReqs),
-				}).
-				Mark(ierr.ErrInternal)
-		}
+	// Apply all coupons using the unified method
+	err := couponAssociationService.ApplyCouponsToSubscription(ctx, subscriptionID, couponRequests)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to apply coupons to subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"coupon_count":    len(couponRequests),
+			}).
+			Mark(ierr.ErrInternal)
 	}
 
 	s.Logger.Infow("successfully applied all coupons to subscription",
 		"subscription_id", subscriptionID,
-		"subscription_coupon_count", len(subscriptionLevelCoupons),
-		"line_item_coupon_count", len(couponRequests)-len(subscriptionLevelCoupons))
+		"coupon_count", len(couponRequests))
 
 	return nil
 }

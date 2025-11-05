@@ -1,7 +1,6 @@
 package dto
 
 import (
-	"context"
 	"time"
 
 	couponAssociation "github.com/flexprice/flexprice/internal/domain/coupon_association"
@@ -37,24 +36,4 @@ func (r *CreateCouponAssociationRequest) Validate() error {
 	}
 
 	return nil
-}
-
-func (r *CreateCouponAssociationRequest) ToCouponAssociation(ctx context.Context, couponID string, subscriptionID string, subscriptionLineItemID string) *couponAssociation.CouponAssociation {
-	startDate := time.Now()
-	if r.StartDate != nil {
-		startDate = *r.StartDate
-	}
-
-	return &couponAssociation.CouponAssociation{
-		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COUPON_ASSOCIATION),
-		CouponID:               couponID,
-		SubscriptionID:         r.SubscriptionID,
-		SubscriptionLineItemID: r.SubscriptionLineItemID,
-		SubscriptionPhaseID:    r.SubscriptionPhaseID,
-		StartDate:              startDate,
-		EndDate:                r.EndDate,
-		Metadata:               r.Metadata,
-		BaseModel:              types.GetDefaultBaseModel(ctx),
-		EnvironmentID:          types.GetEnvironmentID(ctx),
-	}
 }
