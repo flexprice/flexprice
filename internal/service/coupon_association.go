@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
-	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -130,7 +129,7 @@ func (s *couponAssociationService) ListCouponAssociations(ctx context.Context, f
 }
 
 // ApplyCouponsToSubscription applies coupons to a subscription
-// Handles both subscription-level and line item-level coupons based on PriceID field
+// Handles both subscription-level and line item-level coupons based on LineItemID field
 func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, coupons []dto.SubscriptionCouponRequest) error {
 	if subscriptionID == "" {
 		return ierr.NewError("subscription_id is required").
@@ -166,28 +165,13 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 				Mark(ierr.ErrValidation)
 		}
 
-		// Determine subscription line item ID based on PriceID
-		var subscriptionLineItemID *string
-		if couponReq.PriceID != nil {
-			// Find line item by price_id
-			lineItem, err := s.findLineItemByPriceID(ctx, subscriptionID, *couponReq.PriceID)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to find line item for price ID").
-					WithReportableDetails(map[string]interface{}{
-						"price_id":        *couponReq.PriceID,
-						"subscription_id": subscriptionID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-			subscriptionLineItemID = &lineItem.ID
-		}
-
 		// Create coupon association request
+		// LineItemID is used directly if provided (coupon applies to specific line item)
+		// If omitted, coupon applies at subscription level
 		createReq := dto.CreateCouponAssociationRequest{
 			CouponID:               couponReq.CouponID,
 			SubscriptionID:         subscriptionID,
-			SubscriptionLineItemID: subscriptionLineItemID,
+			SubscriptionLineItemID: couponReq.LineItemID,
 			StartDate:              couponReq.StartDate.UTC(),
 			EndDate:                couponReq.EndDate,
 			SubscriptionPhaseID:    couponReq.SubscriptionPhaseID,
@@ -202,26 +186,6 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 	}
 
 	return nil
-}
-
-// findLineItemByPriceID finds a subscription line item by price ID
-func (s *couponAssociationService) findLineItemByPriceID(ctx context.Context, subscriptionID, priceID string) (*subscription.SubscriptionLineItem, error) {
-	filter := types.NewSubscriptionLineItemFilter()
-	filter.SubscriptionIDs = []string{subscriptionID}
-	filter.PriceIDs = []string{priceID}
-
-	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(lineItems) == 0 {
-		return nil, ierr.NewError("line item not found").
-			WithHint("No line item found with the specified price ID").
-			Mark(ierr.ErrNotFound)
-	}
-
-	return lineItems[0], nil
 }
 
 // Helper method to convert domain models to DTOs

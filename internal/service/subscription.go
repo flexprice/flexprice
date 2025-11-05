@@ -610,18 +610,9 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 		}
 
-		// Handle phase coupons - set dates from phase
-		if len(phaseReq.SubscriptionCoupons) > 0 {
-			phaseCoupons := lo.Map(phaseReq.SubscriptionCoupons, func(couponReq dto.SubscriptionCouponRequest, _ int) dto.SubscriptionCouponRequest {
-				couponReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
-				// Set StartDate to phase StartDate
-				couponReq.StartDate = phaseReq.StartDate
-				if couponReq.EndDate == nil && phaseReq.EndDate != nil {
-					couponReq.EndDate = phaseReq.EndDate
-				}
-				return couponReq
-			})
-
+		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
+		phaseCoupons := s.normalizePhaseCoupons(phaseReq, phase.ID)
+		if len(phaseCoupons) > 0 {
 			if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, phaseCoupons, phaseLineItems); err != nil {
 				return err
 			}
@@ -632,10 +623,49 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			"phase_id", phase.ID,
 			"phase_index", phaseIdx,
 			"line_items_count", len(phaseLineItems),
-			"coupons_count", len(phaseReq.SubscriptionCoupons))
+			"coupons_count", len(phaseCoupons))
 	}
 
 	return nil
+}
+
+// normalizePhaseCoupons converts simple Coupons and LineItemCoupons from phase request to SubscriptionCouponRequest format
+// Sets start/end dates from the phase dates
+func (s *subscriptionService) normalizePhaseCoupons(
+	phaseReq dto.SubscriptionPhaseCreateRequest,
+	phaseID string,
+) []dto.SubscriptionCouponRequest {
+	var subscriptionCoupons []dto.SubscriptionCouponRequest
+
+	// Convert subscription-level coupons
+	for _, couponID := range phaseReq.Coupons {
+		if couponID != "" {
+			subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+				CouponID:            couponID,
+				SubscriptionPhaseID: lo.ToPtr(phaseID),
+				StartDate:           phaseReq.StartDate,
+				EndDate:             phaseReq.EndDate,
+			})
+		}
+	}
+
+	// Convert line item coupons - LineItemCoupons uses line_item_id as keys
+	for lineItemID, couponIDs := range phaseReq.LineItemCoupons {
+		for _, couponID := range couponIDs {
+			if couponID != "" {
+				lineItemIDCopy := lineItemID // Copy to avoid loop variable issue
+				subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+					CouponID:            couponID,
+					LineItemID:          lo.ToPtr(lineItemIDCopy),
+					SubscriptionPhaseID: lo.ToPtr(phaseID),
+					StartDate:           phaseReq.StartDate,
+					EndDate:             phaseReq.EndDate,
+				})
+			}
+		}
+	}
+
+	return subscriptionCoupons
 }
 
 // processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
@@ -2794,6 +2824,7 @@ func (s *subscriptionService) ApplyCouponsToSubscriptionWithLineItems(ctx contex
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 
 	// Apply all coupons using the unified method
+	// LineItemID is already set in couponRequests from normalization
 	err := couponAssociationService.ApplyCouponsToSubscription(ctx, subscriptionID, couponRequests)
 	if err != nil {
 		return ierr.WithError(err).

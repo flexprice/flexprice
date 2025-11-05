@@ -20,10 +20,11 @@ type SubscriptionPhaseCreateRequest struct {
 	StartDate time.Time  `json:"start_date" validate:"required"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	// SubscriptionCoupons is a list of coupon requests to be applied to the subscription
-	// If PriceID is provided in a coupon request, it's applied to that line item
-	// If PriceID is omitted, it's applied at the subscription level
-	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
+	// Coupons represents subscription-level coupons to be applied to this phase
+	Coupons []string `json:"coupons,omitempty"`
+
+	// LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)
+	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 
 	// OverrideLineItems allows customizing specific prices for this phase
 	// If not provided, phase will use the same line items as the subscription (plan prices)
@@ -44,63 +45,6 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate coupons and ensure their dates are within phase bounds
-	for i, coupon := range r.SubscriptionCoupons {
-		if err := coupon.Validate(); err != nil {
-			return err
-		}
-
-		// Validate coupon dates are within phase bounds
-		if coupon.StartDate.Before(r.StartDate) {
-			return ierr.NewError("coupon start_date cannot be before phase start_date").
-				WithHint(fmt.Sprintf("Coupon at index %d start date must be on or after phase start date", i)).
-				WithReportableDetails(map[string]interface{}{
-					"coupon_index": i,
-					"coupon_start": coupon.StartDate,
-					"phase_start":  r.StartDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// If phase has an end date, coupon start must be before or equal to phase end
-		if r.EndDate != nil && coupon.StartDate.After(*r.EndDate) {
-			return ierr.NewError("coupon start_date cannot be after phase end_date").
-				WithHint(fmt.Sprintf("Coupon at index %d start date must be on or before phase end date", i)).
-				WithReportableDetails(map[string]interface{}{
-					"coupon_index": i,
-					"coupon_start": coupon.StartDate,
-					"phase_end":    *r.EndDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if coupon.EndDate != nil {
-			// Coupon end must be after phase start
-			if coupon.EndDate.Before(r.StartDate) {
-				return ierr.NewError("coupon end_date cannot be before phase start_date").
-					WithHint(fmt.Sprintf("Coupon at index %d end date must be on or after phase start date", i)).
-					WithReportableDetails(map[string]interface{}{
-						"coupon_index": i,
-						"coupon_end":   coupon.EndDate,
-						"phase_start":  r.StartDate,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// If phase has an end date, coupon end must be before or equal to phase end
-			if r.EndDate != nil && coupon.EndDate.After(*r.EndDate) {
-				return ierr.NewError("coupon end_date cannot be after phase end_date").
-					WithHint(fmt.Sprintf("Coupon at index %d end date must be on or before phase end date", i)).
-					WithReportableDetails(map[string]interface{}{
-						"coupon_index": i,
-						"coupon_end":   coupon.EndDate,
-						"phase_end":    *r.EndDate,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -119,13 +63,13 @@ func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context
 }
 
 // SubscriptionCouponRequest represents a coupon to be applied to a subscription
-// If PriceID is provided, the coupon is applied to the line item with that price_id
-// If PriceID is omitted, the coupon is applied at the subscription level
+// If LineItemID is provided, the coupon is applied to that specific line item
+// If LineItemID is omitted, the coupon is applied at the subscription level
 type SubscriptionCouponRequest struct {
 	CouponID            string     `json:"coupon_id" validate:"required"`
 	StartDate           time.Time  `json:"start_date" validate:"required"`
 	EndDate             *time.Time `json:"end_date,omitempty"`
-	PriceID             *string    `json:"price_id,omitempty"`
+	LineItemID          *string    `json:"line_item_id,omitempty"`
 	SubscriptionPhaseID *string    `json:"subscription_phase_id,omitempty"`
 }
 
@@ -192,11 +136,10 @@ type CreateSubscriptionRequest struct {
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
 	// SubscriptionCoupons is a list of coupon requests to be applied to the subscription
-	// If PriceID is provided in a coupon request, it's applied to that line item
-	// If PriceID is omitted, it's applied at the subscription level
+	// If LineItemID is provided in a coupon request, it's applied to that line item
+	// If LineItemID is omitted, it's applied at the subscription level
 	SubscriptionCoupons []SubscriptionCouponRequest `json:"subscription_coupons,omitempty" validate:"omitempty,dive"`
 
-	// @deprecated : Use SubscriptionCoupons instead
 	Coupons []string `json:"coupons,omitempty"`
 	// @deprecated : Use SubscriptionCoupons instead
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
@@ -676,13 +619,13 @@ func (r *CreateSubscriptionRequest) normalizeCoupons() {
 	}
 
 	// Convert line item coupons (old format)
-	for priceID, couponIDs := range r.LineItemCoupons {
+	for lineItemID, couponIDs := range r.LineItemCoupons {
 		for _, couponID := range couponIDs {
 			if couponID != "" {
-				priceIDCopy := priceID // Copy to avoid loop variable issue
+				lineItemIDCopy := lineItemID // Copy to avoid loop variable issue
 				r.SubscriptionCoupons = append(r.SubscriptionCoupons, SubscriptionCouponRequest{
-					CouponID: couponID,
-					PriceID:  lo.ToPtr(priceIDCopy),
+					CouponID:   couponID,
+					LineItemID: lo.ToPtr(lineItemIDCopy),
 				})
 			}
 		}
