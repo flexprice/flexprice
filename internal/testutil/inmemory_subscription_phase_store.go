@@ -227,24 +227,6 @@ func (s *InMemorySubscriptionPhaseStore) Delete(ctx context.Context, id string) 
 	return nil
 }
 
-func (s *InMemorySubscriptionPhaseStore) ListBySubscription(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionPhase, error) {
-	if sub == nil {
-		return nil, ierr.NewError("subscription cannot be nil").
-			WithHint("Subscription data is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	phases := s.phasesBySubscription[sub.ID]
-	// Filter by context
-	var result []*subscription.SubscriptionPhase
-	for _, phase := range phases {
-		if CheckEnvironmentFilter(ctx, phase.EnvironmentID) && CheckTenantFilter(ctx, phase.TenantID) {
-			result = append(result, phase)
-		}
-	}
-	return result, nil
-}
-
 func (s *InMemorySubscriptionPhaseStore) List(ctx context.Context, filter *types.SubscriptionPhaseFilter) ([]*subscription.SubscriptionPhase, error) {
 	phases, err := s.InMemoryStore.List(ctx, filter, subscriptionPhaseFilterFn, subscriptionPhaseSortFn)
 	if err != nil {

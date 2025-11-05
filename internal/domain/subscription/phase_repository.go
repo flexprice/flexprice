@@ -23,9 +23,6 @@ type SubscriptionPhaseRepository interface {
 	// Delete deletes a subscription phase by ID
 	Delete(ctx context.Context, id string) error
 
-	// ListBySubscription retrieves all phases for a subscription
-	ListBySubscription(ctx context.Context, sub *Subscription) ([]*SubscriptionPhase, error)
-
 	// List retrieves subscription phases based on filter
 	List(ctx context.Context, filter *types.SubscriptionPhaseFilter) ([]*SubscriptionPhase, error)
 

@@ -1068,8 +1068,15 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
 
 	for _, couponAssociation := range allCouponAssociations {
-		// Validate coupon (CouponService will fetch and validate when applying)
-		if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &sub.ID); err != nil {
+		// Get coupon details for validation
+		coupon, err := s.CouponRepo.Get(ctx, couponAssociation.CouponID)
+		if err != nil {
+			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			continue
+		}
+
+		// Validate coupon
+		if err := couponValidationService.ValidateCoupon(ctx, *coupon, sub); err != nil {
 			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
 			continue
 		}

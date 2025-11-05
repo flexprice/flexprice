@@ -551,7 +551,7 @@ func (s *subscriptionChangeService) createNewSubscription(
 	}
 
 	// Transfer line item coupons
-	if err := s.transferLineItemCoupons(ctx, currentSub.ID, newSub.ID, oldLineItems, newLineItems); err != nil {
+	if err := s.transferLineItemCoupons(ctx, currentSub.ID, newSub, oldLineItems, newLineItems); err != nil {
 		return nil, err
 	}
 
@@ -609,7 +609,8 @@ func (s *subscriptionChangeService) convertCancellationProrationToDetails(
 // transferLineItemCoupons transfers line item specific coupons from old subscription to new subscription
 func (s *subscriptionChangeService) transferLineItemCoupons(
 	ctx context.Context,
-	oldSubscriptionID, newSubscriptionID string,
+	oldSubscriptionID string,
+	newSubscription *subscription.Subscription,
 	oldLineItems, newLineItems []*subscription.SubscriptionLineItem,
 ) error {
 	// Get active coupon associations from old subscription
@@ -662,13 +663,13 @@ func (s *subscriptionChangeService) transferLineItemCoupons(
 
 		// Transfer coupon to new subscription
 		couponRequest := []dto.SubscriptionCouponRequest{{
-			CouponID:  couponAssoc.CouponID,
-			LineItemID:   &oldLineItem.ID,
-			StartDate: couponAssoc.StartDate,
-			EndDate:   couponAssoc.EndDate,
+			CouponID:   couponAssoc.CouponID,
+			LineItemID: &oldLineItem.ID,
+			StartDate:  couponAssoc.StartDate,
+			EndDate:    couponAssoc.EndDate,
 		}}
 
-		if err := couponService.ApplyCouponsToSubscription(ctx, newSubscriptionID, couponRequest); err != nil {
+		if err := couponService.ApplyCouponsToSubscription(ctx, newSubscription, couponRequest); err != nil {
 			s.serviceParams.Logger.Errorw("failed to transfer coupon", "error", err)
 			continue
 		}

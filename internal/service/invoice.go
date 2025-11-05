@@ -71,7 +71,14 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
 	validCoupons := make([]dto.InvoiceCoupon, 0)
 	for _, couponID := range req.Coupons {
-		if err := couponValidationService.ValidateCoupon(ctx, couponID, nil); err != nil {
+		// Get coupon details for validation
+		coupon, err := s.CouponRepo.Get(ctx, couponID)
+		if err != nil {
+			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponID)
+			continue
+		}
+
+		if err := couponValidationService.ValidateCoupon(ctx, *coupon, nil); err != nil {
 			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponID)
 			continue
 		}

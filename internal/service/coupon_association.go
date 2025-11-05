@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/coupon_association"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -14,7 +15,7 @@ type CouponAssociationService interface {
 	GetCouponAssociation(ctx context.Context, id string) (*dto.CouponAssociationResponse, error)
 	DeleteCouponAssociation(ctx context.Context, id string) error
 	ListCouponAssociations(ctx context.Context, filter *types.CouponAssociationFilter) (*dto.ListCouponAssociationsResponse, error)
-	ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, coupons []dto.SubscriptionCouponRequest) error
+	ApplyCouponsToSubscription(ctx context.Context, subscription *subscription.Subscription, coupons []dto.SubscriptionCouponRequest) error
 }
 
 type couponAssociationService struct {
@@ -130,10 +131,17 @@ func (s *couponAssociationService) ListCouponAssociations(ctx context.Context, f
 
 // ApplyCouponsToSubscription applies coupons to a subscription
 // Handles both subscription-level and line item-level coupons based on LineItemID field
-func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Context, subscriptionID string, coupons []dto.SubscriptionCouponRequest) error {
-	if subscriptionID == "" {
+// Uses the subscription object for validation (avoids DB fetch in transactions)
+func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Context, subscription *subscription.Subscription, coupons []dto.SubscriptionCouponRequest) error {
+	if subscription == nil {
+		return ierr.NewError("subscription is required").
+			WithHint("Please provide a valid subscription object").
+			Mark(ierr.ErrValidation)
+	}
+
+	if subscription.ID == "" {
 		return ierr.NewError("subscription_id is required").
-			WithHint("Please provide a valid subscription ID").
+			WithHint("Subscription must have a valid ID").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -154,13 +162,19 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 				Mark(ierr.ErrValidation)
 		}
 
-		// Validate coupon applicability
-		if err := validationService.ValidateCoupon(ctx, couponReq.CouponID, &subscriptionID); err != nil {
+		// Get coupon details for validation
+		coupon, err := s.CouponRepo.Get(ctx, couponReq.CouponID)
+		if err != nil {
+			return err
+		}
+
+		// Validate coupon applicability using subscription object (avoids DB fetch)
+		if err := validationService.ValidateCoupon(ctx, *coupon, subscription); err != nil {
 			return ierr.WithError(err).
 				WithHint("Coupon validation failed").
 				WithReportableDetails(map[string]interface{}{
 					"coupon_id":       couponReq.CouponID,
-					"subscription_id": subscriptionID,
+					"subscription_id": subscription.ID,
 				}).
 				Mark(ierr.ErrValidation)
 		}
@@ -170,7 +184,7 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 		// If omitted, coupon applies at subscription level
 		createReq := dto.CreateCouponAssociationRequest{
 			CouponID:               couponReq.CouponID,
-			SubscriptionID:         subscriptionID,
+			SubscriptionID:         subscription.ID,
 			SubscriptionLineItemID: couponReq.LineItemID,
 			StartDate:              couponReq.StartDate.UTC(),
 			EndDate:                couponReq.EndDate,
@@ -179,7 +193,7 @@ func (s *couponAssociationService) ApplyCouponsToSubscription(ctx context.Contex
 		}
 
 		// Create the coupon association
-		_, err := s.CreateCouponAssociation(ctx, createReq)
+		_, err = s.CreateCouponAssociation(ctx, createReq)
 		if err != nil {
 			return err
 		}

@@ -281,39 +281,6 @@ func (r *subscriptionPhaseRepository) Delete(ctx context.Context, id string) err
 	return nil
 }
 
-// ListBySubscription retrieves all phases for a subscription
-func (r *subscriptionPhaseRepository) ListBySubscription(ctx context.Context, sub *subscription.Subscription) ([]*subscription.SubscriptionPhase, error) {
-	client := r.client.Reader(ctx)
-
-	span := StartRepositorySpan(ctx, "subscription_phase", "list_by_subscription", map[string]interface{}{
-		"subscription_id": sub.ID,
-	})
-	defer FinishSpan(span)
-
-	entPhases, err := client.SubscriptionPhase.Query().
-		Where(
-			subscriptionphase.SubscriptionID(sub.ID),
-			subscriptionphase.TenantID(types.GetTenantID(ctx)),
-			subscriptionphase.EnvironmentID(types.GetEnvironmentID(ctx)),
-			subscriptionphase.StatusNotIn(string(types.StatusDeleted)),
-		).
-		Order(ent.Asc(subscriptionphase.FieldStartDate)).
-		All(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list subscription phases").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": sub.ID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return subscription.SubscriptionPhaseListFromEnt(entPhases), nil
-}
-
 // List retrieves subscription phases based on filter
 func (r *subscriptionPhaseRepository) List(ctx context.Context, filter *types.SubscriptionPhaseFilter) ([]*subscription.SubscriptionPhase, error) {
 	r.log.Debugw("listing subscription phases", "filter", filter)
