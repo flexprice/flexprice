@@ -510,7 +510,7 @@ func registerRouterHandlers(
 
 	// Only register processing handlers when needed
 	if includeProcessingHandlers {
-		// Register post-processing handlers
+		// Register handlers
 		eventConsumptionSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		eventPostProcessingSvc.RegisterHandler(router, cfg)
