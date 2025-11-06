@@ -4592,7 +4592,7 @@ func (s *subscriptionService) GetSubscriptionEntitlements(ctx context.Context, s
 		WithEntityIDs(addonIDs).
 		WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_ADDON).
 		WithStatus(types.StatusPublished).
-		WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
+		WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandAddons))
 
 	addonEntitlements, err := entitlementService.ListEntitlements(ctx, addonEntFilter)
 	if err != nil {

@@ -569,7 +569,7 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 	filter.WithEntityIDs([]string{planID})
 	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithStatus(types.StatusPublished)
-	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
+	filter.WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandPlans))
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)

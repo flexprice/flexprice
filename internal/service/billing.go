@@ -1331,12 +1331,13 @@ func (s *billingService) AggregateEntitlements(entitlements []*dto.EntitlementRe
 		entityName := ""
 
 		// Determine entity type and name
-		if ent.EntityType == (types.ENTITLEMENT_ENTITY_TYPE_PLAN) {
+		switch ent.EntityType {
+		case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
 			entityType = dto.EntitlementSourceEntityTypePlan
 			if ent.Plan != nil {
 				entityName = ent.Plan.Name
 			}
-		} else if ent.EntityType == (types.ENTITLEMENT_ENTITY_TYPE_ADDON) {
+		case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
 			entityType = dto.EntitlementSourceEntityTypeAddon
 			if ent.Addon != nil {
 				entityName = ent.Addon.Name
