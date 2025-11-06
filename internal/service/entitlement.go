@@ -383,6 +383,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 	var featuresByID map[string]*feature.Feature
 	var plansByID map[string]*plan.Plan
 	var metersByID map[string]*meter.Meter
+	var addonsByID map[string]*addon.Addon
 
 	if !filter.GetExpand().IsEmpty() {
 		if filter.GetExpand().Has(types.ExpandFeatures) {
@@ -454,6 +455,29 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				s.Logger.Debugw("fetched plans for entitlements", "count", len(plans))
 			}
 		}
+
+		if filter.GetExpand().Has(types.ExpandAddons) {
+			// Collect entity IDs for addons
+			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+				return e.EntityID
+			})
+
+			if len(entityIDs) > 0 {
+				addonFilter := types.NewNoLimitAddonFilter()
+				addonFilter.AddonIDs = entityIDs
+				addons, err := s.AddonRepo.List(ctx, addonFilter)
+				if err != nil {
+					return nil, err
+				}
+
+				addonsByID = make(map[string]*addon.Addon, len(addons))
+				for _, a := range addons {
+					addonsByID[a.ID] = a
+				}
+
+				s.Logger.Debugw("fetched addons for entitlements", "count", len(addons))
+			}
+		}
 	}
 
 	for i, e := range entitlements {
@@ -486,6 +510,13 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				response.Items[i].PlanID = e.EntityID
 			}
 
+		}
+
+		// Add expanded addon if requested and available
+		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandAddons) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+			if a, ok := addonsByID[e.EntityID]; ok {
+				response.Items[i].Addon = &dto.AddonResponse{Addon: a}
+			}
 		}
 	}
 
