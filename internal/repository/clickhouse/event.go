@@ -92,10 +92,10 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 	}
 
 	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "event", "bulk_insert", map[string]interface{}{
-		"event_count": len(events),
-	})
-	defer FinishSpan(span)
+	// span := StartRepositorySpan(ctx, "event", "bulk_insert", map[string]interface{}{
+	// 	"event_count": len(events),
+	// })
+	// defer FinishSpan(span)
 
 	// split events in batches of 100
 	eventsBatches := lo.Chunk(events, 100)
@@ -108,7 +108,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 		)
 	`)
 		if err != nil {
-			SetSpanError(span, err)
+			// SetSpanError(span, err)
 			return ierr.WithError(err).
 				WithHint("Failed to prepare batch for events").
 				Mark(ierr.ErrDatabase)
@@ -117,13 +117,13 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 		// Validate all events before inserting
 		for _, event := range eventsBatch {
 			if err := event.Validate(); err != nil {
-				SetSpanError(span, err)
+				// SetSpanError(span, err)
 				return err
 			}
 
 			propertiesJSON, err := json.Marshal(event.Properties)
 			if err != nil {
-				SetSpanError(span, err)
+				// SetSpanError(span, err)
 				return ierr.WithError(err).
 					WithHint("Failed to marshal event properties").
 					WithReportableDetails(map[string]interface{}{
@@ -145,7 +145,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 			)
 
 			if err != nil {
-				SetSpanError(span, err)
+				// SetSpanError(span, err)
 				return ierr.WithError(err).
 					WithHint("Failed to append event to batch").
 					WithReportableDetails(map[string]interface{}{
@@ -158,7 +158,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 
 		// Execute the batch
 		if err := batch.Send(); err != nil {
-			SetSpanError(span, err)
+			// SetSpanError(span, err)
 			return ierr.WithError(err).
 				WithHint("Failed to execute batch insert for events").
 				WithReportableDetails(map[string]interface{}{
@@ -168,7 +168,7 @@ func (r *EventRepository) BulkInsertEvents(ctx context.Context, events []*events
 		}
 	}
 
-	SetSpanSuccess(span)
+	// SetSpanSuccess(span)
 	return nil
 }
 
