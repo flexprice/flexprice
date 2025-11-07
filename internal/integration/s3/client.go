@@ -116,6 +116,18 @@ func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, 
 	s3Options := []func(*s3.Options){
 		func(o *s3.Options) {
 			o.Region = s3Config.Region
+			// Configure custom endpoint if provided (for MinIO or other S3-compatible services)
+			if s3Config.EndpointURL != "" {
+				o.BaseEndpoint = aws.String(s3Config.EndpointURL)
+				c.logger.Infow("configuring custom S3 endpoint", "endpoint_url", s3Config.EndpointURL)
+			}
+			// Use path-style addressing if VirtualHostStyle is false (required for MinIO)
+			// Path-style: http://endpoint/bucket/key
+			// Virtual-hosted-style: http://bucket.endpoint/key
+			if !s3Config.VirtualHostStyle {
+				o.UsePathStyle = true
+				c.logger.Infow("using path-style S3 addressing")
+			}
 		},
 	}
 
@@ -126,6 +138,8 @@ func (c *Client) GetS3Client(ctx context.Context, jobConfig *types.S3JobConfig, 
 		"bucket", s3Config.Bucket,
 		"region", s3Config.Region,
 		"key_prefix", s3Config.KeyPrefix,
+		"endpoint_url", s3Config.EndpointURL,
+		"use_path_style", !s3Config.VirtualHostStyle,
 		"credential_type", map[bool]string{true: "temporary", false: "permanent"}[s3Config.AWSSessionToken != ""],
 	)
 
@@ -192,12 +206,16 @@ func (c *Client) GetDecryptedS3Config(conn *connection.Connection, jobConfig *ty
 		KeyPrefix:          jobConfig.KeyPrefix,
 		Compression:        jobConfig.Compression,
 		Encryption:         jobConfig.Encryption,
+		EndpointURL:        jobConfig.EndpointURL,
+		VirtualHostStyle:   !jobConfig.UsePathStyle, // VirtualHostStyle is opposite of UsePathStyle
 	}
 
 	c.logger.Infow("successfully created S3 configuration",
 		"connection_id", conn.ID,
 		"bucket", s3Config.Bucket,
 		"region", s3Config.Region,
+		"endpoint_url", s3Config.EndpointURL,
+		"use_path_style", jobConfig.UsePathStyle,
 	)
 
 	return s3Config, nil
