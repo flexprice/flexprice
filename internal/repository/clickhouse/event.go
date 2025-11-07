@@ -817,6 +817,138 @@ func (r *EventRepository) FindUnprocessedEvents(ctx context.Context, params *eve
 	return eventsList, nil
 }
 
+// FindUnprocessedEvents finds events that haven't been processed yet
+// Uses keyset pagination for better performance with large datasets
+func (r *EventRepository) FindUnprocessedEventsFromFeatureUsage(ctx context.Context, params *events.FindUnprocessedEventsParams) ([]*events.Event, error) {
+	span := StartRepositorySpan(ctx, "event", "find_unprocessed_events", map[string]interface{}{
+		"batch_size":           params.BatchSize,
+		"external_customer_id": params.ExternalCustomerID,
+	})
+	defer FinishSpan(span)
+
+	// Use ANTI JOIN for better performance with ClickHouse
+	// This avoids the need for subqueries in the WHERE clause
+	// Also using the primary key ORDER BY for efficiency
+	query := `
+		SELECT 
+			e.id, e.external_customer_id, e.customer_id, e.tenant_id, 
+			e.event_name, e.timestamp, e.source, e.properties, 
+			e.environment_id, e.ingested_at
+		FROM events e
+		ANTI JOIN (
+			SELECT id, tenant_id, environment_id
+			FROM feature_usage
+			WHERE tenant_id = ?
+			AND environment_id = ?
+		) AS p
+		ON e.id = p.id AND e.tenant_id = p.tenant_id AND e.environment_id = p.environment_id
+		WHERE e.tenant_id = ?
+		AND e.environment_id = ?
+	`
+
+	args := []interface{}{
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+	}
+
+	// Add the last seen ID and timestamp for keyset pagination if provided
+	if params.LastID != "" && !params.LastTimestamp.IsZero() {
+		// Use keyset pagination for better performance
+		query += " AND (e.timestamp, e.id) < (?, ?)"
+		args = append(args, params.LastTimestamp, params.LastID)
+	}
+
+	// Add filters if provided
+	if params.ExternalCustomerID != "" {
+		query += " AND e.external_customer_id = ?"
+		args = append(args, params.ExternalCustomerID)
+	}
+
+	if params.EventName != "" {
+		query += " AND e.event_name = ?"
+		args = append(args, params.EventName)
+	}
+
+	if !params.StartTime.IsZero() {
+		query += " AND e.timestamp >= ?"
+		args = append(args, params.StartTime)
+	}
+
+	if !params.EndTime.IsZero() {
+		query += " AND e.timestamp <= ?"
+		args = append(args, params.EndTime)
+	}
+
+	// Add sorting for consistent keyset pagination
+	// Using the same fields we're filtering on for the keyset
+	query += " ORDER BY e.timestamp DESC, e.id DESC"
+
+	// Add batch size limit
+	if params.BatchSize > 0 {
+		query += " LIMIT ?"
+		args = append(args, params.BatchSize)
+	} else {
+		// Default to a reasonable batch size to avoid huge result sets
+		query += " LIMIT 100"
+	}
+
+	r.logger.Debugw("executing find unprocessed events query",
+		"query", query,
+		"external_customer_id", params.ExternalCustomerID,
+		"event_name", params.EventName,
+		"batch_size", params.BatchSize,
+	)
+
+	// Execute the query
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query unprocessed events").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var eventsList []*events.Event
+	for rows.Next() {
+		var event events.Event
+		var propertiesJSON string
+
+		err := rows.Scan(
+			&event.ID,
+			&event.ExternalCustomerID,
+			&event.CustomerID,
+			&event.TenantID,
+			&event.EventName,
+			&event.Timestamp,
+			&event.Source,
+			&propertiesJSON,
+			&event.EnvironmentID,
+			&event.IngestedAt,
+		)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan event").
+				Mark(ierr.ErrDatabase)
+		}
+
+		if err := json.Unmarshal([]byte(propertiesJSON), &event.Properties); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to unmarshal event properties").
+				Mark(ierr.ErrValidation)
+		}
+
+		eventsList = append(eventsList, &event)
+	}
+
+	SetSpanSuccess(span)
+	return eventsList, nil
+}
+
 // GetDistinctEventNames retrieves distinct event names for a given external customer
 // within the specified time range. This is used for performance optimization
 // to filter meter requests to only those that have actual events.
