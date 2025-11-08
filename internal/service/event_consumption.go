@@ -42,12 +42,21 @@ type eventConsumptionService struct {
 
 	// Batching fields
 	batchMu       sync.Mutex
-	batchBuffer   []*events.Event
+	batchBuffer   []*BatchMessage
 	batchSize     int
 	flushInterval time.Duration
 	flushTicker   *time.Ticker
 	stopCh        chan struct{}
 	wg            sync.WaitGroup
+}
+
+// BatchMessage represents a message in the batch with its associated events and ACK/NACK functions
+type BatchMessage struct {
+	Message  *message.Message // Original Watermill message
+	Events   []*events.Event  // Events to insert (original + billing if applicable)
+	Context  context.Context  // Context with tenant and environment IDs
+	AckFunc  func() error     // Function to acknowledge the message
+	NackFunc func() error     // Function to negative-acknowledge the message
 }
 
 // NewEventConsumptionService creates a new event consumption service
@@ -64,7 +73,7 @@ func NewEventConsumptionService(
 		eventPostProcessingSvc: eventPostProcessingSvc,
 		batchSize:              params.Config.EventProcessing.BatchSize,
 		flushInterval:          time.Duration(params.Config.EventProcessing.BatchFlushSeconds) * time.Second,
-		batchBuffer:            make([]*events.Event, 0, params.Config.EventProcessing.BatchSize),
+		batchBuffer:            make([]*BatchMessage, 0, params.Config.EventProcessing.BatchSize),
 		stopCh:                 make(chan struct{}),
 	}
 
@@ -220,42 +229,43 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		eventsToAdd = append(eventsToAdd, billingEvent)
 	}
 
-	// Add events to batch
-	if err := s.addToBatch(eventsToAdd); err != nil {
-		s.Logger.Errorw("failed to add events to batch",
+	// Create BatchMessage with ACK/NACK functions
+	// These closures capture the msg variable and allow us to ACK/NACK later
+	batchMsg := &BatchMessage{
+		Message: msg,
+		Events:  eventsToAdd,
+		Context: ctx,
+		AckFunc: func() error {
+			msg.Ack() // Call Watermill's ACK
+			return nil
+		},
+		NackFunc: func() error {
+			msg.Nack() // Call Watermill's NACK (negative ACK)
+			return nil
+		},
+	}
+
+	// Add to batch
+	if err := s.addToBatch(batchMsg); err != nil {
+		s.Logger.Errorw("failed to add message to batch",
 			"error", err,
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
 		// Return error for retry
 		return ierr.WithError(err).
-			WithHint("Failed to add events to batch").
+			WithHint("Failed to add message to batch").
 			Mark(ierr.ErrSystem)
 	}
 
-	// Publish event to post-processing service
-	// Only for the tenants that are forced to v1
-	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
-		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
-			s.Logger.Errorw("failed to publish event to post-processing service",
-				"error", err,
-				"event_id", event.ID,
-				"event_name", event.EventName,
-			)
-
-			// Return error for retry
-			return ierr.WithError(err).
-				WithHint("Failed to publish event for post-processing").
-				Mark(ierr.ErrSystem)
-		}
-	}
-
-	s.Logger.Debugw("successfully processed event",
+	s.Logger.Debugw("successfully added event to batch",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
 	)
 
+	// Return nil to indicate handler processed the message
+	// Manual ACK/NACK will happen later in flushBatchUnlocked
 	return nil
 }
 
@@ -296,17 +306,17 @@ func (s *eventConsumptionService) startBatchFlusher() {
 	}()
 }
 
-// addToBatch adds events to the batch buffer, flushing if batch size is reached
-func (s *eventConsumptionService) addToBatch(events []*events.Event) error {
+// addToBatch adds a message to the batch buffer, flushing if batch size is reached
+func (s *eventConsumptionService) addToBatch(batchMsg *BatchMessage) error {
 	s.batchMu.Lock()
 	defer s.batchMu.Unlock()
 
-	// Add events to buffer
-	s.batchBuffer = append(s.batchBuffer, events...)
+	// Add message to buffer
+	s.batchBuffer = append(s.batchBuffer, batchMsg)
 
-	s.Logger.Debugw("added events to batch",
+	s.Logger.Debugw("added message to batch",
 		"batch_size", len(s.batchBuffer),
-		"events_added", len(events),
+		"events_in_message", len(batchMsg.Events),
 	)
 
 	// Check if we should flush
@@ -335,26 +345,102 @@ func (s *eventConsumptionService) flushBatchUnlocked() error {
 		return nil
 	}
 
-	ctx := context.Background()
+	// Make a copy of the batch buffer to process
+	batchMessages := make([]*BatchMessage, len(s.batchBuffer))
+	copy(batchMessages, s.batchBuffer)
+
+	// Extract all events from batch messages
+	eventsToInsert := make([]*events.Event, 0)
+	for _, batchMsg := range batchMessages {
+		eventsToInsert = append(eventsToInsert, batchMsg.Events...)
+	}
 
 	s.Logger.Infow("flushing batch to ClickHouse",
-		"batch_size", len(s.batchBuffer),
+		"batch_size", len(batchMessages),
+		"total_events", len(eventsToInsert),
 	)
 
 	startTime := time.Now()
 
 	// Insert events into ClickHouse
-	if err := s.eventRepo.BulkInsertEvents(ctx, s.batchBuffer); err != nil {
+	ctx := context.Background()
+	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
 		s.Logger.Errorw("failed to flush batch to ClickHouse",
 			"error", err,
-			"batch_size", len(s.batchBuffer),
+			"batch_size", len(batchMessages),
+			"total_events", len(eventsToInsert),
 		)
 		s.sentryService.CaptureException(err)
+
+		// NACK all messages in the batch so they can be retried
+		var nackErrors int
+		for _, batchMsg := range batchMessages {
+			if err := batchMsg.NackFunc(); err != nil {
+				s.Logger.Errorw("failed to NACK message",
+					"error", err,
+					"message_uuid", batchMsg.Message.UUID,
+				)
+				nackErrors++
+			}
+		}
+
+		s.Logger.Errorw("NACKed all messages in failed batch",
+			"batch_size", len(batchMessages),
+			"nack_errors", nackErrors,
+		)
+
+		// Clear the buffer since we've handled all messages (NACKed them)
+		s.batchBuffer = s.batchBuffer[:0]
+
 		return fmt.Errorf("failed to flush batch: %w", err)
 	}
 
 	s.Logger.Infow("successfully flushed batch to ClickHouse",
-		"batch_size", len(s.batchBuffer),
+		"batch_size", len(batchMessages),
+		"total_events", len(eventsToInsert),
+		"duration_ms", time.Since(startTime).Milliseconds(),
+	)
+
+	// Post-process events (only for original events, not billing events)
+	// Only for tenants that are forced to v1
+	var postProcessErrors int
+	if s.Config.FeatureFlag.ForceV1ForTenant != "" {
+		for _, batchMsg := range batchMessages {
+			// Only post-process the first event (original event), not billing events
+			if len(batchMsg.Events) > 0 {
+				originalEvent := batchMsg.Events[0]
+				if originalEvent.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
+					if err := s.eventPostProcessingSvc.PublishEvent(batchMsg.Context, originalEvent, false); err != nil {
+						s.Logger.Errorw("failed to publish event to post-processing service",
+							"error", err,
+							"event_id", originalEvent.ID,
+							"event_name", originalEvent.EventName,
+						)
+						postProcessErrors++
+						// Continue processing other events - post-processing errors don't cause NACKs
+					}
+				}
+			}
+		}
+	}
+
+	// ACK all messages in the batch after successful processing
+	var ackErrors int
+	for _, batchMsg := range batchMessages {
+		if err := batchMsg.AckFunc(); err != nil {
+			s.Logger.Errorw("failed to ACK message",
+				"error", err,
+				"message_uuid", batchMsg.Message.UUID,
+			)
+			ackErrors++
+		}
+	}
+
+	s.Logger.Infow("batch processing completed",
+		"batch_size", len(batchMessages),
+		"total_events", len(eventsToInsert),
+		"ack_errors", ackErrors,
+		"post_process_errors", postProcessErrors,
 		"duration_ms", time.Since(startTime).Milliseconds(),
 	)
 

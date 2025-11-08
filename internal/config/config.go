@@ -180,8 +180,8 @@ type EventProcessingConfig struct {
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_backfill"`
 	// Batch configuration for ClickHouse writes
-	BatchSize         int   `mapstructure:"batch_size" default:"200"`              // Number of events to batch before writing
-	BatchFlushSeconds int64 `mapstructure:"batch_flush_seconds" default:"5"`       // Max seconds to wait before flushing batch
+	BatchSize         int   `mapstructure:"batch_size" default:"200"`        // Number of events to batch before writing
+	BatchFlushSeconds int64 `mapstructure:"batch_flush_seconds" default:"5"` // Max seconds to wait before flushing batch
 }
 
 type EventPostProcessingConfig struct {

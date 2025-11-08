@@ -147,14 +147,14 @@ cache:
   enabled: false
 
 event_processing:
-  topic: "events"
+  topic: "events_local"
   rate_limit: 12
   consumer_group: "flexprice-consumer-local"
   batch_size: 500 # Number of events to batch before writing to ClickHouse
-  batch_flush_seconds: 5 # Max seconds to wait before flushing batch
+  batch_flush_seconds: 10000 # Max seconds to wait before flushing batch
 
 event_processing_lazy:
-  topic: "events_lazy"
+  topic: "events_local"
   rate_limit: 12
   consumer_group: "v1_event_processing_lazy"
 
