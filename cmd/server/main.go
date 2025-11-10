@@ -518,10 +518,10 @@ func registerRouterHandlers(
 	if includeProcessingHandlers {
 		// Register handlers
 		eventConsumptionSvc.RegisterHandler(router, cfg)
-		// eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
-		// eventPostProcessingSvc.RegisterHandler(router, cfg)
-		// featureUsageSvc.RegisterHandler(router, cfg)
-		// featureUsageSvc.RegisterHandlerLazy(router, cfg)
+		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
+		eventPostProcessingSvc.RegisterHandler(router, cfg)
+		featureUsageSvc.RegisterHandler(router, cfg)
+		featureUsageSvc.RegisterHandlerLazy(router, cfg)
 	}
 }
 
