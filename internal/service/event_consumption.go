@@ -71,9 +71,9 @@ func NewEventConsumptionService(
 		eventRepo:              eventRepo,
 		sentryService:          sentryService,
 		eventPostProcessingSvc: eventPostProcessingSvc,
-		batchSize:              params.Config.EventProcessing.BatchSize,
-		flushInterval:          time.Duration(params.Config.EventProcessing.BatchFlushSeconds) * time.Second,
-		batchBuffer:            make([]*BatchMessage, 0, params.Config.EventProcessing.BatchSize),
+		batchSize:              params.Config.EventProcessingLazy.BatchSize,
+		flushInterval:          time.Duration(params.Config.EventProcessingLazy.BatchFlushSeconds) * time.Second,
+		batchBuffer:            make([]*BatchMessage, 0, params.Config.EventProcessingLazy.BatchSize),
 		stopCh:                 make(chan struct{}),
 	}
 
@@ -146,7 +146,7 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 		"event_consumption_lazy_handler",
 		cfg.EventProcessingLazy.Topic,
 		s.lazyPubSub,
-		s.processMessage,
+		s.processMessageLazy,
 		throttle.Middleware,
 	)
 
@@ -156,8 +156,120 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 	)
 }
 
-// processMessage processes a single event message from Kafka
 func (s *eventConsumptionService) processMessage(msg *message.Message) error {
+
+	partitionKey := msg.Metadata.Get("partition_key")
+	tenantID := msg.Metadata.Get("tenant_id")
+	environmentID := msg.Metadata.Get("environment_id")
+
+	s.Logger.Debugw("processing event from message queue",
+		"message_uuid", msg.UUID,
+		"partition_key", partitionKey,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+	)
+
+	// Create a background context with tenant ID
+	ctx := context.Background()
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
+	// Unmarshal the event
+	var event events.Event
+	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		s.Logger.Errorw("failed to unmarshal event",
+			"error", err,
+			"payload", string(msg.Payload),
+		)
+		s.sentryService.CaptureException(err)
+
+		// Return error for non-retriable parse errors
+		// Watermill's poison queue middleware will handle moving it to DLQ
+		if !s.shouldRetryError(err) {
+			return fmt.Errorf("non-retriable unmarshal error: %w", err)
+		}
+		return err
+	}
+
+	s.Logger.Debugw("processing event",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"tenant_id", event.TenantID,
+		"timestamp", event.Timestamp,
+	)
+
+	// Prepare events to insert
+	eventsToInsert := []*events.Event{&event}
+
+	// Create billing event if configured
+	if s.Config.Billing.TenantID != "" {
+		billingEvent := events.NewEvent(
+			"tenant_event", // Standardized event name for billing
+			s.Config.Billing.TenantID,
+			event.TenantID, // Use original tenant ID as external customer ID
+			map[string]interface{}{
+				"original_event_id":   event.ID,
+				"original_event_name": event.EventName,
+				"original_timestamp":  event.Timestamp,
+				"tenant_id":           event.TenantID,
+				"source":              event.Source,
+			},
+			time.Now(),
+			"", // Customer ID will be looked up by external ID
+			"", // Generate new ID
+			"system",
+			s.Config.Billing.EnvironmentID,
+		)
+		eventsToInsert = append(eventsToInsert, billingEvent)
+	}
+
+	// Insert events into ClickHouse
+	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
+		s.Logger.Errorw("failed to insert events",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+
+		// Return error for retry
+		return ierr.WithError(err).
+			WithHint("Failed to insert events into ClickHouse").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Publish event to post-processing service
+	// Only for the tenants that are forced to v1
+	if s.Config.FeatureFlag.ForceV1ForTenant != "" && event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
+		if err := s.eventPostProcessingSvc.PublishEvent(ctx, &event, false); err != nil {
+			s.Logger.Errorw("failed to publish event to post-processing service",
+				"error", err,
+				"event_id", event.ID,
+				"event_name", event.EventName,
+			)
+
+			// Return error for retry
+			return ierr.WithError(err).
+				WithHint("Failed to publish event for post-processing").
+				Mark(ierr.ErrSystem)
+		}
+	}
+
+	s.Logger.Debugw("successfully processed event",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"lag_ms", time.Since(event.Timestamp).Milliseconds(),
+	)
+
+	return nil
+}
+
+// processMessage processes a single event message from Kafka
+func (s *eventConsumptionService) processMessageLazy(msg *message.Message) error {
 
 	partitionKey := msg.Metadata.Get("partition_key")
 	tenantID := msg.Metadata.Get("tenant_id")
