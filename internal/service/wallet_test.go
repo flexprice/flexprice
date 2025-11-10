@@ -1538,6 +1538,249 @@ func (s *WalletServiceSuite) TestGetCustomerWallets() {
 	}
 }
 
+func (s *WalletServiceSuite) TestDebitTransactionConsistency() {
+	s.setupWallet()
+	// Reset the wallet's initial state
+	s.testData.wallet.Balance = decimal.Zero
+	s.testData.wallet.CreditBalance = decimal.Zero
+	err := s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), s.testData.wallet.ID, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+
+	// Add credits
+	creditOp := &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(100),
+		Description:       "Initial credit",
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    "test_credit_1",
+	}
+	err = s.service.CreditWallet(s.GetContext(), creditOp)
+	s.NoError(err)
+
+	// Verify initial state
+	walletObj, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(100).Equal(walletObj.CreditBalance))
+
+	// Verify available credits
+	eligibleCredits, err := s.GetStores().WalletRepo.FindEligibleCredits(
+		s.GetContext(),
+		s.testData.wallet.ID,
+		decimal.NewFromInt(100),
+		100,
+	)
+	s.NoError(err)
+	s.Len(eligibleCredits, 1)
+	s.True(decimal.NewFromInt(100).Equal(eligibleCredits[0].CreditsAvailable))
+
+	// Try to debit exact amount
+	debitOp := &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(100),
+		Description:       "Debit all credits",
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		IdempotencyKey:    "test_debit_1",
+	}
+	err = s.service.DebitWallet(s.GetContext(), debitOp)
+	s.NoError(err)
+
+	// Verify final state - should have zero balance
+	walletObj, err = s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.Zero.Equal(walletObj.CreditBalance),
+		"Expected zero balance, got %s", walletObj.CreditBalance)
+
+	// Verify no eligible credits remain
+	eligibleCredits, err = s.GetStores().WalletRepo.FindEligibleCredits(
+		s.GetContext(),
+		s.testData.wallet.ID,
+		decimal.NewFromInt(1),
+		100,
+	)
+	s.NoError(err)
+	s.Empty(eligibleCredits, "Should have no eligible credits remaining")
+
+	// Verify transactions
+	filter := types.NewWalletTransactionFilter()
+	filter.WalletID = &s.testData.wallet.ID
+	transactions, err := s.GetStores().WalletRepo.ListWalletTransactions(s.GetContext(), filter)
+	s.NoError(err)
+	s.Len(transactions, 2, "Should have exactly 2 transactions (1 credit + 1 debit)")
+
+	// Sort transactions by created_at desc
+	sort.Slice(transactions, func(i, j int) bool {
+		return transactions[i].CreatedAt.After(transactions[j].CreatedAt)
+	})
+
+	// Verify debit transaction
+	debitTx := transactions[0]
+	s.Equal(types.TransactionTypeDebit, debitTx.Type)
+	s.True(decimal.NewFromInt(100).Equal(debitTx.CreditAmount))
+	s.True(decimal.Zero.Equal(debitTx.CreditsAvailable))
+
+	// Verify credit transaction was fully consumed
+	creditTx := transactions[1]
+	s.Equal(types.TransactionTypeCredit, creditTx.Type)
+	s.True(decimal.NewFromInt(100).Equal(creditTx.CreditAmount))
+	s.True(decimal.Zero.Equal(creditTx.CreditsAvailable),
+		"Credit transaction should have zero available credits after full debit")
+}
+
+func (s *WalletServiceSuite) TestDebitIdempotency() {
+	// KNOWN ISSUE: This test documents a bug in the current implementation
+	// The debit operation is NOT idempotent - duplicate requests with the same
+	// idempotency key will consume credits multiple times.
+	//
+	// Root cause: Credit consumption happens in separate transactions that get
+	// committed before the final debit record is created. If the debit record
+	// creation fails (e.g., duplicate idempotency key), credits are already gone.
+	//
+	// TODO: Fix by wrapping the entire debit operation in a single transaction
+	s.T().Skip("KNOWN BUG: Debit operations are not idempotent - skipping until fixed")
+
+	s.setupWallet()
+	// Reset the wallet's initial state
+	s.testData.wallet.Balance = decimal.Zero
+	s.testData.wallet.CreditBalance = decimal.Zero
+	err := s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), s.testData.wallet.ID, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+
+	// Add credits
+	creditOp := &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeCredit,
+		CreditAmount:      decimal.NewFromInt(200),
+		Description:       "Initial credit",
+		TransactionReason: types.TransactionReasonFreeCredit,
+		IdempotencyKey:    "test_credit_idempotency",
+	}
+	err = s.service.CreditWallet(s.GetContext(), creditOp)
+	s.NoError(err)
+
+	// First debit
+	debitOp := &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      decimal.NewFromInt(50),
+		Description:       "First debit",
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		IdempotencyKey:    "test_debit_idempotency",
+	}
+	err = s.service.DebitWallet(s.GetContext(), debitOp)
+	s.NoError(err)
+
+	// Verify state after first debit
+	walletObj, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromInt(150).Equal(walletObj.CreditBalance),
+		"Expected 150 credits after first debit, got %s", walletObj.CreditBalance)
+
+	// Try to debit again with same idempotency key - should be idempotent
+	err = s.service.DebitWallet(s.GetContext(), debitOp)
+	// Expected: Either return same result (idempotent) or error about duplicate key
+	// Actual: Credits are consumed again (balance becomes 100 instead of 150)
+	walletObj, err = s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	// Balance should still be 150 (not 100), proving idempotency
+	s.True(decimal.NewFromInt(150).Equal(walletObj.CreditBalance),
+		"Balance should not change on duplicate debit, expected 150, got %s", walletObj.CreditBalance)
+}
+
+func (s *WalletServiceSuite) TestDebitAvailableCreditsAccuracy() {
+	s.setupWallet()
+	// Reset the wallet's initial state
+	s.testData.wallet.Balance = decimal.Zero
+	s.testData.wallet.CreditBalance = decimal.Zero
+	err := s.GetStores().WalletRepo.UpdateWalletBalance(s.GetContext(), s.testData.wallet.ID, decimal.Zero, decimal.Zero)
+	s.NoError(err)
+
+	// Add multiple credits
+	credits := []struct {
+		amount         decimal.Decimal
+		idempotencyKey string
+	}{
+		{decimal.NewFromInt(50), "credit_1"},
+		{decimal.NewFromInt(30), "credit_2"},
+		{decimal.NewFromInt(20), "credit_3"},
+	}
+
+	for _, credit := range credits {
+		creditOp := &wallet.WalletOperation{
+			WalletID:          s.testData.wallet.ID,
+			Type:              types.TransactionTypeCredit,
+			CreditAmount:      credit.amount,
+			Description:       "Test credit",
+			TransactionReason: types.TransactionReasonFreeCredit,
+			IdempotencyKey:    credit.idempotencyKey,
+		}
+		err = s.service.CreditWallet(s.GetContext(), creditOp)
+		s.NoError(err)
+	}
+
+	// Verify total balance
+	walletObj, err := s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	expectedTotal := decimal.NewFromInt(100) // 50 + 30 + 20
+	s.True(expectedTotal.Equal(walletObj.CreditBalance),
+		"Expected total balance %s, got %s", expectedTotal, walletObj.CreditBalance)
+
+	// Verify available credits matches wallet balance
+	eligibleCredits, err := s.GetStores().WalletRepo.FindEligibleCredits(
+		s.GetContext(),
+		s.testData.wallet.ID,
+		expectedTotal,
+		100,
+	)
+	s.NoError(err)
+	s.NotEmpty(eligibleCredits)
+
+	var totalAvailable decimal.Decimal
+	for _, c := range eligibleCredits {
+		totalAvailable = totalAvailable.Add(c.CreditsAvailable)
+	}
+	s.True(expectedTotal.Equal(totalAvailable),
+		"Available credits (%s) should match wallet balance (%s)", totalAvailable, expectedTotal)
+
+	// Debit partial amount
+	debitAmount := decimal.NewFromInt(70)
+	debitOp := &wallet.WalletOperation{
+		WalletID:          s.testData.wallet.ID,
+		Type:              types.TransactionTypeDebit,
+		CreditAmount:      debitAmount,
+		Description:       "Partial debit",
+		TransactionReason: types.TransactionReasonInvoicePayment,
+		IdempotencyKey:    "test_debit_accuracy",
+	}
+	err = s.service.DebitWallet(s.GetContext(), debitOp)
+	s.NoError(err)
+
+	// Verify remaining balance
+	walletObj, err = s.GetStores().WalletRepo.GetWalletByID(s.GetContext(), s.testData.wallet.ID)
+	s.NoError(err)
+	expectedRemaining := expectedTotal.Sub(debitAmount) // 100 - 70 = 30
+	s.True(expectedRemaining.Equal(walletObj.CreditBalance),
+		"Expected remaining balance %s, got %s", expectedRemaining, walletObj.CreditBalance)
+
+	// Verify available credits still matches wallet balance
+	eligibleCredits, err = s.GetStores().WalletRepo.FindEligibleCredits(
+		s.GetContext(),
+		s.testData.wallet.ID,
+		expectedRemaining,
+		100,
+	)
+	s.NoError(err)
+	s.NotEmpty(eligibleCredits)
+
+	totalAvailable = decimal.Zero
+	for _, c := range eligibleCredits {
+		totalAvailable = totalAvailable.Add(c.CreditsAvailable)
+	}
+	s.True(expectedRemaining.Equal(totalAvailable),
+		"Available credits (%s) should match wallet balance (%s) after debit", totalAvailable, expectedRemaining)
+}
+
 func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 	tests := []struct {
 		name                    string

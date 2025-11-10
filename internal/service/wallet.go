@@ -52,6 +52,9 @@ type WalletService interface {
 	// DebitWallet processes a debit operation on a wallet
 	DebitWallet(ctx context.Context, req *wallet.WalletOperation) error
 
+	// ManualBalanceDebit processes a manual balance debit operation on a wallet
+	ManualBalanceDebit(ctx context.Context, walletID string, req *dto.ManualBalanceDebitRequest) (*dto.WalletResponse, error)
+
 	// CreditWallet processes a credit operation on a wallet
 	CreditWallet(ctx context.Context, req *wallet.WalletOperation) error
 
@@ -695,17 +698,27 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 		return err
 	}
 
-	// Convert amount to credit amount if provided and perform credit operation
-	if req.Amount.GreaterThan(decimal.Zero) {
+	// Normalize all inputs into CreditAmount (internal processing field)
+	// Priority: Amount > CreditAmount
+	// Note: CreditAmount is used internally for BOTH credit and debit operations
+	// The Type field determines direction (add vs subtract)
+
+	switch {
+	case req.Amount.GreaterThan(decimal.Zero):
+		// Amount provided - convert to credits
 		req.CreditAmount = s.GetCreditsFromCurrencyAmount(req.Amount, w.ConversionRate)
-	} else if req.CreditAmount.GreaterThan(decimal.Zero) {
+
+	case req.CreditAmount.GreaterThan(decimal.Zero):
+		// CreditAmount already set - just convert to Amount
 		req.Amount = s.GetCurrencyAmountFromCredits(req.CreditAmount, w.ConversionRate)
-	} else {
-		return ierr.NewError("amount or credit amount is required").
+
+	default:
+		return ierr.NewError("amount or credit_amount is required").
 			WithHint("Amount or credit amount is required").
 			Mark(ierr.ErrValidation)
 	}
 
+	// Credit amount is validated for it is used internally for both credit and debit operations
 	if req.CreditAmount.LessThanOrEqual(decimal.Zero) {
 		return ierr.NewError("wallet transaction amount must be greater than 0").
 			WithHint("Wallet transaction amount must be greater than 0").
@@ -867,13 +880,13 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 	// Log the alert
 	alertService := NewAlertLogsService(s.ServiceParams)
-	
+
 	// Get customer ID from wallet if available
 	var customerID *string
 	if w.CustomerID != "" {
 		customerID = lo.ToPtr(w.CustomerID)
 	}
-	
+
 	logAlertReq := &LogAlertRequest{
 		EntityType:  types.AlertEntityTypeWallet,
 		EntityID:    w.ID,
@@ -1571,4 +1584,45 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
 		CurrentPeriodUsage:    &totalPendingCharges,
 	}, nil
+}
+
+func (s *walletService) ManualBalanceDebit(ctx context.Context, walletID string, req *dto.ManualBalanceDebitRequest) (*dto.WalletResponse, error) {
+	if walletID == "" {
+		return nil, ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	if w.WalletStatus != types.WalletStatusActive {
+		return nil, ierr.NewError("wallet is not active").
+			WithHint("Wallet is not active").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	debitReq := &wallet.WalletOperation{
+		WalletID:          walletID,
+		CreditAmount:      req.Credits,
+		Type:              types.TransactionTypeDebit,
+		Description:       req.Description,
+		TransactionReason: req.TransactionReason,
+		ReferenceType:     types.WalletTxReferenceTypeRequest,
+		IdempotencyKey:    *req.IdempotencyKey,
+		ReferenceID:       types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+	}
+
+	err = s.DebitWallet(ctx, debitReq)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.GetWalletByID(ctx, walletID)
 }

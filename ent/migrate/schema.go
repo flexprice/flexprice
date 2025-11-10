@@ -717,6 +717,7 @@ var (
 		{Name: "is_soft_limit", Type: field.TypeBool, Default: false},
 		{Name: "static_value", Type: field.TypeString, Nullable: true},
 		{Name: "display_order", Type: field.TypeInt, Default: 0},
+		{Name: "parent_entitlement_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "addon_entitlements", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// EntitlementsTable holds the schema information for the "entitlements" table.
@@ -727,7 +728,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "entitlements_addons_entitlements",
-				Columns:    []*schema.Column{EntitlementsColumns[18]},
+				Columns:    []*schema.Column{EntitlementsColumns[19]},
 				RefColumns: []*schema.Column{AddonsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -750,6 +751,11 @@ var (
 				Name:    "entitlement_tenant_id_environment_id_feature_id",
 				Unique:  false,
 				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[10]},
+			},
+			{
+				Name:    "entitlement_tenant_id_environment_id_parent_entitlement_id",
+				Unique:  false,
+				Columns: []*schema.Column{EntitlementsColumns[1], EntitlementsColumns[7], EntitlementsColumns[18]},
 			},
 		},
 	}
@@ -1592,34 +1598,6 @@ var (
 				Name:    "subscription_tenant_id_environment_id_current_period_end_subscription_status_status",
 				Unique:  false,
 				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[17], SubscriptionsColumns[11], SubscriptionsColumns[2]},
-			},
-			{
-				Name:    "subscription_tenant_id_environment_id_pause_status_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[28], SubscriptionsColumns[2]},
-			},
-			{
-				Name:    "subscription_tenant_id_environment_id_active_pause_id_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[29], SubscriptionsColumns[2]},
-			},
-			{
-				Name:    "subscription_tenant_id_environment_id_payment_behavior_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[33], SubscriptionsColumns[2]},
-			},
-			{
-				Name:    "subscription_tenant_id_environment_id_collection_method_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[34], SubscriptionsColumns[2]},
-			},
-			{
-				Name:    "subscription_tenant_id_environment_id_subscription_status_collection_method_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[11], SubscriptionsColumns[34], SubscriptionsColumns[2]},
-				Annotation: &entsql.IndexAnnotation{
-					Where: "subscription_status IN ('incomplete', 'past_due')",
-				},
 			},
 		},
 	}

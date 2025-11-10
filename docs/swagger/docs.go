@@ -42,13 +42,11 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "onetime",
-                            "multiple"
+                            "onetime"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "AddonTypeOnetime",
-                            "AddonTypeMultiple"
+                            "AddonTypeOnetime"
                         ],
                         "name": "addon_type",
                         "in": "query"
@@ -412,6 +410,112 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/gin.H"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/addons/{id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all entitlements for an addon",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Entitlements"
+                ],
+                "summary": "Get addon entitlements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Addon ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListEntitlementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/alert/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List alert logs by filter with optional expand for customer, wallet, and feature",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Alert Logs"
+                ],
+                "summary": "List alert logs by filter",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.AlertLogFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListAlertLogsResponse"
                         }
                     },
                     "400": {
@@ -7033,6 +7137,11 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "name": "start_date_lt",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "name": "start_time",
                         "in": "query"
                     },
@@ -7692,6 +7801,91 @@ const docTemplate = `{
                 }
             }
         },
+        "/rbac/roles": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns all available roles with their permissions, names, and descriptions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "RBAC"
+                ],
+                "summary": "List all RBAC roles",
+                "responses": {
+                    "200": {
+                        "description": "List of roles",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/rbac/roles/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns details of a specific role including permissions, name, and description",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "RBAC"
+                ],
+                "summary": "Get a specific RBAC role",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Role ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Role details",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Role not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/secrets/api/keys": {
             "get": {
                 "security": [
@@ -7757,7 +7951,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new API key with the specified type and permissions",
+                "description": "Create a new API key. Provide 'service_account_id' in body to create API key for a service account, otherwise creates for authenticated user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8782,6 +8976,71 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.SubscriptionChangePreviewResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/entitlements": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all entitlements for a subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription entitlements",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "Feature IDs to filter by",
+                        "name": "feature_ids",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionEntitlementsResponse"
                         }
                     },
                     "400": {
@@ -10558,6 +10817,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/users": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new service account with required roles. Only service accounts can be created via this endpoint.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "Create service account",
+                "parameters": [
+                    {
+                        "description": "Create service account request (type must be 'service_account', roles are required)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.UserResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/me": {
             "get": {
                 "security": [
@@ -10585,6 +10895,57 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Search and filter service accounts by type, roles, etc.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Users"
+                ],
+                "summary": "List service accounts with filters",
+                "parameters": [
+                    {
+                        "description": "Filter parameters",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.UserFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListUsersResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11827,6 +12188,73 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.AlertLogResponse": {
+            "type": "object",
+            "properties": {
+                "alert_info": {
+                    "$ref": "#/definitions/types.AlertInfo"
+                },
+                "alert_status": {
+                    "$ref": "#/definitions/types.AlertState"
+                },
+                "alert_type": {
+                    "$ref": "#/definitions/types.AlertType"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "customer": {
+                    "description": "Expanded fields",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CustomerResponse"
+                        }
+                    ]
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.AlertEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "feature": {
+                    "$ref": "#/definitions/dto.FeatureResponse"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "parent_entity_id": {
+                    "type": "string"
+                },
+                "parent_entity_type": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "wallet": {
+                    "$ref": "#/definitions/dto.WalletResponse"
+                }
+            }
+        },
         "dto.AuthResponse": {
             "type": "object",
             "properties": {
@@ -12370,11 +12798,8 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "permissions": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
+                "service_account_id": {
+                    "type": "string"
                 },
                 "type": {
                     "$ref": "#/definitions/types.SecretType"
@@ -12886,6 +13311,9 @@ const docTemplate = `{
                 "is_soft_limit": {
                     "type": "boolean"
                 },
+                "parent_entitlement_id": {
+                    "type": "string"
+                },
                 "plan_id": {
                     "type": "string"
                 },
@@ -13376,6 +13804,9 @@ const docTemplate = `{
                 "is_soft_limit": {
                     "type": "boolean"
                 },
+                "parent_entitlement_id": {
+                    "type": "string"
+                },
                 "plan_id": {
                     "type": "string"
                 },
@@ -13843,6 +14274,13 @@ const docTemplate = `{
                     "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
                     "type": "number"
                 },
+                "override_entitlements": {
+                    "description": "OverrideEntitlements allows customizing specific entitlements for this subscription",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.OverrideEntitlementRequest"
+                    }
+                },
                 "override_line_items": {
                     "description": "OverrideLineItems allows customizing specific prices for this subscription",
                     "type": "array",
@@ -14021,6 +14459,31 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.CreateUserRequest": {
+            "type": "object",
+            "required": [
+                "roles",
+                "type"
+            ],
+            "properties": {
+                "roles": {
+                    "description": "Roles are required",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "type": {
+                    "description": "Must be \"service_account\"",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.UserType"
+                        }
+                    ]
                 }
             }
         },
@@ -14494,7 +14957,7 @@ const docTemplate = `{
         "dto.DeleteSubscriptionLineItemRequest": {
             "type": "object",
             "properties": {
-                "end_date": {
+                "effective_from": {
                     "type": "string"
                 }
             }
@@ -14540,6 +15003,9 @@ const docTemplate = `{
                 },
                 "is_soft_limit": {
                     "type": "boolean"
+                },
+                "parent_entitlement_id": {
+                    "type": "string"
                 },
                 "plan": {
                     "$ref": "#/definitions/dto.PlanResponse"
@@ -14610,11 +15076,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "plan",
-                "addon"
+                "addon",
+                "subscription"
             ],
             "x-enum-varnames": [
                 "EntitlementSourceEntityTypePlan",
-                "EntitlementSourceEntityTypeAddon"
+                "EntitlementSourceEntityTypeAddon",
+                "EntitlementSourceEntityTypeSubscription"
             ]
         },
         "dto.EntityIntegrationMappingResponse": {
@@ -14782,6 +15250,9 @@ const docTemplate = `{
                 "is_soft_limit": {
                     "type": "boolean"
                 },
+                "is_unlimited": {
+                    "type": "boolean"
+                },
                 "next_usage_reset_at": {
                     "type": "string"
                 },
@@ -14816,16 +15287,16 @@ const docTemplate = `{
                     "description": "Optional - for specific customer",
                     "type": "string"
                 },
-                "limit": {
-                    "description": "Pagination",
-                    "type": "integer"
-                },
-                "meter_ids": {
+                "feature_ids": {
                     "description": "Additional filters",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
+                },
+                "limit": {
+                    "description": "Pagination",
+                    "type": "integer"
                 },
                 "offset": {
                     "type": "integer"
@@ -15859,6 +16330,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ListAlertLogsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AlertLogResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "dto.ListConnectionsResponse": {
             "type": "object",
             "properties": {
@@ -16183,6 +16668,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ListUsersResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.UserResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
         "dto.ListWalletTransactionsResponse": {
             "type": "object",
             "properties": {
@@ -16258,6 +16757,30 @@ const docTemplate = `{
                 "updated_at": {
                     "type": "string",
                     "example": "2024-03-20T15:04:05Z"
+                }
+            }
+        },
+        "dto.OverrideEntitlementRequest": {
+            "type": "object",
+            "required": [
+                "entitlement_id"
+            ],
+            "properties": {
+                "entitlement_id": {
+                    "description": "EntitlementID references the plan/addon entitlement to override",
+                    "type": "string"
+                },
+                "is_enabled": {
+                    "description": "IsEnabled determines if the entitlement is enabled or disabled",
+                    "type": "boolean"
+                },
+                "static_value": {
+                    "description": "StaticValue is the static value for static features",
+                    "type": "string"
+                },
+                "usage_limit": {
+                    "description": "UsageLimit is the new usage limit (only these 3 fields can be overridden)\nFor metered features, nil means unlimited usage",
+                    "type": "integer"
                 }
             }
         },
@@ -16887,17 +17410,16 @@ const docTemplate = `{
         "dto.RemoveAddonRequest": {
             "type": "object",
             "required": [
-                "addon_id",
-                "subscription_id"
+                "addon_association_id"
             ],
             "properties": {
-                "addon_id": {
+                "addon_association_id": {
+                    "type": "string"
+                },
+                "effective_from": {
                     "type": "string"
                 },
                 "reason": {
-                    "type": "string"
-                },
-                "subscription_id": {
                     "type": "string"
                 }
             }
@@ -16998,14 +17520,15 @@ const docTemplate = `{
                 "name": {
                     "type": "string"
                 },
-                "permissions": {
+                "provider": {
+                    "$ref": "#/definitions/types.SecretProvider"
+                },
+                "roles": {
+                    "description": "RBAC roles",
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
-                },
-                "provider": {
-                    "$ref": "#/definitions/types.SecretProvider"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -17015,6 +17538,14 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
+                },
+                "user_type": {
+                    "description": "\"user\" or \"service_account\"",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.UserType"
+                        }
+                    ]
                 }
             }
         },
@@ -17261,6 +17792,23 @@ const docTemplate = `{
                 },
                 "target_plan_id": {
                     "description": "target_plan_id is the ID of the new plan to change to (required)",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionEntitlementsResponse": {
+            "type": "object",
+            "properties": {
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.AggregatedFeature"
+                    }
+                },
+                "plan_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
                     "type": "string"
                 }
             }
@@ -18662,6 +19210,9 @@ const docTemplate = `{
                 "is_soft_limit": {
                     "type": "boolean"
                 },
+                "parent_entitlement_id": {
+                    "type": "string"
+                },
                 "plan_id": {
                     "type": "string"
                 },
@@ -19232,13 +19783,23 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email": {
+                    "description": "Empty for service accounts",
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "tenant": {
                     "$ref": "#/definitions/dto.TenantResponse"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.UserType"
                 }
             }
         },
@@ -20249,12 +20810,10 @@ const docTemplate = `{
         "types.AddonType": {
             "type": "string",
             "enum": [
-                "onetime",
-                "multiple"
+                "onetime"
             ],
             "x-enum-varnames": [
-                "AddonTypeOnetime",
-                "AddonTypeMultiple"
+                "AddonTypeOnetime"
             ]
         },
         "types.AggregationType": {
@@ -20312,6 +20871,92 @@ const docTemplate = `{
                 }
             }
         },
+        "types.AlertEntityType": {
+            "type": "string",
+            "enum": [
+                "wallet",
+                "feature"
+            ],
+            "x-enum-varnames": [
+                "AlertEntityTypeWallet",
+                "AlertEntityTypeFeature"
+            ]
+        },
+        "types.AlertInfo": {
+            "type": "object",
+            "properties": {
+                "alert_settings": {
+                    "$ref": "#/definitions/types.AlertSettings"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "value_at_time": {
+                    "type": "number"
+                }
+            }
+        },
+        "types.AlertLogFilter": {
+            "type": "object",
+            "properties": {
+                "alert_status": {
+                    "$ref": "#/definitions/types.AlertState"
+                },
+                "alert_type": {
+                    "$ref": "#/definitions/types.AlertType"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.AlertEntityType"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.AlertSettings": {
             "type": "object",
             "properties": {
@@ -20328,6 +20973,21 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AlertThreshold"
                 }
             }
+        },
+        "types.AlertState": {
+            "type": "string",
+            "enum": [
+                "ok",
+                "info",
+                "warning",
+                "in_alarm"
+            ],
+            "x-enum-varnames": [
+                "AlertStateOk",
+                "AlertStateInfo",
+                "AlertStateWarning",
+                "AlertStateInAlarm"
+            ]
         },
         "types.AlertThreshold": {
             "type": "object",
@@ -20347,6 +21007,19 @@ const docTemplate = `{
             ],
             "x-enum-varnames": [
                 "AlertThresholdTypeAmount"
+            ]
+        },
+        "types.AlertType": {
+            "type": "string",
+            "enum": [
+                "low_ongoing_balance",
+                "low_credit_balance",
+                "feature_wallet_balance"
+            ],
+            "x-enum-varnames": [
+                "AlertTypeLowOngoingBalance",
+                "AlertTypeLowCreditBalance",
+                "AlertTypeFeatureWalletBalance"
             ]
         },
         "types.AutoTopupTrigger": {
@@ -22066,6 +22739,87 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "TransactionTypeCredit",
                 "TransactionTypeDebit"
+            ]
+        },
+        "types.UserFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "type": {
+                    "enum": [
+                        "user",
+                        "service_account"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.UserType"
+                        }
+                    ]
+                },
+                "user_ids": {
+                    "description": "Specific filters for users",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "types.UserType": {
+            "type": "string",
+            "enum": [
+                "user",
+                "service_account"
+            ],
+            "x-enum-varnames": [
+                "UserTypeUser",
+                "UserTypeServiceAccount"
             ]
         },
         "types.WalletAlertThreshold": {

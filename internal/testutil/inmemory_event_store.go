@@ -680,3 +680,9 @@ func (s *InMemoryEventStore) FindUnprocessedEvents(ctx context.Context, params *
 		WithHint("not implemented").
 		Mark(ierr.ErrSystem)
 }
+
+func (s *InMemoryEventStore) FindUnprocessedEventsFromFeatureUsage(ctx context.Context, params *events.FindUnprocessedEventsParams) ([]*events.Event, error) {
+	return nil, ierr.NewError("not implemented").
+		WithHint("not implemented").
+		Mark(ierr.ErrSystem)
+}

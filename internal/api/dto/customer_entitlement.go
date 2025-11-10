@@ -59,8 +59,9 @@ type AggregatedEntitlement struct {
 type EntitlementSourceEntityType string
 
 const (
-	EntitlementSourceEntityTypePlan  EntitlementSourceEntityType = "plan"
-	EntitlementSourceEntityTypeAddon EntitlementSourceEntityType = "addon"
+	EntitlementSourceEntityTypePlan         EntitlementSourceEntityType = "plan"
+	EntitlementSourceEntityTypeAddon        EntitlementSourceEntityType = "addon"
+	EntitlementSourceEntityTypeSubscription EntitlementSourceEntityType = "subscription"
 )
 
 func (e EntitlementSourceEntityType) Validate() error {
@@ -68,6 +69,7 @@ func (e EntitlementSourceEntityType) Validate() error {
 	allowedValues := []string{
 		string(EntitlementSourceEntityTypePlan),
 		string(EntitlementSourceEntityTypeAddon),
+		string(EntitlementSourceEntityTypeSubscription),
 	}
 
 	if !lo.Contains(allowedValues, string(e)) {
@@ -125,6 +127,7 @@ type CustomerUsageSummaryResponse struct {
 type FeatureUsageSummary struct {
 	Feature          *FeatureResponse     `json:"feature"`
 	TotalLimit       *int64               `json:"total_limit"`
+	IsUnlimited      bool                 `json:"is_unlimited"`
 	CurrentUsage     decimal.Decimal      `json:"current_usage"`
 	UsagePercent     decimal.Decimal      `json:"usage_percent"`
 	IsEnabled        bool                 `json:"is_enabled"`

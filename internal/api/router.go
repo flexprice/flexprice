@@ -270,6 +270,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.GET("/:id/balance/real-time", handlers.Wallet.GetWalletBalance)
 			wallet.GET("/:id/balance/real-time-v2", handlers.Wallet.GetWalletBalanceV2)
 			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
+			wallet.POST("/:id/debit", handlers.Wallet.ManualBalanceDebit)
 		}
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")

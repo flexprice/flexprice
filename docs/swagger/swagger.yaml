@@ -388,6 +388,49 @@ definitions:
       threshold:
         $ref: '#/definitions/dto.Threshold'
     type: object
+  dto.AlertLogResponse:
+    properties:
+      alert_info:
+        $ref: '#/definitions/types.AlertInfo'
+      alert_status:
+        $ref: '#/definitions/types.AlertState'
+      alert_type:
+        $ref: '#/definitions/types.AlertType'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      customer:
+        allOf:
+        - $ref: '#/definitions/dto.CustomerResponse'
+        description: Expanded fields
+      customer_id:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      environment_id:
+        type: string
+      feature:
+        $ref: '#/definitions/dto.FeatureResponse'
+      id:
+        type: string
+      parent_entity_id:
+        type: string
+      parent_entity_type:
+        type: string
+      status:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      wallet:
+        $ref: '#/definitions/dto.WalletResponse'
+    type: object
   dto.AuthResponse:
     properties:
       tenant_id:
@@ -743,10 +786,8 @@ definitions:
         type: string
       name:
         type: string
-      permissions:
-        items:
-          type: string
-        type: array
+      service_account_id:
+        type: string
       type:
         $ref: '#/definitions/types.SecretType'
     required:
@@ -1113,6 +1154,8 @@ definitions:
         type: boolean
       is_soft_limit:
         type: boolean
+      parent_entitlement_id:
+        type: string
       plan_id:
         type: string
       static_value:
@@ -1484,6 +1527,8 @@ definitions:
         type: boolean
       is_soft_limit:
         type: boolean
+      parent_entitlement_id:
+        type: string
       plan_id:
         type: string
       static_value:
@@ -1831,6 +1876,12 @@ definitions:
         description: OverageFactor is a multiplier applied to usage beyond the commitment
           amount
         type: number
+      override_entitlements:
+        description: OverrideEntitlements allows customizing specific entitlements
+          for this subscription
+        items:
+          $ref: '#/definitions/dto.OverrideEntitlementRequest'
+        type: array
       override_line_items:
         description: OverrideLineItems allows customizing specific prices for this
           subscription
@@ -1967,6 +2018,22 @@ definitions:
         type: string
     required:
     - name
+    type: object
+  dto.CreateUserRequest:
+    properties:
+      roles:
+        description: Roles are required
+        items:
+          type: string
+        minItems: 1
+        type: array
+      type:
+        allOf:
+        - $ref: '#/definitions/types.UserType'
+        description: Must be "service_account"
+    required:
+    - roles
+    - type
     type: object
   dto.CreateWalletRequest:
     properties:
@@ -2319,7 +2386,7 @@ definitions:
     type: object
   dto.DeleteSubscriptionLineItemRequest:
     properties:
-      end_date:
+      effective_from:
         type: string
     type: object
   dto.EntitlementResponse:
@@ -2350,6 +2417,8 @@ definitions:
         type: boolean
       is_soft_limit:
         type: boolean
+      parent_entitlement_id:
+        type: string
       plan:
         $ref: '#/definitions/dto.PlanResponse'
       plan_id:
@@ -2397,10 +2466,12 @@ definitions:
     enum:
     - plan
     - addon
+    - subscription
     type: string
     x-enum-varnames:
     - EntitlementSourceEntityTypePlan
     - EntitlementSourceEntityTypeAddon
+    - EntitlementSourceEntityTypeSubscription
   dto.EntityIntegrationMappingResponse:
     properties:
       created_at:
@@ -2510,6 +2581,8 @@ definitions:
         type: boolean
       is_soft_limit:
         type: boolean
+      is_unlimited:
+        type: boolean
       next_usage_reset_at:
         type: string
       sources:
@@ -2533,14 +2606,14 @@ definitions:
       external_customer_id:
         description: Optional - for specific customer
         type: string
-      limit:
-        description: Pagination
-        type: integer
-      meter_ids:
+      feature_ids:
         description: Additional filters
         items:
           type: string
         type: array
+      limit:
+        description: Pagination
+        type: integer
       offset:
         type: integer
       start_time:
@@ -3346,6 +3419,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  dto.ListAlertLogsResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.AlertLogResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   dto.ListConnectionsResponse:
     properties:
       connections:
@@ -3560,6 +3642,15 @@ definitions:
       pagination:
         $ref: '#/definitions/types.PaginationResponse'
     type: object
+  dto.ListUsersResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.UserResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/types.PaginationResponse'
+    type: object
   dto.ListWalletTransactionsResponse:
     properties:
       items:
@@ -3613,6 +3704,25 @@ definitions:
       updated_at:
         example: "2024-03-20T15:04:05Z"
         type: string
+    type: object
+  dto.OverrideEntitlementRequest:
+    properties:
+      entitlement_id:
+        description: EntitlementID references the plan/addon entitlement to override
+        type: string
+      is_enabled:
+        description: IsEnabled determines if the entitlement is enabled or disabled
+        type: boolean
+      static_value:
+        description: StaticValue is the static value for static features
+        type: string
+      usage_limit:
+        description: |-
+          UsageLimit is the new usage limit (only these 3 fields can be overridden)
+          For metered features, nil means unlimited usage
+        type: integer
+    required:
+    - entitlement_id
     type: object
   dto.OverrideLineItemRequest:
     properties:
@@ -4080,15 +4190,14 @@ definitions:
     type: object
   dto.RemoveAddonRequest:
     properties:
-      addon_id:
+      addon_association_id:
+        type: string
+      effective_from:
         type: string
       reason:
         type: string
-      subscription_id:
-        type: string
     required:
-    - addon_id
-    - subscription_id
+    - addon_association_id
     type: object
   dto.ResumeSubscriptionRequest:
     description: Request object for resuming a paused subscription
@@ -4161,18 +4270,23 @@ definitions:
         type: string
       name:
         type: string
-      permissions:
+      provider:
+        $ref: '#/definitions/types.SecretProvider'
+      roles:
+        description: RBAC roles
         items:
           type: string
         type: array
-      provider:
-        $ref: '#/definitions/types.SecretProvider'
       status:
         $ref: '#/definitions/types.Status'
       type:
         $ref: '#/definitions/types.SecretType'
       updated_at:
         type: string
+      user_type:
+        allOf:
+        - $ref: '#/definitions/types.UserType'
+        description: '"user" or "service_account"'
     type: object
   dto.SignUpRequest:
     properties:
@@ -4336,6 +4450,17 @@ definitions:
     - billing_period
     - proration_behavior
     - target_plan_id
+    type: object
+  dto.SubscriptionEntitlementsResponse:
+    properties:
+      features:
+        items:
+          $ref: '#/definitions/dto.AggregatedFeature'
+        type: array
+      plan_id:
+        type: string
+      subscription_id:
+        type: string
     type: object
   dto.SubscriptionLineItemRequest:
     properties:
@@ -5322,6 +5447,8 @@ definitions:
         type: boolean
       is_soft_limit:
         type: boolean
+      parent_entitlement_id:
+        type: string
       plan_id:
         type: string
       static_value:
@@ -5713,11 +5840,18 @@ definitions:
   dto.UserResponse:
     properties:
       email:
+        description: Empty for service accounts
         type: string
       id:
         type: string
+      roles:
+        items:
+          type: string
+        type: array
       tenant:
         $ref: '#/definitions/dto.TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
     type: object
   dto.WalletBalanceResponse:
     properties:
@@ -6442,11 +6576,9 @@ definitions:
   types.AddonType:
     enum:
     - onetime
-    - multiple
     type: string
     x-enum-varnames:
     - AddonTypeOnetime
-    - AddonTypeMultiple
   types.AggregationType:
     enum:
     - COUNT
@@ -6491,6 +6623,65 @@ definitions:
       threshold:
         $ref: '#/definitions/types.WalletAlertThreshold'
     type: object
+  types.AlertEntityType:
+    enum:
+    - wallet
+    - feature
+    type: string
+    x-enum-varnames:
+    - AlertEntityTypeWallet
+    - AlertEntityTypeFeature
+  types.AlertInfo:
+    properties:
+      alert_settings:
+        $ref: '#/definitions/types.AlertSettings'
+      timestamp:
+        type: string
+      value_at_time:
+        type: number
+    type: object
+  types.AlertLogFilter:
+    properties:
+      alert_status:
+        $ref: '#/definitions/types.AlertState'
+      alert_type:
+        $ref: '#/definitions/types.AlertType'
+      customer_id:
+        type: string
+      end_time:
+        type: string
+      entity_id:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.AlertEntityType'
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.AlertSettings:
     properties:
       alert_enabled:
@@ -6502,6 +6693,18 @@ definitions:
       warning:
         $ref: '#/definitions/types.AlertThreshold'
     type: object
+  types.AlertState:
+    enum:
+    - ok
+    - info
+    - warning
+    - in_alarm
+    type: string
+    x-enum-varnames:
+    - AlertStateOk
+    - AlertStateInfo
+    - AlertStateWarning
+    - AlertStateInAlarm
   types.AlertThreshold:
     properties:
       condition:
@@ -6515,6 +6718,16 @@ definitions:
     type: string
     x-enum-varnames:
     - AlertThresholdTypeAmount
+  types.AlertType:
+    enum:
+    - low_ongoing_balance
+    - low_credit_balance
+    - feature_wallet_balance
+    type: string
+    x-enum-varnames:
+    - AlertTypeLowOngoingBalance
+    - AlertTypeLowCreditBalance
+    - AlertTypeFeatureWalletBalance
   types.AutoTopupTrigger:
     enum:
     - disabled
@@ -7792,6 +8005,61 @@ definitions:
     x-enum-varnames:
     - TransactionTypeCredit
     - TransactionTypeDebit
+  types.UserFilter:
+    properties:
+      end_time:
+        type: string
+      expand:
+        type: string
+      filters:
+        description: filters allows complex filtering based on multiple fields
+        items:
+          $ref: '#/definitions/types.FilterCondition'
+        type: array
+      limit:
+        maximum: 1000
+        minimum: 1
+        type: integer
+      offset:
+        minimum: 0
+        type: integer
+      order:
+        enum:
+        - asc
+        - desc
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      sort:
+        items:
+          $ref: '#/definitions/types.SortCondition'
+        type: array
+      start_time:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      type:
+        allOf:
+        - $ref: '#/definitions/types.UserType'
+        enum:
+        - user
+        - service_account
+      user_ids:
+        description: Specific filters for users
+        items:
+          type: string
+        type: array
+    type: object
+  types.UserType:
+    enum:
+    - user
+    - service_account
+    type: string
+    x-enum-varnames:
+    - UserTypeUser
+    - UserTypeServiceAccount
   types.WalletAlertThreshold:
     properties:
       type:
@@ -7891,13 +8159,11 @@ paths:
         type: array
       - enum:
         - onetime
-        - multiple
         in: query
         name: addon_type
         type: string
         x-enum-varnames:
         - AddonTypeOnetime
-        - AddonTypeMultiple
       - in: query
         name: end_time
         type: string
@@ -8083,6 +8349,41 @@ paths:
       summary: Update addon
       tags:
       - Addons
+  /addons/{id}/entitlements:
+    get:
+      consumes:
+      - application/json
+      description: Get all entitlements for an addon
+      parameters:
+      - description: Addon ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListEntitlementsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get addon entitlements
+      tags:
+      - Entitlements
   /addons/lookup/{lookup_key}:
     get:
       description: Get an addon by lookup key
@@ -8144,6 +8445,39 @@ paths:
       summary: List addons by filter
       tags:
       - Addons
+  /alert/search:
+    post:
+      consumes:
+      - application/json
+      description: List alert logs by filter with optional expand for customer, wallet,
+        and feature
+      parameters:
+      - description: Filter
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.AlertLogFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListAlertLogsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List alert logs by filter
+      tags:
+      - Alert Logs
   /auth/login:
     post:
       consumes:
@@ -12396,6 +12730,9 @@ paths:
         name: sort
         type: string
       - in: query
+        name: start_date_lt
+        type: string
+      - in: query
         name: start_time
         type: string
       - enum:
@@ -12826,6 +13163,62 @@ paths:
       summary: List price units by filter
       tags:
       - Price Units
+  /rbac/roles:
+    get:
+      consumes:
+      - application/json
+      description: Returns all available roles with their permissions, names, and
+        descriptions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of roles
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: List all RBAC roles
+      tags:
+      - RBAC
+  /rbac/roles/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Returns details of a specific role including permissions, name,
+        and description
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Role details
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Role not found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get a specific RBAC role
+      tags:
+      - RBAC
   /secrets/api/keys:
     get:
       consumes:
@@ -12867,9 +13260,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Create a new API key with the specified type and permissions
+      description: Create a new API key. Provide 'service_account_id' in body to create
+        API key for a service account, otherwise creates for authenticated user.
       parameters:
-      - description: API key creation request
+      - description: API key creation request\
         in: body
         name: request
         required: true
@@ -13342,6 +13736,48 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Preview subscription plan change
+      tags:
+      - Subscriptions
+  /subscriptions/{id}/entitlements:
+    get:
+      consumes:
+      - application/json
+      description: Get all entitlements for a subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: Feature IDs to filter by
+        in: query
+        items:
+          type: string
+        name: feature_ids
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SubscriptionEntitlementsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get subscription entitlements
       tags:
       - Subscriptions
   /subscriptions/{id}/pause:
@@ -14673,6 +15109,40 @@ paths:
       summary: Update a tenant
       tags:
       - Tenants
+  /users:
+    post:
+      consumes:
+      - application/json
+      description: Create a new service account with required roles. Only service
+        accounts can be created via this endpoint.
+      parameters:
+      - description: Create service account request (type must be 'service_account',
+          roles are required)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create service account
+      tags:
+      - Users
   /users/me:
     get:
       consumes:
@@ -14696,6 +15166,38 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get user info
+      tags:
+      - Users
+  /users/search:
+    post:
+      consumes:
+      - application/json
+      description: Search and filter service accounts by type, roles, etc.
+      parameters:
+      - description: Filter parameters
+        in: body
+        name: filter
+        required: true
+        schema:
+          $ref: '#/definitions/types.UserFilter'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ListUsersResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List service accounts with filters
       tags:
       - Users
   /wallets:

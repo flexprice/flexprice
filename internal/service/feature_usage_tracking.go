@@ -141,29 +141,31 @@ func (s *featureUsageTrackingService) PublishEvent(ctx context.Context, event *e
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("partition_key", partitionKey)
 
+	pubSub := s.pubSub
+	topic := s.Config.FeatureUsageTracking.Topic
 	if isBackfill {
-		pubSub := s.backfillPubSub
-		topic := s.Config.FeatureUsageTracking.TopicBackfill
+		pubSub = s.backfillPubSub
+		topic = s.Config.FeatureUsageTracking.TopicBackfill
+	}
 
-		if pubSub == nil {
-			return ierr.NewError("pubsub not initialized").
-				WithHint("Please check the config").
-				Mark(ierr.ErrSystem)
-		}
+	if pubSub == nil {
+		return ierr.NewError("pubsub not initialized").
+			WithHint("Please check the config").
+			Mark(ierr.ErrSystem)
+	}
 
-		s.Logger.Debugw("publishing event for feature usage tracking",
-			"event_id", event.ID,
-			"event_name", event.EventName,
-			"partition_key", partitionKey,
-			"topic", topic,
-		)
+	s.Logger.Debugw("publishing event for feature usage tracking",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"partition_key", partitionKey,
+		"topic", topic,
+	)
 
-		// Publish to feature usage tracking topic using the backfill PubSub (Kafka)
-		if err := pubSub.Publish(ctx, topic, msg); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to publish event for feature usage tracking").
-				Mark(ierr.ErrSystem)
-		}
+	// Publish to feature usage tracking topic using the backfill PubSub (Kafka)
+	if err := pubSub.Publish(ctx, topic, msg); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to publish event for feature usage tracking").
+			Mark(ierr.ErrSystem)
 	}
 	return nil
 }
@@ -1902,7 +1904,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 		}
 
 		// Find unprocessed events
-		unprocessedEvents, err := s.eventRepo.FindUnprocessedEvents(ctx, findParams)
+		unprocessedEvents, err := s.eventRepo.FindUnprocessedEventsFromFeatureUsage(ctx, findParams)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to find unprocessed events").

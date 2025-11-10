@@ -24,9 +24,8 @@ RUN apk --no-cache add ca-certificates tzdata
 
 WORKDIR /app
 COPY --from=builder /app/app .
-COPY --from=builder /app/internal/config ./config
-COPY --from=builder /app/assets/fonts ./assets/fonts
-COPY --from=builder /app/assets/typst-templates ./assets/typst-templates
+COPY --from=builder /app/internal/config/* ./config/
+COPY --from=builder /app/assets/* ./assets/
 COPY --from=typst /bin/typst /usr/local/bin/
 
 ENV TZ=UTC 

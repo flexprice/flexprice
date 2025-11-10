@@ -89,9 +89,24 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 				}).
 				Mark(ierr.ErrNotFound)
 		}
+	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+		// For subscription-scoped entitlements, validate subscription exists
+		entity, err = s.SubRepo.Get(ctx, entityID)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Subscription not found").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		s.Logger.Infow("creating subscription-scoped entitlement",
+			"subscription_id", entityID,
+			"feature_id", req.FeatureID,
+			"parent_entitlement_id", req.ParentEntitlementID)
 	default:
 		return nil, ierr.NewError("unsupported entity type").
-			WithHint("Only PLAN and ADDON entity types are supported").
+			WithHint("Only PLAN, ADDON, and SUBSCRIPTION entity types are supported").
 			WithReportableDetails(map[string]interface{}{
 				"entity_type": entityType,
 			}).
@@ -159,6 +174,11 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 	case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
 		response.Addon = &dto.AddonResponse{Addon: entity.(*addon.Addon)}
 		response.PlanID = entityID // Keep for backward compatibility
+	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+		// For subscription entitlements, we don't add the full subscription object to avoid circular deps
+		s.Logger.Infow("subscription-scoped entitlement created",
+			"entitlement_id", result.ID,
+			"subscription_id", entityID)
 	}
 
 	// Publish webhook event
@@ -180,14 +200,35 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 			Items: make([]*dto.EntitlementResponse, 0),
 		}
 
-		// Pre-validate all plans and features to ensure they exist
+		// Pre-validate all plans/addons/subscriptions and features to ensure they exist
 		planIDs := make(map[string]bool)
+		addonIDs := make(map[string]bool)
+		subscriptionIDs := make(map[string]bool)
 		featureIDs := make(map[string]bool)
 
 		for _, entReq := range req.Items {
-			if entReq.PlanID != "" {
-				planIDs[entReq.PlanID] = true
+			// Support both legacy plan_id and new entity_type/entity_id
+			var entityType types.EntitlementEntityType
+			var entityID string
+
+			if entReq.EntityType != "" && entReq.EntityID != "" {
+				entityType = entReq.EntityType
+				entityID = entReq.EntityID
+			} else if entReq.PlanID != "" {
+				entityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
+				entityID = entReq.PlanID
 			}
+
+			// Collect entity IDs by type
+			switch entityType {
+			case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
+				planIDs[entityID] = true
+			case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+				addonIDs[entityID] = true
+			case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+				subscriptionIDs[entityID] = true
+			}
+
 			featureIDs[entReq.FeatureID] = true
 		}
 
@@ -199,6 +240,32 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 					WithHint(fmt.Sprintf("Plan with ID %s not found", planID)).
 					WithReportableDetails(map[string]interface{}{
 						"plan_id": planID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// Validate all addons exist
+		for addonID := range addonIDs {
+			_, err := s.AddonRepo.GetByID(txCtx, addonID)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint(fmt.Sprintf("Addon with ID %s not found", addonID)).
+					WithReportableDetails(map[string]interface{}{
+						"addon_id": addonID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// Validate all subscriptions exist
+		for subscriptionID := range subscriptionIDs {
+			_, err := s.SubRepo.Get(txCtx, subscriptionID)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint(fmt.Sprintf("Subscription with ID %s not found", subscriptionID)).
+					WithReportableDetails(map[string]interface{}{
+						"subscription_id": subscriptionID,
 					}).
 					Mark(ierr.ErrValidation)
 			}
@@ -283,8 +350,9 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 				entResp.Feature = &dto.FeatureResponse{Feature: feature}
 			}
 
-			// Add expanded plan if it's a plan entitlement
-			if ent.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+			// Add expanded entity based on entity type
+			switch ent.EntityType {
+			case types.ENTITLEMENT_ENTITY_TYPE_PLAN:
 				plan, err := s.PlanRepo.Get(txCtx, ent.EntityID)
 				if err != nil {
 					return ierr.WithError(err).
@@ -295,6 +363,22 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 						Mark(ierr.ErrDatabase)
 				}
 				entResp.Plan = &dto.PlanResponse{Plan: plan}
+			case types.ENTITLEMENT_ENTITY_TYPE_ADDON:
+				addon, err := s.AddonRepo.GetByID(txCtx, ent.EntityID)
+				if err != nil {
+					return ierr.WithError(err).
+						WithHint("Failed to fetch addon for entitlement").
+						WithReportableDetails(map[string]interface{}{
+							"addon_id": ent.EntityID,
+						}).
+						Mark(ierr.ErrDatabase)
+				}
+				entResp.Addon = &dto.AddonResponse{Addon: addon}
+			case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
+				// For subscription entitlements, we don't add the full subscription object to avoid circular deps
+				s.Logger.Infow("subscription-scoped entitlement created in bulk",
+					"entitlement_id", ent.ID,
+					"subscription_id", ent.EntityID)
 			}
 
 			response.Items = append(response.Items, entResp)
@@ -383,6 +467,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 	var featuresByID map[string]*feature.Feature
 	var plansByID map[string]*plan.Plan
 	var metersByID map[string]*meter.Meter
+	var addonsByID map[string]*addon.Addon
 
 	if !filter.GetExpand().IsEmpty() {
 		if filter.GetExpand().Has(types.ExpandFeatures) {
@@ -454,6 +539,29 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				s.Logger.Debugw("fetched plans for entitlements", "count", len(plans))
 			}
 		}
+
+		if filter.GetExpand().Has(types.ExpandAddons) {
+			// Collect entity IDs for addons
+			entityIDs := lo.Map(entitlements, func(e *entitlement.Entitlement, _ int) string {
+				return e.EntityID
+			})
+
+			if len(entityIDs) > 0 {
+				addonFilter := types.NewNoLimitAddonFilter()
+				addonFilter.AddonIDs = entityIDs
+				addons, err := s.AddonRepo.List(ctx, addonFilter)
+				if err != nil {
+					return nil, err
+				}
+
+				addonsByID = make(map[string]*addon.Addon, len(addons))
+				for _, a := range addons {
+					addonsByID[a.ID] = a
+				}
+
+				s.Logger.Debugw("fetched addons for entitlements", "count", len(addons))
+			}
+		}
 	}
 
 	for i, e := range entitlements {
@@ -486,6 +594,13 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 				response.Items[i].PlanID = e.EntityID
 			}
 
+		}
+
+		// Add expanded addon if requested and available
+		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandAddons) && e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_ADDON {
+			if a, ok := addonsByID[e.EntityID]; ok {
+				response.Items[i].Addon = &dto.AddonResponse{Addon: a}
+			}
 		}
 	}
 
@@ -569,7 +684,7 @@ func (s *entitlementService) GetPlanEntitlements(ctx context.Context, planID str
 	filter.WithEntityIDs([]string{planID})
 	filter.WithEntityType(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	filter.WithStatus(types.StatusPublished)
-	filter.WithExpand(fmt.Sprintf("%s,%s", types.ExpandFeatures, types.ExpandMeters))
+	filter.WithExpand(fmt.Sprintf("%s,%s,%s", types.ExpandFeatures, types.ExpandMeters, types.ExpandPlans))
 
 	// Use the standard list function to get the entitlements with expansion
 	return s.ListEntitlements(ctx, filter)

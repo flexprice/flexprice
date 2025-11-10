@@ -149,6 +149,11 @@ func DisplayOrder(v int) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldDisplayOrder, v))
 }
 
+// ParentEntitlementID applies equality check predicate on the "parent_entitlement_id" field. It's identical to ParentEntitlementIDEQ.
+func ParentEntitlementID(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldParentEntitlementID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldEQ(FieldTenantID, v))
@@ -1122,6 +1127,81 @@ func DisplayOrderLT(v int) predicate.Entitlement {
 // DisplayOrderLTE applies the LTE predicate on the "display_order" field.
 func DisplayOrderLTE(v int) predicate.Entitlement {
 	return predicate.Entitlement(sql.FieldLTE(FieldDisplayOrder, v))
+}
+
+// ParentEntitlementIDEQ applies the EQ predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEQ(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDNEQ applies the NEQ predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDNEQ(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNEQ(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDIn applies the In predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIn(FieldParentEntitlementID, vs...))
+}
+
+// ParentEntitlementIDNotIn applies the NotIn predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDNotIn(vs ...string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotIn(FieldParentEntitlementID, vs...))
+}
+
+// ParentEntitlementIDGT applies the GT predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDGT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGT(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDGTE applies the GTE predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDGTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldGTE(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDLT applies the LT predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDLT(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLT(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDLTE applies the LTE predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDLTE(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldLTE(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDContains applies the Contains predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDContains(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContains(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDHasPrefix applies the HasPrefix predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDHasPrefix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDHasSuffix applies the HasSuffix predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDHasSuffix(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDIsNil applies the IsNil predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDIsNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldIsNull(FieldParentEntitlementID))
+}
+
+// ParentEntitlementIDNotNil applies the NotNil predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDNotNil() predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldNotNull(FieldParentEntitlementID))
+}
+
+// ParentEntitlementIDEqualFold applies the EqualFold predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDEqualFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldEqualFold(FieldParentEntitlementID, v))
+}
+
+// ParentEntitlementIDContainsFold applies the ContainsFold predicate on the "parent_entitlement_id" field.
+func ParentEntitlementIDContainsFold(v string) predicate.Entitlement {
+	return predicate.Entitlement(sql.FieldContainsFold(FieldParentEntitlementID, v))
 }
 
 // And groups predicates with the AND operator between them.

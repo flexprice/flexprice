@@ -12,16 +12,17 @@ import (
 
 // CreateEntitlementRequest represents the request to create a new entitlement
 type CreateEntitlementRequest struct {
-	PlanID           string                            `json:"plan_id,omitempty"`
-	FeatureID        string                            `json:"feature_id" binding:"required"`
-	FeatureType      types.FeatureType                 `json:"feature_type" binding:"required"`
-	IsEnabled        bool                              `json:"is_enabled"`
-	UsageLimit       *int64                            `json:"usage_limit"`
-	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
-	IsSoftLimit      bool                              `json:"is_soft_limit"`
-	StaticValue      string                            `json:"static_value"`
-	EntityType       types.EntitlementEntityType       `json:"entity_type"`
-	EntityID         string                            `json:"entity_id"`
+	PlanID              string                            `json:"plan_id,omitempty"`
+	FeatureID           string                            `json:"feature_id" binding:"required"`
+	FeatureType         types.FeatureType                 `json:"feature_type" binding:"required"`
+	IsEnabled           bool                              `json:"is_enabled"`
+	UsageLimit          *int64                            `json:"usage_limit"`
+	UsageResetPeriod    types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
+	IsSoftLimit         bool                              `json:"is_soft_limit"`
+	StaticValue         string                            `json:"static_value"`
+	EntityType          types.EntitlementEntityType       `json:"entity_type"`
+	EntityID            string                            `json:"entity_id"`
+	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -84,18 +85,19 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 	}
 
 	return &entitlement.Entitlement{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
-		EntityType:       r.EntityType,
-		EntityID:         r.EntityID,
-		FeatureID:        r.FeatureID,
-		FeatureType:      r.FeatureType,
-		IsEnabled:        r.IsEnabled,
-		UsageLimit:       r.UsageLimit,
-		UsageResetPeriod: r.UsageResetPeriod,
-		IsSoftLimit:      r.IsSoftLimit,
-		StaticValue:      r.StaticValue,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
+		EntityType:          r.EntityType,
+		EntityID:            r.EntityID,
+		FeatureID:           r.FeatureID,
+		FeatureType:         r.FeatureType,
+		IsEnabled:           r.IsEnabled,
+		UsageLimit:          r.UsageLimit,
+		UsageResetPeriod:    r.UsageResetPeriod,
+		IsSoftLimit:         r.IsSoftLimit,
+		StaticValue:         r.StaticValue,
+		ParentEntitlementID: r.ParentEntitlementID,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 }
 
@@ -167,12 +169,17 @@ func EntitlementToResponse(e *entitlement.Entitlement) *EntitlementResponse {
 		return nil
 	}
 
-	return &EntitlementResponse{
+	resp := &EntitlementResponse{
 		Entitlement: e,
-
-		// TODO: !REMOVE after migration
-		PlanID: e.EntityID,
 	}
+
+	// TODO: !REMOVE after migration
+	// Only set PlanID when entity_type is PLAN
+	if e.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+		resp.PlanID = e.EntityID
+	}
+
+	return resp
 }
 
 // EntitlementsToResponse converts a slice of entitlements to responses

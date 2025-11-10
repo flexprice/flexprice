@@ -12,11 +12,16 @@ import (
 type WalletOperation struct {
 	WalletID string                `json:"wallet_id"`
 	Type     types.TransactionType `json:"type"`
-	// Amount is the amount of the transaction in the wallet's currency
+	// Amount is the amount of the transaction in the wallet's currency (e.g., USD, EUR)
+	// Priority: If Amount is provided along with CreditAmount, Amount takes precedence
+	// The Type field (CREDIT or DEBIT) determines the operation direction
 	Amount decimal.Decimal `json:"amount"`
-	// CreditAmount is the amount of the transaction in the wallet's credit currency
-	// If both are provided, Amount is used
-	CreditAmount      decimal.Decimal             `json:"credit_amount"`
+
+	// CreditAmount is the amount of credits to add/remove from the wallet
+	// Used when you want to specify credits directly instead of currency amount
+	// Priority: Only used if Amount is not provided
+	CreditAmount decimal.Decimal `json:"credit_amount,omitempty"`
+
 	ReferenceType     types.WalletTxReferenceType `json:"reference_type,omitempty"`
 	ReferenceID       string                      `json:"reference_id,omitempty"`
 	Description       string                      `json:"description,omitempty"`
@@ -37,9 +42,29 @@ func (w *WalletOperation) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Check if at least one amount field is provided
 	if w.Amount.IsZero() && w.CreditAmount.IsZero() {
 		return ierr.NewError("amount or credit_amount must be provided").
-			WithHint("Either amount or credit amount must be specified for the operation").
+			WithHint("Either amount or credit_amount must be specified for the operation").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate negative values
+	if w.Amount.LessThan(decimal.Zero) {
+		return ierr.NewError("amount cannot be negative").
+			WithHint("Amount must be zero or positive").
+			WithReportableDetails(map[string]interface{}{
+				"amount": w.Amount,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if w.CreditAmount.LessThan(decimal.Zero) {
+		return ierr.NewError("credit_amount cannot be negative").
+			WithHint("Credit amount must be zero or positive").
+			WithReportableDetails(map[string]interface{}{
+				"credit_amount": w.CreditAmount,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 

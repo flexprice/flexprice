@@ -47,6 +47,8 @@ const (
 	FieldStaticValue = "static_value"
 	// FieldDisplayOrder holds the string denoting the display_order field in the database.
 	FieldDisplayOrder = "display_order"
+	// FieldParentEntitlementID holds the string denoting the parent_entitlement_id field in the database.
+	FieldParentEntitlementID = "parent_entitlement_id"
 	// Table holds the table name of the entitlement in the database.
 	Table = "entitlements"
 )
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldIsSoftLimit,
 	FieldStaticValue,
 	FieldDisplayOrder,
+	FieldParentEntitlementID,
 }
 
 // ForeignKeys holds the SQL foreign-keys that are owned by the "entitlements"
@@ -214,4 +217,9 @@ func ByStaticValue(opts ...sql.OrderTermOption) OrderOption {
 // ByDisplayOrder orders the results by the display_order field.
 func ByDisplayOrder(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisplayOrder, opts...).ToFunc()
+}
+
+// ByParentEntitlementID orders the results by the parent_entitlement_id field.
+func ByParentEntitlementID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentEntitlementID, opts...).ToFunc()
 }

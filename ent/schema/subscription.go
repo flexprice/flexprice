@@ -180,15 +180,5 @@ func (Subscription) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "subscription_status", "status"),
 		// For billing period updates
 		index.Fields("tenant_id", "environment_id", "current_period_end", "subscription_status", "status"),
-		// For pause-related queries
-		index.Fields("tenant_id", "environment_id", "pause_status", "status"),
-		index.Fields("tenant_id", "environment_id", "active_pause_id", "status"),
-		// For payment behavior queries
-		index.Fields("tenant_id", "environment_id", "payment_behavior", "status"),
-		index.Fields("tenant_id", "environment_id", "collection_method", "status"),
-
-		// For incomplete subscription queries
-		index.Fields("tenant_id", "environment_id", "subscription_status", "collection_method", "status").
-			Annotations(entsql.IndexWhere("subscription_status IN ('incomplete', 'past_due')")),
 	}
 }

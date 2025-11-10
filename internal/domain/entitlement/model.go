@@ -8,18 +8,19 @@ import (
 
 // Entitlement represents the benefits a customer gets from a subscription plan
 type Entitlement struct {
-	ID               string                            `json:"id"`
-	EntityType       types.EntitlementEntityType       `json:"entity_type"`
-	EntityID         string                            `json:"entity_id"`
-	FeatureID        string                            `json:"feature_id"`
-	FeatureType      types.FeatureType                 `json:"feature_type"`
-	IsEnabled        bool                              `json:"is_enabled"`
-	UsageLimit       *int64                            `json:"usage_limit"`
-	UsageResetPeriod types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
-	IsSoftLimit      bool                              `json:"is_soft_limit"`
-	StaticValue      string                            `json:"static_value"`
-	EnvironmentID    string                            `json:"environment_id"`
-	DisplayOrder     int                               `json:"display_order"`
+	ID                  string                            `json:"id"`
+	EntityType          types.EntitlementEntityType       `json:"entity_type"`
+	EntityID            string                            `json:"entity_id"`
+	FeatureID           string                            `json:"feature_id"`
+	FeatureType         types.FeatureType                 `json:"feature_type"`
+	IsEnabled           bool                              `json:"is_enabled"`
+	UsageLimit          *int64                            `json:"usage_limit"`
+	UsageResetPeriod    types.EntitlementUsageResetPeriod `json:"usage_reset_period"`
+	IsSoftLimit         bool                              `json:"is_soft_limit"`
+	StaticValue         string                            `json:"static_value"`
+	EnvironmentID       string                            `json:"environment_id"`
+	DisplayOrder        int                               `json:"display_order"`
+	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
 	types.BaseModel
 }
 
@@ -80,18 +81,19 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 	}
 
 	return &Entitlement{
-		ID:               e.ID,
-		EntityType:       types.EntitlementEntityType(e.EntityType),
-		EntityID:         e.EntityID,
-		FeatureID:        e.FeatureID,
-		FeatureType:      types.FeatureType(e.FeatureType),
-		IsEnabled:        e.IsEnabled,
-		UsageLimit:       e.UsageLimit,
-		UsageResetPeriod: types.EntitlementUsageResetPeriod(e.UsageResetPeriod),
-		IsSoftLimit:      e.IsSoftLimit,
-		StaticValue:      e.StaticValue,
-		EnvironmentID:    e.EnvironmentID,
-		DisplayOrder:     e.DisplayOrder,
+		ID:                  e.ID,
+		EntityType:          types.EntitlementEntityType(e.EntityType),
+		EntityID:            e.EntityID,
+		FeatureID:           e.FeatureID,
+		FeatureType:         types.FeatureType(e.FeatureType),
+		IsEnabled:           e.IsEnabled,
+		UsageLimit:          e.UsageLimit,
+		UsageResetPeriod:    types.EntitlementUsageResetPeriod(e.UsageResetPeriod),
+		IsSoftLimit:         e.IsSoftLimit,
+		StaticValue:         e.StaticValue,
+		EnvironmentID:       e.EnvironmentID,
+		DisplayOrder:        e.DisplayOrder,
+		ParentEntitlementID: e.ParentEntitlementID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

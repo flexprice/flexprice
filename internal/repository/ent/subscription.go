@@ -160,7 +160,6 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
 			subscription.EnvironmentID(types.GetEnvironmentID(ctx)),
-			subscription.Version(sub.Version), // Version check for optimistic locking
 		)
 
 	// Set all fields
@@ -177,8 +176,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetUpdatedAt(now).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		AddVersion(1) // Increment version atomically
+		SetUpdatedBy(types.GetUserID(ctx))
 
 	if sub.ActivePauseID != nil {
 		query.SetActivePauseID(*sub.ActivePauseID)
@@ -187,47 +185,13 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	}
 
 	// Execute update
-	n, err := query.Save(ctx)
+	_, err := query.Save(ctx)
 	if err != nil {
 		SetSpanError(span, err)
+		r.logger.Errorw("failed to update subscription", "error", err, "subscription_id", sub.ID)
 		return ierr.WithError(err).
 			WithHint("Failed to update subscription").
 			Mark(ierr.ErrDatabase)
-	}
-	if n == 0 {
-		// No rows were updated - either record doesn't exist or version mismatch
-		exists, err := client.Subscription.Query().
-			Where(
-				subscription.ID(sub.ID),
-				subscription.TenantID(types.GetTenantID(ctx)),
-			).
-			Exist(ctx)
-		if err != nil {
-			SetSpanError(span, err)
-			return ierr.WithError(err).
-				WithHint("Failed to check if subscription exists").
-				Mark(ierr.ErrDatabase)
-		}
-		if !exists {
-			notFoundErr := ierr.NewError("subscription not found").
-				WithHint("Subscription not found").
-				Mark(ierr.ErrNotFound)
-			SetSpanError(span, notFoundErr)
-			return notFoundErr
-		}
-		// Record exists but version mismatch
-		versionErr := ierr.NewError("version conflict").
-			WithHint("Version conflict").
-			WithReportableDetails(
-				map[string]any{
-					"subscription_id":  sub.ID,
-					"expected_version": sub.Version,
-					"actual_version":   sub.Version + 1,
-				},
-			).
-			Mark(ierr.ErrVersionConflict)
-		SetSpanError(span, versionErr)
-		return versionErr
 	}
 
 	SetSpanSuccess(span)

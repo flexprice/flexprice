@@ -482,3 +482,44 @@ func (r *GetCustomerWalletsRequest) Validate() error {
 
 	return nil
 }
+
+// ManualBalanceDebitRequest represents a request to debit credits from a wallet
+type ManualBalanceDebitRequest struct {
+	// credits is the number of credits to debit from the wallet
+	Credits decimal.Decimal `json:"credits"`
+	// transaction_reason is the reason for the transaction
+	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty" binding:"required"`
+	// idempotency_key is a unique key for the transaction
+	IdempotencyKey *string `json:"idempotency_key" binding:"required"`
+	// description to add any specific details about the transaction
+	Description string `json:"description,omitempty"`
+	// metadata is a map of key-value pairs to store any additional information about the transaction
+	Metadata types.Metadata `json:"metadata,omitempty"`
+}
+
+func (r *ManualBalanceDebitRequest) Validate() error {
+	if r.Credits.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("credits must be greater than 0").
+			WithHint("Credits to debit must be a positive value").
+			WithReportableDetails(map[string]interface{}{
+				"credits": r.Credits,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	allowedTransactionReasons := []types.TransactionReason{
+		types.TransactionReasonManualBalanceDebit,
+	}
+
+	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {
+		return ierr.NewError("transaction_reason must be one of the allowed values").
+			WithHint("Invalid transaction reason").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_reason": r.TransactionReason,
+				"allowed_reasons":    allowedTransactionReasons,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}

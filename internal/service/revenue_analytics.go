@@ -98,27 +98,25 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 	ctx context.Context,
 	req *dto.GetCostAnalyticsRequest,
 ) (*dto.GetDetailedCostAnalyticsResponse, error) {
-	// 0. Fetch active costsheet for tenant
+	// 1. Fetch cost analytics (gracefully handle errors)
+	var costAnalytics *dto.GetCostAnalyticsResponse
 	costsheet, err := s.costsheetService.GetActiveCostsheetForTenant(ctx)
 	if err != nil {
-		return nil, err
+		s.Logger.Warnw("failed to fetch active costsheet", "error", err)
+		costAnalytics = nil
+	} else if len(costsheet.Prices) == 0 {
+		s.Logger.Warnw("no prices found for costsheet", "costsheet_id", costsheet.ID)
+		costAnalytics = nil
+	} else {
+		costAnalytics, err = s.getCostAnalytics(ctx, costsheet.ID, req)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch cost analytics", "error", err)
+			costAnalytics = nil
+		}
 	}
 
-	if len(costsheet.Prices) == 0 {
-		return nil, ierr.NewError("no prices found for costsheet").
-			WithHint("No prices found for costsheet").
-			Mark(ierr.ErrNotFound)
-	}
-
-	// 1. Fetch cost analytics
-	costAnalytics, err := s.getCostAnalytics(ctx, costsheet.ID, req)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. Fetch revenue analytics (use existing service)
+	// 2. Fetch revenue analytics
 	var revenueAnalytics *dto.GetUsageAnalyticsResponse
-
 	revenueReq := s.buildRevenueRequest(req)
 	if revenueReq != nil {
 		revenueAnalytics, err = s.featureUsageTrackingService.GetDetailedUsageAnalyticsV2(ctx, revenueReq)
@@ -128,29 +126,55 @@ func (s *revenueAnalyticsService) GetDetailedCostAnalytics(
 		}
 	}
 
-	// 3. Compute derived metrics
+	// 3. Build response - prioritize revenue if cost fails
 	response := &dto.GetDetailedCostAnalyticsResponse{
-		CostAnalytics: costAnalytics.CostAnalytics, // Flatten the cost analytics array
-		TotalCost:     costAnalytics.TotalCost,
-		Currency:      costAnalytics.Currency,
-		StartTime:     costAnalytics.StartTime,
-		EndTime:       costAnalytics.EndTime,
+		CostAnalytics: []dto.CostAnalyticItem{},
+		TotalCost:     decimal.Zero,
+		TotalRevenue:  decimal.Zero,
+		Margin:        decimal.Zero,
+		MarginPercent: decimal.Zero,
+		ROI:           decimal.Zero,
+		ROIPercent:    decimal.Zero,
+		Currency:      "USD", // Default currency
+		StartTime:     req.StartTime,
+		EndTime:       req.EndTime,
 	}
 
-	// Calculate derived metrics if revenue analytics is available
-	// Note: revenueAnalytics will be nil until revenue integration is implemented
+	// Populate cost analytics if available
+	if costAnalytics != nil {
+		response.CostAnalytics = costAnalytics.CostAnalytics
+		response.TotalCost = costAnalytics.TotalCost
+		if costAnalytics.Currency != "" {
+			response.Currency = costAnalytics.Currency
+		}
+		response.StartTime = costAnalytics.StartTime
+		response.EndTime = costAnalytics.EndTime
+	}
+
+	// Calculate revenue
 	response.TotalRevenue = s.calculateTotalRevenue(revenueAnalytics)
-	response.Margin = response.TotalRevenue.Sub(response.TotalCost)
-
-	if !response.TotalRevenue.IsZero() {
-		response.MarginPercent = response.Margin.Div(response.TotalRevenue).Mul(decimal.NewFromInt(100))
+	if revenueAnalytics != nil && revenueAnalytics.Currency != "" {
+		// Use revenue currency if cost currency is default
+		if response.Currency == "USD" && costAnalytics == nil {
+			response.Currency = revenueAnalytics.Currency
+		}
 	}
 
-	if !response.TotalCost.IsZero() {
-		response.ROI = response.Margin.Div(response.TotalCost)
-		response.ROIPercent = response.ROI.Mul(decimal.NewFromInt(100))
+	// Only calculate derived metrics if both cost and revenue are available
+	if costAnalytics != nil && revenueAnalytics != nil {
+		response.Margin = response.TotalRevenue.Sub(response.TotalCost)
+
+		if !response.TotalRevenue.IsZero() {
+			response.MarginPercent = response.Margin.Div(response.TotalRevenue).Mul(decimal.NewFromInt(100))
+		}
+
+		if !response.TotalCost.IsZero() {
+			response.ROI = response.Margin.Div(response.TotalCost)
+			response.ROIPercent = response.ROI.Mul(decimal.NewFromInt(100))
+		}
 	}
 
+	// Return response even if cost analytics failed, as long as we have revenue or at least attempted both
 	return response, nil
 }
 

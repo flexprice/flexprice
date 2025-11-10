@@ -54,7 +54,7 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 
 	// Activity options for heavy operations (data export)
 	heavyActivityOptions := workflow.ActivityOptions{
-		StartToCloseTimeout: 15 * time.Minute,
+		StartToCloseTimeout: 30 * time.Minute, // Increased from 15 to 30 minutes for large exports and slow connections
 		RetryPolicy: &temporal.RetryPolicy{
 			MaximumAttempts: 3,
 		},
