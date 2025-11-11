@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
@@ -26,6 +28,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"github.com/sourcegraph/conc/pool"
 )
 
 // PriceMatch represents a matching price and meter for an event
@@ -105,11 +108,31 @@ func NewEventPostProcessingService(
 
 // PublishEvent publishes an event to the post-processing topic
 func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *events.Event, isBackfill bool) error {
+	// Basic validation guards
+	if event == nil {
+		return ierr.NewError("nil event").WithHint("PublishEvent received nil event").Mark(ierr.ErrValidation)
+	}
+	if event.TenantID == "" || event.EnvironmentID == "" || event.EventName == "" || event.ID == "" {
+		return ierr.NewError("missing required event fields").
+			WithHint("tenant_id, environment_id, event_name, and id must be set").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"tenant_id":  event.TenantID,
+				"environment_id": event.EnvironmentID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// Create message payload
 	payload, err := json.Marshal(event)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to marshal event for post-processing").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": event.ID,
+				"event_name": event.EventName,
+			}).
 			Mark(ierr.ErrValidation)
 	}
 
@@ -130,6 +153,8 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	msg.Metadata.Set("tenant_id", event.TenantID)
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("partition_key", partitionKey)
+	msg.Metadata.Set("event_id", event.ID)
+	msg.Metadata.Set("event_name", event.EventName)
 
 	// TODO: use partition key in the producer
 
@@ -145,6 +170,14 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 			WithHint("Please check the config").
 			Mark(ierr.ErrSystem)
 	}
+	if strings.TrimSpace(topic) == "" {
+		return ierr.NewError("post-processing topic not configured").
+			WithHint("EventPostProcessing.Topic or TopicBackfill must be set").
+			WithReportableDetails(map[string]interface{}{
+				"is_backfill": isBackfill,
+			}).
+			Mark(ierr.ErrSystem)
+	}
 
 	s.Logger.Debugw("publishing event for post-processing",
 		"event_id", event.ID,
@@ -157,6 +190,11 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 	if err := pubSub.Publish(ctx, topic, msg); err != nil {
 		return ierr.WithError(err).
 			WithHint("Failed to publish event for post-processing").
+			WithReportableDetails(map[string]interface{}{
+				"event_id": event.ID,
+				"event_name": event.EventName,
+				"topic": topic,
+			}).
 			Mark(ierr.ErrSystem)
 	}
 	return nil
@@ -238,8 +276,15 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	// Unmarshal the event
 	var event events.Event
 	if err := json.Unmarshal(msg.Payload, &event); err != nil {
+		structured := ierr.WithError(err).
+			WithHint("Failed to unmarshal event for post-processing").
+			WithReportableDetails(map[string]interface{}{
+				"message_uuid": msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("failed to unmarshal event for post-processing",
-			"error", err,
+			"error", structured,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on unmarshal errors
@@ -257,14 +302,29 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 			ExternalCustomerID: event.ExternalCustomerID,
 		})
 		if err != nil {
+			structured := ierr.WithError(err).
+				WithHint("Failed to update event with ingested_at").
+				WithReportableDetails(map[string]interface{}{
+					"event_id":             event.ID,
+					"external_customer_id": event.ExternalCustomerID,
+				}).
+				Mark(ierr.ErrDatabase)
 			s.Logger.Errorw("failed to update event with ingested_at",
-				"error", err,
+				"error", structured,
 			)
-			return err
+			return structured
 		}
 
 		if len(events) == 0 {
+			structured := ierr.NewError("event not found").
+				WithHint("Event not found when updating ingested_at").
+				WithReportableDetails(map[string]interface{}{
+					"event_id":             event.ID,
+					"external_customer_id": event.ExternalCustomerID,
+				}).
+				Mark(ierr.ErrNotFound)
 			s.Logger.Errorw("event not found",
+				"error", structured,
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
@@ -276,24 +336,71 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 		foundEvent = &event
 	}
 
+	// Fallback to event metadata if message metadata is missing
+	if tenantID == "" && foundEvent.TenantID != "" {
+		tenantID = foundEvent.TenantID
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+	if environmentID == "" && foundEvent.EnvironmentID != "" {
+		environmentID = foundEvent.EnvironmentID
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
 	// validate tenant id
 	if foundEvent.TenantID != tenantID {
+		structured := ierr.NewError("invalid tenant id").
+			WithHint("tenant_id mismatch between message and event").
+			WithReportableDetails(map[string]interface{}{
+				"expected":      tenantID,
+				"actual":        foundEvent.TenantID,
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
 		s.Logger.Errorw("invalid tenant id",
+			"error", structured,
 			"expected", tenantID,
-			"actual", event.TenantID,
+			"actual", foundEvent.TenantID,
 			"message_uuid", msg.UUID,
 		)
 		return nil // Don't retry on invalid tenant id
 	}
 
+	// validate environment id
+	if foundEvent.EnvironmentID != environmentID {
+		structured := ierr.NewError("invalid environment id").
+			WithHint("environment_id mismatch between message and event").
+			WithReportableDetails(map[string]interface{}{
+				"expected":      environmentID,
+				"actual":        foundEvent.EnvironmentID,
+				"message_uuid":  msg.UUID,
+				"partition_key": partitionKey,
+			}).
+			Mark(ierr.ErrValidation)
+		s.Logger.Errorw("invalid environment id",
+			"error", structured,
+			"expected", environmentID,
+			"actual", foundEvent.EnvironmentID,
+			"message_uuid", msg.UUID,
+		)
+		return nil // Don't retry on invalid environment id
+	}
+
 	// Process the event
 	if err := s.processEvent(ctx, foundEvent); err != nil {
+		structured := ierr.WithError(err).
+			WithHint("Failed to process event").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   foundEvent.ID,
+				"event_name": foundEvent.EventName,
+			}).
+			Mark(ierr.ErrSystem)
 		s.Logger.Errorw("failed to process event",
-			"error", err,
+			"error", structured,
 			"event_id", foundEvent.ID,
 			"event_name", foundEvent.EventName,
 		)
-		return err // Return error for retry
+		return err // Return original error for retry
 	}
 
 	s.Logger.Infow("event processed successfully",
@@ -336,17 +443,53 @@ func (s *eventPostProcessingService) processEvent(ctx context.Context, event *ev
 // 1. event_name + event_id // for non COUNT_UNIQUE aggregation types
 // 2. event_name + event_field_name + event_field_value // for COUNT_UNIQUE aggregation types
 func (s *eventPostProcessingService) generateUniqueHash(event *events.Event, meter *meter.Meter) string {
-	hashStr := fmt.Sprintf("%s:%s", event.EventName, event.ID)
+	var b strings.Builder
+	b.Grow(len(event.EventName) + len(event.ID) + 64)
+	b.WriteString(event.EventName)
+	b.WriteString(":")
+	b.WriteString(event.ID)
 
-	// For meters with field-based aggregation, include the field value in the hash
 	if meter.Aggregation.Type == types.AggregationCountUnique && meter.Aggregation.Field != "" {
 		if fieldValue, ok := event.Properties[meter.Aggregation.Field]; ok {
-			hashStr = fmt.Sprintf("%s:%s:%v", hashStr, meter.Aggregation.Field, fieldValue)
+			b.WriteString(":")
+			b.WriteString(meter.Aggregation.Field)
+			b.WriteString(":")
+			b.WriteString(stableString(fieldValue))
 		}
 	}
 
-	hash := sha256.Sum256([]byte(hashStr))
+	hash := sha256.Sum256([]byte(b.String()))
 	return hex.EncodeToString(hash[:])
+}
+
+// stableString converts a value into a consistent string representation
+func stableString(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case json.Number:
+		return string(val)
+	case float64:
+		return decimal.NewFromFloat(val).String()
+	case float32:
+		return decimal.NewFromFloat32(val).String()
+	case int:
+		return fmt.Sprintf("%d", val)
+	case int64:
+		return fmt.Sprintf("%d", val)
+	case int32:
+		return fmt.Sprintf("%d", val)
+	case uint:
+		return fmt.Sprintf("%d", val)
+	case uint64:
+		return fmt.Sprintf("%d", val)
+	default:
+		b, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Sprintf("%v", val)
+		}
+		return string(b)
+	}
 }
 
 func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context, event *events.Event) ([]*events.ProcessedEvent, error) {
@@ -656,6 +799,13 @@ func (s *eventPostProcessingService) prepareProcessedEvents(ctx context.Context,
 				quantity = decimal.Zero
 			}
 
+			// Derive sign from quantity: 0 for zero qty, 1 otherwise
+			if quantity.IsZero() {
+				processedEventCopy.Sign = 0
+			} else {
+				processedEventCopy.Sign = 1
+			}
+
 			// Store original quantity
 			processedEventCopy.QtyTotal = quantity
 
@@ -725,6 +875,7 @@ func (s *eventPostProcessingService) findMatchingPricesForEvent(
 	meterMap map[string]*meter.Meter,
 ) []PriceMatch {
 	matches := make([]PriceMatch, 0)
+	filterCache := make(map[string]bool)
 
 	// Find prices with associated meters
 	for _, price := range prices {
@@ -747,8 +898,13 @@ func (s *eventPostProcessingService) findMatchingPricesForEvent(
 			continue
 		}
 
-		// Check meter filters
-		if !s.checkMeterFilters(event, meter.Filters) {
+		// Check meter filters with per-call cache keyed by meter ID
+		allowed, cached := filterCache[meter.ID]
+		if !cached {
+			allowed = s.checkMeterFilters(event, meter.Filters)
+			filterCache[meter.ID] = allowed
+		}
+		if !allowed {
 			continue
 		}
 
@@ -813,7 +969,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 
 	case types.AggregationSum:
 		if meter.Aggregation.Field == "" {
-			s.Logger.Warnw("sum aggregation with empty field name",
+			s.Logger.Debugw("sum aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
@@ -822,7 +978,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 
 		val, ok := event.Properties[meter.Aggregation.Field]
 		if !ok {
-			s.Logger.Warnw("property not found for sum aggregation",
+			s.Logger.Debugw("property not found for sum aggregation",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -866,7 +1022,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 			var err error
 			decimalValue, err = decimal.NewFromString(str)
 			if err != nil {
-				s.Logger.Warnw("failed to parse uint64 as decimal",
+				s.Logger.Debugw("failed to parse uint64 as decimal",
 					"event_id", event.ID,
 					"meter_id", meter.ID,
 					"value", v,
@@ -880,7 +1036,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 			var err error
 			decimalValue, err = decimal.NewFromString(v)
 			if err != nil {
-				s.Logger.Warnw("failed to parse string as decimal",
+				s.Logger.Debugw("failed to parse string as decimal",
 					"event_id", event.ID,
 					"meter_id", meter.ID,
 					"value", v,
@@ -894,7 +1050,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 			var err error
 			decimalValue, err = decimal.NewFromString(string(v))
 			if err != nil {
-				s.Logger.Warnw("failed to parse json.Number as decimal",
+				s.Logger.Debugw("failed to parse json.Number as decimal",
 					"event_id", event.ID,
 					"meter_id", meter.ID,
 					"value", v,
@@ -907,7 +1063,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 		default:
 			// Try to convert to string representation
 			stringValue = fmt.Sprintf("%v", v)
-			s.Logger.Warnw("unknown type for sum aggregation - cannot convert to decimal",
+			s.Logger.Debugw("unknown type for sum aggregation - cannot convert to decimal",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
@@ -921,7 +1077,7 @@ func (s *eventPostProcessingService) extractQuantityFromEvent(
 
 	default:
 		// We're only supporting COUNT and SUM for now
-		s.Logger.Warnw("unsupported aggregation type",
+		s.Logger.Debugw("unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
@@ -1201,24 +1357,37 @@ func (s *eventPostProcessingService) ReprocessEvents(ctx context.Context, params
 			break
 		}
 
-		// Publish each event to the post-processing topic
-		for _, event := range unprocessedEvents {
-			// hardcoded delay to avoid rate limiting
-			// TODO: remove this to make it configurable
-			if err := s.PublishEvent(ctx, event, true); err != nil {
-				s.Logger.Errorw("failed to publish event for reprocessing",
-					"event_id", event.ID,
-					"error", err,
-				)
-				// Continue with other events instead of failing the whole batch
-				continue
-			}
-			totalEventsPublished++
-
-			// Update the last seen ID and timestamp for next batch
-			lastID = event.ID
-			lastTimestamp = event.Timestamp
+		// Publish events with bounded concurrency
+		workers64 := s.Config.EventPostProcessing.RateLimitBackfill
+		workers := int(workers64)
+		if workers <= 0 {
+			workers = 10
 		}
+		p := pool.New().WithMaxGoroutines(workers)
+		publishedCount := 0
+		var mu sync.Mutex
+		for _, event := range unprocessedEvents {
+			ev := event
+			p.Go(func() {
+				if err := s.PublishEvent(ctx, ev, true); err != nil {
+					s.Logger.Errorw("failed to publish event for reprocessing",
+						"event_id", ev.ID,
+						"error", err,
+					)
+					return
+				}
+				mu.Lock()
+				publishedCount++
+				mu.Unlock()
+			})
+		}
+		p.Wait()
+
+		// Update totals and keyset for next batch using the last event in the batch
+		totalEventsPublished += publishedCount
+		lastEvent := unprocessedEvents[len(unprocessedEvents)-1]
+		lastID = lastEvent.ID
+		lastTimestamp = lastEvent.Timestamp
 
 		s.Logger.Infow("published events for reprocessing",
 			"batch", processedBatches,
