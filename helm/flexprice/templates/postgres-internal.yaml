@@ -1,0 +1,107 @@
+{{- if not .Values.postgres.external.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-postgres
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: {{ .Values.postgres.internal.service.type }}
+  ports:
+    - port: {{ .Values.postgres.internal.service.port }}
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "flexprice.fullname" . }}-postgres
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "flexprice.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgres.internal.image.repository }}:{{ .Values.postgres.internal.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.internal.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgres.user | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.fullname" . }}-secrets
+                  key: postgres-password
+            - name: POSTGRES_DB
+              value: {{ .Values.postgres.dbname | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            {{- toYaml .Values.postgres.internal.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.user | quote }}
+                - -d
+                - {{ .Values.postgres.dbname | quote }}
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgres.user | quote }}
+                - -d
+                - {{ .Values.postgres.dbname | quote }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+  {{- if .Values.postgres.internal.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        {{- if .Values.postgres.internal.persistence.storageClass }}
+        storageClassName: {{ .Values.postgres.internal.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgres.internal.persistence.size }}
+  {{- end }}
+{{- end }}
+
