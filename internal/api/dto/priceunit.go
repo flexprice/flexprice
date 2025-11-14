@@ -12,13 +12,27 @@ import (
 )
 
 type CreatePriceUnitRequest struct {
-	Name           string         `json:"name" validate:"required"`
-	Code           string         `json:"code" validate:"required"`
-	Symbol         string         `json:"symbol" validate:"required"`
-	BaseCurrency   string         `json:"base_currency" validate:"required,len=3"`
-	ConversionRate string         `json:"conversion_rate" validate:"required"`
-	Precision      int            `json:"precision" validate:"min=0,max=8"`
-	Metadata       types.Metadata `json:"metadata,omitempty"`
+	Name   string `json:"name" validate:"required"`
+	Code   string `json:"code" validate:"required"`
+	Symbol string `json:"symbol" validate:"required"`
+
+	// base_currency  is the currency that the price unit is based on
+	BaseCurrency string `json:"base_currency" validate:"required,len=3"`
+
+	// ConversionRate defines the exchange rate from this price unit to the base currency.
+	// This rate is used to convert amounts in the custom price unit to the base currency for storage and billing.
+	//
+	// Conversion formula:
+	//   price_unit_amount * conversion_rate = base_currency_amount
+	//
+	// Example:
+	//   If conversion_rate = "0.01" and base_currency = "usd":
+	//   100 price_unit tokens * 0.01 = 1.00 USD
+	ConversionRate string `json:"conversion_rate" validate:"required"`
+
+	// Precision is the number of decimal places to round the price unit to
+	Precision int            `json:"precision" validate:"min=0,max=8"`
+	Metadata  types.Metadata `json:"metadata,omitempty"`
 }
 
 func (r *CreatePriceUnitRequest) Validate() error {

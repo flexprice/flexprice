@@ -154,6 +154,9 @@ func (Price) Fields() []ent.Field {
 		field.JSON("tiers", []*types.PriceTier{}).
 			Optional(),
 
+		field.JSON("price_unit_tiers", []*types.PriceTier{}).
+			Optional(),
+
 		field.JSON("transform_quantity", types.TransformQuantity{}).
 			Optional(),
 
