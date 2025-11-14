@@ -244,10 +244,6 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 		}
 
 		for _, p := range prices.Items {
-			// TODO: !REMOVE after migration
-			if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-				p.PlanID = p.EntityID
-			}
 			pricesByPlanID[p.EntityID] = append(pricesByPlanID[p.EntityID], p)
 		}
 	}
