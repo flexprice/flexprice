@@ -40,6 +40,8 @@ type Configuration struct {
 	FeatureUsageTrackingLazy FeatureUsageTrackingLazyConfig `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
 	EnvAccess                EnvAccessConfig                `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag              FeatureFlagConfig              `mapstructure:"feature_flag" validate:"required"`
+	Email                    EmailConfig                    `mapstructure:"email" validate:"required"`
+	RBAC                     RBACConfig                     `mapstructure:"rbac" validate:"omitempty"`
 }
 
 type CacheConfig struct {
@@ -115,6 +117,10 @@ type PostgresConfig struct {
 	MaxIdleConns           int    `mapstructure:"max_idle_conns" default:"5"`
 	ConnMaxLifetimeMinutes int    `mapstructure:"conn_max_lifetime_minutes" default:"60"`
 	AutoMigrate            bool   `mapstructure:"auto_migrate" default:"false"`
+
+	// Reader endpoint configuration for read replicas
+	ReaderHost string `mapstructure:"reader_host"`
+	ReaderPort int    `mapstructure:"reader_port"`
 }
 
 type APIKeyConfig struct {
@@ -221,6 +227,22 @@ type FeatureFlagConfig struct {
 	ForceV1ForTenant               string `mapstructure:"force_v1_for_tenant" validate:"omitempty"`
 }
 
+type Email struct {
+	Enabled      bool   `mapstructure:"enabled" validate:"required"`
+	ResendAPIKey string `mapstructure:"resend_api_key" validate:"omitempty"`
+	FromAddress  string `mapstructure:"from_address" validate:"omitempty"`
+	ReplyTo      string `mapstructure:"reply_to" validate:"omitempty"`
+	CalendarURL  string `mapstructure:"calendar_url" validate:"omitempty"`
+}
+
+type EmailConfig struct {
+	Enabled      bool   `mapstructure:"enabled" validate:"required"`
+	ResendAPIKey string `mapstructure:"resend_api_key" validate:"omitempty"`
+	FromAddress  string `mapstructure:"from_address" validate:"omitempty"`
+	ReplyTo      string `mapstructure:"reply_to" validate:"omitempty"`
+	CalendarURL  string `mapstructure:"calendar_url" validate:"omitempty"`
+}
+
 func NewConfig() (*Configuration, error) {
 	v := viper.New()
 
@@ -325,4 +347,35 @@ func (c PostgresConfig) GetDSN() string {
 		c.Port,
 		c.SSLMode,
 	)
+}
+
+func (c PostgresConfig) GetReaderDSN() string {
+	// If reader host is not configured, fall back to writer host
+	host := c.ReaderHost
+	port := c.ReaderPort
+
+	if host == "" {
+		host = c.Host
+	}
+	if port == 0 {
+		port = c.Port
+	}
+
+	return fmt.Sprintf(
+		"user=%s password=%s dbname=%s host=%s port=%d sslmode=%s",
+		c.User,
+		c.Password,
+		c.DBName,
+		host,
+		port,
+		c.SSLMode,
+	)
+}
+
+func (c PostgresConfig) HasSeparateReader() bool {
+	return c.ReaderHost != "" && c.ReaderHost != c.Host
+}
+
+type RBACConfig struct {
+	RolesConfigPath string `mapstructure:"roles_config_path" json:"roles_config_path"`
 }

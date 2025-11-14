@@ -43,10 +43,22 @@ func (c *MockPostgresClient) TxFromContext(ctx context.Context) *ent.Tx {
 	return nil
 }
 
-// Querier returns the ent client
-func (c *MockPostgresClient) Querier(ctx context.Context) *ent.Client {
+// Writer returns the writer client for write operations
+func (c *MockPostgresClient) Writer(ctx context.Context) *ent.Client {
 	if tx := c.TxFromContext(ctx); tx != nil {
 		return tx.Client()
 	}
 	return c.entClient
+}
+
+// Reader returns the appropriate client for read operations
+func (c *MockPostgresClient) Reader(ctx context.Context) *ent.Client {
+	if tx := c.TxFromContext(ctx); tx != nil {
+		return tx.Client()
+	}
+	return c.entClient
+}
+
+func (c *MockPostgresClient) Close() error {
+	return nil
 }

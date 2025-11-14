@@ -36,7 +36,7 @@ func NewCustomerRepository(client postgres.IClient, log *logger.Logger, cache ca
 }
 
 func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Customer) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating customer",
 		"customer_id", c.ID,
@@ -124,7 +124,7 @@ func (r *customerRepository) Get(ctx context.Context, id string) (*domainCustome
 		return cachedCustomer, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.log.Debugw("getting customer", "customer_id", id)
 
 	c, err := client.Customer.Query().
@@ -172,7 +172,7 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 		return cachedCustomer, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting customer by lookup key", "lookup_key", lookupKey)
 
@@ -206,7 +206,7 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 }
 
 func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "customer", "list", map[string]interface{}{
@@ -237,7 +237,7 @@ func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFil
 }
 
 func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "customer", "count", map[string]interface{}{
@@ -270,7 +270,7 @@ func (r *customerRepository) Count(ctx context.Context, filter *types.CustomerFi
 }
 
 func (r *customerRepository) ListAll(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "customer", "list_all", map[string]interface{}{
@@ -303,7 +303,7 @@ func (r *customerRepository) ListAll(ctx context.Context, filter *types.Customer
 }
 
 func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Customer) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating customer",
 		"customer_id", c.ID,
@@ -382,7 +382,7 @@ func (r *customerRepository) Delete(ctx context.Context, domainCustomer *domainC
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Customer.Update().
 		Where(
 			customer.ID(domainCustomer.ID),

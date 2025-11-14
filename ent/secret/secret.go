@@ -37,14 +37,16 @@ const (
 	FieldValue = "value"
 	// FieldDisplayID holds the string denoting the display_id field in the database.
 	FieldDisplayID = "display_id"
-	// FieldPermissions holds the string denoting the permissions field in the database.
-	FieldPermissions = "permissions"
 	// FieldExpiresAt holds the string denoting the expires_at field in the database.
 	FieldExpiresAt = "expires_at"
 	// FieldLastUsedAt holds the string denoting the last_used_at field in the database.
 	FieldLastUsedAt = "last_used_at"
 	// FieldProviderData holds the string denoting the provider_data field in the database.
 	FieldProviderData = "provider_data"
+	// FieldRoles holds the string denoting the roles field in the database.
+	FieldRoles = "roles"
+	// FieldUserType holds the string denoting the user_type field in the database.
+	FieldUserType = "user_type"
 	// Table holds the table name of the secret in the database.
 	Table = "secrets"
 )
@@ -64,10 +66,11 @@ var Columns = []string{
 	FieldProvider,
 	FieldValue,
 	FieldDisplayID,
-	FieldPermissions,
 	FieldExpiresAt,
 	FieldLastUsedAt,
 	FieldProviderData,
+	FieldRoles,
+	FieldUserType,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -99,8 +102,10 @@ var (
 	TypeValidator func(string) error
 	// ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
 	ProviderValidator func(string) error
-	// DefaultPermissions holds the default value on creation for the "permissions" field.
-	DefaultPermissions []string
+	// DefaultRoles holds the default value on creation for the "roles" field.
+	DefaultRoles []string
+	// DefaultUserType holds the default value on creation for the "user_type" field.
+	DefaultUserType string
 )
 
 // OrderOption defines the ordering options for the Secret queries.
@@ -179,4 +184,9 @@ func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 // ByLastUsedAt orders the results by the last_used_at field.
 func ByLastUsedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLastUsedAt, opts...).ToFunc()
+}
+
+// ByUserType orders the results by the user_type field.
+func ByUserType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUserType, opts...).ToFunc()
 }

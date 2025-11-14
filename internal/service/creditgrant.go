@@ -48,6 +48,14 @@ type CreditGrantService interface {
 	// This method handles both one-time and recurring credit grants
 	ApplyCreditGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, metadata types.Metadata) error
 
+	// CreateScheduledCreditGrantApplication creates a CGA record without applying it
+	// This is used when credit grants need to be scheduled for later processing (e.g., when subscription is incomplete)
+	CreateScheduledCreditGrantApplication(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, metadata types.Metadata) (*domainCreditGrantApplication.CreditGrantApplication, error)
+
+	// ApplyCreditGrantToWallet applies credit grant to wallet atomically
+	// This handles wallet top-up, CGA status update, and next period creation
+	ApplyCreditGrantToWallet(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, cga *domainCreditGrantApplication.CreditGrantApplication) error
+
 	// CancelFutureCreditGrantsOfSubscription cancels all future credit grants for this subscription
 	CancelFutureCreditGrantsOfSubscription(ctx context.Context, subscriptionID string) error
 }
@@ -255,15 +263,14 @@ func (s *creditGrantService) GetCreditGrantsBySubscription(ctx context.Context, 
 	return resp, nil
 }
 
-// ApplyCreditGrant applies a credit grant to a subscription and creates CGA tracking records
-// This method handles both one-time and recurring credit grants
-func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, metadata types.Metadata) error {
-
-	// Validate credit grant
-	if err := grant.Validate(); err != nil {
-		return err
-	}
-
+// CreateScheduledCreditGrantApplication creates a CGA record without applying it
+// This is used when credit grants need to be scheduled for later processing (e.g., when subscription is incomplete)
+func (s *creditGrantService) CreateScheduledCreditGrantApplication(
+	ctx context.Context,
+	grant *creditgrant.CreditGrant,
+	subscription *subscription.Subscription,
+	metadata types.Metadata,
+) (*domainCreditGrantApplication.CreditGrantApplication, error) {
 	// Calculate credit grant period based on cadence
 	var periodStart, periodEnd time.Time
 	var err error
@@ -272,7 +279,7 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		// For recurring grants, calculate proper period dates
 		periodStart, periodEnd, err = s.calculateNextPeriod(grant, subscription.StartDate, subscription.EndDate)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
@@ -284,11 +291,17 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		applicationReason = types.ApplicationReasonOnetimeCreditGrant
 	}
 
+	// Schedule for subscription start date, or now if subscription start is in the past
+	scheduledFor := subscription.StartDate
+	if scheduledFor.Before(time.Now().UTC()) {
+		scheduledFor = time.Now().UTC()
+	}
+
 	cga := &domainCreditGrantApplication.CreditGrantApplication{
 		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
 		CreditGrantID:                   grant.ID,
 		SubscriptionID:                  subscription.ID,
-		ScheduledFor:                    subscription.StartDate,
+		ScheduledFor:                    scheduledFor,
 		PeriodStart:                     lo.ToPtr(periodStart),
 		PeriodEnd:                       lo.ToPtr(periodEnd),
 		ApplicationStatus:               types.ApplicationStatusPending,
@@ -302,25 +315,43 @@ func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *credit
 		BaseModel:                       types.GetDefaultBaseModel(ctx),
 	}
 
-	// Create CGA record first
+	// Create CGA record
 	if err = s.CreditGrantApplicationRepo.Create(ctx, cga); err != nil {
-		s.Logger.Errorw("failed to create CGA record", "error", err)
+		s.Logger.Errorw("failed to create scheduled CGA record", "error", err)
+		return nil, err
+	}
+
+	return cga, nil
+}
+
+// ApplyCreditGrant applies a credit grant to a subscription and creates CGA tracking records
+// This method handles both one-time and recurring credit grants
+func (s *creditGrantService) ApplyCreditGrant(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, metadata types.Metadata) error {
+
+	// Validate credit grant
+	if err := grant.Validate(); err != nil {
+		return err
+	}
+
+	// Create CGA record for tracking
+	cga, err := s.CreateScheduledCreditGrantApplication(ctx, grant, subscription, metadata)
+	if err != nil {
 		return err
 	}
 
 	// Apply credit grant transaction (handles wallet, status update, and next period creation atomically)
-	err = s.applyCreditGrantToWallet(ctx, grant, subscription, cga)
+	err = s.ApplyCreditGrantToWallet(ctx, grant, subscription, cga)
 
 	return err
 }
 
-// applyCreditGrantToWallet applies credit grant in a complete transaction
+// ApplyCreditGrantToWallet applies credit grant in a complete transaction
 // This function performs 3 main tasks atomically:
 // 1. Apply credits to wallet
 // 2. Update CGA status to applied
 // 3. Create next period CGA if recurring
 // If any task fails, all changes are rolled back and CGA is marked as failed
-func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, cga *domainCreditGrantApplication.CreditGrantApplication) error {
+func (s *creditGrantService) ApplyCreditGrantToWallet(ctx context.Context, grant *creditgrant.CreditGrant, subscription *subscription.Subscription, cga *domainCreditGrantApplication.CreditGrantApplication) error {
 	walletService := NewWalletService(s.ServiceParams)
 
 	// Find or create wallet outside of transaction for better error handling
@@ -586,7 +617,7 @@ func (s *creditGrantService) processScheduledApplication(
 	switch action {
 	case StateActionApply:
 		// Apply credit grant transaction (handles wallet, status update, and next period creation atomically)
-		err := s.applyCreditGrantToWallet(ctx, creditGrant.CreditGrant, subscription.Subscription, cga)
+		err := s.ApplyCreditGrantToWallet(ctx, creditGrant.CreditGrant, subscription.Subscription, cga)
 		if err != nil {
 			s.Logger.Errorw("Failed to apply credit grant transaction", "application_id", cga.ID, "error", err)
 			return err
@@ -796,8 +827,7 @@ func (s *creditGrantService) cancelFutureCreditGrantApplications(
 	// Update current CGA status to cancelled
 	cga.ApplicationStatus = types.ApplicationStatusCancelled
 
-	err := s.CreditGrantApplicationRepo.Update(ctx, cga)
-	if err != nil {
+	if err := s.CreditGrantApplicationRepo.Update(ctx, cga); err != nil {
 		s.Logger.Errorw("Failed to update CGA status to cancelled", "application_id", cga.ID, "error", err)
 		return err
 	}
@@ -819,8 +849,8 @@ func (s *creditGrantService) cancelFutureCreditGrantApplications(
 		return err
 	}
 
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Cancel each future application
+	// Cancel each future application in a transaction
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Cancel each future application
 		for _, app := range applications {
 			app.ApplicationStatus = types.ApplicationStatusCancelled
@@ -839,7 +869,9 @@ func (s *creditGrantService) cancelFutureCreditGrantApplications(
 		}
 
 		return nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	s.Logger.Infow("Successfully cancelled future credit grant applications",
 		"grant_id", grant.ID,

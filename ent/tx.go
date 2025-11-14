@@ -52,6 +52,8 @@ type Tx struct {
 	Environment *EnvironmentClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
+	// Group is the client for interacting with the Group builders.
+	Group *GroupClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -70,6 +72,8 @@ type Tx struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// ScheduledTask is the client for interacting with the ScheduledTask builders.
+	ScheduledTask *ScheduledTaskClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
 	// Settings is the client for interacting with the Settings builders.
@@ -250,6 +254,7 @@ func (tx *Tx) init() {
 	tx.EntityIntegrationMapping = NewEntityIntegrationMappingClient(tx.config)
 	tx.Environment = NewEnvironmentClient(tx.config)
 	tx.Feature = NewFeatureClient(tx.config)
+	tx.Group = NewGroupClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.InvoiceLineItem = NewInvoiceLineItemClient(tx.config)
 	tx.InvoiceSequence = NewInvoiceSequenceClient(tx.config)
@@ -259,6 +264,7 @@ func (tx *Tx) init() {
 	tx.Plan = NewPlanClient(tx.config)
 	tx.Price = NewPriceClient(tx.config)
 	tx.PriceUnit = NewPriceUnitClient(tx.config)
+	tx.ScheduledTask = NewScheduledTaskClient(tx.config)
 	tx.Secret = NewSecretClient(tx.config)
 	tx.Settings = NewSettingsClient(tx.config)
 	tx.Subscription = NewSubscriptionClient(tx.config)

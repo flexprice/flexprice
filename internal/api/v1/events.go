@@ -430,3 +430,33 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 
 	return startTime, endTime, nil
 }
+
+// @Summary Get monitoring data
+// @Description Retrieve monitoring data for events including consumer lag and event metrics (last 24 hours by default)
+// @Tags Events
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.GetMonitoringDataResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /events/monitoring [get]
+func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Default to last 24 hours
+	endTime := time.Now().UTC()
+	startTime := endTime.Add(-24 * time.Hour)
+
+	req := dto.GetMonitoringDataRequest{
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+
+	// Call the service to get monitoring data
+	response, err := h.eventService.GetMonitoringData(ctx, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}

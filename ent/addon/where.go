@@ -835,29 +835,6 @@ func MetadataNotNil() predicate.Addon {
 	return predicate.Addon(sql.FieldNotNull(FieldMetadata))
 }
 
-// HasPrices applies the HasEdge predicate on the "prices" edge.
-func HasPrices() predicate.Addon {
-	return predicate.Addon(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, PricesTable, PricesColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasPricesWith applies the HasEdge predicate on the "prices" edge with a given conditions (other predicates).
-func HasPricesWith(preds ...predicate.Price) predicate.Addon {
-	return predicate.Addon(func(s *sql.Selector) {
-		step := newPricesStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasEntitlements applies the HasEdge predicate on the "entitlements" edge.
 func HasEntitlements() predicate.Addon {
 	return predicate.Addon(func(s *sql.Selector) {

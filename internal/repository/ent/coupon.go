@@ -34,7 +34,7 @@ func NewCouponRepository(client postgres.IClient, log *logger.Logger, cache cach
 }
 
 func (r *couponRepository) Create(ctx context.Context, c *domainCoupon.Coupon) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating coupon",
 		"coupon_id", c.ID,
@@ -118,7 +118,7 @@ func (r *couponRepository) Get(ctx context.Context, id string) (*domainCoupon.Co
 		return cachedCoupon, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.log.Debugw("getting coupon", "coupon_id", id)
 
 	c, err := client.Coupon.Query().
@@ -195,7 +195,7 @@ func (r *couponRepository) GetBatch(ctx context.Context, ids []string) ([]*domai
 	}
 
 	// Fetch uncached coupons from database
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	entCoupons, err := client.Coupon.Query().
 		Where(
@@ -245,7 +245,7 @@ func (r *couponRepository) GetBatch(ctx context.Context, ids []string) ([]*domai
 }
 
 func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating coupon",
 		"coupon_id", c.ID,
@@ -305,7 +305,7 @@ func (r *couponRepository) Update(ctx context.Context, c *domainCoupon.Coupon) e
 }
 
 func (r *couponRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting coupon",
 		"coupon_id", id,
@@ -352,7 +352,7 @@ func (r *couponRepository) Delete(ctx context.Context, id string) error {
 }
 
 func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("incrementing coupon redemptions",
 		"coupon_id", id,
@@ -399,7 +399,7 @@ func (r *couponRepository) IncrementRedemptions(ctx context.Context, id string) 
 }
 
 func (r *couponRepository) List(ctx context.Context, filter *types.CouponFilter) ([]*domainCoupon.Coupon, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "coupon", "list", map[string]interface{}{
@@ -431,7 +431,7 @@ func (r *couponRepository) List(ctx context.Context, filter *types.CouponFilter)
 }
 
 func (r *couponRepository) Count(ctx context.Context, filter *types.CouponFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "coupon", "count", map[string]interface{}{

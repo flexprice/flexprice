@@ -31,7 +31,7 @@ func NewMeterRepository(client postgres.IClient, logger *logger.Logger, cache ca
 }
 
 func (r *meterRepository) CreateMeter(ctx context.Context, m *domainMeter.Meter) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "meter", "create", map[string]interface{}{
@@ -85,7 +85,7 @@ func (r *meterRepository) GetMeter(ctx context.Context, id string) (*domainMeter
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Try to get from cache first
 	if cachedMeter := r.GetCache(ctx, id); cachedMeter != nil {
@@ -135,7 +135,7 @@ func (r *meterRepository) List(ctx context.Context, filter *types.MeterFilter) (
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Meter.Query()
 
 	// Apply base filters
@@ -186,7 +186,7 @@ func (r *meterRepository) Count(ctx context.Context, filter *types.MeterFilter) 
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Meter.Query()
 
 	// Apply base filters
@@ -213,7 +213,7 @@ func (r *meterRepository) Count(ctx context.Context, filter *types.MeterFilter) 
 }
 
 func (r *meterRepository) DisableMeter(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "meter", "disable", map[string]interface{}{
@@ -265,7 +265,7 @@ func (r *meterRepository) UpdateMeter(ctx context.Context, id string, filters []
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.logger.Debugw("updating meter",
 		"meter_id", id,

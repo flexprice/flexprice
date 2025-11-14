@@ -58,6 +58,8 @@ type CreateSubscriptionRequest struct {
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
 	// OverrideLineItems allows customizing specific prices for this subscription
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+	// OverrideEntitlements allows customizing specific entitlements for this subscription
+	OverrideEntitlements []OverrideEntitlementRequest `json:"override_entitlements,omitempty" validate:"omitempty,dive"`
 	// Addons represents addons to be added to the subscription during creation
 	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 
@@ -96,9 +98,24 @@ type AddAddonRequest struct {
 
 // RemoveAddonRequest is used by body-based endpoint /subscriptions/addon (DELETE)
 type RemoveAddonRequest struct {
-	SubscriptionID string `json:"subscription_id" validate:"required"`
-	AddonID        string `json:"addon_id" validate:"required"`
-	Reason         string `json:"reason"`
+	AddonAssociationID string     `json:"addon_association_id" validate:"required"`
+	Reason             string     `json:"reason"`
+	EffectiveFrom      *time.Time `json:"effective_from,omitempty"`
+}
+
+func (r *RemoveAddonRequest) Validate() error {
+
+	if r.EffectiveFrom != nil && r.EffectiveFrom.Before(time.Now()) {
+		return ierr.NewError("effective_from date is invalid").
+			WithHint("end date cannot be in the past").
+			WithReportableDetails(map[string]interface{}{
+				"addon_association_id": r.AddonAssociationID,
+				"effective_from":       r.EffectiveFrom,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 type UpdateSubscriptionRequest struct {
@@ -162,12 +179,7 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	}
 	// Set default proration behavior if not provided
 	if r.ProrationBehavior == "" {
-		r.ProrationBehavior = types.ProrationBehaviorCreateProrations
-	}
-
-	// Validate proration behavior
-	if err := r.ProrationBehavior.Validate(); err != nil {
-		return err
+		r.ProrationBehavior = types.ProrationBehaviorNone
 	}
 
 	return nil
@@ -673,6 +685,7 @@ type SubscriptionLineItemRequest struct {
 // SubscriptionLineItemResponse represents the response for a subscription line item
 type SubscriptionLineItemResponse struct {
 	*subscription.SubscriptionLineItem
+	Price *PriceResponse `json:"price,omitempty"`
 }
 
 // OverrideLineItemRequest represents a price override for a specific subscription
@@ -696,6 +709,33 @@ type OverrideLineItemRequest struct {
 
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+}
+
+// OverrideEntitlementRequest allows overriding entitlement values for a subscription
+type OverrideEntitlementRequest struct {
+	// EntitlementID references the plan/addon entitlement to override
+	EntitlementID string `json:"entitlement_id" validate:"required"`
+
+	// UsageLimit is the new usage limit (only these 3 fields can be overridden)
+	// For metered features, nil means unlimited usage
+	UsageLimit *int64 `json:"usage_limit"`
+
+	// IsEnabled determines if the entitlement is enabled or disabled
+	IsEnabled *bool `json:"is_enabled,omitempty"`
+
+	// StaticValue is the static value for static features
+	StaticValue *string `json:"static_value,omitempty"`
+}
+
+// Validate validates the entitlement override request
+func (r *OverrideEntitlementRequest) Validate() error {
+	if r.EntitlementID == "" {
+		return ierr.NewError("entitlement_id is required").
+			WithHint("Please provide the entitlement ID to override").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 // Validate validates the override line item request with additional context

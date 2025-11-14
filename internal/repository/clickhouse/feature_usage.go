@@ -472,11 +472,14 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 	}
 
 	// Add group by columns based on params.GroupBy
-	// Always include feature_id for cost calculation, then add requested grouping dimensions
-	groupByColumns := []string{"feature_id"}       // Always include feature_id for cost calculation
-	groupByColumnAliases := []string{"feature_id"} // for SELECT clause
+	// Always include feature_id, price_id, meter_id, sub_line_item_id for granular tracking
+	groupByColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"}
+	groupByColumnAliases := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"}
 	groupByFieldMapping := make(map[string]string) // maps original field to column alias
 	groupByFieldMapping["feature_id"] = "feature_id"
+	groupByFieldMapping["price_id"] = "price_id"
+	groupByFieldMapping["meter_id"] = "meter_id"
+	groupByFieldMapping["sub_line_item_id"] = "sub_line_item_id"
 
 	// Add the requested grouping dimensions
 	for _, groupBy := range params.GroupBy {
@@ -665,6 +668,12 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 			switch groupByCol {
 			case "feature_id":
 				analytics.FeatureID = value
+			case "price_id":
+				analytics.PriceID = value
+			case "meter_id":
+				analytics.MeterID = value
+			case "sub_line_item_id":
+				analytics.SubLineItemID = value
 			case "source":
 				analytics.Source = value
 			default:
@@ -751,9 +760,9 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 	bucketWindowExpr := r.formatWindowSize(featureInfo.BucketSize, nil)
 
 	// Build group by columns based on request parameters
-	groupByColumns := []string{"bucket_start", "feature_id"}
-	innerSelectColumns := []string{"feature_id"} // For inner query (has access to properties column)
-	outerSelectColumns := []string{"feature_id"} // For outer query (only has aliased columns)
+	groupByColumns := []string{"bucket_start", "feature_id", "price_id", "meter_id", "sub_line_item_id"}
+	innerSelectColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"} // For inner query (has access to properties column)
+	outerSelectColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"} // For outer query (only has aliased columns)
 
 	// Add grouping columns
 	for _, groupBy := range params.GroupBy {
@@ -916,6 +925,12 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			switch selectCol {
 			case "feature_id":
 				analytics.FeatureID = value
+			case "price_id":
+				analytics.PriceID = value
+			case "meter_id":
+				analytics.MeterID = value
+			case "sub_line_item_id":
+				analytics.SubLineItemID = value
 			case "source":
 				analytics.Source = value
 			default:
@@ -972,6 +987,24 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 	if group.Source != "" {
 		innerQuery += " AND source = ?"
 		queryParams = append(queryParams, group.Source)
+	}
+
+	// Add filter for this specific group's price_id
+	if group.PriceID != "" {
+		innerQuery += " AND price_id = ?"
+		queryParams = append(queryParams, group.PriceID)
+	}
+
+	// Add filter for this specific group's meter_id
+	if group.MeterID != "" {
+		innerQuery += " AND meter_id = ?"
+		queryParams = append(queryParams, group.MeterID)
+	}
+
+	// Add filter for this specific group's sub_line_item_id
+	if group.SubLineItemID != "" {
+		innerQuery += " AND sub_line_item_id = ?"
+		queryParams = append(queryParams, group.SubLineItemID)
 	}
 
 	// Add filters for this specific group's properties
@@ -1193,6 +1226,22 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		queryParams = append(queryParams, analytics.FeatureID)
 	}
 
+	// Add price_id filter if present in analytics (CRITICAL for price override cases)
+	// This ensures that when the same feature has multiple prices (price override),
+	// each price gets its own time-series points
+	if analytics.PriceID != "" {
+		query += " AND price_id = ?"
+		queryParams = append(queryParams, analytics.PriceID)
+	}
+
+	// Add sub_line_item_id filter if present in analytics (CRITICAL for price override cases)
+	// This ensures that when the same feature has multiple prices (price override),
+	// each subscription line item gets its own time-series points
+	if analytics.SubLineItemID != "" {
+		query += " AND sub_line_item_id = ?"
+		queryParams = append(queryParams, analytics.SubLineItemID)
+	}
+
 	// Add source filter if present in analytics
 	if analytics.Source != "" {
 		query += " AND source = ?"
@@ -1241,6 +1290,8 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		"query", query,
 		"params", queryParams,
 		"feature_id", analytics.FeatureID,
+		"price_id", analytics.PriceID,
+		"sub_line_item_id", analytics.SubLineItemID,
 		"source", analytics.Source,
 		"property_filters", params.PropertyFilters,
 	)
@@ -1295,7 +1346,11 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 }
 
 // GetFeatureUsageBySubscription gets usage data for a subscription using a single optimized query
-func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, externalCustomerID, environmentID, tenantID string, startTime, endTime time.Time) (map[string]*events.UsageByFeatureResult, error) {
+func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, externalCustomerID string, startTime, endTime time.Time) (map[string]*events.UsageByFeatureResult, error) {
+	// Extract tenantID and environmentID from context
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "feature_usage", "get_usage_by_subscription_v2", map[string]interface{}{
 		"subscription_id":      subscriptionID,
@@ -1381,6 +1436,130 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 	r.logger.Debugw("optimized subscription usage query completed",
 		"subscription_id", subscriptionID,
 		"feature_count", len(results))
+
+	return results, nil
+}
+
+// GetFeatureUsageForExport retrieves feature usage data for export in batches
+func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*events.FeatureUsage, error) {
+	// Extract tenantID and environmentID from context
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "feature_usage", "get_for_export_batched", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": environmentID,
+		"start_time":     startTime,
+		"end_time":       endTime,
+		"batch_size":     batchSize,
+		"offset":         offset,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		SELECT 
+			id,
+			tenant_id,
+			external_customer_id,
+			customer_id,
+			event_name,
+			source,
+			timestamp,
+			ingested_at,
+			properties,
+			environment_id,
+			subscription_id,
+			sub_line_item_id,
+			price_id,
+			meter_id,
+			feature_id,
+			period_id,
+			unique_hash,
+			qty_total,
+			sign
+		FROM feature_usage
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		  AND sign = 1
+		ORDER BY timestamp DESC
+		LIMIT ? OFFSET ?
+	`
+
+	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, startTime, endTime, batchSize, offset)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query feature usage for export in batch").
+			WithReportableDetails(map[string]interface{}{
+				"batch_size": batchSize,
+				"offset":     offset,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []*events.FeatureUsage
+	for rows.Next() {
+		var usage events.FeatureUsage
+		var propertiesJSON string
+
+		err := rows.Scan(
+			&usage.ID,
+			&usage.TenantID,
+			&usage.ExternalCustomerID,
+			&usage.CustomerID,
+			&usage.EventName,
+			&usage.Source,
+			&usage.Timestamp,
+			&usage.IngestedAt,
+			&propertiesJSON,
+			&usage.EnvironmentID,
+			&usage.SubscriptionID,
+			&usage.SubLineItemID,
+			&usage.PriceID,
+			&usage.MeterID,
+			&usage.FeatureID,
+			&usage.PeriodID,
+			&usage.UniqueHash,
+			&usage.QtyTotal,
+			&usage.Sign,
+		)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan feature usage row").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Parse properties JSON
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &usage.Properties); err != nil {
+				r.logger.Warnw("failed to parse properties JSON",
+					"event_id", usage.ID,
+					"error", err)
+				usage.Properties = make(map[string]interface{})
+			}
+		}
+
+		results = append(results, &usage)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Error iterating feature usage rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	r.logger.Debugw("feature usage export batch query completed",
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"batch_size", batchSize,
+		"offset", offset,
+		"records_in_batch", len(results))
 
 	return results, nil
 }

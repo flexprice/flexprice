@@ -42,7 +42,7 @@ func (r *SubscriptionScheduleRepository) Create(ctx context.Context, schedule *s
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Writer(ctx)
 
 	r.Logger.Debugw("creating subscription schedule",
 		"subscription_id", schedule.SubscriptionID,
@@ -86,7 +86,7 @@ func (r *SubscriptionScheduleRepository) Get(ctx context.Context, id string) (*s
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Reader(ctx)
 
 	r.Logger.Debugw("getting subscription schedule",
 		"schedule_id", id,
@@ -141,7 +141,7 @@ func (r *SubscriptionScheduleRepository) GetBySubscriptionID(ctx context.Context
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Reader(ctx)
 
 	r.Logger.Debugw("getting subscription schedule by subscription ID",
 		"subscription_id", subscriptionID,
@@ -197,7 +197,7 @@ func (r *SubscriptionScheduleRepository) Update(ctx context.Context, schedule *s
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Writer(ctx)
 
 	r.Logger.Debugw("updating subscription schedule",
 		"schedule_id", schedule.ID,
@@ -247,7 +247,7 @@ func (r *SubscriptionScheduleRepository) Delete(ctx context.Context, id string) 
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Writer(ctx)
 
 	r.Logger.Debugw("deleting subscription schedule",
 		"schedule_id", id,
@@ -294,7 +294,7 @@ func (r *SubscriptionScheduleRepository) ListPhases(ctx context.Context, schedul
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Reader(ctx)
 
 	r.Logger.Debugw("listing subscription schedule phases",
 		"schedule_id", scheduleID,
@@ -335,7 +335,7 @@ func (r *SubscriptionScheduleRepository) CreatePhase(ctx context.Context, phase 
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Writer(ctx)
 
 	r.Logger.Debugw("creating subscription schedule phase",
 		"phase_id", phase.ID,
@@ -382,7 +382,7 @@ func (r *SubscriptionScheduleRepository) GetPhase(ctx context.Context, id string
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Reader(ctx)
 
 	r.Logger.Debugw("getting subscription schedule phase",
 		"phase_id", id,
@@ -429,7 +429,7 @@ func (r *SubscriptionScheduleRepository) UpdatePhase(ctx context.Context, phase 
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Writer(ctx)
 
 	r.Logger.Debugw("updating subscription schedule phase",
 		"phase_id", phase.ID,
@@ -483,7 +483,7 @@ func (r *SubscriptionScheduleRepository) DeletePhase(ctx context.Context, id str
 	})
 	defer FinishSpan(span)
 
-	client := r.Client.Querier(ctx)
+	client := r.Client.Writer(ctx)
 
 	r.Logger.Debugw("deleting subscription schedule phase",
 		"phase_id", id,
@@ -531,7 +531,7 @@ func (r *SubscriptionScheduleRepository) CreateWithPhases(ctx context.Context, s
 
 	// Use the transaction functionality from the client
 	err := r.Client.WithTx(ctx, func(txCtx context.Context) error {
-		txClient := r.Client.Querier(txCtx)
+		txClient := r.Client.Writer(txCtx)
 
 		// Create the schedule
 		_, err := txClient.SubscriptionSchedule.Create().

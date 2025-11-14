@@ -34,6 +34,14 @@ type Repository interface {
 	// GetByID fetches a pricing unit by its ID
 	GetByID(ctx context.Context, id string) (*PriceUnit, error)
 
+	// Validation operations
+
+	// ExistsByCode checks if a pricing unit with the given code exists for a tenant and environment
+	ExistsByCode(ctx context.Context, code string) (bool, error)
+
+	// IsUsedByPrices checks if a pricing unit is being used by any prices
+	IsUsedByPrices(ctx context.Context, priceUnitID string) (bool, error)
+
 	// Convert operations
 
 	// ConvertToBaseCurrency converts an amount from pricing unit to base currency

@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
-	"github.com/flexprice/flexprice/ent/price"
-	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	domainPriceUnit "github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -18,17 +16,15 @@ import (
 
 // PriceUnitService handles business logic for price units
 type PriceUnitService struct {
-	repo   domainPriceUnit.Repository
-	client *ent.Client // Keep client for price checks during deletion
-	log    *logger.Logger
+	repo domainPriceUnit.Repository
+	log  *logger.Logger
 }
 
 // NewPriceUnitService creates a new instance of PriceUnitService
-func NewPriceUnitService(repo domainPriceUnit.Repository, client *ent.Client, log *logger.Logger) *PriceUnitService {
+func NewPriceUnitService(repo domainPriceUnit.Repository, log *logger.Logger) *PriceUnitService {
 	return &PriceUnitService{
-		repo:   repo,
-		client: client,
-		log:    log,
+		repo: repo,
+		log:  log,
 	}
 }
 
@@ -52,14 +48,7 @@ func (s *PriceUnitService) Create(ctx context.Context, req *dto.CreatePriceUnitR
 	}
 
 	// Check if code already exists (only consider published records)
-	exists, err := s.client.PriceUnit.Query().
-		Where(
-			priceunit.CodeEQ(strings.ToLower(req.Code)),
-			priceunit.TenantIDEQ(tenantID),
-			priceunit.EnvironmentIDEQ(environmentID),
-			priceunit.StatusEQ(string(types.StatusPublished)),
-		).
-		Exist(ctx)
+	exists, err := s.repo.ExistsByCode(ctx, strings.ToLower(req.Code))
 	if err != nil {
 		// Preserve database errors without overwriting
 		if ierr.IsDatabase(err) {
@@ -263,9 +252,7 @@ func (s *PriceUnitService) Delete(ctx context.Context, id string) error {
 	switch existingUnit.Status {
 	case types.StatusPublished:
 		// Check if the unit is being used by any prices
-		exists, err := s.client.Price.Query().
-			Where(price.PriceUnitIDEQ(id)).
-			Exist(ctx)
+		exists, err := s.repo.IsUsedByPrices(ctx, id)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to check if price unit is in use").

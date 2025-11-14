@@ -36,7 +36,7 @@ func NewEntityIntegrationMappingRepository(client postgres.IClient, log *logger.
 }
 
 func (r *entityIntegrationMappingRepository) Create(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating entity integration mapping",
 		"mapping_id", mapping.ID,
@@ -120,7 +120,7 @@ func (r *entityIntegrationMappingRepository) Create(ctx context.Context, mapping
 }
 
 func (r *entityIntegrationMappingRepository) Get(ctx context.Context, id string) (*domainEntityIntegrationMapping.EntityIntegrationMapping, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting entity integration mapping", "mapping_id", id)
 
@@ -172,7 +172,7 @@ func (r *entityIntegrationMappingRepository) Get(ctx context.Context, id string)
 }
 
 func (r *entityIntegrationMappingRepository) List(ctx context.Context, filter *types.EntityIntegrationMappingFilter) ([]*domainEntityIntegrationMapping.EntityIntegrationMapping, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("listing entity integration mappings", "filter", filter)
 
@@ -206,7 +206,7 @@ func (r *entityIntegrationMappingRepository) List(ctx context.Context, filter *t
 }
 
 func (r *entityIntegrationMappingRepository) Count(ctx context.Context, filter *types.EntityIntegrationMappingFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("counting entity integration mappings", "filter", filter)
 
@@ -238,7 +238,7 @@ func (r *entityIntegrationMappingRepository) Count(ctx context.Context, filter *
 }
 
 func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating entity integration mapping",
 		"mapping_id", mapping.ID,
@@ -337,7 +337,7 @@ func (r *entityIntegrationMappingRepository) Update(ctx context.Context, mapping
 }
 
 func (r *entityIntegrationMappingRepository) Delete(ctx context.Context, mapping *domainEntityIntegrationMapping.EntityIntegrationMapping) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting entity integration mapping", "mapping_id", mapping.ID)
 

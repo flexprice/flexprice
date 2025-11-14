@@ -9,7 +9,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/clickhouse"
@@ -74,7 +73,7 @@ type CSVFeatureProcessor struct {
 	priceRepo     price.Repository
 	planRepo      plan.Repository
 	addonRepo     addon.Repository
-	entClient     *ent.Client
+	entClient     *postgres.EntClients
 	pgClient      postgres.IClient
 	serviceParams service.ServiceParams
 	// Service instances for reuse
@@ -118,7 +117,7 @@ func newCSVFeatureProcessor(tenantID, environmentID, userID string) (*CSVFeature
 	}
 
 	// Initialize postgres client
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 		return nil, err

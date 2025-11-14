@@ -236,3 +236,64 @@ func (s *InMemoryPriceStore) GetByPlanID(ctx context.Context, planID string) ([]
 func (s *InMemoryPriceStore) Clear() {
 	s.InMemoryStore.Clear()
 }
+
+func (s *InMemoryPriceStore) GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*price.Price, error) {
+	prices, err := s.InMemoryStore.List(ctx, nil, func(ctx context.Context, p *price.Price, filter interface{}) bool {
+		if p == nil {
+			return false
+		}
+		// Check tenant and environment filters
+		if !CheckTenantFilter(ctx, p.TenantID) || !CheckEnvironmentFilter(ctx, p.EnvironmentID) {
+			return false
+		}
+		// Check if price belongs to any of the specified groups
+		if p.GroupID == "" {
+			return false
+		}
+		return lo.Contains(groupIDs, p.GroupID) && p.Status == types.StatusPublished
+	}, priceSortFn)
+
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get prices by group IDs").
+			Mark(ierr.ErrDatabase)
+	}
+	return prices, nil
+}
+
+// ClearGroupIDsBulk clears the group ID for multiple prices
+func (s *InMemoryPriceStore) ClearGroupIDsBulk(ctx context.Context, ids []string) error {
+	for _, id := range ids {
+		p, err := s.Get(ctx, id)
+		if err != nil {
+			return err
+		}
+		p.GroupID = ""
+		if err := s.Update(ctx, p); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to clear group IDs in bulk").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+	return nil
+}
+
+// ClearByGroupID clears the group ID for all prices in a specific group
+func (s *InMemoryPriceStore) ClearByGroupID(ctx context.Context, groupID string) error {
+	// Get all prices in the group
+	prices, err := s.GetByGroupIDs(ctx, []string{groupID})
+	if err != nil {
+		return err
+	}
+
+	// Clear group ID for each price
+	for _, p := range prices {
+		p.GroupID = ""
+		if err := s.Update(ctx, p); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to clear group ID by group ID").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+	return nil
+}

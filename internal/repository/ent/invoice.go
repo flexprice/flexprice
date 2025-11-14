@@ -41,7 +41,7 @@ func NewInvoiceRepository(client postgres.IClient, logger *logger.Logger, cache 
 
 // Create creates a new invoice (non-transactional)
 func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoice) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "create", map[string]interface{}{
@@ -158,7 +158,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// 1. Create invoice
-		invoice, err := r.client.Querier(ctx).Invoice.Create().
+		invoice, err := r.client.Writer(ctx).Invoice.Create().
 			SetID(inv.ID).
 			SetTenantID(inv.TenantID).
 			SetCustomerID(inv.CustomerID).
@@ -237,7 +237,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 		if len(inv.LineItems) > 0 {
 			builders := make([]*ent.InvoiceLineItemCreate, len(inv.LineItems))
 			for i, item := range inv.LineItems {
-				builders[i] = r.client.Querier(ctx).InvoiceLineItem.Create().
+				builders[i] = r.client.Writer(ctx).InvoiceLineItem.Create().
 					SetID(item.ID).
 					SetTenantID(item.TenantID).
 					SetInvoiceID(invoice.ID).
@@ -268,7 +268,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetUpdatedAt(item.UpdatedAt)
 			}
 
-			if err := r.client.Querier(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
+			if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
 				r.logger.Error("failed to create line items", "error", err)
 				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
 			}
@@ -297,7 +297,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
-		exists, err := r.client.Querier(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
+		exists, err := r.client.Writer(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -307,7 +307,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 
 		builders := make([]*ent.InvoiceLineItemCreate, len(items))
 		for i, item := range items {
-			builders[i] = r.client.Querier(ctx).InvoiceLineItem.Create().
+			builders[i] = r.client.Writer(ctx).InvoiceLineItem.Create().
 				SetID(item.ID).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).
@@ -337,7 +337,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetUpdatedAt(item.UpdatedAt)
 		}
 
-		if err := r.client.Querier(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
+		if err := r.client.Writer(ctx).InvoiceLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
 			r.logger.Error("failed to add line items", "error", err)
 			return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
 		}
@@ -359,7 +359,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify invoice exists
-		exists, err := r.client.Querier(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
+		exists, err := r.client.Writer(ctx).Invoice.Query().Where(invoice.ID(invoiceID)).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("invoice existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -367,7 +367,7 @@ func (r *invoiceRepository) RemoveLineItems(ctx context.Context, invoiceID strin
 			return ierr.WithError(err).WithHintf("invoice %s not found", invoiceID).Mark(ierr.ErrNotFound)
 		}
 
-		_, err = r.client.Querier(ctx).InvoiceLineItem.Update().
+		_, err = r.client.Writer(ctx).InvoiceLineItem.Update().
 			Where(
 				invoicelineitem.TenantID(types.GetTenantID(ctx)),
 				invoicelineitem.InvoiceID(invoiceID),
@@ -398,7 +398,7 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 
 	r.logger.Debugw("getting invoice", "id", id)
 
-	invoice, err := r.client.Querier(ctx).Invoice.Query().
+	invoice, err := r.client.Writer(ctx).Invoice.Query().
 		Where(invoice.ID(id),
 			invoice.TenantID(types.GetTenantID(ctx)),
 			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -431,7 +431,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Use predicate-based update for optimistic locking
 	query := client.Invoice.Update().
@@ -513,7 +513,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first
-		_, err := r.client.Querier(ctx).InvoiceLineItem.Update().
+		_, err := r.client.Writer(ctx).InvoiceLineItem.Update().
 			Where(
 				invoicelineitem.InvoiceID(id),
 				invoicelineitem.TenantID(types.GetTenantID(ctx)),
@@ -527,7 +527,7 @@ func (r *invoiceRepository) Delete(ctx context.Context, id string) error {
 		}
 
 		// Then delete invoice
-		_, err = r.client.Querier(ctx).Invoice.Update().
+		_, err = r.client.Writer(ctx).Invoice.Update().
 			Where(
 				invoice.ID(id),
 				invoice.TenantID(types.GetTenantID(ctx)),
@@ -553,7 +553,7 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Invoice.Query().
 		WithCouponApplications(func(q *ent.CouponApplicationQuery) {
 			q.Where(couponapplication.Status(string(types.StatusPublished)))
@@ -602,7 +602,7 @@ func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilt
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Invoice.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
@@ -632,7 +632,7 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 		return cachedInvoice, nil
 	}
 
-	inv, err := r.client.Querier(ctx).Invoice.Query().
+	inv, err := r.client.Writer(ctx).Invoice.Query().
 		Where(
 			invoice.IdempotencyKeyEQ(key),
 			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -662,7 +662,7 @@ func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID 
 	})
 	defer FinishSpan(span)
 
-	exists, err := r.client.Querier(ctx).Invoice.Query().
+	exists, err := r.client.Writer(ctx).Invoice.Query().
 		Where(
 			invoice.And(
 				invoice.TenantID(types.GetTenantID(ctx)),
@@ -734,7 +734,7 @@ func (r *invoiceRepository) GetNextInvoiceNumber(ctx context.Context, invoiceCon
 		RETURNING last_value`
 
 	var lastValue int64
-	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, environmentID, yearMonth, invoiceConfig.InvoiceNumberStartSequence)
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, environmentID, yearMonth, invoiceConfig.InvoiceNumberStartSequence)
 	if err != nil {
 		return "", ierr.WithError(err).WithHint("invoice number generation failed").Mark(ierr.ErrDatabase)
 	}
@@ -781,7 +781,7 @@ func (r *invoiceRepository) GetNextBillingSequence(ctx context.Context, subscrip
 		RETURNING last_sequence`
 
 	var lastSequence int
-	rows, err := r.client.Querier(ctx).QueryContext(ctx, query, tenantID, subscriptionID)
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, query, tenantID, subscriptionID)
 	if err != nil {
 		return 0, ierr.WithError(err).WithHint("billing sequence generation failed").Mark(ierr.ErrDatabase)
 	}
@@ -1045,4 +1045,56 @@ func (r *invoiceRepository) DeleteCache(ctx context.Context, key string) {
 	}
 	idempotencyKey := cache.GenerateKey(cache.PrefixInvoice, tenantID, environmentID, invoice.IdempotencyKey)
 	r.cache.Delete(ctx, idempotencyKey)
+}
+
+// GetInvoicesForExport retrieves invoices for export purposes with pagination
+func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "get_invoices_for_export", map[string]interface{}{
+		"tenant_id":  tenantID,
+		"env_id":     envID,
+		"start_time": startTime,
+		"end_time":   endTime,
+		"limit":      limit,
+		"offset":     offset,
+	})
+	defer FinishSpan(span)
+
+	r.logger.Debugw("fetching invoices for export",
+		"tenant_id", tenantID,
+		"env_id", envID,
+		"start_time", startTime,
+		"end_time", endTime,
+		"limit", limit,
+		"offset", offset)
+
+	invoices, err := r.client.Reader(ctx).Invoice.Query().
+		Where(
+			invoice.TenantID(tenantID),
+			invoice.EnvironmentID(envID),
+			invoice.StatusEQ(string(types.StatusPublished)),
+			invoice.CreatedAtGTE(startTime),
+			invoice.CreatedAtLTE(endTime),
+		).
+		Order(ent.Asc(invoice.FieldCreatedAt)).
+		Limit(limit).
+		Offset(offset).
+		All(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch invoices for export").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id": tenantID,
+				"env_id":    envID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	result := make([]*domainInvoice.Invoice, len(invoices))
+	for i, inv := range invoices {
+		result[i] = domainInvoice.FromEnt(inv)
+	}
+
+	return result, nil
 }

@@ -33,7 +33,7 @@ func NewFeatureRepository(client postgres.IClient, log *logger.Logger, cache cac
 }
 
 func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating feature",
 		"feature_id", f.ID,
@@ -55,7 +55,7 @@ func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature
 		f.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
-	feature, err := client.Feature.Create().
+	createQuery := client.Feature.Create().
 		SetID(f.ID).
 		SetName(f.Name).
 		SetType(string(f.Type)).
@@ -71,8 +71,14 @@ func (r *featureRepository) Create(ctx context.Context, f *domainFeature.Feature
 		SetUpdatedAt(f.UpdatedAt).
 		SetCreatedBy(f.CreatedBy).
 		SetUpdatedBy(f.UpdatedBy).
-		SetEnvironmentID(f.EnvironmentID).
-		Save(ctx)
+		SetEnvironmentID(f.EnvironmentID)
+
+	// Set alert settings if provided
+	if f.AlertSettings != nil {
+		createQuery = createQuery.SetAlertSettings(*f.AlertSettings)
+	}
+
+	feature, err := createQuery.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -107,7 +113,7 @@ func (r *featureRepository) Get(ctx context.Context, id string) (*domainFeature.
 		return cachedFeature, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting feature",
 		"feature_id", id,
@@ -157,7 +163,7 @@ func (r *featureRepository) List(ctx context.Context, filter *types.FeatureFilte
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Feature.Query()
 
 	// Apply entity-specific filters
@@ -185,7 +191,7 @@ func (r *featureRepository) List(ctx context.Context, filter *types.FeatureFilte
 }
 
 func (r *featureRepository) Count(ctx context.Context, filter *types.FeatureFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "feature", "count", map[string]interface{}{
@@ -239,7 +245,7 @@ func (r *featureRepository) ListAll(ctx context.Context, filter *types.FeatureFi
 }
 
 func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating feature",
 		"feature_id", f.ID,
@@ -252,7 +258,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Feature.Update().
+	updateQuery := client.Feature.Update().
 		Where(
 			feature.ID(f.ID),
 			feature.TenantID(f.TenantID),
@@ -266,8 +272,14 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 		SetMetadata(map[string]string(f.Metadata)).
 		SetMeterID(f.MeterID).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	// Set alert settings if provided
+	if f.AlertSettings != nil {
+		updateQuery = updateQuery.SetAlertSettings(*f.AlertSettings)
+	}
+
+	_, err := updateQuery.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -291,7 +303,7 @@ func (r *featureRepository) Update(ctx context.Context, f *domainFeature.Feature
 }
 
 func (r *featureRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting feature",
 		"feature_id", id,
@@ -437,6 +449,11 @@ func (o FeatureQueryOptions) applyEntityQueryOptions(ctx context.Context, f *typ
 	// Apply key filter if specified
 	if f.LookupKey != "" {
 		query = query.Where(feature.LookupKey(f.LookupKey))
+	}
+
+	// Apply lookup keys filter if specified
+	if len(f.LookupKeys) > 0 {
+		query = query.Where(feature.LookupKeyIn(f.LookupKeys...))
 	}
 
 	if f.NameContains != "" {

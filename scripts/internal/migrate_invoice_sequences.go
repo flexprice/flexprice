@@ -45,11 +45,11 @@ func MigrateInvoiceSequences() error {
 	}
 
 	// Initialize postgres client
-	entClient, err := postgres.NewEntClient(cfg, logger)
+	entClients, err := postgres.NewEntClients(cfg, logger)
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %v", err)
 	}
-	defer entClient.Close()
+	entClient := entClients.Writer
 
 	ctx := context.Background()
 

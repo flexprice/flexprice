@@ -70,6 +70,13 @@ func (Entitlement) Fields() []ent.Field {
 			Optional(),
 		field.Int("display_order").
 			Default(0),
+		field.String("parent_entitlement_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Comment("References the parent entitlement (for subscription-scoped entitlements)"),
 	}
 }
 
@@ -87,5 +94,6 @@ func (Entitlement) Indexes() []ent.Index {
 
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id"),
 		index.Fields("tenant_id", "environment_id", "feature_id"),
+		index.Fields("tenant_id", "environment_id", "parent_entitlement_id"),
 	}
 }

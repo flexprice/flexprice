@@ -47,7 +47,7 @@ func (r *creditGrantApplicationRepository) Create(ctx context.Context, a *domain
 		"subscription_id": a.SubscriptionID,
 	})
 	defer FinishSpan(span)
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Set environment ID from context if not already set
 	if a.EnvironmentID == "" {
@@ -115,7 +115,7 @@ func (r *creditGrantApplicationRepository) Get(ctx context.Context, id string) (
 		return cachedApplication, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	application, err := client.CreditGrantApplication.Query().
 		Where(
@@ -157,7 +157,7 @@ func (r *creditGrantApplicationRepository) List(ctx context.Context, filter *typ
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	query := client.CreditGrantApplication.Query()
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -189,7 +189,7 @@ func (r *creditGrantApplicationRepository) Count(ctx context.Context, filter *ty
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	query := client.CreditGrantApplication.Query()
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
@@ -216,7 +216,7 @@ func (r *creditGrantApplicationRepository) Count(ctx context.Context, filter *ty
 }
 
 func (r *creditGrantApplicationRepository) ListAll(ctx context.Context, filter *types.CreditGrantApplicationFilter) ([]*domain.CreditGrantApplication, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditgrantapplication", "list_all", map[string]interface{}{
@@ -265,7 +265,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	_, err := client.CreditGrantApplication.Update().
 		Where(
@@ -319,7 +319,7 @@ func (r *creditGrantApplicationRepository) Update(ctx context.Context, a *domain
 }
 
 func (r *creditGrantApplicationRepository) Delete(ctx context.Context, application *domain.CreditGrantApplication) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting credit grant application",
 		"application_id", application.ID,
@@ -371,7 +371,7 @@ func (r *creditGrantApplicationRepository) FindAllScheduledApplications(ctx cont
 	span := StartRepositorySpan(ctx, "creditgrantapplication", "find_all_scheduled_applications", map[string]interface{}{})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	applications, err := client.CreditGrantApplication.Query().
 		Where(
@@ -396,7 +396,7 @@ func (r *creditGrantApplicationRepository) FindByIdempotencyKey(ctx context.Cont
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	application, err := client.CreditGrantApplication.Query().
 		Where(

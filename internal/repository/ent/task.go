@@ -36,18 +36,26 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Set environment ID from context if not already set
 	if t.EnvironmentID == "" {
 		t.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
 
+	r.logger.Infow("saving task to database",
+		"task_id", t.ID,
+		"created_by", t.CreatedBy,
+		"updated_by", t.UpdatedBy,
+		"tenant_id", t.TenantID)
+
 	task, err := client.Task.Create().
 		SetID(t.ID).
 		SetTenantID(t.TenantID).
 		SetTaskType(string(t.TaskType)).
 		SetEntityType(string(t.EntityType)).
+		SetNillableScheduledTaskID(&t.ScheduledTaskID).
+		SetNillableWorkflowID(t.WorkflowID).
 		SetFileURL(t.FileURL).
 		SetNillableFileName(t.FileName).
 		SetFileType(string(t.FileType)).
@@ -83,6 +91,13 @@ func (r *taskRepository) Create(ctx context.Context, t *domainTask.Task) error {
 	}
 
 	SetSpanSuccess(span)
+
+	r.logger.Infow("task saved to database successfully",
+		"task_id", task.ID,
+		"created_by", task.CreatedBy,
+		"updated_by", task.UpdatedBy,
+		"tenant_id", task.TenantID)
+
 	*t = *domainTask.FromEnt(task)
 	return nil
 }
@@ -94,7 +109,7 @@ func (r *taskRepository) Get(ctx context.Context, id string) (*domainTask.Task, 
 	})
 	defer FinishSpan(span)
 
-	task, err := r.client.Querier(ctx).Task.Query().
+	task, err := r.client.Reader(ctx).Task.Query().
 		Where(
 			task.ID(id),
 			task.TenantID(types.GetTenantID(ctx)),
@@ -130,7 +145,7 @@ func (r *taskRepository) List(ctx context.Context, filter *types.TaskFilter) ([]
 	})
 	defer FinishSpan(span)
 
-	query := r.client.Querier(ctx).Task.Query()
+	query := r.client.Reader(ctx).Task.Query()
 
 	// Apply entity-specific filters
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -157,7 +172,7 @@ func (r *taskRepository) Count(ctx context.Context, filter *types.TaskFilter) (i
 	})
 	defer FinishSpan(span)
 
-	query := r.client.Querier(ctx).Task.Query()
+	query := r.client.Reader(ctx).Task.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
 	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -181,7 +196,7 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Use predicate-based update for optimistic locking
 	query := client.Task.Update().
@@ -196,6 +211,7 @@ func (r *taskRepository) Update(ctx context.Context, t *domainTask.Task) error {
 	query.
 		SetTaskType(string(t.TaskType)).
 		SetEntityType(string(t.EntityType)).
+		SetNillableScheduledTaskID(&t.ScheduledTaskID).
 		SetFileURL(t.FileURL).
 		SetNillableFileName(t.FileName).
 		SetFileType(string(t.FileType)).
@@ -245,7 +261,7 @@ func (r *taskRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	_, err := r.client.Querier(ctx).Task.Update().
+	_, err := r.client.Writer(ctx).Task.Update().
 		Where(
 			task.ID(id),
 			task.TenantID(types.GetTenantID(ctx)),
@@ -323,7 +339,7 @@ func (o TaskQueryOptions) GetFieldName(field string) string {
 	}
 }
 
-func (o TaskQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaskFilter, query *ent.TaskQuery) *ent.TaskQuery {
+func (o TaskQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.TaskFilter, query *ent.TaskQuery) *ent.TaskQuery {
 	if f == nil {
 		return query
 	}
@@ -337,6 +353,9 @@ func (o TaskQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Ta
 	}
 	if f.TaskStatus != nil {
 		query = query.Where(task.TaskStatus(string(*f.TaskStatus)))
+	}
+	if f.ScheduledTaskID != "" {
+		query = query.Where(task.ScheduledTaskID(f.ScheduledTaskID))
 	}
 	if f.CreatedBy != "" {
 		query = query.Where(task.CreatedBy(f.CreatedBy))

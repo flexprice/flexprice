@@ -10,28 +10,29 @@ import (
 // Returns nil if Sentry is not available in the context
 func StartCacheSpan(ctx context.Context, cache, operation string, params map[string]interface{}) *sentry.Span {
 	// Get the hub from the context
-	hub := sentry.GetHubFromContext(ctx)
-	if hub == nil {
-		return nil
-	}
+	// hub := sentry.GetHubFromContext(ctx)
+	// if hub == nil {
+	// 	return nil
+	// }
 
-	// Create a new span for this operation
-	span := sentry.StartSpan(ctx, "cache."+cache+"."+operation)
-	if span != nil {
-		span.Description = "cache." + cache + "." + operation
-		span.Op = "db.cache"
+	// // Create a new span for this operation
+	// span := sentry.StartSpan(ctx, "cache."+cache+"."+operation)
+	// if span != nil {
+	// 	span.Description = "cache." + cache + "." + operation
+	// 	span.Op = "db.cache"
 
-		// Add repository data
-		span.SetData("cache", cache)
-		span.SetData("operation", operation)
+	// 	// Add repository data
+	// 	span.SetData("cache", cache)
+	// 	span.SetData("operation", operation)
 
-		// Add additional parameters
-		for k, v := range params {
-			span.SetData(k, v)
-		}
-	}
+	// 	// Add additional parameters
+	// 	for k, v := range params {
+	// 		span.SetData(k, v)
+	// 	}
+	// }
 
-	return span
+	// return span
+	return nil
 }
 
 // FinishSpan safely finishes a span, handling nil spans

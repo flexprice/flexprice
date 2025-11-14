@@ -216,3 +216,30 @@ func (s *InMemoryPriceUnitStore) ConvertToPriceUnit(ctx context.Context, code, t
 	}
 	return unit.ConvertFromBaseCurrency(fiatAmount), nil
 }
+
+func (s *InMemoryPriceUnitStore) ExistsByCode(ctx context.Context, code string) (bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	for _, unit := range s.items {
+		if unit.Code == code &&
+			unit.TenantID == tenantID &&
+			unit.EnvironmentID == environmentID &&
+			unit.Status == types.StatusPublished {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (s *InMemoryPriceUnitStore) IsUsedByPrices(ctx context.Context, priceUnitID string) (bool, error) {
+	// In the in-memory implementation, we don't have access to prices
+	// This method is primarily used for deletion validation
+	// For testing purposes, we'll return false to allow deletions
+	// In real tests, this can be mocked with specific behavior
+	return false, nil
+}

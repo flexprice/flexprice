@@ -1,0 +1,39 @@
+name: "💬 Question / Discussion"
+description: Ask a question or start a discussion
+title: "[DISCUSSION] <short description>"
+labels: ["question", "discussion"]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for starting a discussion or asking a question!  
+        Please provide enough context so others can understand and help.
+
+  - type: input
+    id: topic
+    attributes:
+      label: "Topic"
+      description: "Briefly describe your question or discussion topic"
+      placeholder: "e.g., Clarification on contribution flow"
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Context"
+      description: "Give more background — what led you to this question or idea?"
+      placeholder: "I was going through the docs and found that..."
+
+  - type: textarea
+    id: question
+    attributes:
+      label: "Your Question or Discussion Points"
+      description: "Write the actual question(s) or discussion ideas here."
+      placeholder: "Can someone explain how ... works?"
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: "Additional Details"
+      description: "Any links, references, screenshots, or examples that might help?"
+      placeholder: "Related links, examples, etc."

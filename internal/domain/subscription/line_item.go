@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -33,6 +34,9 @@ type SubscriptionLineItem struct {
 	EndDate          time.Time                            `db:"end_date" json:"end_date,omitempty"`
 	Metadata         map[string]string                    `db:"metadata" json:"metadata,omitempty"`
 	EnvironmentID    string                               `db:"environment_id" json:"environment_id"`
+
+	Price *price.Price `json:"price,omitempty"`
+
 	types.BaseModel
 }
 

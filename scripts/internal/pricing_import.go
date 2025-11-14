@@ -81,14 +81,15 @@ func newPricingImportScript(tenantID, environmentID string) (*pricingImportScrip
 	}
 
 	// Initialize the database client
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClients, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 		return nil, err
 	}
+	entClient := entClients.Writer
 
 	// Create postgres client
-	pgClient := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
+	pgClient := postgres.NewClient(entClients, log, sentry.NewSentryService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()
 
 	// Initialize repositories

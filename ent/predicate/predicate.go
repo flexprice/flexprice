@@ -63,6 +63,9 @@ type Environment func(*sql.Selector)
 // Feature is the predicate function for feature builders.
 type Feature func(*sql.Selector)
 
+// Group is the predicate function for group builders.
+type Group func(*sql.Selector)
+
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
 
@@ -89,6 +92,9 @@ type Price func(*sql.Selector)
 
 // PriceUnit is the predicate function for priceunit builders.
 type PriceUnit func(*sql.Selector)
+
+// ScheduledTask is the predicate function for scheduledtask builders.
+type ScheduledTask func(*sql.Selector)
 
 // Secret is the predicate function for secret builders.
 type Secret func(*sql.Selector)

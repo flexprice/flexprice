@@ -14,7 +14,6 @@ import (
 	"github.com/flexprice/flexprice/ent/addon"
 	"github.com/flexprice/flexprice/ent/entitlement"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // AddonUpdate is the builder for updating Addon entities.
@@ -130,21 +129,6 @@ func (au *AddonUpdate) ClearMetadata() *AddonUpdate {
 	return au
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (au *AddonUpdate) AddPriceIDs(ids ...string) *AddonUpdate {
-	au.mutation.AddPriceIDs(ids...)
-	return au
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (au *AddonUpdate) AddPrices(p ...*Price) *AddonUpdate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return au.AddPriceIDs(ids...)
-}
-
 // AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
 func (au *AddonUpdate) AddEntitlementIDs(ids ...string) *AddonUpdate {
 	au.mutation.AddEntitlementIDs(ids...)
@@ -163,27 +147,6 @@ func (au *AddonUpdate) AddEntitlements(e ...*Entitlement) *AddonUpdate {
 // Mutation returns the AddonMutation object of the builder.
 func (au *AddonUpdate) Mutation() *AddonMutation {
 	return au.mutation
-}
-
-// ClearPrices clears all "prices" edges to the Price entity.
-func (au *AddonUpdate) ClearPrices() *AddonUpdate {
-	au.mutation.ClearPrices()
-	return au
-}
-
-// RemovePriceIDs removes the "prices" edge to Price entities by IDs.
-func (au *AddonUpdate) RemovePriceIDs(ids ...string) *AddonUpdate {
-	au.mutation.RemovePriceIDs(ids...)
-	return au
-}
-
-// RemovePrices removes "prices" edges to Price entities.
-func (au *AddonUpdate) RemovePrices(p ...*Price) *AddonUpdate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return au.RemovePriceIDs(ids...)
 }
 
 // ClearEntitlements clears all "entitlements" edges to the Entitlement entity.
@@ -305,51 +268,6 @@ func (au *AddonUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if au.mutation.MetadataCleared() {
 		_spec.ClearField(addon.FieldMetadata, field.TypeJSON)
-	}
-	if au.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.RemovedPricesIDs(); len(nodes) > 0 && !au.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := au.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if au.mutation.EntitlementsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -516,21 +434,6 @@ func (auo *AddonUpdateOne) ClearMetadata() *AddonUpdateOne {
 	return auo
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (auo *AddonUpdateOne) AddPriceIDs(ids ...string) *AddonUpdateOne {
-	auo.mutation.AddPriceIDs(ids...)
-	return auo
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (auo *AddonUpdateOne) AddPrices(p ...*Price) *AddonUpdateOne {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return auo.AddPriceIDs(ids...)
-}
-
 // AddEntitlementIDs adds the "entitlements" edge to the Entitlement entity by IDs.
 func (auo *AddonUpdateOne) AddEntitlementIDs(ids ...string) *AddonUpdateOne {
 	auo.mutation.AddEntitlementIDs(ids...)
@@ -549,27 +452,6 @@ func (auo *AddonUpdateOne) AddEntitlements(e ...*Entitlement) *AddonUpdateOne {
 // Mutation returns the AddonMutation object of the builder.
 func (auo *AddonUpdateOne) Mutation() *AddonMutation {
 	return auo.mutation
-}
-
-// ClearPrices clears all "prices" edges to the Price entity.
-func (auo *AddonUpdateOne) ClearPrices() *AddonUpdateOne {
-	auo.mutation.ClearPrices()
-	return auo
-}
-
-// RemovePriceIDs removes the "prices" edge to Price entities by IDs.
-func (auo *AddonUpdateOne) RemovePriceIDs(ids ...string) *AddonUpdateOne {
-	auo.mutation.RemovePriceIDs(ids...)
-	return auo
-}
-
-// RemovePrices removes "prices" edges to Price entities.
-func (auo *AddonUpdateOne) RemovePrices(p ...*Price) *AddonUpdateOne {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return auo.RemovePriceIDs(ids...)
 }
 
 // ClearEntitlements clears all "entitlements" edges to the Entitlement entity.
@@ -721,51 +603,6 @@ func (auo *AddonUpdateOne) sqlSave(ctx context.Context) (_node *Addon, err error
 	}
 	if auo.mutation.MetadataCleared() {
 		_spec.ClearField(addon.FieldMetadata, field.TypeJSON)
-	}
-	if auo.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.RemovedPricesIDs(); len(nodes) > 0 && !auo.mutation.PricesCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := auo.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   addon.PricesTable,
-			Columns: []string{addon.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if auo.mutation.EntitlementsCleared() {
 		edge := &sqlgraph.EdgeSpec{

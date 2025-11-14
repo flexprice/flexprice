@@ -48,6 +48,9 @@ type DetailedUsageAnalytic struct {
 	EventName       string
 	Source          string
 	MeterID         string
+	PriceID         string // Price ID used for this usage - allows tracking different prices per subscription
+	SubLineItemID   string // Subscription line item ID
+	SubscriptionID  string // Subscription ID
 	AggregationType types.AggregationType
 	Unit            string
 	UnitPlural      string

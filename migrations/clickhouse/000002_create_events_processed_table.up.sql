@@ -51,11 +51,11 @@ SETTINGS index_granularity = 8192;
 
 
 ALTER TABLE flexprice.events_processed
-ADD INDEX bf_subscription subscription_id TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_feature      feature_id      TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_source       source          TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_unique_hash  unique_hash     TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX set_event_name  event_name      TYPE set(0)             GRANULARITY 128;
+ADD INDEX IF NOT EXISTS bf_subscription subscription_id TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_feature      feature_id      TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_source       source          TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_unique_hash  unique_hash     TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS set_event_name  event_name      TYPE set(0)             GRANULARITY 128;
 
 
 ------ materialized views

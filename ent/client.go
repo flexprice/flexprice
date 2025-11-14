@@ -34,6 +34,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -43,6 +44,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -105,6 +107,8 @@ type Client struct {
 	Environment *EnvironmentClient
 	// Feature is the client for interacting with the Feature builders.
 	Feature *FeatureClient
+	// Group is the client for interacting with the Group builders.
+	Group *GroupClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// InvoiceLineItem is the client for interacting with the InvoiceLineItem builders.
@@ -123,6 +127,8 @@ type Client struct {
 	Price *PriceClient
 	// PriceUnit is the client for interacting with the PriceUnit builders.
 	PriceUnit *PriceUnitClient
+	// ScheduledTask is the client for interacting with the ScheduledTask builders.
+	ScheduledTask *ScheduledTaskClient
 	// Secret is the client for interacting with the Secret builders.
 	Secret *SecretClient
 	// Settings is the client for interacting with the Settings builders.
@@ -183,6 +189,7 @@ func (c *Client) init() {
 	c.EntityIntegrationMapping = NewEntityIntegrationMappingClient(c.config)
 	c.Environment = NewEnvironmentClient(c.config)
 	c.Feature = NewFeatureClient(c.config)
+	c.Group = NewGroupClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.InvoiceLineItem = NewInvoiceLineItemClient(c.config)
 	c.InvoiceSequence = NewInvoiceSequenceClient(c.config)
@@ -192,6 +199,7 @@ func (c *Client) init() {
 	c.Plan = NewPlanClient(c.config)
 	c.Price = NewPriceClient(c.config)
 	c.PriceUnit = NewPriceUnitClient(c.config)
+	c.ScheduledTask = NewScheduledTaskClient(c.config)
 	c.Secret = NewSecretClient(c.config)
 	c.Settings = NewSettingsClient(c.config)
 	c.Subscription = NewSubscriptionClient(c.config)
@@ -318,6 +326,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		EntityIntegrationMapping:  NewEntityIntegrationMappingClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
 		Feature:                   NewFeatureClient(cfg),
+		Group:                     NewGroupClient(cfg),
 		Invoice:                   NewInvoiceClient(cfg),
 		InvoiceLineItem:           NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:           NewInvoiceSequenceClient(cfg),
@@ -327,6 +336,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
 		PriceUnit:                 NewPriceUnitClient(cfg),
+		ScheduledTask:             NewScheduledTaskClient(cfg),
 		Secret:                    NewSecretClient(cfg),
 		Settings:                  NewSettingsClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
@@ -380,6 +390,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		EntityIntegrationMapping:  NewEntityIntegrationMappingClient(cfg),
 		Environment:               NewEnvironmentClient(cfg),
 		Feature:                   NewFeatureClient(cfg),
+		Group:                     NewGroupClient(cfg),
 		Invoice:                   NewInvoiceClient(cfg),
 		InvoiceLineItem:           NewInvoiceLineItemClient(cfg),
 		InvoiceSequence:           NewInvoiceSequenceClient(cfg),
@@ -389,6 +400,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Plan:                      NewPlanClient(cfg),
 		Price:                     NewPriceClient(cfg),
 		PriceUnit:                 NewPriceUnitClient(cfg),
+		ScheduledTask:             NewScheduledTaskClient(cfg),
 		Secret:                    NewSecretClient(cfg),
 		Settings:                  NewSettingsClient(cfg),
 		Subscription:              NewSubscriptionClient(cfg),
@@ -437,11 +449,12 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Connection, c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation,
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.Secret, c.Settings,
-		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.TaxApplied,
-		c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
+		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
+		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionSchedule, c.SubscriptionSchedulePhase,
+		c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Use(hooks...)
 	}
@@ -455,11 +468,12 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Connection, c.Costsheet, c.Coupon, c.CouponApplication, c.CouponAssociation,
 		c.CreditGrant, c.CreditGrantApplication, c.CreditNote, c.CreditNoteLineItem,
 		c.Customer, c.Entitlement, c.EntityIntegrationMapping, c.Environment,
-		c.Feature, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter, c.Payment,
-		c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.Secret, c.Settings,
-		c.Subscription, c.SubscriptionLineItem, c.SubscriptionPause,
-		c.SubscriptionSchedule, c.SubscriptionSchedulePhase, c.Task, c.TaxApplied,
-		c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet, c.WalletTransaction,
+		c.Feature, c.Group, c.Invoice, c.InvoiceLineItem, c.InvoiceSequence, c.Meter,
+		c.Payment, c.PaymentAttempt, c.Plan, c.Price, c.PriceUnit, c.ScheduledTask,
+		c.Secret, c.Settings, c.Subscription, c.SubscriptionLineItem,
+		c.SubscriptionPause, c.SubscriptionSchedule, c.SubscriptionSchedulePhase,
+		c.Task, c.TaxApplied, c.TaxAssociation, c.TaxRate, c.Tenant, c.User, c.Wallet,
+		c.WalletTransaction,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -506,6 +520,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Environment.mutate(ctx, m)
 	case *FeatureMutation:
 		return c.Feature.mutate(ctx, m)
+	case *GroupMutation:
+		return c.Group.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *InvoiceLineItemMutation:
@@ -524,6 +540,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Price.mutate(ctx, m)
 	case *PriceUnitMutation:
 		return c.PriceUnit.mutate(ctx, m)
+	case *ScheduledTaskMutation:
+		return c.ScheduledTask.mutate(ctx, m)
 	case *SecretMutation:
 		return c.Secret.mutate(ctx, m)
 	case *SettingsMutation:
@@ -665,22 +683,6 @@ func (c *AddonClient) GetX(ctx context.Context, id string) *Addon {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryPrices queries the prices edge of a Addon.
-func (c *AddonClient) QueryPrices(a *Addon) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := a.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(addon.Table, addon.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, addon.PricesTable, addon.PricesColumn),
-		)
-		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // QueryEntitlements queries the entitlements edge of a Addon.
@@ -1495,38 +1497,6 @@ func (c *CostsheetClient) GetX(ctx context.Context, id string) *Costsheet {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryMeter queries the meter edge of a Costsheet.
-func (c *CostsheetClient) QueryMeter(co *Costsheet) *MeterQuery {
-	query := (&MeterClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := co.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(costsheet.Table, costsheet.FieldID, id),
-			sqlgraph.To(meter.Table, meter.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, costsheet.MeterTable, costsheet.MeterColumn),
-		)
-		fromV = sqlgraph.Neighbors(co.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryPrice queries the price edge of a Costsheet.
-func (c *CostsheetClient) QueryPrice(co *Costsheet) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := co.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(costsheet.Table, costsheet.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, costsheet.PriceTable, costsheet.PriceColumn),
-		)
-		fromV = sqlgraph.Neighbors(co.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // Hooks returns the client hooks.
@@ -3390,6 +3360,139 @@ func (c *FeatureClient) mutate(ctx context.Context, m *FeatureMutation) (Value, 
 	}
 }
 
+// GroupClient is a client for the Group schema.
+type GroupClient struct {
+	config
+}
+
+// NewGroupClient returns a client for the Group from the given config.
+func NewGroupClient(c config) *GroupClient {
+	return &GroupClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `group.Hooks(f(g(h())))`.
+func (c *GroupClient) Use(hooks ...Hook) {
+	c.hooks.Group = append(c.hooks.Group, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `group.Intercept(f(g(h())))`.
+func (c *GroupClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Group = append(c.inters.Group, interceptors...)
+}
+
+// Create returns a builder for creating a Group entity.
+func (c *GroupClient) Create() *GroupCreate {
+	mutation := newGroupMutation(c.config, OpCreate)
+	return &GroupCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Group entities.
+func (c *GroupClient) CreateBulk(builders ...*GroupCreate) *GroupCreateBulk {
+	return &GroupCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *GroupClient) MapCreateBulk(slice any, setFunc func(*GroupCreate, int)) *GroupCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &GroupCreateBulk{err: fmt.Errorf("calling to GroupClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*GroupCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &GroupCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Group.
+func (c *GroupClient) Update() *GroupUpdate {
+	mutation := newGroupMutation(c.config, OpUpdate)
+	return &GroupUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *GroupClient) UpdateOne(gr *Group) *GroupUpdateOne {
+	mutation := newGroupMutation(c.config, OpUpdateOne, withGroup(gr))
+	return &GroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *GroupClient) UpdateOneID(id string) *GroupUpdateOne {
+	mutation := newGroupMutation(c.config, OpUpdateOne, withGroupID(id))
+	return &GroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Group.
+func (c *GroupClient) Delete() *GroupDelete {
+	mutation := newGroupMutation(c.config, OpDelete)
+	return &GroupDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *GroupClient) DeleteOne(gr *Group) *GroupDeleteOne {
+	return c.DeleteOneID(gr.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *GroupClient) DeleteOneID(id string) *GroupDeleteOne {
+	builder := c.Delete().Where(group.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &GroupDeleteOne{builder}
+}
+
+// Query returns a query builder for Group.
+func (c *GroupClient) Query() *GroupQuery {
+	return &GroupQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeGroup},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Group entity by its id.
+func (c *GroupClient) Get(ctx context.Context, id string) (*Group, error) {
+	return c.Query().Where(group.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *GroupClient) GetX(ctx context.Context, id string) *Group {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *GroupClient) Hooks() []Hook {
+	return c.hooks.Group
+}
+
+// Interceptors returns the client interceptors.
+func (c *GroupClient) Interceptors() []Interceptor {
+	return c.inters.Group
+}
+
+func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&GroupCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&GroupUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&GroupUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&GroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Group mutation op: %q", m.Op())
+	}
+}
+
 // InvoiceClient is a client for the Invoice schema.
 type InvoiceClient struct {
 	config
@@ -3959,22 +4062,6 @@ func (c *MeterClient) GetX(ctx context.Context, id string) *Meter {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryCostsheet queries the costsheet edge of a Meter.
-func (c *MeterClient) QueryCostsheet(m *Meter) *CostsheetQuery {
-	query := (&CostsheetClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(meter.Table, meter.FieldID, id),
-			sqlgraph.To(costsheet.Table, costsheet.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, meter.CostsheetTable, meter.CostsheetColumn),
-		)
-		fromV = sqlgraph.Neighbors(m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // Hooks returns the client hooks.
@@ -4557,22 +4644,6 @@ func (c *PriceClient) GetX(ctx context.Context, id string) *Price {
 	return obj
 }
 
-// QueryCostsheet queries the costsheet edge of a Price.
-func (c *PriceClient) QueryCostsheet(pr *Price) *CostsheetQuery {
-	query := (&CostsheetClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pr.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(price.Table, price.FieldID, id),
-			sqlgraph.To(costsheet.Table, costsheet.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, price.CostsheetTable, price.CostsheetColumn),
-		)
-		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryPriceUnitEdge queries the price_unit_edge edge of a Price.
 func (c *PriceClient) QueryPriceUnitEdge(pr *Price) *PriceUnitQuery {
 	query := (&PriceUnitClient{config: c.config}).Query()
@@ -4760,6 +4831,139 @@ func (c *PriceUnitClient) mutate(ctx context.Context, m *PriceUnitMutation) (Val
 		return (&PriceUnitDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown PriceUnit mutation op: %q", m.Op())
+	}
+}
+
+// ScheduledTaskClient is a client for the ScheduledTask schema.
+type ScheduledTaskClient struct {
+	config
+}
+
+// NewScheduledTaskClient returns a client for the ScheduledTask from the given config.
+func NewScheduledTaskClient(c config) *ScheduledTaskClient {
+	return &ScheduledTaskClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `scheduledtask.Hooks(f(g(h())))`.
+func (c *ScheduledTaskClient) Use(hooks ...Hook) {
+	c.hooks.ScheduledTask = append(c.hooks.ScheduledTask, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `scheduledtask.Intercept(f(g(h())))`.
+func (c *ScheduledTaskClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ScheduledTask = append(c.inters.ScheduledTask, interceptors...)
+}
+
+// Create returns a builder for creating a ScheduledTask entity.
+func (c *ScheduledTaskClient) Create() *ScheduledTaskCreate {
+	mutation := newScheduledTaskMutation(c.config, OpCreate)
+	return &ScheduledTaskCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ScheduledTask entities.
+func (c *ScheduledTaskClient) CreateBulk(builders ...*ScheduledTaskCreate) *ScheduledTaskCreateBulk {
+	return &ScheduledTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ScheduledTaskClient) MapCreateBulk(slice any, setFunc func(*ScheduledTaskCreate, int)) *ScheduledTaskCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ScheduledTaskCreateBulk{err: fmt.Errorf("calling to ScheduledTaskClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ScheduledTaskCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ScheduledTaskCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ScheduledTask.
+func (c *ScheduledTaskClient) Update() *ScheduledTaskUpdate {
+	mutation := newScheduledTaskMutation(c.config, OpUpdate)
+	return &ScheduledTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ScheduledTaskClient) UpdateOne(st *ScheduledTask) *ScheduledTaskUpdateOne {
+	mutation := newScheduledTaskMutation(c.config, OpUpdateOne, withScheduledTask(st))
+	return &ScheduledTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ScheduledTaskClient) UpdateOneID(id string) *ScheduledTaskUpdateOne {
+	mutation := newScheduledTaskMutation(c.config, OpUpdateOne, withScheduledTaskID(id))
+	return &ScheduledTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ScheduledTask.
+func (c *ScheduledTaskClient) Delete() *ScheduledTaskDelete {
+	mutation := newScheduledTaskMutation(c.config, OpDelete)
+	return &ScheduledTaskDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ScheduledTaskClient) DeleteOne(st *ScheduledTask) *ScheduledTaskDeleteOne {
+	return c.DeleteOneID(st.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ScheduledTaskClient) DeleteOneID(id string) *ScheduledTaskDeleteOne {
+	builder := c.Delete().Where(scheduledtask.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ScheduledTaskDeleteOne{builder}
+}
+
+// Query returns a query builder for ScheduledTask.
+func (c *ScheduledTaskClient) Query() *ScheduledTaskQuery {
+	return &ScheduledTaskQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeScheduledTask},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ScheduledTask entity by its id.
+func (c *ScheduledTaskClient) Get(ctx context.Context, id string) (*ScheduledTask, error) {
+	return c.Query().Where(scheduledtask.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ScheduledTaskClient) GetX(ctx context.Context, id string) *ScheduledTask {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ScheduledTaskClient) Hooks() []Hook {
+	return c.hooks.ScheduledTask
+}
+
+// Interceptors returns the client interceptors.
+func (c *ScheduledTaskClient) Interceptors() []Interceptor {
+	return c.inters.ScheduledTask
+}
+
+func (c *ScheduledTaskClient) mutate(ctx context.Context, m *ScheduledTaskMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ScheduledTaskCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ScheduledTaskUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ScheduledTaskUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ScheduledTaskDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ScheduledTask mutation op: %q", m.Op())
 	}
 }
 
@@ -6956,21 +7160,22 @@ type (
 		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
 		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
-		EntityIntegrationMapping, Environment, Feature, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price, PriceUnit,
-		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, User, Wallet, WalletTransaction []ent.Hook
+		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
+		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionSchedule, SubscriptionSchedulePhase, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet,
+		WalletTransaction []ent.Hook
 	}
 	inters struct {
 		Addon, AddonAssociation, AlertLogs, Auth, BillingSequence, Connection,
 		Costsheet, Coupon, CouponApplication, CouponAssociation, CreditGrant,
 		CreditGrantApplication, CreditNote, CreditNoteLineItem, Customer, Entitlement,
-		EntityIntegrationMapping, Environment, Feature, Invoice, InvoiceLineItem,
-		InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price, PriceUnit,
-		Secret, Settings, Subscription, SubscriptionLineItem, SubscriptionPause,
-		SubscriptionSchedule, SubscriptionSchedulePhase, Task, TaxApplied,
-		TaxAssociation, TaxRate, Tenant, User, Wallet,
+		EntityIntegrationMapping, Environment, Feature, Group, Invoice,
+		InvoiceLineItem, InvoiceSequence, Meter, Payment, PaymentAttempt, Plan, Price,
+		PriceUnit, ScheduledTask, Secret, Settings, Subscription, SubscriptionLineItem,
+		SubscriptionPause, SubscriptionSchedule, SubscriptionSchedulePhase, Task,
+		TaxApplied, TaxAssociation, TaxRate, Tenant, User, Wallet,
 		WalletTransaction []ent.Interceptor
 	}
 )

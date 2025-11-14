@@ -18,9 +18,10 @@ type PriceService interface {
 	CreatePrice(ctx context.Context, req dto.CreatePriceRequest) (*dto.PriceResponse, error)
 	CreateBulkPrice(ctx context.Context, req dto.CreateBulkPriceRequest) (*dto.CreateBulkPriceResponse, error)
 	GetPrice(ctx context.Context, id string) (*dto.PriceResponse, error)
-	GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error)
+	GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error)
 	GetPricesBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.ListPricesResponse, error)
 	GetPricesByAddonID(ctx context.Context, addonID string) (*dto.ListPricesResponse, error)
+	GetPricesByCostsheetID(ctx context.Context, costsheetID string) (*dto.ListPricesResponse, error)
 	GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error)
 	UpdatePrice(ctx context.Context, id string, req dto.UpdatePriceRequest) (*dto.PriceResponse, error)
 	DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error
@@ -87,22 +88,29 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	}
 
 	// Handle regular price case
-	price, err := req.ToPrice(ctx)
+	p, err := req.ToPrice(ctx)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to parse price data").
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := s.PriceRepo.Create(ctx, price); err != nil {
+	// Validate group if provided
+	if req.GroupID != "" {
+		if err := s.validateGroup(ctx, []*price.Price{p}); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.PriceRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
 
-	response := &dto.PriceResponse{Price: price}
+	response := &dto.PriceResponse{Price: p}
 
 	// TODO: !REMOVE after migration
-	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = price.EntityID
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		response.PlanID = p.EntityID
 	}
 
 	return response, nil
@@ -138,6 +146,16 @@ func (s *priceService) validateEntityExists(ctx context.Context, entityType type
 				WithHint("The specified subscription does not exist").
 				WithReportableDetails(map[string]interface{}{
 					"subscription_id": entityID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	case types.PRICE_ENTITY_TYPE_COSTSHEET:
+		costsheet, err := s.CostSheetRepo.GetByID(ctx, entityID)
+		if err != nil || costsheet == nil {
+			return ierr.NewError("costsheet not found").
+				WithHint("The specified costsheet  does not exist").
+				WithReportableDetails(map[string]interface{}{
+					"costsheet_id": entityID,
 				}).
 				Mark(ierr.ErrNotFound)
 		}
@@ -186,6 +204,10 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 
 		// Create regular prices in bulk if any exist
 		if len(regularPrices) > 0 {
+			// Validate groups if provided
+			if err := s.validateGroup(txCtx, regularPrices); err != nil {
+				return err
+			}
 			if err := s.PriceRepo.CreateBulk(txCtx, regularPrices); err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create prices in bulk").
@@ -488,21 +510,31 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		response.PricingUnit = &dto.PriceUnitResponse{PriceUnit: priceUnit}
 	}
 
+	if price.GroupID != "" {
+		groupService := NewGroupService(s.ServiceParams)
+		group, err := groupService.GetGroup(ctx, price.GroupID)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch group", "group_id", price.GroupID, "error", err)
+			// Don't fail the request if group fetch fails, just continue
+		} else {
+			response.Group = group
+		}
+	}
+
 	return response, nil
 }
 
-func (s *priceService) GetPricesByPlanID(ctx context.Context, planID string) (*dto.ListPricesResponse, error) {
-	if planID == "" {
-		return nil, ierr.NewError("plan_id is required").
-			WithHint("Plan ID is required").
-			Mark(ierr.ErrValidation)
+func (s *priceService) GetPricesByPlanID(ctx context.Context, req dto.GetPricesByPlanRequest) (*dto.ListPricesResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
 	}
 
 	priceFilter := types.NewNoLimitPriceFilter().
-		WithEntityIDs([]string{planID}).
+		WithEntityIDs([]string{req.PlanID}).
 		WithStatus(types.StatusPublished).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
-		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+		WithAllowExpiredPrices(req.AllowExpired).
+		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit) + "," + string(types.ExpandGroups))
 
 	response, err := s.GetPrices(ctx, priceFilter)
 	if err != nil {
@@ -557,6 +589,27 @@ func (s *priceService) GetPricesByAddonID(ctx context.Context, addonID string) (
 	return response, nil
 }
 
+func (s *priceService) GetPricesByCostsheetID(ctx context.Context, costsheetID string) (*dto.ListPricesResponse, error) {
+	if costsheetID == "" {
+		return nil, ierr.NewError("costsheet v2 id is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{costsheetID}).
+		WithStatus(types.StatusPublished).
+		WithEntityType(types.PRICE_ENTITY_TYPE_COSTSHEET).
+		WithExpand(string(types.ExpandMeters) + "," + string(types.ExpandPriceUnit))
+
+	response, err := s.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter) (*dto.ListPricesResponse, error) {
 	meterService := NewMeterService(s.MeterRepo)
 
@@ -579,6 +632,15 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 	// Build response
 	response := &dto.ListPricesResponse{
 		Items: make([]*dto.PriceResponse, len(prices)),
+		Pagination: types.NewPaginationResponse(
+			priceCount,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}
+
+	if len(prices) == 0 {
+		return response, nil
 	}
 
 	// If meters are requested to be expanded, fetch all meters in one query
@@ -623,6 +685,94 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 		s.Logger.Debugw("fetched price units for prices", "count", len(priceUnitsByID))
 	}
 
+	// Collect entity IDs based on entity type for efficient bulk fetching
+	var planIDs []string
+	var addonIDs []string
+	var groupIDs []string
+
+	// Separate prices by entity type to collect IDs
+	for _, p := range prices {
+		if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN && p.EntityID != "" {
+			planIDs = append(planIDs, p.EntityID)
+		} else if p.EntityType == types.PRICE_ENTITY_TYPE_ADDON && p.EntityID != "" {
+			addonIDs = append(addonIDs, p.EntityID)
+		}
+		if p.GroupID != "" {
+			groupIDs = append(groupIDs, p.GroupID)
+		}
+	}
+
+	// If plans are requested to be expanded, fetch plans in bulk
+	var plansByID map[string]*dto.PlanResponse
+	planService := NewPlanService(s.ServiceParams)
+	if filter.GetExpand().Has(types.ExpandPlan) && len(planIDs) > 0 {
+		// Remove duplicates
+		planIDs = lo.Uniq(planIDs)
+
+		// Fetch plans in bulk
+		planFilter := types.NewNoLimitPlanFilter()
+		planFilter.PlanIDs = planIDs
+
+		plansResponse, err := planService.GetPlans(ctx, planFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a map for plan lookup
+		plansByID = make(map[string]*dto.PlanResponse, len(plansResponse.Items))
+		for _, p := range plansResponse.Items {
+			plansByID[p.Plan.ID] = p
+		}
+	}
+
+	// If addons are requested to be expanded, fetch addons in bulk
+	var addonsByID map[string]*dto.AddonResponse
+	addonService := NewAddonService(s.ServiceParams)
+	if filter.GetExpand().Has(types.ExpandAddons) && len(addonIDs) > 0 {
+		// Remove duplicates
+		addonIDs = lo.Uniq(addonIDs)
+
+		// Fetch addons in bulk
+		addonFilter := types.NewNoLimitAddonFilter()
+		addonFilter.AddonIDs = addonIDs
+		addonsResponse, err := addonService.GetAddons(ctx, addonFilter)
+		if err != nil {
+			return nil, err
+		}
+
+		// Create a map for addon lookup
+		addonsByID = make(map[string]*dto.AddonResponse, len(addonsResponse.Items))
+		for _, a := range addonsResponse.Items {
+			addonsByID[a.Addon.ID] = a
+		}
+	}
+
+	// If groups are requested to be expanded, fetch groups in bulk
+	var groupsByID map[string]*dto.GroupResponse
+	if filter.GetExpand().Has(types.ExpandGroups) && len(groupIDs) > 0 {
+		// Remove duplicates
+		groupIDs = lo.Uniq(groupIDs)
+
+		groupService := NewGroupService(s.ServiceParams)
+		groupFilter := &types.GroupFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			GroupIDs:    groupIDs,
+		}
+
+		groupsResponse, err := groupService.ListGroups(ctx, groupFilter)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch groups in bulk", "error", err)
+			// Don't fail the request, just continue without groups
+			groupsByID = make(map[string]*dto.GroupResponse)
+		} else {
+			// Create a map for group lookup
+			groupsByID = make(map[string]*dto.GroupResponse, len(groupsResponse.Items))
+			for _, g := range groupsResponse.Items {
+				groupsByID[g.ID] = g
+			}
+		}
+	}
+
 	// Build response with expanded fields
 	for i, p := range prices {
 		response.Items[i] = &dto.PriceResponse{Price: p}
@@ -640,13 +790,28 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 				response.Items[i].PricingUnit = pu
 			}
 		}
-	}
 
-	response.Pagination = types.NewPaginationResponse(
-		priceCount,
-		filter.GetLimit(),
-		filter.GetOffset(),
-	)
+		// Add plan if requested and available
+		if filter.GetExpand().Has(types.ExpandPlan) && p.EntityType == types.PRICE_ENTITY_TYPE_PLAN && p.EntityID != "" {
+			if plan, ok := plansByID[p.EntityID]; ok {
+				response.Items[i].Plan = plan
+			}
+		}
+
+		// Add addon if requested and available
+		if filter.GetExpand().Has(types.ExpandAddons) && p.EntityType == types.PRICE_ENTITY_TYPE_ADDON && p.EntityID != "" {
+			if addon, ok := addonsByID[p.EntityID]; ok {
+				response.Items[i].Addon = addon
+			}
+		}
+
+		// Add group if requested and available
+		if filter.GetExpand().Has(types.ExpandGroups) && p.GroupID != "" {
+			if group, ok := groupsByID[p.GroupID]; ok {
+				response.Items[i].Group = group
+			}
+		}
+	}
 
 	return response, nil
 }
@@ -685,6 +850,15 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate
+
+			// Validate group if provided
+			if req.GroupID != "" {
+				existingPrice.GroupID = req.GroupID
+				if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
+					return err
+				}
+			}
+
 			if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
 				return err
 			}
@@ -729,6 +903,13 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			existingPrice.EndDate = req.EffectiveFrom
 		}
 
+		if req.GroupID != "" {
+			existingPrice.GroupID = req.GroupID
+			if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
+				return nil, err
+			}
+		}
+
 		// Update the price in database
 		if err := s.PriceRepo.Update(ctx, existingPrice); err != nil {
 			return nil, err
@@ -750,11 +931,38 @@ func (s *priceService) DeletePrice(ctx context.Context, id string, req dto.Delet
 		return err
 	}
 
-	if req.EndDate != nil {
-		price.EndDate = req.EndDate
-	} else {
-		price.EndDate = lo.ToPtr(time.Now().UTC())
+	// Check if price is already terminated
+	if price.EndDate != nil {
+		return ierr.NewError("price is already terminated").
+			WithHint("Cannot terminate a price that has already been terminated").
+			WithReportableDetails(map[string]interface{}{
+				"price_id": id,
+				"end_date": price.EndDate,
+			}).
+			Mark(ierr.ErrValidation)
 	}
+
+	// Set end date and validate
+	var endDate time.Time
+	if req.EndDate != nil {
+		endDate = req.EndDate.UTC()
+	} else {
+		endDate = time.Now().UTC()
+	}
+
+	// Validate end date is after start date
+	if price.StartDate != nil && price.StartDate.After(endDate) {
+		return ierr.NewError("end date must be after start date").
+			WithHint("The termination date must be after the price's start date").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":   id,
+				"start_date": price.StartDate,
+				"end_date":   endDate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	price.EndDate = &endDate
 
 	if err := s.PriceRepo.Update(ctx, price); err != nil {
 		return err
@@ -1114,4 +1322,30 @@ func (s *priceService) CalculateCostSheetPrice(ctx context.Context, price *price
 	// For now, we'll use the same calculation as CalculateCost
 	// In the future, we can add costsheet-specific pricing rules here
 	return s.CalculateCost(ctx, price, quantity)
+}
+
+// validateGroup validates that a group exists and is of type "price"
+func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price) error {
+	// 1. Get all group IDs from prices
+	groupIDs := make([]string, 0)
+	for _, price := range prices {
+		if price.GroupID == "" {
+			continue
+		}
+		groupIDs = append(groupIDs, price.GroupID)
+	}
+
+	groupIDs = lo.Uniq(groupIDs)
+
+	// 2. Validate groups if any
+	if len(groupIDs) == 0 {
+		return nil
+	}
+
+	// 3. Validate group
+	groupService := NewGroupService(s.ServiceParams)
+	if err := groupService.ValidateGroupBulk(ctx, groupIDs, types.GroupEntityTypePrice); err != nil {
+		return err
+	}
+	return nil
 }

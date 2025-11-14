@@ -246,6 +246,34 @@ func (s *InMemoryInvoiceStore) GetNextBillingSequence(ctx context.Context, subsc
 	return maxSeq + 1, nil
 }
 
+func (s *InMemoryInvoiceStore) GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*invoice.Invoice, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter by criteria
+	var result []*invoice.Invoice
+	for _, inv := range invoices {
+		if inv.TenantID == tenantID && inv.EnvironmentID == envID &&
+			inv.Status == types.StatusPublished &&
+			!inv.CreatedAt.Before(startTime) && !inv.CreatedAt.After(endTime) {
+			result = append(result, copyInvoice(inv))
+		}
+	}
+
+	// Apply pagination
+	if offset >= len(result) {
+		return []*invoice.Invoice{}, nil
+	}
+	end := offset + limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[offset:end], nil
+}
+
 // invoiceFilterFn implements filtering logic for invoices
 func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface{}) bool {
 	if inv == nil {

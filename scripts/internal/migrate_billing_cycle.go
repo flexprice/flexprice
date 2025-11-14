@@ -66,11 +66,10 @@ func migrateBillingCycle(params MigrateBillingCycleParams) error {
 	}
 
 	// Create database client
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		return fmt.Errorf("failed to create ent client: %w", err)
 	}
-	defer entClient.Close()
 
 	// Create postgres client
 	dbClient := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
@@ -208,7 +207,7 @@ func updateSubscriptionBillingCycle(ctx context.Context, dbClient postgres.IClie
 	environmentID := types.GetEnvironmentID(ctx)
 	now := time.Now().UTC()
 
-	_, err := dbClient.Querier(ctx).ExecContext(ctx, query,
+	_, err := dbClient.Writer(ctx).ExecContext(ctx, query,
 		string(billingCycle),
 		billingAnchor,
 		currentPeriodEnd,

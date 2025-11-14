@@ -3,30 +3,19 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 )
 
-// Costsheet represents the core entity for tracking cost-related configurations in the billing system.
-// It establishes relationships between meters (what we measure) and prices (how much we charge).
-// This entity is crucial for:
-// 1. Determining the cost basis for billing calculations
-// 2. Mapping usage metrics to their associated prices
-// 3. Supporting margin and cost analysis features
+var Idx_costsheet_tenant_environment_lookup_key = "idx_costsheet_tenant_environment_lookup_key"
+
+// Costsheet represents the costsheet entity for tracking cost-related configurations.
+// This entity includes basic columns as specified in the requirements:
+// - id, name, tenant_id, environment_id, status, created_at, created_by, updated_at, updated_by
+// This is used for comparing revenue and costsheet calculations.
 type Costsheet struct {
 	ent.Schema
-}
-
-// Annotations configures the underlying database schema.
-// Here we explicitly set the table name to 'costsheet' (singular form)
-// to maintain consistency with our naming conventions.
-func (Costsheet) Annotations() []schema.Annotation {
-	return []schema.Annotation{
-		entsql.Annotation{Table: "costsheet"},
-	}
 }
 
 // Mixin injects common fields into the schema.
@@ -43,6 +32,7 @@ func (Costsheet) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		baseMixin.BaseMixin{},        // tenant_id, status, created_at, updated_at, created_by, updated_by
 		baseMixin.EnvironmentMixin{}, // environment_id
+		baseMixin.MetadataMixin{},
 	}
 }
 
@@ -56,50 +46,33 @@ func (Costsheet) Fields() []ent.Field {
 			Unique().    // Ensures uniqueness across all records
 			Immutable(), // ID cannot be changed once set
 
-		field.String("meter_id"). // References the associated meter
-						SchemaType(map[string]string{
-				"postgres": "varchar(50)",
+		field.String("name"). // Name of the costsheet
+					SchemaType(map[string]string{
+				"postgres": "varchar(255)",
 			}).
-			NotEmpty(), // Must have a valid meter reference
+			NotEmpty(), // Must have a name
 
-		field.String("price_id"). // References the associated price
+		field.String("lookup_key"). // Lookup key for easy identification
 						SchemaType(map[string]string{
-				"postgres": "varchar(50)",
+				"postgres": "varchar(255)",
 			}).
-			NotEmpty(), // Must have a valid price reference
-	}
-}
+			Optional(),
 
-// Edges defines the relationships between Costsheet and other entities.
-// These relationships are crucial for:
-// 1. Cost calculation workflows
-// 2. Usage tracking
-// 3. Price application
-func (Costsheet) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.From("meter", Meter.Type). // Relationship with Meter entity
-						Ref("costsheet").  // Meter can reference its costsheets
-						Field("meter_id"). // Foreign key field
-						Unique().          // One costsheet entry per meter
-						Required(),        // Must have an associated meter
-
-		edge.From("price", Price.Type). // Relationship with Price entity
-						Ref("costsheet").  // Price can reference its costsheets
-						Field("price_id"). // Foreign key field
-						Unique().          // One costsheet entry per price
-						Required(),        // Must have an associated price
+		field.Text("description"). // Description of the costsheet
+						Optional(),
 	}
 }
 
 // Indexes improves query performance and ensures data integrity.
 // We index:
 // 1. tenant_id + environment_id: For fast multi-tenant, multi-environment queries
-// 2. meter_id + price_id: For unique constraint and fast lookups
+// 2. tenant_id + environment_id + lookup_key: For unique lookup key queries
 func (Costsheet) Indexes() []ent.Index {
 	return []ent.Index{
+		index.Fields("tenant_id", "environment_id", "lookup_key").
+			Unique().
+			StorageKey(Idx_costsheet_tenant_environment_lookup_key).
+			Annotations(entsql.IndexWhere("status = 'published'" + " AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id"), // Supports multi-tenant, multi-environment queries
-		index.Fields("meter_id", "price_id"). // Ensures unique meter-price combinations
-							Unique().                                               // No duplicate meter-price pairs allowed
-							Annotations(entsql.IndexWhere("status = 'published'")), // Only enforce uniqueness for published records
 	}
 }

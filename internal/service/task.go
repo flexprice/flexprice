@@ -114,6 +114,9 @@ func (s *taskService) UpdateTaskStatus(ctx context.Context, id string, status ty
 
 	now := time.Now().UTC()
 	t.TaskStatus = status
+	t.UpdatedAt = now
+	t.UpdatedBy = types.GetUserID(ctx)
+
 	switch status {
 	case types.TaskStatusProcessing:
 		t.StartedAt = &now

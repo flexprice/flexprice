@@ -31,7 +31,7 @@ func NewCouponApplicationRepository(client postgres.IClient, log *logger.Logger,
 }
 
 func (r *couponApplicationRepository) Create(ctx context.Context, ca *domainCouponApplication.CouponApplication) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating coupon application",
 		"coupon_application_id", ca.ID,
@@ -107,7 +107,7 @@ func (r *couponApplicationRepository) Create(ctx context.Context, ca *domainCoup
 }
 
 func (r *couponApplicationRepository) Get(ctx context.Context, id string) (*domainCouponApplication.CouponApplication, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon application",
 		"coupon_application_id", id)
@@ -167,7 +167,7 @@ func (r *couponApplicationRepository) Get(ctx context.Context, id string) (*doma
 }
 
 func (r *couponApplicationRepository) Update(ctx context.Context, ca *domainCouponApplication.CouponApplication) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating coupon application",
 		"coupon_application_id", ca.ID,
@@ -213,7 +213,7 @@ func (r *couponApplicationRepository) Update(ctx context.Context, ca *domainCoup
 }
 
 func (r *couponApplicationRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting coupon application",
 		"coupon_application_id", id)
@@ -254,7 +254,7 @@ func (r *couponApplicationRepository) Delete(ctx context.Context, id string) err
 }
 
 func (r *couponApplicationRepository) GetByInvoice(ctx context.Context, invoiceID string) ([]*domainCouponApplication.CouponApplication, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon applications by invoice",
 		"invoice_id", invoiceID)
@@ -296,7 +296,7 @@ func (r *couponApplicationRepository) GetByInvoice(ctx context.Context, invoiceI
 }
 
 func (r *couponApplicationRepository) GetBySubscription(ctx context.Context, subscriptionID string) ([]*domainCouponApplication.CouponApplication, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon applications by subscription",
 		"subscription_id", subscriptionID)
@@ -338,7 +338,7 @@ func (r *couponApplicationRepository) GetBySubscription(ctx context.Context, sub
 }
 
 func (r *couponApplicationRepository) GetBySubscriptionAndCoupon(ctx context.Context, subscriptionID string, couponID string) ([]*domainCouponApplication.CouponApplication, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon applications by subscription and coupon",
 		"subscription_id", subscriptionID,
@@ -385,7 +385,7 @@ func (r *couponApplicationRepository) GetBySubscriptionAndCoupon(ctx context.Con
 }
 
 func (r *couponApplicationRepository) CountBySubscriptionAndCoupon(ctx context.Context, subscriptionID string, couponID string) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("counting coupon applications by subscription and coupon",
 		"subscription_id", subscriptionID,

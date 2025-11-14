@@ -30,6 +30,10 @@ type TemporalClient interface {
 	GetWorkflowHistory(ctx context.Context, workflowID, runID string) (client.HistoryEventIterator, error)
 	DescribeWorkflowExecution(ctx context.Context, workflowID, runID string) (*workflowservice.DescribeWorkflowExecutionResponse, error)
 
+	// Schedule operations
+	CreateSchedule(ctx context.Context, options models.CreateScheduleOptions) (models.ScheduleHandle, error)
+	GetScheduleHandle(ctx context.Context, scheduleID string) models.ScheduleHandle
+
 	// Raw client access (for advanced use cases)
 	GetRawClient() client.Client
 }

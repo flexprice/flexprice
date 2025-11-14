@@ -45,7 +45,7 @@ func newOnboardingScript() (*onboardingScript, error) {
 	}
 
 	// Initialize the other DB
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}

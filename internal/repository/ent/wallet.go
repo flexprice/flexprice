@@ -33,7 +33,7 @@ func NewWalletRepository(client postgres.IClient, logger *logger.Logger, cache c
 }
 
 func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wallet) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "create_wallet", map[string]interface{}{
@@ -106,7 +106,7 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 		return cachedWallet, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	w, err := client.Wallet.Query().
 		Where(
@@ -141,7 +141,7 @@ func (r *walletRepository) GetWalletByID(ctx context.Context, id string) (*walle
 }
 
 func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerID string) ([]*walletdomain.Wallet, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "get_wallets_by_customer_id", map[string]interface{}{
@@ -178,7 +178,7 @@ func (r *walletRepository) GetWalletsByCustomerID(ctx context.Context, customerI
 }
 
 func (r *walletRepository) UpdateWalletStatus(ctx context.Context, id string, status types.WalletStatus) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "wallet", "update_wallet_status", map[string]interface{}{
@@ -247,7 +247,7 @@ func (r *walletRepository) FindEligibleCredits(ctx context.Context, walletID str
 	offset := 0
 
 	for {
-		credits, err := r.client.Querier(ctx).WalletTransaction.Query().
+		credits, err := r.client.Writer(ctx).WalletTransaction.Query().
 			Where(
 				wallettransaction.WalletID(walletID),
 				wallettransaction.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -324,7 +324,7 @@ func (r *walletRepository) ConsumeCredits(ctx context.Context, credits []*wallet
 		newAvailable := credit.CreditsAvailable.Sub(toConsume)
 
 		// Update credit's available amount
-		_, err := r.client.Querier(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
+		_, err := r.client.Writer(ctx).WalletTransaction.UpdateOne(&ent.WalletTransaction{
 			ID: credit.ID,
 		}).
 			SetCreditsAvailable(newAvailable).
@@ -359,7 +359,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Set environment ID from context if not already set
 	if tx.EnvironmentID == "" {
@@ -418,7 +418,7 @@ func (r *walletRepository) UpdateWalletBalance(ctx context.Context, walletID str
 	})
 	defer FinishSpan(span)
 
-	err := r.client.Querier(ctx).Wallet.Update().
+	err := r.client.Writer(ctx).Wallet.Update().
 		Where(wallet.ID(walletID)).
 		SetBalance(finalBalance).
 		SetCreditBalance(newCreditBalance).
@@ -447,7 +447,7 @@ func (r *walletRepository) GetTransactionByID(ctx context.Context, id string) (*
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	t, err := client.WalletTransaction.Query().
 		Where(
 			wallettransaction.ID(id),
@@ -484,7 +484,7 @@ func (r *walletRepository) ListWalletTransactions(ctx context.Context, f *types.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.WalletTransaction.Query()
 
 	// Apply entity-specific filters
@@ -517,7 +517,7 @@ func (r *walletRepository) ListAllWalletTransactions(ctx context.Context, f *typ
 		f = types.NewNoLimitWalletTransactionFilter()
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.WalletTransaction.Query()
 	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
 	if f != nil {
@@ -548,7 +548,7 @@ func (r *walletRepository) CountWalletTransactions(ctx context.Context, f *types
 		f = types.NewNoLimitWalletTransactionFilter()
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.WalletTransaction.Query()
 	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
 	if f != nil {
@@ -576,7 +576,7 @@ func (r *walletRepository) UpdateTransactionStatus(ctx context.Context, id strin
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	count, err := client.WalletTransaction.Update().
 		Where(
 			wallettransaction.ID(id),
@@ -729,7 +729,7 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	update := client.Wallet.Update().
 		Where(
 			wallet.ID(id),
@@ -834,7 +834,7 @@ func (r *walletRepository) DeleteCache(ctx context.Context, walletID string) {
 }
 
 func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types.WalletFilter) ([]*walletdomain.Wallet, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Wallet.Query().
 		Where(
 			wallet.StatusEQ(string(types.StatusPublished)),
@@ -865,4 +865,106 @@ func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types
 	}
 
 	return walletdomain.FromEntList(wallets), nil
+}
+
+// GetCreditTopupsForExport retrieves wallet transactions joined with wallet and customer data for export
+func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*walletdomain.CreditTopupsExportData, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "wallet", "get_credit_topups_for_export", map[string]interface{}{
+		"tenant_id": tenantID,
+		"env_id":    envID,
+		"start":     startTime,
+		"end":       endTime,
+		"limit":     limit,
+		"offset":    offset,
+	})
+	defer FinishSpan(span)
+
+	client := r.client.Reader(ctx)
+
+	// Use raw SQL for complex join query
+	query := `
+		SELECT
+			wt.id AS topup_id,
+			c.external_id,
+			c.name AS customer_name,
+			wt.wallet_id,
+			wt.amount,
+			wt.credit_balance_before,
+			wt.credit_balance_after,
+			wt.reference_id,
+			wt.transaction_reason,
+			wt.created_at
+		FROM
+			wallet_transactions wt
+			INNER JOIN wallets w ON w.id = wt.wallet_id
+			INNER JOIN customers c ON c.id = w.customer_id
+		WHERE
+			wt.tenant_id = $1
+			AND wt.environment_id = $2
+			AND wt.type = $3
+			AND wt.transaction_status = $4
+			AND wt.status = $5
+			AND wt.created_at >= $6
+			AND wt.created_at < $7
+		ORDER BY wt.created_at ASC
+		LIMIT $8 OFFSET $9
+	`
+
+	rows, err := client.QueryContext(ctx, query,
+		tenantID,
+		envID,
+		string(types.TransactionTypeCredit),
+		string(types.TransactionStatusCompleted),
+		string(types.StatusPublished),
+		startTime,
+		endTime,
+		limit,
+		offset,
+	)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch credit topups for export").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id": tenantID,
+				"env_id":    envID,
+				"limit":     limit,
+				"offset":    offset,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	result := make([]*walletdomain.CreditTopupsExportData, 0)
+	for rows.Next() {
+		exportData := &walletdomain.CreditTopupsExportData{}
+		err := rows.Scan(
+			&exportData.TopupID,
+			&exportData.ExternalID,
+			&exportData.CustomerName,
+			&exportData.WalletID,
+			&exportData.Amount,
+			&exportData.CreditBalanceBefore,
+			&exportData.CreditBalanceAfter,
+			&exportData.ReferenceID,
+			&exportData.TransactionReason,
+			&exportData.CreatedAt,
+		)
+		if err != nil {
+			r.logger.Errorw("failed to scan credit topup export data", "error", err)
+			continue
+		}
+
+		result = append(result, exportData)
+	}
+
+	if err = rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to iterate credit topup rows").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return result, nil
 }

@@ -42,14 +42,16 @@ type Secret struct {
 	Value string `json:"value,omitempty"`
 	// First 8 characters of the API key or integration ID for display purposes
 	DisplayID string `json:"display_id,omitempty"`
-	// List of permissions granted to this secret
-	Permissions []string `json:"permissions,omitempty"`
 	// Expiration time for the secret
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// Last time this secret was used
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	// Provider-specific encrypted data (for integrations)
 	ProviderData map[string]string `json:"provider_data,omitempty"`
+	// Roles copied from user at API key creation time
+	Roles []string `json:"roles,omitempty"`
+	// User type copied from user at API key creation time
+	UserType     string `json:"user_type,omitempty"`
 	selectValues sql.SelectValues
 }
 
@@ -58,9 +60,9 @@ func (*Secret) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case secret.FieldPermissions, secret.FieldProviderData:
+		case secret.FieldProviderData, secret.FieldRoles:
 			values[i] = new([]byte)
-		case secret.FieldID, secret.FieldTenantID, secret.FieldStatus, secret.FieldCreatedBy, secret.FieldUpdatedBy, secret.FieldEnvironmentID, secret.FieldName, secret.FieldType, secret.FieldProvider, secret.FieldValue, secret.FieldDisplayID:
+		case secret.FieldID, secret.FieldTenantID, secret.FieldStatus, secret.FieldCreatedBy, secret.FieldUpdatedBy, secret.FieldEnvironmentID, secret.FieldName, secret.FieldType, secret.FieldProvider, secret.FieldValue, secret.FieldDisplayID, secret.FieldUserType:
 			values[i] = new(sql.NullString)
 		case secret.FieldCreatedAt, secret.FieldUpdatedAt, secret.FieldExpiresAt, secret.FieldLastUsedAt:
 			values[i] = new(sql.NullTime)
@@ -157,14 +159,6 @@ func (s *Secret) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.DisplayID = value.String
 			}
-		case secret.FieldPermissions:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field permissions", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &s.Permissions); err != nil {
-					return fmt.Errorf("unmarshal field permissions: %w", err)
-				}
-			}
 		case secret.FieldExpiresAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field expires_at", values[i])
@@ -186,6 +180,20 @@ func (s *Secret) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &s.ProviderData); err != nil {
 					return fmt.Errorf("unmarshal field provider_data: %w", err)
 				}
+			}
+		case secret.FieldRoles:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field roles", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &s.Roles); err != nil {
+					return fmt.Errorf("unmarshal field roles: %w", err)
+				}
+			}
+		case secret.FieldUserType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field user_type", values[i])
+			} else if value.Valid {
+				s.UserType = value.String
 			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
@@ -259,9 +267,6 @@ func (s *Secret) String() string {
 	builder.WriteString("display_id=")
 	builder.WriteString(s.DisplayID)
 	builder.WriteString(", ")
-	builder.WriteString("permissions=")
-	builder.WriteString(fmt.Sprintf("%v", s.Permissions))
-	builder.WriteString(", ")
 	if v := s.ExpiresAt; v != nil {
 		builder.WriteString("expires_at=")
 		builder.WriteString(v.Format(time.ANSIC))
@@ -274,6 +279,12 @@ func (s *Secret) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("provider_data=")
 	builder.WriteString(fmt.Sprintf("%v", s.ProviderData))
+	builder.WriteString(", ")
+	builder.WriteString("roles=")
+	builder.WriteString(fmt.Sprintf("%v", s.Roles))
+	builder.WriteString(", ")
+	builder.WriteString("user_type=")
+	builder.WriteString(s.UserType)
 	builder.WriteByte(')')
 	return builder.String()
 }

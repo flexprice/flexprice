@@ -39,7 +39,7 @@ func MigrateSubscriptionLineItems() error {
 	tenants := []string{"1cd1a8fb-9d1b-461d-accc-d32df594e436", "2c243ba8-9f99-4032-a93d-4e52042ed0e0", "a06e8bde-5bff-438f-821a-326b2f4a0c94", "ae79fbc2-395b-43d5-94e1-cc598717b7ff", "cd204673-7543-4eb3-89e0-47cc5f32192b", "eb7bc8e8-bec0-41a1-95fd-eab43f337641", "f2aaf2a6-a72a-4733-8efb-e9ccc54f6550", "tenant_01JH280NTMS33TWJ8V8V8M2KTR", "tenant_01JH2DPR6C7C90ZEQQ8F56H741", "tenant_01JJ20ZF9M5GQQXJG2AQSMZCVM"}
 
 	// Initialize database client
-	entClient, err := postgres.NewEntClient(cfg, logger)
+	entClient, err := postgres.NewEntClients(cfg, logger)
 	if err != nil {
 		return fmt.Errorf("failed to create database client: %w", err)
 	}

@@ -315,17 +315,54 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 		return
 	}
 
-	if req.Reason == "" {
-		req.Reason = "user_requested"
-	}
-
-	if err := h.service.RemoveAddonFromSubscription(c.Request.Context(), req.SubscriptionID, req.AddonID, req.Reason); err != nil {
+	if err := h.service.RemoveAddonFromSubscription(c.Request.Context(), &req); err != nil {
 		h.log.Error("Failed to remove addon from subscription", "error", err)
 		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "addon removed from subscription successfully"})
+}
+
+// @Summary Get subscription entitlements
+// @Description Get all entitlements for a subscription
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Param feature_ids query []string false "Feature IDs to filter by"
+// @Success 200 {object} dto.SubscriptionEntitlementsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id}/entitlements [get]
+func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Call the service method with structured response
+	var req dto.GetSubscriptionEntitlementsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.log.Error("Failed to bind query", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	response, err := h.service.GetAggregatedSubscriptionEntitlements(c.Request.Context(), id, &req)
+	if err != nil {
+		h.log.Error("Failed to get subscription entitlements", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // @Summary Update subscription line item
@@ -361,6 +398,46 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 	resp, err := h.service.UpdateSubscriptionLineItem(c.Request.Context(), lineItemID, req)
 	if err != nil {
 		h.log.Error("Failed to update subscription line item", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Delete subscription line item
+// @Description Delete a subscription line item by setting its end date
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Line Item ID"
+// @Param request body dto.DeleteSubscriptionLineItemRequest true "Delete Line Item Request"
+// @Success 200 {object} dto.SubscriptionLineItemResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/lineitems/{id} [delete]
+func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
+	lineItemID := c.Param("id")
+	if lineItemID == "" {
+		c.Error(ierr.NewError("line item ID is required").
+			WithHint("Please provide a valid line item ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.DeleteSubscriptionLineItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.DeleteSubscriptionLineItem(c.Request.Context(), lineItemID, req)
+	if err != nil {
+		h.log.Error("Failed to delete subscription line item", "error", err)
 		c.Error(err)
 		return
 	}

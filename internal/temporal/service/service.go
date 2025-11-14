@@ -348,6 +348,10 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildPriceSyncInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalTaskProcessingWorkflow:
 		return s.buildTaskProcessingInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalHubSpotDealSyncWorkflow:
+		return s.buildHubSpotDealSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalHubSpotInvoiceSyncWorkflow:
+		return s.buildHubSpotInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	default:
 		return nil, errors.NewError("unsupported workflow type").
 			WithHintf("Workflow type %s is not supported", workflowType.String()).
@@ -405,6 +409,48 @@ func (s *temporalService) buildTaskProcessingInput(ctx context.Context, tenantID
 		EnvironmentID: environmentID,
 		UserID:        userID,
 	}, nil
+}
+
+// buildHubSpotDealSyncInput builds input for HubSpot deal sync workflow
+func (s *temporalService) buildHubSpotDealSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(*models.HubSpotDealSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	// Handle value type as well
+	if input, ok := params.(models.HubSpotDealSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for HubSpot deal sync workflow").
+		WithHint("Provide HubSpotDealSyncWorkflowInput with subscription_id").
+		Mark(errors.ErrValidation)
+}
+
+// buildHubSpotInvoiceSyncInput builds input for HubSpot invoice sync workflow
+func (s *temporalService) buildHubSpotInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(*models.HubSpotInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	// Handle value type as well
+	if input, ok := params.(models.HubSpotInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for HubSpot invoice sync workflow").
+		WithHint("Provide HubSpotInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
 }
 
 // validateTenantContext validates that the required tenant context fields are present

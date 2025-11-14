@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -41,6 +43,7 @@ const (
 	PRICE_ENTITY_TYPE_SUBSCRIPTION PriceEntityType = "SUBSCRIPTION"
 	PRICE_ENTITY_TYPE_ADDON        PriceEntityType = "ADDON"
 	PRICE_ENTITY_TYPE_PRICE        PriceEntityType = "PRICE"
+	PRICE_ENTITY_TYPE_COSTSHEET    PriceEntityType = "COSTSHEET"
 )
 
 func (p PriceEntityType) Validate() error {
@@ -49,6 +52,7 @@ func (p PriceEntityType) Validate() error {
 		PRICE_ENTITY_TYPE_SUBSCRIPTION,
 		PRICE_ENTITY_TYPE_ADDON,
 		PRICE_ENTITY_TYPE_PRICE,
+		PRICE_ENTITY_TYPE_COSTSHEET,
 	}
 	if !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid price entity type").
@@ -280,6 +284,8 @@ type PriceFilter struct {
 	ParentPriceID      *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
+
+	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values

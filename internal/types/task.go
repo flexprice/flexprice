@@ -114,12 +114,13 @@ type TaskFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
-	TaskType   *TaskType   `json:"task_type,omitempty"`
-	EntityType *EntityType `json:"entity_type,omitempty"`
-	TaskStatus *TaskStatus `json:"task_status,omitempty"`
-	CreatedBy  string      `json:"created_by,omitempty"`
-	StartTime  *time.Time  `json:"start_time,omitempty"`
-	EndTime    *time.Time  `json:"end_time,omitempty"`
+	TaskType        *TaskType   `json:"task_type,omitempty" form:"task_type"`
+	EntityType      *EntityType `json:"entity_type,omitempty" form:"entity_type"`
+	TaskStatus      *TaskStatus `json:"task_status,omitempty" form:"task_status"`
+	ScheduledTaskID string      `json:"scheduled_task_id,omitempty" form:"scheduled_task_id"`
+	CreatedBy       string      `json:"created_by,omitempty" form:"created_by"`
+	StartTime       *time.Time  `json:"start_time,omitempty" form:"start_time"`
+	EndTime         *time.Time  `json:"end_time,omitempty" form:"end_time"`
 }
 
 // Validate validates the task filter

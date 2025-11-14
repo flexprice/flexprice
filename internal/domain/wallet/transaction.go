@@ -123,3 +123,17 @@ func TransactionListFromEnt(dataList []*ent.WalletTransaction) []*Transaction {
 	}
 	return transactions
 }
+
+// CreditTopupsExportData represents the joined data for credit topup export
+type CreditTopupsExportData struct {
+	TopupID             string
+	ExternalID          string
+	CustomerName        string
+	WalletID            string
+	Amount              decimal.Decimal
+	CreditBalanceBefore decimal.Decimal
+	CreditBalanceAfter  decimal.Decimal
+	ReferenceID         string
+	TransactionReason   types.TransactionReason
+	CreatedAt           time.Time
+}

@@ -1,0 +1,18 @@
+{
+  "event_ingestor": {
+    "name": "Event Ingestor",
+    "description": "Limited to ingesting events and batch events. Use for services that only send events.",
+    "permissions": {
+      "event": ["write"]
+    }
+  },
+
+  "event_reader": {
+    "name": "Event Reader",
+    "description": "Limited to reading events. Use for services that only read events.",
+    "permissions": {
+      "event": ["read"]
+    }
+  }
+}
+

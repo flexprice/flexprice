@@ -6,9 +6,12 @@ import (
 
 // SyncConfig defines which entities should be synced between FlexPrice and external providers
 type SyncConfig struct {
+	// Integration sync (Stripe, Razorpay, etc.)
 	Plan         *EntitySyncConfig `json:"plan,omitempty"`
 	Subscription *EntitySyncConfig `json:"subscription,omitempty"`
 	Invoice      *EntitySyncConfig `json:"invoice,omitempty"`
+	// CRM sync (HubSpot, Salesforce, etc.)
+	Deal *EntitySyncConfig `json:"deal,omitempty"`
 }
 
 // EntitySyncConfig defines sync direction for an entity
@@ -20,9 +23,12 @@ type EntitySyncConfig struct {
 // DefaultSyncConfig returns a sync config with all entities disabled
 func DefaultSyncConfig() *SyncConfig {
 	return &SyncConfig{
+		// Integration sync
 		Plan:         &EntitySyncConfig{Inbound: false, Outbound: false},
 		Subscription: &EntitySyncConfig{Inbound: false, Outbound: false},
 		Invoice:      &EntitySyncConfig{Inbound: false, Outbound: false},
+		// CRM sync
+		Deal: &EntitySyncConfig{Inbound: false, Outbound: false},
 	}
 }
 
@@ -42,6 +48,10 @@ func (s *SyncConfig) Validate() error {
 
 	if s.Invoice != nil && s.Invoice.Inbound {
 		return ierr.NewError("invoice inbound sync is not allowed").Mark(ierr.ErrValidation)
+	}
+
+	if s.Deal != nil && s.Deal.Inbound {
+		return ierr.NewError("deal inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
 
 	return nil

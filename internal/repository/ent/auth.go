@@ -50,7 +50,7 @@ func (r *authRepository) CreateAuth(ctx context.Context, auth *domainAuth.Auth) 
 
 	r.logger.Debugw("creating auth", "user_id", auth.UserID, "provider", auth.Provider)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Auth.
 		Create().
 		SetUserID(auth.UserID).
@@ -83,7 +83,7 @@ func (r *authRepository) GetAuthByUserID(ctx context.Context, userID string) (*d
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	auth, err := client.Auth.
 		Query().
 		Where(
@@ -136,7 +136,7 @@ func (r *authRepository) UpdateAuth(ctx context.Context, auth *domainAuth.Auth) 
 
 	r.logger.Debugw("updating auth", "user_id", auth.UserID, "provider", auth.Provider)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Auth.
 		Update().
 		Where(entAuth.UserID(auth.UserID)).
@@ -178,7 +178,7 @@ func (r *authRepository) DeleteAuth(ctx context.Context, userID string) error {
 
 	r.logger.Debugw("deleting auth", "user_id", userID)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Auth.
 		Delete().
 		Where(entAuth.UserID(userID)).

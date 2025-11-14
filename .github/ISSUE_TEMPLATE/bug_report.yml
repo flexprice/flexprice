@@ -1,0 +1,49 @@
+name: "🐛 Bug Report"
+description: Report a bug or unexpected behavior
+title: "[BUG] <short description>"
+labels: ["bug", "needs triage"]
+
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for reporting a bug! Please fill out the details below."
+
+  - type: input
+    id: summary
+    attributes:
+      label: "Summary"
+      description: "Short summary of the bug"
+      placeholder: "Something isn't working..."
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to Reproduce"
+      description: "List the steps to reproduce the issue"
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+      render: bash
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected Behavior"
+      description: "What did you expect to happen?"
+      placeholder: "It should have..."
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Actual Behavior"
+      description: "What actually happened?"
+      placeholder: "It actually..."
+
+  - type: input
+    id: environment
+    attributes:
+      label: "Environment"
+      description: "e.g., Node.js version, OS, Browser"
+      placeholder: "Node 18.0.0, Ubuntu 22.04"

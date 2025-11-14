@@ -210,6 +210,14 @@ func (s *eventPostProcessingService) processMessage(msg *message.Message) error 
 	tenantID := msg.Metadata.Get("tenant_id")
 	environmentID := msg.Metadata.Get("environment_id")
 
+	if s.Config.FeatureFlag.ForceV1ForTenant != "" && tenantID != s.Config.FeatureFlag.ForceV1ForTenant {
+		s.Logger.Debugw("skipping event post-processing for tenant as its not a part of v1 pipeline",
+			"tenant_id", tenantID,
+			"force_v1_for_tenant", s.Config.FeatureFlag.ForceV1ForTenant,
+		)
+		return nil
+	}
+
 	s.Logger.Debugw("processing event from message queue",
 		"message_uuid", msg.UUID,
 		"partition_key", partitionKey,

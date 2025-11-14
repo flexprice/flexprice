@@ -65,12 +65,12 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 
 // CreateAPIKey godoc
 // @Summary Create a new API key
-// @Description Create a new API key with the specified type and permissions
+// @Description Create a new API key. Provide 'service_account_id' in body to create API key for a service account, otherwise creates for authenticated user.
 // @Tags secrets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.CreateAPIKeyRequest true "API key creation request"
+// @Param request body dto.CreateAPIKeyRequest true "API key creation request\"
 // @Success 201 {object} dto.CreateAPIKeyResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse

@@ -1,7 +1,7 @@
 /*
 Package costsheet provides domain models and operations for managing costsheets in the FlexPrice system.
-Costsheets are used to track the relationship between meters (usage tracking) and prices (cost calculation)
-for different tenants and environments.
+Costsheets are used for tracking cost-related configurations with basic columns and are designed for comparing
+revenue and costsheet calculations.
 */
 package costsheet
 
@@ -12,18 +12,29 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 )
 
-// Costsheet represents the domain model for tracking meter-price relationships.
-// It maps usage metrics (meters) to their associated costs (prices) and includes
-// metadata for tenant and environment context.
+// Costsheet represents the domain model for costsheet.
+// It includes basic columns as specified in the requirements:
+// - id, name, tenant_id, environment_id, status, created_at, created_by, updated_at, updated_by
+// - lookup_key, description, metadata for additional information
+// This entity is used for comparing revenue and costsheet calculations.
 type Costsheet struct {
 	// ID uniquely identifies this costsheet record
 	ID string `json:"id"`
 
-	// MeterID references the meter used to track usage
-	MeterID string `json:"meter_id"`
+	// Name of the costsheet
+	Name string `json:"name"`
 
-	// PriceID references the price configuration for cost calculation
-	PriceID string `json:"price_id"`
+	// LookupKey for easy identification and retrieval
+	LookupKey string `json:"lookup_key,omitempty"`
+
+	// Description provides additional context about the costsheet
+	Description string `json:"description,omitempty"`
+
+	// Metadata stores additional key-value pairs for extensibility
+	Metadata map[string]string `json:"metadata,omitempty"`
+
+	// EnvironmentID for environment segregation
+	EnvironmentID string `json:"environment_id"`
 
 	// Embed BaseModel for common fields (tenant_id, status, timestamps, etc.)
 	types.BaseModel
@@ -47,12 +58,6 @@ type Filter struct {
 	// CostsheetIDs allows filtering by specific costsheet IDs
 	CostsheetIDs []string
 
-	// MeterIDs filters by specific meter IDs
-	MeterIDs []string
-
-	// PriceIDs filters by specific price IDs
-	PriceIDs []string
-
 	// Status filters by costsheet status
 	Status types.Status
 
@@ -61,6 +66,12 @@ type Filter struct {
 
 	// EnvironmentID filters by specific environment ID
 	EnvironmentID string
+
+	// Name filters by costsheet name
+	Name string
+
+	// LookupKey filters by lookup key
+	LookupKey string
 }
 
 // GetLimit implements BaseFilter interface
@@ -136,13 +147,12 @@ func (f *Filter) Validate() error {
 	return nil
 }
 
-// New creates a new Costsheet instance with the provided meter and price IDs.
+// New creates a new Costsheet instance with the provided name.
 // It automatically sets up the base model fields using context information.
-func New(ctx context.Context, meterID, priceID string) *Costsheet {
+func New(ctx context.Context, name string) *Costsheet {
 	return &Costsheet{
 		ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_COSTSHEET),
-		MeterID:   meterID,
-		PriceID:   priceID,
+		Name:      name,
 		BaseModel: types.GetDefaultBaseModel(ctx),
 	}
 }
@@ -150,14 +160,9 @@ func New(ctx context.Context, meterID, priceID string) *Costsheet {
 // Validate checks if the costsheet data is valid.
 // This includes checking required fields and valid status values.
 func (c *Costsheet) Validate() error {
-	if c.MeterID == "" {
-		return ierr.NewError("meter_id is required").
-			WithHint("Meter ID is required").
-			Mark(ierr.ErrValidation)
-	}
-	if c.PriceID == "" {
-		return ierr.NewError("price_id is required").
-			WithHint("Price ID is required").
+	if c.Name == "" {
+		return ierr.NewError("name is required").
+			WithHint("Costsheet name is required").
 			Mark(ierr.ErrValidation)
 	}
 

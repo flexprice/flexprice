@@ -34,7 +34,7 @@ func NewEntitlementRepository(client postgres.IClient, log *logger.Logger, cache
 }
 
 func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "create", map[string]interface{}{
@@ -61,6 +61,7 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetUsageResetPeriod(string(e.UsageResetPeriod)).
 		SetIsSoftLimit(e.IsSoftLimit).
 		SetStaticValue(e.StaticValue).
+		SetNillableParentEntitlementID(e.ParentEntitlementID).
 		SetTenantID(e.TenantID).
 		SetStatus(string(e.Status)).
 		SetCreatedAt(e.CreatedAt).
@@ -108,7 +109,7 @@ func (r *entitlementRepository) Get(ctx context.Context, id string) (*domainEnti
 		return cachedEntitlement, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.log.Debugw("getting entitlement",
 		"entitlement_id", id,
 		"tenant_id", types.GetTenantID(ctx),
@@ -148,7 +149,7 @@ func (r *entitlementRepository) List(ctx context.Context, filter *types.Entitlem
 		}
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "list", map[string]interface{}{
@@ -192,7 +193,7 @@ func (r *entitlementRepository) List(ctx context.Context, filter *types.Entitlem
 }
 
 func (r *entitlementRepository) Count(ctx context.Context, filter *types.EntitlementFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "entitlement", "count", map[string]interface{}{
@@ -258,7 +259,7 @@ func (r *entitlementRepository) ListAll(ctx context.Context, filter *types.Entit
 }
 
 func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement.Entitlement) (*domainEntitlement.Entitlement, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating entitlement",
 		"entitlement_id", e.ID,
@@ -289,6 +290,7 @@ func (r *entitlementRepository) Update(ctx context.Context, e *domainEntitlement
 		SetNillableUsageLimit(e.UsageLimit).
 		SetUsageResetPeriod(string(e.UsageResetPeriod)).
 		SetStaticValue(e.StaticValue).
+		SetNillableParentEntitlementID(e.ParentEntitlementID).
 		SetStatus(string(e.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
@@ -318,7 +320,7 @@ func (r *entitlementRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting entitlement",
 		"entitlement_id", id,
@@ -365,7 +367,7 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 		return []*domainEntitlement.Entitlement{}, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	builders := make([]*ent.EntitlementCreate, len(entitlements))
 
 	// Get environment ID from context
@@ -424,7 +426,7 @@ func (r *entitlementRepository) DeleteBulk(ctx context.Context, ids []string) er
 
 	r.log.Debugw("deleting entitlements in bulk", "count", len(ids))
 
-	_, err := r.client.Querier(ctx).Entitlement.Update().
+	_, err := r.client.Writer(ctx).Entitlement.Update().
 		Where(
 			entitlement.IDIn(ids...),
 			entitlement.TenantID(types.GetTenantID(ctx)),

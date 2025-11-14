@@ -17,6 +17,11 @@ Build usage-based, credit-based, or hybrid pricing models with full control. Fle
 
 [![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/flexprice/go-sdk) [![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)](https://pypi.org/project/flexprice) [![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)](https://www.npmjs.com/package/@flexprice/sdk) 
 
+
+<a href="https://trendshift.io/repositories/14669" target="_blank"><img src="https://trendshift.io/api/badge/repositories/14669" alt="flexprice%2Fflexprice | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
+
+<a href="https://www.producthunt.com/products/flexprice?embed=true&utm_source=badge-top-post-badge&utm_medium=badge&utm_source=badge-flexprice" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/top-post-badge.svg?post_id=943445&theme=neutral&period=daily&t=1761109952518" alt="Flexprice - Usage&#0045;based&#0032;pricing&#0032;and&#0032;metering&#0032;for&#0032;developers | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
+
 </h5>
 
 ---

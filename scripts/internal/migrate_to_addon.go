@@ -44,11 +44,10 @@ func CopyPlanChargesToAddons() error {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
 
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		return fmt.Errorf("failed to connect to postgres: %w", err)
 	}
-	defer entClient.Close()
 
 	pgClient := postgres.NewClient(entClient, log, sentry.NewSentryService(cfg, log))
 	cacheClient := cache.NewInMemoryCache()

@@ -39,7 +39,7 @@ func (r *tenantRepository) Create(ctx context.Context, tenant *domainTenant.Tena
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Tenant.
 		Create().
 		SetID(tenant.ID).
@@ -77,7 +77,7 @@ func (r *tenantRepository) GetByID(ctx context.Context, id string) (*domainTenan
 		return cachedTenant, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	tenant, err := client.Tenant.
 		Query().
 		Where(
@@ -115,7 +115,7 @@ func (r *tenantRepository) List(ctx context.Context) ([]*domainTenant.Tenant, er
 	span := StartRepositorySpan(ctx, "tenant", "list", map[string]interface{}{})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	tenants, err := client.Tenant.
 		Query().
 		Order(ent.Desc(entTenant.FieldCreatedAt)).
@@ -141,7 +141,7 @@ func (r *tenantRepository) Update(ctx context.Context, tenant *domainTenant.Tena
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	_, err := client.Tenant.
 		UpdateOneID(tenant.ID).

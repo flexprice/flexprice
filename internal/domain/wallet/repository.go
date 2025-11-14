@@ -2,6 +2,7 @@ package wallet
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
@@ -29,4 +30,7 @@ type Repository interface {
 	ConsumeCredits(ctx context.Context, credits []*Transaction, amount decimal.Decimal) error
 	CreateTransaction(ctx context.Context, tx *Transaction) error
 	UpdateWalletBalance(ctx context.Context, walletID string, finalBalance, newCreditBalance decimal.Decimal) error
+
+	// Export operations
+	GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*CreditTopupsExportData, error)
 }

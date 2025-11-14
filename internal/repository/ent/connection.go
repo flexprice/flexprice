@@ -32,7 +32,7 @@ func NewConnectionRepository(client postgres.IClient, log *logger.Logger, cache 
 }
 
 func (r *connectionRepository) Create(ctx context.Context, c *domainConnection.Connection) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating connection",
 		"connection_id", c.ID,
@@ -105,7 +105,7 @@ func (r *connectionRepository) Get(ctx context.Context, id string) (*domainConne
 		return cachedConnection, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.log.Debugw("getting connection", "connection_id", id)
 
 	c, err := client.Connection.Query().
@@ -180,7 +180,7 @@ func (r *connectionRepository) GetByProvider(ctx context.Context, provider types
 }
 
 func (r *connectionRepository) List(ctx context.Context, filter *types.ConnectionFilter) ([]*domainConnection.Connection, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	query := client.Connection.Query()
 	query = r.queryOpts.ApplyTenantFilter(ctx, query)
@@ -219,6 +219,30 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 				"account_id":      encryptedSecretData.Stripe.AccountID,
 			}
 		}
+	case types.SecretProviderS3:
+		if encryptedSecretData.S3 != nil {
+			result := map[string]interface{}{
+				"aws_access_key_id":     encryptedSecretData.S3.AWSAccessKeyID,
+				"aws_secret_access_key": encryptedSecretData.S3.AWSSecretAccessKey,
+			}
+			// Add session token if present (for temporary credentials)
+			if encryptedSecretData.S3.AWSSessionToken != "" {
+				result["aws_session_token"] = encryptedSecretData.S3.AWSSessionToken
+			}
+			return result
+		}
+	case types.SecretProviderHubSpot:
+		if encryptedSecretData.HubSpot != nil {
+			result := map[string]interface{}{
+				"access_token":  encryptedSecretData.HubSpot.AccessToken,
+				"client_secret": encryptedSecretData.HubSpot.ClientSecret,
+			}
+			// Add app_id if present
+			if encryptedSecretData.HubSpot.AppID != "" {
+				result["app_id"] = encryptedSecretData.HubSpot.AppID
+			}
+			return result
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {
@@ -229,7 +253,7 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 }
 
 func (r *connectionRepository) Count(ctx context.Context, filter *types.ConnectionFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	query := client.Connection.Query()
 	query = r.queryOpts.ApplyTenantFilter(ctx, query)
@@ -252,7 +276,7 @@ func (r *connectionRepository) Count(ctx context.Context, filter *types.Connecti
 }
 
 func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.Connection) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating connection",
 		"connection_id", c.ID,
@@ -304,7 +328,7 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 }
 
 func (r *connectionRepository) Delete(ctx context.Context, c *domainConnection.Connection) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting connection",
 		"connection_id", c.ID,

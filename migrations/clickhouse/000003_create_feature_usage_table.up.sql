@@ -45,13 +45,13 @@ SETTINGS index_granularity = 8192;
 
 
 ALTER TABLE flexprice.feature_usage
-ADD INDEX bf_subscription subscription_id TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_feature      feature_id      TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_source       source          TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_unique_hash  unique_hash     TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_price        price_id        TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX bf_meter        meter_id        TYPE bloom_filter(0.01) GRANULARITY 128,
-ADD INDEX set_event_name  event_name      TYPE set(0)             GRANULARITY 128;
+ADD INDEX IF NOT EXISTS bf_subscription subscription_id TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_feature      feature_id      TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_source       source          TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_unique_hash  unique_hash     TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_price        price_id        TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS bf_meter        meter_id        TYPE bloom_filter(0.01) GRANULARITY 128,
+ADD INDEX IF NOT EXISTS set_event_name  event_name      TYPE set(0)             GRANULARITY 128;
 
 
 ----------------------------
@@ -65,7 +65,7 @@ INSERT INTO flexprice.feature_usage (
     unique_hash, qty_total,
     version, sign
 )
-SELECT 
+SELECT
     id, tenant_id, environment_id, external_customer_id, event_name,
     customer_id, subscription_id, sub_line_item_id, price_id, feature_id, meter_id, period_id,
     timestamp, ingested_at, processed_at,
@@ -73,7 +73,7 @@ SELECT
     unique_hash, qty_total,
     version, sign
 FROM flexprice.events_processed
-WHERE sign = 1 
+WHERE sign = 1
   AND timestamp >= date_sub(date_trunc('month', now()), INTERVAL 6 MONTH)  -- 2 months ago start
   AND timestamp < date_sub(date_trunc('month', now()), INTERVAL 2 MONTH)   -- 2 months ago end
-SETTINGS max_memory_usage = 500000000; 
+SETTINGS max_memory_usage = 500000000;

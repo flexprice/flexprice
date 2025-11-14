@@ -31,6 +31,10 @@ const (
 	ExpandCouponApplications ExpandableField = "coupon_applications"
 	ExpandPriceUnit          ExpandableField = "priceunit"
 	ExpandCouponAssociations ExpandableField = "coupon_associations"
+	ExpandAddons             ExpandableField = "addons"
+	ExpandGroups             ExpandableField = "groups"
+	ExpandWallet             ExpandableField = "wallet"
+	ExpandFeature            ExpandableField = "feature"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -56,10 +60,11 @@ var (
 
 	// PriceExpandConfig defines what can be expanded on a price
 	PriceExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandMeters, ExpandPriceUnit},
+		AllowedFields: []ExpandableField{ExpandMeters, ExpandPriceUnit, ExpandPlan, ExpandAddons, ExpandGroups},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandMeters:    {},
 			ExpandPriceUnit: {},
+			ExpandGroups:    {},
 		},
 	}
 
@@ -115,6 +120,16 @@ var (
 			ExpandSubscription:       {ExpandPlan},
 			ExpandCustomer:           {},
 			ExpandCouponApplications: {ExpandCoupon},
+		},
+	}
+
+	// AlertLogExpandConfig defines what can be expanded on an alert log
+	AlertLogExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandCustomer, ExpandWallet, ExpandFeature},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandCustomer: {},
+			ExpandWallet:   {},
+			ExpandFeature:  {},
 		},
 	}
 )

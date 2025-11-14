@@ -16,10 +16,12 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/addon"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -44,6 +46,9 @@ type FeatureUsageTrackingService interface {
 
 	// Get detailed usage analytics with filtering, grouping, and time-series data
 	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
+
+	// Get detailed usage analytics version 2 with filtering, grouping, and time-series data
+	GetDetailedUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
 
 	// Reprocess events for a specific customer or with other filters
 	ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error
@@ -136,29 +141,31 @@ func (s *featureUsageTrackingService) PublishEvent(ctx context.Context, event *e
 	msg.Metadata.Set("environment_id", event.EnvironmentID)
 	msg.Metadata.Set("partition_key", partitionKey)
 
+	pubSub := s.pubSub
+	topic := s.Config.FeatureUsageTracking.Topic
 	if isBackfill {
-		pubSub := s.backfillPubSub
-		topic := s.Config.FeatureUsageTracking.TopicBackfill
+		pubSub = s.backfillPubSub
+		topic = s.Config.FeatureUsageTracking.TopicBackfill
+	}
 
-		if pubSub == nil {
-			return ierr.NewError("pubsub not initialized").
-				WithHint("Please check the config").
-				Mark(ierr.ErrSystem)
-		}
+	if pubSub == nil {
+		return ierr.NewError("pubsub not initialized").
+			WithHint("Please check the config").
+			Mark(ierr.ErrSystem)
+	}
 
-		s.Logger.Debugw("publishing event for feature usage tracking",
-			"event_id", event.ID,
-			"event_name", event.EventName,
-			"partition_key", partitionKey,
-			"topic", topic,
-		)
+	s.Logger.Debugw("publishing event for feature usage tracking",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"partition_key", partitionKey,
+		"topic", topic,
+	)
 
-		// Publish to feature usage tracking topic using the backfill PubSub (Kafka)
-		if err := pubSub.Publish(ctx, topic, msg); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to publish event for feature usage tracking").
-				Mark(ierr.ErrSystem)
-		}
+	// Publish to feature usage tracking topic using the backfill PubSub (Kafka)
+	if err := pubSub.Publish(ctx, topic, msg); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to publish event for feature usage tracking").
+			Mark(ierr.ErrSystem)
 	}
 	return nil
 }
@@ -974,14 +981,19 @@ func (s *featureUsageTrackingService) convertValueToString(val interface{}) stri
 
 // AnalyticsData holds all data required for analytics processing
 type AnalyticsData struct {
-	Customer      *customer.Customer
-	Subscriptions []*subscription.Subscription
-	Analytics     []*events.DetailedUsageAnalytic
-	Features      map[string]*feature.Feature
-	Meters        map[string]*meter.Meter
-	Prices        map[string]*price.Price
-	Currency      string
-	Params        *events.UsageAnalyticsParams
+	Customer              *customer.Customer
+	Subscriptions         []*subscription.Subscription
+	SubscriptionLineItems map[string]*subscription.SubscriptionLineItem // Map of line item ID -> line item
+	SubscriptionsMap      map[string]*subscription.Subscription         // Map of subscription ID -> subscription
+	Analytics             []*events.DetailedUsageAnalytic
+	Features              map[string]*feature.Feature
+	Meters                map[string]*meter.Meter
+	Prices                map[string]*price.Price
+	PriceResponses        map[string]*dto.PriceResponse // Map of price ID -> PriceResponse (used when groups need to be expanded)
+	Plans                 map[string]*plan.Plan         // Map of plan ID -> plan
+	Addons                map[string]*addon.Addon       // Map of addon ID -> addon
+	Currency              string
+	Params                *events.UsageAnalyticsParams
 }
 
 // GetDetailedUsageAnalytics provides detailed usage analytics with filtering, grouping, and time-series data
@@ -1001,6 +1013,80 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalytics(ctx context.Cont
 	return s.buildAnalyticsResponse(ctx, data, req)
 }
 
+func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+	// 1. Validate request
+	if err := s.validateAnalyticsRequestV2(req); err != nil {
+		return nil, err
+	}
+
+	customers, err := s.fetchCustomers(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize aggregated analytics slice
+	var allAnalytics []*events.DetailedUsageAnalytic
+	var aggregatedData *AnalyticsData
+	var currency string
+
+	// Process each customer and aggregate their analytics data
+	for i, customer := range customers {
+		// Create a customer-specific request
+		customerReq := *req
+		customerReq.ExternalCustomerID = customer.ExternalID
+
+		// Fetch analytics data for this customer
+		data, err := s.fetchAnalyticsData(ctx, &customerReq)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch analytics data for customer, skipping",
+				"customer_id", customer.ID,
+				"external_customer_id", customer.ExternalID,
+				"error", err,
+			)
+			continue
+		}
+
+		// Append this customer's analytics to the aggregated list
+		allAnalytics = append(allAnalytics, data.Analytics...)
+
+		// Use the first customer's data structure as the base for aggregation
+		if i == 0 {
+			aggregatedData = data
+			currency = data.Currency
+		} else {
+			// Validate currency consistency across customers
+			if data.Currency != "" && currency != "" && data.Currency != currency {
+				return nil, ierr.NewError("multiple currencies detected across customers").
+					WithHint("Analytics V2 is only supported when all customers use the same currency").
+					WithReportableDetails(map[string]interface{}{
+						"expected_currency": currency,
+						"found_currency":    data.Currency,
+						"customer_id":       customer.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			// Merge additional data into aggregated structure
+			s.mergeAnalyticsData(aggregatedData, data)
+		}
+	}
+
+	// If no data was collected, return empty response
+	if aggregatedData == nil {
+		return &dto.GetUsageAnalyticsResponse{
+			TotalCost: decimal.Zero,
+			Currency:  "",
+			Items:     []dto.UsageAnalyticItem{},
+		}, nil
+	}
+
+	// Update the aggregated data with all analytics
+	aggregatedData.Analytics = allAnalytics
+	aggregatedData.Currency = currency
+
+	// 3. Process and return response
+	return s.buildAnalyticsResponse(ctx, aggregatedData, req)
+}
+
 // validateAnalyticsRequest validates the analytics request
 func (s *featureUsageTrackingService) validateAnalyticsRequest(req *dto.GetUsageAnalyticsRequest) error {
 	if req.ExternalCustomerID == "" {
@@ -1009,6 +1095,14 @@ func (s *featureUsageTrackingService) validateAnalyticsRequest(req *dto.GetUsage
 			Mark(ierr.ErrValidation)
 	}
 
+	if req.WindowSize != "" {
+		return req.WindowSize.Validate()
+	}
+
+	return nil
+}
+
+func (s *featureUsageTrackingService) validateAnalyticsRequestV2(req *dto.GetUsageAnalyticsRequest) error {
 	if req.WindowSize != "" {
 		return req.WindowSize.Validate()
 	}
@@ -1046,19 +1140,32 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 
 	// 5. Build data structure
 	data := &AnalyticsData{
-		Customer:      customer,
-		Subscriptions: subscriptions,
-		Analytics:     analytics,
-		Currency:      currency,
-		Params:        params,
-		Features:      make(map[string]*feature.Feature),
-		Meters:        make(map[string]*meter.Meter),
-		Prices:        make(map[string]*price.Price),
+		Customer:              customer,
+		Subscriptions:         subscriptions,
+		SubscriptionLineItems: make(map[string]*subscription.SubscriptionLineItem),
+		SubscriptionsMap:      make(map[string]*subscription.Subscription),
+		Analytics:             analytics,
+		Currency:              currency,
+		Params:                params,
+		Features:              make(map[string]*feature.Feature),
+		Meters:                make(map[string]*meter.Meter),
+		Prices:                make(map[string]*price.Price),
+		Plans:                 make(map[string]*plan.Plan),
+		Addons:                make(map[string]*addon.Addon),
+		PriceResponses:        make(map[string]*dto.PriceResponse),
+	}
+
+	// Build subscription maps
+	for _, sub := range subscriptions {
+		data.SubscriptionsMap[sub.ID] = sub
+		for _, lineItem := range sub.LineItems {
+			data.SubscriptionLineItems[lineItem.ID] = lineItem
+		}
 	}
 
 	// 6. Enrich with metadata if we have analytics data
 	if len(analytics) > 0 {
-		if err := s.enrichWithMetadata(ctx, data); err != nil {
+		if err := s.enrichWithMetadata(ctx, data, req); err != nil {
 			s.Logger.Warnw("failed to enrich analytics with metadata",
 				"error", err,
 				"analytics_count", len(analytics),
@@ -1074,7 +1181,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 func (s *featureUsageTrackingService) buildAnalyticsResponse(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	// If no results, return early
 	if len(data.Analytics) == 0 {
-		return s.ToGetUsageAnalyticsResponseDTO(ctx, data.Analytics, req)
+		return s.ToGetUsageAnalyticsResponseDTO(ctx, data, req)
 	}
 
 	// Calculate costs
@@ -1094,9 +1201,9 @@ func (s *featureUsageTrackingService) buildAnalyticsResponse(ctx context.Context
 	}
 
 	// Aggregate results by requested grouping dimensions
-	analytics := s.aggregateAnalyticsByGrouping(data.Analytics, data.Params.GroupBy)
+	data.Analytics = s.aggregateAnalyticsByGrouping(data.Analytics, data.Params.GroupBy)
 
-	return s.ToGetUsageAnalyticsResponseDTO(ctx, analytics, req)
+	return s.ToGetUsageAnalyticsResponseDTO(ctx, data, req)
 }
 
 // fetchCustomer fetches customer by external customer ID
@@ -1122,6 +1229,8 @@ func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, cu
 	filter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
+		types.SubscriptionStatusPaused,
+		types.SubscriptionStatusCancelled,
 	}
 
 	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
@@ -1300,7 +1409,7 @@ func (s *featureUsageTrackingService) validateCurrency(subscriptions []*subscrip
 }
 
 // enrichWithMetadata enriches analytics data with feature, meter, and price information
-func (s *featureUsageTrackingService) enrichWithMetadata(ctx context.Context, data *AnalyticsData) error {
+func (s *featureUsageTrackingService) enrichWithMetadata(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) error {
 	// Extract unique feature IDs
 	featureIDs := s.extractUniqueFeatureIDs(data.Analytics)
 	if len(featureIDs) == 0 {
@@ -1350,6 +1459,21 @@ func (s *featureUsageTrackingService) enrichWithMetadata(ctx context.Context, da
 		return err
 	}
 
+	if req.Expand != nil && lo.Contains(req.Expand, "plan") {
+		planMap, err := s.fetchPlans(ctx, data)
+		if err != nil {
+			return err
+		}
+		data.Plans = planMap
+	}
+	if req.Expand != nil && lo.Contains(req.Expand, "addon") {
+		addonMap, err := s.fetchAddons(ctx, data)
+		if err != nil {
+			return err
+		}
+		data.Addons = addonMap
+	}
+
 	// Enrich analytics with metadata
 	s.enrichAnalyticsWithMetadata(data)
 
@@ -1390,21 +1514,61 @@ func (s *featureUsageTrackingService) fetchSubscriptionPrices(ctx context.Contex
 
 	// Fetch prices
 	if len(priceIDs) > 0 {
+		priceService := NewPriceService(s.ServiceParams)
 		priceFilter := types.NewNoLimitPriceFilter()
+		priceFilter.Expand = lo.ToPtr(string(types.ExpandGroups))
 		priceFilter.PriceIDs = priceIDs
 		priceFilter.WithStatus(types.StatusPublished)
-		priceFilter.AllowExpiredPrices = false
-		prices, err := s.PriceRepo.List(ctx, priceFilter)
+		// CRITICAL: Allow expired prices for price override cases
+		// When a price is overridden, the old price is terminated (has end_date)
+		// We still need it to calculate costs for historical usage
+		priceFilter.AllowExpiredPrices = true
+		pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to fetch subscription prices for cost calculation").
 				Mark(ierr.ErrDatabase)
 		}
 
-		// Create price map by meter ID
-		for _, p := range prices {
-			if p.MeterID != "" {
-				data.Prices[p.MeterID] = p
+		// Create price map by price ID - this ensures different prices for the same meter
+		// (e.g., from cancelled and new subscriptions) are tracked separately
+		for _, priceResp := range pricesResponse.Items {
+			data.Prices[priceResp.ID] = priceResp.Price
+			data.PriceResponses[priceResp.ID] = priceResp
+		}
+
+		// Collect parent price IDs for subscription override prices
+		parentPriceIDs := make([]string, 0)
+		parentPriceIDSet := make(map[string]bool)
+		for _, priceResp := range pricesResponse.Items {
+			if priceResp.EntityType == types.PRICE_ENTITY_TYPE_SUBSCRIPTION && priceResp.ParentPriceID != "" {
+				if !parentPriceIDSet[priceResp.ParentPriceID] {
+					parentPriceIDs = append(parentPriceIDs, priceResp.ParentPriceID)
+					parentPriceIDSet[priceResp.ParentPriceID] = true
+				}
+			}
+		}
+
+		// Fetch parent prices if needed
+		if len(parentPriceIDs) > 0 {
+			parentPriceFilter := types.NewNoLimitPriceFilter()
+			parentPriceFilter.Expand = lo.ToPtr(string(types.ExpandGroups))
+			parentPriceFilter.PriceIDs = parentPriceIDs
+			parentPriceFilter.WithStatus(types.StatusPublished)
+			// CRITICAL: Allow expired prices for price override cases
+			// Parent prices might be expired when subscription-scoped overrides are created
+			parentPriceFilter.AllowExpiredPrices = true
+			parentPricesResponse, err := priceService.GetPrices(ctx, parentPriceFilter)
+			if err != nil {
+				return ierr.WithError(err).
+					WithHint("Failed to fetch parent prices for subscription overrides").
+					Mark(ierr.ErrDatabase)
+			}
+
+			// Add parent prices to maps
+			for _, priceResp := range parentPricesResponse.Items {
+				data.Prices[priceResp.ID] = priceResp.Price
+				data.PriceResponses[priceResp.ID] = priceResp
 			}
 		}
 	}
@@ -1436,7 +1600,9 @@ func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *
 	for _, item := range data.Analytics {
 		if feature, ok := data.Features[item.FeatureID]; ok {
 			if meter, ok := data.Meters[feature.MeterID]; ok {
-				if price, hasPricing := data.Prices[meter.ID]; hasPricing {
+				// Use price_id from the analytics item - this ensures we use the correct price
+				// that was active when the usage was recorded (important for cancelled/new subscriptions)
+				if price, hasPricing := data.Prices[item.PriceID]; hasPricing {
 					// Calculate cost based on meter type
 					if meter.IsBucketedMaxMeter() {
 						s.calculateBucketedCost(ctx, priceService, item, price)
@@ -1527,7 +1693,11 @@ func (s *featureUsageTrackingService) aggregateAnalyticsByGrouping(analytics []*
 		} else {
 			// Create a new aggregated item
 			aggregated := &events.DetailedUsageAnalytic{
-				FeatureID:        "", // Will be set based on grouping
+				FeatureID:        item.FeatureID,
+				PriceID:          item.PriceID,
+				MeterID:          item.MeterID,
+				SubLineItemID:    item.SubLineItemID,
+				SubscriptionID:   item.SubscriptionID,
 				FeatureName:      item.FeatureName,
 				EventName:        item.EventName,
 				Source:           item.Source,
@@ -1571,12 +1741,16 @@ func (s *featureUsageTrackingService) aggregateAnalyticsByGrouping(analytics []*
 
 // createGroupingKey creates a unique key for grouping based on the requested dimensions
 func (s *featureUsageTrackingService) createGroupingKey(item *events.DetailedUsageAnalytic, groupBy []string) string {
-	keyParts := make([]string, 0, len(groupBy))
+	// Always include feature_id, price_id, meter_id, sub_line_item_id for granular tracking
+	// Note: subscription_id is NOT included in grouping but kept for reference
+	keyParts := make([]string, 0, len(groupBy)+4)
+	keyParts = append(keyParts, item.FeatureID, item.PriceID, item.MeterID, item.SubLineItemID)
 
 	for _, group := range groupBy {
 		switch group {
 		case "feature_id":
-			keyParts = append(keyParts, item.FeatureID)
+			// Already included above
+			continue
 		case "source":
 			keyParts = append(keyParts, item.Source)
 		default:
@@ -1735,7 +1909,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 		}
 
 		// Find unprocessed events
-		unprocessedEvents, err := s.eventRepo.FindUnprocessedEvents(ctx, findParams)
+		unprocessedEvents, err := s.eventRepo.FindUnprocessedEventsFromFeatureUsage(ctx, findParams)
 		if err != nil {
 			return ierr.WithError(err).
 				WithHint("Failed to find unprocessed events").
@@ -1849,15 +2023,23 @@ func (s *featureUsageTrackingService) isSubscriptionValidForEvent(
 	return true
 }
 
-func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, analytics []*events.DetailedUsageAnalytic, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
+func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context.Context, data *AnalyticsData, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error) {
 	response := &dto.GetUsageAnalyticsResponse{
 		TotalCost: decimal.Zero,
 		Currency:  "",
-		Items:     make([]dto.UsageAnalyticItem, 0, len(analytics)),
+		Items:     make([]dto.UsageAnalyticItem, 0, len(data.Analytics)),
+	}
+
+	// Check which fields should be expanded
+	expandMap := make(map[string]bool)
+	if req.Expand != nil {
+		for _, expand := range req.Expand {
+			expandMap[expand] = true
+		}
 	}
 
 	// Convert analytics to response items
-	for _, analytic := range analytics {
+	for _, analytic := range data.Analytics {
 		// For bucketed MAX, use TotalUsage (sum of bucket maxes) not MaxUsage
 		// TotalUsage already contains the sum from getMaxBucketTotals
 		totalUsage := analytic.TotalUsage
@@ -1868,6 +2050,10 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 
 		item := dto.UsageAnalyticItem{
 			FeatureID:       analytic.FeatureID,
+			PriceID:         analytic.PriceID,
+			MeterID:         analytic.MeterID,
+			SubLineItemID:   analytic.SubLineItemID,
+			SubscriptionID:  analytic.SubscriptionID,
 			FeatureName:     analytic.FeatureName,
 			EventName:       analytic.EventName,
 			Source:          analytic.Source,
@@ -1881,6 +2067,63 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			Properties:      analytic.Properties,
 			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
 		}
+		// Can expand plan and addon
+		if analytic.PriceID != "" {
+			if price, ok := data.PriceResponses[analytic.PriceID]; ok {
+				switch price.EntityType {
+				case types.PRICE_ENTITY_TYPE_ADDON:
+					item.AddOnID = price.EntityID
+				case types.PRICE_ENTITY_TYPE_PLAN:
+					item.PlanID = price.EntityID
+				case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+					// For subscription override prices, get plan_id from parent_price_id
+					// Parent price should already be fetched in fetchSubscriptionPrices
+					if price.ParentPriceID != "" {
+						if parentPrice, ok := data.PriceResponses[price.ParentPriceID]; ok {
+							if parentPrice.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+								item.PlanID = parentPrice.EntityID
+							}
+						}
+					}
+				}
+				if expandMap["price"] {
+					item.Price = price
+				}
+			}
+		}
+
+		if expandMap["meter"] && analytic.MeterID != "" {
+			if meter, ok := data.Meters[analytic.MeterID]; ok {
+				item.Meter = meter
+			}
+		}
+
+		if expandMap["feature"] && analytic.FeatureID != "" {
+			if feature, ok := data.Features[analytic.FeatureID]; ok {
+				item.Feature = feature
+			}
+		}
+
+		if expandMap["subscription_line_item"] && analytic.SubLineItemID != "" {
+			if lineItem, ok := data.SubscriptionLineItems[analytic.SubLineItemID]; ok {
+				item.SubscriptionLineItem = lineItem
+			}
+		}
+
+		// Expand plan if requested
+		if expandMap["plan"] && item.PlanID != "" {
+			if plan, ok := data.Plans[item.PlanID]; ok {
+				item.Plan = plan
+			}
+		}
+
+		// Expand addon if requested
+		if expandMap["addon"] && item.AddOnID != "" {
+			if addon, ok := data.Addons[item.AddOnID]; ok {
+				item.Addon = addon
+			}
+		}
+
 		// Map time-series points if available
 		if req.WindowSize != "" {
 			for _, point := range analytic.Points {
@@ -1953,4 +2196,123 @@ func (s *featureUsageTrackingService) getTotalUsageForWeightedSumAggregation(
 	weightedUsage := propertyValue.Div(decimal.NewFromFloat(totalPeriodSeconds)).Mul(decimal.NewFromFloat(remainingSeconds))
 
 	return weightedUsage, nil
+}
+
+// fetchPlansByIDs fetches plans by their IDs
+func (s *featureUsageTrackingService) fetchPlans(ctx context.Context, data *AnalyticsData) (map[string]*plan.Plan, error) {
+
+	// Create filter to fetch plans by IDs
+	planFilter := types.NewNoLimitPlanFilter()
+
+	plans, err := s.PlanRepo.List(ctx, planFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch plans for analytics",
+			"error", err,
+		)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch plans for analytics").
+			Mark(ierr.ErrDatabase)
+	}
+
+	planMap := make(map[string]*plan.Plan)
+	for _, p := range plans {
+		planMap[p.ID] = p
+	}
+
+	return planMap, nil
+}
+
+func (s *featureUsageTrackingService) fetchAddons(ctx context.Context, data *AnalyticsData) (map[string]*addon.Addon, error) {
+	addonFilter := types.NewNoLimitAddonFilter()
+
+	addons, err := s.AddonRepo.List(ctx, addonFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to fetch addons for analytics",
+			"error", err,
+		)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch addons for analytics").
+			Mark(ierr.ErrDatabase)
+	}
+
+	addonMap := make(map[string]*addon.Addon)
+	for _, a := range addons {
+		addonMap[a.ID] = a
+	}
+
+	return addonMap, nil
+}
+
+// fetchCustomers fetches all customers when no external customer ID is provided
+func (s *featureUsageTrackingService) fetchCustomers(ctx context.Context, req *dto.GetUsageAnalyticsRequest) ([]*customer.Customer, error) {
+	if req.ExternalCustomerID != "" {
+		cust, err := s.fetchCustomer(ctx, req.ExternalCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		return []*customer.Customer{cust}, nil
+	} else {
+		customers, err := s.CustomerRepo.List(ctx, types.NewNoLimitCustomerFilter())
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to fetch customers").
+				Mark(ierr.ErrDatabase)
+		}
+		return customers, nil
+	}
+}
+
+// mergeAnalyticsData merges additional analytics data into the aggregated data structure
+func (s *featureUsageTrackingService) mergeAnalyticsData(aggregated *AnalyticsData, additional *AnalyticsData) {
+	// Merge customers (though in V2 we process multiple customers, we keep track of all)
+	// Note: We don't merge customers as each iteration processes a different customer
+
+	// Merge subscriptions
+	for _, sub := range additional.Subscriptions {
+		// Check if subscription already exists
+		if _, exists := aggregated.SubscriptionsMap[sub.ID]; !exists {
+			aggregated.Subscriptions = append(aggregated.Subscriptions, sub)
+			aggregated.SubscriptionsMap[sub.ID] = sub
+
+			// Add line items
+			for _, lineItem := range sub.LineItems {
+				aggregated.SubscriptionLineItems[lineItem.ID] = lineItem
+			}
+		}
+	}
+
+	// Merge features
+	for id, feature := range additional.Features {
+		if _, exists := aggregated.Features[id]; !exists {
+			aggregated.Features[id] = feature
+		}
+	}
+
+	// Merge meters
+	for id, meter := range additional.Meters {
+		if _, exists := aggregated.Meters[id]; !exists {
+			aggregated.Meters[id] = meter
+		}
+	}
+
+	// Merge prices
+	for id, price := range additional.Prices {
+		if _, exists := aggregated.Prices[id]; !exists {
+			aggregated.Prices[id] = price
+		}
+	}
+
+	// Merge plans
+	for id, plan := range additional.Plans {
+		if _, exists := aggregated.Plans[id]; !exists {
+			aggregated.Plans[id] = plan
+		}
+	}
+
+	// Merge addons
+	for id, addon := range additional.Addons {
+		if _, exists := aggregated.Addons[id]; !exists {
+			aggregated.Addons[id] = addon
+		}
+	}
 }

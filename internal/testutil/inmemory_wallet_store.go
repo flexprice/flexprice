@@ -558,3 +558,78 @@ func (s *InMemoryWalletStore) GetWalletsByFilter(ctx context.Context, filter *ty
 	}
 	return wallets, nil
 }
+
+// GetCreditTopupsForExport retrieves credit topup data for export
+func (s *InMemoryWalletStore) GetCreditTopupsForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*wallet.CreditTopupsExportData, error) {
+	// Get all transactions without any filters
+	allTransactions, err := s.transactions.List(ctx, nil, nil, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transactions for export").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Filter and transform transactions
+	var results []*wallet.CreditTopupsExportData
+
+	for _, tx := range allTransactions {
+		// Filter by tenant, environment, and time range
+		if tx.TenantID != tenantID {
+			continue
+		}
+		if tx.EnvironmentID != envID {
+			continue
+		}
+		if tx.Type != types.TransactionTypeCredit {
+			continue
+		}
+		if tx.CreatedAt.Before(startTime) || tx.CreatedAt.After(endTime) {
+			continue
+		}
+
+		// Get the associated wallet
+		w, err := s.wallets.Get(ctx, tx.WalletID)
+		if err != nil {
+			continue
+		}
+
+		// Calculate credit balance before (for mock, we'll use current balance)
+		// In a real implementation this would come from the transaction record
+		creditBalanceBefore := w.CreditBalance
+		creditBalanceAfter := w.CreditBalance.Add(tx.Amount)
+
+		// Build export data using the correct struct fields
+		exportData := &wallet.CreditTopupsExportData{
+			TopupID:             tx.ID,
+			ExternalID:          "",     // Transaction doesn't have ExternalID field
+			CustomerName:        w.Name, // Use wallet name as customer name for mock
+			WalletID:            tx.WalletID,
+			Amount:              tx.Amount,
+			CreditBalanceBefore: creditBalanceBefore,
+			CreditBalanceAfter:  creditBalanceAfter,
+			ReferenceID:         tx.ReferenceID,
+			TransactionReason:   tx.TransactionReason,
+			CreatedAt:           tx.CreatedAt,
+		}
+
+		results = append(results, exportData)
+	}
+
+	// Sort by created_at descending
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].CreatedAt.After(results[j].CreatedAt)
+	})
+
+	// Apply pagination
+	start := offset
+	if start >= len(results) {
+		return []*wallet.CreditTopupsExportData{}, nil
+	}
+
+	end := start + limit
+	if end > len(results) {
+		end = len(results)
+	}
+
+	return results[start:end], nil
+}

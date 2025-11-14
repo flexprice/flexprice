@@ -49,7 +49,7 @@ func (o *SubscriptionLineItemQueryOptions) applyActiveLineItemFilter(query *ent.
 
 // Create creates a new subscription line item
 func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subscription.SubscriptionLineItem) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "subscription_line_item", "create", map[string]interface{}{
@@ -141,7 +141,7 @@ func (r *subscriptionLineItemRepository) Get(ctx context.Context, id string) (*s
 		return cachedItem, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
 			WithHint("Database client is not available").
@@ -201,7 +201,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		"tenant_id", item.TenantID,
 	)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.SubscriptionLineItem.UpdateOneID(item.ID).
 		SetNillableEntityID(types.ToNillableString(item.EntityID)).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
@@ -261,7 +261,7 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.SubscriptionLineItem.Delete().
 		Where(
 			subscriptionlineitem.ID(id),
@@ -302,7 +302,7 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Create bulk operation
 	bulk := make([]*ent.SubscriptionLineItemCreate, len(items))
@@ -375,7 +375,7 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 		"tenant_id", types.GetTenantID(ctx),
 	)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	query := client.SubscriptionLineItem.Query().
 		Where(
@@ -415,7 +415,7 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 			Mark(ierr.ErrValidation)
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
 			WithHint("Database client is not available").
@@ -472,7 +472,7 @@ func (r *subscriptionLineItemRepository) Count(ctx context.Context, filter *type
 			Mark(ierr.ErrValidation)
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
 			WithHint("Database client is not available").

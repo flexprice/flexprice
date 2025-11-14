@@ -49,11 +49,6 @@ func (Connection) Fields() []ent.Field {
 	}
 }
 
-// Edges of the Connection.
-func (Connection) Edges() []ent.Edge {
-	return nil
-}
-
 // Indexes of the Connection.
 func (Connection) Indexes() []ent.Index {
 	return []ent.Index{

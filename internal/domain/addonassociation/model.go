@@ -54,3 +54,26 @@ func FromEntList(ents []*ent.AddonAssociation) []*AddonAssociation {
 		return FromEnt(ent)
 	})
 }
+
+// GetPeriod returns period start and end dates based on addon association dates
+func (aa *AddonAssociation) GetPeriod(defaultPeriodStart, defaultPeriodEnd time.Time) (time.Time, time.Time) {
+	return aa.GetPeriodStart(defaultPeriodStart), aa.GetPeriodEnd(defaultPeriodEnd)
+}
+
+// GetPeriodStart returns the period start date based on addon association dates
+func (aa *AddonAssociation) GetPeriodStart(defaultPeriodStart time.Time) time.Time {
+	// If addon association has a start date after default period start, use addon association start date
+	if aa.StartDate != nil && !aa.StartDate.IsZero() && (aa.StartDate.After(defaultPeriodStart) || aa.StartDate.Equal(defaultPeriodStart)) {
+		return *aa.StartDate
+	}
+	return defaultPeriodStart
+}
+
+// GetPeriodEnd returns the period end date based on addon association dates
+func (aa *AddonAssociation) GetPeriodEnd(defaultPeriodEnd time.Time) time.Time {
+	// If addon association has an end date before default period end, use addon association end date
+	if aa.EndDate != nil && !aa.EndDate.IsZero() && (aa.EndDate.Before(defaultPeriodEnd) || aa.EndDate.Equal(defaultPeriodEnd)) {
+		return *aa.EndDate
+	}
+	return defaultPeriodEnd
+}

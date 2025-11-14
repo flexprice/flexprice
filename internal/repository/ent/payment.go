@@ -32,7 +32,7 @@ func NewPaymentRepository(client postgres.IClient, log *logger.Logger, cache cac
 }
 
 func (r *paymentRepository) Create(ctx context.Context, p *domainPayment.Payment) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating payment",
 		"payment_id", p.ID,
@@ -114,7 +114,7 @@ func (r *paymentRepository) Get(ctx context.Context, id string) (*domainPayment.
 		return cachedPayment, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting payment",
 		"payment_id", id,
@@ -160,7 +160,7 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 		}
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "payment", "list", map[string]interface{}{
@@ -192,7 +192,7 @@ func (r *paymentRepository) List(ctx context.Context, filter *types.PaymentFilte
 }
 
 func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "payment", "count", map[string]interface{}{
@@ -221,7 +221,7 @@ func (r *paymentRepository) Count(ctx context.Context, filter *types.PaymentFilt
 }
 
 func (r *paymentRepository) Update(ctx context.Context, p *domainPayment.Payment) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating payment",
 		"payment_id", p.ID,
@@ -287,7 +287,7 @@ func (r *paymentRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting payment",
 		"payment_id", id,
@@ -332,7 +332,7 @@ func (r *paymentRepository) GetByIdempotencyKey(ctx context.Context, key string)
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting payment by idempotency key",
 		"idempotency_key", key,
@@ -379,7 +379,7 @@ func (r *paymentRepository) CreateAttempt(ctx context.Context, a *domainPayment.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating payment attempt",
 		"attempt_id", a.ID,
@@ -432,7 +432,7 @@ func (r *paymentRepository) GetAttempt(ctx context.Context, id string) (*domainP
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting payment attempt",
 		"attempt_id", id,
@@ -475,7 +475,7 @@ func (r *paymentRepository) UpdateAttempt(ctx context.Context, a *domainPayment.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating payment attempt",
 		"attempt_id", a.ID,
@@ -528,7 +528,7 @@ func (r *paymentRepository) ListAttempts(ctx context.Context, paymentID string) 
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("listing payment attempts",
 		"payment_id", paymentID,
@@ -563,7 +563,7 @@ func (r *paymentRepository) GetLatestAttempt(ctx context.Context, paymentID stri
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting latest payment attempt",
 		"payment_id", paymentID,

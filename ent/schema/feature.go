@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Feature holds the schema definition for the Feature entity.
@@ -71,6 +72,11 @@ func (Feature) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		field.JSON("alert_settings", types.AlertSettings{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 	}
 }
 

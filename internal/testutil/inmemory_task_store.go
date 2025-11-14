@@ -30,6 +30,7 @@ func copyTask(t *task.Task) *task.Task {
 		ID:                t.ID,
 		TaskType:          t.TaskType,
 		EntityType:        t.EntityType,
+		ScheduledTaskID:   t.ScheduledTaskID,
 		FileURL:           t.FileURL,
 		FileType:          t.FileType,
 		TaskStatus:        t.TaskStatus,
@@ -96,6 +97,32 @@ func (s *InMemoryTaskStore) Count(ctx context.Context, filter *types.TaskFilter)
 	return s.InMemoryStore.Count(ctx, filter, taskFilterFn)
 }
 
+// GetLastExportTask gets the last export task for a scheduled job (regardless of status)
+func (s *InMemoryTaskStore) GetLastExportTask(ctx context.Context, scheduledJobID string) (*task.Task, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var lastTask *task.Task
+	for _, t := range s.items {
+		if t.ScheduledTaskID == scheduledJobID &&
+			t.TaskType == types.TaskTypeExport &&
+			t.Status == types.StatusPublished &&
+			CheckEnvironmentFilter(ctx, t.EnvironmentID) &&
+			t.TenantID == types.GetTenantID(ctx) {
+
+			if lastTask == nil || t.CreatedAt.After(lastTask.CreatedAt) {
+				lastTask = t
+			}
+		}
+	}
+
+	if lastTask == nil {
+		return nil, nil // No previous task found - not an error
+	}
+
+	return copyTask(lastTask), nil
+}
+
 // taskFilterFn implements filtering logic for tasks
 func taskFilterFn(ctx context.Context, t *task.Task, filter interface{}) bool {
 	if t == nil {
@@ -131,6 +158,11 @@ func taskFilterFn(ctx context.Context, t *task.Task, filter interface{}) bool {
 
 	// Filter by task status
 	if f.TaskStatus != nil && t.TaskStatus != *f.TaskStatus {
+		return false
+	}
+
+	// Filter by scheduled task ID
+	if f.ScheduledTaskID != "" && t.ScheduledTaskID != f.ScheduledTaskID {
 		return false
 	}
 

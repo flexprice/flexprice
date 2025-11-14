@@ -96,6 +96,46 @@ func (tu *TaskUpdate) SetNillableEntityType(s *string) *TaskUpdate {
 	return tu
 }
 
+// SetScheduledTaskID sets the "scheduled_task_id" field.
+func (tu *TaskUpdate) SetScheduledTaskID(s string) *TaskUpdate {
+	tu.mutation.SetScheduledTaskID(s)
+	return tu
+}
+
+// SetNillableScheduledTaskID sets the "scheduled_task_id" field if the given value is not nil.
+func (tu *TaskUpdate) SetNillableScheduledTaskID(s *string) *TaskUpdate {
+	if s != nil {
+		tu.SetScheduledTaskID(*s)
+	}
+	return tu
+}
+
+// ClearScheduledTaskID clears the value of the "scheduled_task_id" field.
+func (tu *TaskUpdate) ClearScheduledTaskID() *TaskUpdate {
+	tu.mutation.ClearScheduledTaskID()
+	return tu
+}
+
+// SetWorkflowID sets the "workflow_id" field.
+func (tu *TaskUpdate) SetWorkflowID(s string) *TaskUpdate {
+	tu.mutation.SetWorkflowID(s)
+	return tu
+}
+
+// SetNillableWorkflowID sets the "workflow_id" field if the given value is not nil.
+func (tu *TaskUpdate) SetNillableWorkflowID(s *string) *TaskUpdate {
+	if s != nil {
+		tu.SetWorkflowID(*s)
+	}
+	return tu
+}
+
+// ClearWorkflowID clears the value of the "workflow_id" field.
+func (tu *TaskUpdate) ClearWorkflowID() *TaskUpdate {
+	tu.mutation.ClearWorkflowID()
+	return tu
+}
+
 // SetFileURL sets the "file_url" field.
 func (tu *TaskUpdate) SetFileURL(s string) *TaskUpdate {
 	tu.mutation.SetFileURL(s)
@@ -393,11 +433,6 @@ func (tu *TaskUpdate) check() error {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Task.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := tu.mutation.FileURL(); ok {
-		if err := task.FileURLValidator(v); err != nil {
-			return &ValidationError{Name: "file_url", err: fmt.Errorf(`ent: validator failed for field "Task.file_url": %w`, err)}
-		}
-	}
 	if v, ok := tu.mutation.FileType(); ok {
 		if err := task.FileTypeValidator(v); err != nil {
 			return &ValidationError{Name: "file_type", err: fmt.Errorf(`ent: validator failed for field "Task.file_type": %w`, err)}
@@ -441,6 +476,18 @@ func (tu *TaskUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := tu.mutation.EntityType(); ok {
 		_spec.SetField(task.FieldEntityType, field.TypeString, value)
+	}
+	if value, ok := tu.mutation.ScheduledTaskID(); ok {
+		_spec.SetField(task.FieldScheduledTaskID, field.TypeString, value)
+	}
+	if tu.mutation.ScheduledTaskIDCleared() {
+		_spec.ClearField(task.FieldScheduledTaskID, field.TypeString)
+	}
+	if value, ok := tu.mutation.WorkflowID(); ok {
+		_spec.SetField(task.FieldWorkflowID, field.TypeString, value)
+	}
+	if tu.mutation.WorkflowIDCleared() {
+		_spec.ClearField(task.FieldWorkflowID, field.TypeString)
 	}
 	if value, ok := tu.mutation.FileURL(); ok {
 		_spec.SetField(task.FieldFileURL, field.TypeString, value)
@@ -599,6 +646,46 @@ func (tuo *TaskUpdateOne) SetNillableEntityType(s *string) *TaskUpdateOne {
 	if s != nil {
 		tuo.SetEntityType(*s)
 	}
+	return tuo
+}
+
+// SetScheduledTaskID sets the "scheduled_task_id" field.
+func (tuo *TaskUpdateOne) SetScheduledTaskID(s string) *TaskUpdateOne {
+	tuo.mutation.SetScheduledTaskID(s)
+	return tuo
+}
+
+// SetNillableScheduledTaskID sets the "scheduled_task_id" field if the given value is not nil.
+func (tuo *TaskUpdateOne) SetNillableScheduledTaskID(s *string) *TaskUpdateOne {
+	if s != nil {
+		tuo.SetScheduledTaskID(*s)
+	}
+	return tuo
+}
+
+// ClearScheduledTaskID clears the value of the "scheduled_task_id" field.
+func (tuo *TaskUpdateOne) ClearScheduledTaskID() *TaskUpdateOne {
+	tuo.mutation.ClearScheduledTaskID()
+	return tuo
+}
+
+// SetWorkflowID sets the "workflow_id" field.
+func (tuo *TaskUpdateOne) SetWorkflowID(s string) *TaskUpdateOne {
+	tuo.mutation.SetWorkflowID(s)
+	return tuo
+}
+
+// SetNillableWorkflowID sets the "workflow_id" field if the given value is not nil.
+func (tuo *TaskUpdateOne) SetNillableWorkflowID(s *string) *TaskUpdateOne {
+	if s != nil {
+		tuo.SetWorkflowID(*s)
+	}
+	return tuo
+}
+
+// ClearWorkflowID clears the value of the "workflow_id" field.
+func (tuo *TaskUpdateOne) ClearWorkflowID() *TaskUpdateOne {
+	tuo.mutation.ClearWorkflowID()
 	return tuo
 }
 
@@ -912,11 +999,6 @@ func (tuo *TaskUpdateOne) check() error {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Task.entity_type": %w`, err)}
 		}
 	}
-	if v, ok := tuo.mutation.FileURL(); ok {
-		if err := task.FileURLValidator(v); err != nil {
-			return &ValidationError{Name: "file_url", err: fmt.Errorf(`ent: validator failed for field "Task.file_url": %w`, err)}
-		}
-	}
 	if v, ok := tuo.mutation.FileType(); ok {
 		if err := task.FileTypeValidator(v); err != nil {
 			return &ValidationError{Name: "file_type", err: fmt.Errorf(`ent: validator failed for field "Task.file_type": %w`, err)}
@@ -977,6 +1059,18 @@ func (tuo *TaskUpdateOne) sqlSave(ctx context.Context) (_node *Task, err error) 
 	}
 	if value, ok := tuo.mutation.EntityType(); ok {
 		_spec.SetField(task.FieldEntityType, field.TypeString, value)
+	}
+	if value, ok := tuo.mutation.ScheduledTaskID(); ok {
+		_spec.SetField(task.FieldScheduledTaskID, field.TypeString, value)
+	}
+	if tuo.mutation.ScheduledTaskIDCleared() {
+		_spec.ClearField(task.FieldScheduledTaskID, field.TypeString)
+	}
+	if value, ok := tuo.mutation.WorkflowID(); ok {
+		_spec.SetField(task.FieldWorkflowID, field.TypeString, value)
+	}
+	if tuo.mutation.WorkflowIDCleared() {
+		_spec.ClearField(task.FieldWorkflowID, field.TypeString)
 	}
 	if value, ok := tuo.mutation.FileURL(); ok {
 		_spec.SetField(task.FieldFileURL, field.TypeString, value)

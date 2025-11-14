@@ -12,9 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
-	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // CostsheetQuery is the builder for querying Costsheet entities.
@@ -24,8 +22,6 @@ type CostsheetQuery struct {
 	order      []costsheet.OrderOption
 	inters     []Interceptor
 	predicates []predicate.Costsheet
-	withMeter  *MeterQuery
-	withPrice  *PriceQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -60,50 +56,6 @@ func (cq *CostsheetQuery) Unique(unique bool) *CostsheetQuery {
 func (cq *CostsheetQuery) Order(o ...costsheet.OrderOption) *CostsheetQuery {
 	cq.order = append(cq.order, o...)
 	return cq
-}
-
-// QueryMeter chains the current query on the "meter" edge.
-func (cq *CostsheetQuery) QueryMeter() *MeterQuery {
-	query := (&MeterClient{config: cq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := cq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := cq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(costsheet.Table, costsheet.FieldID, selector),
-			sqlgraph.To(meter.Table, meter.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, costsheet.MeterTable, costsheet.MeterColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(cq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryPrice chains the current query on the "price" edge.
-func (cq *CostsheetQuery) QueryPrice() *PriceQuery {
-	query := (&PriceClient{config: cq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := cq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := cq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(costsheet.Table, costsheet.FieldID, selector),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, costsheet.PriceTable, costsheet.PriceColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(cq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // First returns the first Costsheet entity from the query.
@@ -298,34 +250,10 @@ func (cq *CostsheetQuery) Clone() *CostsheetQuery {
 		order:      append([]costsheet.OrderOption{}, cq.order...),
 		inters:     append([]Interceptor{}, cq.inters...),
 		predicates: append([]predicate.Costsheet{}, cq.predicates...),
-		withMeter:  cq.withMeter.Clone(),
-		withPrice:  cq.withPrice.Clone(),
 		// clone intermediate query.
 		sql:  cq.sql.Clone(),
 		path: cq.path,
 	}
-}
-
-// WithMeter tells the query-builder to eager-load the nodes that are connected to
-// the "meter" edge. The optional arguments are used to configure the query builder of the edge.
-func (cq *CostsheetQuery) WithMeter(opts ...func(*MeterQuery)) *CostsheetQuery {
-	query := (&MeterClient{config: cq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	cq.withMeter = query
-	return cq
-}
-
-// WithPrice tells the query-builder to eager-load the nodes that are connected to
-// the "price" edge. The optional arguments are used to configure the query builder of the edge.
-func (cq *CostsheetQuery) WithPrice(opts ...func(*PriceQuery)) *CostsheetQuery {
-	query := (&PriceClient{config: cq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	cq.withPrice = query
-	return cq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -404,12 +332,8 @@ func (cq *CostsheetQuery) prepareQuery(ctx context.Context) error {
 
 func (cq *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Costsheet, error) {
 	var (
-		nodes       = []*Costsheet{}
-		_spec       = cq.querySpec()
-		loadedTypes = [2]bool{
-			cq.withMeter != nil,
-			cq.withPrice != nil,
-		}
+		nodes = []*Costsheet{}
+		_spec = cq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Costsheet).scanValues(nil, columns)
@@ -417,7 +341,6 @@ func (cq *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Co
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Costsheet{config: cq.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -429,78 +352,7 @@ func (cq *CostsheetQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Co
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := cq.withMeter; query != nil {
-		if err := cq.loadMeter(ctx, query, nodes, nil,
-			func(n *Costsheet, e *Meter) { n.Edges.Meter = e }); err != nil {
-			return nil, err
-		}
-	}
-	if query := cq.withPrice; query != nil {
-		if err := cq.loadPrice(ctx, query, nodes, nil,
-			func(n *Costsheet, e *Price) { n.Edges.Price = e }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
-}
-
-func (cq *CostsheetQuery) loadMeter(ctx context.Context, query *MeterQuery, nodes []*Costsheet, init func(*Costsheet), assign func(*Costsheet, *Meter)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Costsheet)
-	for i := range nodes {
-		fk := nodes[i].MeterID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(meter.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "meter_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
-}
-func (cq *CostsheetQuery) loadPrice(ctx context.Context, query *PriceQuery, nodes []*Costsheet, init func(*Costsheet), assign func(*Costsheet, *Price)) error {
-	ids := make([]string, 0, len(nodes))
-	nodeids := make(map[string][]*Costsheet)
-	for i := range nodes {
-		fk := nodes[i].PriceID
-		if _, ok := nodeids[fk]; !ok {
-			ids = append(ids, fk)
-		}
-		nodeids[fk] = append(nodeids[fk], nodes[i])
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	query.Where(price.IDIn(ids...))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		nodes, ok := nodeids[n.ID]
-		if !ok {
-			return fmt.Errorf(`unexpected foreign-key "price_id" returned %v`, n.ID)
-		}
-		for i := range nodes {
-			assign(nodes[i], n)
-		}
-	}
-	return nil
 }
 
 func (cq *CostsheetQuery) sqlCount(ctx context.Context) (int, error) {
@@ -527,12 +379,6 @@ func (cq *CostsheetQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != costsheet.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
-		}
-		if cq.withMeter != nil {
-			_spec.Node.AddColumnOnce(costsheet.FieldMeterID)
-		}
-		if cq.withPrice != nil {
-			_spec.Node.AddColumnOnce(costsheet.FieldPriceID)
 		}
 	}
 	if ps := cq.predicates; len(ps) > 0 {

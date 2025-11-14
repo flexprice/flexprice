@@ -83,3 +83,21 @@ func (o *WorkerOptions) ToSDKOptions() worker.Options {
 		EnableLoggingInReplay:                  o.EnableLoggingInReplay,
 	}
 }
+
+// CreateScheduleOptions represents options for creating a schedule
+type CreateScheduleOptions struct {
+	ID     string
+	Spec   client.ScheduleSpec
+	Action *client.ScheduleWorkflowAction
+	Paused bool
+}
+
+// ToSDKOptions converts CreateScheduleOptions to Temporal SDK client.ScheduleOptions
+func (o *CreateScheduleOptions) ToSDKOptions() client.ScheduleOptions {
+	return client.ScheduleOptions{
+		ID:     o.ID,
+		Spec:   o.Spec,
+		Action: o.Action,
+		Paused: o.Paused,
+	}
+}

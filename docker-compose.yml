@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15.3
+    image: postgres:17
     ports:
       - 127.0.0.1:5432:5432
     environment:
@@ -9,7 +9,7 @@ services:
       POSTGRES_DB: flexprice
     volumes:
       - ./init-temporal-db.sh:/docker-entrypoint-initdb.d/init-temporal-db.sh
-      - ./migrations:/docker-entrypoint-initdb.d/migration
+      - ./migrations/postgres:/docker-entrypoint-initdb.d/
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: pg_isready -U flexprice -d flexprice

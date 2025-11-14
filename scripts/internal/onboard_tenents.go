@@ -39,11 +39,10 @@ func SyncBillingCustomers() error {
 	}
 
 	// Initialize database client
-	entClient, err := postgres.NewEntClient(cfg, logger)
+	entClient, err := postgres.NewEntClients(cfg, logger)
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	defer entClient.Close()
 
 	// Create postgres client wrapper
 	client := postgres.NewClient(entClient, logger, sentry.NewSentryService(cfg, logger))

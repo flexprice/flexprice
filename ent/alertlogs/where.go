@@ -109,6 +109,21 @@ func EntityID(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldEQ(FieldEntityID, v))
 }
 
+// ParentEntityType applies equality check predicate on the "parent_entity_type" field. It's identical to ParentEntityTypeEQ.
+func ParentEntityType(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldParentEntityType, v))
+}
+
+// ParentEntityID applies equality check predicate on the "parent_entity_id" field. It's identical to ParentEntityIDEQ.
+func ParentEntityID(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldParentEntityID, v))
+}
+
+// CustomerID applies equality check predicate on the "customer_id" field. It's identical to CustomerIDEQ.
+func CustomerID(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldCustomerID, v))
+}
+
 // AlertType applies equality check predicate on the "alert_type" field. It's identical to AlertTypeEQ.
 func AlertType(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldEQ(FieldAlertType, v))
@@ -682,6 +697,231 @@ func EntityIDEqualFold(v string) predicate.AlertLogs {
 // EntityIDContainsFold applies the ContainsFold predicate on the "entity_id" field.
 func EntityIDContainsFold(v string) predicate.AlertLogs {
 	return predicate.AlertLogs(sql.FieldContainsFold(FieldEntityID, v))
+}
+
+// ParentEntityTypeEQ applies the EQ predicate on the "parent_entity_type" field.
+func ParentEntityTypeEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeNEQ applies the NEQ predicate on the "parent_entity_type" field.
+func ParentEntityTypeNEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNEQ(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeIn applies the In predicate on the "parent_entity_type" field.
+func ParentEntityTypeIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIn(FieldParentEntityType, vs...))
+}
+
+// ParentEntityTypeNotIn applies the NotIn predicate on the "parent_entity_type" field.
+func ParentEntityTypeNotIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotIn(FieldParentEntityType, vs...))
+}
+
+// ParentEntityTypeGT applies the GT predicate on the "parent_entity_type" field.
+func ParentEntityTypeGT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGT(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeGTE applies the GTE predicate on the "parent_entity_type" field.
+func ParentEntityTypeGTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGTE(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeLT applies the LT predicate on the "parent_entity_type" field.
+func ParentEntityTypeLT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLT(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeLTE applies the LTE predicate on the "parent_entity_type" field.
+func ParentEntityTypeLTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLTE(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeContains applies the Contains predicate on the "parent_entity_type" field.
+func ParentEntityTypeContains(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContains(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeHasPrefix applies the HasPrefix predicate on the "parent_entity_type" field.
+func ParentEntityTypeHasPrefix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasPrefix(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeHasSuffix applies the HasSuffix predicate on the "parent_entity_type" field.
+func ParentEntityTypeHasSuffix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasSuffix(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeIsNil applies the IsNil predicate on the "parent_entity_type" field.
+func ParentEntityTypeIsNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIsNull(FieldParentEntityType))
+}
+
+// ParentEntityTypeNotNil applies the NotNil predicate on the "parent_entity_type" field.
+func ParentEntityTypeNotNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotNull(FieldParentEntityType))
+}
+
+// ParentEntityTypeEqualFold applies the EqualFold predicate on the "parent_entity_type" field.
+func ParentEntityTypeEqualFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEqualFold(FieldParentEntityType, v))
+}
+
+// ParentEntityTypeContainsFold applies the ContainsFold predicate on the "parent_entity_type" field.
+func ParentEntityTypeContainsFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContainsFold(FieldParentEntityType, v))
+}
+
+// ParentEntityIDEQ applies the EQ predicate on the "parent_entity_id" field.
+func ParentEntityIDEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldParentEntityID, v))
+}
+
+// ParentEntityIDNEQ applies the NEQ predicate on the "parent_entity_id" field.
+func ParentEntityIDNEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNEQ(FieldParentEntityID, v))
+}
+
+// ParentEntityIDIn applies the In predicate on the "parent_entity_id" field.
+func ParentEntityIDIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIn(FieldParentEntityID, vs...))
+}
+
+// ParentEntityIDNotIn applies the NotIn predicate on the "parent_entity_id" field.
+func ParentEntityIDNotIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotIn(FieldParentEntityID, vs...))
+}
+
+// ParentEntityIDGT applies the GT predicate on the "parent_entity_id" field.
+func ParentEntityIDGT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGT(FieldParentEntityID, v))
+}
+
+// ParentEntityIDGTE applies the GTE predicate on the "parent_entity_id" field.
+func ParentEntityIDGTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGTE(FieldParentEntityID, v))
+}
+
+// ParentEntityIDLT applies the LT predicate on the "parent_entity_id" field.
+func ParentEntityIDLT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLT(FieldParentEntityID, v))
+}
+
+// ParentEntityIDLTE applies the LTE predicate on the "parent_entity_id" field.
+func ParentEntityIDLTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLTE(FieldParentEntityID, v))
+}
+
+// ParentEntityIDContains applies the Contains predicate on the "parent_entity_id" field.
+func ParentEntityIDContains(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContains(FieldParentEntityID, v))
+}
+
+// ParentEntityIDHasPrefix applies the HasPrefix predicate on the "parent_entity_id" field.
+func ParentEntityIDHasPrefix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasPrefix(FieldParentEntityID, v))
+}
+
+// ParentEntityIDHasSuffix applies the HasSuffix predicate on the "parent_entity_id" field.
+func ParentEntityIDHasSuffix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasSuffix(FieldParentEntityID, v))
+}
+
+// ParentEntityIDIsNil applies the IsNil predicate on the "parent_entity_id" field.
+func ParentEntityIDIsNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIsNull(FieldParentEntityID))
+}
+
+// ParentEntityIDNotNil applies the NotNil predicate on the "parent_entity_id" field.
+func ParentEntityIDNotNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotNull(FieldParentEntityID))
+}
+
+// ParentEntityIDEqualFold applies the EqualFold predicate on the "parent_entity_id" field.
+func ParentEntityIDEqualFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEqualFold(FieldParentEntityID, v))
+}
+
+// ParentEntityIDContainsFold applies the ContainsFold predicate on the "parent_entity_id" field.
+func ParentEntityIDContainsFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContainsFold(FieldParentEntityID, v))
+}
+
+// CustomerIDEQ applies the EQ predicate on the "customer_id" field.
+func CustomerIDEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEQ(FieldCustomerID, v))
+}
+
+// CustomerIDNEQ applies the NEQ predicate on the "customer_id" field.
+func CustomerIDNEQ(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNEQ(FieldCustomerID, v))
+}
+
+// CustomerIDIn applies the In predicate on the "customer_id" field.
+func CustomerIDIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIn(FieldCustomerID, vs...))
+}
+
+// CustomerIDNotIn applies the NotIn predicate on the "customer_id" field.
+func CustomerIDNotIn(vs ...string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotIn(FieldCustomerID, vs...))
+}
+
+// CustomerIDGT applies the GT predicate on the "customer_id" field.
+func CustomerIDGT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGT(FieldCustomerID, v))
+}
+
+// CustomerIDGTE applies the GTE predicate on the "customer_id" field.
+func CustomerIDGTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldGTE(FieldCustomerID, v))
+}
+
+// CustomerIDLT applies the LT predicate on the "customer_id" field.
+func CustomerIDLT(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLT(FieldCustomerID, v))
+}
+
+// CustomerIDLTE applies the LTE predicate on the "customer_id" field.
+func CustomerIDLTE(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldLTE(FieldCustomerID, v))
+}
+
+// CustomerIDContains applies the Contains predicate on the "customer_id" field.
+func CustomerIDContains(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContains(FieldCustomerID, v))
+}
+
+// CustomerIDHasPrefix applies the HasPrefix predicate on the "customer_id" field.
+func CustomerIDHasPrefix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasPrefix(FieldCustomerID, v))
+}
+
+// CustomerIDHasSuffix applies the HasSuffix predicate on the "customer_id" field.
+func CustomerIDHasSuffix(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldHasSuffix(FieldCustomerID, v))
+}
+
+// CustomerIDIsNil applies the IsNil predicate on the "customer_id" field.
+func CustomerIDIsNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldIsNull(FieldCustomerID))
+}
+
+// CustomerIDNotNil applies the NotNil predicate on the "customer_id" field.
+func CustomerIDNotNil() predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldNotNull(FieldCustomerID))
+}
+
+// CustomerIDEqualFold applies the EqualFold predicate on the "customer_id" field.
+func CustomerIDEqualFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldEqualFold(FieldCustomerID, v))
+}
+
+// CustomerIDContainsFold applies the ContainsFold predicate on the "customer_id" field.
+func CustomerIDContainsFold(v string) predicate.AlertLogs {
+	return predicate.AlertLogs(sql.FieldContainsFold(FieldCustomerID, v))
 }
 
 // AlertTypeEQ applies the EQ predicate on the "alert_type" field.

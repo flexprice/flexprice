@@ -21,12 +21,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
+	"github.com/flexprice/flexprice/internal/domain/scheduledtask"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -142,8 +144,8 @@ func NewCreditGrantRepository(p RepositoryParams) creditgrant.Repository {
 	return entRepo.NewCreditGrantRepository(p.EntClient, p.Logger, p.Cache)
 }
 
-func NewCostSheetRepository(p RepositoryParams) costsheet.Repository {
-	return entRepo.NewCostSheetRepository(p.EntClient, p.Logger)
+func NewCostsheetRepository(p RepositoryParams) costsheet.Repository {
+	return entRepo.NewCostsheetRepository(p.EntClient, p.Logger, p.Cache)
 }
 
 func NewCreditGrantApplicationRepository(p RepositoryParams) creditgrantapplication.Repository {
@@ -208,4 +210,12 @@ func NewSettingsRepository(p RepositoryParams) settings.Repository {
 
 func NewAlertLogsRepository(p RepositoryParams) alertlogs.Repository {
 	return entRepo.NewAlertLogsRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewGroupRepository(p RepositoryParams) group.Repository {
+	return entRepo.NewGroupRepository(p.EntClient, p.Logger, p.Cache)
+}
+
+func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
+	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
 }

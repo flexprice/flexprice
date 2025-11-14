@@ -109,6 +109,16 @@ func EntityType(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldEntityType, v))
 }
 
+// ScheduledTaskID applies equality check predicate on the "scheduled_task_id" field. It's identical to ScheduledTaskIDEQ.
+func ScheduledTaskID(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldScheduledTaskID, v))
+}
+
+// WorkflowID applies equality check predicate on the "workflow_id" field. It's identical to WorkflowIDEQ.
+func WorkflowID(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldWorkflowID, v))
+}
+
 // FileURL applies equality check predicate on the "file_url" field. It's identical to FileURLEQ.
 func FileURL(v string) predicate.Task {
 	return predicate.Task(sql.FieldEQ(FieldFileURL, v))
@@ -732,6 +742,156 @@ func EntityTypeEqualFold(v string) predicate.Task {
 // EntityTypeContainsFold applies the ContainsFold predicate on the "entity_type" field.
 func EntityTypeContainsFold(v string) predicate.Task {
 	return predicate.Task(sql.FieldContainsFold(FieldEntityType, v))
+}
+
+// ScheduledTaskIDEQ applies the EQ predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDNEQ applies the NEQ predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDIn applies the In predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldScheduledTaskID, vs...))
+}
+
+// ScheduledTaskIDNotIn applies the NotIn predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldScheduledTaskID, vs...))
+}
+
+// ScheduledTaskIDGT applies the GT predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDGTE applies the GTE predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDLT applies the LT predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDLTE applies the LTE predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDContains applies the Contains predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDHasPrefix applies the HasPrefix predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDHasSuffix applies the HasSuffix predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDIsNil applies the IsNil predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldScheduledTaskID))
+}
+
+// ScheduledTaskIDNotNil applies the NotNil predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldScheduledTaskID))
+}
+
+// ScheduledTaskIDEqualFold applies the EqualFold predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldScheduledTaskID, v))
+}
+
+// ScheduledTaskIDContainsFold applies the ContainsFold predicate on the "scheduled_task_id" field.
+func ScheduledTaskIDContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldScheduledTaskID, v))
+}
+
+// WorkflowIDEQ applies the EQ predicate on the "workflow_id" field.
+func WorkflowIDEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldEQ(FieldWorkflowID, v))
+}
+
+// WorkflowIDNEQ applies the NEQ predicate on the "workflow_id" field.
+func WorkflowIDNEQ(v string) predicate.Task {
+	return predicate.Task(sql.FieldNEQ(FieldWorkflowID, v))
+}
+
+// WorkflowIDIn applies the In predicate on the "workflow_id" field.
+func WorkflowIDIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldIn(FieldWorkflowID, vs...))
+}
+
+// WorkflowIDNotIn applies the NotIn predicate on the "workflow_id" field.
+func WorkflowIDNotIn(vs ...string) predicate.Task {
+	return predicate.Task(sql.FieldNotIn(FieldWorkflowID, vs...))
+}
+
+// WorkflowIDGT applies the GT predicate on the "workflow_id" field.
+func WorkflowIDGT(v string) predicate.Task {
+	return predicate.Task(sql.FieldGT(FieldWorkflowID, v))
+}
+
+// WorkflowIDGTE applies the GTE predicate on the "workflow_id" field.
+func WorkflowIDGTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldGTE(FieldWorkflowID, v))
+}
+
+// WorkflowIDLT applies the LT predicate on the "workflow_id" field.
+func WorkflowIDLT(v string) predicate.Task {
+	return predicate.Task(sql.FieldLT(FieldWorkflowID, v))
+}
+
+// WorkflowIDLTE applies the LTE predicate on the "workflow_id" field.
+func WorkflowIDLTE(v string) predicate.Task {
+	return predicate.Task(sql.FieldLTE(FieldWorkflowID, v))
+}
+
+// WorkflowIDContains applies the Contains predicate on the "workflow_id" field.
+func WorkflowIDContains(v string) predicate.Task {
+	return predicate.Task(sql.FieldContains(FieldWorkflowID, v))
+}
+
+// WorkflowIDHasPrefix applies the HasPrefix predicate on the "workflow_id" field.
+func WorkflowIDHasPrefix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasPrefix(FieldWorkflowID, v))
+}
+
+// WorkflowIDHasSuffix applies the HasSuffix predicate on the "workflow_id" field.
+func WorkflowIDHasSuffix(v string) predicate.Task {
+	return predicate.Task(sql.FieldHasSuffix(FieldWorkflowID, v))
+}
+
+// WorkflowIDIsNil applies the IsNil predicate on the "workflow_id" field.
+func WorkflowIDIsNil() predicate.Task {
+	return predicate.Task(sql.FieldIsNull(FieldWorkflowID))
+}
+
+// WorkflowIDNotNil applies the NotNil predicate on the "workflow_id" field.
+func WorkflowIDNotNil() predicate.Task {
+	return predicate.Task(sql.FieldNotNull(FieldWorkflowID))
+}
+
+// WorkflowIDEqualFold applies the EqualFold predicate on the "workflow_id" field.
+func WorkflowIDEqualFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldEqualFold(FieldWorkflowID, v))
+}
+
+// WorkflowIDContainsFold applies the ContainsFold predicate on the "workflow_id" field.
+func WorkflowIDContainsFold(v string) predicate.Task {
+	return predicate.Task(sql.FieldContainsFold(FieldWorkflowID, v))
 }
 
 // FileURLEQ applies the EQ predicate on the "file_url" field.

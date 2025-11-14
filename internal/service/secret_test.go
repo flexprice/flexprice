@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/secret"
+	domainUser "github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/security"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -54,7 +55,8 @@ func (s *SecretServiceSuite) setupService() {
 	s.Require().NoError(err, "Failed to create encryption service")
 
 	s.secretRepo = s.GetStores().SecretRepo
-	s.service = NewSecretService(s.secretRepo, cfg, s.GetLogger())
+	userRepo := s.GetStores().UserRepo
+	s.service = NewSecretService(s.secretRepo, userRepo, cfg, s.GetLogger())
 }
 
 func (s *SecretServiceSuite) setupTestData() {
@@ -68,15 +70,32 @@ func (s *SecretServiceSuite) setupTestData() {
 		s.testData.secrets.integration = nil
 	}
 
+	// Create default test user (needed for API key creation)
+	userRepo := s.GetStores().UserRepo
+	testUser := &domainUser.User{
+		ID:    types.DefaultUserID,
+		Email: "test@example.com",
+		Type:  types.UserTypeUser,
+		Roles: []string{}, // Empty roles = full access
+		BaseModel: types.BaseModel{
+			TenantID:  types.DefaultTenantID,
+			Status:    types.StatusPublished,
+			CreatedAt: time.Now().UTC(),
+			UpdatedAt: time.Now().UTC(),
+		},
+	}
+	_ = userRepo.Create(s.GetContext(), testUser)
+
 	// Create test API key
 	apiKey := &secret.Secret{
-		ID:          "secret_test_api_key",
-		Name:        "Test API Key",
-		Type:        types.SecretTypePrivateKey,
-		Provider:    types.SecretProviderFlexPrice,
-		Value:       s.encryptionSvc.Hash("test_api_key"),
-		DisplayID:   "test1",
-		Permissions: []string{"read", "write"},
+		ID:        "secret_test_api_key",
+		Name:      "Test API Key",
+		Type:      types.SecretTypePrivateKey,
+		Provider:  types.SecretProviderFlexPrice,
+		Value:     s.encryptionSvc.Hash("test_api_key"),
+		DisplayID: "test1",
+		Roles:     []string{}, // Empty roles = full access
+		UserType:  "user",     // Default user type
 		BaseModel: types.BaseModel{
 			TenantID:  types.DefaultTenantID,
 			Status:    types.StatusPublished,
@@ -170,11 +189,6 @@ func (s *SecretServiceSuite) TestCreateAPIKey() {
 			s.Equal(types.SecretProviderFlexPrice, resp.Provider)
 			s.NotEmpty(resp.DisplayID)
 			s.Len(resp.DisplayID, 10)
-
-			// Verify default permissions
-			if len(tt.req.Permissions) == 0 {
-				s.Equal([]string{"read", "write"}, resp.Permissions)
-			}
 		})
 	}
 }

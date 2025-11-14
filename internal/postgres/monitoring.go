@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/logger"
 	sentryService "github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // SentryClient wraps the standard postgres client with Sentry monitoring
@@ -28,6 +29,7 @@ func NewSentryClient(client IClient, sentry *sentryService.Service, logger *logg
 func (c *SentryClient) WithTx(ctx context.Context, fn func(context.Context) error) error {
 	span, spanCtx := c.sentry.StartDBSpan(ctx, "postgres.transaction", map[string]interface{}{
 		"operation": "transaction",
+		"target":    "writer", // Transactions always go to writer
 	})
 	if span != nil {
 		defer span.Finish()
@@ -42,10 +44,39 @@ func (c *SentryClient) TxFromContext(ctx context.Context) *ent.Tx {
 	return c.client.TxFromContext(ctx)
 }
 
-// Querier returns the current transaction client if in a transaction, or the regular client
-// This method wraps the client without any span tracking for now as there
-// is no value in just getting postgress query client getting called
-// we have added a repository layer that will add the span tracking
-func (c *SentryClient) Querier(ctx context.Context) *ent.Client {
-	return c.client.Querier(ctx)
+// Writer returns the writer client for write operations
+func (c *SentryClient) Writer(ctx context.Context) *ent.Client {
+	// Add tag to track writer usage (lightweight operation)
+	if span := c.sentry.GetSpanFromContext(ctx); span != nil {
+		span.SetTag("db.endpoint", "writer")
+		span.SetTag("db.resolved_target", "writer")
+	}
+	return c.client.Writer(ctx)
+}
+
+// Reader returns the appropriate client for read operations
+func (c *SentryClient) Reader(ctx context.Context) *ent.Client {
+	// Determine actual target and add tags
+	actualTarget := "reader"
+
+	// Check if in transaction
+	if c.client.TxFromContext(ctx) != nil {
+		actualTarget = "writer_via_tx"
+	} else if types.ShouldForceWriter(ctx) {
+		// Check for force writer flag
+		actualTarget = "writer_forced"
+	}
+
+	// Add tags to track reader usage and routing decision
+	if span := c.sentry.GetSpanFromContext(ctx); span != nil {
+		span.SetTag("db.endpoint", "reader")
+		span.SetTag("db.resolved_target", actualTarget)
+	}
+
+	return c.client.Reader(ctx)
+}
+
+// Close closes the database connection
+func (c *SentryClient) Close() error {
+	return c.client.Close()
 }

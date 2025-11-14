@@ -252,6 +252,26 @@ func (eu *EntitlementUpdate) AddDisplayOrder(i int) *EntitlementUpdate {
 	return eu
 }
 
+// SetParentEntitlementID sets the "parent_entitlement_id" field.
+func (eu *EntitlementUpdate) SetParentEntitlementID(s string) *EntitlementUpdate {
+	eu.mutation.SetParentEntitlementID(s)
+	return eu
+}
+
+// SetNillableParentEntitlementID sets the "parent_entitlement_id" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableParentEntitlementID(s *string) *EntitlementUpdate {
+	if s != nil {
+		eu.SetParentEntitlementID(*s)
+	}
+	return eu
+}
+
+// ClearParentEntitlementID clears the value of the "parent_entitlement_id" field.
+func (eu *EntitlementUpdate) ClearParentEntitlementID() *EntitlementUpdate {
+	eu.mutation.ClearParentEntitlementID()
+	return eu
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (eu *EntitlementUpdate) Mutation() *EntitlementMutation {
 	return eu.mutation
@@ -388,6 +408,12 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := eu.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(entitlement.FieldDisplayOrder, field.TypeInt, value)
+	}
+	if value, ok := eu.mutation.ParentEntitlementID(); ok {
+		_spec.SetField(entitlement.FieldParentEntitlementID, field.TypeString, value)
+	}
+	if eu.mutation.ParentEntitlementIDCleared() {
+		_spec.ClearField(entitlement.FieldParentEntitlementID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -633,6 +659,26 @@ func (euo *EntitlementUpdateOne) AddDisplayOrder(i int) *EntitlementUpdateOne {
 	return euo
 }
 
+// SetParentEntitlementID sets the "parent_entitlement_id" field.
+func (euo *EntitlementUpdateOne) SetParentEntitlementID(s string) *EntitlementUpdateOne {
+	euo.mutation.SetParentEntitlementID(s)
+	return euo
+}
+
+// SetNillableParentEntitlementID sets the "parent_entitlement_id" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableParentEntitlementID(s *string) *EntitlementUpdateOne {
+	if s != nil {
+		euo.SetParentEntitlementID(*s)
+	}
+	return euo
+}
+
+// ClearParentEntitlementID clears the value of the "parent_entitlement_id" field.
+func (euo *EntitlementUpdateOne) ClearParentEntitlementID() *EntitlementUpdateOne {
+	euo.mutation.ClearParentEntitlementID()
+	return euo
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (euo *EntitlementUpdateOne) Mutation() *EntitlementMutation {
 	return euo.mutation
@@ -799,6 +845,12 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if value, ok := euo.mutation.AddedDisplayOrder(); ok {
 		_spec.AddField(entitlement.FieldDisplayOrder, field.TypeInt, value)
+	}
+	if value, ok := euo.mutation.ParentEntitlementID(); ok {
+		_spec.SetField(entitlement.FieldParentEntitlementID, field.TypeString, value)
+	}
+	if euo.mutation.ParentEntitlementIDCleared() {
+		_spec.ClearField(entitlement.FieldParentEntitlementID, field.TypeString)
 	}
 	_node = &Entitlement{config: euo.config}
 	_spec.Assign = _node.assignValues

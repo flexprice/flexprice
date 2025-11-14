@@ -5,18 +5,32 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 type User struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID    string         `json:"id"`
+	Email string         `json:"email"` // Empty for service accounts
+	Type  types.UserType `json:"type"`
+	Roles []string       `json:"roles"`
 	types.BaseModel
+}
+
+// Validate validates the user
+func (u *User) Validate() error {
+	// Validate user type
+	if err := u.Type.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewUser(email, tenantID string) *User {
 	return &User{
 		ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
 		Email: email,
+		Type:  types.UserTypeUser,
+		Roles: []string{},
 		BaseModel: types.BaseModel{
 			TenantID:  tenantID,
 			Status:    types.StatusPublished,
@@ -36,7 +50,9 @@ func FromEnt(e *ent.User) *User {
 
 	return &User{
 		ID:    e.ID,
-		Email: e.Email,
+		Email: lo.FromPtrOr(e.Email, ""),
+		Type:  types.UserType(e.Type),
+		Roles: e.Roles,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

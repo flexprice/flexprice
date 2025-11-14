@@ -59,8 +59,9 @@ type AggregatedEntitlement struct {
 type EntitlementSourceEntityType string
 
 const (
-	EntitlementSourceEntityTypePlan  EntitlementSourceEntityType = "plan"
-	EntitlementSourceEntityTypeAddon EntitlementSourceEntityType = "addon"
+	EntitlementSourceEntityTypePlan         EntitlementSourceEntityType = "plan"
+	EntitlementSourceEntityTypeAddon        EntitlementSourceEntityType = "addon"
+	EntitlementSourceEntityTypeSubscription EntitlementSourceEntityType = "subscription"
 )
 
 func (e EntitlementSourceEntityType) Validate() error {
@@ -68,6 +69,7 @@ func (e EntitlementSourceEntityType) Validate() error {
 	allowedValues := []string{
 		string(EntitlementSourceEntityTypePlan),
 		string(EntitlementSourceEntityTypeAddon),
+		string(EntitlementSourceEntityTypeSubscription),
 	}
 
 	if !lo.Contains(allowedValues, string(e)) {
@@ -85,7 +87,7 @@ type EntitlementSource struct {
 	EntityID         string                      `json:"entity_id"`
 	EntityType       EntitlementSourceEntityType `json:"entity_type"`
 	Quantity         int64                       `json:"quantity"`
-	EntitiyName      string                      `json:"entity_name"`
+	EntityName       string                      `json:"entity_name"`
 	EntitlementID    string                      `json:"entitlement_id"`
 	IsEnabled        bool                        `json:"is_enabled"`
 	UsageLimit       *int64                      `json:"usage_limit,omitempty"`
@@ -95,8 +97,11 @@ type EntitlementSource struct {
 
 // GetCustomerUsageSummaryRequest represents the request for getting customer usage summary
 type GetCustomerUsageSummaryRequest struct {
-	FeatureIDs      []string `json:"feature_ids,omitempty" form:"feature_ids"`
-	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+	CustomerID        string   `json:"customer_id,omitempty" form:"customer_id"`
+	CustomerLookupKey string   `json:"customer_lookup_key,omitempty" form:"customer_lookup_key"`
+	FeatureIDs        []string `json:"feature_ids,omitempty" form:"feature_ids"`
+	FeatureLookupKeys []string `json:"feature_lookup_keys,omitempty" form:"feature_lookup_keys"`
+	SubscriptionIDs   []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
 }
 
 func (r *GetCustomerUsageSummaryRequest) Validate() error {
@@ -122,6 +127,7 @@ type CustomerUsageSummaryResponse struct {
 type FeatureUsageSummary struct {
 	Feature          *FeatureResponse     `json:"feature"`
 	TotalLimit       *int64               `json:"total_limit"`
+	IsUnlimited      bool                 `json:"is_unlimited"`
 	CurrentUsage     decimal.Decimal      `json:"current_usage"`
 	UsagePercent     decimal.Decimal      `json:"usage_percent"`
 	IsEnabled        bool                 `json:"is_enabled"`

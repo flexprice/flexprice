@@ -15,7 +15,11 @@ type Repository interface {
 	GetUsageWithFilters(ctx context.Context, params *UsageWithFiltersParams) ([]*AggregationResult, error)
 	GetEvents(ctx context.Context, params *GetEventsParams) ([]*Event, uint64, error)
 	FindUnprocessedEvents(ctx context.Context, params *FindUnprocessedEventsParams) ([]*Event, error)
+	FindUnprocessedEventsFromFeatureUsage(ctx context.Context, params *FindUnprocessedEventsParams) ([]*Event, error)
 	GetDistinctEventNames(ctx context.Context, externalCustomerID string, startTime, endTime time.Time) ([]string, error)
+
+	// Monitoring methods
+	GetTotalEventCount(ctx context.Context, startTime, endTime time.Time) uint64
 }
 
 // ProcessedEventRepository defines operations for processed events

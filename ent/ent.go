@@ -31,6 +31,7 @@ import (
 	"github.com/flexprice/flexprice/ent/entityintegrationmapping"
 	"github.com/flexprice/flexprice/ent/environment"
 	"github.com/flexprice/flexprice/ent/feature"
+	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/invoicesequence"
@@ -40,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/ent/plan"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
+	"github.com/flexprice/flexprice/ent/scheduledtask"
 	"github.com/flexprice/flexprice/ent/secret"
 	"github.com/flexprice/flexprice/ent/settings"
 	"github.com/flexprice/flexprice/ent/subscription"
@@ -134,6 +136,7 @@ func checkColumn(table, column string) error {
 			entityintegrationmapping.Table:  entityintegrationmapping.ValidColumn,
 			environment.Table:               environment.ValidColumn,
 			feature.Table:                   feature.ValidColumn,
+			group.Table:                     group.ValidColumn,
 			invoice.Table:                   invoice.ValidColumn,
 			invoicelineitem.Table:           invoicelineitem.ValidColumn,
 			invoicesequence.Table:           invoicesequence.ValidColumn,
@@ -143,6 +146,7 @@ func checkColumn(table, column string) error {
 			plan.Table:                      plan.ValidColumn,
 			price.Table:                     price.ValidColumn,
 			priceunit.Table:                 priceunit.ValidColumn,
+			scheduledtask.Table:             scheduledtask.ValidColumn,
 			secret.Table:                    secret.ValidColumn,
 			settings.Table:                  settings.ValidColumn,
 			subscription.Table:              subscription.ValidColumn,

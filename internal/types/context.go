@@ -15,6 +15,8 @@ const (
 	CtxJWT           ContextKey = "ctx_jwt"
 	CtxEnvironmentID ContextKey = "ctx_environment_id"
 	CtxDBTransaction ContextKey = "ctx_db_transaction"
+	CtxForceWriter   ContextKey = "ctx_force_writer" // Force DB operations to use writer connection
+	CtxRoles         ContextKey = "ctx_roles"        // RBAC roles array for permission checks
 
 	// Default values
 	DefaultTenantID = "00000000-0000-0000-0000-000000000000"
@@ -56,6 +58,14 @@ func GetEnvironmentID(ctx context.Context) string {
 	return ""
 }
 
+// GetRoles returns the RBAC roles array from the context
+func GetRoles(ctx context.Context) []string {
+	if roles, ok := ctx.Value(CtxRoles).([]string); ok {
+		return roles
+	}
+	return []string{} // Empty roles = full access
+}
+
 // SetTenantID sets the tenant ID in the context
 func SetTenantID(ctx context.Context, tenantID string) context.Context {
 	return context.WithValue(ctx, CtxTenantID, tenantID)
@@ -69,6 +79,21 @@ func SetEnvironmentID(ctx context.Context, environmentID string) context.Context
 // SetUserID sets the user ID in the context
 func SetUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, CtxUserID, userID)
+}
+
+// WithForceWriter returns a context that forces database operations to use the writer connection.
+// This is useful when you need to ensure read-after-write consistency or when you know
+// the operation might need to write even if it starts as a read.
+func WithForceWriter(ctx context.Context) context.Context {
+	return context.WithValue(ctx, CtxForceWriter, true)
+}
+
+// ShouldForceWriter returns true if the context is marked to force writer connection
+func ShouldForceWriter(ctx context.Context) bool {
+	if forceWriter, ok := ctx.Value(CtxForceWriter).(bool); ok {
+		return forceWriter
+	}
+	return false
 }
 
 // ValidateTenantContext validates that the required tenant context fields are present

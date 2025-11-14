@@ -363,3 +363,45 @@ func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.FromWallet(updated))
 }
+
+// DebitWallet godoc
+// @Summary Debit a wallet
+// @Description Debit a wallet by debiting credits from a wallet
+// @Tags Wallets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Wallet ID"
+// @Param request body dto.DebitWalletRequest true "Debit wallet request"
+// @Success 200 {object} dto.WalletResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /wallets/{id}/debit [post]
+func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
+	walletID := c.Param("id")
+	if walletID == "" {
+		c.Error(ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ManualBalanceDebitRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	wallet, err := h.walletService.ManualBalanceDebit(c.Request.Context(), walletID, &req)
+	if err != nil {
+		h.logger.Error("Failed to debit balance manually", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, wallet)
+}

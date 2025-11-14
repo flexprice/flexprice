@@ -61,7 +61,7 @@ type Repository interface {
 ```go
 // Add to internal/repository/ent/creditgrant.go
 func (r *creditGrantRepository) FindActiveRecurringGrants(ctx context.Context) ([]*domainCreditGrant.CreditGrant, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
 
     span := StartRepositorySpan(ctx, "creditgrant", "find_active_recurring", map[string]interface{}{
         "tenant_id": types.GetTenantID(ctx),
@@ -89,7 +89,7 @@ func (r *creditGrantRepository) FindActiveRecurringGrants(ctx context.Context) (
 }
 
 func (r *creditGrantRepository) FindActiveGrantsForSubscription(ctx context.Context, subscriptionID string) ([]*domainCreditGrant.CreditGrant, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
 
     span := StartRepositorySpan(ctx, "creditgrant", "find_active_for_subscription", map[string]interface{}{
         "subscription_id": subscriptionID,
@@ -167,7 +167,7 @@ type Repository interface {
 ```go
 // Add to internal/repository/ent/subscription.go
 func (r *subscriptionRepository) FindEligibleSubscriptionsForGrant(ctx context.Context, grant *creditgrant.CreditGrant) ([]*domainSubscription.Subscription, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
 
     span := StartRepositorySpan(ctx, "subscription", "find_eligible_for_grant", map[string]interface{}{
         "grant_id": grant.ID,
@@ -229,7 +229,7 @@ func (r *subscriptionRepository) FindEligibleSubscriptionsForGrant(ctx context.C
 }
 
 func (r *subscriptionRepository) FindSubscriptionsNeedingRecurringProcessing(ctx context.Context) ([]*domainSubscription.Subscription, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
 
     span := StartRepositorySpan(ctx, "subscription", "find_needing_recurring", map[string]interface{}{
         "tenant_id": types.GetTenantID(ctx),
@@ -273,7 +273,7 @@ func (r *subscriptionRepository) FindSubscriptionsNeedingRecurringProcessing(ctx
 // Add to internal/repository/ent/creditgrantapplication.go
 
 func (r *creditGrantApplicationRepository) ExistsForBillingPeriod(ctx context.Context, grantID, subscriptionID string, periodStart, periodEnd time.Time) (bool, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
 
     count, err := client.CreditGrantApplication.Query().
         Where(
@@ -293,7 +293,7 @@ func (r *creditGrantApplicationRepository) ExistsForBillingPeriod(ctx context.Co
 }
 
 func (r *creditGrantApplicationRepository) FindDeferredApplications(ctx context.Context, subscriptionID string) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
 
     applications, err := client.CreditGrantApplication.Query().
         Where(
@@ -311,7 +311,7 @@ func (r *creditGrantApplicationRepository) FindDeferredApplications(ctx context.
 }
 
 func (r *creditGrantApplicationRepository) FindFailedApplicationsForRetry(ctx context.Context, maxRetries int) ([]*domainCreditGrantApplication.CreditGrantApplication, error) {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
     now := time.Now().UTC()
 
     applications, err := client.CreditGrantApplication.Query().
@@ -335,7 +335,7 @@ func (r *creditGrantApplicationRepository) FindFailedApplicationsForRetry(ctx co
 }
 
 func (r *creditGrantApplicationRepository) CancelFutureApplications(ctx context.Context, subscriptionID string) error {
-    client := r.client.Querier(ctx)
+    client := r.client.Writer(ctx)
     now := time.Now().UTC()
 
     _, err := client.CreditGrantApplication.Update().

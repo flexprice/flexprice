@@ -32,7 +32,7 @@ func NewPriceRepository(client postgres.IClient, log *logger.Logger, cache cache
 }
 
 func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating price",
 		"price_id", p.ID,
@@ -141,7 +141,7 @@ func (r *priceRepository) Get(ctx context.Context, id string) (*domainPrice.Pric
 		return cachedPrice, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting price",
 		"price_id", id,
@@ -184,7 +184,7 @@ func (r *priceRepository) List(ctx context.Context, filter *types.PriceFilter) (
 		}
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price", "list", map[string]interface{}{
@@ -214,7 +214,7 @@ func (r *priceRepository) List(ctx context.Context, filter *types.PriceFilter) (
 }
 
 func (r *priceRepository) Count(ctx context.Context, filter *types.PriceFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price", "count", map[string]interface{}{
@@ -258,7 +258,7 @@ func (r *priceRepository) ListAll(ctx context.Context, filter *types.PriceFilter
 }
 
 func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating price",
 		"price_id", p.ID,
@@ -297,6 +297,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetMetadata(map[string]string(p.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
+		SetNillableGroupID(lo.ToPtr(p.GroupID)).
 		Save(ctx)
 
 	if err != nil {
@@ -320,7 +321,7 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 }
 
 func (r *priceRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting price",
 		"price_id", id,
@@ -364,7 +365,7 @@ func (r *priceRepository) Delete(ctx context.Context, id string) error {
 }
 
 func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.Price) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("bulk creating prices",
 		"count", len(prices),
@@ -420,7 +421,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetCreatedAt(p.CreatedAt).
 			SetUpdatedAt(p.UpdatedAt).
 			SetCreatedBy(p.CreatedBy).
-			SetUpdatedBy(p.UpdatedBy)
+			SetUpdatedBy(p.UpdatedBy).
+			SetNillableGroupID(lo.ToPtr(p.GroupID))
 	}
 
 	_, err := client.Price.CreateBulk(builders...).Save(ctx)
@@ -435,7 +437,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 }
 
 func (r *priceRepository) DeleteBulk(ctx context.Context, ids []string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("bulk deleting prices",
 		"count", len(ids),
@@ -572,22 +574,22 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		// - End date should be after current time (or null)
 		query = query.Where(
 			price.Or(
-				price.StartDateIsNil(),
-				price.StartDateLTE(now),
-				price.StartDateEQ(now),
-			),
-			price.Or(
 				price.EndDateIsNil(),
 				price.EndDateGT(now),
 			),
 		)
 	}
 
+	// Apply start date less than filter if specified
+	if f.StartDateLT != nil {
+		query = query.Where(price.StartDateLT(*f.StartDateLT))
+	}
+
 	return query
 }
 
 func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*domainPrice.Price, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	prices, err := client.Price.Query().
 		Where(price.EntityID(planID), price.Status(string(types.StatusPublished))).
@@ -640,4 +642,47 @@ func (r *priceRepository) DeleteCache(ctx context.Context, priceID string) {
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixPrice, tenantID, environmentID, priceID)
 	r.cache.Delete(ctx, cacheKey)
+}
+
+// Grouping cruds
+
+func (r *priceRepository) GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*domainPrice.Price, error) {
+	client := r.client.Reader(ctx)
+
+	prices, err := client.Price.Query().
+		Where(price.GroupIDIn(groupIDs...)).
+		All(ctx)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get prices by group IDs").
+			WithReportableDetails(map[string]interface{}{
+				"group_ids": groupIDs,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return domainPrice.FromEntList(prices), nil
+}
+
+func (r *priceRepository) ClearByGroupID(ctx context.Context, groupID string) error {
+	client := r.client.Writer(ctx)
+
+	_, err := client.Price.Update().
+		Where(
+			price.GroupID(groupID),
+			price.TenantID(types.GetTenantID(ctx)),
+			price.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
+		ClearGroupID().
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to clear group ID").
+			WithReportableDetails(map[string]interface{}{
+				"group_id": groupID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return nil
 }

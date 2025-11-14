@@ -44,10 +44,6 @@ func (Secret) Fields() []ent.Field {
 		field.String("display_id").
 			Optional().
 			Comment("First 8 characters of the API key or integration ID for display purposes"),
-		field.Strings("permissions").
-			Optional().
-			Default([]string{}).
-			Comment("List of permissions granted to this secret"),
 		field.Time("expires_at").
 			Optional().
 			Nillable().
@@ -59,6 +55,15 @@ func (Secret) Fields() []ent.Field {
 		field.JSON("provider_data", map[string]string{}).
 			Optional().
 			Comment("Provider-specific encrypted data (for integrations)"),
+		// RBAC Fields
+		field.Strings("roles").
+			Optional().
+			Default([]string{}).
+			Comment("Roles copied from user at API key creation time"),
+		field.String("user_type").
+			Optional().
+			Default("user").
+			Comment("User type copied from user at API key creation time"),
 	}
 }
 

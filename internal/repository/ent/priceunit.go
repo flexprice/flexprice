@@ -3,10 +3,12 @@ package ent
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPriceUnit "github.com/flexprice/flexprice/internal/domain/priceunit"
@@ -36,7 +38,7 @@ func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache c
 }
 
 func (r *priceUnitRepository) Create(ctx context.Context, unit *domainPriceUnit.PriceUnit) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating price unit",
 		"price_unit_id", unit.ID,
@@ -132,7 +134,7 @@ func (r *priceUnitRepository) GetByID(ctx context.Context, id string) (*domainPr
 		return cachedUnit, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting price unit",
 		"price_unit_id", id,
@@ -182,7 +184,7 @@ func (r *priceUnitRepository) List(ctx context.Context, filter *domainPriceUnit.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.PriceUnit.Query()
 
 	// Apply entity-specific filters
@@ -213,7 +215,7 @@ func (r *priceUnitRepository) List(ctx context.Context, filter *domainPriceUnit.
 }
 
 func (r *priceUnitRepository) Count(ctx context.Context, filter *domainPriceUnit.PriceUnitFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price_unit", "count", map[string]interface{}{
@@ -248,7 +250,7 @@ func (r *priceUnitRepository) Count(ctx context.Context, filter *domainPriceUnit
 }
 
 func (r *priceUnitRepository) Update(ctx context.Context, unit *domainPriceUnit.PriceUnit) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating price unit",
 		"price_unit_id", unit.ID,
@@ -298,7 +300,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, unit *domainPriceUnit.
 }
 
 func (r *priceUnitRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting price unit",
 		"price_unit_id", id,
@@ -374,7 +376,7 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string, tenant
 			Mark(ierr.ErrValidation)
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	q := client.PriceUnit.Query().
 		Where(
@@ -422,6 +424,69 @@ func (r *priceUnitRepository) ConvertToPriceUnit(ctx context.Context, code strin
 	}
 	// amount in custom currency = amount in fiat currency / conversion_rate
 	return fiatAmount.Div(unit.ConversionRate), nil
+}
+
+// ExistsByCode checks if a pricing unit with the given code exists for a tenant and environment
+func (r *priceUnitRepository) ExistsByCode(ctx context.Context, code string) (bool, error) {
+	client := r.client.Reader(ctx)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "price_unit", "exists_by_code", map[string]interface{}{
+		"code": code,
+	})
+	defer FinishSpan(span)
+
+	query := client.PriceUnit.Query().
+		Where(
+			priceunit.CodeEQ(strings.ToLower(code)),
+			priceunit.TenantIDEQ(types.GetTenantID(ctx)),
+			priceunit.EnvironmentIDEQ(types.GetEnvironmentID(ctx)),
+			priceunit.StatusEQ(string(types.StatusPublished)),
+		)
+
+	exists, err := query.Exist(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		return false, ierr.WithError(err).
+			WithHint("Failed to check if price unit exists by code").
+			WithReportableDetails(map[string]any{
+				"code": code,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return exists, nil
+}
+
+// IsUsedByPrices checks if a pricing unit is being used by any prices
+func (r *priceUnitRepository) IsUsedByPrices(ctx context.Context, priceUnitID string) (bool, error) {
+	client := r.client.Reader(ctx)
+
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "price_unit", "is_used_by_prices", map[string]interface{}{
+		"price_unit_id": priceUnitID,
+	})
+	defer FinishSpan(span)
+
+	exists, err := client.Price.Query().
+		Where(
+			price.PriceUnitIDEQ(priceUnitID),
+		).
+		Exist(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return false, ierr.WithError(err).
+			WithHint("Failed to check if price unit is in use").
+			WithReportableDetails(map[string]any{
+				"price_unit_id": priceUnitID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return exists, nil
 }
 
 // PriceUnitQuery type alias for better readability

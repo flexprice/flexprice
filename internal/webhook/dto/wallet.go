@@ -22,9 +22,10 @@ type InternalTransactionEvent struct {
 
 // WalletWebhookPayload represents the detailed payload for wallet webhooks
 type WalletWebhookPayload struct {
-	EventType string              `json:"event_type"`
-	Wallet    *dto.WalletResponse `json:"wallet"`
-	Alert     *WalletAlertInfo    `json:"alert,omitempty"`
+	EventType string                `json:"event_type"`
+	Wallet    *dto.WalletResponse   `json:"wallet"`
+	Customer  *dto.CustomerResponse `json:"customer,omitempty"`
+	Alert     *WalletAlertInfo      `json:"alert,omitempty"`
 }
 
 // WalletAlertInfo contains details about the wallet alert
@@ -43,10 +44,11 @@ type TransactionWebhookPayload struct {
 	Wallet      *dto.WalletResponse            `json:"wallet"`
 }
 
-func NewWalletWebhookPayload(wallet *dto.WalletResponse, alert *WalletAlertInfo, eventType string) *WalletWebhookPayload {
+func NewWalletWebhookPayload(wallet *dto.WalletResponse, customer *dto.CustomerResponse, alert *WalletAlertInfo, eventType string) *WalletWebhookPayload {
 	return &WalletWebhookPayload{
 		EventType: eventType,
 		Wallet:    wallet,
+		Customer:  customer,
 		Alert:     alert,
 	}
 }

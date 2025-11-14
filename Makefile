@@ -129,7 +129,7 @@ migrate-clickhouse:
 # Seed initial data
 seed-db:
 	@echo "Running Seed data migration..."
-	@docker compose exec -T postgres psql -U flexprice -d flexprice -f /docker-entrypoint-initdb.d/migration/postgres/V1__seed.sql
+	@docker compose exec -T postgres psql -U flexprice -d flexprice -f /docker-entrypoint-initdb.d/V1__seed.sql
 	@echo "Postgres seed data migration complete"
 
 # Initialize kafka topics

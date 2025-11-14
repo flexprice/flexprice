@@ -215,7 +215,7 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 	}
 
 	// Initialize Postgres client for customer, meter, feature repositories
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
 	}

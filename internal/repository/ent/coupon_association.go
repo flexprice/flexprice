@@ -42,7 +42,7 @@ func NewCouponAssociationRepository(client postgres.IClient, log *logger.Logger,
 }
 
 func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCouponAssociation.CouponAssociation) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating coupon association",
 		"association_id", ca.ID,
@@ -107,7 +107,7 @@ func (r *couponAssociationRepository) Create(ctx context.Context, ca *domainCoup
 }
 
 func (r *couponAssociationRepository) Get(ctx context.Context, id string) (*domainCouponAssociation.CouponAssociation, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon association", "id", id)
 
@@ -146,7 +146,7 @@ func (r *couponAssociationRepository) Get(ctx context.Context, id string) (*doma
 }
 
 func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCouponAssociation.CouponAssociation) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating coupon association",
 		"association_id", ca.ID,
@@ -191,7 +191,7 @@ func (r *couponAssociationRepository) Update(ctx context.Context, ca *domainCoup
 }
 
 func (r *couponAssociationRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting coupon association", "id", id)
 
@@ -223,7 +223,7 @@ func (r *couponAssociationRepository) Delete(ctx context.Context, id string) err
 }
 
 func (r *couponAssociationRepository) GetBySubscription(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon associations by subscription", "subscription_id", subscriptionID)
 
@@ -261,7 +261,7 @@ func (r *couponAssociationRepository) GetBySubscription(ctx context.Context, sub
 }
 
 func (r *couponAssociationRepository) GetBySubscriptionForLineItems(ctx context.Context, subscriptionID string) ([]*domainCouponAssociation.CouponAssociation, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting coupon associations by subscription line item", "subscription_id", subscriptionID)
 

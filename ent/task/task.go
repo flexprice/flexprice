@@ -31,6 +31,10 @@ const (
 	FieldTaskType = "task_type"
 	// FieldEntityType holds the string denoting the entity_type field in the database.
 	FieldEntityType = "entity_type"
+	// FieldScheduledTaskID holds the string denoting the scheduled_task_id field in the database.
+	FieldScheduledTaskID = "scheduled_task_id"
+	// FieldWorkflowID holds the string denoting the workflow_id field in the database.
+	FieldWorkflowID = "workflow_id"
 	// FieldFileURL holds the string denoting the file_url field in the database.
 	FieldFileURL = "file_url"
 	// FieldFileName holds the string denoting the file_name field in the database.
@@ -73,6 +77,8 @@ var Columns = []string{
 	FieldEnvironmentID,
 	FieldTaskType,
 	FieldEntityType,
+	FieldScheduledTaskID,
+	FieldWorkflowID,
 	FieldFileURL,
 	FieldFileName,
 	FieldFileType,
@@ -115,8 +121,8 @@ var (
 	TaskTypeValidator func(string) error
 	// EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
 	EntityTypeValidator func(string) error
-	// FileURLValidator is a validator for the "file_url" field. It is called by the builders before save.
-	FileURLValidator func(string) error
+	// DefaultFileURL holds the default value on creation for the "file_url" field.
+	DefaultFileURL string
 	// FileTypeValidator is a validator for the "file_type" field. It is called by the builders before save.
 	FileTypeValidator func(string) error
 	// DefaultTaskStatus holds the default value on creation for the "task_status" field.
@@ -180,6 +186,16 @@ func ByTaskType(opts ...sql.OrderTermOption) OrderOption {
 // ByEntityType orders the results by the entity_type field.
 func ByEntityType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEntityType, opts...).ToFunc()
+}
+
+// ByScheduledTaskID orders the results by the scheduled_task_id field.
+func ByScheduledTaskID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldScheduledTaskID, opts...).ToFunc()
+}
+
+// ByWorkflowID orders the results by the workflow_id field.
+func ByWorkflowID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWorkflowID, opts...).ToFunc()
 }
 
 // ByFileURL orders the results by the file_url field.

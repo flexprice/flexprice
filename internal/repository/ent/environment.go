@@ -37,7 +37,7 @@ func (r *environmentRepository) Create(ctx context.Context, env *domainEnvironme
 
 	r.logger.Debugw("creating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Environment.
 		Create().
 		SetID(env.ID).
@@ -82,7 +82,7 @@ func (r *environmentRepository) Get(ctx context.Context, id string) (*domainEnvi
 			Mark(ierr.ErrValidation)
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	e, err := client.Environment.
 		Query().
 		Where(
@@ -131,7 +131,7 @@ func (r *environmentRepository) List(ctx context.Context, filter types.Filter) (
 			Mark(ierr.ErrValidation)
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Environment.
 		Query().
 		Where(
@@ -166,7 +166,7 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 
 	r.logger.Debugw("updating environment", "environment_id", env.ID, "tenant_id", env.TenantID)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.Environment.
 		UpdateOneID(env.ID).
 		SetName(env.Name).

@@ -45,7 +45,7 @@ func (r *taxrateRepository) Create(ctx context.Context, t *domainTaxRate.TaxRate
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating taxrate",
 		"taxrate_id", t.ID,
@@ -120,7 +120,7 @@ func (r *taxrateRepository) Get(ctx context.Context, id string) (*domainTaxRate.
 		return taxrate, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting taxrate",
 		"id", id,
@@ -171,7 +171,7 @@ func (r *taxrateRepository) List(ctx context.Context, filter *types.TaxRateFilte
 			Mark(ierr.ErrValidation)
 	}
 
-	query := r.client.Querier(ctx).TaxRate.Query()
+	query := r.client.Reader(ctx).TaxRate.Query()
 
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 
@@ -206,7 +206,7 @@ func (r *taxrateRepository) Count(ctx context.Context, filter *types.TaxRateFilt
 	})
 	defer FinishSpan(span)
 
-	query := r.client.Querier(ctx).TaxRate.Query()
+	query := r.client.Reader(ctx).TaxRate.Query()
 
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 
@@ -239,7 +239,7 @@ func (r *taxrateRepository) Update(ctx context.Context, t *domainTaxRate.TaxRate
 
 	r.log.Debugw("updating taxrate", "taxrate", t)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	_, err := client.TaxRate.Update().
 		Where(
@@ -313,7 +313,7 @@ func (r *taxrateRepository) Delete(ctx context.Context, t *domainTaxRate.TaxRate
 		"tenant_id", types.GetTenantID(ctx),
 		"environment_id", types.GetEnvironmentID(ctx),
 	)
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.TaxRate.Update().
 		Where(
 			taxrate.ID(t.ID),
@@ -345,7 +345,7 @@ func (r *taxrateRepository) GetByCode(ctx context.Context, code string) (*domain
 	defer FinishSpan(span)
 
 	r.log.Debugw("getting taxrate by code", "code", code)
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	taxrateEnt, err := client.TaxRate.Query().
 		Where(
 			taxrate.Code(code),
@@ -390,7 +390,7 @@ func (r *taxrateRepository) ListAll(ctx context.Context, filter *types.TaxRateFi
 			Mark(ierr.ErrValidation)
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	taxrates, err := client.TaxRate.Query().
 		Where(
 			taxrate.TenantID(types.GetTenantID(ctx)),

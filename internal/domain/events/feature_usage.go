@@ -25,7 +25,10 @@ type FeatureUsageRepository interface {
 	GetDetailedUsageAnalytics(ctx context.Context, params *UsageAnalyticsParams, maxBucketFeatures map[string]*MaxBucketFeatureInfo) ([]*DetailedUsageAnalytic, error)
 
 	// Get feature usage by subscription
-	GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, externalCustomerID, environmentID, tenantID string, startTime, endTime time.Time) (map[string]*UsageByFeatureResult, error)
+	GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, externalCustomerID string, startTime, endTime time.Time) (map[string]*UsageByFeatureResult, error)
+
+	// GetFeatureUsageForExport gets feature usage data for export in batches
+	GetFeatureUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*FeatureUsage, error)
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation

@@ -36,7 +36,7 @@ func NewAddonRepository(client postgres.IClient, log *logger.Logger, cache cache
 }
 
 func (r *addonRepository) Create(ctx context.Context, a *domainAddon.Addon) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating addon",
 		"addon_id", a.ID,
@@ -117,7 +117,7 @@ func (r *addonRepository) GetByID(ctx context.Context, id string) (*domainAddon.
 		return cachedAddon, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting addon",
 		"addon_id", id,
@@ -166,7 +166,7 @@ func (r *addonRepository) GetByLookupKey(ctx context.Context, lookupKey string) 
 		return cachedAddon, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting addon by lookup key",
 		"lookup_key", lookupKey,
@@ -214,7 +214,7 @@ func (r *addonRepository) List(ctx context.Context, filter *types.AddonFilter) (
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.Addon.Query()
 
 	// Apply entity-specific filters
@@ -242,7 +242,7 @@ func (r *addonRepository) List(ctx context.Context, filter *types.AddonFilter) (
 }
 
 func (r *addonRepository) Count(ctx context.Context, filter *types.AddonFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "addon", "count", map[string]interface{}{
@@ -296,7 +296,7 @@ func (r *addonRepository) ListAll(ctx context.Context, filter *types.AddonFilter
 }
 
 func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating addon",
 		"addon_id", a.ID,
@@ -346,7 +346,7 @@ func (r *addonRepository) Update(ctx context.Context, a *domainAddon.Addon) erro
 }
 
 func (r *addonRepository) Delete(ctx context.Context, id string) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting addon",
 		"addon_id", id,

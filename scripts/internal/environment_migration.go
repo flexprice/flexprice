@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/environment"
@@ -22,7 +21,6 @@ type migrationScript struct {
 	log             *logger.Logger
 	tenantRepo      tenant.Repository
 	environmentRepo environment.Repository
-	entClient       *ent.Client
 	pgClient        postgres.IClient
 }
 
@@ -40,7 +38,7 @@ func newMigrationScript() (*migrationScript, error) {
 	}
 
 	// Initialize the database client
-	entClient, err := postgres.NewEntClient(cfg, log)
+	entClient, err := postgres.NewEntClients(cfg, log)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 		return nil, err
@@ -59,7 +57,6 @@ func newMigrationScript() (*migrationScript, error) {
 		log:             log,
 		tenantRepo:      tenantRepo,
 		environmentRepo: environmentRepo,
-		entClient:       entClient,
 		pgClient:        pgClient,
 	}, nil
 }
@@ -134,7 +131,7 @@ func (s *migrationScript) updateEntitiesWithEnvironmentID(ctx context.Context, t
 			entity,
 		)
 
-		result, err := s.entClient.QueryContext(ctx, query, environmentID, tenantID)
+		result, err := s.pgClient.Writer(ctx).QueryContext(ctx, query, environmentID, tenantID)
 		if err != nil {
 			s.log.Errorw("Failed to update entity", "entity", entity, "error", err)
 			continue

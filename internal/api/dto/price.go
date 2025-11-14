@@ -47,6 +47,9 @@ type CreatePriceRequest struct {
 
 	// ParentPriceID is the id of the parent price for this price
 	ParentPriceID string `json:"-"`
+
+	// GroupID is the id of the group to add the price to
+	GroupID string `json:"group_id,omitempty"`
 }
 
 type PriceUnitConfig struct {
@@ -637,6 +640,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		EndDate:            r.EndDate,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
+		GroupID:            r.GroupID,
 	}
 
 	price.DisplayAmount = price.GetDisplayAmount()
@@ -664,6 +668,9 @@ type UpdatePriceRequest struct {
 
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+
+	// GroupID is the id of the group to update the price in
+	GroupID string `json:"group_id,omitempty"`
 }
 
 func (r *UpdatePriceRequest) Validate() error {
@@ -712,6 +719,13 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.TrialPeriod = existingPrice.TrialPeriod
 	createReq.MeterID = existingPrice.MeterID
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
+
+	// GroupID is the id of the group to update the price in
+	if r.GroupID != "" {
+		createReq.GroupID = r.GroupID
+	} else {
+		createReq.GroupID = existingPrice.GroupID
+	}
 
 	// Determine target billing model (use request billing model if provided, otherwise existing)
 	targetBillingModel := existingPrice.BillingModel
@@ -797,8 +811,11 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 
 type PriceResponse struct {
 	*price.Price
-	Meter       *MeterResponse     `json:"meter,omitempty"`
 	PricingUnit *PriceUnitResponse `json:"pricing_unit,omitempty"`
+	Meter       *MeterResponse     `json:"meter,omitempty"`
+	Plan        *PlanResponse      `json:"plan,omitempty"`
+	Addon       *AddonResponse     `json:"addon,omitempty"`
+	Group       *GroupResponse     `json:"group,omitempty"`
 
 	// TODO: Remove this once we have a proper price entity type
 	PlanID string `json:"plan_id,omitempty"`

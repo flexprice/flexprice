@@ -153,8 +153,10 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.logger,
 		s.stores.ConnectionRepo,
 		s.stores.CustomerRepo,
+		s.stores.SubscriptionRepo,
 		s.stores.InvoiceRepo,
 		s.stores.PaymentRepo,
+		s.stores.PriceRepo,
 		s.stores.EntityIntegrationMappingRepo,
 		encryptionService,
 	)

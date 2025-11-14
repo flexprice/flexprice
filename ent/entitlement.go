@@ -50,9 +50,11 @@ type Entitlement struct {
 	// StaticValue holds the value of the "static_value" field.
 	StaticValue string `json:"static_value,omitempty"`
 	// DisplayOrder holds the value of the "display_order" field.
-	DisplayOrder       int `json:"display_order,omitempty"`
-	addon_entitlements *string
-	selectValues       sql.SelectValues
+	DisplayOrder int `json:"display_order,omitempty"`
+	// References the parent entitlement (for subscription-scoped entitlements)
+	ParentEntitlementID *string `json:"parent_entitlement_id,omitempty"`
+	addon_entitlements  *string
+	selectValues        sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -64,7 +66,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case entitlement.FieldUsageLimit, entitlement.FieldDisplayOrder:
 			values[i] = new(sql.NullInt64)
-		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue:
+		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID:
 			values[i] = new(sql.NullString)
 		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -194,6 +196,13 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				e.DisplayOrder = int(value.Int64)
 			}
+		case entitlement.FieldParentEntitlementID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_entitlement_id", values[i])
+			} else if value.Valid {
+				e.ParentEntitlementID = new(string)
+				*e.ParentEntitlementID = value.String
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -289,6 +298,11 @@ func (e *Entitlement) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("display_order=")
 	builder.WriteString(fmt.Sprintf("%v", e.DisplayOrder))
+	builder.WriteString(", ")
+	if v := e.ParentEntitlementID; v != nil {
+		builder.WriteString("parent_entitlement_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

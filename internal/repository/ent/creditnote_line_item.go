@@ -33,7 +33,7 @@ func NewCreditNoteLineItemRepository(client postgres.IClient, log *logger.Logger
 
 // Create creates a new credit note line item
 func (r *creditnoteLineItemRepository) Create(ctx context.Context, item *domainCreditNote.CreditNoteLineItem) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditnote_line_item", "create", map[string]interface{}{
@@ -87,7 +87,7 @@ func (r *creditnoteLineItemRepository) Get(ctx context.Context, id string) (*dom
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	if client == nil {
 		err := ierr.NewError("failed to get database client").
 			WithHint("Database client is not available").
@@ -139,7 +139,7 @@ func (r *creditnoteLineItemRepository) Update(ctx context.Context, item *domainC
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.CreditNoteLineItem.UpdateOneID(item.ID).
 		Where(
 			creditnotelineitem.TenantID(types.GetTenantID(ctx)),
@@ -183,7 +183,7 @@ func (r *creditnoteLineItemRepository) Delete(ctx context.Context, id string) er
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	_, err := client.CreditNoteLineItem.Update().
 		Where(
 			creditnotelineitem.ID(id),
@@ -221,7 +221,7 @@ func (r *creditnoteLineItemRepository) CreateBulk(ctx context.Context, items []*
 		return nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	builders := make([]*ent.CreditNoteLineItemCreate, len(items))
 
 	for i, item := range items {
@@ -270,7 +270,7 @@ func (r *creditnoteLineItemRepository) ListByCreditNote(ctx context.Context, cre
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	items, err := client.CreditNoteLineItem.Query().
 		Where(
 			creditnotelineitem.CreditNoteID(creditNoteID),
@@ -307,7 +307,7 @@ func (r *creditnoteLineItemRepository) ListByInvoiceLineItem(ctx context.Context
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	items, err := client.CreditNoteLineItem.Query().
 		Where(
 			creditnotelineitem.InvoiceLineItemID(invoiceLineItemID),
@@ -344,7 +344,7 @@ func (r *creditnoteLineItemRepository) List(ctx context.Context, filter *types.C
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.CreditNoteLineItem.Query()
 
 	// Apply common query options
@@ -378,7 +378,7 @@ func (r *creditnoteLineItemRepository) Count(ctx context.Context, filter *types.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.CreditNoteLineItem.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)

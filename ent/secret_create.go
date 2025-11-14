@@ -156,12 +156,6 @@ func (sc *SecretCreate) SetNillableDisplayID(s *string) *SecretCreate {
 	return sc
 }
 
-// SetPermissions sets the "permissions" field.
-func (sc *SecretCreate) SetPermissions(s []string) *SecretCreate {
-	sc.mutation.SetPermissions(s)
-	return sc
-}
-
 // SetExpiresAt sets the "expires_at" field.
 func (sc *SecretCreate) SetExpiresAt(t time.Time) *SecretCreate {
 	sc.mutation.SetExpiresAt(t)
@@ -193,6 +187,26 @@ func (sc *SecretCreate) SetNillableLastUsedAt(t *time.Time) *SecretCreate {
 // SetProviderData sets the "provider_data" field.
 func (sc *SecretCreate) SetProviderData(m map[string]string) *SecretCreate {
 	sc.mutation.SetProviderData(m)
+	return sc
+}
+
+// SetRoles sets the "roles" field.
+func (sc *SecretCreate) SetRoles(s []string) *SecretCreate {
+	sc.mutation.SetRoles(s)
+	return sc
+}
+
+// SetUserType sets the "user_type" field.
+func (sc *SecretCreate) SetUserType(s string) *SecretCreate {
+	sc.mutation.SetUserType(s)
+	return sc
+}
+
+// SetNillableUserType sets the "user_type" field if the given value is not nil.
+func (sc *SecretCreate) SetNillableUserType(s *string) *SecretCreate {
+	if s != nil {
+		sc.SetUserType(*s)
+	}
 	return sc
 }
 
@@ -253,9 +267,13 @@ func (sc *SecretCreate) defaults() {
 		v := secret.DefaultEnvironmentID
 		sc.mutation.SetEnvironmentID(v)
 	}
-	if _, ok := sc.mutation.Permissions(); !ok {
-		v := secret.DefaultPermissions
-		sc.mutation.SetPermissions(v)
+	if _, ok := sc.mutation.Roles(); !ok {
+		v := secret.DefaultRoles
+		sc.mutation.SetRoles(v)
+	}
+	if _, ok := sc.mutation.UserType(); !ok {
+		v := secret.DefaultUserType
+		sc.mutation.SetUserType(v)
 	}
 }
 
@@ -385,10 +403,6 @@ func (sc *SecretCreate) createSpec() (*Secret, *sqlgraph.CreateSpec) {
 		_spec.SetField(secret.FieldDisplayID, field.TypeString, value)
 		_node.DisplayID = value
 	}
-	if value, ok := sc.mutation.Permissions(); ok {
-		_spec.SetField(secret.FieldPermissions, field.TypeJSON, value)
-		_node.Permissions = value
-	}
 	if value, ok := sc.mutation.ExpiresAt(); ok {
 		_spec.SetField(secret.FieldExpiresAt, field.TypeTime, value)
 		_node.ExpiresAt = &value
@@ -400,6 +414,14 @@ func (sc *SecretCreate) createSpec() (*Secret, *sqlgraph.CreateSpec) {
 	if value, ok := sc.mutation.ProviderData(); ok {
 		_spec.SetField(secret.FieldProviderData, field.TypeJSON, value)
 		_node.ProviderData = value
+	}
+	if value, ok := sc.mutation.Roles(); ok {
+		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
+		_node.Roles = value
+	}
+	if value, ok := sc.mutation.UserType(); ok {
+		_spec.SetField(secret.FieldUserType, field.TypeString, value)
+		_node.UserType = value
 	}
 	return _node, _spec
 }

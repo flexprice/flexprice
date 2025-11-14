@@ -151,24 +151,6 @@ func (su *SecretUpdate) ClearDisplayID() *SecretUpdate {
 	return su
 }
 
-// SetPermissions sets the "permissions" field.
-func (su *SecretUpdate) SetPermissions(s []string) *SecretUpdate {
-	su.mutation.SetPermissions(s)
-	return su
-}
-
-// AppendPermissions appends s to the "permissions" field.
-func (su *SecretUpdate) AppendPermissions(s []string) *SecretUpdate {
-	su.mutation.AppendPermissions(s)
-	return su
-}
-
-// ClearPermissions clears the value of the "permissions" field.
-func (su *SecretUpdate) ClearPermissions() *SecretUpdate {
-	su.mutation.ClearPermissions()
-	return su
-}
-
 // SetExpiresAt sets the "expires_at" field.
 func (su *SecretUpdate) SetExpiresAt(t time.Time) *SecretUpdate {
 	su.mutation.SetExpiresAt(t)
@@ -218,6 +200,44 @@ func (su *SecretUpdate) SetProviderData(m map[string]string) *SecretUpdate {
 // ClearProviderData clears the value of the "provider_data" field.
 func (su *SecretUpdate) ClearProviderData() *SecretUpdate {
 	su.mutation.ClearProviderData()
+	return su
+}
+
+// SetRoles sets the "roles" field.
+func (su *SecretUpdate) SetRoles(s []string) *SecretUpdate {
+	su.mutation.SetRoles(s)
+	return su
+}
+
+// AppendRoles appends s to the "roles" field.
+func (su *SecretUpdate) AppendRoles(s []string) *SecretUpdate {
+	su.mutation.AppendRoles(s)
+	return su
+}
+
+// ClearRoles clears the value of the "roles" field.
+func (su *SecretUpdate) ClearRoles() *SecretUpdate {
+	su.mutation.ClearRoles()
+	return su
+}
+
+// SetUserType sets the "user_type" field.
+func (su *SecretUpdate) SetUserType(s string) *SecretUpdate {
+	su.mutation.SetUserType(s)
+	return su
+}
+
+// SetNillableUserType sets the "user_type" field if the given value is not nil.
+func (su *SecretUpdate) SetNillableUserType(s *string) *SecretUpdate {
+	if s != nil {
+		su.SetUserType(*s)
+	}
+	return su
+}
+
+// ClearUserType clears the value of the "user_type" field.
+func (su *SecretUpdate) ClearUserType() *SecretUpdate {
+	su.mutation.ClearUserType()
 	return su
 }
 
@@ -333,17 +353,6 @@ func (su *SecretUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if su.mutation.DisplayIDCleared() {
 		_spec.ClearField(secret.FieldDisplayID, field.TypeString)
 	}
-	if value, ok := su.mutation.Permissions(); ok {
-		_spec.SetField(secret.FieldPermissions, field.TypeJSON, value)
-	}
-	if value, ok := su.mutation.AppendedPermissions(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, secret.FieldPermissions, value)
-		})
-	}
-	if su.mutation.PermissionsCleared() {
-		_spec.ClearField(secret.FieldPermissions, field.TypeJSON)
-	}
 	if value, ok := su.mutation.ExpiresAt(); ok {
 		_spec.SetField(secret.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -361,6 +370,23 @@ func (su *SecretUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.ProviderDataCleared() {
 		_spec.ClearField(secret.FieldProviderData, field.TypeJSON)
+	}
+	if value, ok := su.mutation.Roles(); ok {
+		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
+	}
+	if value, ok := su.mutation.AppendedRoles(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, secret.FieldRoles, value)
+		})
+	}
+	if su.mutation.RolesCleared() {
+		_spec.ClearField(secret.FieldRoles, field.TypeJSON)
+	}
+	if value, ok := su.mutation.UserType(); ok {
+		_spec.SetField(secret.FieldUserType, field.TypeString, value)
+	}
+	if su.mutation.UserTypeCleared() {
+		_spec.ClearField(secret.FieldUserType, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -504,24 +530,6 @@ func (suo *SecretUpdateOne) ClearDisplayID() *SecretUpdateOne {
 	return suo
 }
 
-// SetPermissions sets the "permissions" field.
-func (suo *SecretUpdateOne) SetPermissions(s []string) *SecretUpdateOne {
-	suo.mutation.SetPermissions(s)
-	return suo
-}
-
-// AppendPermissions appends s to the "permissions" field.
-func (suo *SecretUpdateOne) AppendPermissions(s []string) *SecretUpdateOne {
-	suo.mutation.AppendPermissions(s)
-	return suo
-}
-
-// ClearPermissions clears the value of the "permissions" field.
-func (suo *SecretUpdateOne) ClearPermissions() *SecretUpdateOne {
-	suo.mutation.ClearPermissions()
-	return suo
-}
-
 // SetExpiresAt sets the "expires_at" field.
 func (suo *SecretUpdateOne) SetExpiresAt(t time.Time) *SecretUpdateOne {
 	suo.mutation.SetExpiresAt(t)
@@ -571,6 +579,44 @@ func (suo *SecretUpdateOne) SetProviderData(m map[string]string) *SecretUpdateOn
 // ClearProviderData clears the value of the "provider_data" field.
 func (suo *SecretUpdateOne) ClearProviderData() *SecretUpdateOne {
 	suo.mutation.ClearProviderData()
+	return suo
+}
+
+// SetRoles sets the "roles" field.
+func (suo *SecretUpdateOne) SetRoles(s []string) *SecretUpdateOne {
+	suo.mutation.SetRoles(s)
+	return suo
+}
+
+// AppendRoles appends s to the "roles" field.
+func (suo *SecretUpdateOne) AppendRoles(s []string) *SecretUpdateOne {
+	suo.mutation.AppendRoles(s)
+	return suo
+}
+
+// ClearRoles clears the value of the "roles" field.
+func (suo *SecretUpdateOne) ClearRoles() *SecretUpdateOne {
+	suo.mutation.ClearRoles()
+	return suo
+}
+
+// SetUserType sets the "user_type" field.
+func (suo *SecretUpdateOne) SetUserType(s string) *SecretUpdateOne {
+	suo.mutation.SetUserType(s)
+	return suo
+}
+
+// SetNillableUserType sets the "user_type" field if the given value is not nil.
+func (suo *SecretUpdateOne) SetNillableUserType(s *string) *SecretUpdateOne {
+	if s != nil {
+		suo.SetUserType(*s)
+	}
+	return suo
+}
+
+// ClearUserType clears the value of the "user_type" field.
+func (suo *SecretUpdateOne) ClearUserType() *SecretUpdateOne {
+	suo.mutation.ClearUserType()
 	return suo
 }
 
@@ -716,17 +762,6 @@ func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err err
 	if suo.mutation.DisplayIDCleared() {
 		_spec.ClearField(secret.FieldDisplayID, field.TypeString)
 	}
-	if value, ok := suo.mutation.Permissions(); ok {
-		_spec.SetField(secret.FieldPermissions, field.TypeJSON, value)
-	}
-	if value, ok := suo.mutation.AppendedPermissions(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, secret.FieldPermissions, value)
-		})
-	}
-	if suo.mutation.PermissionsCleared() {
-		_spec.ClearField(secret.FieldPermissions, field.TypeJSON)
-	}
 	if value, ok := suo.mutation.ExpiresAt(); ok {
 		_spec.SetField(secret.FieldExpiresAt, field.TypeTime, value)
 	}
@@ -744,6 +779,23 @@ func (suo *SecretUpdateOne) sqlSave(ctx context.Context) (_node *Secret, err err
 	}
 	if suo.mutation.ProviderDataCleared() {
 		_spec.ClearField(secret.FieldProviderData, field.TypeJSON)
+	}
+	if value, ok := suo.mutation.Roles(); ok {
+		_spec.SetField(secret.FieldRoles, field.TypeJSON, value)
+	}
+	if value, ok := suo.mutation.AppendedRoles(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, secret.FieldRoles, value)
+		})
+	}
+	if suo.mutation.RolesCleared() {
+		_spec.ClearField(secret.FieldRoles, field.TypeJSON)
+	}
+	if value, ok := suo.mutation.UserType(); ok {
+		_spec.SetField(secret.FieldUserType, field.TypeString, value)
+	}
+	if suo.mutation.UserTypeCleared() {
+		_spec.ClearField(secret.FieldUserType, field.TypeString)
 	}
 	_node = &Secret{config: suo.config}
 	_spec.Assign = _node.assignValues

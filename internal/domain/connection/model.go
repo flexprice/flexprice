@@ -84,6 +84,34 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			Stripe: stripeMetadata,
 		}
+	case types.SecretProviderS3:
+		s3Metadata := &types.S3ConnectionMetadata{}
+		if accessKey, ok := metadata["aws_access_key_id"].(string); ok {
+			s3Metadata.AWSAccessKeyID = accessKey
+		}
+		if secretKey, ok := metadata["aws_secret_access_key"].(string); ok {
+			s3Metadata.AWSSecretAccessKey = secretKey
+		}
+		if sessionToken, ok := metadata["aws_session_token"].(string); ok {
+			s3Metadata.AWSSessionToken = sessionToken
+		}
+		return types.ConnectionMetadata{
+			S3: s3Metadata,
+		}
+	case types.SecretProviderHubSpot:
+		hubspotMetadata := &types.HubSpotConnectionMetadata{}
+		if accessToken, ok := metadata["access_token"].(string); ok {
+			hubspotMetadata.AccessToken = accessToken
+		}
+		if clientSecret, ok := metadata["client_secret"].(string); ok {
+			hubspotMetadata.ClientSecret = clientSecret
+		}
+		if appID, ok := metadata["app_id"].(string); ok {
+			hubspotMetadata.AppID = appID
+		}
+		return types.ConnectionMetadata{
+			HubSpot: hubspotMetadata,
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{
@@ -164,4 +192,15 @@ func (c *Connection) IsInvoiceInboundEnabled() bool {
 func (c *Connection) IsInvoiceOutboundEnabled() bool {
 	config := c.GetSyncConfig()
 	return config.Invoice != nil && config.Invoice.Outbound
+}
+
+// IsDealInboundEnabled checks if deal inbound sync is enabled
+func (c *Connection) IsDealInboundEnabled() bool {
+	return false
+}
+
+// IsDealOutboundEnabled checks if deal outbound sync is enabled
+func (c *Connection) IsDealOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Deal != nil && config.Deal.Outbound
 }

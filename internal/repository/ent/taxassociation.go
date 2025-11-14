@@ -34,7 +34,7 @@ func NewTaxAssociationRepository(client postgres.IClient, logger *logger.Logger,
 
 // Create creates a new tax config
 func (r *taxAssociationRepository) Create(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	r.logger.Debugw("creating tax association", "tax_association_id", t.ID, "tax_rate_id", t.TaxRateID, "entity_type", t.EntityType, "entity_id", t.EntityID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "create", map[string]interface{}{
@@ -105,7 +105,7 @@ func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainT
 		return cached, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.logger.Debugw("getting tax association", "tax_association_id", id)
 
 	tc, err := client.TaxAssociation.Query().
@@ -137,7 +137,7 @@ func (r *taxAssociationRepository) Get(ctx context.Context, id string) (*domainT
 
 // Update updates a tax association
 func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	r.logger.Debugw("updating tax association", "tax_association_id", t.ID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "update", map[string]interface{}{
@@ -179,7 +179,7 @@ func (r *taxAssociationRepository) Update(ctx context.Context, t *domainTaxConfi
 
 // Delete deletes a tax association by ID
 func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfig.TaxAssociation) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	r.logger.Debugw("deleting tax association", "tax_association_id", t.ID)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "delete", map[string]interface{}{
@@ -219,7 +219,7 @@ func (r *taxAssociationRepository) Delete(ctx context.Context, t *domainTaxConfi
 
 // List retrieves tax configs based on filter
 func (r *taxAssociationRepository) List(ctx context.Context, filter *types.TaxAssociationFilter) ([]*domainTaxConfig.TaxAssociation, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "list", map[string]interface{}{
 		"filter": filter,
@@ -249,7 +249,7 @@ func (r *taxAssociationRepository) List(ctx context.Context, filter *types.TaxAs
 
 // Count counts tax configs based on filter
 func (r *taxAssociationRepository) Count(ctx context.Context, filter *types.TaxAssociationFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	span := StartRepositorySpan(ctx, "taxassociation", "count", map[string]interface{}{
 		"filter": filter,

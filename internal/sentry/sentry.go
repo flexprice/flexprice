@@ -260,3 +260,7 @@ func (s *Service) StartRepositorySpan(ctx context.Context, repository, operation
 
 	return span, span.Context()
 }
+
+func (s *Service) GetSpanFromContext(ctx context.Context) *sentry.Span {
+	return sentry.SpanFromContext(ctx)
+}

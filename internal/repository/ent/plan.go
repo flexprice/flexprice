@@ -33,7 +33,7 @@ func NewPlanRepository(client postgres.IClient, log *logger.Logger, cache cache.
 }
 
 func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating plan",
 		"plan_id", p.ID,
@@ -108,7 +108,7 @@ func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, 
 		return cachedPlan, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting plan", "plan_id", id)
 
@@ -146,7 +146,7 @@ func (r *planRepository) Get(ctx context.Context, id string) (*domainPlan.Plan, 
 }
 
 func (r *planRepository) List(ctx context.Context, filter *types.PlanFilter) ([]*domainPlan.Plan, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.log.Debugw("listing plans",
 		"tenant_id", types.GetTenantID(ctx),
 		"limit", filter.GetLimit(),
@@ -197,7 +197,7 @@ func (r *planRepository) ListAll(ctx context.Context, filter *types.PlanFilter) 
 }
 
 func (r *planRepository) Count(ctx context.Context, filter *types.PlanFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("counting plans",
 		"tenant_id", types.GetTenantID(ctx),
@@ -241,7 +241,7 @@ func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (
 		return cachedPlan, nil
 	}
 
-	plan, err := r.client.Querier(ctx).Plan.Query().
+	plan, err := r.client.Writer(ctx).Plan.Query().
 		Where(
 			plan.LookupKey(lookupKey),
 			plan.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -275,7 +275,7 @@ func (r *planRepository) GetByLookupKey(ctx context.Context, lookupKey string) (
 }
 
 func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating plan",
 		"plan_id", p.ID,
@@ -338,7 +338,7 @@ func (r *planRepository) Update(ctx context.Context, p *domainPlan.Plan) error {
 }
 
 func (r *planRepository) Delete(ctx context.Context, p *domainPlan.Plan) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting plan",
 		"plan_id", p.ID,
@@ -464,8 +464,12 @@ func (o PlanQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.Pl
 		return query, nil
 	}
 
-	if len(f.EntityIDs) > 0 {
-		query = query.Where(plan.IDIn(f.EntityIDs...))
+	if len(f.PlanIDs) > 0 {
+		query = query.Where(plan.IDIn(f.PlanIDs...))
+	}
+
+	if f.LookupKey != nil {
+		query = query.Where(plan.LookupKeyEQ(*f.LookupKey))
 	}
 
 	if f.Filters != nil {

@@ -12,9 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/costsheet"
-	"github.com/flexprice/flexprice/ent/meter"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 )
 
 // CostsheetUpdate is the builder for updating Costsheet entities.
@@ -70,59 +68,75 @@ func (cu *CostsheetUpdate) ClearUpdatedBy() *CostsheetUpdate {
 	return cu
 }
 
-// SetMeterID sets the "meter_id" field.
-func (cu *CostsheetUpdate) SetMeterID(s string) *CostsheetUpdate {
-	cu.mutation.SetMeterID(s)
+// SetMetadata sets the "metadata" field.
+func (cu *CostsheetUpdate) SetMetadata(m map[string]string) *CostsheetUpdate {
+	cu.mutation.SetMetadata(m)
 	return cu
 }
 
-// SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillableMeterID(s *string) *CostsheetUpdate {
+// ClearMetadata clears the value of the "metadata" field.
+func (cu *CostsheetUpdate) ClearMetadata() *CostsheetUpdate {
+	cu.mutation.ClearMetadata()
+	return cu
+}
+
+// SetName sets the "name" field.
+func (cu *CostsheetUpdate) SetName(s string) *CostsheetUpdate {
+	cu.mutation.SetName(s)
+	return cu
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (cu *CostsheetUpdate) SetNillableName(s *string) *CostsheetUpdate {
 	if s != nil {
-		cu.SetMeterID(*s)
+		cu.SetName(*s)
 	}
 	return cu
 }
 
-// SetPriceID sets the "price_id" field.
-func (cu *CostsheetUpdate) SetPriceID(s string) *CostsheetUpdate {
-	cu.mutation.SetPriceID(s)
+// SetLookupKey sets the "lookup_key" field.
+func (cu *CostsheetUpdate) SetLookupKey(s string) *CostsheetUpdate {
+	cu.mutation.SetLookupKey(s)
 	return cu
 }
 
-// SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (cu *CostsheetUpdate) SetNillablePriceID(s *string) *CostsheetUpdate {
+// SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
+func (cu *CostsheetUpdate) SetNillableLookupKey(s *string) *CostsheetUpdate {
 	if s != nil {
-		cu.SetPriceID(*s)
+		cu.SetLookupKey(*s)
 	}
 	return cu
 }
 
-// SetMeter sets the "meter" edge to the Meter entity.
-func (cu *CostsheetUpdate) SetMeter(m *Meter) *CostsheetUpdate {
-	return cu.SetMeterID(m.ID)
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (cu *CostsheetUpdate) ClearLookupKey() *CostsheetUpdate {
+	cu.mutation.ClearLookupKey()
+	return cu
 }
 
-// SetPrice sets the "price" edge to the Price entity.
-func (cu *CostsheetUpdate) SetPrice(p *Price) *CostsheetUpdate {
-	return cu.SetPriceID(p.ID)
+// SetDescription sets the "description" field.
+func (cu *CostsheetUpdate) SetDescription(s string) *CostsheetUpdate {
+	cu.mutation.SetDescription(s)
+	return cu
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (cu *CostsheetUpdate) SetNillableDescription(s *string) *CostsheetUpdate {
+	if s != nil {
+		cu.SetDescription(*s)
+	}
+	return cu
+}
+
+// ClearDescription clears the value of the "description" field.
+func (cu *CostsheetUpdate) ClearDescription() *CostsheetUpdate {
+	cu.mutation.ClearDescription()
+	return cu
 }
 
 // Mutation returns the CostsheetMutation object of the builder.
 func (cu *CostsheetUpdate) Mutation() *CostsheetMutation {
 	return cu.mutation
-}
-
-// ClearMeter clears the "meter" edge to the Meter entity.
-func (cu *CostsheetUpdate) ClearMeter() *CostsheetUpdate {
-	cu.mutation.ClearMeter()
-	return cu
-}
-
-// ClearPrice clears the "price" edge to the Price entity.
-func (cu *CostsheetUpdate) ClearPrice() *CostsheetUpdate {
-	cu.mutation.ClearPrice()
-	return cu
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -163,21 +177,10 @@ func (cu *CostsheetUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (cu *CostsheetUpdate) check() error {
-	if v, ok := cu.mutation.MeterID(); ok {
-		if err := costsheet.MeterIDValidator(v); err != nil {
-			return &ValidationError{Name: "meter_id", err: fmt.Errorf(`ent: validator failed for field "Costsheet.meter_id": %w`, err)}
+	if v, ok := cu.mutation.Name(); ok {
+		if err := costsheet.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Costsheet.name": %w`, err)}
 		}
-	}
-	if v, ok := cu.mutation.PriceID(); ok {
-		if err := costsheet.PriceIDValidator(v); err != nil {
-			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "Costsheet.price_id": %w`, err)}
-		}
-	}
-	if cu.mutation.MeterCleared() && len(cu.mutation.MeterIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Costsheet.meter"`)
-	}
-	if cu.mutation.PriceCleared() && len(cu.mutation.PriceIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Costsheet.price"`)
 	}
 	return nil
 }
@@ -212,63 +215,26 @@ func (cu *CostsheetUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(costsheet.FieldEnvironmentID, field.TypeString)
 	}
-	if cu.mutation.MeterCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.MeterTable,
-			Columns: []string{costsheet.MeterColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(meter.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := cu.mutation.Metadata(); ok {
+		_spec.SetField(costsheet.FieldMetadata, field.TypeJSON, value)
 	}
-	if nodes := cu.mutation.MeterIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.MeterTable,
-			Columns: []string{costsheet.MeterColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(meter.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if cu.mutation.MetadataCleared() {
+		_spec.ClearField(costsheet.FieldMetadata, field.TypeJSON)
 	}
-	if cu.mutation.PriceCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.PriceTable,
-			Columns: []string{costsheet.PriceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := cu.mutation.Name(); ok {
+		_spec.SetField(costsheet.FieldName, field.TypeString, value)
 	}
-	if nodes := cu.mutation.PriceIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.PriceTable,
-			Columns: []string{costsheet.PriceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if value, ok := cu.mutation.LookupKey(); ok {
+		_spec.SetField(costsheet.FieldLookupKey, field.TypeString, value)
+	}
+	if cu.mutation.LookupKeyCleared() {
+		_spec.ClearField(costsheet.FieldLookupKey, field.TypeString)
+	}
+	if value, ok := cu.mutation.Description(); ok {
+		_spec.SetField(costsheet.FieldDescription, field.TypeString, value)
+	}
+	if cu.mutation.DescriptionCleared() {
+		_spec.ClearField(costsheet.FieldDescription, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -330,59 +296,75 @@ func (cuo *CostsheetUpdateOne) ClearUpdatedBy() *CostsheetUpdateOne {
 	return cuo
 }
 
-// SetMeterID sets the "meter_id" field.
-func (cuo *CostsheetUpdateOne) SetMeterID(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetMeterID(s)
+// SetMetadata sets the "metadata" field.
+func (cuo *CostsheetUpdateOne) SetMetadata(m map[string]string) *CostsheetUpdateOne {
+	cuo.mutation.SetMetadata(m)
 	return cuo
 }
 
-// SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillableMeterID(s *string) *CostsheetUpdateOne {
+// ClearMetadata clears the value of the "metadata" field.
+func (cuo *CostsheetUpdateOne) ClearMetadata() *CostsheetUpdateOne {
+	cuo.mutation.ClearMetadata()
+	return cuo
+}
+
+// SetName sets the "name" field.
+func (cuo *CostsheetUpdateOne) SetName(s string) *CostsheetUpdateOne {
+	cuo.mutation.SetName(s)
+	return cuo
+}
+
+// SetNillableName sets the "name" field if the given value is not nil.
+func (cuo *CostsheetUpdateOne) SetNillableName(s *string) *CostsheetUpdateOne {
 	if s != nil {
-		cuo.SetMeterID(*s)
+		cuo.SetName(*s)
 	}
 	return cuo
 }
 
-// SetPriceID sets the "price_id" field.
-func (cuo *CostsheetUpdateOne) SetPriceID(s string) *CostsheetUpdateOne {
-	cuo.mutation.SetPriceID(s)
+// SetLookupKey sets the "lookup_key" field.
+func (cuo *CostsheetUpdateOne) SetLookupKey(s string) *CostsheetUpdateOne {
+	cuo.mutation.SetLookupKey(s)
 	return cuo
 }
 
-// SetNillablePriceID sets the "price_id" field if the given value is not nil.
-func (cuo *CostsheetUpdateOne) SetNillablePriceID(s *string) *CostsheetUpdateOne {
+// SetNillableLookupKey sets the "lookup_key" field if the given value is not nil.
+func (cuo *CostsheetUpdateOne) SetNillableLookupKey(s *string) *CostsheetUpdateOne {
 	if s != nil {
-		cuo.SetPriceID(*s)
+		cuo.SetLookupKey(*s)
 	}
 	return cuo
 }
 
-// SetMeter sets the "meter" edge to the Meter entity.
-func (cuo *CostsheetUpdateOne) SetMeter(m *Meter) *CostsheetUpdateOne {
-	return cuo.SetMeterID(m.ID)
+// ClearLookupKey clears the value of the "lookup_key" field.
+func (cuo *CostsheetUpdateOne) ClearLookupKey() *CostsheetUpdateOne {
+	cuo.mutation.ClearLookupKey()
+	return cuo
 }
 
-// SetPrice sets the "price" edge to the Price entity.
-func (cuo *CostsheetUpdateOne) SetPrice(p *Price) *CostsheetUpdateOne {
-	return cuo.SetPriceID(p.ID)
+// SetDescription sets the "description" field.
+func (cuo *CostsheetUpdateOne) SetDescription(s string) *CostsheetUpdateOne {
+	cuo.mutation.SetDescription(s)
+	return cuo
+}
+
+// SetNillableDescription sets the "description" field if the given value is not nil.
+func (cuo *CostsheetUpdateOne) SetNillableDescription(s *string) *CostsheetUpdateOne {
+	if s != nil {
+		cuo.SetDescription(*s)
+	}
+	return cuo
+}
+
+// ClearDescription clears the value of the "description" field.
+func (cuo *CostsheetUpdateOne) ClearDescription() *CostsheetUpdateOne {
+	cuo.mutation.ClearDescription()
+	return cuo
 }
 
 // Mutation returns the CostsheetMutation object of the builder.
 func (cuo *CostsheetUpdateOne) Mutation() *CostsheetMutation {
 	return cuo.mutation
-}
-
-// ClearMeter clears the "meter" edge to the Meter entity.
-func (cuo *CostsheetUpdateOne) ClearMeter() *CostsheetUpdateOne {
-	cuo.mutation.ClearMeter()
-	return cuo
-}
-
-// ClearPrice clears the "price" edge to the Price entity.
-func (cuo *CostsheetUpdateOne) ClearPrice() *CostsheetUpdateOne {
-	cuo.mutation.ClearPrice()
-	return cuo
 }
 
 // Where appends a list predicates to the CostsheetUpdate builder.
@@ -436,21 +418,10 @@ func (cuo *CostsheetUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (cuo *CostsheetUpdateOne) check() error {
-	if v, ok := cuo.mutation.MeterID(); ok {
-		if err := costsheet.MeterIDValidator(v); err != nil {
-			return &ValidationError{Name: "meter_id", err: fmt.Errorf(`ent: validator failed for field "Costsheet.meter_id": %w`, err)}
+	if v, ok := cuo.mutation.Name(); ok {
+		if err := costsheet.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Costsheet.name": %w`, err)}
 		}
-	}
-	if v, ok := cuo.mutation.PriceID(); ok {
-		if err := costsheet.PriceIDValidator(v); err != nil {
-			return &ValidationError{Name: "price_id", err: fmt.Errorf(`ent: validator failed for field "Costsheet.price_id": %w`, err)}
-		}
-	}
-	if cuo.mutation.MeterCleared() && len(cuo.mutation.MeterIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Costsheet.meter"`)
-	}
-	if cuo.mutation.PriceCleared() && len(cuo.mutation.PriceIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "Costsheet.price"`)
 	}
 	return nil
 }
@@ -502,63 +473,26 @@ func (cuo *CostsheetUpdateOne) sqlSave(ctx context.Context) (_node *Costsheet, e
 	if cuo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(costsheet.FieldEnvironmentID, field.TypeString)
 	}
-	if cuo.mutation.MeterCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.MeterTable,
-			Columns: []string{costsheet.MeterColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(meter.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := cuo.mutation.Metadata(); ok {
+		_spec.SetField(costsheet.FieldMetadata, field.TypeJSON, value)
 	}
-	if nodes := cuo.mutation.MeterIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.MeterTable,
-			Columns: []string{costsheet.MeterColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(meter.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if cuo.mutation.MetadataCleared() {
+		_spec.ClearField(costsheet.FieldMetadata, field.TypeJSON)
 	}
-	if cuo.mutation.PriceCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.PriceTable,
-			Columns: []string{costsheet.PriceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	if value, ok := cuo.mutation.Name(); ok {
+		_spec.SetField(costsheet.FieldName, field.TypeString, value)
 	}
-	if nodes := cuo.mutation.PriceIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: true,
-			Table:   costsheet.PriceTable,
-			Columns: []string{costsheet.PriceColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	if value, ok := cuo.mutation.LookupKey(); ok {
+		_spec.SetField(costsheet.FieldLookupKey, field.TypeString, value)
+	}
+	if cuo.mutation.LookupKeyCleared() {
+		_spec.ClearField(costsheet.FieldLookupKey, field.TypeString)
+	}
+	if value, ok := cuo.mutation.Description(); ok {
+		_spec.SetField(costsheet.FieldDescription, field.TypeString, value)
+	}
+	if cuo.mutation.DescriptionCleared() {
+		_spec.ClearField(costsheet.FieldDescription, field.TypeString)
 	}
 	_node = &Costsheet{config: cuo.config}
 	_spec.Assign = _node.assignValues

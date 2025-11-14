@@ -413,7 +413,6 @@ func (puq *PriceUnitQuery) loadPrices(ctx context.Context, query *PriceQuery, no
 			init(nodes[i])
 		}
 	}
-	query.withFKs = true
 	if len(query.ctx.Fields) > 0 {
 		query.ctx.AppendFieldOnce(price.FieldPriceUnitID)
 	}

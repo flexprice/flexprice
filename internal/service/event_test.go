@@ -37,6 +37,29 @@ func (s *EventServiceSuite) SetupTest() {
 	s.logger = logger.GetLogger()
 	s.config = config.GetDefaultConfig()
 
+	// Add Kafka config required by getKafkaConsumerConfig method
+	s.config.Kafka.RouteTenantsOnLazyMode = []string{}
+	s.config.EventProcessing = config.EventProcessingConfig{
+		Topic:         "events",
+		ConsumerGroup: "flexprice-consumer-test",
+	}
+	s.config.EventProcessingLazy = config.EventProcessingLazyConfig{
+		Topic:         "events_lazy",
+		ConsumerGroup: "v1_event_processing_lazy",
+	}
+	s.config.EventPostProcessing = config.EventPostProcessingConfig{
+		Topic:         "events_post_processing",
+		ConsumerGroup: "v1_events_post_processing",
+	}
+	s.config.FeatureUsageTracking = config.FeatureUsageTrackingConfig{
+		Topic:         "events",
+		ConsumerGroup: "v1_feature_tracking_service",
+	}
+	s.config.FeatureUsageTrackingLazy = config.FeatureUsageTrackingLazyConfig{
+		Topic:         "events_lazy",
+		ConsumerGroup: "v1_feature_tracking_service_lazy",
+	}
+
 	s.service = NewEventService(
 		s.eventRepo,
 		nil, // meter repo not needed for these tests

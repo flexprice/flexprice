@@ -37,7 +37,7 @@ func NewCreditNoteRepository(client postgres.IClient, log *logger.Logger, cache 
 
 // Create creates a new credit note (non-transactional)
 func (r *creditnoteRepository) Create(ctx context.Context, cn *domainCreditNote.CreditNote) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditnote", "create", map[string]interface{}{
@@ -135,7 +135,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 
 	err := r.client.WithTx(ctx, func(ctx context.Context) error {
 		// 1. Create credit note
-		creditNote, err := r.client.Querier(ctx).CreditNote.Create().
+		creditNote, err := r.client.Writer(ctx).CreditNote.Create().
 			SetID(cn.ID).
 			SetTenantID(cn.TenantID).
 			SetInvoiceID(cn.InvoiceID).
@@ -150,10 +150,10 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			SetStatus(string(cn.Status)).
 			SetCreatedAt(cn.CreatedAt).
 			SetUpdatedAt(cn.UpdatedAt).
-					SetCreatedBy(cn.CreatedBy).
-		SetCustomerID(cn.CustomerID).
-		SetNillableSubscriptionID(cn.SubscriptionID).
-		SetNillableVoidedAt(cn.VoidedAt).
+			SetCreatedBy(cn.CreatedBy).
+			SetCustomerID(cn.CustomerID).
+			SetNillableSubscriptionID(cn.SubscriptionID).
+			SetNillableVoidedAt(cn.VoidedAt).
 			SetNillableFinalizedAt(cn.FinalizedAt).
 			SetUpdatedBy(cn.UpdatedBy).
 			SetTotalAmount(cn.TotalAmount).
@@ -195,7 +195,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 			builders := make([]*ent.CreditNoteLineItemCreate, len(cn.LineItems))
 
 			for i, item := range cn.LineItems {
-				builders[i] = r.client.Querier(ctx).CreditNoteLineItem.Create().
+				builders[i] = r.client.Writer(ctx).CreditNoteLineItem.Create().
 					SetID(item.ID).
 					SetTenantID(item.TenantID).
 					SetCreditNoteID(creditNote.ID).
@@ -212,7 +212,7 @@ func (r *creditnoteRepository) CreateWithLineItems(ctx context.Context, cn *doma
 					SetUpdatedAt(item.UpdatedAt)
 			}
 
-			if err := r.client.Querier(ctx).CreditNoteLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
+			if err := r.client.Writer(ctx).CreditNoteLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
 				r.log.Errorw("failed to create line items", "error", err, "creditnote_id", cn.ID)
 				return ierr.WithError(err).WithHint("line item creation failed").Mark(ierr.ErrDatabase)
 			}
@@ -239,7 +239,7 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify credit note exists
-		exists, err := r.client.Querier(ctx).CreditNote.Query().Where(creditnote.ID(creditNoteID)).Exist(ctx)
+		exists, err := r.client.Writer(ctx).CreditNote.Query().Where(creditnote.ID(creditNoteID)).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -249,7 +249,7 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 
 		builders := make([]*ent.CreditNoteLineItemCreate, len(items))
 		for i, item := range items {
-			builders[i] = r.client.Querier(ctx).CreditNoteLineItem.Create().
+			builders[i] = r.client.Writer(ctx).CreditNoteLineItem.Create().
 				SetID(item.ID).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).
@@ -266,7 +266,7 @@ func (r *creditnoteRepository) AddLineItems(ctx context.Context, creditNoteID st
 				SetUpdatedAt(item.UpdatedAt)
 		}
 
-		if err := r.client.Querier(ctx).CreditNoteLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
+		if err := r.client.Writer(ctx).CreditNoteLineItem.CreateBulk(builders...).Exec(ctx); err != nil {
 			r.log.Errorw("failed to add line items", "error", err, "creditnote_id", creditNoteID)
 			return ierr.WithError(err).WithHint("line item addition failed").Mark(ierr.ErrDatabase)
 		}
@@ -288,7 +288,7 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Verify credit note exists
-		exists, err := r.client.Querier(ctx).CreditNote.Query().Where(creditnote.ID(creditNoteID)).Exist(ctx)
+		exists, err := r.client.Writer(ctx).CreditNote.Query().Where(creditnote.ID(creditNoteID)).Exist(ctx)
 		if err != nil {
 			return ierr.WithError(err).WithHint("credit note existence check failed").Mark(ierr.ErrDatabase)
 		}
@@ -296,7 +296,7 @@ func (r *creditnoteRepository) RemoveLineItems(ctx context.Context, creditNoteID
 			return ierr.WithError(err).WithHintf("credit note %s not found", creditNoteID).Mark(ierr.ErrNotFound)
 		}
 
-		_, err = r.client.Querier(ctx).CreditNoteLineItem.Update().
+		_, err = r.client.Writer(ctx).CreditNoteLineItem.Update().
 			Where(
 				creditnotelineitem.TenantID(types.GetTenantID(ctx)),
 				creditnotelineitem.CreditNoteID(creditNoteID),
@@ -327,7 +327,7 @@ func (r *creditnoteRepository) Get(ctx context.Context, id string) (*domainCredi
 
 	r.log.Debugw("getting credit note", "creditnote_id", id)
 
-	creditNote, err := r.client.Querier(ctx).CreditNote.Query().
+	creditNote, err := r.client.Reader(ctx).CreditNote.Query().
 		Where(creditnote.ID(id),
 			creditnote.TenantID(types.GetTenantID(ctx)),
 			creditnote.EnvironmentID(types.GetEnvironmentID(ctx)),
@@ -358,7 +358,7 @@ func (r *creditnoteRepository) Update(ctx context.Context, cn *domainCreditNote.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Use predicate-based update for optimistic locking
 	query := client.CreditNote.Update().
@@ -427,7 +427,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 
 	return r.client.WithTx(ctx, func(ctx context.Context) error {
 		// Delete line items first
-		_, err := r.client.Querier(ctx).CreditNoteLineItem.Update().
+		_, err := r.client.Writer(ctx).CreditNoteLineItem.Update().
 			Where(
 				creditnotelineitem.CreditNoteID(id),
 				creditnotelineitem.TenantID(types.GetTenantID(ctx)),
@@ -442,7 +442,7 @@ func (r *creditnoteRepository) Delete(ctx context.Context, id string) error {
 		}
 
 		// Then delete credit note
-		_, err = r.client.Querier(ctx).CreditNote.Update().
+		_, err = r.client.Writer(ctx).CreditNote.Update().
 			Where(
 				creditnote.ID(id),
 				creditnote.TenantID(types.GetTenantID(ctx)),
@@ -469,7 +469,7 @@ func (r *creditnoteRepository) List(ctx context.Context, filter *types.CreditNot
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.CreditNote.Query().
 		WithLineItems()
 
@@ -504,7 +504,7 @@ func (r *creditnoteRepository) Count(ctx context.Context, filter *types.CreditNo
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.CreditNote.Query()
 
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
@@ -528,7 +528,7 @@ func (r *creditnoteRepository) GetByIdempotencyKey(ctx context.Context, key stri
 		return cachedCreditNote, nil
 	}
 
-	cn, err := r.client.Querier(ctx).CreditNote.Query().
+	cn, err := r.client.Reader(ctx).CreditNote.Query().
 		Where(
 			creditnote.IdempotencyKey(key),
 			creditnote.EnvironmentID(types.GetEnvironmentID(ctx)),

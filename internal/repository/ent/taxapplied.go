@@ -45,7 +45,7 @@ func (r *taxappliedRepository) Create(ctx context.Context, ta *domainTaxApplied.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating taxapplied",
 		"taxapplied_id", ta.ID,
@@ -124,7 +124,7 @@ func (r *taxappliedRepository) Get(ctx context.Context, id string) (*domainTaxAp
 		return taxapplied, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting taxapplied",
 		"id", id,
@@ -169,7 +169,7 @@ func (r *taxappliedRepository) Update(ctx context.Context, ta *domainTaxApplied.
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("updating taxapplied",
 		"taxapplied_id", ta.ID,
@@ -228,7 +228,7 @@ func (r *taxappliedRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting taxapplied",
 		"id", id,
@@ -283,7 +283,7 @@ func (r *taxappliedRepository) List(ctx context.Context, filter *types.TaxApplie
 			Mark(ierr.ErrValidation)
 	}
 
-	query := r.client.Querier(ctx).TaxApplied.Query()
+	query := r.client.Reader(ctx).TaxApplied.Query()
 
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 
@@ -315,7 +315,7 @@ func (r *taxappliedRepository) List(ctx context.Context, filter *types.TaxApplie
 
 // Count counts tax applied records based on filter
 func (r *taxappliedRepository) Count(ctx context.Context, filter *types.TaxAppliedFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	span := StartRepositorySpan(ctx, "taxapplied", "count", map[string]interface{}{
 		"filter": filter,
@@ -526,7 +526,7 @@ func (r *taxappliedRepository) GetByIdempotencyKey(ctx context.Context, idempote
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	taxapplied, err := client.TaxApplied.Query().
 		Where(taxapplied.IdempotencyKey(idempotencyKey),

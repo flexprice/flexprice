@@ -36,7 +36,7 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		return nil, err
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditgrant", "create", map[string]interface{}{
@@ -121,7 +121,7 @@ func (r *creditGrantRepository) CreateBulk(ctx context.Context, creditGrants []*
 		}
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 	builders := make([]*ent.CreditGrantCreate, len(creditGrants))
 
 	// Get environment ID from context
@@ -192,7 +192,7 @@ func (r *creditGrantRepository) Get(ctx context.Context, id string) (*domainCred
 		return cachedCreditGrant, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	r.log.Debugw("getting credit grant",
 		"creditgrant_id", id,
 		"tenant_id", types.GetTenantID(ctx),
@@ -232,7 +232,7 @@ func (r *creditGrantRepository) List(ctx context.Context, filter *types.CreditGr
 		}
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditgrant", "list", map[string]interface{}{
@@ -264,7 +264,7 @@ func (r *creditGrantRepository) List(ctx context.Context, filter *types.CreditGr
 }
 
 func (r *creditGrantRepository) Count(ctx context.Context, filter *types.CreditGrantFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "creditgrant", "count", map[string]interface{}{
@@ -318,7 +318,7 @@ func (r *creditGrantRepository) ListAll(ctx context.Context, filter *types.Credi
 }
 
 func (r *creditGrantRepository) Update(ctx context.Context, cg *domainCreditGrant.CreditGrant) (*domainCreditGrant.CreditGrant, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating credit grant",
 		"creditgrant_id", cg.ID,
@@ -370,7 +370,7 @@ func (r *creditGrantRepository) Delete(ctx context.Context, id string) error {
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting credit grant",
 		"creditgrant_id", id,
@@ -420,7 +420,7 @@ func (r *creditGrantRepository) DeleteBulk(ctx context.Context, ids []string) er
 
 	r.log.Debugw("deleting credit grants in bulk", "count", len(ids))
 
-	_, err := r.client.Querier(ctx).CreditGrant.Update().
+	_, err := r.client.Writer(ctx).CreditGrant.Update().
 		Where(
 			creditgrant.IDIn(ids...),
 			creditgrant.TenantID(types.GetTenantID(ctx)),

@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/publisher"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/pyroscope"
+	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/repository"
 	s3 "github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/sentry"
@@ -40,6 +41,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
+	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
 )
 
@@ -77,6 +79,9 @@ func main() {
 			// Security
 			security.NewEncryptionService,
 
+			// RBAC
+			rbac.NewRBACService,
+
 			// storage
 			s3.NewService,
 
@@ -89,7 +94,7 @@ func main() {
 			cache.NewInMemoryCache,
 
 			// Postgres
-			postgres.NewEntClient,
+			postgres.NewEntClients,
 			postgres.NewClient,
 
 			// Clickhouse
@@ -140,7 +145,7 @@ func main() {
 			repository.NewTaxAppliedRepository,
 			repository.NewSecretRepository,
 			repository.NewCreditGrantRepository,
-			repository.NewCostSheetRepository,
+			repository.NewCostsheetRepository,
 			repository.NewCreditGrantApplicationRepository,
 			repository.NewCreditNoteRepository,
 			repository.NewCreditNoteLineItemRepository,
@@ -157,6 +162,8 @@ func main() {
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
+			repository.NewGroupRepository,
+			repository.NewScheduledTaskRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -175,6 +182,7 @@ func main() {
 			// Services
 			// Integration factory must be provided before service params
 			integration.NewFactory,
+			syncExport.NewExportService,
 			service.NewServiceParams,
 			service.NewTenantService,
 			service.NewAuthService,
@@ -201,7 +209,8 @@ func main() {
 			service.NewOnboardingService,
 			service.NewBillingService,
 			service.NewCreditGrantService,
-			service.NewCostSheetService,
+			service.NewCostsheetService,
+			service.NewRevenueAnalyticsService,
 			service.NewCreditNoteService,
 			service.NewConnectionService,
 			service.NewEntityIntegrationMappingService,
@@ -212,6 +221,8 @@ func main() {
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
 			service.NewAlertLogsService,
+			service.NewGroupService,
+			service.NewScheduledTaskService,
 		),
 	)
 
@@ -265,7 +276,8 @@ func provideHandlers(
 	onboardingService service.OnboardingService,
 	billingService service.BillingService,
 	creditGrantService service.CreditGrantService,
-	costSheetService service.CostSheetService,
+	costsheetService service.CostsheetService,
+	revenueAnalyticsService service.RevenueAnalyticsService,
 	creditNoteService service.CreditNoteService,
 	connectionService service.ConnectionService,
 	entityIntegrationMappingService service.EntityIntegrationMappingService,
@@ -278,8 +290,11 @@ func provideHandlers(
 	subscriptionChangeService service.SubscriptionChangeService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
 	alertLogsService service.AlertLogsService,
+	groupService service.GroupService,
 	integrationFactory *integration.Factory,
 	db postgres.IClient,
+	scheduledTaskService service.ScheduledTaskService,
+	rbacService *rbac.RBACService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
@@ -305,10 +320,11 @@ func provideHandlers(
 		Tax:                      v1.NewTaxHandler(taxService, logger),
 		Onboarding:               v1.NewOnboardingHandler(onboardingService, logger),
 		CronSubscription:         cron.NewSubscriptionHandler(subscriptionService, logger),
+		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, featureService, alertLogsService),
 		CronInvoice:              cron.NewInvoiceHandler(invoiceService, subscriptionService, connectionService, tenantService, environmentService, integrationFactory, logger),
-		CronWallet:               cron.NewWalletCronHandler(logger, walletService, tenantService, environmentService, alertLogsService),
 		CreditGrant:              v1.NewCreditGrantHandler(creditGrantService, logger),
-		CostSheet:                v1.NewCostSheetHandler(costSheetService, logger),
+		Costsheet:                v1.NewCostsheetHandler(costsheetService, logger),
+		RevenueAnalytics:         v1.NewRevenueAnalyticsHandler(revenueAnalyticsService, cfg, logger),
 		CronCreditGrant:          cron.NewCreditGrantCronHandler(creditGrantService, logger),
 		CreditNote:               v1.NewCreditNoteHandler(creditNoteService, logger),
 		Connection:               v1.NewConnectionHandler(connectionService, logger),
@@ -316,14 +332,18 @@ func provideHandlers(
 		PriceUnit:                v1.NewPriceUnitHandler(priceUnitService, logger),
 		Webhook:                  v1.NewWebhookHandler(cfg, svixClient, logger, integrationFactory, customerService, paymentService, invoiceService, planService, subscriptionService, entityIntegrationMappingService, db),
 		Coupon:                   v1.NewCouponHandler(couponService, logger),
-		Addon:                    v1.NewAddonHandler(addonService, logger),
+		Addon:                    v1.NewAddonHandler(addonService, entitlementService, logger),
 		Settings:                 v1.NewSettingsHandler(settingsService, logger),
 		SetupIntent:              v1.NewSetupIntentHandler(integrationFactory, customerService, logger),
+		Group:                    v1.NewGroupHandler(groupService, logger),
+		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
+		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
+		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
 	}
 }
 
-func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService) *gin.Engine {
-	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService)
+func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
+	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
@@ -496,7 +516,7 @@ func registerRouterHandlers(
 
 	// Only register processing handlers when needed
 	if includeProcessingHandlers {
-		// Register post-processing handlers
+		// Register handlers
 		eventConsumptionSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		eventPostProcessingSvc.RegisterHandler(router, cfg)

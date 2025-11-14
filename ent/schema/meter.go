@@ -2,7 +2,6 @@ package schema
 
 import (
 	"entgo.io/ent"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -54,13 +53,6 @@ func (Meter) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			Default(string(types.ResetUsageBillingPeriod)),
-	}
-}
-
-// Edges of the Meter.
-func (Meter) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.To("costsheet", Costsheet.Type),
 	}
 }
 

@@ -94,31 +94,21 @@ type Price struct {
 	StartDate *time.Time `json:"start_date,omitempty"`
 	// EndDate holds the value of the "end_date" field.
 	EndDate *time.Time `json:"end_date,omitempty"`
+	// GroupID holds the value of the "group_id" field.
+	GroupID *string `json:"group_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceQuery when eager-loading is set.
 	Edges        PriceEdges `json:"edges"`
-	addon_prices *string
 	selectValues sql.SelectValues
 }
 
 // PriceEdges holds the relations/edges for other nodes in the graph.
 type PriceEdges struct {
-	// Costsheet holds the value of the costsheet edge.
-	Costsheet []*Costsheet `json:"costsheet,omitempty"`
 	// PriceUnitEdge holds the value of the price_unit_edge edge.
 	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
-}
-
-// CostsheetOrErr returns the Costsheet value or an error if the edge
-// was not loaded in eager-loading.
-func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
-	if e.loadedTypes[0] {
-		return e.Costsheet, nil
-	}
-	return nil, &NotLoadedError{edge: "costsheet"}
+	loadedTypes [1]bool
 }
 
 // PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
@@ -126,7 +116,7 @@ func (e PriceEdges) CostsheetOrErr() ([]*Costsheet, error) {
 func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
 	if e.PriceUnitEdge != nil {
 		return e.PriceUnitEdge, nil
-	} else if e.loadedTypes[1] {
+	} else if e.loadedTypes[0] {
 		return nil, &NotFoundError{label: priceunit.Label}
 	}
 	return nil, &NotLoadedError{edge: "price_unit_edge"}
@@ -143,12 +133,10 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID:
+		case price.FieldID, price.FieldTenantID, price.FieldStatus, price.FieldCreatedBy, price.FieldUpdatedBy, price.FieldEnvironmentID, price.FieldCurrency, price.FieldDisplayAmount, price.FieldPriceUnitType, price.FieldPriceUnitID, price.FieldPriceUnit, price.FieldDisplayPriceUnitAmount, price.FieldType, price.FieldBillingPeriod, price.FieldBillingModel, price.FieldBillingCadence, price.FieldInvoiceCadence, price.FieldMeterID, price.FieldTierMode, price.FieldLookupKey, price.FieldDescription, price.FieldEntityType, price.FieldEntityID, price.FieldParentPriceID, price.FieldGroupID:
 			values[i] = new(sql.NullString)
 		case price.FieldCreatedAt, price.FieldUpdatedAt, price.FieldStartDate, price.FieldEndDate:
 			values[i] = new(sql.NullTime)
-		case price.ForeignKeys[0]: // addon_prices
-			values[i] = new(sql.NullString)
 		default:
 			values[i] = new(sql.UnknownType)
 		}
@@ -409,12 +397,12 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.EndDate = new(time.Time)
 				*pr.EndDate = value.Time
 			}
-		case price.ForeignKeys[0]:
+		case price.FieldGroupID:
 			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field addon_prices", values[i])
+				return fmt.Errorf("unexpected type %T for field group_id", values[i])
 			} else if value.Valid {
-				pr.addon_prices = new(string)
-				*pr.addon_prices = value.String
+				pr.GroupID = new(string)
+				*pr.GroupID = value.String
 			}
 		default:
 			pr.selectValues.Set(columns[i], values[i])
@@ -427,11 +415,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pr *Price) Value(name string) (ent.Value, error) {
 	return pr.selectValues.Get(name)
-}
-
-// QueryCostsheet queries the "costsheet" edge of the Price entity.
-func (pr *Price) QueryCostsheet() *CostsheetQuery {
-	return NewPriceClient(pr.config).QueryCostsheet(pr)
 }
 
 // QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
@@ -585,6 +568,11 @@ func (pr *Price) String() string {
 	if v := pr.EndDate; v != nil {
 		builder.WriteString("end_date=")
 		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := pr.GroupID; v != nil {
+		builder.WriteString("group_id=")
+		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')
 	return builder.String()

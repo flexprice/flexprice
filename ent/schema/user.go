@@ -32,7 +32,14 @@ func (User) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			NotEmpty(),
+			Optional().
+			Nillable(),
+		// RBAC Fields
+		field.String("type").
+			Default("user"),
+		field.Strings("roles").
+			Optional().
+			Default([]string{}),
 	}
 }
 
@@ -42,8 +49,8 @@ func (User) Indexes() []ent.Index {
 		index.Fields("email").
 			Unique().
 			StorageKey("idx_user_email_unique").
-			Annotations(entsql.IndexWhere("status = 'published'")),
-		index.Fields("tenant_id", "status").
+			Annotations(entsql.IndexWhere("status = 'published' AND email IS NOT NULL AND email != ''")),
+		index.Fields("tenant_id", "status", "type").
 			StorageKey("idx_user_tenant_status"),
 		index.Fields("tenant_id", "created_at").
 			StorageKey("idx_user_tenant_created_at"),

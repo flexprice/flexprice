@@ -11,6 +11,8 @@ type Task struct {
 	ID                string                 `json:"id"`
 	TaskType          types.TaskType         `json:"task_type"`
 	EntityType        types.EntityType       `json:"entity_type"`
+	ScheduledTaskID   string                 `json:"scheduled_task_id,omitempty"`
+	WorkflowID        *string                `json:"workflow_id,omitempty"`
 	FileURL           string                 `json:"file_url"`
 	FileName          *string                `json:"file_name,omitempty"`
 	FileType          types.FileType         `json:"file_type"`
@@ -38,6 +40,8 @@ func FromEnt(e *ent.Task) *Task {
 		ID:                e.ID,
 		TaskType:          types.TaskType(e.TaskType),
 		EntityType:        types.EntityType(e.EntityType),
+		ScheduledTaskID:   e.ScheduledTaskID,
+		WorkflowID:        e.WorkflowID,
 		FileURL:           e.FileURL,
 		FileName:          e.FileName,
 		FileType:          types.FileType(e.FileType),

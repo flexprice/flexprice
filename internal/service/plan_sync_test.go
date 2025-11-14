@@ -158,7 +158,9 @@ func (s *PlanSyncTestSuite) terminateLineItem(lineItem *subscription.Subscriptio
 
 // Helper function to terminate a price
 func (s *PlanSyncTestSuite) terminatePrice(price *price.Price) {
-	price.EndDate = lo.ToPtr(time.Now().UTC())
+	// Set EndDate slightly in the future to ensure it passes validation
+	// when used as EffectiveFrom in DeleteSubscriptionLineItemRequest
+	price.EndDate = lo.ToPtr(time.Now().UTC().Add(1 * time.Second))
 	err := s.GetStores().PriceRepo.Update(s.GetContext(), price)
 	s.NoError(err)
 }

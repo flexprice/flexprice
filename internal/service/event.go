@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/publisher"
 	"github.com/flexprice/flexprice/internal/sentry"
@@ -30,6 +31,7 @@ type EventService interface {
 	BulkGetUsageByMeter(ctx context.Context, req []*dto.GetUsageByMeterRequest) (map[string]*events.AggregationResult, error)
 	GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error)
 	GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error)
+	GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error)
 }
 
 type eventService struct {
@@ -534,4 +536,107 @@ func parseEventIteratorToStruct(key string) (*events.EventIterator, error) {
 
 func createEventIteratorKey(timestamp time.Time, id string) string {
 	return fmt.Sprintf("%d::%s", timestamp.UnixNano(), id)
+}
+
+func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Create Kafka monitoring service
+	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
+
+	// Get total event count
+	totalEventCount := s.eventRepo.GetTotalEventCount(ctx, req.StartTime, req.EndTime)
+
+	// Get tenant and environment from context
+	// Note: Consumer groups might be tenant/environment specific in production
+	// For now, using global consumer groups from config
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	s.logger.Infow("fetching monitoring data",
+		"tenant_id", tenantID,
+		"environment_id", envID,
+		"event_consumption_group", s.config.EventProcessing.ConsumerGroup,
+		"event_post_processing_group", s.config.EventPostProcessing.ConsumerGroup)
+
+	// Get the appropriate consumer groups and topics based on tenant configuration
+	eventConsumptionTopic, eventConsumptionConsumerGroup, eventPostProcessingTopic, eventPostProcessingConsumerGroup := s.getKafkaConsumerConfig(ctx)
+
+	// Calculate Kafka consumer lag for event consumption
+	eventConsumptionLag, err := kafkaMonitoring.GetConsumerLag(ctx,
+		eventConsumptionTopic,
+		eventConsumptionConsumerGroup)
+	if err != nil {
+		s.logger.Warnw("failed to get event consumption consumer lag",
+			"error", err,
+			"topic", eventConsumptionTopic,
+			"consumer_group", eventConsumptionConsumerGroup)
+		// Continue with zero lag on error
+		eventConsumptionLag = &kafka.ConsumerLag{TotalLag: 0}
+	}
+
+	// Calculate Kafka consumer lag for event post processing
+	eventPostProcessingLag, err := kafkaMonitoring.GetConsumerLag(ctx,
+		eventPostProcessingTopic,
+		eventPostProcessingConsumerGroup)
+	if err != nil {
+		s.logger.Warnw("failed to get event post processing consumer lag",
+			"error", err,
+			"topic", eventPostProcessingTopic,
+			"consumer_group", eventPostProcessingConsumerGroup)
+		// Continue with zero lag on error
+		eventPostProcessingLag = &kafka.ConsumerLag{TotalLag: 0}
+	}
+
+	// Build response
+	response := &dto.GetMonitoringDataResponse{
+		TotalCount:        totalEventCount,
+		ConsumptionLag:    eventConsumptionLag.TotalLag,
+		PostProcessingLag: eventPostProcessingLag.TotalLag,
+	}
+
+	return response, nil
+}
+
+// getKafkaConsumerConfig determines the appropriate Kafka consumer groups and topics
+// based on whether the tenant is in the lazy tenants list
+func (s *eventService) getKafkaConsumerConfig(ctx context.Context) (
+	eventConsumptionTopic string,
+	eventConsumptionConsumerGroup string,
+	eventPostProcessingTopic string,
+	eventPostProcessingConsumerGroup string,
+) {
+	// Get tenant ID from context
+	tenantID := types.GetTenantID(ctx)
+
+	// Check if tenant is in the lazy tenants list
+	isLazyTenant := false
+	for _, lazyTenantID := range s.config.Kafka.RouteTenantsOnLazyMode {
+		if lazyTenantID == tenantID {
+			isLazyTenant = true
+			break
+		}
+	}
+
+	// Set event consumption topic and consumer group
+	if isLazyTenant {
+		eventConsumptionTopic = s.config.EventProcessingLazy.Topic
+		eventConsumptionConsumerGroup = s.config.EventProcessingLazy.ConsumerGroup
+	} else {
+		eventConsumptionTopic = s.config.EventProcessing.Topic
+		eventConsumptionConsumerGroup = s.config.EventProcessing.ConsumerGroup
+	}
+
+	// Set event post processing topic and consumer group
+	if isLazyTenant {
+		eventPostProcessingTopic = s.config.FeatureUsageTrackingLazy.Topic
+		eventPostProcessingConsumerGroup = s.config.FeatureUsageTrackingLazy.ConsumerGroup
+	} else {
+		eventPostProcessingTopic = s.config.FeatureUsageTracking.Topic
+		eventPostProcessingConsumerGroup = s.config.FeatureUsageTracking.ConsumerGroup
+	}
+
+	return eventConsumptionTopic, eventConsumptionConsumerGroup, eventPostProcessingTopic, eventPostProcessingConsumerGroup
 }
