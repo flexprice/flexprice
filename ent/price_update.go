@@ -396,6 +396,24 @@ func (pu *PriceUpdate) ClearTiers() *PriceUpdate {
 	return pu
 }
 
+// SetPriceUnitTiers sets the "price_unit_tiers" field.
+func (pu *PriceUpdate) SetPriceUnitTiers(tt []*types.PriceTier) *PriceUpdate {
+	pu.mutation.SetPriceUnitTiers(tt)
+	return pu
+}
+
+// AppendPriceUnitTiers appends tt to the "price_unit_tiers" field.
+func (pu *PriceUpdate) AppendPriceUnitTiers(tt []*types.PriceTier) *PriceUpdate {
+	pu.mutation.AppendPriceUnitTiers(tt)
+	return pu
+}
+
+// ClearPriceUnitTiers clears the value of the "price_unit_tiers" field.
+func (pu *PriceUpdate) ClearPriceUnitTiers() *PriceUpdate {
+	pu.mutation.ClearPriceUnitTiers()
+	return pu
+}
+
 // SetTransformQuantity sets the "transform_quantity" field.
 func (pu *PriceUpdate) SetTransformQuantity(tq types.TransformQuantity) *PriceUpdate {
 	pu.mutation.SetTransformQuantity(tq)
@@ -801,6 +819,17 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.TiersCleared() {
 		_spec.ClearField(price.FieldTiers, field.TypeJSON)
+	}
+	if value, ok := pu.mutation.PriceUnitTiers(); ok {
+		_spec.SetField(price.FieldPriceUnitTiers, field.TypeJSON, value)
+	}
+	if value, ok := pu.mutation.AppendedPriceUnitTiers(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, price.FieldPriceUnitTiers, value)
+		})
+	}
+	if pu.mutation.PriceUnitTiersCleared() {
+		_spec.ClearField(price.FieldPriceUnitTiers, field.TypeJSON)
 	}
 	if value, ok := pu.mutation.TransformQuantity(); ok {
 		_spec.SetField(price.FieldTransformQuantity, field.TypeJSON, value)
@@ -1310,6 +1339,24 @@ func (puo *PriceUpdateOne) ClearTiers() *PriceUpdateOne {
 	return puo
 }
 
+// SetPriceUnitTiers sets the "price_unit_tiers" field.
+func (puo *PriceUpdateOne) SetPriceUnitTiers(tt []*types.PriceTier) *PriceUpdateOne {
+	puo.mutation.SetPriceUnitTiers(tt)
+	return puo
+}
+
+// AppendPriceUnitTiers appends tt to the "price_unit_tiers" field.
+func (puo *PriceUpdateOne) AppendPriceUnitTiers(tt []*types.PriceTier) *PriceUpdateOne {
+	puo.mutation.AppendPriceUnitTiers(tt)
+	return puo
+}
+
+// ClearPriceUnitTiers clears the value of the "price_unit_tiers" field.
+func (puo *PriceUpdateOne) ClearPriceUnitTiers() *PriceUpdateOne {
+	puo.mutation.ClearPriceUnitTiers()
+	return puo
+}
+
 // SetTransformQuantity sets the "transform_quantity" field.
 func (puo *PriceUpdateOne) SetTransformQuantity(tq types.TransformQuantity) *PriceUpdateOne {
 	puo.mutation.SetTransformQuantity(tq)
@@ -1745,6 +1792,17 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.TiersCleared() {
 		_spec.ClearField(price.FieldTiers, field.TypeJSON)
+	}
+	if value, ok := puo.mutation.PriceUnitTiers(); ok {
+		_spec.SetField(price.FieldPriceUnitTiers, field.TypeJSON, value)
+	}
+	if value, ok := puo.mutation.AppendedPriceUnitTiers(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, price.FieldPriceUnitTiers, value)
+		})
+	}
+	if puo.mutation.PriceUnitTiersCleared() {
+		_spec.ClearField(price.FieldPriceUnitTiers, field.TypeJSON)
 	}
 	if value, ok := puo.mutation.TransformQuantity(); ok {
 		_spec.SetField(price.FieldTransformQuantity, field.TypeJSON, value)

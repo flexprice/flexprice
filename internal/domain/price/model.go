@@ -370,32 +370,55 @@ func FromEnt(e *ent.Price) *Price {
 		}
 	}
 
+	// Convert price unit tiers from ent model to price tiers
+	var priceUnitTiers JSONBTiers
+	if len(e.PriceUnitTiers) > 0 {
+		priceUnitTiers = make(JSONBTiers, len(e.PriceUnitTiers))
+		for i, tier := range e.PriceUnitTiers {
+			priceUnitTiers[i] = PriceTier{
+				UpTo:       tier.UpTo,
+				UnitAmount: tier.UnitAmount,
+			}
+			if tier.FlatAmount != nil {
+				flatAmount := tier.FlatAmount
+				priceUnitTiers[i].FlatAmount = flatAmount
+			}
+		}
+	}
+
 	return &Price{
-		ID:                 e.ID,
-		Amount:             e.Amount,
-		Currency:           e.Currency,
-		DisplayAmount:      e.DisplayAmount,
-		Type:               types.PriceType(e.Type),
-		BillingPeriod:      types.BillingPeriod(e.BillingPeriod),
-		BillingPeriodCount: e.BillingPeriodCount,
-		BillingModel:       types.BillingModel(e.BillingModel),
-		BillingCadence:     types.BillingCadence(e.BillingCadence),
-		InvoiceCadence:     types.InvoiceCadence(e.InvoiceCadence),
-		TrialPeriod:        e.TrialPeriod,
-		TierMode:           types.BillingTier(lo.FromPtr(e.TierMode)),
-		Tiers:              tiers,
-		MeterID:            lo.FromPtr(e.MeterID),
-		LookupKey:          e.LookupKey,
-		Description:        e.Description,
-		TransformQuantity:  JSONBTransformQuantity(e.TransformQuantity),
-		Metadata:           JSONBMetadata(e.Metadata),
-		EnvironmentID:      e.EnvironmentID,
-		EntityType:         types.PriceEntityType(lo.FromPtr(e.EntityType)),
-		EntityID:           lo.FromPtr(e.EntityID),
-		ParentPriceID:      lo.FromPtr(e.ParentPriceID),
-		GroupID:            lo.FromPtr(e.GroupID),
-		StartDate:          e.StartDate,
-		EndDate:            e.EndDate,
+		ID:                     e.ID,
+		Amount:                 e.Amount,
+		Currency:               e.Currency,
+		DisplayAmount:          e.DisplayAmount,
+		Type:                   types.PriceType(e.Type),
+		BillingPeriod:          types.BillingPeriod(e.BillingPeriod),
+		BillingPeriodCount:     e.BillingPeriodCount,
+		BillingModel:           types.BillingModel(e.BillingModel),
+		BillingCadence:         types.BillingCadence(e.BillingCadence),
+		InvoiceCadence:         types.InvoiceCadence(e.InvoiceCadence),
+		TrialPeriod:            e.TrialPeriod,
+		TierMode:               types.BillingTier(lo.FromPtr(e.TierMode)),
+		Tiers:                  tiers,
+		MeterID:                lo.FromPtr(e.MeterID),
+		LookupKey:              e.LookupKey,
+		Description:            e.Description,
+		TransformQuantity:      JSONBTransformQuantity(e.TransformQuantity),
+		Metadata:               JSONBMetadata(e.Metadata),
+		EnvironmentID:          e.EnvironmentID,
+		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
+		EntityID:               lo.FromPtr(e.EntityID),
+		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
+		GroupID:                lo.FromPtr(e.GroupID),
+		StartDate:              e.StartDate,
+		PriceUnitType:          types.PriceUnitType(e.PriceUnitType),
+		PriceUnitID:            e.PriceUnitID,
+		PriceUnit:              e.PriceUnit,
+		PriceUnitAmount:        e.PriceUnitAmount,
+		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
+		ConversionRate:         e.ConversionRate,
+		EndDate:                e.EndDate,
+		PriceUnitTiers:         priceUnitTiers,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
