@@ -1330,11 +1330,11 @@ func init() {
 	// price.DefaultTrialPeriod holds the default value on creation for the trial_period field.
 	price.DefaultTrialPeriod = priceDescTrialPeriod.Default.(int)
 	// priceDescEntityType is the schema descriptor for entity_type field.
-	priceDescEntityType := priceFields[25].Descriptor()
+	priceDescEntityType := priceFields[26].Descriptor()
 	// price.DefaultEntityType holds the default value on creation for the entity_type field.
 	price.DefaultEntityType = priceDescEntityType.Default.(string)
 	// priceDescStartDate is the schema descriptor for start_date field.
-	priceDescStartDate := priceFields[28].Descriptor()
+	priceDescStartDate := priceFields[29].Descriptor()
 	// price.DefaultStartDate holds the default value on creation for the start_date field.
 	price.DefaultStartDate = priceDescStartDate.Default.(func() time.Time)
 	priceunitMixin := schema.PriceUnit{}.Mixin()
