@@ -183,6 +183,16 @@ func (p *Price) GetDisplayAmount() string {
 	return fmt.Sprintf("%s%s", p.GetCurrencySymbol(), amount)
 }
 
+// GetDisplayPriceUnitAmount returns the price unit amount formatted with the price unit symbol
+// Example: "₿0.001" for Bitcoin or "£10.00" for GBP
+func (p *Price) GetDisplayPriceUnitAmount(priceUnitSymbol string) string {
+	if p.PriceUnitAmount == nil {
+		return ""
+	}
+	amount := p.PriceUnitAmount.String()
+	return fmt.Sprintf("%s%s", priceUnitSymbol, amount)
+}
+
 // CalculateAmount performs calculation
 func (p *Price) CalculateAmount(quantity decimal.Decimal) decimal.Decimal {
 	// Calculate with full precision
