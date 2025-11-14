@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -61,10 +62,19 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 
 	// Get display name if needed (before price creation)
 	s.getDisplayName(ctx, &req)
-	// Handle regular price case
+
+	// Convert request to Price domain object
 	p, err := req.ToPrice(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	// Apply price unit conversion if price type is CUSTOM
+	// This converts amounts/tiers and updates the Price object
+	if p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+		if err := s.applyPriceUnitConversionToPrice(ctx, p, req); err != nil {
+			return nil, err
+		}
 	}
 
 	// Validate group if provided
@@ -89,7 +99,6 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		s.syncPriceToQuickBooksIfEnabled(ctx, p.ID, p.EntityID)
 	}
-
 	return response, nil
 }
 
@@ -212,15 +221,24 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		var regularPrices []*price.Price
 
 		for _, priceReq := range req.Items {
-			// Handle regular prices
+			// Get display name if needed (before price creation)
 			s.getDisplayName(txCtx, &priceReq)
-			price, err := priceReq.ToPrice(txCtx)
+			// Convert request to Price domain object
+			p, err := priceReq.ToPrice(txCtx)
 			if err != nil {
 				return ierr.WithError(err).
 					WithHint("Failed to create price").
 					Mark(ierr.ErrValidation)
 			}
-			regularPrices = append(regularPrices, price)
+
+			// Apply price unit conversion if price type is CUSTOM
+			if p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+				if err := s.applyPriceUnitConversionToPrice(txCtx, p, priceReq); err != nil {
+					return err
+				}
+			}
+
+			regularPrices = append(regularPrices, p)
 		}
 
 		// Create regular prices in bulk if any exist
@@ -1190,6 +1208,128 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 			"price_id", priceID,
 			"plan_id", planID)
 	}
+}
+
+// applyPriceUnitConversionToPrice applies price unit conversion to an existing Price object
+// This method handles:
+// 1. Fetching and validating the price unit entity
+// 2. Converting price unit amounts to base currency amounts and updating p.Amount
+// 3. Converting price unit tiers to base currency tiers and updating p.Tiers
+// 4. Setting price unit metadata (PriceUnitID, ConversionRate) on the Price object
+func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *price.Price, req dto.CreatePriceRequest) error {
+	if req.PriceUnitConfig == nil {
+		return ierr.NewError("price_unit_config is required for CUSTOM price unit type").
+			WithHint("Price unit config must be provided when using custom pricing units").
+			Mark(ierr.ErrValidation)
+	}
+
+	// 1. Fetch the price unit by code
+	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit)
+	if err != nil {
+		return err
+	}
+
+	// 2. Validate price unit is published
+	if priceUnit.Status != types.StatusPublished {
+		return ierr.NewError("price unit must be published").
+			WithHint("The specified price unit is not published").
+			WithReportableDetails(map[string]interface{}{
+				"price_unit_code": req.PriceUnitConfig.PriceUnit,
+				"status":          priceUnit.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// 3. Validate base currency matches the price currency
+	if priceUnit.BaseCurrency != p.Currency {
+		return ierr.NewError("price unit base currency must match price currency").
+			WithHint("The price unit's base currency must match the price's currency").
+			WithReportableDetails(map[string]interface{}{
+				"price_unit_base_currency": priceUnit.BaseCurrency,
+				"price_currency":           p.Currency,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// 4. Convert amount if provided (for FLAT_FEE and PACKAGE billing models)
+	if p.PriceUnitAmount != nil {
+		// Convert price unit amount to fiat currency
+		fiatAmount, err := priceunit.ConvertToFiatCurrencyAmount(
+			ctx,
+			*p.PriceUnitAmount,
+			priceUnit.ConversionRate,
+			priceUnit.Precision,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Update the price amount with converted value
+		p.Amount = fiatAmount
+	}
+
+	// 5. Convert tiers if provided (for TIERED billing model)
+	if len(p.PriceUnitTiers) > 0 {
+		convertedTiers := make([]price.PriceTier, len(p.PriceUnitTiers))
+
+		for i, tier := range p.PriceUnitTiers {
+			// Convert unit amount
+			convertedUnitAmount, err := priceunit.ConvertToFiatCurrencyAmount(
+				ctx,
+				tier.UnitAmount,
+				priceUnit.ConversionRate,
+				priceUnit.Precision,
+			)
+			if err != nil {
+				return err
+			}
+
+			convertedTier := price.PriceTier{
+				UpTo:       tier.UpTo,
+				UnitAmount: convertedUnitAmount,
+			}
+
+			// Convert flat amount if provided
+			if tier.FlatAmount != nil {
+				convertedFlatAmount, err := priceunit.ConvertToFiatCurrencyAmount(
+					ctx,
+					*tier.FlatAmount,
+					priceUnit.ConversionRate,
+					priceUnit.Precision,
+				)
+				if err != nil {
+					return err
+				}
+				convertedTier.FlatAmount = &convertedFlatAmount
+			}
+
+			convertedTiers[i] = convertedTier
+		}
+
+		// Update the price tiers with converted values
+		p.Tiers = price.JSONBTiers(convertedTiers)
+	}
+
+	// 6. Set price unit metadata
+	p.PriceUnitID = priceUnit.ID
+	p.ConversionRate = &priceUnit.ConversionRate
+
+	// 7. Update display amounts after conversion
+	p.DisplayAmount = p.GetDisplayAmount()
+	if p.PriceUnitAmount != nil {
+		p.DisplayPriceUnitAmount = p.GetDisplayPriceUnitAmount(priceUnit.Symbol)
+	}
+
+	s.Logger.Infow("applied price unit conversion to price object",
+		"price_unit_id", priceUnit.ID,
+		"price_unit_code", priceUnit.Code,
+		"conversion_rate", priceUnit.ConversionRate.String(),
+		"base_currency", priceUnit.BaseCurrency,
+		"converted_amount", p.Amount.String(),
+		"has_tiers", len(p.Tiers) > 0,
+	)
+
+	return nil
 }
 
 // syncPriceToQuickBooksIfEnabled syncs a price to QuickBooks via Temporal workflow if the integration is enabled.
