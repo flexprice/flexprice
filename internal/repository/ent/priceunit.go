@@ -33,7 +33,7 @@ func NewPriceUnitRepository(client postgres.IClient, log *logger.Logger, cache c
 }
 
 func (r *priceUnitRepository) Create(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) (*domainPriceUnit.PriceUnit, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("creating price unit",
 		"price_unit_id", priceUnit.ID,
@@ -112,7 +112,7 @@ func (r *priceUnitRepository) Get(ctx context.Context, id string) (*domainPriceU
 		return cachedPriceUnit, nil
 	}
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("getting price unit",
 		"price_unit_id", id,
@@ -162,7 +162,7 @@ func (r *priceUnitRepository) List(ctx context.Context, filter *types.PriceUnitF
 	})
 	defer FinishSpan(span)
 
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 	query := client.PriceUnit.Query()
 
 	// Apply entity-specific filters
@@ -190,7 +190,7 @@ func (r *priceUnitRepository) List(ctx context.Context, filter *types.PriceUnitF
 }
 
 func (r *priceUnitRepository) Count(ctx context.Context, filter *types.PriceUnitFilter) (int, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "price_unit", "count", map[string]interface{}{
@@ -222,7 +222,7 @@ func (r *priceUnitRepository) Count(ctx context.Context, filter *types.PriceUnit
 }
 
 func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) (*domainPriceUnit.PriceUnit, error) {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("updating price unit",
 		"price_unit_id", priceUnit.ID,
@@ -292,7 +292,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 }
 
 func (r *priceUnitRepository) Delete(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) error {
-	client := r.client.Querier(ctx)
+	client := r.client.Reader(ctx)
 
 	r.log.Debugw("deleting price unit",
 		"price_unit_id", priceUnit.ID,
@@ -354,7 +354,7 @@ func (r *priceUnitRepository) GetByCode(ctx context.Context, code string) (*doma
 		return cachedPriceUnit, nil
 	}
 
-	entPriceUnit, err := r.client.Querier(ctx).PriceUnit.Query().
+	entPriceUnit, err := r.client.Reader(ctx).PriceUnit.Query().
 		Where(
 			priceunit.Code(code),
 			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
