@@ -222,7 +222,7 @@ func (r *priceUnitRepository) Count(ctx context.Context, filter *types.PriceUnit
 }
 
 func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) (*domainPriceUnit.PriceUnit, error) {
-	client := r.client.Reader(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating price unit",
 		"price_unit_id", priceUnit.ID,

@@ -165,6 +165,7 @@ func main() {
 			repository.NewAlertLogsRepository,
 			repository.NewGroupRepository,
 			repository.NewScheduledTaskRepository,
+			repository.NewPriceUnitRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
