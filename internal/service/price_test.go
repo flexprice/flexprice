@@ -61,7 +61,6 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 	req := dto.CreatePriceRequest{
 		Amount:             "100",
 		Currency:           "usd",
-		PlanID:             "plan-1",
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           "plan-1",
 		Type:               types.PRICE_TYPE_USAGE,
