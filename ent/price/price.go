@@ -74,6 +74,8 @@ const (
 	FieldTierMode = "tier_mode"
 	// FieldTiers holds the string denoting the tiers field in the database.
 	FieldTiers = "tiers"
+	// FieldPriceUnitTiers holds the string denoting the price_unit_tiers field in the database.
+	FieldPriceUnitTiers = "price_unit_tiers"
 	// FieldTransformQuantity holds the string denoting the transform_quantity field in the database.
 	FieldTransformQuantity = "transform_quantity"
 	// FieldLookupKey holds the string denoting the lookup_key field in the database.
@@ -148,6 +150,7 @@ var Columns = []string{
 	FieldFilterValues,
 	FieldTierMode,
 	FieldTiers,
+	FieldPriceUnitTiers,
 	FieldTransformQuantity,
 	FieldLookupKey,
 	FieldDescription,

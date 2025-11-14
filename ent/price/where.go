@@ -2058,6 +2058,16 @@ func TiersNotNil() predicate.Price {
 	return predicate.Price(sql.FieldNotNull(FieldTiers))
 }
 
+// PriceUnitTiersIsNil applies the IsNil predicate on the "price_unit_tiers" field.
+func PriceUnitTiersIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldPriceUnitTiers))
+}
+
+// PriceUnitTiersNotNil applies the NotNil predicate on the "price_unit_tiers" field.
+func PriceUnitTiersNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldPriceUnitTiers))
+}
+
 // TransformQuantityIsNil applies the IsNil predicate on the "transform_quantity" field.
 func TransformQuantityIsNil() predicate.Price {
 	return predicate.Price(sql.FieldIsNull(FieldTransformQuantity))

@@ -109,9 +109,6 @@ type PriceResponse struct {
 	Plan  *PlanResponse  `json:"plan,omitempty"`
 	Addon *AddonResponse `json:"addon,omitempty"`
 	Group *GroupResponse `json:"group,omitempty"`
-
-	// TODO: Remove this once we have a proper price entity type
-	PlanID string `json:"plan_id,omitempty"`
 }
 
 // ListPricesResponse represents the response for listing prices

@@ -36923,6 +36923,8 @@ type PriceMutation struct {
 	tier_mode                 *types.BillingTier
 	tiers                     *[]*types.PriceTier
 	appendtiers               []*types.PriceTier
+	price_unit_tiers          *[]*types.PriceTier
+	appendprice_unit_tiers    []*types.PriceTier
 	transform_quantity        *types.TransformQuantity
 	lookup_key                *string
 	description               *string
@@ -38330,6 +38332,71 @@ func (m *PriceMutation) ResetTiers() {
 	delete(m.clearedFields, price.FieldTiers)
 }
 
+// SetPriceUnitTiers sets the "price_unit_tiers" field.
+func (m *PriceMutation) SetPriceUnitTiers(tt []*types.PriceTier) {
+	m.price_unit_tiers = &tt
+	m.appendprice_unit_tiers = nil
+}
+
+// PriceUnitTiers returns the value of the "price_unit_tiers" field in the mutation.
+func (m *PriceMutation) PriceUnitTiers() (r []*types.PriceTier, exists bool) {
+	v := m.price_unit_tiers
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPriceUnitTiers returns the old "price_unit_tiers" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldPriceUnitTiers(ctx context.Context) (v []*types.PriceTier, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPriceUnitTiers is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPriceUnitTiers requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPriceUnitTiers: %w", err)
+	}
+	return oldValue.PriceUnitTiers, nil
+}
+
+// AppendPriceUnitTiers adds tt to the "price_unit_tiers" field.
+func (m *PriceMutation) AppendPriceUnitTiers(tt []*types.PriceTier) {
+	m.appendprice_unit_tiers = append(m.appendprice_unit_tiers, tt...)
+}
+
+// AppendedPriceUnitTiers returns the list of values that were appended to the "price_unit_tiers" field in this mutation.
+func (m *PriceMutation) AppendedPriceUnitTiers() ([]*types.PriceTier, bool) {
+	if len(m.appendprice_unit_tiers) == 0 {
+		return nil, false
+	}
+	return m.appendprice_unit_tiers, true
+}
+
+// ClearPriceUnitTiers clears the value of the "price_unit_tiers" field.
+func (m *PriceMutation) ClearPriceUnitTiers() {
+	m.price_unit_tiers = nil
+	m.appendprice_unit_tiers = nil
+	m.clearedFields[price.FieldPriceUnitTiers] = struct{}{}
+}
+
+// PriceUnitTiersCleared returns if the "price_unit_tiers" field was cleared in this mutation.
+func (m *PriceMutation) PriceUnitTiersCleared() bool {
+	_, ok := m.clearedFields[price.FieldPriceUnitTiers]
+	return ok
+}
+
+// ResetPriceUnitTiers resets all changes to the "price_unit_tiers" field.
+func (m *PriceMutation) ResetPriceUnitTiers() {
+	m.price_unit_tiers = nil
+	m.appendprice_unit_tiers = nil
+	delete(m.clearedFields, price.FieldPriceUnitTiers)
+}
+
 // SetTransformQuantity sets the "transform_quantity" field.
 func (m *PriceMutation) SetTransformQuantity(tq types.TransformQuantity) {
 	m.transform_quantity = &tq
@@ -38948,7 +39015,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 39)
+	fields := make([]string, 0, 40)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -39035,6 +39102,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.tiers != nil {
 		fields = append(fields, price.FieldTiers)
+	}
+	if m.price_unit_tiers != nil {
+		fields = append(fields, price.FieldPriceUnitTiers)
 	}
 	if m.transform_quantity != nil {
 		fields = append(fields, price.FieldTransformQuantity)
@@ -39132,6 +39202,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.TierMode()
 	case price.FieldTiers:
 		return m.Tiers()
+	case price.FieldPriceUnitTiers:
+		return m.PriceUnitTiers()
 	case price.FieldTransformQuantity:
 		return m.TransformQuantity()
 	case price.FieldLookupKey:
@@ -39219,6 +39291,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldTierMode(ctx)
 	case price.FieldTiers:
 		return m.OldTiers(ctx)
+	case price.FieldPriceUnitTiers:
+		return m.OldPriceUnitTiers(ctx)
 	case price.FieldTransformQuantity:
 		return m.OldTransformQuantity(ctx)
 	case price.FieldLookupKey:
@@ -39451,6 +39525,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTiers(v)
 		return nil
+	case price.FieldPriceUnitTiers:
+		v, ok := value.([]*types.PriceTier)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPriceUnitTiers(v)
+		return nil
 	case price.FieldTransformQuantity:
 		v, ok := value.(types.TransformQuantity)
 		if !ok {
@@ -39620,6 +39701,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldTiers) {
 		fields = append(fields, price.FieldTiers)
 	}
+	if m.FieldCleared(price.FieldPriceUnitTiers) {
+		fields = append(fields, price.FieldPriceUnitTiers)
+	}
 	if m.FieldCleared(price.FieldTransformQuantity) {
 		fields = append(fields, price.FieldTransformQuantity)
 	}
@@ -39705,6 +39789,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldTiers:
 		m.ClearTiers()
+		return nil
+	case price.FieldPriceUnitTiers:
+		m.ClearPriceUnitTiers()
 		return nil
 	case price.FieldTransformQuantity:
 		m.ClearTransformQuantity()
@@ -39830,6 +39917,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldTiers:
 		m.ResetTiers()
+		return nil
+	case price.FieldPriceUnitTiers:
+		m.ResetPriceUnitTiers()
 		return nil
 	case price.FieldTransformQuantity:
 		m.ResetTransformQuantity()
