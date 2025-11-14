@@ -292,7 +292,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 }
 
 func (r *priceUnitRepository) Delete(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) error {
-	client := r.client.Reader(ctx)
+	client := r.client.Writer(ctx)
 
 	r.log.Debugw("deleting price unit",
 		"price_unit_id", priceUnit.ID,
