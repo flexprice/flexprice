@@ -969,6 +969,16 @@ func MinQuantityLTE(v decimal.Decimal) predicate.Price {
 	return predicate.Price(sql.FieldLTE(FieldMinQuantity, v))
 }
 
+// MinQuantityIsNil applies the IsNil predicate on the "min_quantity" field.
+func MinQuantityIsNil() predicate.Price {
+	return predicate.Price(sql.FieldIsNull(FieldMinQuantity))
+}
+
+// MinQuantityNotNil applies the NotNil predicate on the "min_quantity" field.
+func MinQuantityNotNil() predicate.Price {
+	return predicate.Price(sql.FieldNotNull(FieldMinQuantity))
+}
+
 // PriceUnitTypeEQ applies the EQ predicate on the "price_unit_type" field.
 func PriceUnitTypeEQ(v string) predicate.Price {
 	return predicate.Price(sql.FieldEQ(FieldPriceUnitType, v))

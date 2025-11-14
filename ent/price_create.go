@@ -160,6 +160,14 @@ func (pc *PriceCreate) SetMinQuantity(d decimal.Decimal) *PriceCreate {
 	return pc
 }
 
+// SetNillableMinQuantity sets the "min_quantity" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableMinQuantity(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetMinQuantity(*d)
+	}
+	return pc
+}
+
 // SetPriceUnitType sets the "price_unit_type" field.
 func (pc *PriceCreate) SetPriceUnitType(s string) *PriceCreate {
 	pc.mutation.SetPriceUnitType(s)
@@ -631,9 +639,6 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.MinQuantity(); !ok {
-		return &ValidationError{Name: "min_quantity", err: errors.New(`ent: missing required field "Price.min_quantity"`)}
-	}
 	if _, ok := pc.mutation.PriceUnitType(); !ok {
 		return &ValidationError{Name: "price_unit_type", err: errors.New(`ent: missing required field "Price.price_unit_type"`)}
 	}
@@ -781,7 +786,7 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := pc.mutation.MinQuantity(); ok {
 		_spec.SetField(price.FieldMinQuantity, field.TypeOther, value)
-		_node.MinQuantity = value
+		_node.MinQuantity = &value
 	}
 	if value, ok := pc.mutation.PriceUnitType(); ok {
 		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)

@@ -402,7 +402,7 @@ func FromEnt(e *ent.Price) *Price {
 		BillingPeriodCount:     e.BillingPeriodCount,
 		BillingModel:           types.BillingModel(e.BillingModel),
 		DisplayName:            e.DisplayName,
-		MinQuantity:            lo.ToPtr(e.MinQuantity),
+		MinQuantity:            e.MinQuantity,
 		BillingCadence:         types.BillingCadence(e.BillingCadence),
 		InvoiceCadence:         types.InvoiceCadence(e.InvoiceCadence),
 		TrialPeriod:            e.TrialPeriod,
@@ -444,14 +444,14 @@ func FromEntList(list []*ent.Price) []*Price {
 	return prices
 }
 
-// ToEntTiers converts domain tiers to ent tiers
-func (p *Price) ToEntTiers() []*types.PriceTier {
-	if len(p.Tiers) == 0 {
+// ToEntTiersFromJSONB converts JSONBTiers to ent tiers (reusable for both Tiers and PriceUnitTiers)
+func ToEntTiersFromJSONB(jsonbTiers JSONBTiers) []*types.PriceTier {
+	if len(jsonbTiers) == 0 {
 		return nil
 	}
 
-	tiers := make([]*types.PriceTier, len(p.Tiers))
-	for i, tier := range p.Tiers {
+	tiers := make([]*types.PriceTier, len(jsonbTiers))
+	for i, tier := range jsonbTiers {
 		tiers[i] = &types.PriceTier{
 			UpTo:       tier.UpTo,
 			UnitAmount: tier.UnitAmount,
@@ -459,6 +459,11 @@ func (p *Price) ToEntTiers() []*types.PriceTier {
 		}
 	}
 	return tiers
+}
+
+// ToEntTiers converts domain tiers to ent tiers
+func (p *Price) ToEntTiers() []*types.PriceTier {
+	return ToEntTiersFromJSONB(p.Tiers)
 }
 
 // ValidateTrialPeriod checks if trial period is valid

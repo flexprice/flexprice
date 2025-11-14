@@ -44,7 +44,7 @@ type Price struct {
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
 	// MinQuantity holds the value of the "min_quantity" field.
-	MinQuantity decimal.Decimal `json:"min_quantity,omitempty"`
+	MinQuantity *decimal.Decimal `json:"min_quantity,omitempty"`
 	// PriceUnitType holds the value of the "price_unit_type" field.
 	PriceUnitType string `json:"price_unit_type,omitempty"`
 	// PriceUnitID holds the value of the "price_unit_id" field.
@@ -143,11 +143,11 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case price.FieldPriceUnitAmount, price.FieldConversionRate:
+		case price.FieldMinQuantity, price.FieldPriceUnitAmount, price.FieldConversionRate:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case price.FieldFilterValues, price.FieldTiers, price.FieldPriceUnitTiers, price.FieldTransformQuantity, price.FieldMetadata:
 			values[i] = new([]byte)
-		case price.FieldAmount, price.FieldMinQuantity:
+		case price.FieldAmount:
 			values[i] = new(decimal.Decimal)
 		case price.FieldBillingPeriodCount, price.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
@@ -243,10 +243,11 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 				pr.DisplayAmount = value.String
 			}
 		case price.FieldMinQuantity:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
+			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field min_quantity", values[i])
-			} else if value != nil {
-				pr.MinQuantity = *value
+			} else if value.Valid {
+				pr.MinQuantity = new(decimal.Decimal)
+				*pr.MinQuantity = *value.S.(*decimal.Decimal)
 			}
 		case price.FieldPriceUnitType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -515,8 +516,10 @@ func (pr *Price) String() string {
 	builder.WriteString("display_amount=")
 	builder.WriteString(pr.DisplayAmount)
 	builder.WriteString(", ")
-	builder.WriteString("min_quantity=")
-	builder.WriteString(fmt.Sprintf("%v", pr.MinQuantity))
+	if v := pr.MinQuantity; v != nil {
+		builder.WriteString("min_quantity=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("price_unit_type=")
 	builder.WriteString(pr.PriceUnitType)

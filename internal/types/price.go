@@ -279,32 +279,6 @@ func (p PriceScope) Validate() error {
 	return nil
 }
 
-// PriceUnitType is the type of the price unit ex FIAT, CUSTOM
-type PriceUnitType string
-
-const (
-	PRICE_UNIT_TYPE_FIAT   PriceUnitType = "FIAT"
-	PRICE_UNIT_TYPE_CUSTOM PriceUnitType = "CUSTOM"
-)
-
-func (p PriceUnitType) Validate() error {
-	allowed := []PriceUnitType{
-		PRICE_UNIT_TYPE_FIAT,
-		PRICE_UNIT_TYPE_CUSTOM,
-	}
-
-	if p != "" && !lo.Contains(allowed, p) {
-		return ierr.NewError("invalid price unit type").
-			WithHint("Price unit type must be either FIAT or CUSTOM").
-			WithReportableDetails(map[string]interface{}{
-				"price_unit_type": p,
-				"allowed":         allowed,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
 // PriceFilter represents filters for price queries
 type PriceFilter struct {
 	*QueryFilter

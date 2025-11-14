@@ -37515,7 +37515,7 @@ func (m *PriceMutation) MinQuantity() (r decimal.Decimal, exists bool) {
 // OldMinQuantity returns the old "min_quantity" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldMinQuantity(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *PriceMutation) OldMinQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldMinQuantity is only allowed on UpdateOne operations")
 	}
@@ -37529,9 +37529,22 @@ func (m *PriceMutation) OldMinQuantity(ctx context.Context) (v decimal.Decimal, 
 	return oldValue.MinQuantity, nil
 }
 
+// ClearMinQuantity clears the value of the "min_quantity" field.
+func (m *PriceMutation) ClearMinQuantity() {
+	m.min_quantity = nil
+	m.clearedFields[price.FieldMinQuantity] = struct{}{}
+}
+
+// MinQuantityCleared returns if the "min_quantity" field was cleared in this mutation.
+func (m *PriceMutation) MinQuantityCleared() bool {
+	_, ok := m.clearedFields[price.FieldMinQuantity]
+	return ok
+}
+
 // ResetMinQuantity resets all changes to the "min_quantity" field.
 func (m *PriceMutation) ResetMinQuantity() {
 	m.min_quantity = nil
+	delete(m.clearedFields, price.FieldMinQuantity)
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
@@ -39671,6 +39684,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldDisplayName) {
 		fields = append(fields, price.FieldDisplayName)
 	}
+	if m.FieldCleared(price.FieldMinQuantity) {
+		fields = append(fields, price.FieldMinQuantity)
+	}
 	if m.FieldCleared(price.FieldPriceUnitID) {
 		fields = append(fields, price.FieldPriceUnitID)
 	}
@@ -39759,6 +39775,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldDisplayName:
 		m.ClearDisplayName()
+		return nil
+	case price.FieldMinQuantity:
+		m.ClearMinQuantity()
 		return nil
 	case price.FieldPriceUnitID:
 		m.ClearPriceUnitID()

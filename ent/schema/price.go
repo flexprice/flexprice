@@ -65,6 +65,8 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
+			Optional().
+			Nillable().
 			Immutable(),
 
 		// price_unit_type is the type of the price unit- Fiat, Custom
