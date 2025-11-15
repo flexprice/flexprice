@@ -1367,11 +1367,12 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			sub_line_item_id,
 			feature_id,
 			meter_id,
-			sum(qty_total)                     AS sum_total,
-			max(qty_total)                     AS max_total,
+			price_id,
+			sum(qty_total * sign)              AS sum_total,
+			max(qty_total * sign)              AS max_total,
 			count(DISTINCT id)                 AS count_distinct_ids,
 			count(DISTINCT unique_hash)        AS count_unique_qty,
-			argMax(qty_total, "timestamp")     AS latest_qty
+			argMax(qty_total * sign, "timestamp") AS latest_qty
 		FROM feature_usage
 		WHERE 
 			subscription_id = ?
@@ -1380,7 +1381,8 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			AND tenant_id = ?
 			AND "timestamp" >= ?
 			AND "timestamp" < ?
-		GROUP BY sub_line_item_id, feature_id, meter_id
+			AND sign != 0
+		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
 	`
 
 	log.Printf("Executing query: %s", query)
@@ -1401,11 +1403,11 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 
 	results := make(map[string]*events.UsageByFeatureResult)
 	for rows.Next() {
-		var subLineItemID, featureID, meterID string
+		var subLineItemID, featureID, meterID, priceID string
 		var sumTotal, maxTotal, latestQty decimal.Decimal
 		var countDistinctIDs, countUniqueQty uint64
 
-		err := rows.Scan(&subLineItemID, &featureID, &meterID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
+		err := rows.Scan(&subLineItemID, &featureID, &meterID, &priceID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
 		if err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
@@ -1417,6 +1419,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			SubLineItemID:    subLineItemID,
 			FeatureID:        featureID,
 			MeterID:          meterID,
+			PriceID:          priceID,
 			SumTotal:         sumTotal,
 			MaxTotal:         maxTotal,
 			CountDistinctIDs: countDistinctIDs,

@@ -3926,7 +3926,6 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 	// Collect all price IDs and build meter to price mapping
 	priceIDs := make([]string, 0, len(lineItems))
-	meterToPriceMap := make(map[string]string) // meter_id -> price_id
 
 	for _, item := range lineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -3936,7 +3935,6 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 			continue
 		}
 		priceIDs = append(priceIDs, item.PriceID)
-		meterToPriceMap[item.MeterID] = item.PriceID
 	}
 
 	// Fetch all prices in one call
@@ -3983,6 +3981,9 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	var usageCharges []*dto.SubscriptionUsageByMetersResponse
 	totalCost := decimal.Zero
 
+	// Track which line items have been processed
+	processedLineItems := make(map[string]bool)
+
 	// Process each feature result - now we have meter_id directly from ClickHouse
 	for subLineItemID, usageResult := range usageResults {
 		meterID := usageResult.MeterID
@@ -3993,20 +3994,11 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 			continue
 		}
 
-		priceID, hasPrice := meterToPriceMap[meterID]
-		if !hasPrice {
-			s.Logger.Warnw("price not found for meter, skipping",
-				"sub_line_item_id", subLineItemID,
-				"meter_id", meterID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
+		priceID := usageResult.PriceID
 
 		priceObj, priceExists := priceMap[priceID]
 		if !priceExists || priceObj == nil {
 			s.Logger.Warnw("price object not found, skipping",
-				"sub_line_item_id", subLineItemID,
-				"meter_id", meterID,
 				"price_id", priceID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -4051,6 +4043,60 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 			FilterValues:     make(price.JSONBFilters),
 			MeterID:          meterID,
 			MeterDisplayName: meterDisplayNames[meterID],
+			Price:            priceObj,
+			IsOverage:        false,
+		}
+
+		// Add filter values from meter
+		for _, filter := range meter.Filters {
+			charge.FilterValues[filter.Key] = filter.Values
+		}
+
+		usageCharges = append(usageCharges, charge)
+		processedLineItems[subLineItemID] = true
+	}
+
+	// Add zero-quantity, zero-cost charges for line items not found in usage results
+	for _, item := range lineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+		if item.MeterID == "" {
+			continue
+		}
+
+		// Skip if this line item was already processed
+		if processedLineItems[item.ID] {
+			continue
+		}
+
+		priceObj, priceExists := priceMap[item.PriceID]
+		if !priceExists || priceObj == nil {
+			s.Logger.Warnw("price object not found for line item, skipping zero charge",
+				"line_item_id", item.ID,
+				"price_id", item.PriceID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		meter := meterMap[item.MeterID]
+		if meter == nil {
+			s.Logger.Warnw("meter not found for line item, skipping zero charge",
+				"line_item_id", item.ID,
+				"meter_id", item.MeterID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		// Create zero-quantity, zero-cost charge for this line item
+		charge := &dto.SubscriptionUsageByMetersResponse{
+			Amount:           0.0,
+			Currency:         priceObj.Currency,
+			DisplayAmount:    fmt.Sprintf("0.00 %s", priceObj.Currency),
+			Quantity:         0.0,
+			FilterValues:     make(price.JSONBFilters),
+			MeterID:          item.MeterID,
+			MeterDisplayName: meterDisplayNames[item.MeterID],
 			Price:            priceObj,
 			IsOverage:        false,
 		}
@@ -4154,7 +4200,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 					overageCharge := *charge // Create a copy
 					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
 					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
-					overageCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.DisplayAmount = price.GetDisplayAmountWithPrecision(overageAmountDecimal, subscription.Currency)
 					overageCharge.IsOverage = true
 					overageCharge.OverageFactor = overageFactorFloat
 					finalCharges = append(finalCharges, &overageCharge)
@@ -4198,9 +4244,9 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	})
 
 	// Build response
-	response.Amount = totalCost.InexactFloat64()
+	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
-	response.DisplayAmount = fmt.Sprintf("%.2f %s", totalCost.InexactFloat64(), response.Currency)
+	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
 	response.StartTime = usageStartTime
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges

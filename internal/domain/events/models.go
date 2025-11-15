@@ -85,6 +85,7 @@ type UsageByFeatureResult struct {
 	SubLineItemID    string
 	FeatureID        string
 	MeterID          string
+	PriceID          string
 	SumTotal         decimal.Decimal
 	MaxTotal         decimal.Decimal
 	CountDistinctIDs uint64
