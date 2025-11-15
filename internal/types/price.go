@@ -27,9 +27,6 @@ type PriceType string
 // PriceScope indicates whether a price is at the plan level or subscription level
 type PriceScope string
 
-// PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
-type PriceUnitType string
-
 // PriceEntityType is the type of the entity that the price is associated with
 // i.e. PLAN, SUBSCRIPTION, ADDON, PRICE
 // If price is created for plan then it will have PLAN as entity type with entity id as plan id
@@ -66,6 +63,35 @@ func (p PriceEntityType) Validate() error {
 	return nil
 }
 
+// PriceUnitType is the type of the price unit ex FIAT, CUSTOM
+type PriceUnitType string
+
+const (
+	PRICE_UNIT_TYPE_FIAT   PriceUnitType = "FIAT"
+	PRICE_UNIT_TYPE_CUSTOM PriceUnitType = "CUSTOM"
+)
+
+func (p PriceUnitType) Validate() error {
+	allowed := []PriceUnitType{
+		PRICE_UNIT_TYPE_FIAT,
+		PRICE_UNIT_TYPE_CUSTOM,
+	}
+	if !lo.Contains(allowed, p) {
+		return ierr.NewError("invalid price unit type").
+			WithHint("Invalid price unit type").
+			WithReportableDetails(map[string]interface{}{
+				"price_unit_type": p,
+				"allowed":         allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+func (p PriceUnitType) String() string {
+	return string(p)
+}
+
 // Additional types needed for JSON fields
 type PriceTier struct {
 	// up_to is the quantity up to which this tier applies. It is null for the last tier.
@@ -86,11 +112,6 @@ type TransformQuantity struct {
 	DivideBy int    `json:"divide_by,omitempty"`
 	Round    string `json:"round,omitempty"`
 }
-
-const (
-	PRICE_UNIT_TYPE_FIAT   PriceUnitType = "FIAT"
-	PRICE_UNIT_TYPE_CUSTOM PriceUnitType = "CUSTOM"
-)
 
 const (
 	PRICE_TYPE_USAGE PriceType = "USAGE"
@@ -249,22 +270,6 @@ func (p PriceScope) Validate() error {
 			WithReportableDetails(map[string]interface{}{
 				"price_scope": p,
 				"allowed":     allowed,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-func (p PriceUnitType) Validate() error {
-	allowed := []PriceUnitType{
-		PRICE_UNIT_TYPE_FIAT,
-		PRICE_UNIT_TYPE_CUSTOM,
-	}
-	if !lo.Contains(allowed, p) {
-		return ierr.NewError("invalid price unit type").
-			WithHint("Price unit type must be either FIAT or CUSTOM").
-			WithReportableDetails(map[string]interface{}{
-				"price_unit_type": p,
-				"allowed":         allowed,
 			}).
 			Mark(ierr.ErrValidation)
 	}

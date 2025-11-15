@@ -1,226 +1,113 @@
 package priceunit
 
 import (
+	"context"
+
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// PriceUnit represents a unit of pricing in the domain
+// PriceUnit is the model entity for the PriceUnit schema.
 type PriceUnit struct {
-	ID             string          `json:"id"`
-	Name           string          `json:"name"`
-	Code           string          `json:"code"`
-	Symbol         string          `json:"symbol"`
-	BaseCurrency   string          `json:"base_currency"`
-	ConversionRate decimal.Decimal `json:"conversion_rate"`
-	Precision      int             `json:"precision"`
-	EnvironmentID  string          `json:"environment_id"`
+	ID             string          `json:"id,omitempty"`
+	Name           string          `json:"name,omitempty"`
+	Code           string          `json:"code,omitempty"`
+	Symbol         string          `json:"symbol,omitempty"`
+	BaseCurrency   string          `json:"base_currency,omitempty"`
+	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
+	Precision      int             `json:"precision,omitempty"`
+	EnvironmentID  string          `json:"environment_id,omitempty"`
+	Metadata       types.Metadata  `json:"metadata,omitempty"`
 	types.BaseModel
 }
 
-// Validate validates the price unit
-func (u *PriceUnit) Validate() error {
-	if u.Name == "" {
-		return ierr.NewError("name is required").
-			WithHint("Name is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	if len(u.Code) != 3 {
-		return ierr.NewError("code must be exactly 3 characters").
-			WithHint("Code must be exactly 3 characters").
-			Mark(ierr.ErrValidation)
-	}
-
-	if len(u.Symbol) > 10 {
-		return ierr.NewError("symbol cannot exceed 10 characters").
-			WithHint("Symbol cannot exceed 10 characters").
-			Mark(ierr.ErrValidation)
-	}
-
-	if len(u.BaseCurrency) != 3 {
-		return ierr.NewError("base currency must be exactly 3 characters").
-			WithHint("Base currency must be exactly 3 characters").
-			Mark(ierr.ErrValidation)
-	}
-
-	if u.ConversionRate.IsZero() || u.ConversionRate.IsNegative() {
-		return ierr.NewError("conversion rate must be positive").
-			WithHint("Conversion rate must be positive").
-			Mark(ierr.ErrValidation)
-	}
-
-	if u.Precision < 0 || u.Precision > 8 {
-		return ierr.NewError("precision must be between 0 and 8").
-			WithHint("Precision must be between 0 and 8").
-			Mark(ierr.ErrValidation)
-	}
-
-	if u.Status != types.StatusPublished && u.Status != types.StatusArchived && u.Status != types.StatusDeleted {
-		return ierr.NewError("invalid status").
-			WithHint("Status must be one of: published, archived, deleted").
-			Mark(ierr.ErrValidation)
-	}
-
-	if u.TenantID == "" {
-		return ierr.NewError("tenant ID is required").
-			WithHint("Tenant ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	if u.EnvironmentID == "" {
-		return ierr.NewError("environment ID is required").
-			WithHint("Environment ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
-}
-
-// ConvertToBaseCurrency converts an amount in pricing unit to base currency
-// Formula: amount in fiat currency = amount in pricing unit * conversion rate
-func (u *PriceUnit) ConvertToBaseCurrency(customAmount decimal.Decimal) decimal.Decimal {
-	return customAmount.Mul(u.ConversionRate)
-}
-
-// ConvertFromBaseCurrency converts an amount in base currency to pricing unit
-// Formula: amount in pricing unit = amount in fiat currency / conversion rate
-func (u *PriceUnit) ConvertFromBaseCurrency(baseAmount decimal.Decimal) decimal.Decimal {
-	return baseAmount.Div(u.ConversionRate)
-}
-
-// FromEnt converts an ent.PriceUnit to a domain PriceUnit
-func FromEnt(e *ent.PriceUnit) *PriceUnit {
-	if e == nil {
+func FromEnt(ent *ent.PriceUnit) *PriceUnit {
+	if ent == nil {
 		return nil
 	}
 
 	return &PriceUnit{
-		ID:             e.ID,
-		Name:           e.Name,
-		Code:           e.Code,
-		Symbol:         e.Symbol,
-		BaseCurrency:   e.BaseCurrency,
-		ConversionRate: e.ConversionRate,
-		Precision:      e.Precision,
+		ID:             ent.ID,
+		Name:           ent.Name,
+		Code:           ent.Code,
+		Symbol:         ent.Symbol,
+		BaseCurrency:   ent.BaseCurrency,
+		ConversionRate: ent.ConversionRate,
+		Precision:      ent.Precision,
+		EnvironmentID:  ent.EnvironmentID,
+		Metadata:       ent.Metadata,
 		BaseModel: types.BaseModel{
-			TenantID:  e.TenantID,
-			Status:    types.Status(e.Status),
-			CreatedAt: e.CreatedAt,
-			UpdatedAt: e.UpdatedAt,
-			CreatedBy: e.CreatedBy,
-			UpdatedBy: e.UpdatedBy,
+			CreatedAt: ent.CreatedAt,
+			UpdatedAt: ent.UpdatedAt,
+			CreatedBy: ent.CreatedBy,
+			UpdatedBy: ent.UpdatedBy,
+			Status:    types.Status(ent.Status),
+			TenantID:  ent.TenantID,
 		},
 	}
 }
 
-// FromEntList converts a list of ent.PriceUnit to domain PriceUnit
-func FromEntList(list []*ent.PriceUnit) []*PriceUnit {
-	if list == nil {
-		return nil
-	}
-	units := make([]*PriceUnit, len(list))
-	for i, item := range list {
-		units[i] = FromEnt(item)
-	}
-	return units
+func FromEntList(ents []*ent.PriceUnit) []*PriceUnit {
+	return lo.Map(ents, func(ent *ent.PriceUnit, _ int) *PriceUnit {
+		return FromEnt(ent)
+	})
 }
 
-// PriceUnitFilter represents filter criteria for listing pricing units
-type PriceUnitFilter struct {
-	// QueryFilter contains pagination and basic query parameters
-	QueryFilter *types.QueryFilter
+// ConvertToFiatCurrencyAmount converts pricing unit amount to fiat currency
+// Formula: fiat_amount = price_unit_amount * conversion_rate
+// Example: 100 FP tokens * 0.01 USD/token = 1.00 USD
+func ConvertToFiatCurrencyAmount(ctx context.Context, priceUnitAmount decimal.Decimal, conversionRate decimal.Decimal, precision int) (decimal.Decimal, error) {
+	// Validate inputs
+	if conversionRate.IsZero() || !conversionRate.IsPositive() {
+		return decimal.Zero, ierr.NewError("conversion rate must be positive and non-zero").
+			WithHint("Conversion rate must be positive and non-zero").
+			WithReportableDetails(map[string]interface{}{
+				"conversion_rate": conversionRate.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
-	// TimeRangeFilter allows filtering by time periods
-	TimeRangeFilter *types.TimeRangeFilter
+	if precision < 0 || precision > 8 {
+		return decimal.Zero, ierr.NewError("precision must be between 0 and 8").
+			WithHint("Precision must be between 0 and 8").
+			WithReportableDetails(map[string]interface{}{
+				"precision": precision,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
-	// Filters allows complex filtering based on multiple fields
-	Filters []*types.FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
-
-	// Sort allows sorting by multiple fields
-	Sort []*types.SortCondition `json:"sort,omitempty" form:"sort" validate:"omitempty"`
-
-	// Status filters by price unit status
-	Status types.Status `json:"status,omitempty" form:"status"`
-
-	// TenantID filters by specific tenant ID
-	TenantID string `json:"tenant_id,omitempty" form:"tenant_id"`
-
-	// EnvironmentID filters by specific environment ID
-	EnvironmentID string `json:"environment_id,omitempty" form:"environment_id"`
+	// Convert and round to specified precision
+	result := priceUnitAmount.Mul(conversionRate)
+	return result.Round(int32(precision)), nil
 }
 
-// GetLimit implements BaseFilter interface
-func (f *PriceUnitFilter) GetLimit() int {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().GetLimit()
-	}
-	return f.QueryFilter.GetLimit()
-}
+// ConvertToPriceUnitAmount converts fiat currency amount to pricing unit
+// Formula: price_unit_amount = fiat_amount / conversion_rate
+// Example: 1.00 USD / 0.01 USD/FP = 100 FP tokens
+func ConvertToPriceUnitAmount(ctx context.Context, fiatAmount decimal.Decimal, conversionRate decimal.Decimal, precision int) (decimal.Decimal, error) {
 
-// GetOffset implements BaseFilter interface
-func (f *PriceUnitFilter) GetOffset() int {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().GetOffset()
-	}
-	return f.QueryFilter.GetOffset()
-}
-
-// GetSort implements BaseFilter interface
-func (f *PriceUnitFilter) GetSort() string {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().GetSort()
-	}
-	return f.QueryFilter.GetSort()
-}
-
-// GetOrder implements BaseFilter interface
-func (f *PriceUnitFilter) GetOrder() string {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().GetOrder()
-	}
-	return f.QueryFilter.GetOrder()
-}
-
-// GetStatus implements BaseFilter interface
-func (f *PriceUnitFilter) GetStatus() string {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().GetStatus()
-	}
-	return f.QueryFilter.GetStatus()
-}
-
-// GetExpand implements BaseFilter interface
-func (f *PriceUnitFilter) GetExpand() types.Expand {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().GetExpand()
-	}
-	return f.QueryFilter.GetExpand()
-}
-
-// IsUnlimited returns true if this is an unlimited query
-func (f *PriceUnitFilter) IsUnlimited() bool {
-	if f.QueryFilter == nil {
-		return types.NewDefaultQueryFilter().IsUnlimited()
-	}
-	return f.QueryFilter.IsUnlimited()
-}
-
-// Validate validates the filter
-func (f *PriceUnitFilter) Validate() error {
-	if f.QueryFilter != nil {
-		if err := f.QueryFilter.Validate(); err != nil {
-			return err
-		}
+	if conversionRate.IsZero() || !conversionRate.IsPositive() {
+		return decimal.Zero, ierr.NewError("conversion rate must be positive and non-zero").
+			WithHint("Conversion rate must be positive and non-zero").
+			WithReportableDetails(map[string]interface{}{
+				"conversion_rate": conversionRate.String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	if f.TimeRangeFilter != nil {
-		if err := f.TimeRangeFilter.Validate(); err != nil {
-			return err
-		}
+	if precision < 0 || precision > 8 {
+		return decimal.Zero, ierr.NewError("precision must be between 0 and 8").
+			WithHint("Precision must be between 0 and 8").
+			WithReportableDetails(map[string]interface{}{
+				"precision": precision,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
-	return nil
+	// Convert and round to specified precision
+	result := fiatAmount.Div(conversionRate)
+	return result.Round(int32(precision)), nil
 }

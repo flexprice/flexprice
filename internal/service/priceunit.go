@@ -2,350 +2,169 @@ package service
 
 import (
 	"context"
-	"strings"
-	"time"
 
-	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
-	domainPriceUnit "github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
-	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
-// PriceUnitService handles business logic for price units
-type PriceUnitService struct {
-	repo domainPriceUnit.Repository
-	log  *logger.Logger
+type PriceUnitService = interfaces.PriceUnitService
+
+type priceUnitService struct {
+	ServiceParams
 }
 
-// NewPriceUnitService creates a new instance of PriceUnitService
-func NewPriceUnitService(repo domainPriceUnit.Repository, log *logger.Logger) *PriceUnitService {
-	return &PriceUnitService{
-		repo: repo,
-		log:  log,
+func NewPriceUnitService(params ServiceParams) PriceUnitService {
+	return &priceUnitService{
+		ServiceParams: params,
 	}
 }
 
-func (s *PriceUnitService) Create(ctx context.Context, req *dto.CreatePriceUnitRequest) (*domainPriceUnit.PriceUnit, error) {
-	// Validate tenant ID
-	tenantID := types.GetTenantID(ctx)
-	if tenantID == "" {
-		return nil, ierr.NewError("tenant id is required").
-			WithMessage("missing tenant id in context").
-			WithHint("Tenant ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate environment ID
-	environmentID := types.GetEnvironmentID(ctx)
-	if environmentID == "" {
-		return nil, ierr.NewError("environment id is required").
-			WithMessage("missing environment id in context").
-			WithHint("Environment ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Check if code already exists (only consider published records)
-	exists, err := s.repo.ExistsByCode(ctx, strings.ToLower(req.Code))
-	if err != nil {
-		// Preserve database errors without overwriting
-		if ierr.IsDatabase(err) {
-			return nil, err
-		}
+func (s *priceUnitService) CreatePriceUnit(ctx context.Context, req dto.CreatePriceUnitRequest) (*dto.CreatePriceUnitResponse, error) {
+	// Validate request
+	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
-			WithMessage("failed to check if code exists").
-			WithHint("Failed to check if code exists").
-			Mark(ierr.ErrDatabase)
-	}
-	if exists {
-		return nil, ierr.NewError("code already exists").
-			WithMessage("duplicate code found for published unit").
-			WithHint("A published custom pricing unit with this code already exists").
-			WithReportableDetails(map[string]interface{}{
-				"code":   req.Code,
-				"status": types.StatusPublished,
-			}).
+			WithHint("Invalid price unit data provided").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate conversion rate is provided
-	if req.ConversionRate == nil {
-		return nil, ierr.NewError("conversion rate is required").
-			WithMessage("missing required conversion rate").
-			WithHint("Conversion rate is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	now := time.Now().UTC()
-
-	// Generate ID with prefix
-	id := types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE_UNIT)
-
-	unit := &domainPriceUnit.PriceUnit{
-		ID:             id,
-		Name:           req.Name,
-		Code:           strings.ToLower(req.Code),
-		Symbol:         req.Symbol,
-		BaseCurrency:   strings.ToLower(req.BaseCurrency),
-		ConversionRate: *req.ConversionRate,
-		Precision:      req.Precision,
-		BaseModel: types.BaseModel{
-			TenantID:  tenantID,
-			Status:    types.StatusPublished,
-			CreatedAt: now,
-			UpdatedAt: now,
-			CreatedBy: types.DefaultUserID,
-			UpdatedBy: types.DefaultUserID,
-		},
-	}
-
-	if err := s.repo.Create(ctx, unit); err != nil {
+	// Convert request to domain model
+	priceUnit, err := req.ToPriceUnit(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	return unit, nil
+	// Create price unit
+	createdPriceUnit, err := s.PriceUnitRepo.Create(ctx, priceUnit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.CreatePriceUnitResponse{
+		PriceUnit: createdPriceUnit,
+	}, nil
 }
 
-// List returns a paginated list of pricing units
-func (s *PriceUnitService) List(ctx context.Context, filter *domainPriceUnit.PriceUnitFilter) (*dto.ListPriceUnitsResponse, error) {
-	// Set tenant and environment from context if not provided
-	if filter.TenantID == "" {
-		filter.TenantID = types.GetTenantID(ctx)
-	}
-	if filter.EnvironmentID == "" {
-		filter.EnvironmentID = types.GetEnvironmentID(ctx)
+func (s *priceUnitService) GetPriceUnit(ctx context.Context, id string) (*dto.PriceUnitResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("price unit id is required").
+			WithHint("Please provide a valid price unit ID").
+			Mark(ierr.ErrValidation)
 	}
 
-	// Validate the filter
+	priceUnit, err := s.PriceUnitRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PriceUnitResponse{
+		PriceUnit: priceUnit,
+	}, nil
+}
+
+func (s *priceUnitService) GetPriceUnitByCode(ctx context.Context, code string) (*dto.PriceUnitResponse, error) {
+	if code == "" {
+		return nil, ierr.NewError("price unit code is required").
+			WithHint("Please provide a valid price unit code").
+			Mark(ierr.ErrValidation)
+	}
+
+	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, code)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PriceUnitResponse{
+		PriceUnit: priceUnit,
+	}, nil
+}
+
+func (s *priceUnitService) ListPriceUnits(ctx context.Context, filter *types.PriceUnitFilter) (*dto.ListPriceUnitsResponse, error) {
+	// Validate filter
 	if err := filter.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Get total count for pagination
-	totalCount, err := s.repo.Count(ctx, filter)
+	// Get price units from repository
+	priceUnits, err := s.PriceUnitRepo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get paginated results
-	units, err := s.repo.List(ctx, filter)
-	if err != nil {
-		return nil, err
+	// Convert to response DTOs
+	responses := make([]*dto.PriceUnitResponse, len(priceUnits))
+	for i, priceUnit := range priceUnits {
+		responses[i] = &dto.PriceUnitResponse{
+			PriceUnit: priceUnit,
+		}
 	}
 
-	// Convert to response
-	response := &dto.ListPriceUnitsResponse{
-		Items: make([]*dto.PriceUnitResponse, len(units)),
+	// Create list response
+	listResponse := &dto.ListPriceUnitsResponse{
+		Items: responses,
 		Pagination: types.PaginationResponse{
-			Total:  totalCount,
 			Limit:  filter.GetLimit(),
 			Offset: filter.GetOffset(),
+			Total:  len(responses),
 		},
 	}
 
-	for i, unit := range units {
-		response.Items[i] = s.toResponse(unit)
-	}
-
-	return response, nil
+	return listResponse, nil
 }
 
-// GetByID retrieves a pricing unit by ID
-func (s *PriceUnitService) GetByID(ctx context.Context, id string) (*dto.PriceUnitResponse, error) {
-	unit, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, ierr.WithError(err).
-				WithMessage("pricing unit not found").
-				WithHint("Pricing unit not found").
-				Mark(ierr.ErrNotFound)
-		}
-		return nil, err
-	}
-
-	return s.toResponse(unit), nil
-}
-
-func (s *PriceUnitService) GetByCode(ctx context.Context, code, tenantID, environmentID string) (*dto.PriceUnitResponse, error) {
-	unit, err := s.repo.GetByCode(ctx, strings.ToLower(code), tenantID, environmentID, string(types.StatusPublished))
-	if err != nil {
-		return nil, err
-	}
-	return s.toResponse(unit), nil
-}
-
-func (s *PriceUnitService) Update(ctx context.Context, id string, req *dto.UpdatePriceUnitRequest) (*dto.PriceUnitResponse, error) {
-	// Get existing unit
-	existingUnit, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Track if any changes were made
-	hasChanges := false
-	changes := make(map[string]interface{})
-
-	// Update fields if provided and different from current values
-	if req.Name != "" {
-		if req.Name != existingUnit.Name {
-			existingUnit.Name = req.Name
-			hasChanges = true
-			changes["name"] = req.Name
-		}
-	}
-	if req.Symbol != "" {
-		if req.Symbol != existingUnit.Symbol {
-			existingUnit.Symbol = req.Symbol
-			hasChanges = true
-			changes["symbol"] = req.Symbol
-		}
-	}
-	if req.Precision != 0 {
-		if req.Precision != existingUnit.Precision {
-			existingUnit.Precision = req.Precision
-			hasChanges = true
-			changes["precision"] = req.Precision
-		}
-	}
-	if req.ConversionRate != nil {
-		if !req.ConversionRate.Equal(existingUnit.ConversionRate) {
-			existingUnit.ConversionRate = *req.ConversionRate
-			hasChanges = true
-			changes["conversion_rate"] = req.ConversionRate.String()
-		}
-	}
-
-	// Check if any changes were actually made
-	if !hasChanges {
-		return nil, ierr.NewError("no changes detected").
-			WithMessage("provided values are the same as current values").
-			WithHint("Provide different values to update the price unit").
-			WithReportableDetails(map[string]interface{}{
-				"id":              id,
-				"name":            existingUnit.Name,
-				"symbol":          existingUnit.Symbol,
-				"precision":       existingUnit.Precision,
-				"conversion_rate": existingUnit.ConversionRate,
-			}).
+func (s *priceUnitService) UpdatePriceUnit(ctx context.Context, id string, req dto.UpdatePriceUnitRequest) (*dto.PriceUnitResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("price unit id is required").
+			WithHint("Please provide a valid price unit ID").
 			Mark(ierr.ErrValidation)
 	}
 
-	existingUnit.UpdatedAt = time.Now().UTC()
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid price unit update data provided").
+			Mark(ierr.ErrValidation)
+	}
 
-	if err := s.repo.Update(ctx, existingUnit); err != nil {
+	// Get existing price unit
+	existingPriceUnit, err := s.PriceUnitRepo.Get(ctx, id)
+	if err != nil {
 		return nil, err
 	}
 
-	return s.toResponse(existingUnit), nil
+	// Update fields
+	if req.Name != nil {
+		existingPriceUnit.Name = *req.Name
+	}
+	if req.Metadata != nil {
+		existingPriceUnit.Metadata = req.Metadata
+	}
+
+	// Update price unit
+	updatedPriceUnit, err := s.PriceUnitRepo.Update(ctx, existingPriceUnit)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PriceUnitResponse{
+		PriceUnit: updatedPriceUnit,
+	}, nil
 }
 
-func (s *PriceUnitService) Delete(ctx context.Context, id string) error {
-	// Get the existing unit first
-	existingUnit, err := s.repo.GetByID(ctx, id)
+func (s *priceUnitService) DeletePriceUnit(ctx context.Context, id string) error {
+	if id == "" {
+		return ierr.NewError("price unit id is required").
+			WithHint("Please provide a valid price unit ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get existing price unit
+	priceUnit, err := s.PriceUnitRepo.Get(ctx, id)
 	if err != nil {
 		return err
 	}
 
-	// Check the current status and handle accordingly
-	switch existingUnit.Status {
-	case types.StatusPublished:
-		// Check if the unit is being used by any prices
-		exists, err := s.repo.IsUsedByPrices(ctx, id)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to check if price unit is in use").
-				Mark(ierr.ErrDatabase)
-		}
-		if exists {
-			return ierr.NewError("price unit is in use").
-				WithMessage("cannot archive unit that is in use").
-				WithHint("This price unit is being used by one or more prices").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Archive the unit (set status to archived)
-		existingUnit.Status = types.StatusArchived
-		existingUnit.UpdatedAt = time.Now().UTC()
-
-		return s.repo.Update(ctx, existingUnit)
-
-	case types.StatusArchived:
-		return ierr.NewError("price unit is already archived").
-			WithMessage("cannot archive unit that is already archived").
-			WithHint("The price unit is already in archived status").
-			WithReportableDetails(map[string]interface{}{
-				"id":     id,
-				"status": existingUnit.Status,
-			}).
-			Mark(ierr.ErrValidation)
-
-	case types.StatusDeleted:
-		return ierr.NewError("price unit has been hard deleted").
-			WithMessage("cannot archive unit that has been hard deleted").
-			WithHint("The price unit has been permanently deleted and cannot be modified").
-			WithReportableDetails(map[string]interface{}{
-				"id":     id,
-				"status": existingUnit.Status,
-			}).
-			Mark(ierr.ErrValidation)
-
-	default:
-		return ierr.NewError("invalid price unit status").
-			WithMessage("price unit has an invalid status").
-			WithHint("Price unit status must be one of: published, archived, deleted").
-			WithReportableDetails(map[string]interface{}{
-				"id":     id,
-				"status": existingUnit.Status,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-}
-
-// ConvertToBaseCurrency converts an amount from pricing unit to base currency
-// amount in fiat currency = amount in pricing unit * conversion_rate
-func (s *PriceUnitService) ConvertToBaseCurrency(ctx context.Context, code, tenantID, environmentID string, priceUnitAmount decimal.Decimal) (decimal.Decimal, error) {
-	if priceUnitAmount.IsZero() {
-		return decimal.Zero, nil
-	}
-
-	if priceUnitAmount.IsNegative() {
-		return decimal.Zero, ierr.NewError("amount must be positive").
-			WithMessage("negative amount provided for conversion").
-			WithHint("Amount must be greater than zero").
-			WithReportableDetails(map[string]interface{}{
-				"amount": priceUnitAmount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	return s.repo.ConvertToBaseCurrency(ctx, strings.ToLower(code), tenantID, environmentID, priceUnitAmount)
-}
-
-// ConvertToPriceUnit converts an amount from base currency to pricing unit
-// amount in pricing unit = amount in fiat currency / conversion_rate
-func (s *PriceUnitService) ConvertToPriceUnit(ctx context.Context, code, tenantID, environmentID string, fiatAmount decimal.Decimal) (decimal.Decimal, error) {
-	if fiatAmount.IsZero() {
-		return decimal.Zero, nil
-	}
-
-	if fiatAmount.IsNegative() {
-		return decimal.Zero, ierr.NewError("amount must be positive").
-			WithMessage("negative amount provided for conversion").
-			WithHint("Amount must be greater than zero").
-			WithReportableDetails(map[string]interface{}{
-				"amount": fiatAmount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	return s.repo.ConvertToPriceUnit(ctx, strings.ToLower(code), tenantID, environmentID, fiatAmount)
-}
-
-// toResponse converts a domain PricingUnit to a dto.PriceUnitResponse
-func (s *PriceUnitService) toResponse(unit *domainPriceUnit.PriceUnit) *dto.PriceUnitResponse {
-	return &dto.PriceUnitResponse{
-		PriceUnit: unit,
-	}
+	// Delete price unit
+	return s.PriceUnitRepo.Delete(ctx, priceUnit)
 }
