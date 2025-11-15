@@ -34,6 +34,12 @@ const (
 	FieldSubscriptionID = "subscription_id"
 	// FieldSubscriptionLineItemID holds the string denoting the subscription_line_item_id field in the database.
 	FieldSubscriptionLineItemID = "subscription_line_item_id"
+	// FieldSubscriptionPhaseID holds the string denoting the subscription_phase_id field in the database.
+	FieldSubscriptionPhaseID = "subscription_phase_id"
+	// FieldStartDate holds the string denoting the start_date field in the database.
+	FieldStartDate = "start_date"
+	// FieldEndDate holds the string denoting the end_date field in the database.
+	FieldEndDate = "end_date"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// EdgeCoupon holds the string denoting the coupon edge name in mutations.
@@ -87,6 +93,9 @@ var Columns = []string{
 	FieldCouponID,
 	FieldSubscriptionID,
 	FieldSubscriptionLineItemID,
+	FieldSubscriptionPhaseID,
+	FieldStartDate,
+	FieldEndDate,
 	FieldMetadata,
 }
 
@@ -123,6 +132,8 @@ var (
 	CouponIDValidator func(string) error
 	// SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
 	SubscriptionIDValidator func(string) error
+	// DefaultStartDate holds the default value on creation for the "start_date" field.
+	DefaultStartDate func() time.Time
 )
 
 // OrderOption defines the ordering options for the CouponAssociation queries.
@@ -181,6 +192,21 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionLineItemID orders the results by the subscription_line_item_id field.
 func BySubscriptionLineItemID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionLineItemID, opts...).ToFunc()
+}
+
+// BySubscriptionPhaseID orders the results by the subscription_phase_id field.
+func BySubscriptionPhaseID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionPhaseID, opts...).ToFunc()
+}
+
+// ByStartDate orders the results by the start_date field.
+func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartDate, opts...).ToFunc()
+}
+
+// ByEndDate orders the results by the end_date field.
+func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
 }
 
 // ByCouponField orders the results by coupon field.

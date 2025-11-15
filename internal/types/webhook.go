@@ -31,6 +31,13 @@ const (
 	WebhookEventSubscriptionResumed   = "subscription.resumed"
 )
 
+// subscription phase event names
+const (
+	WebhookEventSubscriptionPhaseCreated = "subscription.phase.created"
+	WebhookEventSubscriptionPhaseUpdated = "subscription.phase.updated"
+	WebhookEventSubscriptionPhaseDeleted = "subscription.phase.deleted"
+)
+
 // feature event names
 const (
 	WebhookEventFeatureCreated            = "feature.created"

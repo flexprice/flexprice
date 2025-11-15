@@ -19,7 +19,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
-	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/subscriptionphase"
 )
 
 // SubscriptionQuery is the builder for querying Subscription entities.
@@ -31,8 +31,8 @@ type SubscriptionQuery struct {
 	predicates             []predicate.Subscription
 	withLineItems          *SubscriptionLineItemQuery
 	withPauses             *SubscriptionPauseQuery
+	withPhases             *SubscriptionPhaseQuery
 	withCreditGrants       *CreditGrantQuery
-	withSchedule           *SubscriptionScheduleQuery
 	withCouponAssociations *CouponAssociationQuery
 	withCouponApplications *CouponApplicationQuery
 	// intermediate query (i.e. traversal path).
@@ -115,6 +115,28 @@ func (sq *SubscriptionQuery) QueryPauses() *SubscriptionPauseQuery {
 	return query
 }
 
+// QueryPhases chains the current query on the "phases" edge.
+func (sq *SubscriptionQuery) QueryPhases() *SubscriptionPhaseQuery {
+	query := (&SubscriptionPhaseClient{config: sq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, selector),
+			sqlgraph.To(subscriptionphase.Table, subscriptionphase.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, subscription.PhasesTable, subscription.PhasesColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // QueryCreditGrants chains the current query on the "credit_grants" edge.
 func (sq *SubscriptionQuery) QueryCreditGrants() *CreditGrantQuery {
 	query := (&CreditGrantClient{config: sq.config}).Query()
@@ -130,28 +152,6 @@ func (sq *SubscriptionQuery) QueryCreditGrants() *CreditGrantQuery {
 			sqlgraph.From(subscription.Table, subscription.FieldID, selector),
 			sqlgraph.To(creditgrant.Table, creditgrant.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CreditGrantsTable, subscription.CreditGrantsColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QuerySchedule chains the current query on the "schedule" edge.
-func (sq *SubscriptionQuery) QuerySchedule() *SubscriptionScheduleQuery {
-	query := (&SubscriptionScheduleClient{config: sq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := sq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := sq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(subscription.Table, subscription.FieldID, selector),
-			sqlgraph.To(subscriptionschedule.Table, subscriptionschedule.FieldID),
-			sqlgraph.Edge(sqlgraph.O2O, false, subscription.ScheduleTable, subscription.ScheduleColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
 		return fromU, nil
@@ -397,8 +397,8 @@ func (sq *SubscriptionQuery) Clone() *SubscriptionQuery {
 		predicates:             append([]predicate.Subscription{}, sq.predicates...),
 		withLineItems:          sq.withLineItems.Clone(),
 		withPauses:             sq.withPauses.Clone(),
+		withPhases:             sq.withPhases.Clone(),
 		withCreditGrants:       sq.withCreditGrants.Clone(),
-		withSchedule:           sq.withSchedule.Clone(),
 		withCouponAssociations: sq.withCouponAssociations.Clone(),
 		withCouponApplications: sq.withCouponApplications.Clone(),
 		// clone intermediate query.
@@ -429,6 +429,17 @@ func (sq *SubscriptionQuery) WithPauses(opts ...func(*SubscriptionPauseQuery)) *
 	return sq
 }
 
+// WithPhases tells the query-builder to eager-load the nodes that are connected to
+// the "phases" edge. The optional arguments are used to configure the query builder of the edge.
+func (sq *SubscriptionQuery) WithPhases(opts ...func(*SubscriptionPhaseQuery)) *SubscriptionQuery {
+	query := (&SubscriptionPhaseClient{config: sq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sq.withPhases = query
+	return sq
+}
+
 // WithCreditGrants tells the query-builder to eager-load the nodes that are connected to
 // the "credit_grants" edge. The optional arguments are used to configure the query builder of the edge.
 func (sq *SubscriptionQuery) WithCreditGrants(opts ...func(*CreditGrantQuery)) *SubscriptionQuery {
@@ -437,17 +448,6 @@ func (sq *SubscriptionQuery) WithCreditGrants(opts ...func(*CreditGrantQuery)) *
 		opt(query)
 	}
 	sq.withCreditGrants = query
-	return sq
-}
-
-// WithSchedule tells the query-builder to eager-load the nodes that are connected to
-// the "schedule" edge. The optional arguments are used to configure the query builder of the edge.
-func (sq *SubscriptionQuery) WithSchedule(opts ...func(*SubscriptionScheduleQuery)) *SubscriptionQuery {
-	query := (&SubscriptionScheduleClient{config: sq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	sq.withSchedule = query
 	return sq
 }
 
@@ -554,8 +554,8 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 		loadedTypes = [6]bool{
 			sq.withLineItems != nil,
 			sq.withPauses != nil,
+			sq.withPhases != nil,
 			sq.withCreditGrants != nil,
-			sq.withSchedule != nil,
 			sq.withCouponAssociations != nil,
 			sq.withCouponApplications != nil,
 		}
@@ -592,16 +592,17 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 			return nil, err
 		}
 	}
+	if query := sq.withPhases; query != nil {
+		if err := sq.loadPhases(ctx, query, nodes,
+			func(n *Subscription) { n.Edges.Phases = []*SubscriptionPhase{} },
+			func(n *Subscription, e *SubscriptionPhase) { n.Edges.Phases = append(n.Edges.Phases, e) }); err != nil {
+			return nil, err
+		}
+	}
 	if query := sq.withCreditGrants; query != nil {
 		if err := sq.loadCreditGrants(ctx, query, nodes,
 			func(n *Subscription) { n.Edges.CreditGrants = []*CreditGrant{} },
 			func(n *Subscription, e *CreditGrant) { n.Edges.CreditGrants = append(n.Edges.CreditGrants, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := sq.withSchedule; query != nil {
-		if err := sq.loadSchedule(ctx, query, nodes, nil,
-			func(n *Subscription, e *SubscriptionSchedule) { n.Edges.Schedule = e }); err != nil {
 			return nil, err
 		}
 	}
@@ -686,6 +687,36 @@ func (sq *SubscriptionQuery) loadPauses(ctx context.Context, query *Subscription
 	}
 	return nil
 }
+func (sq *SubscriptionQuery) loadPhases(ctx context.Context, query *SubscriptionPhaseQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionPhase)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[string]*Subscription)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(subscriptionphase.FieldSubscriptionID)
+	}
+	query.Where(predicate.SubscriptionPhase(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(subscription.PhasesColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.SubscriptionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 func (sq *SubscriptionQuery) loadCreditGrants(ctx context.Context, query *CreditGrantQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *CreditGrant)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[string]*Subscription)
@@ -714,33 +745,6 @@ func (sq *SubscriptionQuery) loadCreditGrants(ctx context.Context, query *Credit
 		node, ok := nodeids[*fk]
 		if !ok {
 			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, *fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
-}
-func (sq *SubscriptionQuery) loadSchedule(ctx context.Context, query *SubscriptionScheduleQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *SubscriptionSchedule)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*Subscription)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(subscriptionschedule.FieldSubscriptionID)
-	}
-	query.Where(predicate.SubscriptionSchedule(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(subscription.ScheduleColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.SubscriptionID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "subscription_id" returned %v for node %v`, fk, n.ID)
 		}
 		assign(node, n)
 	}

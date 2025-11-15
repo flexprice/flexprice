@@ -123,6 +123,13 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 		field.Time("end_date").
 			Optional().
 			Nillable(),
+		field.String("subscription_phase_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
 		field.JSON("metadata", map[string]string{}).
 			Optional().
 			SchemaType(map[string]string{

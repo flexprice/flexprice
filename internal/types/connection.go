@@ -9,10 +9,11 @@ import (
 type ConnectionMetadataType string
 
 const (
-	ConnectionMetadataTypeStripe  ConnectionMetadataType = "stripe"
-	ConnectionMetadataTypeGeneric ConnectionMetadataType = "generic"
-	ConnectionMetadataTypeS3      ConnectionMetadataType = "s3"
-	ConnectionMetadataTypeHubSpot ConnectionMetadataType = "hubspot"
+	ConnectionMetadataTypeStripe   ConnectionMetadataType = "stripe"
+	ConnectionMetadataTypeGeneric  ConnectionMetadataType = "generic"
+	ConnectionMetadataTypeS3       ConnectionMetadataType = "s3"
+	ConnectionMetadataTypeHubSpot  ConnectionMetadataType = "hubspot"
+	ConnectionMetadataTypeRazorpay ConnectionMetadataType = "razorpay"
 )
 
 func (t ConnectionMetadataType) Validate() error {
@@ -21,10 +22,11 @@ func (t ConnectionMetadataType) Validate() error {
 		ConnectionMetadataTypeGeneric,
 		ConnectionMetadataTypeS3,
 		ConnectionMetadataTypeHubSpot,
+		ConnectionMetadataTypeRazorpay,
 	}
 	if !lo.Contains(allowedTypes, t) {
 		return ierr.NewError("invalid connection metadata type").
-			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot").
+			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot, razorpay").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -83,6 +85,28 @@ func (h *HubSpotConnectionMetadata) Validate() error {
 	return nil
 }
 
+// RazorpayConnectionMetadata represents Razorpay-specific connection metadata
+type RazorpayConnectionMetadata struct {
+	KeyID         string `json:"key_id"`          // Razorpay Key ID (encrypted)
+	SecretKey     string `json:"secret_key"`      // Razorpay Secret Key (encrypted)
+	WebhookSecret string `json:"webhook_secret"`  // Razorpay Webhook Secret (encrypted, optional)
+}
+
+// Validate validates the Razorpay connection metadata
+func (r *RazorpayConnectionMetadata) Validate() error {
+	if r.KeyID == "" {
+		return ierr.NewError("key_id is required").
+			WithHint("Razorpay key ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if r.SecretKey == "" {
+		return ierr.NewError("secret_key is required").
+			WithHint("Razorpay secret key is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // ConnectionSettings represents general connection settings
 type ConnectionSettings struct {
 	InvoiceSyncEnable *bool `json:"invoice_sync_enable,omitempty"`
@@ -125,11 +149,12 @@ func (g *GenericConnectionMetadata) Validate() error {
 
 // ConnectionMetadata represents structured connection metadata
 type ConnectionMetadata struct {
-	Stripe   *StripeConnectionMetadata  `json:"stripe,omitempty"`
-	S3       *S3ConnectionMetadata      `json:"s3,omitempty"`
-	HubSpot  *HubSpotConnectionMetadata `json:"hubspot,omitempty"`
-	Generic  *GenericConnectionMetadata `json:"generic,omitempty"`
-	Settings *ConnectionSettings        `json:"settings,omitempty"`
+	Stripe   *StripeConnectionMetadata   `json:"stripe,omitempty"`
+	S3       *S3ConnectionMetadata       `json:"s3,omitempty"`
+	HubSpot  *HubSpotConnectionMetadata  `json:"hubspot,omitempty"`
+	Razorpay *RazorpayConnectionMetadata `json:"razorpay,omitempty"`
+	Generic  *GenericConnectionMetadata  `json:"generic,omitempty"`
+	Settings *ConnectionSettings         `json:"settings,omitempty"`
 }
 
 // Validate validates the connection metadata based on provider type
@@ -156,6 +181,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.HubSpot.Validate()
+	case SecretProviderRazorpay:
+		if c.Razorpay == nil {
+			return ierr.NewError("razorpay metadata is required").
+				WithHint("Razorpay metadata is required for razorpay provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.Razorpay.Validate()
 	default:
 		// For other providers or unknown types, use generic format
 		if c.Generic == nil {

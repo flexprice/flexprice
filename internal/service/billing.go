@@ -1033,86 +1033,74 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	// Apply Coupons if any - both subscription level and line item level
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 	couponValidationService := NewCouponValidationService(s.ServiceParams)
-	couponService := NewCouponService(s.ServiceParams)
 
-	// Get subscription-level coupons
-	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, sub.ID)
+	// Get all coupon associations (both subscription-level and line item-level) that are active during the subscription's current billing period
+	// Using a single query to fetch both types
+	allCouponsFilter := types.NewCouponAssociationFilter()
+	allCouponsFilter.SubscriptionIDs = []string{sub.ID}
+	allCouponsFilter.ActiveOnly = true
+	allCouponsFilter.PeriodStart = &sub.CurrentPeriodStart
+	allCouponsFilter.PeriodEnd = &sub.CurrentPeriodEnd
+	allCouponAssociationsResponse, err := couponAssociationService.ListCouponAssociations(ctx, allCouponsFilter)
 	if err != nil {
 		return nil, err
 	}
+	allCouponAssociations := allCouponAssociationsResponse.Items
 
+	// Build maps for efficient lookups
+	subLineItemIDToPriceIDMap := make(map[string]string)
+	for _, lineItem := range sub.LineItems {
+		if lineItem.PriceID != "" {
+			subLineItemIDToPriceIDMap[lineItem.ID] = lineItem.PriceID
+		}
+	}
+
+	// Build set of price IDs that appear in invoice line items
+	invoiceLineItemPriceIDs := make(map[string]bool)
+	for _, lineItem := range append(result.FixedCharges, result.UsageCharges...) {
+		if lineItem.PriceID != nil {
+			invoiceLineItemPriceIDs[*lineItem.PriceID] = true
+		}
+	}
+
+	// Process all coupon associations in a single loop
 	validCoupons := make([]dto.InvoiceCoupon, 0)
-	for _, couponAssociation := range couponAssociations {
-		coupon, err := couponService.GetCoupon(ctx, couponAssociation.CouponID)
+	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
+
+	for _, couponAssociation := range allCouponAssociations {
+		// Get coupon details for validation
+		coupon, err := s.CouponRepo.Get(ctx, couponAssociation.CouponID)
 		if err != nil {
 			s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
 			continue
 		}
-		if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &sub.ID); err != nil {
+
+		// Validate coupon
+		if err := couponValidationService.ValidateCoupon(ctx, *coupon, sub); err != nil {
 			s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
 			continue
 		}
-		validCoupons = append(validCoupons, dto.InvoiceCoupon{
-			CouponID:            couponAssociation.CouponID,
-			CouponAssociationID: &couponAssociation.ID,
-			AmountOff:           coupon.AmountOff,
-			PercentageOff:       coupon.PercentageOff,
-			Type:                coupon.Type,
-		})
-	}
 
-	couponAssociationsbyLineItems, err := couponAssociationService.GetBySubscriptionForLineItems(ctx, sub.ID)
-	// Get line item-level coupons by collecting them from subscription line items
-	if err != nil {
-		return nil, err
-	}
-
-	subLineItemToCouponMap := make(map[string][]*dto.CouponAssociationResponse)
-	for _, couponAssociation := range couponAssociationsbyLineItems {
 		if couponAssociation.SubscriptionLineItemID == nil {
-			continue
-		}
-		subLineItemToCouponMap[*couponAssociation.SubscriptionLineItemID] = append(subLineItemToCouponMap[*couponAssociation.SubscriptionLineItemID], couponAssociation)
-	}
-
-	priceIDtoSubLineItemMap := make(map[string]*subscription.SubscriptionLineItem)
-	for _, lineItem := range sub.LineItems {
-		if lineItem.PriceID == "" {
-			continue
-		}
-		priceIDtoSubLineItemMap[lineItem.PriceID] = lineItem
-	}
-
-	validLineItemCoupons := make([]dto.InvoiceLineItemCoupon, 0)
-	for _, lineItem := range append(result.FixedCharges, result.UsageCharges...) {
-		if lineItem.PriceID == nil {
-			continue
-		}
-		if lineItem.Metadata != nil && lineItem.Metadata["is_overage"] == "true" {
-			continue
-		}
-		subLineItem, ok := priceIDtoSubLineItemMap[*lineItem.PriceID]
-		if !ok {
-			continue
-		}
-		couponAssociations := subLineItemToCouponMap[subLineItem.ID]
-		for _, couponAssociation := range couponAssociations {
-			coupon, err := couponService.GetCoupon(ctx, couponAssociation.CouponID)
-			if err != nil {
-				s.Logger.Errorw("failed to get coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			// Subscription-level coupon
+			validCoupons = append(validCoupons, dto.InvoiceCoupon{
+				CouponID:            couponAssociation.CouponID,
+				CouponAssociationID: &couponAssociation.ID,
+			})
+		} else {
+			// Line item-level coupon - only include if the line item is in the invoice
+			priceID, ok := subLineItemIDToPriceIDMap[*couponAssociation.SubscriptionLineItemID]
+			if !ok || priceID == "" {
 				continue
 			}
-			if err := couponValidationService.ValidateCoupon(ctx, couponAssociation.CouponID, &sub.ID); err != nil {
-				s.Logger.Errorw("failed to validate coupon", "error", err, "coupon_id", couponAssociation.CouponID)
+			// Only add if this price ID appears in the invoice line items
+			if !invoiceLineItemPriceIDs[priceID] {
 				continue
 			}
 			validLineItemCoupons = append(validLineItemCoupons, dto.InvoiceLineItemCoupon{
-				LineItemID:          *lineItem.PriceID,
+				LineItemID:          priceID,
 				CouponID:            couponAssociation.CouponID,
 				CouponAssociationID: &couponAssociation.ID,
-				AmountOff:           coupon.AmountOff,
-				PercentageOff:       coupon.PercentageOff,
-				Type:                coupon.Type,
 			})
 		}
 	}

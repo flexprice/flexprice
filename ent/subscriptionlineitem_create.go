@@ -339,6 +339,20 @@ func (slic *SubscriptionLineItemCreate) SetNillableEndDate(t *time.Time) *Subscr
 	return slic
 }
 
+// SetSubscriptionPhaseID sets the "subscription_phase_id" field.
+func (slic *SubscriptionLineItemCreate) SetSubscriptionPhaseID(s string) *SubscriptionLineItemCreate {
+	slic.mutation.SetSubscriptionPhaseID(s)
+	return slic
+}
+
+// SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableSubscriptionPhaseID(s *string) *SubscriptionLineItemCreate {
+	if s != nil {
+		slic.SetSubscriptionPhaseID(*s)
+	}
+	return slic
+}
+
 // SetMetadata sets the "metadata" field.
 func (slic *SubscriptionLineItemCreate) SetMetadata(m map[string]string) *SubscriptionLineItemCreate {
 	slic.mutation.SetMetadata(m)
@@ -641,6 +655,10 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.EndDate(); ok {
 		_spec.SetField(subscriptionlineitem.FieldEndDate, field.TypeTime, value)
 		_node.EndDate = &value
+	}
+	if value, ok := slic.mutation.SubscriptionPhaseID(); ok {
+		_spec.SetField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString, value)
+		_node.SubscriptionPhaseID = &value
 	}
 	if value, ok := slic.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)

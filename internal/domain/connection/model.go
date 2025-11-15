@@ -112,6 +112,20 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			HubSpot: hubspotMetadata,
 		}
+	case types.SecretProviderRazorpay:
+		razorpayMetadata := &types.RazorpayConnectionMetadata{}
+		if keyID, ok := metadata["key_id"].(string); ok {
+			razorpayMetadata.KeyID = keyID
+		}
+		if secretKey, ok := metadata["secret_key"].(string); ok {
+			razorpayMetadata.SecretKey = secretKey
+		}
+		if webhookSecret, ok := metadata["webhook_secret"].(string); ok {
+			razorpayMetadata.WebhookSecret = webhookSecret
+		}
+		return types.ConnectionMetadata{
+			Razorpay: razorpayMetadata,
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{

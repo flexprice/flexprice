@@ -14,6 +14,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
+	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/s3"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
@@ -186,6 +188,57 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 	}, nil
 }
 
+// GetRazorpayIntegration returns a complete Razorpay integration setup
+func (f *Factory) GetRazorpayIntegration(ctx context.Context) (*RazorpayIntegration, error) {
+	// Create Razorpay client
+	razorpayClient := razorpay.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+	)
+
+	// Create customer service
+	customerSvc := razorpay.NewCustomerService(
+		razorpayClient,
+		f.customerRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	// Create invoice sync service
+	invoiceSyncSvc := razorpay.NewInvoiceSyncService(
+		razorpayClient,
+		customerSvc.(*razorpay.CustomerService),
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	// Create payment service
+	paymentSvc := razorpay.NewPaymentService(
+		razorpayClient,
+		customerSvc,
+		invoiceSyncSvc,
+		f.logger,
+	)
+
+	// Create webhook handler
+	webhookHandler := razorpaywebhook.NewHandler(
+		razorpayClient,
+		paymentSvc,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &RazorpayIntegration{
+		Client:         razorpayClient,
+		CustomerSvc:    customerSvc,
+		PaymentSvc:     paymentSvc,
+		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (interface{}, error) {
 	switch providerType {
@@ -193,6 +246,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetStripeIntegration(ctx)
 	case types.SecretProviderHubSpot:
 		return f.GetHubSpotIntegration(ctx)
+	case types.SecretProviderRazorpay:
+		return f.GetRazorpayIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -208,6 +263,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 	return []types.SecretProvider{
 		types.SecretProviderStripe,
 		types.SecretProviderHubSpot,
+		types.SecretProviderRazorpay,
 	}
 }
 
@@ -238,6 +294,15 @@ type HubSpotIntegration struct {
 	InvoiceSyncSvc *hubspot.InvoiceSyncService
 	DealSyncSvc    *hubspot.DealSyncService
 	WebhookHandler *hubspotwebhook.Handler
+}
+
+// RazorpayIntegration contains all Razorpay integration services
+type RazorpayIntegration struct {
+	Client         razorpay.RazorpayClient
+	CustomerSvc    razorpay.RazorpayCustomerService
+	PaymentSvc     *razorpay.PaymentService
+	InvoiceSyncSvc *razorpay.InvoiceSyncService
+	WebhookHandler *razorpaywebhook.Handler
 }
 
 // IntegrationProvider defines the interface for all integration providers
@@ -276,6 +341,21 @@ func (p *HubSpotProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasHubSpotConnection(ctx)
 }
 
+// RazorpayProvider implements IntegrationProvider for Razorpay
+type RazorpayProvider struct {
+	integration *RazorpayIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *RazorpayProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderRazorpay
+}
+
+// IsAvailable checks if Razorpay integration is available
+func (p *RazorpayProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasRazorpayConnection(ctx)
+}
+
 // GetAvailableProviders returns all available providers for the current environment
 func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvider, error) {
 	var providers []IntegrationProvider
@@ -295,6 +375,15 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		hubspotProvider := &HubSpotProvider{integration: hubspotIntegration}
 		if hubspotProvider.IsAvailable(ctx) {
 			providers = append(providers, hubspotProvider)
+		}
+	}
+
+	// Check Razorpay
+	razorpayIntegration, err := f.GetRazorpayIntegration(ctx)
+	if err == nil {
+		razorpayProvider := &RazorpayProvider{integration: razorpayIntegration}
+		if razorpayProvider.IsAvailable(ctx) {
+			providers = append(providers, razorpayProvider)
 		}
 	}
 

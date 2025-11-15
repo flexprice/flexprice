@@ -669,9 +669,9 @@ func (s *WalletServiceSuite) TestTopUpWallet() {
 	resp, err := s.service.TopUpWallet(s.GetContext(), s.testData.wallet.ID, topUpReq)
 	s.NoError(err)
 	s.NotNil(resp)
-	s.True(decimal.NewFromInt(1500).Equal(resp.Balance),
+	s.True(decimal.NewFromInt(1500).Equal(resp.Wallet.Balance),
 		"Balance mismatch: expected %s, got %s",
-		decimal.NewFromInt(1500), resp.Balance)
+		decimal.NewFromInt(1500), resp.Wallet.Balance)
 
 	// Verify the transaction has the correct priority
 	filter := types.NewWalletTransactionFilter()
@@ -917,17 +917,17 @@ func (s *WalletServiceSuite) TestWalletConversionRateHandling() {
 			s.NotNil(resp)
 
 			// Verify balances
-			s.True(tc.expectedAmount.Equal(resp.Balance),
+			s.True(tc.expectedAmount.Equal(resp.Wallet.Balance),
 				"Balance mismatch for %s: expected %s, got %s",
-				tc.name, tc.expectedAmount, resp.Balance)
-			s.True(tc.creditAmount.Equal(resp.CreditBalance),
+				tc.name, tc.expectedAmount, resp.Wallet.Balance)
+			s.True(tc.creditAmount.Equal(resp.Wallet.CreditBalance),
 				"Credit balance mismatch for %s: expected %s, got %s",
-				tc.name, tc.creditAmount, resp.CreditBalance)
+				tc.name, tc.creditAmount, resp.Wallet.CreditBalance)
 
 			// Verify conversion rate maintained
-			s.True(tc.conversionRate.Equal(resp.ConversionRate),
+			s.True(tc.conversionRate.Equal(resp.Wallet.ConversionRate),
 				"Conversion rate changed: expected %s, got %s",
-				tc.conversionRate, resp.ConversionRate)
+				tc.conversionRate, resp.Wallet.ConversionRate)
 		})
 	}
 }

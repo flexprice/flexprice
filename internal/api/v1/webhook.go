@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/integration"
+	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -398,4 +400,115 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 	h.logger.Infow("successfully processed HubSpot webhook",
 		"environment_id", environmentID,
 		"event_count", len(events))
+}
+
+// @Summary Handle Razorpay webhook events
+// @Description Process incoming Razorpay webhook events for payment capture and failure
+// @Tags Webhooks
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param environment_id path string true "Environment ID"
+// @Param X-Razorpay-Signature header string true "Razorpay webhook signature"
+// @Success 200 {object} map[string]interface{} "Webhook received (always returns 200)"
+// @Router /webhooks/razorpay/{tenant_id}/{environment_id} [post]
+func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
+	// Always return 200 OK to Razorpay to prevent retries
+	// We log errors internally but don't expose them to Razorpay
+	defer func() {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Webhook received",
+		})
+	}()
+
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
+	// Read the raw request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read request body", "error", err)
+		return
+	}
+
+	// Get Razorpay signature from headers
+	signature := c.GetHeader("X-Razorpay-Signature")
+
+	// Log all headers for debugging (only in case of missing signature)
+	if signature == "" {
+		h.logger.Warnw("missing X-Razorpay-Signature header - webhook test ping or signature not configured",
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"has_body", len(body) > 0,
+			"content_type", c.GetHeader("Content-Type"))
+		return
+	}
+
+	// Get Razorpay event ID for idempotency
+	// As per Razorpay docs: "The value for this header is unique per event"
+	eventID := c.GetHeader("x-razorpay-event-id")
+
+	// Set context with tenant and environment IDs
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Get Razorpay integration
+	razorpayIntegration, err := h.integrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Razorpay integration", "error", err)
+		return
+	}
+
+	// Verify webhook signature
+	err = razorpayIntegration.Client.VerifyWebhookSignature(ctx, body, signature)
+	if err != nil {
+		h.logger.Errorw("failed to verify Razorpay webhook signature", "error", err)
+		return
+	}
+
+	// Log webhook processing (without sensitive data)
+	h.logger.Infow("processing Razorpay webhook",
+		"environment_id", environmentID,
+		"tenant_id", tenantID,
+		"event_id", eventID,
+		"payload_length", len(body))
+
+	// Parse webhook payload
+	var event razorpaywebhook.RazorpayWebhookEvent
+	err = json.Unmarshal(body, &event)
+	if err != nil {
+		h.logger.Errorw("failed to parse Razorpay webhook payload", "error", err)
+		return
+	}
+
+	// Create service dependencies for webhook handler
+	serviceDeps := &razorpaywebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		DB:                              h.db,
+	}
+
+	// Handle the webhook event
+	err = razorpayIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
+	if err != nil {
+		h.logger.Errorw("failed to handle Razorpay webhook event", "error", err)
+		return
+	}
+
+	h.logger.Infow("successfully processed Razorpay webhook",
+		"environment_id", environmentID,
+		"event_id", eventID,
+		"event_type", event.Event)
 }

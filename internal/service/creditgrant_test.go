@@ -59,6 +59,7 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
 		WalletRepo:                 s.GetStores().WalletRepo,
 		TenantRepo:                 s.GetStores().TenantRepo,
 		InvoiceRepo:                s.GetStores().InvoiceRepo,

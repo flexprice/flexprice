@@ -111,6 +111,8 @@ type Subscription struct {
 
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
 
+	Phases []*SubscriptionPhase `json:"phases,omitempty"`
+
 	CouponAssociations []*coupon_association.CouponAssociation `json:"coupon_associations,omitempty"`
 
 	CustomerTimezone string `json:"customer_timezone"`
@@ -138,6 +140,11 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 	var pauses []*SubscriptionPause
 	if sub.Edges.Pauses != nil {
 		pauses = SubscriptionPauseListFromEnt(sub.Edges.Pauses)
+	}
+
+	var phases []*SubscriptionPhase
+	if sub.Edges.Phases != nil {
+		phases = SubscriptionPhaseListFromEnt(sub.Edges.Phases)
 	}
 
 	var couponAssociations []*coupon_association.CouponAssociation
@@ -180,6 +187,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		LineItems:          lineItems,
 		CouponAssociations: couponAssociations,
 		Pauses:             pauses,
+		Phases:             phases,
 		CustomerTimezone:   sub.CustomerTimezone,
 		ProrationBehavior:  types.ProrationBehavior(sub.ProrationBehavior),
 		BaseModel: types.BaseModel{
