@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -603,7 +604,7 @@ func (s *billingService) CalculateUsageCharges(
 				"is_overage", matchingCharge.IsOverage,
 				"subscription_id", sub.ID,
 				"line_item_id", item.ID,
-				"price_id", item.PriceID)	
+				"price_id", item.PriceID)
 
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				EntityID:         lo.ToPtr(item.EntityID),
@@ -1158,14 +1159,23 @@ func (s *billingService) CalculateUsageChargesForPreview(
 			// Calculate price unit amount if price unit is available
 			var priceUnitAmount *decimal.Decimal
 			if item.PriceUnit != "" {
-				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), lineItemAmount)
+				// Get the price unit by code
+				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit)
 				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
+					s.Logger.Warnw("failed to get price unit",
 						"error", err,
-						"price_unit", item.PriceUnit,
-						"amount", lineItemAmount)
+						"price_unit", item.PriceUnit)
 				} else {
-					priceUnitAmount = &convertedAmount
+					// Convert fiat currency amount to price unit amount
+					convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.Precision)
+					if err != nil {
+						s.Logger.Warnw("failed to convert amount to price unit",
+							"error", err,
+							"price_unit", item.PriceUnit,
+							"amount", lineItemAmount)
+					} else {
+						priceUnitAmount = &convertedAmount
+					}
 				}
 			}
 

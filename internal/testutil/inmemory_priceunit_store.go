@@ -107,6 +107,23 @@ func (s *InMemoryPriceUnitStore) List(ctx context.Context, filter *types.PriceUn
 	return priceUnits, nil
 }
 
+func (s *InMemoryPriceUnitStore) Count(ctx context.Context, filter *types.PriceUnitFilter) (int, error) {
+	if filter == nil {
+		filter = types.NewPriceUnitFilter()
+	}
+
+	count, err := s.InMemoryStore.Count(ctx, filter, priceUnitFilterFn)
+	if err != nil {
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count price units").
+			WithReportableDetails(map[string]interface{}{
+				"filter": filter,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	return count, nil
+}
+
 func (s *InMemoryPriceUnitStore) Update(ctx context.Context, pu *priceunit.PriceUnit) (*priceunit.PriceUnit, error) {
 	if pu == nil {
 		return nil, ierr.NewError("price unit cannot be nil").
