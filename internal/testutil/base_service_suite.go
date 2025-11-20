@@ -27,6 +27,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/secret"
 	"github.com/flexprice/flexprice/internal/domain/settings"
@@ -60,6 +61,7 @@ type Stores struct {
 	EventRepo                    events.Repository
 	PlanRepo                     plan.Repository
 	PriceRepo                    price.Repository
+	PriceUnitRepo                priceunit.Repository
 	MeterRepo                    meter.Repository
 	CustomerRepo                 customer.Repository
 	InvoiceRepo                  invoice.Repository
@@ -193,6 +195,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		EventRepo:                    NewInMemoryEventStore(),
 		PlanRepo:                     NewInMemoryPlanStore(),
 		PriceRepo:                    NewInMemoryPriceStore(),
+		PriceUnitRepo:                NewInMemoryPriceUnitStore(),
 		MeterRepo:                    NewInMemoryMeterStore(),
 		CustomerRepo:                 NewInMemoryCustomerStore(),
 		InvoiceRepo:                  NewInMemoryInvoiceStore(),
@@ -241,6 +244,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.EventRepo.(*InMemoryEventStore).Clear()
 	s.stores.PlanRepo.(*InMemoryPlanStore).Clear()
 	s.stores.PriceRepo.(*InMemoryPriceStore).Clear()
+	s.stores.PriceUnitRepo.(*InMemoryPriceUnitStore).Clear()
 	s.stores.MeterRepo.(*InMemoryMeterStore).Clear()
 	s.stores.CustomerRepo.(*InMemoryCustomerStore).Clear()
 	s.stores.InvoiceRepo.(*InMemoryInvoiceStore).Clear()

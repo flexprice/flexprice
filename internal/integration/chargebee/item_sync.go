@@ -741,7 +741,7 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *ent.Pla
 
 		case types.BILLING_MODEL_PACKAGE:
 			// For package pricing, set price and optionally period
-			itemPriceReq.Price = convertAmountToSmallestUnit(price.Amount, price.Currency)
+			itemPriceReq.Price = convertAmountToSmallestUnit(price.Amount.InexactFloat64(), price.Currency)
 			if price.TransformQuantity.DivideBy > 0 {
 				divideBy := price.TransformQuantity.DivideBy
 				itemPriceReq.Period = &divideBy
@@ -749,11 +749,11 @@ func (s *PlanSyncService) SyncPlanToChargebee(ctx context.Context, plan *ent.Pla
 
 		case types.BILLING_MODEL_FLAT_FEE:
 			// For flat fee, just set the price
-			itemPriceReq.Price = convertAmountToSmallestUnit(price.Amount, price.Currency)
+			itemPriceReq.Price = convertAmountToSmallestUnit(price.Amount.InexactFloat64(), price.Currency)
 
 		default:
 			// Default to flat fee
-			itemPriceReq.Price = convertAmountToSmallestUnit(price.Amount, price.Currency)
+			itemPriceReq.Price = convertAmountToSmallestUnit(price.Amount.InexactFloat64(), price.Currency)
 		}
 
 		itemPrice, err := s.itemPriceService.CreateItemPrice(ctx, itemPriceReq)
