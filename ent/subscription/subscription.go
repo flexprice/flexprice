@@ -90,6 +90,8 @@ const (
 	FieldCustomerTimezone = "customer_timezone"
 	// FieldProrationBehavior holds the string denoting the proration_behavior field in the database.
 	FieldProrationBehavior = "proration_behavior"
+	// FieldInvoicingCustomerID holds the string denoting the invoicing_customer_id field in the database.
+	FieldInvoicingCustomerID = "invoicing_customer_id"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -102,6 +104,8 @@ const (
 	EdgeCouponAssociations = "coupon_associations"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
 	EdgeCouponApplications = "coupon_applications"
+	// EdgeInvoicingCustomer holds the string denoting the invoicing_customer edge name in mutations.
+	EdgeInvoicingCustomer = "invoicing_customer"
 	// Table holds the table name of the subscription in the database.
 	Table = "subscriptions"
 	// LineItemsTable is the table that holds the line_items relation/edge.
@@ -146,6 +150,13 @@ const (
 	CouponApplicationsInverseTable = "coupon_applications"
 	// CouponApplicationsColumn is the table column denoting the coupon_applications relation/edge.
 	CouponApplicationsColumn = "subscription_id"
+	// InvoicingCustomerTable is the table that holds the invoicing_customer relation/edge.
+	InvoicingCustomerTable = "subscriptions"
+	// InvoicingCustomerInverseTable is the table name for the Customer entity.
+	// It exists in this package in order to avoid circular dependency with the "customer" package.
+	InvoicingCustomerInverseTable = "customers"
+	// InvoicingCustomerColumn is the table column denoting the invoicing_customer relation/edge.
+	InvoicingCustomerColumn = "invoicing_customer_id"
 )
 
 // Columns holds all SQL columns for subscription fields.
@@ -188,6 +199,7 @@ var Columns = []string{
 	FieldGatewayPaymentMethodID,
 	FieldCustomerTimezone,
 	FieldProrationBehavior,
+	FieldInvoicingCustomerID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -497,6 +509,11 @@ func ByProrationBehavior(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProrationBehavior, opts...).ToFunc()
 }
 
+// ByInvoicingCustomerID orders the results by the invoicing_customer_id field.
+func ByInvoicingCustomerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoicingCustomerID, opts...).ToFunc()
+}
+
 // ByLineItemsCount orders the results by line_items count.
 func ByLineItemsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -580,6 +597,13 @@ func ByCouponApplications(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOptio
 		sqlgraph.OrderByNeighborTerms(s, newCouponApplicationsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByInvoicingCustomerField orders the results by invoicing_customer field.
+func ByInvoicingCustomerField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newInvoicingCustomerStep(), sql.OrderByField(field, opts...))
+	}
+}
 func newLineItemsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -620,5 +644,12 @@ func newCouponApplicationsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CouponApplicationsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CouponApplicationsTable, CouponApplicationsColumn),
+	)
+}
+func newInvoicingCustomerStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(InvoicingCustomerInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, InvoicingCustomerTable, InvoicingCustomerColumn),
 	)
 }

@@ -1572,12 +1572,21 @@ var (
 		{Name: "gateway_payment_method_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "customer_timezone", Type: field.TypeString, Default: "UTC"},
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
+		{Name: "invoicing_customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
 	SubscriptionsTable = &schema.Table{
 		Name:       "subscriptions",
 		Columns:    SubscriptionsColumns,
 		PrimaryKey: []*schema.Column{SubscriptionsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscriptions_customers_invoicing_customer",
+				Columns:    []*schema.Column{SubscriptionsColumns[38]},
+				RefColumns: []*schema.Column{CustomersColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "subscription_tenant_id_environment_id_customer_id_status",
@@ -2205,6 +2214,7 @@ func init() {
 	PriceUnitTable.Annotation = &entsql.Annotation{
 		Table: "price_unit",
 	}
+	SubscriptionsTable.ForeignKeys[0].RefTable = CustomersTable
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPhasesTable.ForeignKeys[0].RefTable = SubscriptionsTable

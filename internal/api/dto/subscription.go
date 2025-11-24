@@ -100,7 +100,13 @@ type CreateSubscriptionRequest struct {
 
 	// external_customer_id is the customer id in your DB
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
-	ExternalCustomerID string               `json:"external_customer_id"`
+	ExternalCustomerID string `json:"external_customer_id"`
+
+	// invoicing_customer_id is the customer ID to use for invoicing
+	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
+	// If not provided, the subscription customer will be used for invoicing
+	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
+
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -770,6 +776,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		PaymentBehavior:        string(paymentBehavior),
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
+		InvoicingCustomerID:    r.InvoicingCustomerID,
 	}
 
 	// Set commitment amount and overage factor if provided

@@ -119,6 +119,10 @@ type Subscription struct {
 
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
 
+	// InvoicingCustomerID is the customer ID to use for invoicing
+	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
+	InvoicingCustomerID *string `db:"invoicing_customer_id" json:"invoicing_customer_id,omitempty"`
+
 	types.BaseModel
 }
 
@@ -184,12 +188,13 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		CollectionMethod:       string(sub.CollectionMethod),
 		GatewayPaymentMethodID: lo.ToPtr(sub.GatewayPaymentMethodID),
 
-		LineItems:          lineItems,
-		CouponAssociations: couponAssociations,
-		Pauses:             pauses,
-		Phases:             phases,
-		CustomerTimezone:   sub.CustomerTimezone,
-		ProrationBehavior:  types.ProrationBehavior(sub.ProrationBehavior),
+		LineItems:           lineItems,
+		CouponAssociations:  couponAssociations,
+		Pauses:              pauses,
+		Phases:              phases,
+		CustomerTimezone:    sub.CustomerTimezone,
+		ProrationBehavior:   types.ProrationBehavior(sub.ProrationBehavior),
+		InvoicingCustomerID: sub.InvoicingCustomerID,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

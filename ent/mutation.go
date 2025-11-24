@@ -37155,7 +37155,7 @@ func (m *PriceMutation) PriceUnitID() (r string, exists bool) {
 // OldPriceUnitID returns the old "price_unit_id" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
 	}
@@ -44141,6 +44141,8 @@ type SubscriptionMutation struct {
 	coupon_applications        map[string]struct{}
 	removedcoupon_applications map[string]struct{}
 	clearedcoupon_applications bool
+	invoicing_customer         *string
+	clearedinvoicing_customer  bool
 	done                       bool
 	oldValue                   func(context.Context) (*Subscription, error)
 	predicates                 []predicate.Subscription
@@ -45804,6 +45806,55 @@ func (m *SubscriptionMutation) ResetProrationBehavior() {
 	m.proration_behavior = nil
 }
 
+// SetInvoicingCustomerID sets the "invoicing_customer_id" field.
+func (m *SubscriptionMutation) SetInvoicingCustomerID(s string) {
+	m.invoicing_customer = &s
+}
+
+// InvoicingCustomerID returns the value of the "invoicing_customer_id" field in the mutation.
+func (m *SubscriptionMutation) InvoicingCustomerID() (r string, exists bool) {
+	v := m.invoicing_customer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicingCustomerID returns the old "invoicing_customer_id" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldInvoicingCustomerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicingCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicingCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicingCustomerID: %w", err)
+	}
+	return oldValue.InvoicingCustomerID, nil
+}
+
+// ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
+func (m *SubscriptionMutation) ClearInvoicingCustomerID() {
+	m.invoicing_customer = nil
+	m.clearedFields[subscription.FieldInvoicingCustomerID] = struct{}{}
+}
+
+// InvoicingCustomerIDCleared returns if the "invoicing_customer_id" field was cleared in this mutation.
+func (m *SubscriptionMutation) InvoicingCustomerIDCleared() bool {
+	_, ok := m.clearedFields[subscription.FieldInvoicingCustomerID]
+	return ok
+}
+
+// ResetInvoicingCustomerID resets all changes to the "invoicing_customer_id" field.
+func (m *SubscriptionMutation) ResetInvoicingCustomerID() {
+	m.invoicing_customer = nil
+	delete(m.clearedFields, subscription.FieldInvoicingCustomerID)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -46128,6 +46179,33 @@ func (m *SubscriptionMutation) ResetCouponApplications() {
 	m.removedcoupon_applications = nil
 }
 
+// ClearInvoicingCustomer clears the "invoicing_customer" edge to the Customer entity.
+func (m *SubscriptionMutation) ClearInvoicingCustomer() {
+	m.clearedinvoicing_customer = true
+	m.clearedFields[subscription.FieldInvoicingCustomerID] = struct{}{}
+}
+
+// InvoicingCustomerCleared reports if the "invoicing_customer" edge to the Customer entity was cleared.
+func (m *SubscriptionMutation) InvoicingCustomerCleared() bool {
+	return m.InvoicingCustomerIDCleared() || m.clearedinvoicing_customer
+}
+
+// InvoicingCustomerIDs returns the "invoicing_customer" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// InvoicingCustomerID instead. It exists only for internal usage by the builders.
+func (m *SubscriptionMutation) InvoicingCustomerIDs() (ids []string) {
+	if id := m.invoicing_customer; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetInvoicingCustomer resets all changes to the "invoicing_customer" edge.
+func (m *SubscriptionMutation) ResetInvoicingCustomer() {
+	m.invoicing_customer = nil
+	m.clearedinvoicing_customer = false
+}
+
 // Where appends a list predicates to the SubscriptionMutation builder.
 func (m *SubscriptionMutation) Where(ps ...predicate.Subscription) {
 	m.predicates = append(m.predicates, ps...)
@@ -46162,7 +46240,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 37)
+	fields := make([]string, 0, 38)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -46274,6 +46352,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.proration_behavior != nil {
 		fields = append(fields, subscription.FieldProrationBehavior)
 	}
+	if m.invoicing_customer != nil {
+		fields = append(fields, subscription.FieldInvoicingCustomerID)
+	}
 	return fields
 }
 
@@ -46356,6 +46437,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomerTimezone()
 	case subscription.FieldProrationBehavior:
 		return m.ProrationBehavior()
+	case subscription.FieldInvoicingCustomerID:
+		return m.InvoicingCustomerID()
 	}
 	return nil, false
 }
@@ -46439,6 +46522,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldCustomerTimezone(ctx)
 	case subscription.FieldProrationBehavior:
 		return m.OldProrationBehavior(ctx)
+	case subscription.FieldInvoicingCustomerID:
+		return m.OldInvoicingCustomerID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -46707,6 +46792,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetProrationBehavior(v)
 		return nil
+	case subscription.FieldInvoicingCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicingCustomerID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -46806,6 +46898,9 @@ func (m *SubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(subscription.FieldGatewayPaymentMethodID) {
 		fields = append(fields, subscription.FieldGatewayPaymentMethodID)
 	}
+	if m.FieldCleared(subscription.FieldInvoicingCustomerID) {
+		fields = append(fields, subscription.FieldInvoicingCustomerID)
+	}
 	return fields
 }
 
@@ -46861,6 +46956,9 @@ func (m *SubscriptionMutation) ClearField(name string) error {
 		return nil
 	case subscription.FieldGatewayPaymentMethodID:
 		m.ClearGatewayPaymentMethodID()
+		return nil
+	case subscription.FieldInvoicingCustomerID:
+		m.ClearInvoicingCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription nullable field %s", name)
@@ -46981,13 +47079,16 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 	case subscription.FieldProrationBehavior:
 		m.ResetProrationBehavior()
 		return nil
+	case subscription.FieldInvoicingCustomerID:
+		m.ResetInvoicingCustomerID()
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.line_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47005,6 +47106,9 @@ func (m *SubscriptionMutation) AddedEdges() []string {
 	}
 	if m.coupon_applications != nil {
 		edges = append(edges, subscription.EdgeCouponApplications)
+	}
+	if m.invoicing_customer != nil {
+		edges = append(edges, subscription.EdgeInvoicingCustomer)
 	}
 	return edges
 }
@@ -47049,13 +47153,17 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgeInvoicingCustomer:
+		if id := m.invoicing_customer; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.removedline_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47123,7 +47231,7 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.clearedline_items {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47141,6 +47249,9 @@ func (m *SubscriptionMutation) ClearedEdges() []string {
 	}
 	if m.clearedcoupon_applications {
 		edges = append(edges, subscription.EdgeCouponApplications)
+	}
+	if m.clearedinvoicing_customer {
+		edges = append(edges, subscription.EdgeInvoicingCustomer)
 	}
 	return edges
 }
@@ -47161,6 +47272,8 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 		return m.clearedcoupon_associations
 	case subscription.EdgeCouponApplications:
 		return m.clearedcoupon_applications
+	case subscription.EdgeInvoicingCustomer:
+		return m.clearedinvoicing_customer
 	}
 	return false
 }
@@ -47169,6 +47282,9 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *SubscriptionMutation) ClearEdge(name string) error {
 	switch name {
+	case subscription.EdgeInvoicingCustomer:
+		m.ClearInvoicingCustomer()
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription unique edge %s", name)
 }
@@ -47194,6 +47310,9 @@ func (m *SubscriptionMutation) ResetEdge(name string) error {
 		return nil
 	case subscription.EdgeCouponApplications:
 		m.ResetCouponApplications()
+		return nil
+	case subscription.EdgeInvoicingCustomer:
+		m.ResetInvoicingCustomer()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription edge %s", name)

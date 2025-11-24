@@ -79,6 +79,24 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate invoicing customer if provided
+	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
+		invoicingCustomer, err := s.CustomerRepo.Get(ctx, *req.InvoicingCustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoicingCustomer.Status != types.StatusPublished {
+			return nil, ierr.NewError("invoicing customer is not active").
+				WithHint("The invoicing customer must be active").
+				WithReportableDetails(map[string]interface{}{
+					"invoicing_customer_id": *req.InvoicingCustomerID,
+					"status":                invoicingCustomer.Status,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
 	if err != nil {
 		return nil, err

@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -420,6 +421,26 @@ func (su *SubscriptionUpdate) SetNillableCustomerTimezone(s *string) *Subscripti
 	return su
 }
 
+// SetInvoicingCustomerID sets the "invoicing_customer_id" field.
+func (su *SubscriptionUpdate) SetInvoicingCustomerID(s string) *SubscriptionUpdate {
+	su.mutation.SetInvoicingCustomerID(s)
+	return su
+}
+
+// SetNillableInvoicingCustomerID sets the "invoicing_customer_id" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableInvoicingCustomerID(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetInvoicingCustomerID(*s)
+	}
+	return su
+}
+
+// ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
+func (su *SubscriptionUpdate) ClearInvoicingCustomerID() *SubscriptionUpdate {
+	su.mutation.ClearInvoicingCustomerID()
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -508,6 +529,11 @@ func (su *SubscriptionUpdate) AddCouponApplications(c ...*CouponApplication) *Su
 		ids[i] = c[i].ID
 	}
 	return su.AddCouponApplicationIDs(ids...)
+}
+
+// SetInvoicingCustomer sets the "invoicing_customer" edge to the Customer entity.
+func (su *SubscriptionUpdate) SetInvoicingCustomer(c *Customer) *SubscriptionUpdate {
+	return su.SetInvoicingCustomerID(c.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -639,6 +665,12 @@ func (su *SubscriptionUpdate) RemoveCouponApplications(c ...*CouponApplication) 
 		ids[i] = c[i].ID
 	}
 	return su.RemoveCouponApplicationIDs(ids...)
+}
+
+// ClearInvoicingCustomer clears the "invoicing_customer" edge to the Customer entity.
+func (su *SubscriptionUpdate) ClearInvoicingCustomer() *SubscriptionUpdate {
+	su.mutation.ClearInvoicingCustomer()
+	return su
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1088,6 +1120,35 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if su.mutation.InvoicingCustomerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   subscription.InvoicingCustomerTable,
+			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   subscription.InvoicingCustomerTable,
+			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if n, err = sqlgraph.UpdateNodes(ctx, su.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{subscription.Label}
@@ -1493,6 +1554,26 @@ func (suo *SubscriptionUpdateOne) SetNillableCustomerTimezone(s *string) *Subscr
 	return suo
 }
 
+// SetInvoicingCustomerID sets the "invoicing_customer_id" field.
+func (suo *SubscriptionUpdateOne) SetInvoicingCustomerID(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetInvoicingCustomerID(s)
+	return suo
+}
+
+// SetNillableInvoicingCustomerID sets the "invoicing_customer_id" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableInvoicingCustomerID(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetInvoicingCustomerID(*s)
+	}
+	return suo
+}
+
+// ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
+func (suo *SubscriptionUpdateOne) ClearInvoicingCustomerID() *SubscriptionUpdateOne {
+	suo.mutation.ClearInvoicingCustomerID()
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -1581,6 +1662,11 @@ func (suo *SubscriptionUpdateOne) AddCouponApplications(c ...*CouponApplication)
 		ids[i] = c[i].ID
 	}
 	return suo.AddCouponApplicationIDs(ids...)
+}
+
+// SetInvoicingCustomer sets the "invoicing_customer" edge to the Customer entity.
+func (suo *SubscriptionUpdateOne) SetInvoicingCustomer(c *Customer) *SubscriptionUpdateOne {
+	return suo.SetInvoicingCustomerID(c.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -1712,6 +1798,12 @@ func (suo *SubscriptionUpdateOne) RemoveCouponApplications(c ...*CouponApplicati
 		ids[i] = c[i].ID
 	}
 	return suo.RemoveCouponApplicationIDs(ids...)
+}
+
+// ClearInvoicingCustomer clears the "invoicing_customer" edge to the Customer entity.
+func (suo *SubscriptionUpdateOne) ClearInvoicingCustomer() *SubscriptionUpdateOne {
+	suo.mutation.ClearInvoicingCustomer()
+	return suo
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
@@ -2184,6 +2276,35 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(couponapplication.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.InvoicingCustomerCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   subscription.InvoicingCustomerTable,
+			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   subscription.InvoicingCustomerTable,
+			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
