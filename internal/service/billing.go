@@ -1658,18 +1658,21 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	}
 	// Resolve tax rates for invoice level (invoice-level only per scope)
 	// Prepare minimal request for tax resolution using subscription context
+	// Use invoicing customer ID if available, otherwise fallback to subscription customer ID
+	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	taxService := NewTaxService(s.ServiceParams)
 	taxPrepareReq := dto.CreateInvoiceRequest{
 		SubscriptionID: lo.ToPtr(sub.ID),
-		CustomerID:     sub.CustomerID,
+		CustomerID:     invoicingCustomerID,
 	}
 	preparedTaxRates, err := taxService.PrepareTaxRatesForInvoice(ctx, taxPrepareReq)
 	if err != nil {
 		return nil, err
 	}
 	// Create invoice request
+	// Use invoicing customer ID if available, otherwise fallback to subscription customer ID
 	req := &dto.CreateInvoiceRequest{
-		CustomerID:       sub.CustomerID,
+		CustomerID:       invoicingCustomerID,
 		SubscriptionID:   lo.ToPtr(sub.ID),
 		InvoiceType:      types.InvoiceTypeSubscription,
 		InvoiceStatus:    lo.ToPtr(types.InvoiceStatusDraft),

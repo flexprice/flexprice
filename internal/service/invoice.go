@@ -2210,8 +2210,8 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			Mark(ierr.ErrValidation)
 	}
 
-	// Get subscription with line items
-	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
+	// Get sub with line items
+	sub, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2244,7 +2244,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		referencePoint := types.ReferencePointPeriodEnd
 
 		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx,
-			subscription,
+			sub,
 			*inv.PeriodStart,
 			*inv.PeriodEnd,
 			referencePoint,
@@ -2253,7 +2253,10 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			return err
 		}
 
-		// STEP 3: Update invoice totals and metadata
+		// STEP 3: Update invoice totals, metadata, and customer ID
+		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
+		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
+		inv.CustomerID = newInvoiceReq.CustomerID
 		inv.AmountDue = newInvoiceReq.AmountDue
 		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
 		inv.Description = newInvoiceReq.Description

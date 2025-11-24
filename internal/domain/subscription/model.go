@@ -126,6 +126,15 @@ type Subscription struct {
 	types.BaseModel
 }
 
+// GetInvoicingCustomerID returns the invoicing customer ID if available, otherwise falls back to the subscription customer ID.
+// This provides backward compatibility for subscriptions that don't have an invoicing customer ID set.
+func (s *Subscription) GetInvoicingCustomerID() string {
+	if s.InvoicingCustomerID != nil && *s.InvoicingCustomerID != "" {
+		return *s.InvoicingCustomerID
+	}
+	return s.CustomerID
+}
+
 func FromEntList(subs []*ent.Subscription) []*Subscription {
 	return lo.Map(subs, func(sub *ent.Subscription, _ int) *Subscription {
 		return GetSubscriptionFromEnt(sub)
