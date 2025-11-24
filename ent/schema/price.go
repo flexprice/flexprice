@@ -65,7 +65,8 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Optional(),
+			Optional().
+			Nillable(),
 		// price_unit is the code of the price unit
 		field.String("price_unit").
 			SchemaType(map[string]string{
