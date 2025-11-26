@@ -488,3 +488,21 @@ func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, response)
 }
+
+func (h *EventsHandler) GetDailyRevenue(c *gin.Context) {
+	ctx := c.Request.Context()
+	var err error
+	var req dto.GetDailyRevenueRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+	response, err := h.featureUsageTrackingService.GetDailyRevenue(ctx, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}

@@ -360,3 +360,50 @@ type EventCostInfo struct {
 type GetHuggingFaceBillingDataResponse struct {
 	Data []EventCostInfo `json:"requests"`
 }
+
+type GetDailyRevenueRequest struct {
+	StartTime           time.Time `json:"start_time,omitempty"`
+	EndTime             time.Time `json:"end_time,omitempty"`
+	ExternalCustomerIDs []string  `json:"external_customer_ids,omitempty"`
+}
+
+type GetDailyRevenueResponse struct {
+	Data []DailyRevenueInfo `json:"data"`
+}
+
+type DailyRevenueInfo struct {
+	ExternalCustomerID string               `json:"external_customer_id"`
+	TotalCost          decimal.Decimal      `json:"total_cost"`
+	Windows            []DailyRevenueWindow `json:"windows"`
+}
+
+type DailyRevenueWindow struct {
+	Cost      decimal.Decimal `json:"cost"`
+	Timestamp time.Time       `json:"timestamp"`
+}
+
+func (r *GetDailyRevenueRequest) Validate() error {
+
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.StartTime.IsZero() {
+		return ierr.NewError("start time is required").
+			WithHint("Start time is required").
+			Mark(ierr.ErrValidation)
+	}
+	if r.EndTime.IsZero() {
+		return ierr.NewError("end time is required").
+			WithHint("End time is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.StartTime.After(r.EndTime) {
+		return ierr.NewError("start time must be before end time").
+			WithHint("Start time must be before end time").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}

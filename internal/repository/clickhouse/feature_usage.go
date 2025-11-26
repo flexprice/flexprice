@@ -1790,3 +1790,81 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 
 	return records, nil
 }
+
+func (r *FeatureUsageRepository) GetDailyUsage(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string) ([]*events.FeatureUsage, error) {
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Build query with GROUP BY for daily usage aggregated by external_customer_id and price_id
+	query := `
+		SELECT 
+			external_customer_id,
+			price_id,
+			toStartOfDay(timestamp) AS window_time,
+			SUM(qty_total * sign) AS quantity
+		FROM feature_usage FINAL
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND timestamp >= ?
+		AND timestamp < ?
+	`
+
+	args := []interface{}{tenantID, environmentID, startTime, endTime}
+
+	// Add external_customer_id filter if provided
+	if len(externalCustomerIDs) > 0 {
+		query += ` AND external_customer_id IN (`
+		placeholders := make([]string, len(externalCustomerIDs))
+		for i := range externalCustomerIDs {
+			placeholders[i] = "?"
+			args = append(args, externalCustomerIDs[i])
+		}
+		query += strings.Join(placeholders, ",") + ")"
+	}
+
+	query += `
+		GROUP BY
+			external_customer_id,
+			price_id,
+			window_time
+		ORDER BY
+			external_customer_id
+	`
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query feature_usage by event IDs").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var records []*events.FeatureUsage
+	for rows.Next() {
+		var record events.FeatureUsage
+		var windowTime time.Time
+		var quantity decimal.Decimal
+
+		err := rows.Scan(
+			&record.ExternalCustomerID,
+			&record.PriceID,
+			&windowTime,
+			&quantity,
+		)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan feature_usage record").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Set the timestamp from window_time and total_cost as QtyTotal
+		record.Timestamp = windowTime
+		record.QtyTotal = quantity
+		record.Properties = make(map[string]interface{})
+
+		records = append(records, &record)
+	}
+
+	return records, nil
+}
