@@ -241,6 +241,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("", handlers.Subscription.CreateSubscription)
 			subscription.GET("", handlers.Subscription.GetSubscriptions)
 			subscription.GET("/:id", handlers.Subscription.GetSubscription)
+			subscription.POST("/:id/activate", handlers.Subscription.ActivateDraftSubscription)
 			subscription.POST("/:id/cancel", handlers.Subscription.CancelSubscription)
 			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
 

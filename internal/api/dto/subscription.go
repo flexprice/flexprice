@@ -172,8 +172,11 @@ type CreateSubscriptionRequest struct {
 	BillingAnchor *time.Time `json:"-"`
 
 	// Workflow
-	Workflow           *types.TemporalWorkflowType `json:"-"`
-	SubscriptionStatus types.SubscriptionStatus    `json:"-,omitempty"`
+	Workflow *types.TemporalWorkflowType `json:"-"`
+
+	// SubscriptionStatus determines the initial status of the subscription
+	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
+	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
@@ -266,6 +269,27 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	// Set default proration behavior if not provided
 	if r.ProrationBehavior == "" {
 		r.ProrationBehavior = types.ProrationBehaviorNone
+	}
+
+	return nil
+}
+
+// ActivateDraftSubscriptionRequest represents the request to activate a draft subscription
+type ActivateDraftSubscriptionRequest struct {
+	// start_date is the new start date for the subscription when activating
+	StartDate *time.Time `json:"start_date" validate:"required"`
+}
+
+// Validate validates the activation request
+func (r *ActivateDraftSubscriptionRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.StartDate == nil {
+		return ierr.NewError("start_date is required").
+			WithHint("Start date is required to activate a draft subscription").
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -441,6 +465,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"trial_end":  *r.TrialEnd,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Validate draft subscription constraints
+	if r.SubscriptionStatus == types.SubscriptionStatusDraft {
+		if len(r.Phases) > 0 {
+			return ierr.NewError("phases are not allowed for draft subscriptions").
+				WithHint("Draft subscriptions cannot have phases").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Validate commitment amount and overage factor

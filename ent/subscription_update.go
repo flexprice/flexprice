@@ -109,6 +109,34 @@ func (su *SubscriptionUpdate) SetNillableSubscriptionStatus(s *string) *Subscrip
 	return su
 }
 
+// SetBillingAnchor sets the "billing_anchor" field.
+func (su *SubscriptionUpdate) SetBillingAnchor(t time.Time) *SubscriptionUpdate {
+	su.mutation.SetBillingAnchor(t)
+	return su
+}
+
+// SetNillableBillingAnchor sets the "billing_anchor" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableBillingAnchor(t *time.Time) *SubscriptionUpdate {
+	if t != nil {
+		su.SetBillingAnchor(*t)
+	}
+	return su
+}
+
+// SetStartDate sets the "start_date" field.
+func (su *SubscriptionUpdate) SetStartDate(t time.Time) *SubscriptionUpdate {
+	su.mutation.SetStartDate(t)
+	return su
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableStartDate(t *time.Time) *SubscriptionUpdate {
+	if t != nil {
+		su.SetStartDate(*t)
+	}
+	return su
+}
+
 // SetEndDate sets the "end_date" field.
 func (su *SubscriptionUpdate) SetEndDate(t time.Time) *SubscriptionUpdate {
 	su.mutation.SetEndDate(t)
@@ -731,6 +759,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := su.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
 	}
+	if value, ok := su.mutation.BillingAnchor(); ok {
+		_spec.SetField(subscription.FieldBillingAnchor, field.TypeTime, value)
+	}
+	if value, ok := su.mutation.StartDate(); ok {
+		_spec.SetField(subscription.FieldStartDate, field.TypeTime, value)
+	}
 	if value, ok := su.mutation.EndDate(); ok {
 		_spec.SetField(subscription.FieldEndDate, field.TypeTime, value)
 	}
@@ -1178,6 +1212,34 @@ func (suo *SubscriptionUpdateOne) SetSubscriptionStatus(s string) *SubscriptionU
 func (suo *SubscriptionUpdateOne) SetNillableSubscriptionStatus(s *string) *SubscriptionUpdateOne {
 	if s != nil {
 		suo.SetSubscriptionStatus(*s)
+	}
+	return suo
+}
+
+// SetBillingAnchor sets the "billing_anchor" field.
+func (suo *SubscriptionUpdateOne) SetBillingAnchor(t time.Time) *SubscriptionUpdateOne {
+	suo.mutation.SetBillingAnchor(t)
+	return suo
+}
+
+// SetNillableBillingAnchor sets the "billing_anchor" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableBillingAnchor(t *time.Time) *SubscriptionUpdateOne {
+	if t != nil {
+		suo.SetBillingAnchor(*t)
+	}
+	return suo
+}
+
+// SetStartDate sets the "start_date" field.
+func (suo *SubscriptionUpdateOne) SetStartDate(t time.Time) *SubscriptionUpdateOne {
+	suo.mutation.SetStartDate(t)
+	return suo
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableStartDate(t *time.Time) *SubscriptionUpdateOne {
+	if t != nil {
+		suo.SetStartDate(*t)
 	}
 	return suo
 }
@@ -1833,6 +1895,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
+	}
+	if value, ok := suo.mutation.BillingAnchor(); ok {
+		_spec.SetField(subscription.FieldBillingAnchor, field.TypeTime, value)
+	}
+	if value, ok := suo.mutation.StartDate(); ok {
+		_spec.SetField(subscription.FieldStartDate, field.TypeTime, value)
 	}
 	if value, ok := suo.mutation.EndDate(); ok {
 		_spec.SetField(subscription.FieldEndDate, field.TypeTime, value)

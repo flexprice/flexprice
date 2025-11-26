@@ -30,6 +30,7 @@ const (
 	SubscriptionStatusPastDue           SubscriptionStatus = "past_due"
 	SubscriptionStatusTrialing          SubscriptionStatus = "trialing"
 	SubscriptionStatusUnpaid            SubscriptionStatus = "unpaid"
+	SubscriptionStatusDraft             SubscriptionStatus = "draft"
 )
 
 func (s SubscriptionStatus) String() string {
@@ -46,6 +47,7 @@ func (s SubscriptionStatus) Validate() error {
 		SubscriptionStatusPastDue,
 		SubscriptionStatusTrialing,
 		SubscriptionStatusUnpaid,
+		SubscriptionStatusDraft,
 	}
 	if !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid subscription status").
