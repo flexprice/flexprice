@@ -546,13 +546,9 @@ func (s *billingService) CalculateUsageCharges(
 	overageFactor := lo.FromPtr(sub.OverageFactor)
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
 
-	if hasCommitment && usage != nil {
+	if hasCommitment {
 		// If there's overage, commitment is fully utilized, so no true-up needed
-		if usage.HasOverage {
-			s.Logger.Debugw("skipping commitment true-up because overage exists",
-				"subscription_id", sub.ID,
-				"commitment_amount", commitmentAmount.String())
-		} else {
+		if !usage.HasOverage && sub.EnableTrueUp {
 			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
 
 			if remainingCommitment.GreaterThan(decimal.Zero) {
@@ -589,12 +585,6 @@ func (s *billingService) CalculateUsageCharges(
 
 				usageCharges = append(usageCharges, trueUpLineItem)
 				totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
-
-				s.Logger.Infow("added commitment true-up line item",
-					"subscription_id", sub.ID,
-					"remaining_commitment", roundedRemainingCommitment.String(),
-					"commitment_amount", commitmentAmount.String(),
-					"commitment_utilized", commitmentUtilized.String())
 			}
 		}
 	}
@@ -1003,13 +993,9 @@ func (s *billingService) CalculateUsageChargesForPreview(
 	overageFactor := lo.FromPtr(sub.OverageFactor)
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
 
-	if hasCommitment && usage != nil {
+	if hasCommitment {
 		// If there's overage, commitment is fully utilized, so no true-up needed
-		if usage.HasOverage {
-			s.Logger.Debugw("skipping commitment true-up because overage exists",
-				"subscription_id", sub.ID,
-				"commitment_amount", commitmentAmount.String())
-		} else {
+		if !usage.HasOverage && sub.EnableTrueUp {
 			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
 
 			if remainingCommitment.GreaterThan(decimal.Zero) {
@@ -1045,12 +1031,6 @@ func (s *billingService) CalculateUsageChargesForPreview(
 
 				usageCharges = append(usageCharges, trueUpLineItem)
 				totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
-
-				s.Logger.Infow("added commitment true-up line item for preview",
-					"subscription_id", sub.ID,
-					"remaining_commitment", roundedRemainingCommitment.String(),
-					"commitment_amount", commitmentAmount.String(),
-					"commitment_utilized", commitmentUtilized.String())
 			}
 		}
 	}

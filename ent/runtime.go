@@ -1642,6 +1642,10 @@ func init() {
 	subscription.DefaultProrationBehavior = subscriptionDescProrationBehavior.Default.(string)
 	// subscription.ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	subscription.ProrationBehaviorValidator = subscriptionDescProrationBehavior.Validators[0].(func(string) error)
+	// subscriptionDescEnableTrueUp is the schema descriptor for enable_true_up field.
+	subscriptionDescEnableTrueUp := subscriptionFields[31].Descriptor()
+	// subscription.DefaultEnableTrueUp holds the default value on creation for the enable_true_up field.
+	subscription.DefaultEnableTrueUp = subscriptionDescEnableTrueUp.Default.(bool)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
 	subscriptionlineitemMixinFields0 := subscriptionlineitemMixin[0].Fields()
 	_ = subscriptionlineitemMixinFields0
