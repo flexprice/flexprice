@@ -29,6 +29,11 @@ type FeatureUsageRepository interface {
 
 	// GetFeatureUsageForExport gets feature usage data for export in batches
 	GetFeatureUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*FeatureUsage, error)
+
+	GetUsageForMaxMetersWithBuckets(ctx context.Context, params *FeatureUsageParams) (*AggregationResult, error)
+
+	// GetFeatureUsageByEventIDs gets feature usage records by event IDs
+	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*FeatureUsage, error)
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation

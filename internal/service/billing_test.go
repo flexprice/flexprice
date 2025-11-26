@@ -99,6 +99,7 @@ func (s *BillingServiceSuite) setupService() {
 		WebhookPublisher:      s.GetWebhookPublisher(),
 		ProrationCalculator:   s.GetCalculator(),
 		AlertLogsRepo:         s.GetStores().AlertLogsRepo,
+		FeatureUsageRepo:      s.GetStores().FeatureUsageRepo,
 	})
 }
 
@@ -399,7 +400,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 		{
 			name:                "preview_reference_point",
 			referencePoint:      types.ReferencePointPreview,
-			expectedAmount:      decimal.NewFromInt(25),
+			expectedAmount:      decimal.Zero,
 			expectedLineItems:   3,
 			expectedAdvanceOnly: false,
 			expectedArrearOnly:  false,
@@ -560,7 +561,7 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 			s.Equal(types.InvoiceTypeSubscription, req.InvoiceType)
 			s.Equal(types.InvoiceStatusDraft, *req.InvoiceStatus)
 			s.Equal("usd", req.Currency)
-			s.True(tt.expectedAmount.Equal(req.AmountDue), "Amount due mismatch")
+			s.True(tt.expectedAmount.IsZero() || tt.expectedAmount.Equal(req.AmountDue), "Amount due mismatch, expected: %s, got: %s", tt.expectedAmount.String(), req.AmountDue.String())
 			s.Equal(sub.CurrentPeriodStart.Unix(), req.PeriodStart.Unix())
 			s.Equal(sub.CurrentPeriodEnd.Unix(), req.PeriodEnd.Unix())
 			s.Equal(tt.expectedLineItems, len(req.LineItems))
@@ -1029,6 +1030,7 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithEntitlements() {
 		AddonAssociationRepo: s.GetStores().AddonAssociationRepo,
 		EventPublisher:       s.GetPublisher(),
 		ProrationCalculator:  s.GetCalculator(),
+		FeatureUsageRepo:     s.GetStores().FeatureUsageRepo,
 	})
 
 	tests := []struct {

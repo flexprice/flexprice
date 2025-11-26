@@ -350,3 +350,33 @@ func (h *CustomerHandler) ListCustomersByFilter(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Get upcoming credit grant applications
+// @Description Get upcoming credit grant applications for a customer
+// @Tags Customers
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Customer ID"
+// @Success 200 {object} dto.ListCreditGrantApplicationsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /customers/{id}/grants/upcoming [get]
+func (h *CustomerHandler) GetUpcomingCreditGrantApplications(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("customer ID is required").
+			WithHint("Please provide a valid customer ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetUpcomingCreditGrantApplications(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to get upcoming credit grant applications", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

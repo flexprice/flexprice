@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
+	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -220,3 +221,11 @@ type ProcessScheduledCreditGrantApplicationsResponse struct {
 	FailedApplicationsCount  int `json:"failed_applications_count"`
 	TotalApplicationsCount   int `json:"total_applications_count"`
 }
+
+// CreditGrantApplicationResponse represents the response for a credit grant application
+type CreditGrantApplicationResponse struct {
+	*domainCreditGrantApplication.CreditGrantApplication
+}
+
+// ListCreditGrantApplicationsResponse represents a paginated list of credit grant applications
+type ListCreditGrantApplicationsResponse = types.ListResponse[*CreditGrantApplicationResponse]

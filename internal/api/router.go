@@ -56,10 +56,11 @@ type Handlers struct {
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
 	// Cron jobs : TODO: move crons out of API based architecture
-	CronSubscription *cron.SubscriptionHandler
-	CronWallet       *cron.WalletCronHandler
-	CronCreditGrant  *cron.CreditGrantCronHandler
-	CronInvoice      *cron.InvoiceHandler
+	CronSubscription       *cron.SubscriptionHandler
+	CronWallet             *cron.WalletCronHandler
+	CronCreditGrant        *cron.CreditGrantCronHandler
+	CronInvoice            *cron.InvoiceHandler
+	CronKafkaLagMonitoring *cron.KafkaLagMonitoringHandler
 }
 
 func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
@@ -134,6 +135,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/usage/meter", handlers.Events.GetUsageByMeter)
 			events.POST("/analytics", handlers.Events.GetUsageAnalytics)
 			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
+			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
 		}
 
@@ -185,6 +187,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
 			customer.GET("/usage", handlers.Customer.GetCustomerUsageSummary)     // New route with query parameters (must come first!)
 			customer.GET("/:id/usage", handlers.Customer.GetCustomerUsageSummary) // Deprecated route with path parameter
+			customer.GET("/:id/grants/upcoming", handlers.Customer.GetUpcomingCreditGrantApplications)
 
 			// other routes for customer
 			customer.GET("/:id/wallets", handlers.Wallet.GetWalletsByCustomerID)
@@ -244,8 +247,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/pause", handlers.SubscriptionPause.PauseSubscription)
 			subscription.POST("/:id/resume", handlers.SubscriptionPause.ResumeSubscription)
 			subscription.GET("/:id/pauses", handlers.SubscriptionPause.ListPauses)
-			subscription.POST("/:id/phases", handlers.Subscription.AddSubscriptionPhase)
 			subscription.GET("/:id/entitlements", handlers.Subscription.GetSubscriptionEntitlements)
+			subscription.GET("/:id/grants/upcoming", handlers.Subscription.GetUpcomingCreditGrantApplications)
 
 			// Addon management for subscriptions - moved under subscription handler
 			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
@@ -491,6 +494,10 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhooks.POST("/stripe/:tenant_id/:environment_id", handlers.Webhook.HandleStripeWebhook)
 		// HubSpot webhook endpoint: POST /v1/webhooks/hubspot/{tenant_id}/{environment_id}
 		webhooks.POST("/hubspot/:tenant_id/:environment_id", handlers.Webhook.HandleHubSpotWebhook)
+		// Razorpay webhook endpoint: POST /v1/webhooks/razorpay/{tenant_id}/{environment_id}
+		webhooks.POST("/razorpay/:tenant_id/:environment_id", handlers.Webhook.HandleRazorpayWebhook)
+		// Chargebee webhook endpoint: POST /v1/webhooks/chargebee/{tenant_id}/{environment_id}
+		webhooks.POST("/chargebee/:tenant_id/:environment_id", handlers.Webhook.HandleChargebeeWebhook)
 	}
 
 	// Cron routes
@@ -521,6 +528,11 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	invoiceGroup := cron.Group("/invoices")
 	{
 		invoiceGroup.POST("/void-old-pending", handlers.CronInvoice.VoidOldPendingInvoices)
+	}
+	// Kafka lag monitoring related cron jobs
+	kafkaLagMonitoringGroup := cron.Group("/events")
+	{
+		kafkaLagMonitoringGroup.POST("/monitoring", handlers.CronKafkaLagMonitoring.HandleKafkaLagMonitoring)
 	}
 
 	// Settings routes

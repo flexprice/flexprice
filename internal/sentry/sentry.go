@@ -264,3 +264,54 @@ func (s *Service) StartRepositorySpan(ctx context.Context, repository, operation
 func (s *Service) GetSpanFromContext(ctx context.Context) *sentry.Span {
 	return sentry.SpanFromContext(ctx)
 }
+
+func (s *Service) StartMonitoringSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	operationName := fmt.Sprintf("monitoring.%s", operation)
+
+	span := sentry.StartSpan(ctx, operationName)
+	if span != nil {
+		span.Description = operationName
+		span.Op = "monitoring.operation"
+
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+	}
+
+	return span, span.Context()
+}
+
+// StartKafkaLagMonitoringSpan creates a specialized span for Kafka consumer lag monitoring.
+// It tracks lag metrics with proper tagging for alerting and observability.
+func (s *Service) StartKafkaLagMonitoringSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	if !s.cfg.Sentry.Enabled {
+		return nil, ctx
+	}
+
+	operationName := fmt.Sprintf("monitoring.%s", operation)
+	span := sentry.StartSpan(ctx, operationName)
+
+	if span != nil {
+		span.Description = operationName
+		span.Op = "monitoring.kafka.lag"
+
+		// Set data fields for the span
+		for k, v := range params {
+			span.SetData(k, v)
+		}
+
+		// Add topic and consumer group as tags for filtering
+		if topic, ok := params["topic"].(string); ok {
+			span.SetTag("kafka.topic", topic)
+		}
+		if consumerGroup, ok := params["consumer_group"].(string); ok {
+			span.SetTag("kafka.consumer_group", consumerGroup)
+		}
+	}
+
+	return span, span.Context()
+}

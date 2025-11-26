@@ -1367,11 +1367,12 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			sub_line_item_id,
 			feature_id,
 			meter_id,
-			sum(qty_total)                     AS sum_total,
-			max(qty_total)                     AS max_total,
+			price_id,
+			sum(qty_total * sign)              AS sum_total,
+			max(qty_total * sign)              AS max_total,
 			count(DISTINCT id)                 AS count_distinct_ids,
 			count(DISTINCT unique_hash)        AS count_unique_qty,
-			argMax(qty_total, "timestamp")     AS latest_qty
+			argMax(qty_total * sign, "timestamp") AS latest_qty
 		FROM feature_usage
 		WHERE 
 			subscription_id = ?
@@ -1380,7 +1381,8 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			AND tenant_id = ?
 			AND "timestamp" >= ?
 			AND "timestamp" < ?
-		GROUP BY sub_line_item_id, feature_id, meter_id
+			AND sign != 0
+		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
 	`
 
 	log.Printf("Executing query: %s", query)
@@ -1401,11 +1403,11 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 
 	results := make(map[string]*events.UsageByFeatureResult)
 	for rows.Next() {
-		var subLineItemID, featureID, meterID string
+		var subLineItemID, featureID, meterID, priceID string
 		var sumTotal, maxTotal, latestQty decimal.Decimal
 		var countDistinctIDs, countUniqueQty uint64
 
-		err := rows.Scan(&subLineItemID, &featureID, &meterID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
+		err := rows.Scan(&subLineItemID, &featureID, &meterID, &priceID, &sumTotal, &maxTotal, &countDistinctIDs, &countUniqueQty, &latestQty)
 		if err != nil {
 			SetSpanError(span, err)
 			return nil, ierr.WithError(err).
@@ -1417,6 +1419,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			SubLineItemID:    subLineItemID,
 			FeatureID:        featureID,
 			MeterID:          meterID,
+			PriceID:          priceID,
 			SumTotal:         sumTotal,
 			MaxTotal:         maxTotal,
 			CountDistinctIDs: countDistinctIDs,
@@ -1562,4 +1565,228 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 		"records_in_batch", len(results))
 
 	return results, nil
+}
+
+func (r *FeatureUsageRepository) GetUsageForMaxMetersWithBuckets(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "event", "get_usage", map[string]interface{}{
+		"price_id":    params.PriceID,
+		"meter_id":    params.MeterID,
+		"window_size": params.WindowSize,
+	})
+	defer FinishSpan(span)
+
+	query := r.getWindowedQuery(ctx, params)
+	log.Printf("Executing query: %s", query)
+
+	rows, err := r.store.GetConn().Query(ctx, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute usage query").
+			WithReportableDetails(map[string]interface{}{
+				"price_id":    params.PriceID,
+				"meter_id":    params.MeterID,
+				"window_size": params.WindowSize,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var result events.AggregationResult
+	result.Type = params.UsageParams.AggregationType
+
+	// For windowed queries, we need to process all rows
+	for rows.Next() {
+		var windowSize time.Time
+		var value decimal.Decimal
+		var total decimal.Decimal
+		if err := rows.Scan(&total, &windowSize, &value); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan decimal result").
+				WithReportableDetails(map[string]interface{}{
+					"window_size": windowSize,
+					"value":       value,
+					"total":       total,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+		// Set the overall maximum as the result value
+		result.Value = total
+
+		result.Results = append(result.Results, events.UsageResult{
+			WindowSize: windowSize,
+			Value:      value,
+		})
+	}
+
+	SetSpanSuccess(span)
+	return &result, nil
+}
+
+func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) string {
+	bucketWindow := r.formatWindowSize(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor)
+
+	externalCustomerFilter := ""
+	if params.UsageParams.ExternalCustomerID != "" {
+		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+
+	featureFilter := ""
+	if params.FeatureID != "" {
+		featureFilter = fmt.Sprintf("AND feature_id = '%s'", params.FeatureID)
+	}
+
+	priceFilter := ""
+	if params.PriceID != "" {
+		priceFilter = fmt.Sprintf("AND price_id = '%s'", params.PriceID)
+	}
+
+	meterFilter := ""
+	if params.MeterID != "" {
+		meterFilter = fmt.Sprintf("AND meter_id = '%s'", params.MeterID)
+	}
+
+	subLineItemFilter := ""
+	if params.SubLineItemID != "" {
+		subLineItemFilter = fmt.Sprintf("AND sub_line_item_id = '%s'", params.SubLineItemID)
+	}
+
+	filterConditions := buildFilterConditions(params.Filters)
+	timeConditions := buildTimeConditions(params.UsageParams)
+
+	// First get max values per bucket, then get the max across all buckets
+	return fmt.Sprintf(`
+		WITH bucket_maxes AS (
+			SELECT
+				%s as bucket_start,
+				max(qty_total * sign) as bucket_max
+			FROM feature_usage
+			PREWHERE tenant_id = '%s'
+				AND environment_id = '%s'
+				%s
+				%s
+				%s
+				%s
+				%s
+				%s
+				%s
+			GROUP BY bucket_start
+			ORDER BY bucket_start
+		)
+		SELECT
+			(SELECT sum(bucket_max) FROM bucket_maxes) as total,
+			bucket_start as timestamp,
+			bucket_max as value
+		FROM bucket_maxes
+		ORDER BY bucket_start
+	`,
+		bucketWindow,
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		externalCustomerFilter,
+		featureFilter,
+		priceFilter,
+		meterFilter,
+		subLineItemFilter,
+		filterConditions,
+		timeConditions)
+}
+
+// GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs
+func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*events.FeatureUsage, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Build query with IN clause for event IDs
+	query := `
+		SELECT 
+			id, tenant_id, external_customer_id, customer_id, event_name, source, 
+			timestamp, ingested_at, properties, processed_at, environment_id,
+			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
+			unique_hash, qty_total, version, sign, processing_lag_ms
+		FROM feature_usage FINAL
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND id IN (?)
+	`
+
+	// ClickHouse requires special handling for IN clause with arrays
+	// Build placeholders for the IN clause
+	placeholders := make([]string, len(eventIDs))
+	args := make([]interface{}, 0, 3+len(eventIDs))
+	args = append(args, tenantID, environmentID)
+
+	for i, eventID := range eventIDs {
+		placeholders[i] = "?"
+		args = append(args, eventID)
+	}
+
+	query = strings.Replace(query, "IN (?)", "IN ("+strings.Join(placeholders, ",")+")", 1)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query feature_usage by event IDs").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var records []*events.FeatureUsage
+	for rows.Next() {
+		var record events.FeatureUsage
+		var propertiesJSON string
+
+		err := rows.Scan(
+			&record.ID,
+			&record.TenantID,
+			&record.ExternalCustomerID,
+			&record.CustomerID,
+			&record.EventName,
+			&record.Source,
+			&record.Timestamp,
+			&record.IngestedAt,
+			&propertiesJSON,
+			&record.ProcessedAt,
+			&record.EnvironmentID,
+			&record.SubscriptionID,
+			&record.SubLineItemID,
+			&record.PriceID,
+			&record.MeterID,
+			&record.FeatureID,
+			&record.PeriodID,
+			&record.UniqueHash,
+			&record.QtyTotal,
+			&record.Version,
+			&record.Sign,
+			&record.ProcessingLagMs,
+		)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan feature_usage record").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Parse properties
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &record.Properties); err != nil {
+				r.logger.Warnw("failed to unmarshal properties",
+					"event_id", record.ID,
+					"error", err,
+				)
+				record.Properties = make(map[string]interface{})
+			}
+		} else {
+			record.Properties = make(map[string]interface{})
+		}
+
+		records = append(records, &record)
+	}
+
+	return records, nil
 }

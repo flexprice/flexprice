@@ -67,7 +67,37 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key types.SettingK
 		}
 	}
 
-	return nil, &ent.NotFoundError{}
+	return nil, ierr.WithError(&ent.NotFoundError{}).
+		WithHintf("Setting with key %s was not found", key.String()).
+		WithReportableDetails(map[string]any{
+			"key": key.String(),
+		}).
+		Mark(ierr.ErrNotFound)
+}
+
+// GetTenantSettingByKey retrieves a tenant-level setting by key (without environment_id)
+func (s *InMemorySettingsStore) GetTenantSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+	tenantID := types.GetTenantID(ctx)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Find setting by tenant, empty environment_id, and key
+	for _, setting := range s.items {
+		if setting.TenantID == tenantID &&
+			setting.EnvironmentID == "" &&
+			setting.Key == key.String() &&
+			setting.Status == types.StatusPublished {
+			return setting, nil
+		}
+	}
+
+	return nil, ierr.WithError(&ent.NotFoundError{}).
+		WithHintf("Setting with key %s was not found", key.String()).
+		WithReportableDetails(map[string]any{
+			"key": key.String(),
+		}).
+		Mark(ierr.ErrNotFound)
 }
 
 // DeleteByKey deletes a setting by key for a specific tenant and environment
@@ -95,6 +125,33 @@ func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key types.Setti
 			"key":            key,
 			"tenant_id":      tenantID,
 			"environment_id": environmentID,
+		}).
+		Mark(ierr.ErrNotFound)
+}
+
+// DeleteTenantSettingByKey deletes a tenant-level setting by key (without environment_id)
+func (s *InMemorySettingsStore) DeleteTenantSettingByKey(ctx context.Context, key types.SettingKey) error {
+	tenantID := types.GetTenantID(ctx)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Find and delete tenant-level setting by tenant, empty environment_id, and key
+	for id, setting := range s.items {
+		if setting.TenantID == tenantID &&
+			setting.EnvironmentID == "" &&
+			setting.Key == key.String() &&
+			setting.Status == types.StatusPublished {
+			delete(s.items, id)
+			return nil
+		}
+	}
+
+	return ierr.NewError("setting not found").
+		WithHintf("Tenant-level setting with key %s was not found", key).
+		WithReportableDetails(map[string]any{
+			"key":       key,
+			"tenant_id": tenantID,
 		}).
 		Mark(ierr.ErrNotFound)
 }

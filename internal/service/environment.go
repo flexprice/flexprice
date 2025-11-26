@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -20,12 +21,16 @@ type EnvironmentService interface {
 type environmentService struct {
 	repo             environment.Repository
 	envAccessService EnvAccessService
+	settingsService  SettingsService
+	ServiceParams
 }
 
-func NewEnvironmentService(repo environment.Repository, envAccessService EnvAccessService) EnvironmentService {
+func NewEnvironmentService(repo environment.Repository, envAccessService EnvAccessService, settingsService SettingsService, params ServiceParams) EnvironmentService {
 	return &environmentService{
 		repo:             repo,
 		envAccessService: envAccessService,
+		settingsService:  settingsService,
+		ServiceParams:    params,
 	}
 }
 
@@ -35,6 +40,40 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 	}
 
 	env := req.ToEnvironment(ctx)
+	envType := types.EnvironmentType(req.Type)
+
+	// Check environment limits for prod and sandbox environments
+	if envType == types.EnvironmentProduction || envType == types.EnvironmentDevelopment {
+		// Get env config with defaults (tenant-level, no environment_id)
+
+		config, err := s.settingsService.GetSettingWithDefaults(ctx, types.SettingKeyEnvConfig)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get current count of environments of this type
+		currentCount, err := s.repo.CountByType(ctx, envType)
+		if err != nil {
+			return nil, err
+		}
+
+		// Determine the limit based on environment type
+		envTypeKey := string(envType)
+		limit, exists := config.Value[envTypeKey]
+		if !exists {
+			return nil, ierr.NewErrorf("environment limit not configured for type: %s", envTypeKey).
+				WithHintf("Environment limit configuration missing for type: %s", envTypeKey).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Check if limit is reached
+		if currentCount >= limit.(int) {
+			envTypeName := string(envType)
+			return nil, ierr.NewErrorf("environment limit reached: maximum %d %s environment(s) allowed", limit, envTypeName).
+				WithHintf("You have reached the maximum limit of %d %s environment(s)", limit, envTypeName).
+				Mark(ierr.ErrValidation)
+		}
+	}
 
 	if err := s.repo.Create(ctx, env); err != nil {
 		return nil, err

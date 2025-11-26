@@ -113,6 +113,11 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		response.PlanID = p.EntityID
 	}
 
+	// Sync new price to Chargebee if it belongs to a plan
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
+	}
+
 	return response, nil
 }
 
@@ -240,6 +245,16 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Sync prices to Chargebee if integration is available and prices are for a plan
+	// Use the centralized sync function for each price
+	if response != nil && len(response.Items) > 0 {
+		for _, priceResp := range response.Items {
+			if priceResp.Price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+				s.syncPriceToChargebeeIfEnabled(ctx, priceResp.Price.ID, priceResp.Price.EntityID)
+			}
+		}
 	}
 
 	return response, nil
@@ -454,6 +469,11 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	// TODO: !REMOVE after migration
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		response.PlanID = p.EntityID
+	}
+
+	// Sync new price to Chargebee if it belongs to a plan
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
 	}
 
 	return response, nil
@@ -884,6 +904,11 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			"new_price_start_date", terminationEndDate,
 			"entity_type", existingPrice.EntityType,
 			"entity_id", existingPrice.EntityID)
+
+		// Sync new price to Chargebee if it belongs to a plan
+		if newPriceResp.Price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+			s.syncPriceToChargebeeIfEnabled(ctx, newPriceResp.Price.ID, newPriceResp.Price.EntityID)
+		}
 
 		return newPriceResp, nil
 	} else {
@@ -1348,4 +1373,63 @@ func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price)
 		return err
 	}
 	return nil
+}
+
+// syncPriceToChargebeeIfEnabled syncs a price to Chargebee if the integration is enabled
+// This is a non-blocking operation - errors are logged but don't fail the price operation
+func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceID, planID string) {
+	// Early return if integration factory is not available
+	if s.IntegrationFactory == nil {
+		return
+	}
+
+	// Get Chargebee integration
+	chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
+	if err != nil {
+		s.Logger.Debugw("Chargebee integration not available, skipping sync",
+			"price_id", priceID,
+			"plan_id", planID,
+			"error", err)
+		return
+	}
+
+	// Check if Chargebee connection exists
+	if !chargebeeIntegration.Client.HasChargebeeConnection(ctx) {
+		s.Logger.Debugw("Chargebee connection not configured, skipping sync",
+			"price_id", priceID,
+			"plan_id", planID)
+		return
+	}
+
+	// Get plan using repository
+	plan, err := s.PlanRepo.Get(ctx, planID)
+	if err != nil {
+		s.Logger.Errorw("failed to get plan for Chargebee sync",
+			"price_id", priceID,
+			"plan_id", planID,
+			"error", err)
+		return
+	}
+
+	// Get price using repository
+	priceModel, err := s.PriceRepo.Get(ctx, priceID)
+	if err != nil {
+		s.Logger.Errorw("failed to get price for Chargebee sync",
+			"price_id", priceID,
+			"plan_id", planID,
+			"error", err)
+		return
+	}
+
+	// Sync to Chargebee (non-blocking - log errors but don't fail)
+	if syncErr := chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel}); syncErr != nil {
+		s.Logger.Errorw("failed to sync price to Chargebee",
+			"price_id", priceID,
+			"plan_id", planID,
+			"error", syncErr)
+	} else {
+		s.Logger.Infow("successfully synced price to Chargebee",
+			"price_id", priceID,
+			"plan_id", planID)
+	}
 }

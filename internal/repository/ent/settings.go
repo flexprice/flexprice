@@ -40,11 +40,6 @@ func (r *settingsRepository) Create(ctx context.Context, s *domainSettings.Setti
 		"key", s.Key,
 	)
 
-	// Set environment ID from context if not already set
-	if s.EnvironmentID == "" {
-		s.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
-
 	setting, err := client.Settings.Create().
 		SetID(s.ID).
 		SetTenantID(s.TenantID).
@@ -95,11 +90,12 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 		"key", s.Key,
 	)
 
+	// For env_config, use NULL environment_id (tenant-level)
+	// Build the WHERE clause based on whether it's env_config or not
 	_, err := client.Settings.Update().
 		Where(
 			settings.ID(s.ID),
 			settings.TenantID(s.TenantID),
-			settings.EnvironmentID(types.GetEnvironmentID(ctx)),
 			settings.Status(string(types.StatusPublished)),
 		).
 		SetValue(s.Value).
@@ -234,6 +230,38 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 	return setting, nil
 }
 
+// GetTenantSettingByKey retrieves a tenant-level setting by key (without environment_id)
+func (r *settingsRepository) GetTenantSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+	client := r.client.Reader(ctx)
+	r.log.Debugw("getting tenant setting by key", "key", key)
+
+	s, err := client.Settings.Query().
+		Where(
+			settings.Key(key.String()),
+			settings.TenantID(types.GetTenantID(ctx)),
+			settings.EnvironmentID(""),
+			settings.Status(string(types.StatusPublished)),
+		).
+		Only(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.WithError(err).
+				WithHintf("Setting with key %s was not found", key.String()).
+				WithReportableDetails(map[string]any{
+					"key": key.String(),
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get tenant setting by key").
+			Mark(ierr.ErrDatabase)
+	}
+
+	setting := domainSettings.FromEnt(s)
+	return setting, nil
+}
+
 func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingKey) error {
 	// Get the setting first for cache invalidation
 	setting, err := r.GetByKey(ctx, key)
@@ -268,6 +296,48 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingK
 		}
 		return ierr.WithError(err).
 			WithHint("Failed to delete setting by key").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Delete from cache
+	r.DeleteCache(ctx, setting)
+	return nil
+}
+
+func (r *settingsRepository) DeleteTenantSettingByKey(ctx context.Context, key types.SettingKey) error {
+	// Get the tenant-level setting first for cache invalidation
+	setting, err := r.GetTenantSettingByKey(ctx, key)
+	if err != nil {
+		return err
+	}
+
+	client := r.client.Writer(ctx)
+
+	r.log.Debugw("deleting tenant-level setting by key", "key", key.String())
+
+	_, err = client.Settings.Update().
+		Where(
+			settings.Key(key.String()),
+			settings.TenantID(types.GetTenantID(ctx)),
+			settings.EnvironmentID(""),
+			settings.Status(string(types.StatusPublished)),
+		).
+		SetStatus(string(types.StatusArchived)).
+		SetUpdatedAt(time.Now().UTC()).
+		SetUpdatedBy(types.GetUserID(ctx)).
+		Save(ctx)
+
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return ierr.WithError(err).
+				WithHintf("Tenant-level setting with key %s was not found", key.String()).
+				WithReportableDetails(map[string]any{
+					"key": key.String(),
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+		return ierr.WithError(err).
+			WithHint("Failed to delete tenant-level setting by key").
 			Mark(ierr.ErrDatabase)
 	}
 

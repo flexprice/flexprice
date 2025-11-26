@@ -180,3 +180,11 @@ type UsageWithFiltersParams struct {
 	*UsageParams
 	FilterGroups []FilterGroup // Ordered list of filter groups, from most specific to least specific
 }
+
+type FeatureUsageParams struct {
+	*UsageParams
+	FeatureID     string `json:"feature_id"`
+	PriceID       string `json:"price_id"`
+	MeterID       string `json:"meter_id"`
+	SubLineItemID string `json:"sub_line_item_id"`
+}

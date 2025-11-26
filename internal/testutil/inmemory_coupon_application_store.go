@@ -100,79 +100,97 @@ func (s *InMemoryCouponApplicationStore) Delete(ctx context.Context, id string) 
 	return s.InMemoryStore.Delete(ctx, id)
 }
 
-func (s *InMemoryCouponApplicationStore) GetByInvoice(ctx context.Context, invoiceID string) ([]*coupon_application.CouponApplication, error) {
-	// Create a filter function that matches by invoice_id
-	filterFn := func(ctx context.Context, ca *coupon_application.CouponApplication, _ interface{}) bool {
-		return ca.InvoiceID == invoiceID &&
-			ca.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
+// List retrieves coupon applications based on the provided filter
+func (s *InMemoryCouponApplicationStore) List(ctx context.Context, filter *types.CouponApplicationFilter) ([]*coupon_application.CouponApplication, error) {
+	if filter == nil {
+		filter = types.NewCouponApplicationFilter()
 	}
 
-	// List all coupon applications with our filter
-	applications, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
+	items, err := s.InMemoryStore.List(ctx, filter, couponApplicationFilterFn, couponApplicationSortFn)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list coupon applications").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
-	return lo.Map(applications, func(ca *coupon_application.CouponApplication, _ int) *coupon_application.CouponApplication {
+	return lo.Map(items, func(ca *coupon_application.CouponApplication, _ int) *coupon_application.CouponApplication {
 		return copyCouponApplication(ca)
 	}), nil
 }
 
-func (s *InMemoryCouponApplicationStore) GetBySubscription(ctx context.Context, subscriptionID string) ([]*coupon_application.CouponApplication, error) {
-	// Create a filter function that matches by subscription_id
-	filterFn := func(ctx context.Context, ca *coupon_application.CouponApplication, _ interface{}) bool {
-		return ca.SubscriptionID != nil && *ca.SubscriptionID == subscriptionID &&
-			ca.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
+// Count counts coupon applications based on the provided filter
+func (s *InMemoryCouponApplicationStore) Count(ctx context.Context, filter *types.CouponApplicationFilter) (int, error) {
+	if filter == nil {
+		filter = types.NewCouponApplicationFilter()
 	}
 
-	// List all coupon applications with our filter
-	applications, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list coupon applications").
-			Mark(ierr.ErrDatabase)
-	}
-
-	return lo.Map(applications, func(ca *coupon_application.CouponApplication, _ int) *coupon_application.CouponApplication {
-		return copyCouponApplication(ca)
-	}), nil
+	return s.InMemoryStore.Count(ctx, filter, couponApplicationFilterFn)
 }
 
-func (s *InMemoryCouponApplicationStore) GetBySubscriptionAndCoupon(ctx context.Context, subscriptionID string, couponID string) ([]*coupon_application.CouponApplication, error) {
-	// Create a filter function that matches by subscription_id and coupon_id
-	filterFn := func(ctx context.Context, ca *coupon_application.CouponApplication, _ interface{}) bool {
-		return ca.SubscriptionID != nil && *ca.SubscriptionID == subscriptionID &&
-			ca.CouponID == couponID &&
-			ca.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
+// couponApplicationFilterFn implements filtering logic for coupon applications
+func couponApplicationFilterFn(ctx context.Context, ca *coupon_application.CouponApplication, filter interface{}) bool {
+	f, ok := filter.(*types.CouponApplicationFilter)
+	if !ok {
+		return false
 	}
 
-	// List all coupon applications with our filter
-	applications, err := s.InMemoryStore.List(ctx, nil, filterFn, nil)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list coupon applications").
-			Mark(ierr.ErrDatabase)
+	// Apply tenant filter
+	tenantID := types.GetTenantID(ctx)
+	if tenantID != "" && ca.TenantID != tenantID {
+		return false
 	}
 
-	return lo.Map(applications, func(ca *coupon_application.CouponApplication, _ int) *coupon_application.CouponApplication {
-		return copyCouponApplication(ca)
-	}), nil
+	// Apply environment filter
+	if !CheckEnvironmentFilter(ctx, ca.EnvironmentID) {
+		return false
+	}
+
+	// Apply status filter (default: exclude deleted)
+	if f.QueryFilter != nil {
+		status := f.QueryFilter.GetStatus()
+		if status == "" {
+			if ca.Status == types.StatusDeleted {
+				return false
+			}
+		} else if ca.Status != types.Status(status) {
+			return false
+		}
+	} else if ca.Status == types.StatusDeleted {
+		return false
+	}
+
+	// Check invoice IDs filter
+	if len(f.InvoiceIDs) > 0 && !lo.Contains(f.InvoiceIDs, ca.InvoiceID) {
+		return false
+	}
+
+	// Check subscription IDs filter
+	if len(f.SubscriptionIDs) > 0 {
+		if ca.SubscriptionID == nil || !lo.Contains(f.SubscriptionIDs, *ca.SubscriptionID) {
+			return false
+		}
+	}
+
+	// Check coupon IDs filter
+	if len(f.CouponIDs) > 0 && !lo.Contains(f.CouponIDs, ca.CouponID) {
+		return false
+	}
+
+	// Check invoice line item IDs filter
+	if len(f.InvoiceLineItemIDs) > 0 {
+		if ca.InvoiceLineItemID == nil || !lo.Contains(f.InvoiceLineItemIDs, *ca.InvoiceLineItemID) {
+			return false
+		}
+	}
+
+	// Check coupon association IDs filter
+	if len(f.CouponAssociationIDs) > 0 && !lo.Contains(f.CouponAssociationIDs, ca.CouponAssociationID) {
+		return false
+	}
+
+	return true
 }
 
-func (s *InMemoryCouponApplicationStore) CountBySubscriptionAndCoupon(ctx context.Context, subscriptionID string, couponID string) (int, error) {
-	// Create a filter function that matches by subscription_id and coupon_id
-	filterFn := func(ctx context.Context, ca *coupon_application.CouponApplication, _ interface{}) bool {
-		return ca.SubscriptionID != nil && *ca.SubscriptionID == subscriptionID &&
-			ca.CouponID == couponID &&
-			ca.TenantID == types.GetTenantID(ctx) &&
-			CheckEnvironmentFilter(ctx, ca.EnvironmentID)
-	}
-
-	// Count all coupon applications with our filter
-	return s.InMemoryStore.Count(ctx, nil, filterFn)
+// couponApplicationSortFn implements sorting logic for coupon applications
+func couponApplicationSortFn(i, j *coupon_application.CouponApplication) bool {
+	// Default sort by created_at desc
+	return i.CreatedAt.After(j.CreatedAt)
 }

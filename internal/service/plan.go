@@ -7,7 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/plan"
-	"github.com/flexprice/flexprice/internal/domain/price"
+	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -48,9 +48,9 @@ func (s *planService) CreatePlan(ctx context.Context, req dto.CreatePlanRequest)
 
 		// 2. Create prices in bulk if present
 		if len(req.Prices) > 0 {
-			prices := make([]*price.Price, len(req.Prices))
+			prices := make([]*domainPrice.Price, len(req.Prices))
 			for i, planPriceReq := range req.Prices {
-				var price *price.Price
+				var price *domainPrice.Price
 				var err error
 
 				// Skip if the price request is nil
@@ -397,9 +397,9 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 			for _, price := range planResponse.Prices {
 				if reqPrice, ok := reqPriceMap[price.ID]; ok {
 					// Update existing price
-					price.Description = reqPrice.Description
-					price.Metadata = reqPrice.Metadata
-					price.LookupKey = reqPrice.LookupKey
+					price.Price.Description = reqPrice.Description
+					price.Price.Metadata = reqPrice.Metadata
+					price.Price.LookupKey = reqPrice.LookupKey
 					if err := s.PriceRepo.Update(ctx, price.Price); err != nil {
 						return err
 					}
@@ -417,11 +417,11 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 			}
 
 			// Create new prices
-			bulkCreatePrices := make([]*price.Price, 0) // Slice for bulk creation
+			bulkCreatePrices := make([]*domainPrice.Price, 0) // Slice for bulk creation
 
 			for _, reqPrice := range req.Prices {
 				if reqPrice.ID == "" {
-					var newPrice *price.Price
+					var newPrice *domainPrice.Price
 					var err error
 
 					// If price unit config is provided, handle it through the price service
@@ -667,7 +667,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 	}
 
 	// Create price map for quick lookups
-	planPriceMap := make(map[string]*price.Price)
+	planPriceMap := make(map[string]*domainPrice.Price)
 	for _, priceResp := range pricesResponse.Items {
 		// skip the fixed fee prices
 		if priceResp.Price.Type == types.PRICE_TYPE_FIXED {

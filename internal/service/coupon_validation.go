@@ -6,7 +6,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -23,10 +22,10 @@ func (e *CouponValidationError) Error() string {
 
 // CouponValidationService defines the interface for coupon validation operations
 type CouponValidationService interface {
-	// Core validation method used for both subscription and invoice scenarios
-	ValidateCoupon(ctx context.Context, couponID string, subscriptionID *string) error
+	// Core validation method - stateless, accepts coupon and subscription objects directly
+	ValidateCoupon(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error
 	// Basic coupon validation (status, validity, etc.)
-	ValidateCouponBasic(coupon *coupon.Coupon) error
+	ValidateCouponBasic(coupon coupon.Coupon) error
 }
 
 // couponValidationService implements CouponValidationService
@@ -41,31 +40,17 @@ func NewCouponValidationService(params ServiceParams) CouponValidationService {
 	}
 }
 
-// ValidateCouponForSubscription validates a coupon before associating it with a subscription
-func (s *couponValidationService) ValidateCoupon(ctx context.Context, couponID string, subscriptionID *string) error {
+// ValidateCoupon validates a coupon with optional subscription context
+// This is a stateless method that accepts coupon and subscription objects directly
+func (s *couponValidationService) ValidateCoupon(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
+	var subscriptionID *string
+	if subscription != nil {
+		subscriptionID = &subscription.ID
+	}
+
 	s.Logger.Infow("validating coupon for subscription association",
-		"coupon_id", couponID,
+		"coupon_id", coupon.ID,
 		"subscription_id", subscriptionID)
-
-	// Get coupon details
-	coupon, err := s.CouponRepo.Get(ctx, couponID)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to get coupon details").
-			Mark(ierr.ErrNotFound)
-	}
-
-	// subscription is nil by default if subscriptionID is nil
-	var subscription *subscription.Subscription
-	if subscriptionID != nil {
-		sub, err := s.SubRepo.Get(ctx, *subscriptionID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to get subscription details").
-				Mark(ierr.ErrNotFound)
-		}
-		subscription = sub
-	}
 
 	// Priority 1: Basic coupon validation
 	if err := s.ValidateCouponBasic(coupon); err != nil {
@@ -90,21 +75,14 @@ func (s *couponValidationService) ValidateCoupon(ctx context.Context, couponID s
 	}
 
 	s.Logger.Infow("coupon validation for subscription successful",
-		"coupon_id", couponID,
+		"coupon_id", coupon.ID,
 		"subscription_id", subscriptionID)
 
 	return nil
 }
 
 // ValidateCouponBasic performs basic coupon validation (public method)
-func (s *couponValidationService) ValidateCouponBasic(coupon *coupon.Coupon) error {
-	// Check if coupon exists
-	if coupon == nil {
-		return &CouponValidationError{
-			Code:    types.CouponValidationErrorCodeNotFound,
-			Message: "Coupon not found",
-		}
-	}
+func (s *couponValidationService) ValidateCouponBasic(coupon coupon.Coupon) error {
 
 	// Check if coupon is published
 	if coupon.Status != types.StatusPublished {
@@ -122,7 +100,7 @@ func (s *couponValidationService) ValidateCouponBasic(coupon *coupon.Coupon) err
 }
 
 // Priority 2: Business rule validation for subscription
-func (s *couponValidationService) validateCouponBusinessRules(coupon *coupon.Coupon, subscription *subscription.Subscription) error {
+func (s *couponValidationService) validateCouponBusinessRules(coupon coupon.Coupon, subscription *subscription.Subscription) error {
 	// Date range validation
 	if err := s.validateCouponDateRange(coupon); err != nil {
 		return err
@@ -139,7 +117,7 @@ func (s *couponValidationService) validateCouponBusinessRules(coupon *coupon.Cou
 }
 
 // Date range validation
-func (s *couponValidationService) validateCouponDateRange(coupon *coupon.Coupon) error {
+func (s *couponValidationService) validateCouponDateRange(coupon coupon.Coupon) error {
 	now := time.Now()
 
 	// Check redeem_after date
@@ -176,7 +154,7 @@ func (s *couponValidationService) validateCouponDateRange(coupon *coupon.Coupon)
 }
 
 // Currency validation
-func (s *couponValidationService) validateCouponCurrency(coupon *coupon.Coupon, targetCurrency string) error {
+func (s *couponValidationService) validateCouponCurrency(coupon coupon.Coupon, targetCurrency string) error {
 	// If coupon has specific currency, it must match target currency
 	if coupon.Currency != "" {
 		if coupon.Currency != targetCurrency {
@@ -196,7 +174,7 @@ func (s *couponValidationService) validateCouponCurrency(coupon *coupon.Coupon, 
 }
 
 // Priority 5: Redemption validation
-func (s *couponValidationService) validateCouponRedemption(coupon *coupon.Coupon) error {
+func (s *couponValidationService) validateCouponRedemption(coupon coupon.Coupon) error {
 	// Check if coupon has reached max redemptions
 	if coupon.MaxRedemptions != nil {
 		if coupon.TotalRedemptions >= *coupon.MaxRedemptions {
@@ -216,7 +194,7 @@ func (s *couponValidationService) validateCouponRedemption(coupon *coupon.Coupon
 }
 
 // validateCouponForInvoiceSpecific implements cadence-specific validation for invoice application
-func (s *couponValidationService) validateCouponCadence(ctx context.Context, coupon *coupon.Coupon, subscription *subscription.Subscription) error {
+func (s *couponValidationService) validateCouponCadence(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
 	s.Logger.Debugw("validating coupon cadence for invoice",
 		"coupon_id", coupon.ID,
 		"cadence", coupon.Cadence)
@@ -242,14 +220,17 @@ func (s *couponValidationService) validateCouponCadence(ctx context.Context, cou
 }
 
 // validateOnceCadenceForInvoice validates "once" cadence - coupon should only be applied to first invoice
-func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupon *coupon.Coupon, subscription *subscription.Subscription) error {
+func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
 	s.Logger.Debugw("validating once cadence for invoice",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID)
 
 	// Use optimized query to check if this coupon has already been applied to this subscription
 	// This is much more efficient than fetching all invoices and counting them
-	existingApplicationCount, err := s.CouponApplicationRepo.CountBySubscriptionAndCoupon(ctx, subscription.ID, coupon.ID)
+	filter := types.NewCouponApplicationFilter()
+	filter.SubscriptionIDs = []string{subscription.ID}
+	filter.CouponIDs = []string{coupon.ID}
+	existingApplicationCount, err := s.CouponApplicationRepo.Count(ctx, filter)
 	if err != nil {
 		return &CouponValidationError{
 			Code:    types.CouponValidationErrorCodeDatabaseError,
@@ -288,7 +269,7 @@ func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupo
 }
 
 // validateForeverCadence validates "forever" cadence - coupon is always applied
-func (s *couponValidationService) validateForeverCadence(coupon *coupon.Coupon, subscription *subscription.Subscription) error {
+func (s *couponValidationService) validateForeverCadence(coupon coupon.Coupon, subscription *subscription.Subscription) error {
 	s.Logger.Debugw("validating forever cadence for invoice",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID)
@@ -301,7 +282,7 @@ func (s *couponValidationService) validateForeverCadence(coupon *coupon.Coupon, 
 }
 
 // validateRepeatedCadenceForInvoice validates "repeated" cadence - coupon applied for duration_in_periods times
-func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, coupon *coupon.Coupon, subscription *subscription.Subscription) error {
+func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
 	s.Logger.Debugw("validating repeated cadence for invoice",
 		"coupon_id", coupon.ID,
 		"duration_in_periods", coupon.DurationInPeriods)
@@ -320,7 +301,10 @@ func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, c
 
 	// Use optimized query to count existing applications for this coupon and subscription
 	// This is much more efficient than the previous approach of getting all invoices and their applications
-	existingApplicationCount, err := s.CouponApplicationRepo.CountBySubscriptionAndCoupon(ctx, subscription.ID, coupon.ID)
+	filter := types.NewCouponApplicationFilter()
+	filter.SubscriptionIDs = []string{subscription.ID}
+	filter.CouponIDs = []string{coupon.ID}
+	existingApplicationCount, err := s.CouponApplicationRepo.Count(ctx, filter)
 	if err != nil {
 		s.Logger.Warnw("failed to count existing applications for repeated cadence validation",
 			"coupon_id", coupon.ID,

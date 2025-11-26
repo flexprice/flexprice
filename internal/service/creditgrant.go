@@ -58,6 +58,9 @@ type CreditGrantService interface {
 
 	// CancelFutureCreditGrantsOfSubscription cancels all future credit grants for this subscription
 	CancelFutureCreditGrantsOfSubscription(ctx context.Context, subscriptionID string) error
+
+	// ListCreditGrantApplications retrieves credit grant applications based on filter
+	ListCreditGrantApplications(ctx context.Context, filter *types.CreditGrantApplicationFilter) (*dto.ListCreditGrantApplicationsResponse, error)
 }
 
 type creditGrantService struct {
@@ -233,7 +236,41 @@ func (s *creditGrantService) UpdateCreditGrant(ctx context.Context, id string, r
 }
 
 func (s *creditGrantService) DeleteCreditGrant(ctx context.Context, id string) error {
-	return s.CreditGrantRepo.Delete(ctx, id)
+
+	grant, err := s.CreditGrantRepo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if grant.Status != types.StatusPublished {
+		return ierr.NewError("credit grant is not in published status").
+			WithHint("Credit grant is already archived").
+			WithReportableDetails(map[string]interface{}{
+				"credit_grant_id": id,
+				"status":          grant.Status,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		if grant.Scope == types.CreditGrantScopeSubscription && grant.SubscriptionID != nil {
+			err = s.CancelFutureCreditGrantsOfSubscription(ctx, *grant.SubscriptionID)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = s.CreditGrantRepo.Delete(ctx, id)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *creditGrantService) GetCreditGrantsByPlan(ctx context.Context, planID string) (*dto.ListCreditGrantsResponse, error) {
@@ -964,4 +1001,40 @@ func (s *creditGrantService) CancelFutureCreditGrantsOfSubscription(ctx context.
 		"subscription_status", subscription.SubscriptionStatus)
 
 	return nil
+}
+
+func (s *creditGrantService) ListCreditGrantApplications(ctx context.Context, filter *types.CreditGrantApplicationFilter) (*dto.ListCreditGrantApplicationsResponse, error) {
+	if filter == nil {
+		filter = types.NewCreditGrantApplicationFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
+	applications, err := s.CreditGrantApplicationRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	count, err := s.CreditGrantApplicationRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	response := &dto.ListCreditGrantApplicationsResponse{
+		Items: make([]*dto.CreditGrantApplicationResponse, len(applications)),
+	}
+
+	for i, app := range applications {
+		response.Items[i] = &dto.CreditGrantApplicationResponse{CreditGrantApplication: app}
+	}
+
+	response.Pagination = types.NewPaginationResponse(
+		count,
+		filter.GetLimit(),
+		filter.GetOffset(),
+	)
+
+	return response, nil
 }

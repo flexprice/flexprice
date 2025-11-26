@@ -196,3 +196,44 @@ func (r *environmentRepository) Update(ctx context.Context, env *domainEnvironme
 
 	return nil
 }
+
+// CountByType counts environments by tenant and type
+func (r *environmentRepository) CountByType(ctx context.Context, envType types.EnvironmentType) (int, error) {
+	// Start a span for this repository operation
+	span := StartRepositorySpan(ctx, "environment", "count_by_type", map[string]interface{}{
+		"environment_type": envType,
+	})
+	defer FinishSpan(span)
+
+	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
+	if !ok {
+		validationErr := fmt.Errorf("tenant ID not found in context")
+		SetSpanError(span, validationErr)
+		return 0, ierr.NewError("tenant ID not found in context").
+			WithHint("Tenant ID is required in the context").
+			Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Reader(ctx)
+	count, err := client.Environment.
+		Query().
+		Where(
+			entEnvironment.TenantID(tenantID),
+			entEnvironment.Type(string(envType)),
+			entEnvironment.Status(string(types.StatusPublished)),
+		).
+		Count(ctx)
+
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to count environments by type").
+			WithReportableDetails(map[string]interface{}{
+				"tenant_id":       tenantID,
+				"environment_type": envType,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return count, nil
+}

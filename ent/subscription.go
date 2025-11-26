@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/subscription"
-	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/shopspring/decimal"
 )
 
@@ -106,10 +105,10 @@ type SubscriptionEdges struct {
 	LineItems []*SubscriptionLineItem `json:"line_items,omitempty"`
 	// Pauses holds the value of the pauses edge.
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
+	// Phases holds the value of the phases edge.
+	Phases []*SubscriptionPhase `json:"phases,omitempty"`
 	// CreditGrants holds the value of the credit_grants edge.
 	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
-	// Schedule holds the value of the schedule edge.
-	Schedule *SubscriptionSchedule `json:"schedule,omitempty"`
 	// Subscription can have multiple coupon associations
 	CouponAssociations []*CouponAssociation `json:"coupon_associations,omitempty"`
 	// Subscription can have multiple coupon applications
@@ -137,24 +136,22 @@ func (e SubscriptionEdges) PausesOrErr() ([]*SubscriptionPause, error) {
 	return nil, &NotLoadedError{edge: "pauses"}
 }
 
+// PhasesOrErr returns the Phases value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) PhasesOrErr() ([]*SubscriptionPhase, error) {
+	if e.loadedTypes[2] {
+		return e.Phases, nil
+	}
+	return nil, &NotLoadedError{edge: "phases"}
+}
+
 // CreditGrantsOrErr returns the CreditGrants value or an error if the edge
 // was not loaded in eager-loading.
 func (e SubscriptionEdges) CreditGrantsOrErr() ([]*CreditGrant, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[3] {
 		return e.CreditGrants, nil
 	}
 	return nil, &NotLoadedError{edge: "credit_grants"}
-}
-
-// ScheduleOrErr returns the Schedule value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e SubscriptionEdges) ScheduleOrErr() (*SubscriptionSchedule, error) {
-	if e.Schedule != nil {
-		return e.Schedule, nil
-	} else if e.loadedTypes[3] {
-		return nil, &NotFoundError{label: subscriptionschedule.Label}
-	}
-	return nil, &NotLoadedError{edge: "schedule"}
 }
 
 // CouponAssociationsOrErr returns the CouponAssociations value or an error if the edge
@@ -468,14 +465,14 @@ func (s *Subscription) QueryPauses() *SubscriptionPauseQuery {
 	return NewSubscriptionClient(s.config).QueryPauses(s)
 }
 
+// QueryPhases queries the "phases" edge of the Subscription entity.
+func (s *Subscription) QueryPhases() *SubscriptionPhaseQuery {
+	return NewSubscriptionClient(s.config).QueryPhases(s)
+}
+
 // QueryCreditGrants queries the "credit_grants" edge of the Subscription entity.
 func (s *Subscription) QueryCreditGrants() *CreditGrantQuery {
 	return NewSubscriptionClient(s.config).QueryCreditGrants(s)
-}
-
-// QuerySchedule queries the "schedule" edge of the Subscription entity.
-func (s *Subscription) QuerySchedule() *SubscriptionScheduleQuery {
-	return NewSubscriptionClient(s.config).QuerySchedule(s)
 }
 
 // QueryCouponAssociations queries the "coupon_associations" edge of the Subscription entity.

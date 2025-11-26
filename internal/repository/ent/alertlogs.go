@@ -6,8 +6,10 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/alertlogs"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainAlertLogs "github.com/flexprice/flexprice/internal/domain/alertlogs"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -17,16 +19,18 @@ import (
 )
 
 type alertLogsRepository struct {
-	client postgres.IClient
-	log    *logger.Logger
-	cache  cache.Cache
+	client    postgres.IClient
+	log       *logger.Logger
+	queryOpts AlertLogQueryOptions
+	cache     cache.Cache
 }
 
 func NewAlertLogsRepository(client postgres.IClient, log *logger.Logger, cache cache.Cache) domainAlertLogs.Repository {
 	return &alertLogsRepository{
-		client: client,
-		log:    log,
-		cache:  cache,
+		client:    client,
+		log:       log,
+		queryOpts: AlertLogQueryOptions{},
+		cache:     cache,
 	}
 }
 
@@ -187,33 +191,27 @@ func (r *alertLogsRepository) Get(ctx context.Context, id string) (*domainAlertL
 
 func (r *alertLogsRepository) List(ctx context.Context, filter *types.AlertLogFilter) ([]*domainAlertLogs.AlertLog, error) {
 	client := r.client.Reader(ctx)
+	r.log.Debugw("listing alert logs",
+		"tenant_id", types.GetTenantID(ctx),
+		"limit", filter.GetLimit(),
+		"offset", filter.GetOffset(),
+	)
 
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "alertlogs", "list", map[string]interface{}{
-		"limit":  filter.GetLimit(),
-		"offset": filter.GetOffset(),
+		"filter": filter,
 	})
 	defer FinishSpan(span)
 
-	query := client.AlertLogs.Query().Where(
-		alertlogs.TenantID(types.GetTenantID(ctx)),
-		alertlogs.EnvironmentID(types.GetEnvironmentID(ctx)),
-	)
-
-	// Apply common filters
-	query = r.applyFilters(query, filter)
-
-	// Apply pagination
-	if filter.GetLimit() > 0 {
-		query = query.Limit(filter.GetLimit())
+	query := client.AlertLogs.Query()
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list alert logs").
+			Mark(ierr.ErrDatabase)
 	}
-	if filter.GetOffset() > 0 {
-		query = query.Offset(filter.GetOffset())
-	}
-
-	// Apply default sorting by creation time (latest first)
-	query = query.Order(ent.Desc(alertlogs.FieldCreatedAt))
-
+	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
 	alertLogs, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
@@ -391,4 +389,146 @@ func (r *alertLogsRepository) ListByAlertType(ctx context.Context, alertType typ
 
 	SetSpanSuccess(span)
 	return domainAlertLogs.FromEntList(alertLogs), nil
+}
+
+// AlertLogQuery type alias for better readability
+type AlertLogQuery = *ent.AlertLogsQuery
+
+// AlertLogQueryOptions implements BaseQueryOptions for alert log queries
+type AlertLogQueryOptions struct{}
+
+func (o AlertLogQueryOptions) ApplyTenantFilter(ctx context.Context, query AlertLogQuery) AlertLogQuery {
+	return query.Where(alertlogs.TenantID(types.GetTenantID(ctx)))
+}
+
+func (o AlertLogQueryOptions) ApplyEnvironmentFilter(ctx context.Context, query AlertLogQuery) AlertLogQuery {
+	environmentID := types.GetEnvironmentID(ctx)
+	if environmentID != "" {
+		return query.Where(alertlogs.EnvironmentID(environmentID))
+	}
+	return query
+}
+
+func (o AlertLogQueryOptions) ApplyStatusFilter(query AlertLogQuery, status string) AlertLogQuery {
+	if status == "" {
+		return query.Where(alertlogs.StatusNotIn(string(types.StatusDeleted)))
+	}
+	return query.Where(alertlogs.Status(status))
+}
+
+func (o AlertLogQueryOptions) ApplySortFilter(query AlertLogQuery, field string, order string) AlertLogQuery {
+	field = o.GetFieldName(field)
+
+	// Apply standard ordering for all fields
+	if order == types.OrderDesc {
+		query = query.Order(ent.Desc(field))
+	} else {
+		query = query.Order(ent.Asc(field))
+	}
+	return query
+}
+
+func (o AlertLogQueryOptions) ApplyPaginationFilter(query AlertLogQuery, limit int, offset int) AlertLogQuery {
+	return query.Offset(offset).Limit(limit)
+}
+
+func (o AlertLogQueryOptions) GetFieldName(field string) string {
+	switch field {
+	case "created_at":
+		return alertlogs.FieldCreatedAt
+	case "updated_at":
+		return alertlogs.FieldUpdatedAt
+	case "entity_type":
+		return alertlogs.FieldEntityType
+	case "entity_id":
+		return alertlogs.FieldEntityID
+	case "parent_entity_type":
+		return alertlogs.FieldParentEntityType
+	case "parent_entity_id":
+		return alertlogs.FieldParentEntityID
+	case "customer_id":
+		return alertlogs.FieldCustomerID
+	case "alert_type":
+		return alertlogs.FieldAlertType
+	case "alert_status":
+		return alertlogs.FieldAlertStatus
+	case "status":
+		return alertlogs.FieldStatus
+	default:
+		// unknown field
+		return ""
+	}
+}
+
+func (o AlertLogQueryOptions) GetFieldResolver(field string) (string, error) {
+	fieldName := o.GetFieldName(field)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in alert log query", field).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
+}
+
+func (o AlertLogQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.AlertLogFilter, query AlertLogQuery) (AlertLogQuery, error) {
+	var err error
+	if f == nil {
+		return query, nil
+	}
+
+	if f.EntityType != "" {
+		query = query.Where(alertlogs.EntityType(string(f.EntityType)))
+	}
+
+	if f.EntityID != "" {
+		query = query.Where(alertlogs.EntityID(f.EntityID))
+	}
+
+	if f.AlertType != "" {
+		query = query.Where(alertlogs.AlertType(string(f.AlertType)))
+	}
+
+	if f.AlertStatus != "" {
+		query = query.Where(alertlogs.AlertStatus(string(f.AlertStatus)))
+	}
+
+	if f.CustomerID != "" {
+		query = query.Where(alertlogs.CustomerID(f.CustomerID))
+	}
+
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[AlertLogQuery, predicate.AlertLogs](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.AlertLogs { return predicate.AlertLogs(p) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Apply sorts using the generic function
+	if f.Sort != nil {
+		query, err = dsl.ApplySorts[AlertLogQuery, alertlogs.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) alertlogs.OrderOption { return alertlogs.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(alertlogs.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(alertlogs.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	return query, nil
 }

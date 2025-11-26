@@ -11,4 +11,5 @@ type Repository interface {
 	Get(ctx context.Context, id string) (*Environment, error)
 	List(ctx context.Context, filter types.Filter) ([]*Environment, error)
 	Update(ctx context.Context, environment *Environment) error
+	CountByType(ctx context.Context, envType types.EnvironmentType) (int, error)
 }

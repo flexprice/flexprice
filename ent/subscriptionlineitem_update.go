@@ -570,6 +570,9 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	if sliu.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEndDate, field.TypeTime)
 	}
+	if sliu.mutation.SubscriptionPhaseIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString)
+	}
 	if value, ok := sliu.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)
 	}
@@ -1210,6 +1213,9 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.EndDateCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldEndDate, field.TypeTime)
+	}
+	if sliuo.mutation.SubscriptionPhaseIDCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldSubscriptionPhaseID, field.TypeString)
 	}
 	if value, ok := sliuo.mutation.Metadata(); ok {
 		_spec.SetField(subscriptionlineitem.FieldMetadata, field.TypeJSON, value)

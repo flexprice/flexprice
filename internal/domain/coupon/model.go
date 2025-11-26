@@ -46,32 +46,47 @@ func (c *Coupon) IsValid() bool {
 		return false
 	}
 
+	// Check if coupon is expired
+	if c.Status != types.StatusPublished {
+		return false
+	}
+
 	return true
 }
 
-// CalculateDiscount calculates the discount amount for a given price
-func (c *Coupon) CalculateDiscount(originalPrice decimal.Decimal) decimal.Decimal {
-	switch c.Type {
-	case types.CouponTypeFixed:
-		return *c.AmountOff
-	case types.CouponTypePercentage:
-		return originalPrice.Mul(*c.PercentageOff).Div(decimal.NewFromInt(100))
-	default:
-		return decimal.Zero
-	}
+// DiscountResult holds the result of applying a discount
+type DiscountResult struct {
+	Discount   decimal.Decimal // The discount amount applied
+	FinalPrice decimal.Decimal // The final price after discount
 }
 
-// ApplyDiscount applies the discount to a given price and returns the final price
-func (c *Coupon) ApplyDiscount(originalPrice decimal.Decimal) decimal.Decimal {
-	discount := c.CalculateDiscount(originalPrice)
+// ApplyDiscount calculates and applies the discount in a single operation,
+// returning both the discount amount and final price. This is more efficient than
+func (c *Coupon) ApplyDiscount(originalPrice decimal.Decimal) DiscountResult {
+	var discount decimal.Decimal
+
+	switch c.Type {
+	case types.CouponTypeFixed:
+		discount = *c.AmountOff
+	case types.CouponTypePercentage:
+		discount = originalPrice.Mul(*c.PercentageOff).Div(decimal.NewFromInt(100))
+	default:
+		discount = decimal.Zero
+	}
+
 	finalPrice := originalPrice.Sub(discount)
 
 	// Ensure final price doesn't go below zero
 	if finalPrice.LessThan(decimal.Zero) {
-		return decimal.Zero
+		// If discount exceeds price, adjust discount to match original price
+		discount = originalPrice
+		finalPrice = decimal.Zero
 	}
 
-	return finalPrice
+	return DiscountResult{
+		Discount:   discount,
+		FinalPrice: finalPrice,
+	}
 }
 
 func FromEnt(e *ent.Coupon) *Coupon {

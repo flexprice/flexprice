@@ -15,11 +15,89 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// SubscriptionPhaseCreateRequest represents the request to create a subscription phase
+type SubscriptionPhaseCreateRequest struct {
+	StartDate time.Time  `json:"start_date" validate:"required"`
+	EndDate   *time.Time `json:"end_date,omitempty"`
+
+	// Coupons represents subscription-level coupons to be applied to this phase
+	Coupons []string `json:"coupons,omitempty"`
+
+	// LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)
+	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
+
+	// OverrideLineItems allows customizing specific prices for this phase
+	// If not provided, phase will use the same line items as the subscription (plan prices)
+	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
+
+	Metadata map[string]string `json:"metadata,omitempty"`
+}
+
+// Validate validates the SubscriptionPhaseCreateRequest
+func (r *SubscriptionPhaseCreateRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.EndDate != nil && r.EndDate.Before(r.StartDate) {
+		return ierr.NewError("end_date cannot be before start_date").
+			WithHint("Ensure the phase end date is on or after the start date").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
+// ToSubscriptionPhase converts the request to a domain SubscriptionPhase
+
+func (r *SubscriptionPhaseCreateRequest) ToSubscriptionPhase(ctx context.Context, subscriptionID string) *subscription.SubscriptionPhase {
+	return &subscription.SubscriptionPhase{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_PHASE),
+		SubscriptionID: subscriptionID,
+		StartDate:      r.StartDate,
+		EndDate:        r.EndDate,
+		Metadata:       r.Metadata,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+}
+
+// SubscriptionCouponRequest represents a coupon to be applied to a subscription
+// If LineItemID is provided, the coupon is applied to that specific line item
+// If LineItemID is omitted, the coupon is applied at the subscription level
+type SubscriptionCouponRequest struct {
+	CouponID            string     `json:"coupon_id" validate:"required"`
+	StartDate           time.Time  `json:"start_date" validate:"required"`
+	EndDate             *time.Time `json:"end_date,omitempty"`
+	LineItemID          *string    `json:"line_item_id,omitempty"`
+	SubscriptionPhaseID *string    `json:"subscription_phase_id,omitempty"`
+}
+
+// Validate validates the SubscriptionCouponRequest
+func (r *SubscriptionCouponRequest) Validate() error {
+
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	// Validate date range if EndDate is provided
+	if r.EndDate != nil {
+		if r.EndDate.Before(r.StartDate) {
+			return ierr.NewError("end_date cannot be before start_date").
+				WithHint("Ensure the coupon end date is on or after the start date").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 type CreateSubscriptionRequest struct {
 
 	// customer_id is the flexprice customer id
 	// and it is prioritized over external_customer_id in case both are provided.
 	CustomerID string `json:"customer_id"`
+
 	// external_customer_id is the customer id in your DB
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string               `json:"external_customer_id"`
@@ -34,6 +112,7 @@ type CreateSubscriptionRequest struct {
 	BillingPeriod      types.BillingPeriod  `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                  `json:"billing_period_count" default:"1"`
 	Metadata           map[string]string    `json:"metadata,omitempty"`
+
 	// BillingCycle is the cycle of the billing anchor.
 	// This is used to determine the billing date for the subscription (i.e set the billing anchor)
 	// If not set, the default value is anniversary. Possible values are anniversary and calendar.
@@ -42,20 +121,23 @@ type CreateSubscriptionRequest struct {
 	// For example, if the billing period is month and the start date is 2025-04-15 then in case of
 	// calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
 	BillingCycle types.BillingCycle `json:"billing_cycle"`
+
 	// Credit grants to be applied when subscription is created
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
+
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
-	// Phases represents an optional timeline of subscription phases
-	Phases []SubscriptionSchedulePhaseInput `json:"phases,omitempty" validate:"omitempty,dive"`
+
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
-	// SubscriptionCoupons is a list of coupon IDs to be applied to the subscription
+
 	Coupons []string `json:"coupons,omitempty"`
-	// SubscriptionLineItemsCoupons is a list of coupon IDs to be applied to the subscription line items
+
 	LineItemCoupons map[string][]string `json:"line_item_coupons,omitempty"`
+
 	// OverrideLineItems allows customizing specific prices for this subscription
 	OverrideLineItems []OverrideLineItemRequest `json:"override_line_items,omitempty" validate:"omitempty,dive"`
 	// OverrideEntitlements allows customizing specific entitlements for this subscription
@@ -63,9 +145,13 @@ type CreateSubscriptionRequest struct {
 	// Addons represents addons to be added to the subscription during creation
 	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 
+	// Phases represents subscription phases to be created with the subscription
+	Phases []SubscriptionPhaseCreateRequest `json:"phases,omitempty" validate:"omitempty,dive"`
+
 	// Payment behavior configuration
 	PaymentBehavior        *types.PaymentBehavior `json:"payment_behavior,omitempty"`
 	GatewayPaymentMethodID *string                `json:"gateway_payment_method_id,omitempty"`
+
 	// collection_method determines how invoices are collected
 	// "default_incomplete" - subscription waits for payment confirmation before activation
 	// "send_invoice" - subscription activates immediately, invoice is sent for payment
@@ -189,10 +275,14 @@ type SubscriptionResponse struct {
 	*subscription.Subscription
 	Plan     *PlanResponse     `json:"plan"`
 	Customer *CustomerResponse `json:"customer"`
-	// Schedule is included when the subscription has a schedule
-	Schedule *SubscriptionScheduleResponse `json:"schedule,omitempty"`
 	// CouponAssociations are the coupon associations for this subscription
 	CouponAssociations []*CouponAssociationResponse `json:"coupon_associations,omitempty"`
+
+	// Phases are the subscription phases for this subscription
+	Phases []*SubscriptionPhaseResponse `json:"phases,omitempty"`
+
+	// Credit grants are the credit grants for this subscription
+	CreditGrants []*CreditGrantResponse `json:"credit_grants,omitempty"`
 
 	// Latest invoice information for incomplete subscriptions
 	LatestInvoice *InvoiceResponse `json:"latest_invoice,omitempty"`
@@ -393,54 +483,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	// Validate phases if provided
-	if len(r.Phases) > 0 {
-		// First phase must start on or after subscription start date
-		if r.Phases[0].StartDate.Before(*r.StartDate) {
-			return ierr.NewError("first phase start date cannot be before subscription start date").
-				WithHint("The first phase must start on or after the subscription start date").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_start_date": *r.StartDate,
-					"first_phase_start_date":  r.Phases[0].StartDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate each phase
-		for i, phase := range r.Phases {
-			// Validate the phase itself
-			if err := phase.Validate(); err != nil {
-				return ierr.NewError(fmt.Sprintf("invalid phase at index %d", i)).
-					WithHint("Phase validation failed").
-					WithReportableDetails(map[string]interface{}{
-						"index": i,
-						"error": err.Error(),
-					}).
-					Mark(ierr.ErrValidation)
-			}
-
-			// Validate phase continuity
-			if i > 0 {
-				prevPhase := r.Phases[i-1]
-				if prevPhase.EndDate == nil {
-					return ierr.NewError(fmt.Sprintf("phase at index %d must have an end date", i-1)).
-						WithHint("All phases except the last one must have an end date").
-						Mark(ierr.ErrValidation)
-				}
-
-				if !prevPhase.EndDate.Equal(phase.StartDate) {
-					return ierr.NewError(fmt.Sprintf("phase at index %d does not start immediately after previous phase", i)).
-						WithHint("Phases must be contiguous").
-						WithReportableDetails(map[string]interface{}{
-							"previous_phase_end":  prevPhase.EndDate,
-							"current_phase_start": phase.StartDate,
-						}).
-						Mark(ierr.ErrValidation)
-				}
-			}
-		}
-	}
-
 	// taxrate overrides validation
 	if len(r.TaxRateOverrides) > 0 {
 		for _, taxRateOverride := range r.TaxRateOverrides {
@@ -456,33 +498,6 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
-	// Validate subscription coupons if provided
-	if len(r.Coupons) > 0 {
-		// Validate that coupon IDs are not empty
-		for i, couponID := range r.Coupons {
-			if couponID == "" {
-				return ierr.NewError("subscription coupon ID cannot be empty").
-					WithHint("All subscription coupon IDs must be valid").
-					WithReportableDetails(map[string]interface{}{
-						"index": i,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
-
-	if len(r.LineItemCoupons) > 0 {
-		for priceID, couponIDs := range r.LineItemCoupons {
-			if len(couponIDs) == 0 {
-				return ierr.NewError("subscription line item coupon IDs cannot be empty").
-					WithHint("All subscription line item coupon IDs must be valid").
-					WithReportableDetails(map[string]interface{}{
-						"price_id": priceID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
 	// Validate override line items if provided
 	if len(r.OverrideLineItems) > 0 {
 		priceIDsSeen := make(map[string]bool)
@@ -508,6 +523,79 @@ func (r *CreateSubscriptionRequest) Validate() error {
 					Mark(ierr.ErrValidation)
 			}
 			priceIDsSeen[override.PriceID] = true
+		}
+	}
+
+	// Validate phases continuity if provided
+	if len(r.Phases) > 0 {
+		// First, validate each individual phase
+		for i, phase := range r.Phases {
+			if err := phase.Validate(); err != nil {
+				return ierr.WithError(err).
+					WithHint(fmt.Sprintf("Phase validation failed at index %d", i)).
+					WithReportableDetails(map[string]interface{}{
+						"phase_index": i,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// Validate phase continuity
+		for i := 0; i < len(r.Phases); i++ {
+			currentPhase := r.Phases[i]
+			isLastPhase := i == len(r.Phases)-1
+
+			// All phases except the last must have an end date
+			if !isLastPhase && currentPhase.EndDate == nil {
+				return ierr.NewError("phase end_date is required for all phases except the last").
+					WithHint(fmt.Sprintf("Phase at index %d must have an end_date set", i)).
+					WithReportableDetails(map[string]interface{}{
+						"phase_index": i,
+						"phase_start": currentPhase.StartDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+
+			// If not the last phase, validate that current phase's end date equals next phase's start date
+			if !isLastPhase {
+				nextPhase := r.Phases[i+1]
+
+				// Check if end date of current phase equals start date of next phase
+				if !currentPhase.EndDate.Equal(nextPhase.StartDate) {
+					return ierr.NewError("phases must be continuous").
+						WithHint(fmt.Sprintf("Phase %d end_date must equal phase %d start_date for continuous phases", i, i+1)).
+						WithReportableDetails(map[string]interface{}{
+							"phase_index":       i,
+							"current_phase_end": *currentPhase.EndDate,
+							"next_phase_index":  i + 1,
+							"next_phase_start":  nextPhase.StartDate,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+		}
+
+		// Validate that subscription dates match phase dates when both are provided
+		if r.StartDate != nil && !r.StartDate.Equal(r.Phases[0].StartDate) {
+			return ierr.NewError("subscription start_date must match first phase start_date when both are provided").
+				WithHint("Ensure subscription start_date equals the first phase start_date").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_start_date": *r.StartDate,
+					"first_phase_start_date":  r.Phases[0].StartDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Check last phase end date validation
+		lastPhase := r.Phases[len(r.Phases)-1]
+		if r.EndDate != nil && lastPhase.EndDate != nil && !r.EndDate.Equal(*lastPhase.EndDate) {
+			return ierr.NewError("subscription end_date must match last phase end_date when both are provided").
+				WithHint("Ensure subscription end_date equals the last phase end_date").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_end_date": *r.EndDate,
+					"last_phase_end_date":   *lastPhase.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 
@@ -632,6 +720,30 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		r.CustomerTimezone = "UTC"
 	}
 
+	// Determine subscription start and end dates based on phases
+	var startDate time.Time
+	var endDate *time.Time
+	var billingAnchor time.Time
+
+	if len(r.Phases) > 0 {
+		// If phases are provided, use first phase start date as subscription start date
+		startDate = r.Phases[0].StartDate
+		billingAnchor = startDate
+
+		// Use last phase end date as subscription end date (if last phase has end date)
+		lastPhase := r.Phases[len(r.Phases)-1]
+		if lastPhase.EndDate != nil {
+			endDate = lastPhase.EndDate
+		}
+	} else {
+		// If no phases, use provided start/end dates
+		if r.StartDate != nil {
+			startDate = *r.StartDate
+			billingAnchor = startDate
+		}
+		endDate = r.EndDate
+	}
+
 	sub := &subscription.Subscription{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
 		CustomerID:         r.CustomerID,
@@ -639,14 +751,14 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		Currency:           strings.ToLower(r.Currency),
 		LookupKey:          r.LookupKey,
 		SubscriptionStatus: initialStatus,
-		StartDate:          *r.StartDate,
-		EndDate:            r.EndDate,
+		StartDate:          startDate,
+		EndDate:            endDate,
 		TrialStart:         r.TrialStart,
 		TrialEnd:           r.TrialEnd,
 		BillingCadence:     r.BillingCadence,
 		BillingPeriod:      r.BillingPeriod,
 		BillingPeriodCount: r.BillingPeriodCount,
-		BillingAnchor:      *r.StartDate,
+		BillingAnchor:      billingAnchor,
 		Metadata:           r.Metadata,
 		EnvironmentID:      types.GetEnvironmentID(ctx),
 		BaseModel:          types.GetDefaultBaseModel(ctx),
@@ -1016,4 +1128,35 @@ type SubscriptionUpdatePeriodResponseItem struct {
 	PeriodEnd      time.Time `json:"period_end"`
 	Success        bool      `json:"success"`
 	Error          string    `json:"error"`
+}
+
+// GetUpcomingCreditGrantApplicationsRequest represents the request to get upcoming credit grant applications
+type GetUpcomingCreditGrantApplicationsRequest struct {
+	// SubscriptionIDs is a list of subscription IDs to get upcoming credit grant applications for
+	// This allows querying multiple subscriptions at once, useful for customer-level queries
+	SubscriptionIDs []string `json:"subscription_ids" binding:"required,min=1" validate:"required,min=1"`
+}
+
+// Validate validates the GetUpcomingCreditGrantApplicationsRequest
+func (r *GetUpcomingCreditGrantApplicationsRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if len(r.SubscriptionIDs) == 0 {
+		return ierr.NewError("subscription_ids is required").
+			WithHint("Please provide at least one subscription ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate that all subscription IDs are non-empty
+	for i, id := range r.SubscriptionIDs {
+		if id == "" {
+			return ierr.NewError("subscription_ids cannot contain empty values").
+				WithHint(fmt.Sprintf("Subscription ID at index %d is empty", i)).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }

@@ -347,3 +347,16 @@ type GetMonitoringDataResponse struct {
 	ConsumptionLag    int64  `json:"consumption_lag"`
 	PostProcessingLag int64  `json:"post_processing_lag"`
 }
+
+type GetHuggingFaceBillingDataRequest struct {
+	EventIDs []string `json:"requestIds" binding:"required,min=1"`
+}
+
+type EventCostInfo struct {
+	EventID       string          `json:"requestId"`
+	CostInNanoUSD decimal.Decimal `json:"costNanoUsd"`
+}
+
+type GetHuggingFaceBillingDataResponse struct {
+	Data []EventCostInfo `json:"requests"`
+}

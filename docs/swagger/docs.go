@@ -4421,6 +4421,37 @@ const docTemplate = `{
                 }
             }
         },
+        "/events/monitoring": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieve monitoring data for events including consumer lag and event metrics (last 24 hours by default)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get monitoring data",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetMonitoringDataResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/events/query": {
             "post": {
                 "security": [
@@ -7964,7 +7995,7 @@ const docTemplate = `{
                 "summary": "Create a new API key",
                 "parameters": [
                     {
-                        "description": "API key creation request",
+                        "description": "API key creation request\\",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9165,64 +9196,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/phases": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Add a new phase to a subscription schedule",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "Add new phase to subscription schedule",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Add schedule phase request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.AddSchedulePhaseRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11182,6 +11155,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/wallets/{id}/debit": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Debit a wallet by debiting credits from a wallet",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Wallets"
+                ],
+                "summary": "Debit a wallet",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Wallet ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Debit wallet request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ManualBalanceDebitRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.WalletResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/wallets/{id}/terminate": {
             "post": {
                 "security": [
@@ -11428,7 +11465,8 @@ const docTemplate = `{
                             "PURCHASED_CREDIT_DIRECT",
                             "CREDIT_NOTE",
                             "CREDIT_EXPIRED",
-                            "WALLET_TERMINATION"
+                            "WALLET_TERMINATION",
+                            "MANUAL_BALANCE_DEBIT"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -11439,7 +11477,8 @@ const docTemplate = `{
                             "TransactionReasonPurchasedCreditDirect",
                             "TransactionReasonCreditNote",
                             "TransactionReasonCreditExpired",
-                            "TransactionReasonWalletTermination"
+                            "TransactionReasonWalletTermination",
+                            "TransactionReasonManualBalanceDebit"
                         ],
                         "name": "transaction_reason",
                         "in": "query"
@@ -11809,6 +11848,10 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "Optional",
+                    "type": "string"
+                },
                 "environment_id": {
                     "type": "string"
                 },
@@ -11821,6 +11864,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "start_date": {
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -11829,6 +11875,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subscription_line_item_id": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "subscription_phase_id": {
                     "description": "Optional",
                     "type": "string"
                 },
@@ -11982,17 +12032,6 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
-                }
-            }
-        },
-        "dto.AddSchedulePhaseRequest": {
-            "type": "object",
-            "required": [
-                "phase"
-            ],
-            "properties": {
-                "phase": {
-                    "$ref": "#/definitions/dto.SubscriptionSchedulePhaseInput"
                 }
             }
         },
@@ -12679,6 +12718,10 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "end_date": {
+                    "description": "Optional",
+                    "type": "string"
+                },
                 "environment_id": {
                     "type": "string"
                 },
@@ -12691,6 +12734,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "start_date": {
+                    "type": "string"
+                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
@@ -12699,6 +12745,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "subscription_line_item_id": {
+                    "description": "Optional",
+                    "type": "string"
+                },
+                "subscription_phase_id": {
                     "description": "Optional",
                     "type": "string"
                 },
@@ -14217,7 +14267,6 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "coupons": {
-                    "description": "SubscriptionCoupons is a list of coupon IDs to be applied to the subscription",
                     "type": "array",
                     "items": {
                         "type": "string"
@@ -14252,7 +14301,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "line_item_coupons": {
-                    "description": "SubscriptionLineItemsCoupons is a list of coupon IDs to be applied to the subscription line items",
                     "type": "object",
                     "additionalProperties": {
                         "type": "array",
@@ -14297,10 +14345,10 @@ const docTemplate = `{
                     ]
                 },
                 "phases": {
-                    "description": "Phases represents an optional timeline of subscription phases",
+                    "description": "Phases represents subscription phases to be created with the subscription",
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/dto.SubscriptionSchedulePhaseInput"
+                        "$ref": "#/definitions/dto.SubscriptionPhaseCreateRequest"
                     }
                 },
                 "plan_id": {
@@ -15452,6 +15500,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GetMonitoringDataResponse": {
+            "type": "object",
+            "properties": {
+                "consumption_lag": {
+                    "type": "integer"
+                },
+                "post_processing_lag": {
+                    "type": "integer"
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "dto.GetPreviewInvoiceRequest": {
             "type": "object",
             "required": [
@@ -15861,30 +15923,25 @@ const docTemplate = `{
         },
         "dto.InvoiceCoupon": {
             "type": "object",
+            "required": [
+                "coupon_id"
+            ],
             "properties": {
-                "amount_off": {
-                    "type": "number"
-                },
                 "coupon_association_id": {
                     "type": "string"
                 },
                 "coupon_id": {
                     "type": "string"
-                },
-                "percentage_off": {
-                    "type": "number"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.CouponType"
                 }
             }
         },
         "dto.InvoiceLineItemCoupon": {
             "type": "object",
+            "required": [
+                "coupon_id",
+                "line_item_id"
+            ],
             "properties": {
-                "amount_off": {
-                    "type": "number"
-                },
                 "coupon_association_id": {
                     "type": "string"
                 },
@@ -15892,14 +15949,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "line_item_id": {
-                    "description": "ID of the invoice line item this coupon applies to",
+                    "description": "price_id used to match the line item",
                     "type": "string"
-                },
-                "percentage_off": {
-                    "type": "number"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.CouponType"
                 }
             }
         },
@@ -16712,6 +16763,43 @@ const docTemplate = `{
                 },
                 "token": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.ManualBalanceDebitRequest": {
+            "type": "object",
+            "required": [
+                "idempotency_key",
+                "transaction_reason"
+            ],
+            "properties": {
+                "credits": {
+                    "description": "credits is the number of credits to debit from the wallet",
+                    "type": "number"
+                },
+                "description": {
+                    "description": "description to add any specific details about the transaction",
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "description": "idempotency_key is a unique key for the transaction",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "metadata is a map of key-value pairs to store any additional information about the transaction",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "transaction_reason": {
+                    "description": "transaction_reason is the reason for the transaction",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TransactionReason"
+                        }
+                    ]
                 }
             }
         },
@@ -17813,30 +17901,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.SubscriptionLineItemRequest": {
-            "type": "object",
-            "required": [
-                "price_id",
-                "quantity"
-            ],
-            "properties": {
-                "display_name": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "price_id": {
-                    "type": "string"
-                },
-                "quantity": {
-                    "type": "number"
-                }
-            }
-        },
         "dto.SubscriptionLineItemResponse": {
             "type": "object",
             "properties": {
@@ -17918,6 +17982,9 @@ const docTemplate = `{
                 "subscription_id": {
                     "type": "string"
                 },
+                "subscription_phase_id": {
+                    "type": "string"
+                },
                 "tenant_id": {
                     "type": "string"
                 },
@@ -17984,6 +18051,101 @@ const docTemplate = `{
                 },
                 "resumed_at": {
                     "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "description": "SubscriptionID is the identifier for the subscription",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionPhaseCreateRequest": {
+            "type": "object",
+            "required": [
+                "start_date"
+            ],
+            "properties": {
+                "coupons": {
+                    "description": "Coupons represents subscription-level coupons to be applied to this phase",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "line_item_coupons": {
+                    "description": "LineItemCoupons represents line item-level coupons (map of line_item_id to coupon IDs)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "override_line_items": {
+                    "description": "OverrideLineItems allows customizing specific prices for this phase\nIf not provided, phase will use the same line items as the subscription (plan prices)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.OverrideLineItemRequest"
+                    }
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionPhaseResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "EndDate is when the phase ends (nil if phase is still active or indefinite)",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the phase",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the subscription phase",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata contains additional key-value pairs",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "start_date": {
+                    "description": "StartDate is when the phase starts",
                     "type": "string"
                 },
                 "status": {
@@ -18143,6 +18305,13 @@ const docTemplate = `{
                     "description": "PaymentBehavior determines how subscription payments are handled",
                     "type": "string"
                 },
+                "phases": {
+                    "description": "Phases are the subscription phases for this subscription",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionPhaseResponse"
+                    }
+                },
                 "plan": {
                     "$ref": "#/definitions/dto.PlanResponse"
                 },
@@ -18152,14 +18321,6 @@ const docTemplate = `{
                 },
                 "proration_behavior": {
                     "$ref": "#/definitions/types.ProrationBehavior"
-                },
-                "schedule": {
-                    "description": "Schedule is included when the subscription has a schedule",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
-                        }
-                    ]
                 },
                 "start_date": {
                     "description": "StartDate is the start date of the subscription",
@@ -18191,126 +18352,6 @@ const docTemplate = `{
                 "version": {
                     "description": "Version is used for optimistic locking",
                     "type": "integer"
-                }
-            }
-        },
-        "dto.SubscriptionSchedulePhaseInput": {
-            "type": "object",
-            "required": [
-                "start_date"
-            ],
-            "properties": {
-                "billing_cycle": {
-                    "$ref": "#/definitions/types.BillingCycle"
-                },
-                "commitment_amount": {
-                    "type": "number"
-                },
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreateCreditGrantRequest"
-                    }
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "line_items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SubscriptionLineItemRequest"
-                    }
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "overage_factor": {
-                    "type": "number"
-                },
-                "start_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.SubscriptionSchedulePhaseResponse": {
-            "type": "object",
-            "properties": {
-                "commitment_amount": {
-                    "type": "number"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreditGrantResponse"
-                    }
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "line_items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
-                    }
-                },
-                "overage_factor": {
-                    "type": "number"
-                },
-                "phase_index": {
-                    "type": "integer"
-                },
-                "schedule_id": {
-                    "type": "string"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.SubscriptionScheduleResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "current_phase_index": {
-                    "type": "integer"
-                },
-                "end_behavior": {
-                    "$ref": "#/definitions/types.ScheduleEndBehavior"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "phases": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.SubscriptionSchedulePhaseResponse"
-                    }
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.SubscriptionScheduleStatus"
-                },
-                "subscription_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },
@@ -20635,6 +20676,9 @@ const docTemplate = `{
                 "subscription_id": {
                     "type": "string"
                 },
+                "subscription_phase_id": {
+                    "type": "string"
+                },
                 "tenant_id": {
                     "type": "string"
                 },
@@ -20700,6 +20744,57 @@ const docTemplate = `{
                 },
                 "resumed_at": {
                     "description": "ResumedAt is when the pause was actually ended (if manually resumed)",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "description": "SubscriptionID is the identifier for the subscription",
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "subscription.SubscriptionPhase": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "EndDate is when the phase ends (nil if phase is still active or indefinite)",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the phase",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the subscription phase",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata contains additional key-value pairs",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "start_date": {
+                    "description": "StartDate is when the phase starts",
                     "type": "string"
                 },
                 "status": {
@@ -22239,6 +22334,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "endpoint_url": {
+                    "description": "Custom S3 endpoint URL (e.g., \"http://minio:9000\" for MinIO)",
+                    "type": "string"
+                },
                 "key_prefix": {
                     "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")",
                     "type": "string"
@@ -22246,29 +22345,24 @@ const docTemplate = `{
                 "region": {
                     "description": "AWS region (e.g., \"us-west-2\")",
                     "type": "string"
+                },
+                "use_path_style": {
+                    "description": "Use path-style addressing instead of virtual-hosted-style (required for MinIO)",
+                    "type": "boolean"
                 }
             }
-        },
-        "types.ScheduleEndBehavior": {
-            "type": "string",
-            "enum": [
-                "RELEASE",
-                "CANCEL"
-            ],
-            "x-enum-varnames": [
-                "EndBehaviorRelease",
-                "EndBehaviorCancel"
-            ]
         },
         "types.ScheduledTaskEntityType": {
             "type": "string",
             "enum": [
                 "events",
-                "invoice"
+                "invoice",
+                "credit_topups"
             ],
             "x-enum-varnames": [
                 "ScheduledTaskEntityTypeEvents",
-                "ScheduledTaskEntityTypeInvoice"
+                "ScheduledTaskEntityTypeInvoice",
+                "ScheduledTaskEntityTypeCreditTopups"
             ]
         },
         "types.ScheduledTaskInterval": {
@@ -22484,19 +22578,6 @@ const docTemplate = `{
                 "SubscriptionLineItemEntityTypeAddon"
             ]
         },
-        "types.SubscriptionScheduleStatus": {
-            "type": "string",
-            "enum": [
-                "ACTIVE",
-                "RELEASED",
-                "CANCELED"
-            ],
-            "x-enum-varnames": [
-                "ScheduleStatusActive",
-                "ScheduleStatusReleased",
-                "ScheduleStatusCanceled"
-            ]
-        },
         "types.SubscriptionStatus": {
             "type": "string",
             "enum": [
@@ -22704,7 +22785,8 @@ const docTemplate = `{
                 "PURCHASED_CREDIT_DIRECT",
                 "CREDIT_NOTE",
                 "CREDIT_EXPIRED",
-                "WALLET_TERMINATION"
+                "WALLET_TERMINATION",
+                "MANUAL_BALANCE_DEBIT"
             ],
             "x-enum-varnames": [
                 "TransactionReasonInvoicePayment",
@@ -22714,7 +22796,8 @@ const docTemplate = `{
                 "TransactionReasonPurchasedCreditDirect",
                 "TransactionReasonCreditNote",
                 "TransactionReasonCreditExpired",
-                "TransactionReasonWalletTermination"
+                "TransactionReasonWalletTermination",
+                "TransactionReasonManualBalanceDebit"
             ]
         },
         "types.TransactionStatus": {

@@ -30,6 +30,7 @@ require (
 	github.com/nedpals/supabase-go v0.5.0
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/razorpay/razorpay-go v1.4.0
 	github.com/resend/resend-go/v2 v2.26.0
 	github.com/samber/lo v1.47.0
 	github.com/shopspring/decimal v1.4.0
@@ -82,6 +83,7 @@ require (
 	github.com/bytedance/sonic v1.12.4 // indirect
 	github.com/bytedance/sonic/loader v0.2.1 // indirect
 	github.com/cenkalti/backoff/v3 v3.2.2 // indirect
+	github.com/chargebee/chargebee-go/v3 v3.39.0 // indirect
 	github.com/cloudwego/base64x v0.1.4 // indirect
 	github.com/cloudwego/iasm v0.2.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect

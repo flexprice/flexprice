@@ -414,6 +414,41 @@ func (s *InMemoryWalletStore) GetTransactionByID(ctx context.Context, id string)
 	return tx, nil
 }
 
+func (s *InMemoryWalletStore) GetTransactionByIdempotencyKey(ctx context.Context, idempotencyKey string) (*wallet.Transaction, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Create a filter function that matches by idempotency_key
+	filterFn := func(ctx context.Context, tx *wallet.Transaction, _ interface{}) bool {
+		return tx.IdempotencyKey == idempotencyKey &&
+			tx.TenantID == tenantID &&
+			tx.EnvironmentID == environmentID &&
+			tx.Status == types.StatusPublished
+	}
+
+	transactions, err := s.transactions.List(ctx, nil, filterFn, nil)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve transaction").
+			WithReportableDetails(map[string]interface{}{
+				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(transactions) == 0 {
+		return nil, ierr.NewError("transaction not found").
+			WithHint("Transaction not found").
+			WithReportableDetails(map[string]interface{}{
+				"idempotency_key": idempotencyKey,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Return the first matching transaction (should be unique due to unique index)
+	return transactions[0], nil
+}
+
 func (s *InMemoryWalletStore) ListWalletTransactions(ctx context.Context, f *types.WalletTransactionFilter) ([]*wallet.Transaction, error) {
 	transactions, err := s.transactions.List(ctx, f, transactionFilterFn, transactionSortFn)
 	if err != nil {
@@ -479,6 +514,46 @@ func (s *InMemoryWalletStore) UpdateTransactionStatus(ctx context.Context, id st
 			}).
 			Mark(ierr.ErrDatabase)
 	}
+	return nil
+}
+
+// UpdateTransaction updates a wallet transaction (multiple fields)
+func (s *InMemoryWalletStore) UpdateTransaction(ctx context.Context, tx *wallet.Transaction) error {
+	if tx == nil {
+		return ierr.NewError("transaction cannot be nil").
+			WithHint("A valid transaction object must be provided").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check if transaction exists
+	existing, err := s.GetTransactionByID(ctx, tx.ID)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to retrieve transaction for update").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": tx.ID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Update the fields
+	existing.TxStatus = tx.TxStatus
+	existing.CreditBalanceBefore = tx.CreditBalanceBefore
+	existing.CreditBalanceAfter = tx.CreditBalanceAfter
+	existing.CreditsAvailable = tx.CreditsAvailable
+	existing.UpdatedAt = time.Now().UTC()
+	existing.UpdatedBy = types.GetUserID(ctx)
+
+	// Update in store
+	if err := s.transactions.Update(ctx, tx.ID, existing); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update transaction").
+			WithReportableDetails(map[string]interface{}{
+				"transaction_id": tx.ID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
 	return nil
 }
 

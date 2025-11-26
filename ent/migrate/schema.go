@@ -390,6 +390,9 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "subscription_phase_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "start_date", Type: field.TypeTime},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
 		{Name: "coupon_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -403,19 +406,19 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "coupon_associations_coupons_coupon_associations",
-				Columns:    []*schema.Column{CouponAssociationsColumns[9]},
+				Columns:    []*schema.Column{CouponAssociationsColumns[12]},
 				RefColumns: []*schema.Column{CouponsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "coupon_associations_subscriptions_coupon_associations",
-				Columns:    []*schema.Column{CouponAssociationsColumns[10]},
+				Columns:    []*schema.Column{CouponAssociationsColumns[13]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "coupon_associations_subscription_line_items_coupon_associations",
-				Columns:    []*schema.Column{CouponAssociationsColumns[11]},
+				Columns:    []*schema.Column{CouponAssociationsColumns[14]},
 				RefColumns: []*schema.Column{SubscriptionLineItemsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -429,17 +432,17 @@ var (
 			{
 				Name:    "couponassociation_tenant_id_environment_id_coupon_id",
 				Unique:  false,
-				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[9]},
+				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[12]},
 			},
 			{
 				Name:    "couponassociation_tenant_id_environment_id_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[10]},
+				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[13]},
 			},
 			{
 				Name:    "couponassociation_tenant_id_environment_id_subscription_id_subscription_line_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[10], CouponAssociationsColumns[11]},
+				Columns: []*schema.Column{CouponAssociationsColumns[1], CouponAssociationsColumns[7], CouponAssociationsColumns[13], CouponAssociationsColumns[14]},
 			},
 		},
 	}
@@ -1629,6 +1632,7 @@ var (
 		{Name: "trial_period", Type: field.TypeInt, Default: 0},
 		{Name: "start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "subscription_phase_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
@@ -1640,7 +1644,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscription_line_items_subscriptions_line_items",
-				Columns:    []*schema.Column{SubscriptionLineItemsColumns[27]},
+				Columns:    []*schema.Column{SubscriptionLineItemsColumns[28]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1649,7 +1653,7 @@ var (
 			{
 				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[27], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[28], SubscriptionLineItemsColumns[2]},
 			},
 			{
 				Name:    "subscriptionlineitem_tenant_id_environment_id_customer_id_status",
@@ -1731,9 +1735,9 @@ var (
 			},
 		},
 	}
-	// SubscriptionSchedulesColumns holds the columns for the "subscription_schedules" table.
-	SubscriptionSchedulesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString},
+	// SubscriptionPhasesColumns holds the columns for the "subscription_phases" table.
+	SubscriptionPhasesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "created_at", Type: field.TypeTime},
@@ -1741,82 +1745,29 @@ var (
 		{Name: "created_by", Type: field.TypeString, Nullable: true},
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "schedule_status", Type: field.TypeString, Default: "ACTIVE"},
-		{Name: "current_phase_index", Type: field.TypeInt, Default: 0},
-		{Name: "end_behavior", Type: field.TypeString, Default: "RELEASE"},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "start_date", Type: field.TypeTime},
-		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
-		{Name: "subscription_id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "end_date", Type: field.TypeTime, Nullable: true},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
-	// SubscriptionSchedulesTable holds the schema information for the "subscription_schedules" table.
-	SubscriptionSchedulesTable = &schema.Table{
-		Name:       "subscription_schedules",
-		Columns:    SubscriptionSchedulesColumns,
-		PrimaryKey: []*schema.Column{SubscriptionSchedulesColumns[0]},
+	// SubscriptionPhasesTable holds the schema information for the "subscription_phases" table.
+	SubscriptionPhasesTable = &schema.Table{
+		Name:       "subscription_phases",
+		Columns:    SubscriptionPhasesColumns,
+		PrimaryKey: []*schema.Column{SubscriptionPhasesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
-				Symbol:     "subscription_schedules_subscriptions_schedule",
-				Columns:    []*schema.Column{SubscriptionSchedulesColumns[13]},
+				Symbol:     "subscription_phases_subscriptions_phases",
+				Columns:    []*schema.Column{SubscriptionPhasesColumns[11]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "subscriptionschedule_tenant_id_environment_id_subscription_id",
+				Name:    "subscriptionphase_tenant_id_environment_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionSchedulesColumns[1], SubscriptionSchedulesColumns[7], SubscriptionSchedulesColumns[13]},
-			},
-			{
-				Name:    "subscriptionschedule_tenant_id_environment_id_subscription_id_schedule_status",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionSchedulesColumns[1], SubscriptionSchedulesColumns[7], SubscriptionSchedulesColumns[13], SubscriptionSchedulesColumns[8]},
-			},
-		},
-	}
-	// SubscriptionSchedulePhasesColumns holds the columns for the "subscription_schedule_phases" table.
-	SubscriptionSchedulePhasesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeString},
-		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "updated_by", Type: field.TypeString, Nullable: true},
-		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
-		{Name: "phase_index", Type: field.TypeInt},
-		{Name: "start_date", Type: field.TypeTime},
-		{Name: "end_date", Type: field.TypeTime, Nullable: true},
-		{Name: "commitment_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
-		{Name: "overage_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
-		{Name: "line_items", Type: field.TypeJSON, Nullable: true},
-		{Name: "credit_grants", Type: field.TypeJSON, Nullable: true},
-		{Name: "metadata", Type: field.TypeJSON, Nullable: true},
-		{Name: "schedule_id", Type: field.TypeString},
-	}
-	// SubscriptionSchedulePhasesTable holds the schema information for the "subscription_schedule_phases" table.
-	SubscriptionSchedulePhasesTable = &schema.Table{
-		Name:       "subscription_schedule_phases",
-		Columns:    SubscriptionSchedulePhasesColumns,
-		PrimaryKey: []*schema.Column{SubscriptionSchedulePhasesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "subscription_schedule_phases_subscription_schedules_phases",
-				Columns:    []*schema.Column{SubscriptionSchedulePhasesColumns[16]},
-				RefColumns: []*schema.Column{SubscriptionSchedulesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-		Indexes: []*schema.Index{
-			{
-				Name:    "subscriptionschedulephase_tenant_id_environment_id_schedule_id_phase_index",
-				Unique:  true,
-				Columns: []*schema.Column{SubscriptionSchedulePhasesColumns[1], SubscriptionSchedulePhasesColumns[7], SubscriptionSchedulePhasesColumns[16], SubscriptionSchedulePhasesColumns[8]},
-			},
-			{
-				Name:    "subscriptionschedulephase_tenant_id_environment_id_start_date",
-				Unique:  false,
-				Columns: []*schema.Column{SubscriptionSchedulePhasesColumns[1], SubscriptionSchedulePhasesColumns[7], SubscriptionSchedulePhasesColumns[9]},
+				Columns: []*schema.Column{SubscriptionPhasesColumns[1], SubscriptionPhasesColumns[7]},
 			},
 		},
 	}
@@ -2223,8 +2174,7 @@ var (
 		SubscriptionsTable,
 		SubscriptionLineItemsTable,
 		SubscriptionPausesTable,
-		SubscriptionSchedulesTable,
-		SubscriptionSchedulePhasesTable,
+		SubscriptionPhasesTable,
 		TasksTable,
 		TaxAppliedsTable,
 		TaxAssociationsTable,
@@ -2257,8 +2207,7 @@ func init() {
 	}
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
-	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable
-	SubscriptionSchedulePhasesTable.ForeignKeys[0].RefTable = SubscriptionSchedulesTable
+	SubscriptionPhasesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[0].RefTable = CouponAssociationsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[1].RefTable = CouponApplicationsTable
 }

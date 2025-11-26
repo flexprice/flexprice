@@ -12,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -113,6 +114,20 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		priceMap[p.Price.ID] = p
 	}
 
+	// Create phases array if phases are provided
+	var phases []*subscription.SubscriptionPhase
+	var firstPhaseID string
+	if len(req.Phases) > 0 {
+		phases = make([]*subscription.SubscriptionPhase, len(req.Phases))
+		for i, phaseReq := range req.Phases {
+			phase := phaseReq.ToSubscriptionPhase(ctx, sub.ID)
+			phases[i] = phase
+			if i == 0 {
+				firstPhaseID = phase.ID
+			}
+		}
+	}
+
 	// Ensure start date is in UTC format
 	// Note: StartDate is now guaranteed to be set (either from request or defaulted in DTO validation)
 	sub.StartDate = sub.StartDate.UTC()
@@ -201,14 +216,33 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		item.TrialPeriod = price.TrialPeriod
 		item.PriceUnitID = price.PriceUnitID
 		item.PriceUnit = price.PriceUnit
-		if sub.EndDate != nil {
+
+		// Set phase ID if phases exist
+		if firstPhaseID != "" {
+			item.SubscriptionPhaseID = &firstPhaseID
+		}
+
+		// If phases exist, set end date to first phase end date, otherwise use subscription end date
+		if len(req.Phases) > 0 && req.Phases[0].EndDate != nil {
+			item.EndDate = *req.Phases[0].EndDate
+		} else if sub.EndDate != nil {
 			item.EndDate = *sub.EndDate
 		}
+
 		// Set start date to the price start date if it is after the subscription start date
 		if price.StartDate != nil && price.StartDate.After(sub.StartDate) {
 			item.StartDate = lo.FromPtr(price.StartDate)
 		} else {
 			item.StartDate = sub.StartDate
+		}
+	}
+
+	// Create original price to line item mapping before processing overrides
+	// This captures the mapping before any price overrides change the PriceID
+	originalPriceToLineItemMap := make(map[string]string)
+	for _, item := range lineItems {
+		if item.PriceID != "" && item.ID != "" {
+			originalPriceToLineItemMap[item.PriceID] = item.ID
 		}
 	}
 
@@ -230,8 +264,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		"current_period_start", sub.CurrentPeriodStart,
 		"current_period_end", sub.CurrentPeriodEnd,
 		"valid_prices", len(validPrices),
-		"num_line_items", len(sub.LineItems),
-		"has_phases", len(req.Phases) > 0)
+		"num_line_items", len(sub.LineItems))
 
 	// Create response object
 	response := &dto.SubscriptionResponse{Subscription: sub}
@@ -308,26 +341,15 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			return err
 		}
 
-		// Create subscription schedule if phases are provided
-		if len(req.Phases) > 0 {
-			schedule, err := s.createScheduleFromPhases(ctx, sub, req.Phases)
-			if err != nil {
-				return err
-			}
-
-			// Include the schedule in the response
-			if schedule != nil {
-				response.Schedule = dto.SubscriptionScheduleResponseFromDomain(schedule)
-			}
-		}
-
 		// handle tax rate linking
 		err = s.handleTaxRateLinking(ctx, sub, req)
 		if err != nil {
 			return err
 		}
-		// Apply coupons to the subscription
-		if err := s.ApplyCouponsToSubscriptionWithLineItems(ctx, sub.ID, req.Coupons, req.LineItemCoupons, lineItems); err != nil {
+
+		// handle subscription coupons
+		err = s.handleSubCoupons(ctx, sub, req, originalPriceToLineItemMap)
+		if err != nil {
 			return err
 		}
 
@@ -364,6 +386,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Handle subscription phases if provided
+	if len(phases) > 0 {
+		err = s.handleSubscriptionPhases(ctx, sub, phases, req.Phases, plan, validPrices)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Update response to ensure it has the latest subscription data
@@ -523,6 +553,154 @@ func (s *subscriptionService) handleTaxRateLinking(ctx context.Context, sub *sub
 		}
 	}
 	return nil
+}
+
+// handleSubscriptionPhases processes subscription phases and creates phase-specific line items
+func (s *subscriptionService) handleSubscriptionPhases(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	phases []*subscription.SubscriptionPhase,
+	phaseRequests []dto.SubscriptionPhaseCreateRequest,
+	plan *plan.Plan,
+	validPrices []*dto.PriceResponse,
+) error {
+	if len(phases) == 0 {
+		return nil
+	}
+
+	// Create a map from price ID to price for quick lookup
+	priceMap := lo.SliceToMap(validPrices, func(p *dto.PriceResponse) (string, *dto.PriceResponse) {
+		return p.Price.ID, p
+	})
+
+	// Create plan response wrapper (reusing DTO conversion pattern from AddSubscriptionLineItem)
+	planResponse := &dto.PlanResponse{Plan: plan}
+
+	// Process each phase
+	for i, phase := range phases {
+		// Create the phase in database
+		if err := s.SubscriptionPhaseRepo.Create(ctx, phase); err != nil {
+			return err
+		}
+
+		// Skip creating line items for the first phase since they're already created with the subscription
+		if i == 0 {
+			continue
+		}
+
+		// Get corresponding phase request for additional data
+		phaseReq := phaseRequests[i]
+
+		// Create line items from plan prices - reusing DTO's ToSubscriptionLineItem logic (same as AddSubscriptionLineItem)
+		phaseLineItems := lo.Map(validPrices, func(priceResp *dto.PriceResponse, _ int) *subscription.SubscriptionLineItem {
+			// Build line item params
+			params := dto.LineItemParams{
+				Subscription: sub,
+				Price:        priceResp,
+				Plan:         planResponse,
+				EntityType:   types.SubscriptionLineItemEntityTypePlan,
+			}
+
+			// Create request with phase dates
+			startDate := phaseReq.StartDate
+			if priceResp.Price.StartDate != nil && priceResp.Price.StartDate.After(phaseReq.StartDate) {
+				startDate = lo.FromPtr(priceResp.Price.StartDate)
+			}
+
+			req := dto.CreateSubscriptionLineItemRequest{
+				PriceID:             priceResp.Price.ID,
+				SubscriptionPhaseID: lo.ToPtr(phase.ID),
+				StartDate:           lo.ToPtr(startDate),
+				EndDate:             phaseReq.EndDate,
+			}
+
+			lineItem := req.ToSubscriptionLineItem(ctx, params)
+			return lineItem
+		})
+
+		// Create original price to line item mapping before processing overrides
+		// This captures the mapping before any price overrides change the PriceID
+		phasePriceToLineItemMap := make(map[string]string)
+		for _, item := range phaseLineItems {
+			if item.PriceID != "" && item.ID != "" {
+				phasePriceToLineItemMap[item.PriceID] = item.ID
+			}
+		}
+
+		// Process phase-specific price overrides if present
+		if len(phaseReq.OverrideLineItems) > 0 {
+			if err := s.ProcessSubscriptionPriceOverrides(ctx, sub, phaseReq.OverrideLineItems, phaseLineItems, priceMap); err != nil {
+				return err
+			}
+		}
+
+		// Create phase line items in database
+		for _, lineItem := range phaseLineItems {
+			if err := s.SubscriptionLineItemRepo.Create(ctx, lineItem); err != nil {
+				return err
+			}
+		}
+
+		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
+		couponAssociationService := NewCouponAssociationService(s.ServiceParams)
+		phaseCoupons := s.normalizePhaseCoupons(phaseReq, phase.ID, phasePriceToLineItemMap)
+		if len(phaseCoupons) > 0 {
+			err := couponAssociationService.ApplyCouponsToSubscription(ctx, sub, phaseCoupons)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// normalizePhaseCoupons converts simple Coupons and LineItemCoupons from phase request to SubscriptionCouponRequest format
+// Sets start/end dates from the phase dates
+func (s *subscriptionService) normalizePhaseCoupons(
+	phaseReq dto.SubscriptionPhaseCreateRequest,
+	phaseID string,
+	phasePriceToLineItemMap map[string]string,
+) []dto.SubscriptionCouponRequest {
+	var subscriptionCoupons []dto.SubscriptionCouponRequest
+
+	// Convert subscription-level coupons
+	for _, couponID := range phaseReq.Coupons {
+		if couponID != "" {
+			subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+				CouponID:            couponID,
+				SubscriptionPhaseID: lo.ToPtr(phaseID),
+				StartDate:           phaseReq.StartDate,
+				EndDate:             phaseReq.EndDate,
+			})
+		}
+	}
+
+	// Convert line item coupons - use phasePriceToLineItemMap to convert priceID to lineItemID
+	for priceID, couponIDs := range phaseReq.LineItemCoupons {
+		for _, couponID := range couponIDs {
+			if couponID != "" {
+				// Get lineItemID from the phase price mapping
+				if lineItemID, exists := phasePriceToLineItemMap[priceID]; exists {
+					subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+						CouponID:            couponID,
+						LineItemID:          lo.ToPtr(lineItemID),
+						SubscriptionPhaseID: lo.ToPtr(phaseID),
+						StartDate:           phaseReq.StartDate,
+						EndDate:             phaseReq.EndDate,
+					})
+				} else {
+					// Log warning but continue processing other coupons
+					s.Logger.Warnw("phase coupon priceID not found in phase line items, skipping",
+						"price_id", priceID,
+						"coupon_id", couponID,
+						"phase_id", phaseID)
+				}
+			}
+		}
+	}
+
+	return subscriptionCoupons
 }
 
 // processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides
@@ -784,7 +962,9 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 		return nil, err
 	}
 
-	response := &dto.SubscriptionResponse{Subscription: sub}
+	response := &dto.SubscriptionResponse{
+		Subscription: sub,
+	}
 
 	// if subscription pause status is not none, get all pauses
 	if sub.PauseStatus != types.PauseStatusNone {
@@ -812,21 +992,30 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	}
 	response.Customer = customer
 
-	// Try to get schedule if exists
-	schedule, err := s.GetScheduleBySubscriptionID(ctx, id)
-	if err == nil && schedule != nil {
-		response.Schedule = schedule
-	}
-
 	// expand coupon associations
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-	couponAssociations, err := couponAssociationService.GetCouponAssociationsBySubscription(ctx, id)
+	couponFilter := types.NewCouponAssociationFilter()
+	couponFilter.SubscriptionIDs = []string{id}
+	couponAssociationsResponse, err := couponAssociationService.ListCouponAssociations(ctx, couponFilter)
 	if err != nil {
 		s.Logger.Errorw("failed to get coupon associations for subscription",
 			"subscription_id", id,
 			"error", err)
 	} else {
-		response.CouponAssociations = couponAssociations
+		response.CouponAssociations = couponAssociationsResponse.Items
+	}
+
+	// expand subscription phases
+	subscriptionPhaseService := NewSubscriptionPhaseService(s.ServiceParams)
+	phaseFilter := types.NewNoLimitSubscriptionPhaseFilter()
+	phaseFilter.SubscriptionIDs = []string{id}
+	phasesResponse, err := subscriptionPhaseService.GetSubscriptionPhases(ctx, phaseFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get subscription phases for subscription",
+			"subscription_id", id,
+			"error", err)
+	} else {
+		response.Phases = phasesResponse.Items
 	}
 
 	// expand price for subscription line items
@@ -850,6 +1039,17 @@ func (s *subscriptionService) GetSubscription(ctx context.Context, id string) (*
 	for _, lineItem := range sub.LineItems {
 		lineItem.Price = priceMap[lineItem.PriceID]
 	}
+
+	// expand credit grants
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+	creditGrantsResponse, err := creditGrantService.GetCreditGrantsBySubscription(ctx, id)
+	if err != nil {
+		s.Logger.Errorw("failed to get credit grants for subscription",
+			"subscription_id", id,
+			"error", err)
+		return nil, err
+	}
+	response.CreditGrants = creditGrantsResponse.Items
 
 	return response, nil
 }
@@ -877,6 +1077,7 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 
 	if req.CancelAt != nil {
 		subscription.CancelAt = req.CancelAt
+		subscription.EndDate = req.CancelAt
 	}
 
 	subscription.CancelAtPeriodEnd = req.CancelAtPeriodEnd
@@ -940,18 +1141,13 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 
-	// Step 5: Validate cancellation timing
-	if err := s.validateCancellationTiming(subscription, req.CancellationType, effectiveDate); err != nil {
-		return nil, err
-	}
-
 	var prorationDetails []dto.ProrationDetail
 	totalCreditAmount := decimal.Zero
 
-	// Step 6: Execute in transaction
+	// Step 5: Execute in transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 
-		// Step 7: Calculate proration using unified function
+		// Step 6: Calculate proration using unified function
 		if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
 			prorationService := NewProrationService(s.ServiceParams)
 			prorationResult, err := prorationService.CalculateSubscriptionCancellationProration(
@@ -985,20 +1181,20 @@ func (s *subscriptionService) CancelSubscription(
 			}
 
 		}
-		// Step 8: Update subscription status
+		// Step 7: Update subscription status
 		err = s.updateSubscriptionForCancellation(ctx, subscription, req.CancellationType, effectiveDate, req.Reason)
 		if err != nil {
 			return err
 		}
 
-		// Step 9: Cancel future credit grants
+		// Step 8: Cancel future credit grants
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
 		err = creditGrantService.CancelFutureCreditGrantsOfSubscription(ctx, subscription.ID)
 		if err != nil {
 			return err
 		}
 
-		// Step 10: Top up wallet for proration credit (only if there's a credit amount)
+		// Step 9: Top up wallet for proration credit (only if there's a credit amount)
 		if totalCreditAmount.GreaterThan(decimal.Zero) {
 			walletService := NewWalletService(s.ServiceParams)
 			err = walletService.TopUpWalletForProratedCharge(ctx, subscription.CustomerID, totalCreditAmount.Abs(), subscription.Currency)
@@ -1212,88 +1408,12 @@ func (s *subscriptionService) ListSubscriptions(ctx context.Context, filter *typ
 
 	s.Logger.Debugw("built subscription responses", "response_count", len(response.Items))
 
-	// Include schedules if requested in expand
-	if filter.Expand != nil && filter.GetExpand().Has(types.ExpandSchedule) {
-		s.Logger.Debugw("adding schedules to subscription responses")
-		s.addSchedulesToSubscriptionResponses(ctx, response.Items)
-	}
-
 	s.Logger.Debugw("completed ListSubscriptions successfully",
 		"total_items", len(response.Items),
 		"total_count", count,
 		"pagination", response.Pagination)
 
 	return response, nil
-}
-
-// addSchedulesToSubscriptionResponses adds schedule information to subscription responses if available
-func (s *subscriptionService) addSchedulesToSubscriptionResponses(ctx context.Context, items []*dto.SubscriptionResponse) {
-	s.Logger.Debugw("starting addSchedulesToSubscriptionResponses", "items_count", len(items))
-
-	// If repository doesn't support schedules, return early
-	if s.SubscriptionScheduleRepo == nil {
-		s.Logger.Debugw("subscription schedule repository is not configured, skipping schedule expansion")
-		return
-	}
-
-	// Group subscriptions by ID for faster lookup
-	subMap := make(map[string]*dto.SubscriptionResponse, len(items))
-	for _, sub := range items {
-		if sub == nil {
-			s.Logger.Warnw("found nil subscription response in items")
-			continue
-		}
-		if sub.ID == "" {
-			s.Logger.Warnw("found subscription response with empty ID", "subscription", sub)
-			continue
-		}
-		subMap[sub.ID] = sub
-	}
-
-	// Collect all subscription IDs
-	subscriptionIDs := lo.Keys(subMap)
-	s.Logger.Debugw("collected subscription IDs for schedule lookup",
-		"subscription_ids", subscriptionIDs,
-		"subscription_count", len(subscriptionIDs))
-
-	// In a real implementation, we would get schedules in a single query
-	// For now, we'll do individual lookups
-	schedulesFound := 0
-	schedulesErrors := 0
-	for _, subscriptionID := range subscriptionIDs {
-		sub := subMap[subscriptionID]
-
-		s.Logger.Debugw("looking up schedule for subscription", "subscription_id", subscriptionID)
-
-		// Try to get schedule if exists
-		schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
-		if err != nil {
-			s.Logger.Debugw("error getting schedule for subscription",
-				"subscription_id", subscriptionID,
-				"error", err)
-			schedulesErrors++
-			continue
-		}
-
-		if schedule == nil {
-			s.Logger.Debugw("no schedule found for subscription", "subscription_id", subscriptionID)
-			continue
-		}
-
-		s.Logger.Debugw("found schedule for subscription",
-			"subscription_id", subscriptionID,
-			"schedule_id", schedule.ID,
-			"schedule_status", schedule.ScheduleStatus)
-
-		// Add schedule to subscription response
-		sub.Schedule = dto.SubscriptionScheduleResponseFromDomain(schedule)
-		schedulesFound++
-	}
-
-	s.Logger.Debugw("completed addSchedulesToSubscriptionResponses",
-		"total_subscriptions", len(subscriptionIDs),
-		"schedules_found", schedulesFound,
-		"schedule_errors", schedulesErrors)
 }
 
 func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *dto.GetUsageBySubscriptionRequest) (*dto.GetUsageBySubscriptionResponse, error) {
@@ -1994,16 +2114,10 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				sub = updatedSub
 			}
 
-			s.Logger.Infow("created invoice for period",
-				"subscription_id", sub.ID,
-				"period_start", period.start,
-				"period_end", period.end,
-				"period_index", i)
-
 			// Check for cancellation at this period end
 			if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
 				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-				sub.CancelledAt = sub.CancelAt
+				sub.EndDate = sub.CancelAt
 				break
 			}
 
@@ -2019,7 +2133,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			}
 
 			if inv == nil {
-				s.Logger.Errorw("skipping period as no invoice was created",
+				s.Logger.Infow("no invoice was created for period",
 					"subscription_id", sub.ID,
 					"period_start", period.start,
 					"period_end", period.end,
@@ -2043,7 +2157,6 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 		// Final cancellation check
 		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {
 			sub.SubscriptionStatus = types.SubscriptionStatusCancelled
-			sub.CancelledAt = sub.CancelAt
 		}
 
 		// Check if the new period end matches the subscription end date
@@ -2779,558 +2892,6 @@ func (s *subscriptionService) publishInternalWebhookEvent(ctx context.Context, e
 	}
 }
 
-// CreateSubscriptionSchedule creates a subscription schedule
-func (s *subscriptionService) CreateSubscriptionSchedule(ctx context.Context, req *dto.CreateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	// Verify subscription exists
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if a schedule already exists for the subscription
-	if s.SubscriptionScheduleRepo == nil {
-		return nil, ierr.NewError("subscription repository does not support schedules").
-			WithHint("Schedule functionality is not supported").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Check if a schedule already exists
-	existingSchedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, req.SubscriptionID)
-	if err == nil && existingSchedule != nil {
-		return nil, ierr.NewError("subscription already has a schedule").
-			WithHint("A subscription can only have one schedule").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": req.SubscriptionID,
-				"schedule_id":     existingSchedule.ID,
-			}).
-			Mark(ierr.ErrAlreadyExists)
-	}
-
-	// Create the schedule
-	schedule := &subscription.SubscriptionSchedule{
-		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
-		SubscriptionID:    req.SubscriptionID,
-		ScheduleStatus:    types.ScheduleStatusActive,
-		CurrentPhaseIndex: 0,
-		EndBehavior:       req.EndBehavior,
-		StartDate:         sub.StartDate,
-		Metadata:          types.Metadata{},
-		EnvironmentID:     types.GetEnvironmentID(ctx),
-		BaseModel:         types.GetDefaultBaseModel(ctx),
-	}
-
-	// Create phases
-	phases := make([]*subscription.SchedulePhase, 0, len(req.Phases))
-	for i, phaseInput := range req.Phases {
-		// Convert line items to the domain model type
-		lineItems := make([]types.SchedulePhaseLineItem, 0, len(phaseInput.LineItems))
-		for _, item := range phaseInput.LineItems {
-			lineItems = append(lineItems, types.SchedulePhaseLineItem{
-				PriceID:     item.PriceID,
-				Quantity:    item.Quantity,
-				DisplayName: item.DisplayName,
-				Metadata:    types.Metadata(item.Metadata),
-			})
-		}
-
-		// Convert credit grants to the domain model type
-		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(phaseInput.CreditGrants))
-		for _, grant := range phaseInput.CreditGrants {
-			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
-				Name:                   grant.Name,
-				Scope:                  grant.Scope,
-				PlanID:                 grant.PlanID,
-				Credits:                grant.Credits,
-				Cadence:                grant.Cadence,
-				Period:                 grant.Period,
-				PeriodCount:            grant.PeriodCount,
-				ExpirationType:         grant.ExpirationType,
-				ExpirationDuration:     grant.ExpirationDuration,
-				ExpirationDurationUnit: grant.ExpirationDurationUnit,
-				Priority:               grant.Priority,
-				Metadata:               grant.Metadata,
-			})
-		}
-
-		phase := &subscription.SchedulePhase{
-			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE),
-			ScheduleID:       schedule.ID,
-			PhaseIndex:       i,
-			StartDate:        phaseInput.StartDate,
-			EndDate:          phaseInput.EndDate,
-			CommitmentAmount: &phaseInput.CommitmentAmount,
-			OverageFactor:    &phaseInput.OverageFactor,
-			LineItems:        lineItems,
-			CreditGrants:     creditGrants,
-			Metadata:         phaseInput.Metadata,
-			EnvironmentID:    types.GetEnvironmentID(ctx),
-			BaseModel:        types.GetDefaultBaseModel(ctx),
-		}
-		phases = append(phases, phase)
-	}
-
-	// Create the schedule with phases
-	err = s.SubscriptionScheduleRepo.CreateWithPhases(ctx, schedule, phases)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to create subscription schedule").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": req.SubscriptionID,
-				"phase_count":     len(phases),
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Set the phases to the schedule before returning
-	schedule.Phases = phases
-	return dto.SubscriptionScheduleResponseFromDomain(schedule), nil
-}
-
-// GetSubscriptionSchedule gets a subscription schedule by ID
-func (s *subscriptionService) GetSubscriptionSchedule(ctx context.Context, id string) (*dto.SubscriptionScheduleResponse, error) {
-	if s.SubscriptionScheduleRepo == nil {
-		return nil, ierr.NewError("subscription repository does not support schedules").
-			WithHint("Schedule functionality is not supported").
-			Mark(ierr.ErrInternal)
-	}
-
-	schedule, err := s.SubscriptionScheduleRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return dto.SubscriptionScheduleResponseFromDomain(schedule), nil
-}
-
-// GetScheduleBySubscriptionID gets a subscription schedule by subscription ID
-func (s *subscriptionService) GetScheduleBySubscriptionID(ctx context.Context, subscriptionID string) (*dto.SubscriptionScheduleResponse, error) {
-	// If repository doesn't support schedules, return nil instead of error
-	// This allows graceful fallback for backward compatibility
-	if s.SubscriptionScheduleRepo == nil {
-		s.Logger.Warnw("subscription schedule repository is not configured",
-			"subscription_id", subscriptionID)
-		return nil, nil
-	}
-
-	schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
-	if err != nil {
-		// Not found is a valid response - the subscription may not have a schedule
-		if ierr.IsNotFound(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	if schedule == nil {
-		return nil, nil
-	}
-
-	return dto.SubscriptionScheduleResponseFromDomain(schedule), nil
-}
-
-// UpdateSubscriptionSchedule updates a subscription schedule
-func (s *subscriptionService) UpdateSubscriptionSchedule(ctx context.Context, id string, req *dto.UpdateSubscriptionScheduleRequest) (*dto.SubscriptionScheduleResponse, error) {
-	if s.SubscriptionScheduleRepo == nil {
-		return nil, ierr.NewError("subscription repository does not support schedules").
-			WithHint("Schedule functionality is not supported").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Get the current schedule
-	schedule, err := s.SubscriptionScheduleRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update the fields
-	if req.Status != "" {
-		schedule.ScheduleStatus = req.Status
-	}
-
-	if req.EndBehavior != "" {
-		schedule.EndBehavior = req.EndBehavior
-	}
-
-	// Update in the database
-	if err := s.SubscriptionScheduleRepo.Update(ctx, schedule); err != nil {
-		return nil, err
-	}
-
-	// Get fresh data
-	updatedSchedule, err := s.SubscriptionScheduleRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	return dto.SubscriptionScheduleResponseFromDomain(updatedSchedule), nil
-}
-
-// createScheduleFromPhases creates a schedule and its phases for a subscription
-func (s *subscriptionService) createScheduleFromPhases(ctx context.Context, sub *subscription.Subscription, phaseInputs []dto.SubscriptionSchedulePhaseInput) (*subscription.SubscriptionSchedule, error) {
-	// Create the schedule
-	schedule := &subscription.SubscriptionSchedule{
-		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
-		SubscriptionID:    sub.ID,
-		ScheduleStatus:    types.ScheduleStatusActive,
-		CurrentPhaseIndex: 0,
-		EndBehavior:       types.EndBehaviorRelease,
-		StartDate:         sub.StartDate,
-		Metadata:          types.Metadata{},
-		EnvironmentID:     types.GetEnvironmentID(ctx),
-		BaseModel:         types.GetDefaultBaseModel(ctx),
-	}
-
-	// Create phases
-	phases := make([]*subscription.SchedulePhase, 0, len(phaseInputs))
-	for i, phaseInput := range phaseInputs {
-		// Convert line items to the domain model type
-		lineItems := make([]types.SchedulePhaseLineItem, 0, len(phaseInput.LineItems))
-		for _, item := range phaseInput.LineItems {
-			lineItems = append(lineItems, types.SchedulePhaseLineItem{
-				PriceID:     item.PriceID,
-				Quantity:    item.Quantity,
-				DisplayName: item.DisplayName,
-				Metadata:    item.Metadata,
-			})
-		}
-
-		// Convert credit grants to the domain model type
-		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(phaseInput.CreditGrants))
-		for _, grant := range phaseInput.CreditGrants {
-			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
-				Name:                   grant.Name,
-				Scope:                  grant.Scope,
-				PlanID:                 grant.PlanID,
-				Credits:                grant.Credits,
-				Cadence:                grant.Cadence,
-				Period:                 grant.Period,
-				PeriodCount:            grant.PeriodCount,
-				ExpirationType:         grant.ExpirationType,
-				ExpirationDuration:     grant.ExpirationDuration,
-				ExpirationDurationUnit: grant.ExpirationDurationUnit,
-				Priority:               grant.Priority,
-				Metadata:               grant.Metadata,
-			})
-		}
-
-		phase := &subscription.SchedulePhase{
-			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE),
-			ScheduleID:       schedule.ID,
-			PhaseIndex:       i,
-			StartDate:        phaseInput.StartDate,
-			EndDate:          phaseInput.EndDate,
-			CommitmentAmount: &phaseInput.CommitmentAmount,
-			OverageFactor:    &phaseInput.OverageFactor,
-			LineItems:        lineItems,
-			CreditGrants:     creditGrants,
-			Metadata:         phaseInput.Metadata,
-			EnvironmentID:    types.GetEnvironmentID(ctx),
-			BaseModel:        types.GetDefaultBaseModel(ctx),
-		}
-		phases = append(phases, phase)
-	}
-
-	// Create the schedule with phases
-	err := s.SubscriptionScheduleRepo.CreateWithPhases(ctx, schedule, phases)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to create subscription schedule").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": sub.ID,
-				"phase_count":     len(phases),
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Set the phases to the schedule before returning
-	schedule.Phases = phases
-	return schedule, nil
-}
-
-// AddSchedulePhase adds a new phase to an existing subscription schedule
-func (s *subscriptionService) AddSchedulePhase(ctx context.Context, scheduleID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	if s.SubscriptionScheduleRepo == nil {
-		return nil, ierr.NewError("subscription repository does not support schedules").
-			WithHint("Schedule functionality is not supported").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Get the existing schedule with its phases
-	schedule, err := s.SubscriptionScheduleRepo.Get(ctx, scheduleID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Get the subscription to validate against its dates
-	existingSubscription, _, err := s.SubRepo.GetWithLineItems(ctx, schedule.SubscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load existing phases
-	existingPhases, err := s.SubscriptionScheduleRepo.ListPhases(ctx, scheduleID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list existing phases").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Validate that the new phase's start date is not before subscription start date
-	if req.Phase.StartDate.Before(existingSubscription.StartDate) {
-		return nil, ierr.NewError("phase start date cannot be before subscription start date").
-			WithHint("The phase must start on or after the subscription start date").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_start_date": existingSubscription.StartDate,
-				"phase_start_date":        req.Phase.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// If subscription has an end date, validate the phase doesn't extend beyond it
-	if existingSubscription.EndDate != nil && req.Phase.EndDate != nil && req.Phase.EndDate.After(*existingSubscription.EndDate) {
-		return nil, ierr.NewError("phase end date cannot be after subscription end date").
-			WithHint("The phase must end on or before the subscription end date").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_end_date": existingSubscription.EndDate,
-				"phase_end_date":        req.Phase.EndDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Sort phases by start date
-	sort.Slice(existingPhases, func(i, j int) bool {
-		return existingPhases[i].StartDate.Before(existingPhases[j].StartDate)
-	})
-
-	// SIMPLIFIED APPROACH: Only allow adding phases at the end of existing phases
-	if len(existingPhases) > 0 {
-		lastPhase := existingPhases[len(existingPhases)-1]
-
-		// Check if the last phase has an end date
-		if lastPhase.EndDate == nil {
-			return nil, ierr.NewError("cannot add phase after an open-ended phase").
-				WithHint("The last phase must have an end date to add a new phase").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Verify the new phase starts after the last existing phase ends
-		if !req.Phase.StartDate.After(*lastPhase.EndDate) {
-			return nil, ierr.NewError("new phase must start after the end of the last phase").
-				WithHint("Phase cannot overlap with existing phases. Add phases only at the end of the schedule").
-				WithReportableDetails(map[string]interface{}{
-					"last_phase_end_date":  lastPhase.EndDate,
-					"new_phase_start_date": req.Phase.StartDate,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Create the new phase
-	newPhase := &subscription.SchedulePhase{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE_PHASE),
-		ScheduleID:       scheduleID,
-		PhaseIndex:       len(existingPhases), // Add as the next phase
-		StartDate:        req.Phase.StartDate,
-		EndDate:          req.Phase.EndDate,
-		CommitmentAmount: &req.Phase.CommitmentAmount,
-		OverageFactor:    &req.Phase.OverageFactor,
-		Metadata:         req.Phase.Metadata,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
-	}
-
-	// Convert line items
-	if len(req.Phase.LineItems) > 0 {
-		lineItems := make([]types.SchedulePhaseLineItem, 0, len(req.Phase.LineItems))
-		for _, item := range req.Phase.LineItems {
-			lineItems = append(lineItems, types.SchedulePhaseLineItem{
-				PriceID:     item.PriceID,
-				Quantity:    item.Quantity,
-				DisplayName: item.DisplayName,
-				Metadata:    types.Metadata(item.Metadata),
-			})
-		}
-		newPhase.LineItems = lineItems
-	}
-
-	// Convert credit grants
-	if len(req.Phase.CreditGrants) > 0 {
-		creditGrants := make([]types.SchedulePhaseCreditGrant, 0, len(req.Phase.CreditGrants))
-		for _, grant := range req.Phase.CreditGrants {
-			creditGrants = append(creditGrants, types.SchedulePhaseCreditGrant{
-				Name:                   grant.Name,
-				Scope:                  grant.Scope,
-				PlanID:                 grant.PlanID,
-				Credits:                grant.Credits,
-				Cadence:                grant.Cadence,
-				Period:                 grant.Period,
-				PeriodCount:            grant.PeriodCount,
-				ExpirationType:         grant.ExpirationType,
-				ExpirationDuration:     grant.ExpirationDuration,
-				ExpirationDurationUnit: grant.ExpirationDurationUnit,
-				Priority:               grant.Priority,
-				Metadata:               grant.Metadata,
-			})
-		}
-		newPhase.CreditGrants = creditGrants
-	}
-
-	// Create the new phase
-	err = s.SubscriptionScheduleRepo.CreatePhase(ctx, newPhase)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to add phase to subscription schedule").
-			WithReportableDetails(map[string]interface{}{
-				"schedule_id": scheduleID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Update the schedule with the latest phase count
-	schedule.UpdatedAt = time.Now()
-	schedule.UpdatedBy = types.GetUserID(ctx)
-	err = s.SubscriptionScheduleRepo.Update(ctx, schedule)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to update subscription schedule").
-			WithReportableDetails(map[string]interface{}{
-				"schedule_id": scheduleID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Get the updated schedule to return in the response
-	updatedSchedule, err := s.SubscriptionScheduleRepo.Get(ctx, scheduleID)
-	if err != nil {
-		return nil, err
-	}
-
-	return dto.SubscriptionScheduleResponseFromDomain(updatedSchedule), nil
-}
-
-// AddSubscriptionPhase adds a new phase to a subscription, creating a schedule if needed
-// This is more user-friendly than AddSchedulePhase as it works directly with subscription IDs
-func (s *subscriptionService) AddSubscriptionPhase(ctx context.Context, subscriptionID string, req *dto.AddSchedulePhaseRequest) (*dto.SubscriptionScheduleResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
-	if s.SubscriptionScheduleRepo == nil {
-		return nil, ierr.NewError("subscription repository does not support schedules").
-			WithHint("Schedule functionality is not supported").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Get the subscription
-	existingSubscription, lineItems, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get subscription").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-
-	// Validate that the new phase's start date is not before subscription start date
-	if req.Phase.StartDate.Before(existingSubscription.StartDate) {
-		return nil, ierr.NewError("phase start date cannot be before subscription start date").
-			WithHint("The phase must start on or after the subscription start date").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_start_date": existingSubscription.StartDate,
-				"phase_start_date":        req.Phase.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if req.Phase.EndDate != nil && existingSubscription.EndDate != nil && req.Phase.StartDate.After(*existingSubscription.EndDate) {
-		return nil, ierr.NewError("phase start date cannot be after subscription end date").
-			WithHint("The phase must start before the subscription end date").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_end_date": existingSubscription.EndDate,
-				"phase_start_date":      req.Phase.StartDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if existingSubscription.EndDate != nil && req.Phase.EndDate != nil && req.Phase.EndDate.After(*existingSubscription.EndDate) {
-		return nil, ierr.NewError("phase end date cannot be after subscription end date").
-			WithHint("The phase must end on or before the subscription end date").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_end_date": existingSubscription.EndDate,
-				"phase_end_date":        req.Phase.EndDate,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Check for existing schedule
-	schedule, err := s.SubscriptionScheduleRepo.GetBySubscriptionID(ctx, subscriptionID)
-	if err != nil && !ierr.IsNotFound(err) {
-		// Error other than "not found"
-		return nil, ierr.WithError(err).
-			WithHint("Failed to check for existing schedule").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// No schedule exists, we need to create one
-	if schedule == nil || err != nil {
-		s.Logger.Infow("creating new schedule for subscription",
-			"subscription_id", subscriptionID)
-
-		// Create a schedule with initial phase from subscription start to new phase start
-		initialPhases := []dto.SubscriptionSchedulePhaseInput{}
-
-		// Only add initial phase if new phase doesn't start exactly at subscription start
-		if !req.Phase.StartDate.Equal(existingSubscription.StartDate) {
-			// Build a default initial phase based on subscription's current values
-			initialPhase := dto.SubscriptionSchedulePhaseInput{
-				BillingCycle:     existingSubscription.BillingCycle,
-				StartDate:        existingSubscription.StartDate,
-				EndDate:          &req.Phase.StartDate,
-				CommitmentAmount: lo.FromPtr(existingSubscription.CommitmentAmount),
-				OverageFactor:    lo.FromPtr(existingSubscription.OverageFactor),
-				Metadata:         map[string]string{"created_by": "system", "reason": "auto-created-initial-phase"},
-			}
-
-			// Add line items from subscription
-			for _, item := range lineItems {
-				initialPhase.LineItems = append(initialPhase.LineItems, dto.SubscriptionLineItemRequest{
-					PriceID:     item.PriceID,
-					Quantity:    item.Quantity,
-					DisplayName: item.DisplayName,
-					Metadata:    item.Metadata,
-				})
-			}
-
-			initialPhases = append(initialPhases, initialPhase)
-		}
-
-		// Add the new phase
-		initialPhases = append(initialPhases, req.Phase)
-
-		// Create the schedule with both phases
-		createReq := &dto.CreateSubscriptionScheduleRequest{
-			SubscriptionID: subscriptionID,
-			EndBehavior:    types.EndBehaviorRelease,
-			Phases:         initialPhases,
-		}
-
-		// Create the schedule
-		return s.CreateSubscriptionSchedule(ctx, createReq)
-	}
-
-	// Schedule exists, add the phase to it
-	return s.AddSchedulePhase(ctx, schedule.ID, req)
-}
-
 // ProcessSubscriptionRenewalDueAlert processes subscriptions that are due for renewal in 24 hours
 func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Context) error {
 	subscriptions, err := s.SubRepo.ListSubscriptionsDueForRenewal(ctx)
@@ -3355,84 +2916,70 @@ func (s *subscriptionService) ProcessSubscriptionRenewalDueAlert(ctx context.Con
 	return nil
 }
 
-func (s *subscriptionService) handleSubscriptionResume(ctx context.Context, subscriptionID string) error {
-	// Process any missed recurring grants
-	return nil
-}
+// handleSubCoupons processes coupons for a subscription
+// Converts deprecated Coupons and LineItemCoupons fields to SubscriptionCouponRequest format and applies them
+func (s *subscriptionService) handleSubCoupons(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	req dto.CreateSubscriptionRequest,
+	originalPriceToLineItemMap map[string]string,
+) error {
+	// Convert deprecated fields to SubscriptionCouponRequest format
+	var subscriptionCoupons []dto.SubscriptionCouponRequest
+	for _, couponID := range req.Coupons {
+		if couponID != "" {
+			subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+				CouponID:  couponID,
+				StartDate: sub.StartDate,
+			})
+		}
+	}
 
-// ApplyCouponsToSubscriptionWithLineItems applies both subscription-level and line item-level coupons to a subscription
-func (s *subscriptionService) ApplyCouponsToSubscriptionWithLineItems(ctx context.Context, subscriptionID string, subscriptionCoupons []string, lineItemCoupons map[string][]string, lineItems []*subscription.SubscriptionLineItem) error {
-	if len(subscriptionCoupons) == 0 && len(lineItemCoupons) == 0 {
+	// Process LineItemCoupons - use originalPriceToLineItemMap to convert priceID to lineItemID
+	for priceID, couponIDs := range req.LineItemCoupons {
+		for _, couponID := range couponIDs {
+			if couponID != "" {
+				// Get lineItemID from the original price mapping
+				if lineItemID, exists := originalPriceToLineItemMap[priceID]; exists {
+					subscriptionCoupons = append(subscriptionCoupons, dto.SubscriptionCouponRequest{
+						CouponID:   couponID,
+						LineItemID: lo.ToPtr(lineItemID),
+						StartDate:  sub.StartDate,
+					})
+				} else {
+					// Log warning but continue processing other coupons
+					s.Logger.Warnw("coupon priceID not found in subscription, skipping",
+						"price_id", priceID,
+						"coupon_id", couponID,
+						"subscription_id", sub.ID)
+				}
+			}
+		}
+	}
+
+	if len(subscriptionCoupons) == 0 {
 		return nil
 	}
 
 	s.Logger.Infow("handling subscription and line item coupon associations",
-		"subscription_id", subscriptionID,
-		"subscription_coupon_count", len(subscriptionCoupons),
-		"line_item_coupon_count", len(lineItemCoupons))
+		"subscription_id", sub.ID,
+		"coupon_count", len(subscriptionCoupons))
 
-	// Create coupon service instance
 	couponAssociationService := NewCouponAssociationService(s.ServiceParams)
-
-	// Step 1: Apply subscription-level coupons
-	if len(subscriptionCoupons) > 0 {
-		err := couponAssociationService.ApplyCouponToSubscription(ctx, subscriptionCoupons, subscriptionID)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to apply subscription-level coupons").
-				WithReportableDetails(map[string]interface{}{
-					"subscription_id": subscriptionID,
-					"coupon_ids":      subscriptionCoupons,
-				}).
-				Mark(ierr.ErrInternal)
-		}
-
-		s.Logger.Infow("successfully applied subscription-level coupons",
-			"subscription_id", subscriptionID,
-			"coupon_count", len(subscriptionCoupons))
-	}
-
-	// Step 2: Apply line item-level coupons
-	if len(lineItemCoupons) > 0 {
-		priceIDToLineItem := make(map[string]*subscription.SubscriptionLineItem)
-		for _, lineItem := range lineItems {
-			priceIDToLineItem[lineItem.PriceID] = lineItem
-		}
-
-		for priceID, couponIDs := range lineItemCoupons {
-			lineItem, ok := priceIDToLineItem[priceID]
-			if !ok {
-				return ierr.NewError("line item not found").
-					WithHint("Please provide a valid price ID").
-					WithReportableDetails(map[string]interface{}{
-						"price_id": priceID,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-
-			err := couponAssociationService.ApplyCouponToSubscriptionLineItem(ctx, couponIDs, subscriptionID, lineItem.ID)
-			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to apply line item coupons").
-					WithReportableDetails(map[string]interface{}{
-						"subscription_id": subscriptionID,
-						"price_id":        priceID,
-						"line_item_id":    lineItem.ID,
-						"coupon_ids":      couponIDs,
-					}).
-					Mark(ierr.ErrInternal)
-			}
-		}
-
-		s.Logger.Infow("successfully applied line item coupons",
-			"subscription_id", subscriptionID,
-			"line_item_count", len(lineItemCoupons))
+	err := couponAssociationService.ApplyCouponsToSubscription(ctx, sub, subscriptionCoupons)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to apply coupons to subscription").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": sub.ID,
+				"coupon_count":    len(subscriptionCoupons),
+			}).
+			Mark(ierr.ErrInternal)
 	}
 
 	s.Logger.Infow("successfully applied all coupons to subscription",
-		"subscription_id", subscriptionID,
-		"subscription_coupon_count", len(subscriptionCoupons),
-		"line_item_coupon_count", len(lineItemCoupons))
+		"subscription_id", sub.ID,
+		"coupon_count", len(subscriptionCoupons))
 
 	return nil
 }
@@ -4224,8 +3771,6 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 
 	// Update cancellation fields
 	subscription.CancelledAt = &now
-	subscription.UpdatedAt = now
-	subscription.UpdatedBy = types.GetUserID(ctx)
 
 	// Add cancellation metadata
 	if subscription.Metadata == nil {
@@ -4241,11 +3786,13 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 		subscription.SubscriptionStatus = types.SubscriptionStatusCancelled
 		subscription.CancelAt = &effectiveDate
 		subscription.CancelAtPeriodEnd = false
+		subscription.EndDate = &effectiveDate
 
 	case types.CancellationTypeEndOfPeriod:
 		// Don't change status immediately - will be cancelled at period end
 		subscription.CancelAtPeriodEnd = true
 		subscription.CancelAt = &effectiveDate
+		subscription.EndDate = &effectiveDate
 	default:
 		return ierr.NewError("invalid cancellation type").
 			WithHintf("Unsupported cancellation type: %s", cancellationType).
@@ -4386,7 +3933,6 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 	// Collect all price IDs and build meter to price mapping
 	priceIDs := make([]string, 0, len(lineItems))
-	meterToPriceMap := make(map[string]string) // meter_id -> price_id
 
 	for _, item := range lineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -4396,7 +3942,6 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 			continue
 		}
 		priceIDs = append(priceIDs, item.PriceID)
-		meterToPriceMap[item.MeterID] = item.PriceID
 	}
 
 	// Fetch all prices in one call
@@ -4443,6 +3988,9 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	var usageCharges []*dto.SubscriptionUsageByMetersResponse
 	totalCost := decimal.Zero
 
+	// Track which line items have been processed
+	processedLineItems := make(map[string]bool)
+
 	// Process each feature result - now we have meter_id directly from ClickHouse
 	for subLineItemID, usageResult := range usageResults {
 		meterID := usageResult.MeterID
@@ -4453,20 +4001,11 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 			continue
 		}
 
-		priceID, hasPrice := meterToPriceMap[meterID]
-		if !hasPrice {
-			s.Logger.Warnw("price not found for meter, skipping",
-				"sub_line_item_id", subLineItemID,
-				"meter_id", meterID,
-				"subscription_id", req.SubscriptionID)
-			continue
-		}
+		priceID := usageResult.PriceID
 
 		priceObj, priceExists := priceMap[priceID]
 		if !priceExists || priceObj == nil {
 			s.Logger.Warnw("price object not found, skipping",
-				"sub_line_item_id", subLineItemID,
-				"meter_id", meterID,
 				"price_id", priceID,
 				"subscription_id", req.SubscriptionID)
 			continue
@@ -4511,6 +4050,60 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 			FilterValues:     make(price.JSONBFilters),
 			MeterID:          meterID,
 			MeterDisplayName: meterDisplayNames[meterID],
+			Price:            priceObj,
+			IsOverage:        false,
+		}
+
+		// Add filter values from meter
+		for _, filter := range meter.Filters {
+			charge.FilterValues[filter.Key] = filter.Values
+		}
+
+		usageCharges = append(usageCharges, charge)
+		processedLineItems[subLineItemID] = true
+	}
+
+	// Add zero-quantity, zero-cost charges for line items not found in usage results
+	for _, item := range lineItems {
+		if item.PriceType != types.PRICE_TYPE_USAGE {
+			continue
+		}
+		if item.MeterID == "" {
+			continue
+		}
+
+		// Skip if this line item was already processed
+		if processedLineItems[item.ID] {
+			continue
+		}
+
+		priceObj, priceExists := priceMap[item.PriceID]
+		if !priceExists || priceObj == nil {
+			s.Logger.Warnw("price object not found for line item, skipping zero charge",
+				"line_item_id", item.ID,
+				"price_id", item.PriceID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		meter := meterMap[item.MeterID]
+		if meter == nil {
+			s.Logger.Warnw("meter not found for line item, skipping zero charge",
+				"line_item_id", item.ID,
+				"meter_id", item.MeterID,
+				"subscription_id", req.SubscriptionID)
+			continue
+		}
+
+		// Create zero-quantity, zero-cost charge for this line item
+		charge := &dto.SubscriptionUsageByMetersResponse{
+			Amount:           0.0,
+			Currency:         priceObj.Currency,
+			DisplayAmount:    fmt.Sprintf("0.00 %s", priceObj.Currency),
+			Quantity:         0.0,
+			FilterValues:     make(price.JSONBFilters),
+			MeterID:          item.MeterID,
+			MeterDisplayName: meterDisplayNames[item.MeterID],
 			Price:            priceObj,
 			IsOverage:        false,
 		}
@@ -4614,7 +4207,7 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 					overageCharge := *charge // Create a copy
 					overageCharge.Quantity = overageQuantityDecimal.InexactFloat64()
 					overageCharge.Amount = price.FormatAmountToFloat64WithPrecision(overageAmountDecimal, subscription.Currency)
-					overageCharge.DisplayAmount = price.FormatAmountToStringWithPrecision(overageAmountDecimal, subscription.Currency)
+					overageCharge.DisplayAmount = price.GetDisplayAmountWithPrecision(overageAmountDecimal, subscription.Currency)
 					overageCharge.IsOverage = true
 					overageCharge.OverageFactor = overageFactorFloat
 					finalCharges = append(finalCharges, &overageCharge)
@@ -4658,9 +4251,9 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	})
 
 	// Build response
-	response.Amount = totalCost.InexactFloat64()
+	response.Amount = price.FormatAmountToFloat64WithPrecision(totalCost, subscription.Currency)
 	response.Currency = subscription.Currency
-	response.DisplayAmount = fmt.Sprintf("%.2f %s", totalCost.InexactFloat64(), response.Currency)
+	response.DisplayAmount = price.GetDisplayAmountWithPrecision(totalCost, subscription.Currency)
 	response.StartTime = usageStartTime
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
@@ -5080,4 +4673,96 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 	}
 
 	return nil
+}
+
+func (s *subscriptionService) GetUpcomingCreditGrantApplications(ctx context.Context, req *dto.GetUpcomingCreditGrantApplicationsRequest) (*dto.ListCreditGrantApplicationsResponse, error) {
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Verify each subscription exists
+	subFilter := types.NewNoLimitSubscriptionFilter()
+	subFilter.SubscriptionIDs = req.SubscriptionIDs
+	subscriptions, err := s.SubRepo.List(ctx, subFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	subscriptionIDToSubscriptionMap := make(map[string]*subscription.Subscription, len(subscriptions))
+	for _, sub := range subscriptions {
+		subscriptionIDToSubscriptionMap[sub.ID] = sub
+	}
+
+	for _, subscriptionID := range req.SubscriptionIDs {
+		if _, exists := subscriptionIDToSubscriptionMap[subscriptionID]; !exists {
+			return nil, ierr.NewError("subscription not found").
+				WithHint("Please verify the subscription ID is correct").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id":  subscriptionID,
+					"subscription_ids": req.SubscriptionIDs,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	}
+
+	// Get credit grant service
+	creditGrantService := NewCreditGrantService(s.ServiceParams)
+
+	// Create filter for upcoming grants
+	// Include pending and failed statuses (failed ones can be retried)
+	now := time.Now().UTC()
+	filter := types.NewNoLimitCreditGrantApplicationFilter()
+	filter.SubscriptionIDs = req.SubscriptionIDs
+	filter.ApplicationStatuses = []types.ApplicationStatus{
+		types.ApplicationStatusPending,
+		types.ApplicationStatusFailed,
+	}
+
+	// Get all applications for the specified subscriptions with pending/failed status
+	response, err := creditGrantService.ListCreditGrantApplications(ctx, filter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list credit grant applications").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_ids": req.SubscriptionIDs,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Filter to only include upcoming grants (scheduled_for > now)
+	upcomingItems := make([]*dto.CreditGrantApplicationResponse, 0)
+	for _, item := range response.Items {
+		if item.CreditGrantApplication != nil && item.ScheduledFor.After(now) {
+			upcomingItems = append(upcomingItems, item)
+		}
+	}
+
+	// Sort by scheduled_for date (ascending - earliest first)
+	sort.Slice(upcomingItems, func(i, j int) bool {
+		return upcomingItems[i].ScheduledFor.Before(upcomingItems[j].ScheduledFor)
+	})
+
+	// Update response with filtered items
+	response.Items = upcomingItems
+	response.Pagination.Total = len(upcomingItems)
+
+	return response, nil
+}
+
+// ListByCustomerID retrieves all active subscriptions for a customer
+// This method returns subscriptions with Active or Trialing status and includes line items
+func (s *subscriptionService) ListByCustomerID(ctx context.Context, customerID string) ([]*subscription.Subscription, error) {
+	if customerID == "" {
+		return nil, ierr.NewError("customer ID is required").
+			WithHint("Please provide a valid customer ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	subscriptions, err := s.SubRepo.ListByCustomerID(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	return subscriptions, nil
 }

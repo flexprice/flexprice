@@ -183,46 +183,6 @@ func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Add new phase to subscription schedule
-// @Description Add a new phase to a subscription schedule
-// @Tags Subscriptions
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Subscription ID"
-// @Param request body dto.AddSchedulePhaseRequest true "Add schedule phase request"
-// @Success 200 {object} dto.SubscriptionScheduleResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /subscriptions/{id}/phases [post]
-func (h *SubscriptionHandler) AddSubscriptionPhase(c *gin.Context) {
-	id := c.Param("id")
-	if id == "" {
-		c.Error(ierr.NewError("subscription ID is required").
-			WithHint("Please provide a valid subscription ID").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	var req dto.AddSchedulePhaseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.log.Error("Failed to bind JSON", "error", err)
-		c.Error(ierr.WithError(err).
-			WithHint("Invalid request format").
-			Mark(ierr.ErrValidation))
-		return
-	}
-
-	resp, err := h.service.AddSubscriptionPhase(c.Request.Context(), id, &req)
-	if err != nil {
-		h.log.Error("Failed to add subscription phase", "error", err)
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, resp)
-}
-
 // ListSubscriptionsByFilter godoc
 // @Summary List subscriptions by filter
 // @Description List subscriptions by filter
@@ -438,6 +398,41 @@ func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 	resp, err := h.service.DeleteSubscriptionLineItem(c.Request.Context(), lineItemID, req)
 	if err != nil {
 		h.log.Error("Failed to delete subscription line item", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary Get upcoming credit grant applications
+// @Description Get upcoming credit grant applications for a subscription
+// @Tags Subscriptions
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Success 200 {object} dto.ListCreditGrantApplicationsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id}/grants/upcoming [get]
+func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Create request DTO with the subscription ID from path parameter
+	req := &dto.GetUpcomingCreditGrantApplicationsRequest{
+		SubscriptionIDs: []string{id},
+	}
+
+	resp, err := h.service.GetUpcomingCreditGrantApplications(c.Request.Context(), req)
+	if err != nil {
+		h.log.Error("Failed to get upcoming credit grant applications", "error", err)
 		c.Error(err)
 		return
 	}

@@ -102,6 +102,46 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			HubSpot: hubspotMetadata,
 		}
 
+	case types.SecretProviderRazorpay:
+		razorpayMetadata := &types.RazorpayConnectionMetadata{}
+
+		if keyID, ok := flatMetadata["key_id"].(string); ok {
+			razorpayMetadata.KeyID = keyID
+		}
+		if secretKey, ok := flatMetadata["secret_key"].(string); ok {
+			razorpayMetadata.SecretKey = secretKey
+		}
+		if webhookSecret, ok := flatMetadata["webhook_secret"].(string); ok {
+			razorpayMetadata.WebhookSecret = webhookSecret
+		}
+
+		return types.ConnectionMetadata{
+			Razorpay: razorpayMetadata,
+		}
+
+	case types.SecretProviderChargebee:
+		chargebeeMetadata := &types.ChargebeeConnectionMetadata{}
+
+		if site, ok := flatMetadata["site"].(string); ok {
+			chargebeeMetadata.Site = site
+		}
+		if apiKey, ok := flatMetadata["api_key"].(string); ok {
+			chargebeeMetadata.APIKey = apiKey
+		}
+		if webhookSecret, ok := flatMetadata["webhook_secret"].(string); ok {
+			chargebeeMetadata.WebhookSecret = webhookSecret
+		}
+		if webhookUsername, ok := flatMetadata["webhook_username"].(string); ok {
+			chargebeeMetadata.WebhookUsername = webhookUsername
+		}
+		if webhookPassword, ok := flatMetadata["webhook_password"].(string); ok {
+			chargebeeMetadata.WebhookPassword = webhookPassword
+		}
+
+		return types.ConnectionMetadata{
+			Chargebee: chargebeeMetadata,
+		}
+
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{

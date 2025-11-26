@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -226,6 +227,34 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 			Mark(ierr.ErrValidation)
 	}
 
+	// Determine which gateway to use based on payment_gateway field
+	gatewayType := types.PaymentGatewayTypeStripe // Default to Stripe for backward compatibility
+	if paymentObj.PaymentGateway != nil && *paymentObj.PaymentGateway != "" {
+		gatewayType = types.PaymentGatewayType(*paymentObj.PaymentGateway)
+	}
+
+	p.Logger.Infow("creating payment link",
+		"payment_id", paymentObj.ID,
+		"gateway_type", gatewayType)
+
+	// Route to appropriate gateway
+	switch gatewayType {
+	case types.PaymentGatewayTypeStripe:
+		return p.handleStripePaymentLinkCreation(ctx, paymentObj, invoice)
+	case types.PaymentGatewayTypeRazorpay:
+		return p.handleRazorpayPaymentLinkCreation(ctx, paymentObj, invoice)
+	default:
+		return ierr.NewError("unsupported payment gateway").
+			WithHint("Payment gateway not supported for payment links").
+			WithReportableDetails(map[string]interface{}{
+				"payment_gateway": gatewayType,
+				"payment_id":      paymentObj.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+}
+
+func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
 	// Extract success URL and cancel URL from gateway metadata
 	successURL := ""
 	cancelURL := ""
@@ -318,9 +347,102 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 			Mark(ierr.ErrDatabase)
 	}
 
-	p.Logger.Infow("successfully created payment link and updated status to pending",
+	p.Logger.Infow("successfully created stripe payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
 		"session_id", paymentLinkResp.ID,
+		"payment_url", paymentLinkResp.PaymentURL)
+
+	return nil
+}
+
+func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
+	// Extract success URL and cancel URL from metadata
+	successURL := ""
+	cancelURL := ""
+
+	if paymentObj.Metadata != nil {
+		if url, exists := paymentObj.Metadata["success_url"]; exists {
+			successURL = url
+		}
+		if url, exists := paymentObj.Metadata["cancel_url"]; exists {
+			cancelURL = url
+		}
+	}
+
+	// Prepare metadata for payment link request
+	linkMetadata := make(map[string]string)
+	if paymentObj.Metadata != nil {
+		// Copy metadata but exclude connection-related fields (internal use only)
+		for k, v := range paymentObj.Metadata {
+			if k != "connection_id" && k != "connection_name" {
+				linkMetadata[k] = v
+			}
+		}
+	}
+
+	// Add FlexPrice payment ID to metadata
+	linkMetadata["flexprice_payment_id"] = paymentObj.ID
+
+	// Convert to Razorpay payment link request
+	paymentLinkReq := &razorpay.CreatePaymentLinkRequest{
+		InvoiceID:     paymentObj.DestinationID,
+		CustomerID:    invoice.CustomerID,
+		Amount:        paymentObj.Amount,
+		Currency:      paymentObj.Currency,
+		SuccessURL:    successURL,
+		CancelURL:     cancelURL,
+		Metadata:      linkMetadata,
+		PaymentID:     paymentObj.ID,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+	}
+
+	// Get Razorpay integration for creating payment link
+	razorpayIntegration, err := p.IntegrationFactory.GetRazorpayIntegration(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get Razorpay integration").
+			Mark(ierr.ErrSystem)
+	}
+
+	customerService := NewCustomerService(p.ServiceParams)
+	invoiceService := NewInvoiceService(p.ServiceParams)
+
+	paymentLinkResp, err := razorpayIntegration.PaymentSvc.CreatePaymentLink(ctx, paymentLinkReq, customerService, invoiceService)
+	if err != nil {
+		// If Razorpay SDK fails, keep payment status as INITIATED and return error
+		p.Logger.Errorw("failed to create payment link via Razorpay SDK",
+			"error", err,
+			"payment_id", paymentObj.ID,
+			"invoice_id", paymentObj.DestinationID)
+		return err
+	}
+
+	// If Razorpay SDK succeeds, update payment status to PENDING
+	paymentObj.PaymentStatus = types.PaymentStatusPending
+
+	// Update payment with gateway information
+	paymentObj.GatewayTrackingID = &paymentLinkResp.ID // Store payment_link_id in gateway_tracking_id
+	if paymentObj.GatewayMetadata == nil {
+		paymentObj.GatewayMetadata = types.Metadata{}
+	}
+	// Merge with existing gateway metadata
+	paymentObj.GatewayMetadata["payment_url"] = paymentLinkResp.PaymentURL
+	paymentObj.GatewayMetadata["gateway"] = string(types.PaymentGatewayTypeRazorpay)
+	paymentObj.GatewayMetadata["payment_link_id"] = paymentLinkResp.ID
+
+	// Update the payment record
+	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update payment with payment link information").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentObj.ID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	p.Logger.Infow("successfully created razorpay payment link and updated status to pending",
+		"payment_id", paymentObj.ID,
+		"payment_link_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
 
 	return nil
@@ -468,6 +590,12 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 
 	if invoice.AmountRemaining.IsZero() {
 		invoice.PaymentStatus = types.PaymentStatusSucceeded
+		// Finalize invoice if it's still in draft state
+		if invoice.InvoiceStatus == types.InvoiceStatusDraft {
+			invoice.InvoiceStatus = types.InvoiceStatusFinalized
+			finalizedAt := time.Now().UTC()
+			invoice.FinalizedAt = &finalizedAt
+		}
 	} else if invoice.AmountRemaining.LessThan(invoice.AmountDue) {
 		invoice.PaymentStatus = types.PaymentStatusPending // Partial payment still keeps it pending
 	}
@@ -475,6 +603,31 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	// Update the invoice
 	if err := p.InvoiceRepo.Update(ctx, invoice); err != nil {
 		return err
+	}
+
+	// Check if this invoice is for a purchased credit (has wallet_transaction_id in metadata)
+	// If so, complete the wallet transaction to credit the wallet
+	if invoice.Metadata != nil {
+		if walletTransactionID, ok := invoice.Metadata["wallet_transaction_id"]; ok && walletTransactionID != "" {
+			// Only complete the transaction if payment is fully succeeded
+			if invoice.PaymentStatus == types.PaymentStatusSucceeded {
+				walletService := NewWalletService(p.ServiceParams)
+				if err := walletService.CompletePurchasedCreditTransactionWithRetry(ctx, walletTransactionID); err != nil {
+					p.Logger.Errorw("failed to complete purchased credit transaction",
+						"error", err,
+						"invoice_id", invoice.ID,
+						"wallet_transaction_id", walletTransactionID,
+					)
+					// Don't fail the payment, but log the error
+					// The transaction can be manually completed later
+				} else {
+					p.Logger.Infow("successfully completed purchased credit transaction",
+						"invoice_id", invoice.ID,
+						"wallet_transaction_id", walletTransactionID,
+					)
+				}
+			}
+		}
 	}
 
 	// Check if this is the first invoice payment for an incomplete subscription

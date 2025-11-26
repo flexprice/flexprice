@@ -32,6 +32,7 @@ type EventService interface {
 	GetUsageByMeterWithFilters(ctx context.Context, req *dto.GetUsageByMeterRequest, filterGroups map[string]map[string][]string) ([]*events.AggregationResult, error)
 	GetEvents(ctx context.Context, req *dto.GetEventsRequest) (*dto.GetEventsResponse, error)
 	GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error)
+	MonitorKafkaLag(ctx context.Context) error
 }
 
 type eventService struct {
@@ -536,6 +537,88 @@ func parseEventIteratorToStruct(key string) (*events.EventIterator, error) {
 
 func createEventIteratorKey(timestamp time.Time, id string) string {
 	return fmt.Sprintf("%d::%s", timestamp.UnixNano(), id)
+}
+
+// MonitorKafkaLag monitors Kafka consumer lag for event consumption and post-processing pipelines.
+// It creates Sentry monitoring spans to track lag metrics for alerting and observability.
+func (s *eventService) MonitorKafkaLag(ctx context.Context) error {
+	sentrySvc := sentry.NewSentryService(s.config, s.logger)
+	kafkaMonitoring := kafka.NewMonitoringService(s.config, s.logger)
+
+	// Get Kafka configuration for the current tenant
+	eventConsumptionTopic, eventConsumptionConsumerGroup, eventPostProcessingTopic, eventPostProcessingConsumerGroup := s.getKafkaConsumerConfig(ctx)
+
+	// Monitor event consumption pipeline lag
+	if err := s.monitorConsumerLag(
+		ctx,
+		sentrySvc,
+		kafkaMonitoring,
+		eventConsumptionTopic,
+		eventConsumptionConsumerGroup,
+		"kafka.lag.event_consumption",
+	); err != nil {
+		s.logger.Warnw("failed to monitor event consumption lag",
+			"error", err,
+			"topic", eventConsumptionTopic,
+			"consumer_group", eventConsumptionConsumerGroup)
+	}
+
+	// Monitor event post-processing pipeline lag
+	if err := s.monitorConsumerLag(
+		ctx,
+		sentrySvc,
+		kafkaMonitoring,
+		eventPostProcessingTopic,
+		eventPostProcessingConsumerGroup,
+		"kafka.lag.event_post_processing",
+	); err != nil {
+		s.logger.Warnw("failed to monitor event post-processing lag",
+			"error", err,
+			"topic", eventPostProcessingTopic,
+			"consumer_group", eventPostProcessingConsumerGroup)
+	}
+
+	return nil
+}
+
+// monitorConsumerLag retrieves and reports consumer lag metrics for a specific Kafka topic and consumer group.
+// It creates a Sentry monitoring span with lag details for observability.
+func (s *eventService) monitorConsumerLag(
+	ctx context.Context,
+	sentrySvc *sentry.Service,
+	kafkaMonitoring *kafka.MonitoringService,
+	topic string,
+	consumerGroup string,
+	spanName string,
+) error {
+	// Retrieve consumer lag metrics
+	lag, err := kafkaMonitoring.GetConsumerLag(ctx, topic, consumerGroup)
+	if err != nil {
+		return err
+	}
+
+	// Create monitoring span for lag tracking
+	spanParams := map[string]interface{}{
+		"topic":          topic,
+		"consumer_group": consumerGroup,
+		"total_lag":      lag.TotalLag,
+	}
+
+	span, spanCtx := sentrySvc.StartKafkaLagMonitoringSpan(ctx, spanName, spanParams)
+	if span != nil {
+		defer span.Finish()
+	}
+
+	s.logger.Infow("kafka lag monitored",
+		"topic", topic,
+		"consumer_group", consumerGroup,
+		"total_lag", lag.TotalLag,
+		"span_name", spanName)
+
+	// Use the spanCtx to ensure proper context propagation
+	_ = spanCtx
+
+	return nil
 }
 
 func (s *eventService) GetMonitoringData(ctx context.Context, req *dto.GetMonitoringDataRequest) (*dto.GetMonitoringDataResponse, error) {

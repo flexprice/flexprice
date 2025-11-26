@@ -56,6 +56,7 @@ type Stores struct {
 	CreditGrantApplicationRepo   creditgrantapplication.Repository
 	SubscriptionRepo             subscription.Repository
 	SubscriptionLineItemRepo     subscription.LineItemRepository
+	SubscriptionPhaseRepo        subscription.SubscriptionPhaseRepository
 	EventRepo                    events.Repository
 	PlanRepo                     plan.Repository
 	PriceRepo                    price.Repository
@@ -85,6 +86,7 @@ type Stores struct {
 	EntityIntegrationMappingRepo entityintegrationmapping.Repository
 	SettingsRepo                 settings.Repository
 	AlertLogsRepo                alertlogs.Repository
+	FeatureUsageRepo             events.FeatureUsageRepository
 }
 
 // BaseServiceTestSuite provides common functionality for all service test suites
@@ -158,6 +160,8 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 		s.stores.PaymentRepo,
 		s.stores.PriceRepo,
 		s.stores.EntityIntegrationMappingRepo,
+		s.stores.MeterRepo,
+		s.stores.FeatureRepo,
 		encryptionService,
 	)
 }
@@ -185,6 +189,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	s.stores = Stores{
 		SubscriptionRepo:             NewInMemorySubscriptionStore(),
 		SubscriptionLineItemRepo:     NewInMemorySubscriptionLineItemStore(),
+		SubscriptionPhaseRepo:        NewInMemorySubscriptionPhaseStore(),
 		EventRepo:                    NewInMemoryEventStore(),
 		PlanRepo:                     NewInMemoryPlanStore(),
 		PriceRepo:                    NewInMemoryPriceStore(),
@@ -216,6 +221,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		EntityIntegrationMappingRepo: NewInMemoryEntityIntegrationMappingStore(),
 		SettingsRepo:                 NewInMemorySettingsStore(),
 		AlertLogsRepo:                NewInMemoryAlertLogsStore(),
+		FeatureUsageRepo:             NewInMemoryFeatureUsageStore(),
 	}
 
 	s.db = NewMockPostgresClient(s.logger)
@@ -263,6 +269,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.AddonAssociationRepo.(*InMemoryAddonAssociationStore).Clear()
 	s.stores.SettingsRepo.(*InMemorySettingsStore).Clear()
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
+	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
 }
 

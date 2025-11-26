@@ -94,10 +94,10 @@ const (
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
 	EdgePauses = "pauses"
+	// EdgePhases holds the string denoting the phases edge name in mutations.
+	EdgePhases = "phases"
 	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
 	EdgeCreditGrants = "credit_grants"
-	// EdgeSchedule holds the string denoting the schedule edge name in mutations.
-	EdgeSchedule = "schedule"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
 	EdgeCouponAssociations = "coupon_associations"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -118,6 +118,13 @@ const (
 	PausesInverseTable = "subscription_pauses"
 	// PausesColumn is the table column denoting the pauses relation/edge.
 	PausesColumn = "subscription_id"
+	// PhasesTable is the table that holds the phases relation/edge.
+	PhasesTable = "subscription_phases"
+	// PhasesInverseTable is the table name for the SubscriptionPhase entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionphase" package.
+	PhasesInverseTable = "subscription_phases"
+	// PhasesColumn is the table column denoting the phases relation/edge.
+	PhasesColumn = "subscription_id"
 	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
 	CreditGrantsTable = "credit_grants"
 	// CreditGrantsInverseTable is the table name for the CreditGrant entity.
@@ -125,13 +132,6 @@ const (
 	CreditGrantsInverseTable = "credit_grants"
 	// CreditGrantsColumn is the table column denoting the credit_grants relation/edge.
 	CreditGrantsColumn = "subscription_id"
-	// ScheduleTable is the table that holds the schedule relation/edge.
-	ScheduleTable = "subscription_schedules"
-	// ScheduleInverseTable is the table name for the SubscriptionSchedule entity.
-	// It exists in this package in order to avoid circular dependency with the "subscriptionschedule" package.
-	ScheduleInverseTable = "subscription_schedules"
-	// ScheduleColumn is the table column denoting the schedule relation/edge.
-	ScheduleColumn = "subscription_id"
 	// CouponAssociationsTable is the table that holds the coupon_associations relation/edge.
 	CouponAssociationsTable = "coupon_associations"
 	// CouponAssociationsInverseTable is the table name for the CouponAssociation entity.
@@ -525,6 +525,20 @@ func ByPauses(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByPhasesCount orders the results by phases count.
+func ByPhasesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newPhasesStep(), opts...)
+	}
+}
+
+// ByPhases orders the results by phases terms.
+func ByPhases(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPhasesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByCreditGrantsCount orders the results by credit_grants count.
 func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -536,13 +550,6 @@ func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
 func ByCreditGrants(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newCreditGrantsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
-// ByScheduleField orders the results by schedule field.
-func ByScheduleField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newScheduleStep(), sql.OrderByField(field, opts...))
 	}
 }
 
@@ -587,18 +594,18 @@ func newPausesStep() *sqlgraph.Step {
 		sqlgraph.Edge(sqlgraph.O2M, false, PausesTable, PausesColumn),
 	)
 }
+func newPhasesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PhasesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, PhasesTable, PhasesColumn),
+	)
+}
 func newCreditGrantsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CreditGrantsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CreditGrantsTable, CreditGrantsColumn),
-	)
-}
-func newScheduleStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ScheduleInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.O2O, false, ScheduleTable, ScheduleColumn),
 	)
 }
 func newCouponAssociationsStep() *sqlgraph.Step {

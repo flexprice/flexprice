@@ -67,6 +67,8 @@ const (
 	FieldStartDate = "start_date"
 	// FieldEndDate holds the string denoting the end_date field in the database.
 	FieldEndDate = "end_date"
+	// FieldSubscriptionPhaseID holds the string denoting the subscription_phase_id field in the database.
+	FieldSubscriptionPhaseID = "subscription_phase_id"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
@@ -120,6 +122,7 @@ var Columns = []string{
 	FieldTrialPeriod,
 	FieldStartDate,
 	FieldEndDate,
+	FieldSubscriptionPhaseID,
 	FieldMetadata,
 }
 
@@ -300,6 +303,11 @@ func ByStartDate(opts ...sql.OrderTermOption) OrderOption {
 // ByEndDate orders the results by the end_date field.
 func ByEndDate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndDate, opts...).ToFunc()
+}
+
+// BySubscriptionPhaseID orders the results by the subscription_phase_id field.
+func BySubscriptionPhaseID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionPhaseID, opts...).ToFunc()
 }
 
 // BySubscriptionField orders the results by subscription field.

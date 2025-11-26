@@ -115,6 +115,21 @@ func SubscriptionLineItemID(v string) predicate.CouponAssociation {
 	return predicate.CouponAssociation(sql.FieldEQ(FieldSubscriptionLineItemID, v))
 }
 
+// SubscriptionPhaseID applies equality check predicate on the "subscription_phase_id" field. It's identical to SubscriptionPhaseIDEQ.
+func SubscriptionPhaseID(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEQ(FieldSubscriptionPhaseID, v))
+}
+
+// StartDate applies equality check predicate on the "start_date" field. It's identical to StartDateEQ.
+func StartDate(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEQ(FieldStartDate, v))
+}
+
+// EndDate applies equality check predicate on the "end_date" field. It's identical to EndDateEQ.
+func EndDate(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEQ(FieldEndDate, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.CouponAssociation {
 	return predicate.CouponAssociation(sql.FieldEQ(FieldTenantID, v))
@@ -753,6 +768,171 @@ func SubscriptionLineItemIDEqualFold(v string) predicate.CouponAssociation {
 // SubscriptionLineItemIDContainsFold applies the ContainsFold predicate on the "subscription_line_item_id" field.
 func SubscriptionLineItemIDContainsFold(v string) predicate.CouponAssociation {
 	return predicate.CouponAssociation(sql.FieldContainsFold(FieldSubscriptionLineItemID, v))
+}
+
+// SubscriptionPhaseIDEQ applies the EQ predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDEQ(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEQ(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDNEQ applies the NEQ predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDNEQ(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNEQ(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDIn applies the In predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDIn(vs ...string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldIn(FieldSubscriptionPhaseID, vs...))
+}
+
+// SubscriptionPhaseIDNotIn applies the NotIn predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDNotIn(vs ...string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNotIn(FieldSubscriptionPhaseID, vs...))
+}
+
+// SubscriptionPhaseIDGT applies the GT predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDGT(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldGT(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDGTE applies the GTE predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDGTE(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldGTE(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDLT applies the LT predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDLT(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldLT(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDLTE applies the LTE predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDLTE(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldLTE(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDContains applies the Contains predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDContains(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldContains(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDHasPrefix applies the HasPrefix predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDHasPrefix(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldHasPrefix(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDHasSuffix applies the HasSuffix predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDHasSuffix(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldHasSuffix(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDIsNil applies the IsNil predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDIsNil() predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldIsNull(FieldSubscriptionPhaseID))
+}
+
+// SubscriptionPhaseIDNotNil applies the NotNil predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDNotNil() predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNotNull(FieldSubscriptionPhaseID))
+}
+
+// SubscriptionPhaseIDEqualFold applies the EqualFold predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDEqualFold(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEqualFold(FieldSubscriptionPhaseID, v))
+}
+
+// SubscriptionPhaseIDContainsFold applies the ContainsFold predicate on the "subscription_phase_id" field.
+func SubscriptionPhaseIDContainsFold(v string) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldContainsFold(FieldSubscriptionPhaseID, v))
+}
+
+// StartDateEQ applies the EQ predicate on the "start_date" field.
+func StartDateEQ(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEQ(FieldStartDate, v))
+}
+
+// StartDateNEQ applies the NEQ predicate on the "start_date" field.
+func StartDateNEQ(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNEQ(FieldStartDate, v))
+}
+
+// StartDateIn applies the In predicate on the "start_date" field.
+func StartDateIn(vs ...time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldIn(FieldStartDate, vs...))
+}
+
+// StartDateNotIn applies the NotIn predicate on the "start_date" field.
+func StartDateNotIn(vs ...time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNotIn(FieldStartDate, vs...))
+}
+
+// StartDateGT applies the GT predicate on the "start_date" field.
+func StartDateGT(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldGT(FieldStartDate, v))
+}
+
+// StartDateGTE applies the GTE predicate on the "start_date" field.
+func StartDateGTE(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldGTE(FieldStartDate, v))
+}
+
+// StartDateLT applies the LT predicate on the "start_date" field.
+func StartDateLT(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldLT(FieldStartDate, v))
+}
+
+// StartDateLTE applies the LTE predicate on the "start_date" field.
+func StartDateLTE(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldLTE(FieldStartDate, v))
+}
+
+// EndDateEQ applies the EQ predicate on the "end_date" field.
+func EndDateEQ(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldEQ(FieldEndDate, v))
+}
+
+// EndDateNEQ applies the NEQ predicate on the "end_date" field.
+func EndDateNEQ(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNEQ(FieldEndDate, v))
+}
+
+// EndDateIn applies the In predicate on the "end_date" field.
+func EndDateIn(vs ...time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldIn(FieldEndDate, vs...))
+}
+
+// EndDateNotIn applies the NotIn predicate on the "end_date" field.
+func EndDateNotIn(vs ...time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNotIn(FieldEndDate, vs...))
+}
+
+// EndDateGT applies the GT predicate on the "end_date" field.
+func EndDateGT(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldGT(FieldEndDate, v))
+}
+
+// EndDateGTE applies the GTE predicate on the "end_date" field.
+func EndDateGTE(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldGTE(FieldEndDate, v))
+}
+
+// EndDateLT applies the LT predicate on the "end_date" field.
+func EndDateLT(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldLT(FieldEndDate, v))
+}
+
+// EndDateLTE applies the LTE predicate on the "end_date" field.
+func EndDateLTE(v time.Time) predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldLTE(FieldEndDate, v))
+}
+
+// EndDateIsNil applies the IsNil predicate on the "end_date" field.
+func EndDateIsNil() predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldIsNull(FieldEndDate))
+}
+
+// EndDateNotNil applies the NotNil predicate on the "end_date" field.
+func EndDateNotNil() predicate.CouponAssociation {
+	return predicate.CouponAssociation(sql.FieldNotNull(FieldEndDate))
 }
 
 // MetadataIsNil applies the IsNil predicate on the "metadata" field.

@@ -103,7 +103,8 @@ func BulkReprocessEvents(params BulkReprocessEventsParams) error {
 			log.Printf("Processing customer %d: %s (ID: %s)", i+1, customer.Name, customer.ExternalID)
 
 			// Fetch active subscriptions for the customer
-			subscriptions, err := script.subscriptionRepo.ListByCustomerID(ctx, customer.ID)
+			subscriptionService := service.NewSubscriptionService(script.serviceParams)
+			subscriptions, err := subscriptionService.ListByCustomerID(ctx, customer.ID)
 			if err != nil {
 				script.log.Errorw("Failed to fetch subscriptions",
 					"customerID", customer.ID,
@@ -248,6 +249,7 @@ func newBulkReprocessEventsScript() (*BulkReprocessEventsScript, error) {
 		PriceRepo:        priceRepo,
 		FeatureRepo:      featureRepo,
 		FeatureUsageRepo: featureUsageRepo,
+		SubRepo:          subscriptionRepo,
 	}
 
 	// Initialize event post-processing service (this creates Kafka connections once)

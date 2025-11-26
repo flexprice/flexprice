@@ -26,6 +26,9 @@ const (
 
 	// Tax Application
 	ScopeTaxApplication Scope = "tax_application"
+
+	// Wallet Top Up
+	ScopeWalletTopUp Scope = "wallet_top_up"
 )
 
 // Generator generates idempotency keys

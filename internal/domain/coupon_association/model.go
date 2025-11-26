@@ -1,9 +1,10 @@
 package coupon_association
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/coupon"
-	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -14,24 +15,18 @@ type CouponAssociation struct {
 	CouponID               string            `json:"coupon_id" db:"coupon_id"`
 	SubscriptionID         string            `json:"subscription_id" db:"subscription_id"`                               // Mandatory
 	SubscriptionLineItemID *string           `json:"subscription_line_item_id,omitempty" db:"subscription_line_item_id"` // Optional
+	SubscriptionPhaseID    *string           `json:"subscription_phase_id,omitempty" db:"subscription_phase_id"`         // Optional
+	StartDate              time.Time         `json:"start_date" db:"start_date"`
+	EndDate                *time.Time        `json:"end_date,omitempty" db:"end_date"` // Optional
 	Metadata               map[string]string `json:"metadata,omitempty" db:"metadata"`
 	EnvironmentID          string            `json:"environment_id" db:"environment_id"`
 	Coupon                 *coupon.Coupon    `json:"coupon,omitempty" db:"coupon"`
 	types.BaseModel
 }
 
-// Write a validate method for the coupon association
-
-func (ca *CouponAssociation) Validate() error {
-	if ca.CouponID == "" {
-		return ierr.NewError("coupon validation failed").WithHint("coupon is required").Mark(ierr.ErrValidation)
-	}
-
-	if ca.SubscriptionID == "" {
-		return ierr.NewError("subscription_id is required").WithHint("subscription_id is required").Mark(ierr.ErrValidation)
-	}
-
-	return nil
+// IsSubscriptionLineItemLevel returns true if the coupon association is applied at subscription line item level
+func (ca *CouponAssociation) IsSubscriptionLineItemLevel() bool {
+	return ca.SubscriptionLineItemID != nil
 }
 
 func FromEnt(e *ent.CouponAssociation) *CouponAssociation {
@@ -45,6 +40,9 @@ func FromEnt(e *ent.CouponAssociation) *CouponAssociation {
 		CouponID:               e.CouponID,
 		SubscriptionID:         e.SubscriptionID,
 		SubscriptionLineItemID: e.SubscriptionLineItemID,
+		SubscriptionPhaseID:    e.SubscriptionPhaseID,
+		StartDate:              e.StartDate,
+		EndDate:                e.EndDate,
 		Metadata:               e.Metadata,
 		EnvironmentID:          e.EnvironmentID,
 		Coupon:                 coupon,

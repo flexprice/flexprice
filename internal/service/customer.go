@@ -491,3 +491,52 @@ func (s *customerService) publishWebhookEvent(ctx context.Context, eventName str
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
+
+// GetUpcomingCreditGrantApplications retrieves upcoming credit grant applications for all subscriptions of a customer
+// This method gets all subscriptions for the customer and then fetches upcoming credit grant applications across all of them
+func (s *customerService) GetUpcomingCreditGrantApplications(ctx context.Context, customerID string) (*dto.ListCreditGrantApplicationsResponse, error) {
+	// Validate customer exists
+	_, err := s.CustomerRepo.Get(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get all subscriptions for this customer
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	subscriptions, err := subscriptionService.ListByCustomerID(ctx, customerID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get subscriptions for customer").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customerID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Extract subscription IDs
+	subscriptionIDs := make([]string, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		if sub != nil && sub.ID != "" {
+			subscriptionIDs = append(subscriptionIDs, sub.ID)
+		}
+	}
+
+	// If no subscriptions found, return empty response
+	if len(subscriptionIDs) == 0 {
+		return &dto.ListCreditGrantApplicationsResponse{
+			Items: []*dto.CreditGrantApplicationResponse{},
+			Pagination: types.PaginationResponse{
+				Total:  0,
+				Limit:  0,
+				Offset: 0,
+			},
+		}, nil
+	}
+
+	// Get upcoming credit grant applications for all subscriptions
+	req := &dto.GetUpcomingCreditGrantApplicationsRequest{
+		SubscriptionIDs: subscriptionIDs,
+	}
+
+	return subscriptionService.GetUpcomingCreditGrantApplications(ctx, req)
+}

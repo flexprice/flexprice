@@ -16,7 +16,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
-	"github.com/flexprice/flexprice/ent/subscriptionschedule"
+	"github.com/flexprice/flexprice/ent/subscriptionphase"
 	"github.com/shopspring/decimal"
 )
 
@@ -525,6 +525,21 @@ func (sc *SubscriptionCreate) AddPauses(s ...*SubscriptionPause) *SubscriptionCr
 	return sc.AddPauseIDs(ids...)
 }
 
+// AddPhaseIDs adds the "phases" edge to the SubscriptionPhase entity by IDs.
+func (sc *SubscriptionCreate) AddPhaseIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddPhaseIDs(ids...)
+	return sc
+}
+
+// AddPhases adds the "phases" edges to the SubscriptionPhase entity.
+func (sc *SubscriptionCreate) AddPhases(s ...*SubscriptionPhase) *SubscriptionCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return sc.AddPhaseIDs(ids...)
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (sc *SubscriptionCreate) AddCreditGrantIDs(ids ...string) *SubscriptionCreate {
 	sc.mutation.AddCreditGrantIDs(ids...)
@@ -538,25 +553,6 @@ func (sc *SubscriptionCreate) AddCreditGrants(c ...*CreditGrant) *SubscriptionCr
 		ids[i] = c[i].ID
 	}
 	return sc.AddCreditGrantIDs(ids...)
-}
-
-// SetScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID.
-func (sc *SubscriptionCreate) SetScheduleID(id string) *SubscriptionCreate {
-	sc.mutation.SetScheduleID(id)
-	return sc
-}
-
-// SetNillableScheduleID sets the "schedule" edge to the SubscriptionSchedule entity by ID if the given value is not nil.
-func (sc *SubscriptionCreate) SetNillableScheduleID(id *string) *SubscriptionCreate {
-	if id != nil {
-		sc = sc.SetScheduleID(*id)
-	}
-	return sc
-}
-
-// SetSchedule sets the "schedule" edge to the SubscriptionSchedule entity.
-func (sc *SubscriptionCreate) SetSchedule(s *SubscriptionSchedule) *SubscriptionCreate {
-	return sc.SetScheduleID(s.ID)
 }
 
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
@@ -1038,6 +1034,22 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
+	if nodes := sc.mutation.PhasesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.PhasesTable,
+			Columns: []string{subscription.PhasesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := sc.mutation.CreditGrantsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1047,22 +1059,6 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(creditgrant.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := sc.mutation.ScheduleIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2O,
-			Inverse: false,
-			Table:   subscription.ScheduleTable,
-			Columns: []string{subscription.ScheduleColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

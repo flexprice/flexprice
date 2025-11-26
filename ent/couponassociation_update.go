@@ -90,6 +90,46 @@ func (cau *CouponAssociationUpdate) ClearSubscriptionLineItemID() *CouponAssocia
 	return cau
 }
 
+// SetSubscriptionPhaseID sets the "subscription_phase_id" field.
+func (cau *CouponAssociationUpdate) SetSubscriptionPhaseID(s string) *CouponAssociationUpdate {
+	cau.mutation.SetSubscriptionPhaseID(s)
+	return cau
+}
+
+// SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
+func (cau *CouponAssociationUpdate) SetNillableSubscriptionPhaseID(s *string) *CouponAssociationUpdate {
+	if s != nil {
+		cau.SetSubscriptionPhaseID(*s)
+	}
+	return cau
+}
+
+// ClearSubscriptionPhaseID clears the value of the "subscription_phase_id" field.
+func (cau *CouponAssociationUpdate) ClearSubscriptionPhaseID() *CouponAssociationUpdate {
+	cau.mutation.ClearSubscriptionPhaseID()
+	return cau
+}
+
+// SetEndDate sets the "end_date" field.
+func (cau *CouponAssociationUpdate) SetEndDate(t time.Time) *CouponAssociationUpdate {
+	cau.mutation.SetEndDate(t)
+	return cau
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (cau *CouponAssociationUpdate) SetNillableEndDate(t *time.Time) *CouponAssociationUpdate {
+	if t != nil {
+		cau.SetEndDate(*t)
+	}
+	return cau
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (cau *CouponAssociationUpdate) ClearEndDate() *CouponAssociationUpdate {
+	cau.mutation.ClearEndDate()
+	return cau
+}
+
 // SetMetadata sets the "metadata" field.
 func (cau *CouponAssociationUpdate) SetMetadata(m map[string]string) *CouponAssociationUpdate {
 	cau.mutation.SetMetadata(m)
@@ -230,6 +270,18 @@ func (cau *CouponAssociationUpdate) sqlSave(ctx context.Context) (n int, err err
 	}
 	if cau.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(couponassociation.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := cau.mutation.SubscriptionPhaseID(); ok {
+		_spec.SetField(couponassociation.FieldSubscriptionPhaseID, field.TypeString, value)
+	}
+	if cau.mutation.SubscriptionPhaseIDCleared() {
+		_spec.ClearField(couponassociation.FieldSubscriptionPhaseID, field.TypeString)
+	}
+	if value, ok := cau.mutation.EndDate(); ok {
+		_spec.SetField(couponassociation.FieldEndDate, field.TypeTime, value)
+	}
+	if cau.mutation.EndDateCleared() {
+		_spec.ClearField(couponassociation.FieldEndDate, field.TypeTime)
 	}
 	if value, ok := cau.mutation.Metadata(); ok {
 		_spec.SetField(couponassociation.FieldMetadata, field.TypeJSON, value)
@@ -388,6 +440,46 @@ func (cauo *CouponAssociationUpdateOne) SetNillableSubscriptionLineItemID(s *str
 // ClearSubscriptionLineItemID clears the value of the "subscription_line_item_id" field.
 func (cauo *CouponAssociationUpdateOne) ClearSubscriptionLineItemID() *CouponAssociationUpdateOne {
 	cauo.mutation.ClearSubscriptionLineItemID()
+	return cauo
+}
+
+// SetSubscriptionPhaseID sets the "subscription_phase_id" field.
+func (cauo *CouponAssociationUpdateOne) SetSubscriptionPhaseID(s string) *CouponAssociationUpdateOne {
+	cauo.mutation.SetSubscriptionPhaseID(s)
+	return cauo
+}
+
+// SetNillableSubscriptionPhaseID sets the "subscription_phase_id" field if the given value is not nil.
+func (cauo *CouponAssociationUpdateOne) SetNillableSubscriptionPhaseID(s *string) *CouponAssociationUpdateOne {
+	if s != nil {
+		cauo.SetSubscriptionPhaseID(*s)
+	}
+	return cauo
+}
+
+// ClearSubscriptionPhaseID clears the value of the "subscription_phase_id" field.
+func (cauo *CouponAssociationUpdateOne) ClearSubscriptionPhaseID() *CouponAssociationUpdateOne {
+	cauo.mutation.ClearSubscriptionPhaseID()
+	return cauo
+}
+
+// SetEndDate sets the "end_date" field.
+func (cauo *CouponAssociationUpdateOne) SetEndDate(t time.Time) *CouponAssociationUpdateOne {
+	cauo.mutation.SetEndDate(t)
+	return cauo
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (cauo *CouponAssociationUpdateOne) SetNillableEndDate(t *time.Time) *CouponAssociationUpdateOne {
+	if t != nil {
+		cauo.SetEndDate(*t)
+	}
+	return cauo
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (cauo *CouponAssociationUpdateOne) ClearEndDate() *CouponAssociationUpdateOne {
+	cauo.mutation.ClearEndDate()
 	return cauo
 }
 
@@ -561,6 +653,18 @@ func (cauo *CouponAssociationUpdateOne) sqlSave(ctx context.Context) (_node *Cou
 	}
 	if cauo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(couponassociation.FieldEnvironmentID, field.TypeString)
+	}
+	if value, ok := cauo.mutation.SubscriptionPhaseID(); ok {
+		_spec.SetField(couponassociation.FieldSubscriptionPhaseID, field.TypeString, value)
+	}
+	if cauo.mutation.SubscriptionPhaseIDCleared() {
+		_spec.ClearField(couponassociation.FieldSubscriptionPhaseID, field.TypeString)
+	}
+	if value, ok := cauo.mutation.EndDate(); ok {
+		_spec.SetField(couponassociation.FieldEndDate, field.TypeTime, value)
+	}
+	if cauo.mutation.EndDateCleared() {
+		_spec.ClearField(couponassociation.FieldEndDate, field.TypeTime)
 	}
 	if value, ok := cauo.mutation.Metadata(); ok {
 		_spec.SetField(couponassociation.FieldMetadata, field.TypeJSON, value)

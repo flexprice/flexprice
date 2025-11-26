@@ -64,6 +64,7 @@ func (s *CreditNoteServiceSuite) setupService() {
 		InvoiceRepo:                s.GetStores().InvoiceRepo,
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		PriceRepo:                  s.GetStores().PriceRepo,
 		MeterRepo:                  s.GetStores().MeterRepo,

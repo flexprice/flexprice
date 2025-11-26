@@ -176,7 +176,9 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetUpdatedAt(now).
-		SetUpdatedBy(types.GetUserID(ctx))
+		SetUpdatedBy(types.GetUserID(ctx)).
+		SetNillableEndDate(sub.EndDate).
+		SetMetadata(sub.Metadata)
 
 	if sub.ActivePauseID != nil {
 		query.SetActivePauseID(*sub.ActivePauseID)
@@ -703,6 +705,7 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetBillingPeriod(string(item.BillingPeriod)).
 				SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 				SetNillableEndDate(types.ToNillableTime(item.EndDate)).
+				SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 				SetInvoiceCadence(string(item.InvoiceCadence)).
 				SetTrialPeriod(item.TrialPeriod).
 				SetMetadata(item.Metadata).

@@ -33,13 +33,24 @@ func NewSettingsService(params ServiceParams) SettingsService {
 }
 
 func (s *settingsService) GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
-	setting, err := s.SettingsRepo.GetByKey(ctx, key)
+	// For env_config, use tenant-level query (no environment_id)
+	var setting *settings.Setting
+	var err error
+
+	isEnvConfig := key == types.SettingKeyEnvConfig
+	if isEnvConfig {
+		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+	} else {
+		setting, err = s.SettingsRepo.GetByKey(ctx, key)
+	}
+
 	if err != nil {
 		// If setting not found, check if we should return default values
 		if ent.IsNotFound(err) {
 			// Check if this key has default values
 			if defaultSetting, exists := types.GetDefaultSettings()[key]; exists {
 				// Create and return a setting with default values
+
 				defaultSettingModel := &settings.Setting{
 					ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
 					Key:           defaultSetting.Key.String(),
@@ -47,6 +58,12 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 					EnvironmentID: types.GetEnvironmentID(ctx),
 					BaseModel:     types.GetDefaultBaseModel(ctx),
 				}
+				if isEnvConfig {
+					defaultSettingModel.EnvironmentID = ""
+				} else {
+					defaultSettingModel.EnvironmentID = types.GetEnvironmentID(ctx)
+				}
+				// env_config: EnvironmentID remains empty (zero value), repository will set to NULL
 				return dto.SettingFromDomain(defaultSettingModel), nil
 			}
 		}
@@ -83,7 +100,15 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	}
 
 	// STEP 2: Check if the setting exists
-	setting, err := s.SettingsRepo.GetByKey(ctx, key)
+	// For env_config, use tenant-level query (no environment_id)
+	var setting *settings.Setting
+	var err error
+	if key == types.SettingKeyEnvConfig {
+		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+	} else {
+		setting, err = s.SettingsRepo.GetByKey(ctx, key)
+	}
+
 	if ent.IsNotFound(err) {
 		createReq := &dto.CreateSettingRequest{
 			Key:   key,
@@ -108,15 +133,20 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	for key, value := range req.Value {
 		setting.Value[key] = value
 	}
+
+	// For env_config, ensure environment_id is not set (will be stored as NULL)
+	// Don't set it - repository will handle NULL conversion
+
 	return s.updateSetting(ctx, setting)
 }
 
 func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
-	err := s.SettingsRepo.DeleteByKey(ctx, key)
-	if err != nil {
-		return err
+	// For env_config, delete tenant-level setting (empty environment_id)
+	if key == types.SettingKeyEnvConfig {
+		return s.SettingsRepo.DeleteTenantSettingByKey(ctx, key)
 	}
-	return nil
+
+	return s.SettingsRepo.DeleteByKey(ctx, key)
 }
 
 // GetSettingWithDefaults retrieves a setting by key and merges it with provided default values
@@ -125,6 +155,7 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 // giving preference to stored values for fields that exist in both
 func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
 	// First, get the setting using GetSettingByKey which handles defaults for non-existent settings
+
 	setting, err := s.GetSettingByKey(ctx, key)
 	if err != nil {
 		return nil, err
@@ -154,6 +185,15 @@ func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.
 	// Normalize types for known setting keys to ensure consistent typing
 	if err := s.normalizeSettingTypes(key, mergedValues); err != nil {
 		return nil, err
+	}
+
+	for k, v := range mergedValues {
+		if v, ok := v.(int); ok {
+			mergedValues[k] = v
+		}
+		if v, ok := v.(float64); ok {
+			mergedValues[k] = int(v)
+		}
 	}
 
 	// Create a response with the merged values

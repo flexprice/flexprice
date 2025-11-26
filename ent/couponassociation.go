@@ -41,6 +41,12 @@ type CouponAssociation struct {
 	SubscriptionID string `json:"subscription_id,omitempty"`
 	// SubscriptionLineItemID holds the value of the "subscription_line_item_id" field.
 	SubscriptionLineItemID *string `json:"subscription_line_item_id,omitempty"`
+	// SubscriptionPhaseID holds the value of the "subscription_phase_id" field.
+	SubscriptionPhaseID *string `json:"subscription_phase_id,omitempty"`
+	// StartDate holds the value of the "start_date" field.
+	StartDate time.Time `json:"start_date,omitempty"`
+	// EndDate holds the value of the "end_date" field.
+	EndDate *time.Time `json:"end_date,omitempty"`
 	// Additional metadata for coupon association
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -113,9 +119,9 @@ func (*CouponAssociation) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case couponassociation.FieldMetadata:
 			values[i] = new([]byte)
-		case couponassociation.FieldID, couponassociation.FieldTenantID, couponassociation.FieldStatus, couponassociation.FieldCreatedBy, couponassociation.FieldUpdatedBy, couponassociation.FieldEnvironmentID, couponassociation.FieldCouponID, couponassociation.FieldSubscriptionID, couponassociation.FieldSubscriptionLineItemID:
+		case couponassociation.FieldID, couponassociation.FieldTenantID, couponassociation.FieldStatus, couponassociation.FieldCreatedBy, couponassociation.FieldUpdatedBy, couponassociation.FieldEnvironmentID, couponassociation.FieldCouponID, couponassociation.FieldSubscriptionID, couponassociation.FieldSubscriptionLineItemID, couponassociation.FieldSubscriptionPhaseID:
 			values[i] = new(sql.NullString)
-		case couponassociation.FieldCreatedAt, couponassociation.FieldUpdatedAt:
+		case couponassociation.FieldCreatedAt, couponassociation.FieldUpdatedAt, couponassociation.FieldStartDate, couponassociation.FieldEndDate:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -198,6 +204,26 @@ func (ca *CouponAssociation) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				ca.SubscriptionLineItemID = new(string)
 				*ca.SubscriptionLineItemID = value.String
+			}
+		case couponassociation.FieldSubscriptionPhaseID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_phase_id", values[i])
+			} else if value.Valid {
+				ca.SubscriptionPhaseID = new(string)
+				*ca.SubscriptionPhaseID = value.String
+			}
+		case couponassociation.FieldStartDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field start_date", values[i])
+			} else if value.Valid {
+				ca.StartDate = value.Time
+			}
+		case couponassociation.FieldEndDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field end_date", values[i])
+			} else if value.Valid {
+				ca.EndDate = new(time.Time)
+				*ca.EndDate = value.Time
 			}
 		case couponassociation.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -293,6 +319,19 @@ func (ca *CouponAssociation) String() string {
 	if v := ca.SubscriptionLineItemID; v != nil {
 		builder.WriteString("subscription_line_item_id=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := ca.SubscriptionPhaseID; v != nil {
+		builder.WriteString("subscription_phase_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	builder.WriteString("start_date=")
+	builder.WriteString(ca.StartDate.Format(time.ANSIC))
+	builder.WriteString(", ")
+	if v := ca.EndDate; v != nil {
+		builder.WriteString("end_date=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")

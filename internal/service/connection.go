@@ -105,6 +105,76 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 			}
 		}
 
+	case types.SecretProviderChargebee:
+		if encryptedSecretData.Chargebee != nil {
+			encryptedAPIKey, err := s.encryptionService.Encrypt(encryptedSecretData.Chargebee.APIKey)
+			if err != nil {
+				return types.ConnectionMetadata{}, err
+			}
+
+			// Encrypt webhook secret if provided
+			var encryptedWebhookSecret string
+			if encryptedSecretData.Chargebee.WebhookSecret != "" {
+				encryptedWebhookSecret, err = s.encryptionService.Encrypt(encryptedSecretData.Chargebee.WebhookSecret)
+				if err != nil {
+					return types.ConnectionMetadata{}, err
+				}
+			}
+
+			// Encrypt webhook username if provided
+			var encryptedWebhookUsername string
+			if encryptedSecretData.Chargebee.WebhookUsername != "" {
+				encryptedWebhookUsername, err = s.encryptionService.Encrypt(encryptedSecretData.Chargebee.WebhookUsername)
+				if err != nil {
+					return types.ConnectionMetadata{}, err
+				}
+			}
+
+			// Encrypt webhook password if provided
+			var encryptedWebhookPassword string
+			if encryptedSecretData.Chargebee.WebhookPassword != "" {
+				encryptedWebhookPassword, err = s.encryptionService.Encrypt(encryptedSecretData.Chargebee.WebhookPassword)
+				if err != nil {
+					return types.ConnectionMetadata{}, err
+				}
+			}
+
+			encryptedMetadata.Chargebee = &types.ChargebeeConnectionMetadata{
+				Site:            encryptedSecretData.Chargebee.Site, // Site name is not sensitive
+				APIKey:          encryptedAPIKey,
+				WebhookSecret:   encryptedWebhookSecret,
+				WebhookUsername: encryptedWebhookUsername,
+				WebhookPassword: encryptedWebhookPassword,
+			}
+		}
+
+	case types.SecretProviderRazorpay:
+		if encryptedSecretData.Razorpay != nil {
+			encryptedKeyID, err := s.encryptionService.Encrypt(encryptedSecretData.Razorpay.KeyID)
+			if err != nil {
+				return types.ConnectionMetadata{}, err
+			}
+			encryptedSecretKey, err := s.encryptionService.Encrypt(encryptedSecretData.Razorpay.SecretKey)
+			if err != nil {
+				return types.ConnectionMetadata{}, err
+			}
+
+			// Encrypt webhook secret if provided (optional)
+			var encryptedWebhookSecret string
+			if encryptedSecretData.Razorpay.WebhookSecret != "" {
+				encryptedWebhookSecret, err = s.encryptionService.Encrypt(encryptedSecretData.Razorpay.WebhookSecret)
+				if err != nil {
+					return types.ConnectionMetadata{}, err
+				}
+			}
+
+			encryptedMetadata.Razorpay = &types.RazorpayConnectionMetadata{
+				KeyID:         encryptedKeyID,
+				SecretKey:     encryptedSecretKey,
+				WebhookSecret: encryptedWebhookSecret,
+			}
+		}
+
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {
@@ -127,103 +197,6 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 	}
 
 	return encryptedMetadata, nil
-}
-
-// decryptMetadata decrypts the structured encrypted secret data
-func (s *connectionService) decryptMetadata(encryptedSecretData types.ConnectionMetadata, providerType types.SecretProvider) (types.ConnectionMetadata, error) {
-	decryptedMetadata := encryptedSecretData
-
-	switch providerType {
-	case types.SecretProviderStripe:
-		if encryptedSecretData.Stripe != nil {
-			decryptedPublishableKey, err := s.encryptionService.Decrypt(encryptedSecretData.Stripe.PublishableKey)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-			decryptedSecretKey, err := s.encryptionService.Decrypt(encryptedSecretData.Stripe.SecretKey)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-			decryptedWebhookSecret, err := s.encryptionService.Decrypt(encryptedSecretData.Stripe.WebhookSecret)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-
-			decryptedMetadata.Stripe = &types.StripeConnectionMetadata{
-				PublishableKey: decryptedPublishableKey,
-				SecretKey:      decryptedSecretKey,
-				WebhookSecret:  decryptedWebhookSecret,
-				AccountID:      encryptedSecretData.Stripe.AccountID, // Account ID is not sensitive
-			}
-		}
-
-	case types.SecretProviderS3:
-		if encryptedSecretData.S3 != nil {
-			decryptedAccessKeyID, err := s.encryptionService.Decrypt(encryptedSecretData.S3.AWSAccessKeyID)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-			decryptedSecretAccessKey, err := s.encryptionService.Decrypt(encryptedSecretData.S3.AWSSecretAccessKey)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-
-			// Decrypt session token if present (for temporary credentials)
-			var decryptedSessionToken string
-			if encryptedSecretData.S3.AWSSessionToken != "" {
-				decryptedSessionToken, err = s.encryptionService.Decrypt(encryptedSecretData.S3.AWSSessionToken)
-				if err != nil {
-					return types.ConnectionMetadata{}, err
-				}
-			}
-
-			decryptedMetadata.S3 = &types.S3ConnectionMetadata{
-				AWSAccessKeyID:     decryptedAccessKeyID,
-				AWSSecretAccessKey: decryptedSecretAccessKey,
-				AWSSessionToken:    decryptedSessionToken,
-			}
-		}
-
-	case types.SecretProviderHubSpot:
-		if encryptedSecretData.HubSpot != nil {
-			decryptedAccessToken, err := s.encryptionService.Decrypt(encryptedSecretData.HubSpot.AccessToken)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-			decryptedClientSecret, err := s.encryptionService.Decrypt(encryptedSecretData.HubSpot.ClientSecret)
-			if err != nil {
-				return types.ConnectionMetadata{}, err
-			}
-
-			decryptedMetadata.HubSpot = &types.HubSpotConnectionMetadata{
-				AccessToken:  decryptedAccessToken,
-				ClientSecret: decryptedClientSecret,
-				AppID:        encryptedSecretData.HubSpot.AppID, // App ID is not sensitive
-			}
-		}
-
-	default:
-		// For other providers or unknown types, use generic format
-		if encryptedSecretData.Generic != nil {
-			decryptedData := make(map[string]interface{})
-			for key, value := range encryptedSecretData.Generic.Data {
-				if strValue, ok := value.(string); ok {
-					decryptedValue, err := s.encryptionService.Decrypt(strValue)
-					if err != nil {
-						return types.ConnectionMetadata{}, err
-					}
-					decryptedData[key] = decryptedValue
-				} else {
-					decryptedData[key] = value
-				}
-			}
-			decryptedMetadata.Generic = &types.GenericConnectionMetadata{
-				Data: decryptedData,
-			}
-		}
-	}
-
-	return decryptedMetadata, nil
 }
 
 func (s *connectionService) CreateConnection(ctx context.Context, req dto.CreateConnectionRequest) (*dto.ConnectionResponse, error) {

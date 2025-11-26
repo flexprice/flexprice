@@ -102,6 +102,24 @@ func (s *InMemoryEnvironmentStore) Update(ctx context.Context, env *environment.
 	return nil
 }
 
+func (s *InMemoryEnvironmentStore) CountByType(ctx context.Context, envType types.EnvironmentType) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tenantID := types.GetTenantID(ctx)
+	count := 0
+
+	for _, env := range s.environments {
+		if env.TenantID == tenantID &&
+			env.Type == envType &&
+			env.Status == types.StatusPublished {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
 func (s *InMemoryEnvironmentStore) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
