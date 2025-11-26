@@ -192,10 +192,6 @@ func NewTaxAppliedRepository(p RepositoryParams) taxapplied.Repository {
 	return entRepo.NewTaxAppliedRepository(p.EntClient, p.Logger, p.Cache)
 }
 
-func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
-	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
-}
-
 func NewAddonRepository(p RepositoryParams) addon.Repository {
 	return entRepo.NewAddonRepository(p.EntClient, p.Logger, p.Cache)
 }
@@ -218,4 +214,8 @@ func NewGroupRepository(p RepositoryParams) group.Repository {
 
 func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
+}
+
+func NewPriceUnitRepository(p RepositoryParams) priceunit.Repository {
+	return entRepo.NewPriceUnitRepository(p.EntClient, p.Logger, p.Cache)
 }

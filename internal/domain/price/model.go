@@ -43,27 +43,23 @@ type Price struct {
 	// Currency 3 digit ISO currency code in lowercase ex usd, eur, gbp
 	Currency string `db:"currency" json:"currency"`
 
-	// PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
+	// PriceUnitType is the type of the price unit (FIAT, CUSTOM)
 	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
 
-	// PriceUnitID is the id of the price unit
+	// PriceUnitID is the id of the price unit (for CUSTOM type)
 	PriceUnitID string `db:"price_unit_id" json:"price_unit_id,omitempty"`
 
-	// PriceUnitAmount is the amount stored in price unit
-	// For BTC: 0.00000001 means 0.00000001 BTC
-	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
-
-	// DisplayPriceUnitAmount is the formatted amount with price unit symbol
-	// For BTC: 0.00000001 BTC
-	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount,omitempty"`
-
-	// PriceUnit 3 digit ISO currency code in lowercase ex btc
-	// For BTC: btc
+	// PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
 	PriceUnit string `db:"price_unit" json:"price_unit,omitempty"`
 
-	// ConversionRate is the rate of the price unit to the base currency
-	// For BTC: 1 BTC = 100000000 USD
-	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty"`
+	// PriceUnitAmount is the amount of the price unit
+	PriceUnitAmount *decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
+
+	// DisplayPriceUnitAmount is the formatted amount of the price unit
+	DisplayPriceUnitAmount string `db:"display_price_unit_amount" json:"display_price_unit_amount,omitempty"`
+
+	// ConversionRate is the conversion rate of the price unit to the fiat currency
+	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty"`
 
 	Type types.PriceType `db:"type" json:"type"`
 
@@ -86,7 +82,7 @@ type Price struct {
 
 	Tiers JSONBTiers `db:"tiers,jsonb" json:"tiers"`
 
-	// PriceUnitTiers are the tiers for the price unit
+	// PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED
 	PriceUnitTiers JSONBTiers `db:"price_unit_tiers,jsonb" json:"price_unit_tiers"`
 
 	// MeterID is the id of the meter for usage based pricing
@@ -177,6 +173,16 @@ func (p *Price) FormatAmountToFloat64WithPrecision() float64 {
 func (p *Price) GetDisplayAmount() string {
 	amount := p.FormatAmountToString()
 	return fmt.Sprintf("%s%s", p.GetCurrencySymbol(), amount)
+}
+
+// GetDisplayPriceUnitAmount returns the price unit amount formatted with the price unit symbol
+// Example: "₿0.001" for Bitcoin or "£10.00" for GBP
+func (p *Price) GetDisplayPriceUnitAmount(priceUnitSymbol string) string {
+	if p.PriceUnitAmount == nil {
+		return ""
+	}
+	amount := p.PriceUnitAmount.String()
+	return fmt.Sprintf("%s%s", priceUnitSymbol, amount)
 }
 
 // CalculateAmount performs calculation
@@ -376,10 +382,9 @@ func FromEnt(e *ent.Price) *Price {
 
 	return &Price{
 		ID:                     e.ID,
-		Amount:                 decimal.NewFromFloat(e.Amount),
+		Amount:                 e.Amount,
 		Currency:               e.Currency,
 		DisplayAmount:          e.DisplayAmount,
-		PriceUnitType:          types.PriceUnitType(e.PriceUnitType),
 		Type:                   types.PriceType(e.Type),
 		BillingPeriod:          types.BillingPeriod(e.BillingPeriod),
 		BillingPeriodCount:     e.BillingPeriodCount,
@@ -389,24 +394,25 @@ func FromEnt(e *ent.Price) *Price {
 		TrialPeriod:            e.TrialPeriod,
 		TierMode:               types.BillingTier(lo.FromPtr(e.TierMode)),
 		Tiers:                  tiers,
-		PriceUnitTiers:         priceUnitTiers,
 		MeterID:                lo.FromPtr(e.MeterID),
 		LookupKey:              e.LookupKey,
 		Description:            e.Description,
 		TransformQuantity:      JSONBTransformQuantity(e.TransformQuantity),
 		Metadata:               JSONBMetadata(e.Metadata),
 		EnvironmentID:          e.EnvironmentID,
-		PriceUnitID:            e.PriceUnitID,
-		PriceUnit:              e.PriceUnit,
-		PriceUnitAmount:        decimal.NewFromFloat(e.PriceUnitAmount),
-		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
-		ConversionRate:         decimal.NewFromFloat(e.ConversionRate),
 		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
 		EntityID:               lo.FromPtr(e.EntityID),
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
 		GroupID:                lo.FromPtr(e.GroupID),
 		StartDate:              e.StartDate,
+		PriceUnitType:          types.PriceUnitType(e.PriceUnitType),
+		PriceUnitID:            e.PriceUnitID,
+		PriceUnit:              e.PriceUnit,
+		PriceUnitAmount:        e.PriceUnitAmount,
+		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
+		ConversionRate:         e.ConversionRate,
 		EndDate:                e.EndDate,
+		PriceUnitTiers:         priceUnitTiers,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -430,14 +436,14 @@ func FromEntList(list []*ent.Price) []*Price {
 	return prices
 }
 
-// ToEntTiers converts domain tiers to ent tiers
-func (p *Price) ToEntTiers() []*types.PriceTier {
-	if len(p.Tiers) == 0 {
+// ToEntTiersFromJSONB converts JSONBTiers to ent tiers (reusable for both Tiers and PriceUnitTiers)
+func ToEntTiersFromJSONB(jsonbTiers JSONBTiers) []*types.PriceTier {
+	if len(jsonbTiers) == 0 {
 		return nil
 	}
 
-	tiers := make([]*types.PriceTier, len(p.Tiers))
-	for i, tier := range p.Tiers {
+	tiers := make([]*types.PriceTier, len(jsonbTiers))
+	for i, tier := range jsonbTiers {
 		tiers[i] = &types.PriceTier{
 			UpTo:       tier.UpTo,
 			UnitAmount: tier.UnitAmount,
@@ -447,21 +453,9 @@ func (p *Price) ToEntTiers() []*types.PriceTier {
 	return tiers
 }
 
-// ToPriceUnitTiers converts domain price unit tiers to ent tiers
-func (p *Price) ToPriceUnitTiers() []*types.PriceTier {
-	if len(p.PriceUnitTiers) == 0 {
-		return nil
-	}
-
-	tiers := make([]*types.PriceTier, len(p.PriceUnitTiers))
-	for i, tier := range p.PriceUnitTiers {
-		tiers[i] = &types.PriceTier{
-			UpTo:       tier.UpTo,
-			UnitAmount: tier.UnitAmount,
-			FlatAmount: tier.FlatAmount,
-		}
-	}
-	return tiers
+// ToEntTiers converts domain tiers to ent tiers
+func (p *Price) ToEntTiers() []*types.PriceTier {
+	return ToEntTiersFromJSONB(p.Tiers)
 }
 
 // ValidateTrialPeriod checks if trial period is valid

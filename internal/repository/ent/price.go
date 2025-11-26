@@ -58,10 +58,9 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	priceBuilder := client.Price.Create().
 		SetID(p.ID).
 		SetTenantID(p.TenantID).
-		SetAmount(p.Amount.InexactFloat64()).
+		SetAmount(p.Amount).
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPriceUnitType(string(p.PriceUnitType)).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
 		SetBillingPeriodCount(p.BillingPeriodCount).
@@ -74,7 +73,6 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetTrialPeriod(p.TrialPeriod).
 		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
 		SetTiers(p.ToEntTiers()).
-		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetDescription(p.Description).
@@ -83,27 +81,18 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetCreatedAt(p.CreatedAt).
 		SetUpdatedAt(p.UpdatedAt).
 		SetCreatedBy(p.CreatedBy).
-		SetUpdatedBy(p.UpdatedBy).
+		SetUpdatedBy(p.CreatedBy).
 		SetEnvironmentID(p.EnvironmentID).
 		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
 		SetEntityType(string(p.EntityType)).
-		SetEntityID(p.EntityID)
-
-	if p.PriceUnitID != "" {
-		priceBuilder.SetPriceUnitID(p.PriceUnitID)
-	}
-	if p.PriceUnit != "" {
-		priceBuilder.SetPriceUnit(p.PriceUnit)
-	}
-	if !p.PriceUnitAmount.IsZero() {
-		priceBuilder.SetPriceUnitAmount(p.PriceUnitAmount.InexactFloat64())
-	}
-	if p.DisplayPriceUnitAmount != "" {
-		priceBuilder.SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount)
-	}
-	if !p.ConversionRate.IsZero() {
-		priceBuilder.SetConversionRate(p.ConversionRate.InexactFloat64())
-	}
+		SetEntityID(p.EntityID).
+		SetPriceUnitType(string(p.PriceUnitType)).
+		SetNillablePriceUnitID(lo.Ternary(p.PriceUnitID != "", &p.PriceUnitID, nil)).
+		SetNillablePriceUnit(lo.Ternary(p.PriceUnit != "", &p.PriceUnit, nil)).
+		SetNillablePriceUnitAmount(p.PriceUnitAmount).
+		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
+		SetNillableConversionRate(p.ConversionRate).
+		SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers))
 
 	price, err := priceBuilder.Save(ctx)
 
@@ -278,9 +267,8 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 			price.TenantID(p.TenantID),
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetAmount(p.Amount.InexactFloat64()).
+		SetAmount(p.Amount).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPriceUnitType(string(p.PriceUnitType)).
 		SetType(string(p.Type)).
 		SetBillingPeriod(string(p.BillingPeriod)).
 		SetBillingPeriodCount(p.BillingPeriodCount).
@@ -289,7 +277,6 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
 		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
 		SetTiers(p.ToEntTiers()).
-		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetNillableEndDate(p.EndDate).
@@ -298,6 +285,13 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableGroupID(lo.ToPtr(p.GroupID)).
+		SetPriceUnitType(string(p.PriceUnitType)).
+		SetNillablePriceUnitID(lo.Ternary(p.PriceUnitID != "", &p.PriceUnitID, nil)).
+		SetNillablePriceUnit(lo.Ternary(p.PriceUnit != "", &p.PriceUnit, nil)).
+		SetNillablePriceUnitAmount(p.PriceUnitAmount).
+		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
+		SetNillableConversionRate(p.ConversionRate).
+		SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers)).
 		Save(ctx)
 
 	if err != nil {
@@ -394,7 +388,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 		builders[i] = client.Price.Create().
 			SetID(p.ID).
 			SetTenantID(p.TenantID).
-			SetAmount(p.Amount.InexactFloat64()).
+			SetAmount(p.Amount).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
 			SetEntityID(p.EntityID).
@@ -411,7 +405,6 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
 			SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
 			SetTiers(p.ToEntTiers()).
-			SetPriceUnitTiers(p.ToPriceUnitTiers()).
 			SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 			SetLookupKey(p.LookupKey).
 			SetDescription(p.Description).
@@ -422,7 +415,14 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetUpdatedAt(p.UpdatedAt).
 			SetCreatedBy(p.CreatedBy).
 			SetUpdatedBy(p.UpdatedBy).
-			SetNillableGroupID(lo.ToPtr(p.GroupID))
+			SetNillableGroupID(lo.ToPtr(p.GroupID)).
+			SetPriceUnitType(string(p.PriceUnitType)).
+			SetNillablePriceUnitID(lo.Ternary(p.PriceUnitID != "", &p.PriceUnitID, nil)).
+			SetNillablePriceUnit(lo.Ternary(p.PriceUnit != "", &p.PriceUnit, nil)).
+			SetNillablePriceUnitAmount(p.PriceUnitAmount).
+			SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
+			SetNillableConversionRate(p.ConversionRate).
+			SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers))
 	}
 
 	_, err := client.Price.CreateBulk(builders...).Save(ctx)

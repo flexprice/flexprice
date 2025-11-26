@@ -10,9 +10,11 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/flexprice/flexprice/ent/costsheet"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // PriceCreate is the builder for creating a Price entity.
@@ -113,8 +115,8 @@ func (pc *PriceCreate) SetNillableEnvironmentID(s *string) *PriceCreate {
 }
 
 // SetAmount sets the "amount" field.
-func (pc *PriceCreate) SetAmount(f float64) *PriceCreate {
-	pc.mutation.SetAmount(f)
+func (pc *PriceCreate) SetAmount(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetAmount(d)
 	return pc
 }
 
@@ -173,15 +175,15 @@ func (pc *PriceCreate) SetNillablePriceUnit(s *string) *PriceCreate {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (pc *PriceCreate) SetPriceUnitAmount(f float64) *PriceCreate {
-	pc.mutation.SetPriceUnitAmount(f)
+func (pc *PriceCreate) SetPriceUnitAmount(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetPriceUnitAmount(d)
 	return pc
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitAmount(f *float64) *PriceCreate {
-	if f != nil {
-		pc.SetPriceUnitAmount(*f)
+func (pc *PriceCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetPriceUnitAmount(*d)
 	}
 	return pc
 }
@@ -201,15 +203,15 @@ func (pc *PriceCreate) SetNillableDisplayPriceUnitAmount(s *string) *PriceCreate
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (pc *PriceCreate) SetConversionRate(f float64) *PriceCreate {
-	pc.mutation.SetConversionRate(f)
+func (pc *PriceCreate) SetConversionRate(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetConversionRate(d)
 	return pc
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableConversionRate(f *float64) *PriceCreate {
-	if f != nil {
-		pc.SetConversionRate(*f)
+func (pc *PriceCreate) SetNillableConversionRate(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetConversionRate(*d)
 	}
 	return pc
 }
@@ -456,6 +458,21 @@ func (pc *PriceCreate) SetID(s string) *PriceCreate {
 	return pc
 }
 
+// AddCostsheetIDs adds the "costsheet" edge to the Costsheet entity by IDs.
+func (pc *PriceCreate) AddCostsheetIDs(ids ...string) *PriceCreate {
+	pc.mutation.AddCostsheetIDs(ids...)
+	return pc
+}
+
+// AddCostsheet adds the "costsheet" edges to the Costsheet entity.
+func (pc *PriceCreate) AddCostsheet(c ...*Costsheet) *PriceCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return pc.AddCostsheetIDs(ids...)
+}
+
 // SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by ID.
 func (pc *PriceCreate) SetPriceUnitEdgeID(id string) *PriceCreate {
 	pc.mutation.SetPriceUnitEdgeID(id)
@@ -697,7 +714,7 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_node.EnvironmentID = value
 	}
 	if value, ok := pc.mutation.Amount(); ok {
-		_spec.SetField(price.FieldAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
 	if value, ok := pc.mutation.Currency(); ok {
@@ -717,16 +734,16 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_node.PriceUnit = value
 	}
 	if value, ok := pc.mutation.PriceUnitAmount(); ok {
-		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
-		_node.PriceUnitAmount = value
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
+		_node.PriceUnitAmount = &value
 	}
 	if value, ok := pc.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
 		_node.DisplayPriceUnitAmount = value
 	}
 	if value, ok := pc.mutation.ConversionRate(); ok {
-		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
-		_node.ConversionRate = value
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
+		_node.ConversionRate = &value
 	}
 	if value, ok := pc.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -815,6 +832,22 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.GroupID(); ok {
 		_spec.SetField(price.FieldGroupID, field.TypeString, value)
 		_node.GroupID = &value
+	}
+	if nodes := pc.mutation.CostsheetIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   price.CostsheetTable,
+			Columns: []string{price.CostsheetColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(costsheet.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := pc.mutation.PriceUnitEdgeIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

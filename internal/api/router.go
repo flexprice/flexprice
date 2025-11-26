@@ -22,6 +22,7 @@ type Handlers struct {
 	Environment              *v1.EnvironmentHandler
 	Health                   *v1.HealthHandler
 	Price                    *v1.PriceHandler
+	PriceUnit                *v1.PriceUnitHandler
 	Customer                 *v1.CustomerHandler
 	Connection               *v1.ConnectionHandler
 	Plan                     *v1.PlanHandler
@@ -42,7 +43,6 @@ type Handlers struct {
 	CreditNote               *v1.CreditNoteHandler
 	Tax                      *v1.TaxHandler
 	Coupon                   *v1.CouponHandler
-	PriceUnit                *v1.PriceUnitHandler
 	Webhook                  *v1.WebhookHandler
 	Addon                    *v1.AddonHandler
 	EntityIntegrationMapping *v1.EntityIntegrationMappingHandler
@@ -158,16 +158,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 
-			priceUnit := price.Group("/units")
-			{
-				priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
-				priceUnit.GET("", handlers.PriceUnit.GetPriceUnits)
-				priceUnit.GET("/:id", handlers.PriceUnit.GetByID)
-				priceUnit.GET("/code/:code", handlers.PriceUnit.GetByCode)
-				priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
-				priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
-				priceUnit.POST("/search", handlers.PriceUnit.ListPriceUnitsByFilter)
-			}
+			// Price unit routes
+			price.POST("/units", handlers.PriceUnit.CreatePriceUnit)
+			price.GET("/units", handlers.PriceUnit.ListPriceUnits)
+			price.GET("/units/:id", handlers.PriceUnit.GetPriceUnit)
+			price.GET("/units/code/:code", handlers.PriceUnit.GetPriceUnitByCode)
+			price.PUT("/units/:id", handlers.PriceUnit.UpdatePriceUnit)
+			price.DELETE("/units/:id", handlers.PriceUnit.DeletePriceUnit)
 		}
 
 		customer := v1Private.Group("/customers")
