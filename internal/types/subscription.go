@@ -12,8 +12,9 @@ import (
 type SubscriptionLineItemEntityType string
 
 const (
-	SubscriptionLineItemEntityTypePlan  SubscriptionLineItemEntityType = "plan"
-	SubscriptionLineItemEntityTypeAddon SubscriptionLineItemEntityType = "addon"
+	SubscriptionLineItemEntityTypePlan         SubscriptionLineItemEntityType = "plan"
+	SubscriptionLineItemEntityTypeAddon        SubscriptionLineItemEntityType = "addon"
+	SubscriptionLineItemEntityTypeSubscription SubscriptionLineItemEntityType = "subscription"
 )
 
 // SubscriptionStatus is the status of a subscription

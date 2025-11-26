@@ -547,34 +547,21 @@ func (s *billingService) CalculateUsageCharges(
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
 
 	if hasCommitment {
-		// If there's overage, commitment is fully utilized, so no true-up needed
 		if !usage.HasOverage && sub.EnableTrueUp {
 			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
 
 			if remainingCommitment.GreaterThan(decimal.Zero) {
-				// Get plan display name from line items
-				planDisplayName := ""
-				for _, item := range sub.LineItems {
-					if item.PlanDisplayName != "" {
-						planDisplayName = item.PlanDisplayName
-						break
-					}
-				}
-				// Round remaining commitment to currency precision (2 decimal places for most currencies)
 				precision := types.GetCurrencyPrecision(sub.Currency)
 				roundedRemainingCommitment := remainingCommitment.Round(precision)
 				commitmentUtilized := commitmentAmount.Sub(roundedRemainingCommitment)
 				trueUpLineItem := dto.CreateInvoiceLineItemRequest{
-					EntityID:        lo.ToPtr(sub.PlanID),
-					EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
-					PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
-					PlanDisplayName: lo.ToPtr(planDisplayName),
-					DisplayName:     lo.ToPtr(fmt.Sprintf("%s True Up", planDisplayName)), // Plan display name with true up suffix
-					Amount:          roundedRemainingCommitment,
-					Quantity:        decimal.NewFromInt(1),
-					PeriodStart:     &periodStart,
-					PeriodEnd:       &periodEnd,
-					PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+					EntityID:    lo.ToPtr(sub.ID),
+					EntityType:  lo.ToPtr(string(types.SubscriptionLineItemEntityTypeSubscription)),
+					DisplayName: lo.ToPtr(fmt.Sprintf("Subscription Commitment (%s) shortfall", sub.CommitmentAmount.String())),
+					Amount:      roundedRemainingCommitment,
+					Quantity:    decimal.NewFromInt(1),
+					PeriodStart: &periodStart,
+					PeriodEnd:   &periodEnd,
 					Metadata: types.Metadata{
 						"is_commitment_trueup": "true",
 						"description":          "Remaining commitment amount for billing period",
@@ -907,7 +894,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
 				}
-			} else if !meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
+			} else if !meter.IsBucketedMaxMeter() && !matchingCharge.IsOverage && matchingCharge.Price != nil {
 				// For non-bucketed meters without entitlements (but not overage charges),
 				// calculate cost normally. Overage charges already have the correct amount
 				// calculated by GetFeatureUsageBySubscription with the overage factor applied.
@@ -994,33 +981,21 @@ func (s *billingService) CalculateUsageChargesForPreview(
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
 
 	if hasCommitment {
-		// If there's overage, commitment is fully utilized, so no true-up needed
 		if !usage.HasOverage && sub.EnableTrueUp {
 			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
 
 			if remainingCommitment.GreaterThan(decimal.Zero) {
-				planDisplayName := ""
-				for _, item := range sub.LineItems {
-					if item.PlanDisplayName != "" {
-						planDisplayName = item.PlanDisplayName
-						break
-					}
-				}
-				// Round remaining commitment to currency precision (2 decimal places for most currencies)
 				precision := types.GetCurrencyPrecision(sub.Currency)
 				roundedRemainingCommitment := remainingCommitment.Round(precision)
 				commitmentUtilized := commitmentAmount.Sub(roundedRemainingCommitment)
 				trueUpLineItem := dto.CreateInvoiceLineItemRequest{
-					EntityID:        lo.ToPtr(sub.PlanID),
-					EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
-					PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
-					PlanDisplayName: lo.ToPtr(planDisplayName),
-					DisplayName:     lo.ToPtr(fmt.Sprintf("%s True Up", planDisplayName)), // Plan display name with true up suffix
-					Amount:          roundedRemainingCommitment,
-					Quantity:        decimal.NewFromInt(1),
-					PeriodStart:     &periodStart,
-					PeriodEnd:       &periodEnd,
-					PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+					EntityID:    lo.ToPtr(sub.ID),
+					EntityType:  lo.ToPtr(string(types.SubscriptionLineItemEntityTypeSubscription)),
+					DisplayName: lo.ToPtr(fmt.Sprintf("Subscription Commitment (%s) shortfall", sub.CommitmentAmount.String())),
+					Amount:      roundedRemainingCommitment,
+					Quantity:    decimal.NewFromInt(1),
+					PeriodStart: &periodStart,
+					PeriodEnd:   &periodEnd,
 					Metadata: types.Metadata{
 						"is_commitment_trueup": "true",
 						"description":          "Remaining commitment amount for billing period",
