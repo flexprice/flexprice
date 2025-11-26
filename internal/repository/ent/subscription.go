@@ -166,6 +166,8 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	// Set all fields
 	query.
 		SetLookupKey(sub.LookupKey).
+		SetStartDate(sub.StartDate).
+		SetBillingAnchor(sub.BillingAnchor).
 		SetSubscriptionStatus(string(sub.SubscriptionStatus)).
 		SetCurrentPeriodStart(sub.CurrentPeriodStart).
 		SetCurrentPeriodEnd(sub.CurrentPeriodEnd).

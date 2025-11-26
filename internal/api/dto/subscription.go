@@ -274,6 +274,27 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	return nil
 }
 
+// ActivateDraftSubscriptionRequest represents the request to activate a draft subscription
+type ActivateDraftSubscriptionRequest struct {
+	// start_date is the new start date for the subscription when activating
+	StartDate *time.Time `json:"start_date" validate:"required"`
+}
+
+// Validate validates the activation request
+func (r *ActivateDraftSubscriptionRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.StartDate == nil {
+		return ierr.NewError("start_date is required").
+			WithHint("Start date is required to activate a draft subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 type SubscriptionResponse struct {
 	*subscription.Subscription
 	Plan     *PlanResponse     `json:"plan"`
@@ -444,6 +465,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"trial_end":  *r.TrialEnd,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Validate draft subscription constraints
+	if r.SubscriptionStatus == types.SubscriptionStatusDraft {
+		if len(r.Phases) > 0 {
+			return ierr.NewError("phases are not allowed for draft subscriptions").
+				WithHint("Draft subscriptions cannot have phases").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Validate commitment amount and overage factor
