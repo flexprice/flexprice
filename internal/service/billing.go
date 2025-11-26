@@ -711,7 +711,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 
 			// Handle bucketed max meters first - this should always be checked regardless of entitlements
 			// But skip overage charges as they already have the correct amount with overage factor applied
-			if !matchingCharge.IsOverage && meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
+			if meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
 					PriceID: item.PriceID,
@@ -907,7 +907,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 					quantityForCalculation = decimal.Zero
 					matchingCharge.Amount = 0
 				}
-			} else if !matchingCharge.IsOverage && !meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
+			} else if !meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
 				// For non-bucketed meters without entitlements (but not overage charges),
 				// calculate cost normally. Overage charges already have the correct amount
 				// calculated by GetFeatureUsageBySubscription with the overage factor applied.
@@ -1182,9 +1182,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// Combine both sets of line items
 		combinedLineItems := append(arrearLineItems, advanceLineItems...)
 		if len(combinedLineItems) == 0 {
-			return nil, ierr.NewError("no charges to invoice").
-				WithHint("All charges have already been invoiced").
-				Mark(ierr.ErrAlreadyExists)
+			return zeroAmountInvoice, nil
 		}
 
 		// For current period arrear charges

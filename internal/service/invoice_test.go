@@ -353,8 +353,8 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 				s.invoiceRepo.Clear()
 			},
 			referencePoint: types.ReferencePointPeriodEnd,
-			wantErr:        true,
-			expectedError:  "no charges to invoice",
+			wantErr:        false,
+			expectNil:      true,
 		},
 		{
 			name: "period_end reference point with proper setup",
@@ -399,8 +399,8 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 			referencePoint: types.ReferencePointPeriodEnd,
 			// Even with proper setup, we're still getting the "no charges to invoice" error
 			// This is likely due to how the mock repositories work in the test environment
-			wantErr:       true,
-			expectedError: "no charges to invoice",
+			wantErr:   false,
+			expectNil: true,
 		},
 		{
 			name: "no usage data available",

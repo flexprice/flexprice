@@ -134,3 +134,12 @@ func (s *InMemoryFeatureUsageStore) GetUsageForMaxMetersWithBuckets(ctx context.
 		Value:   decimal.NewFromInt(0),
 	}, nil
 }
+
+func (s *InMemoryFeatureUsageStore) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*events.FeatureUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var result []*events.FeatureUsage
+
+	return result, nil
+}

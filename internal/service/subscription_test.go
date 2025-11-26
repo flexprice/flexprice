@@ -3206,18 +3206,21 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	subService := s.service.(*subscriptionService)
 	err = subService.processSubscriptionPeriod(s.GetContext(), sub, now)
 
-	// The error is expected because there are no charges to invoice
-	// This is a valid business case - if there are no charges to invoice,
-	// we should still update the subscription period
-	s.Error(err)
-	s.Contains(err.Error(), "no charges to invoice")
+	// When there are no charges to invoice, the system should not fail
+	// and should still update the subscription period to the next period
+	s.NoError(err)
 
-	// Verify that the subscription period was NOT updated in the database
-	// because the transaction was rolled back due to the error
+	// Calculate the expected next period
+	expectedNextPeriodStart := periodEnd
+	expectedNextPeriodEnd, err := types.NextBillingDate(expectedNextPeriodStart, sub.BillingAnchor, sub.BillingPeriodCount, sub.BillingPeriod, sub.EndDate)
+	s.NoError(err)
+
+	// Verify that the subscription period WAS updated in the database
+	// even though there were no charges to invoice
 	refreshedSub, err := s.GetStores().SubscriptionRepo.Get(s.GetContext(), sub.ID)
 	s.NoError(err)
-	s.Equal(periodStart, refreshedSub.CurrentPeriodStart)
-	s.Equal(periodEnd, refreshedSub.CurrentPeriodEnd)
+	s.Equal(expectedNextPeriodStart, refreshedSub.CurrentPeriodStart, "Period start should be updated to next period")
+	s.Equal(expectedNextPeriodEnd, refreshedSub.CurrentPeriodEnd, "Period end should be updated to next period")
 
 	// Now let's test a successful scenario by setting up proper line items with arrear invoice cadence
 	// Update the prices to have arrear invoice cadence
@@ -3268,7 +3271,7 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 	// We still expect an error because the mock repository doesn't properly update the invoice status
 	// and the payment processing fails with "invoice has no remaining amount to pay"
 	// This is a limitation of the test environment, not a business logic issue
-	s.Error(err)
+	s.NoError(err)
 
 	// But we can verify that the subscription period was updated correctly
 	// by manually updating it as we would in a real scenario

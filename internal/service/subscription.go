@@ -2116,12 +2116,6 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 				sub = updatedSub
 			}
 
-			s.Logger.Infow("created invoice for period",
-				"subscription_id", sub.ID,
-				"period_start", period.start,
-				"period_end", period.end,
-				"period_index", i)
-
 			// Check for cancellation at this period end
 			if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(period.end) {
 				sub.SubscriptionStatus = types.SubscriptionStatusCancelled
@@ -2141,7 +2135,7 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 			}
 
 			if inv == nil {
-				s.Logger.Errorw("skipping period as no invoice was created",
+				s.Logger.Infow("no invoice was created for period",
 					"subscription_id", sub.ID,
 					"period_start", period.start,
 					"period_end", period.end,

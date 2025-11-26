@@ -460,3 +460,31 @@ func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+// @Summary Get hugging face inference data
+// @Description Retrieve hugging face inference data for events
+// @Tags Events
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} dto.GetHuggingFaceBillingDataResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /events/huggingface-inference [post]
+func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
+	ctx := c.Request.Context()
+	var err error
+
+	var req dto.GetHuggingFaceBillingDataRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	response, err := h.featureUsageTrackingService.GetHuggingFaceBillingData(ctx, &req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, response)
+}

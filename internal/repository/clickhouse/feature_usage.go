@@ -1693,3 +1693,100 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		filterConditions,
 		timeConditions)
 }
+
+// GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs
+func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*events.FeatureUsage, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Build query with IN clause for event IDs
+	query := `
+		SELECT 
+			id, tenant_id, external_customer_id, customer_id, event_name, source, 
+			timestamp, ingested_at, properties, processed_at, environment_id,
+			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
+			unique_hash, qty_total, version, sign, processing_lag_ms
+		FROM feature_usage FINAL
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND id IN (?)
+	`
+
+	// ClickHouse requires special handling for IN clause with arrays
+	// Build placeholders for the IN clause
+	placeholders := make([]string, len(eventIDs))
+	args := make([]interface{}, 0, 3+len(eventIDs))
+	args = append(args, tenantID, environmentID)
+
+	for i, eventID := range eventIDs {
+		placeholders[i] = "?"
+		args = append(args, eventID)
+	}
+
+	query = strings.Replace(query, "IN (?)", "IN ("+strings.Join(placeholders, ",")+")", 1)
+
+	rows, err := r.store.GetConn().Query(ctx, query, args...)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to query feature_usage by event IDs").
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var records []*events.FeatureUsage
+	for rows.Next() {
+		var record events.FeatureUsage
+		var propertiesJSON string
+
+		err := rows.Scan(
+			&record.ID,
+			&record.TenantID,
+			&record.ExternalCustomerID,
+			&record.CustomerID,
+			&record.EventName,
+			&record.Source,
+			&record.Timestamp,
+			&record.IngestedAt,
+			&propertiesJSON,
+			&record.ProcessedAt,
+			&record.EnvironmentID,
+			&record.SubscriptionID,
+			&record.SubLineItemID,
+			&record.PriceID,
+			&record.MeterID,
+			&record.FeatureID,
+			&record.PeriodID,
+			&record.UniqueHash,
+			&record.QtyTotal,
+			&record.Version,
+			&record.Sign,
+			&record.ProcessingLagMs,
+		)
+		if err != nil {
+			return nil, ierr.WithError(err).
+				WithHint("Failed to scan feature_usage record").
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Parse properties
+		if propertiesJSON != "" {
+			if err := json.Unmarshal([]byte(propertiesJSON), &record.Properties); err != nil {
+				r.logger.Warnw("failed to unmarshal properties",
+					"event_id", record.ID,
+					"error", err,
+				)
+				record.Properties = make(map[string]interface{})
+			}
+		} else {
+			record.Properties = make(map[string]interface{})
+		}
+
+		records = append(records, &record)
+	}
+
+	return records, nil
+}
