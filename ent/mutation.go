@@ -44122,6 +44122,7 @@ type SubscriptionMutation struct {
 	gateway_payment_method_id  *string
 	customer_timezone          *string
 	proration_behavior         *string
+	enable_true_up             *bool
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
 	removedline_items          map[string]struct{}
@@ -45804,6 +45805,42 @@ func (m *SubscriptionMutation) ResetProrationBehavior() {
 	m.proration_behavior = nil
 }
 
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (m *SubscriptionMutation) SetEnableTrueUp(b bool) {
+	m.enable_true_up = &b
+}
+
+// EnableTrueUp returns the value of the "enable_true_up" field in the mutation.
+func (m *SubscriptionMutation) EnableTrueUp() (r bool, exists bool) {
+	v := m.enable_true_up
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnableTrueUp returns the old "enable_true_up" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldEnableTrueUp(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnableTrueUp is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnableTrueUp requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnableTrueUp: %w", err)
+	}
+	return oldValue.EnableTrueUp, nil
+}
+
+// ResetEnableTrueUp resets all changes to the "enable_true_up" field.
+func (m *SubscriptionMutation) ResetEnableTrueUp() {
+	m.enable_true_up = nil
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -46162,7 +46199,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 37)
+	fields := make([]string, 0, 38)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -46274,6 +46311,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.proration_behavior != nil {
 		fields = append(fields, subscription.FieldProrationBehavior)
 	}
+	if m.enable_true_up != nil {
+		fields = append(fields, subscription.FieldEnableTrueUp)
+	}
 	return fields
 }
 
@@ -46356,6 +46396,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomerTimezone()
 	case subscription.FieldProrationBehavior:
 		return m.ProrationBehavior()
+	case subscription.FieldEnableTrueUp:
+		return m.EnableTrueUp()
 	}
 	return nil, false
 }
@@ -46439,6 +46481,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldCustomerTimezone(ctx)
 	case subscription.FieldProrationBehavior:
 		return m.OldProrationBehavior(ctx)
+	case subscription.FieldEnableTrueUp:
+		return m.OldEnableTrueUp(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -46706,6 +46750,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProrationBehavior(v)
+		return nil
+	case subscription.FieldEnableTrueUp:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnableTrueUp(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
@@ -46980,6 +47031,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldProrationBehavior:
 		m.ResetProrationBehavior()
+		return nil
+	case subscription.FieldEnableTrueUp:
+		m.ResetEnableTrueUp()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)

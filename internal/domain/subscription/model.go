@@ -119,6 +119,8 @@ type Subscription struct {
 
 	ProrationBehavior types.ProrationBehavior `json:"proration_behavior"`
 
+	EnableTrueUp bool `json:"enable_true_up"`
+
 	types.BaseModel
 }
 
@@ -190,6 +192,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		Phases:             phases,
 		CustomerTimezone:   sub.CustomerTimezone,
 		ProrationBehavior:  types.ProrationBehavior(sub.ProrationBehavior),
+		EnableTrueUp:       sub.EnableTrueUp,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

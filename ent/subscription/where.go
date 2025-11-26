@@ -236,6 +236,11 @@ func ProrationBehavior(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldProrationBehavior, v))
 }
 
+// EnableTrueUp applies equality check predicate on the "enable_true_up" field. It's identical to EnableTrueUpEQ.
+func EnableTrueUp(v bool) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldEnableTrueUp, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldEQ(FieldTenantID, v))
@@ -2194,6 +2199,16 @@ func ProrationBehaviorEqualFold(v string) predicate.Subscription {
 // ProrationBehaviorContainsFold applies the ContainsFold predicate on the "proration_behavior" field.
 func ProrationBehaviorContainsFold(v string) predicate.Subscription {
 	return predicate.Subscription(sql.FieldContainsFold(FieldProrationBehavior, v))
+}
+
+// EnableTrueUpEQ applies the EQ predicate on the "enable_true_up" field.
+func EnableTrueUpEQ(v bool) predicate.Subscription {
+	return predicate.Subscription(sql.FieldEQ(FieldEnableTrueUp, v))
+}
+
+// EnableTrueUpNEQ applies the NEQ predicate on the "enable_true_up" field.
+func EnableTrueUpNEQ(v bool) predicate.Subscription {
+	return predicate.Subscription(sql.FieldNEQ(FieldEnableTrueUp, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

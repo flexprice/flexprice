@@ -489,6 +489,20 @@ func (sc *SubscriptionCreate) SetNillableProrationBehavior(s *string) *Subscript
 	return sc
 }
 
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (sc *SubscriptionCreate) SetEnableTrueUp(b bool) *SubscriptionCreate {
+	sc.mutation.SetEnableTrueUp(b)
+	return sc
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableEnableTrueUp(b *bool) *SubscriptionCreate {
+	if b != nil {
+		sc.SetEnableTrueUp(*b)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -696,6 +710,10 @@ func (sc *SubscriptionCreate) defaults() {
 		v := subscription.DefaultProrationBehavior
 		sc.mutation.SetProrationBehavior(v)
 	}
+	if _, ok := sc.mutation.EnableTrueUp(); !ok {
+		v := subscription.DefaultEnableTrueUp
+		sc.mutation.SetEnableTrueUp(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -818,6 +836,9 @@ func (sc *SubscriptionCreate) check() error {
 		if err := subscription.ProrationBehaviorValidator(v); err != nil {
 			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_behavior": %w`, err)}
 		}
+	}
+	if _, ok := sc.mutation.EnableTrueUp(); !ok {
+		return &ValidationError{Name: "enable_true_up", err: errors.New(`ent: missing required field "Subscription.enable_true_up"`)}
 	}
 	return nil
 }
@@ -1001,6 +1022,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.ProrationBehavior(); ok {
 		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
 		_node.ProrationBehavior = value
+	}
+	if value, ok := sc.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
+		_node.EnableTrueUp = value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

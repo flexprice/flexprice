@@ -256,6 +256,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	sub.LineItems = lineItems
 
+	sub.EnableTrueUp = req.EnableTrueUp
+
 	s.Logger.Infow("creating subscription",
 		"customer_id", sub.CustomerID,
 		"plan_id", sub.PlanID,

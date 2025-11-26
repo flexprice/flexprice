@@ -174,6 +174,9 @@ type CreateSubscriptionRequest struct {
 	// Workflow
 	Workflow           *types.TemporalWorkflowType `json:"-"`
 	SubscriptionStatus types.SubscriptionStatus    `json:"-,omitempty"`
+
+	// Enable Commitment True Up Fee
+	EnableTrueUp bool `json:"enable_true_up"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon
