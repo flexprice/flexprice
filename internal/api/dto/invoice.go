@@ -520,7 +520,7 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 	}
 
 	if invoiceType == types.InvoiceTypeSubscription {
-		if r.PriceID == nil && r.EntityType != lo.ToPtr(string(types.SubscriptionLineItemEntityTypeSubscription)) {
+		if r.PriceID == nil && (r.EntityType == nil || *r.EntityType != string(types.SubscriptionLineItemEntityTypeSubscription)) {
 			return ierr.NewError("price_id is required for subscription invoice").
 				WithHint("price_id is required for subscription invoice").
 				Mark(ierr.ErrValidation)

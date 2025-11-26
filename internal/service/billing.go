@@ -557,7 +557,8 @@ func (s *billingService) CalculateUsageCharges(
 				trueUpLineItem := dto.CreateInvoiceLineItemRequest{
 					EntityID:    lo.ToPtr(sub.ID),
 					EntityType:  lo.ToPtr(string(types.SubscriptionLineItemEntityTypeSubscription)),
-					DisplayName: lo.ToPtr(fmt.Sprintf("Subscription Commitment (%s) shortfall", sub.CommitmentAmount.String())),
+					PriceType:   lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					DisplayName: lo.ToPtr(fmt.Sprintf("Subscription Commitment (%s%s) shortfall", types.GetCurrencySymbol(sub.Currency), sub.CommitmentAmount.String())),
 					Amount:      roundedRemainingCommitment,
 					Quantity:    decimal.NewFromInt(1),
 					PeriodStart: &periodStart,
@@ -991,7 +992,8 @@ func (s *billingService) CalculateUsageChargesForPreview(
 				trueUpLineItem := dto.CreateInvoiceLineItemRequest{
 					EntityID:    lo.ToPtr(sub.ID),
 					EntityType:  lo.ToPtr(string(types.SubscriptionLineItemEntityTypeSubscription)),
-					DisplayName: lo.ToPtr(fmt.Sprintf("Subscription Commitment (%s) shortfall", sub.CommitmentAmount.String())),
+					PriceType:   lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					DisplayName: lo.ToPtr(fmt.Sprintf("Subscription Commitment (%s%s) shortfall", types.GetCurrencySymbol(sub.Currency), sub.CommitmentAmount.String())),
 					Amount:      roundedRemainingCommitment,
 					Quantity:    decimal.NewFromInt(1),
 					PeriodStart: &periodStart,
