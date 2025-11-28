@@ -172,11 +172,11 @@ type CreateSubscriptionRequest struct {
 	BillingAnchor *time.Time `json:"-"`
 
 	// Workflow
-	Workflow *types.TemporalWorkflowType `json:"-"`
+	Workflow           *types.TemporalWorkflowType `json:"-"`
+	SubscriptionStatus types.SubscriptionStatus    `json:"-,omitempty"`
 
-	// SubscriptionStatus determines the initial status of the subscription
-	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
-	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
+	// Enable Commitment True Up Fee
+	EnableTrueUp bool `json:"enable_true_up"`
 }
 
 // AddAddonRequest is used by body-based endpoint /subscriptions/addon

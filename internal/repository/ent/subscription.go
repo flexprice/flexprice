@@ -87,6 +87,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetPaymentBehavior(subscription.PaymentBehavior(sub.PaymentBehavior)).
 		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
+		SetEnableTrueUp(sub.EnableTrueUp).
 		Save(ctx)
 
 	if err != nil {

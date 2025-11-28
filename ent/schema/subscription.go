@@ -150,6 +150,9 @@ func (Subscription) Fields() []ent.Field {
 			NotEmpty().
 			Immutable().
 			Default(string(types.ProrationBehaviorNone)),
+		field.Bool("enable_true_up").
+			Default(false).
+			Comment("Enable Commitment True Up Fee"),
 	}
 }
 

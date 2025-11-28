@@ -448,6 +448,20 @@ func (su *SubscriptionUpdate) SetNillableCustomerTimezone(s *string) *Subscripti
 	return su
 }
 
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (su *SubscriptionUpdate) SetEnableTrueUp(b bool) *SubscriptionUpdate {
+	su.mutation.SetEnableTrueUp(b)
+	return su
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableEnableTrueUp(b *bool) *SubscriptionUpdate {
+	if b != nil {
+		su.SetEnableTrueUp(*b)
+	}
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -851,6 +865,9 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.CustomerTimezone(); ok {
 		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+	}
+	if value, ok := su.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1555,6 +1572,20 @@ func (suo *SubscriptionUpdateOne) SetNillableCustomerTimezone(s *string) *Subscr
 	return suo
 }
 
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (suo *SubscriptionUpdateOne) SetEnableTrueUp(b bool) *SubscriptionUpdateOne {
+	suo.mutation.SetEnableTrueUp(b)
+	return suo
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableEnableTrueUp(b *bool) *SubscriptionUpdateOne {
+	if b != nil {
+		suo.SetEnableTrueUp(*b)
+	}
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -1988,6 +2019,9 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.CustomerTimezone(); ok {
 		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+	}
+	if value, ok := suo.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
