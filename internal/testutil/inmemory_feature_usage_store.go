@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -144,7 +145,7 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageByEventIDs(ctx context.Contex
 	return result, nil
 }
 
-func (s *InMemoryFeatureUsageStore) GetDailyUsage(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string) ([]*events.FeatureUsage, error) {
+func (s *InMemoryFeatureUsageStore) GetUsageByWindow(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string, window types.WindowSize) ([]*events.FeatureUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

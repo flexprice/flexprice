@@ -56,8 +56,8 @@ type FeatureUsageTrackingService interface {
 	// Get HuggingFace Inference
 	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
 
-	// Get Daily Revenue
-	GetDailyRevenue(ctx context.Context, req *dto.GetDailyRevenueRequest) (*dto.GetDailyRevenueResponse, error)
+	// Get Revenue
+	GetRevenue(ctx context.Context, req *dto.GetRevenueRequest) (*dto.GetRevenueResponse, error)
 }
 
 type featureUsageTrackingService struct {
@@ -2411,14 +2411,14 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 		Data: responseData,
 	}, nil
 }
-func (s *featureUsageTrackingService) GetDailyRevenue(ctx context.Context, req *dto.GetDailyRevenueRequest) (*dto.GetDailyRevenueResponse, error) {
+func (s *featureUsageTrackingService) GetRevenue(ctx context.Context, req *dto.GetRevenueRequest) (*dto.GetRevenueResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid daily revenue request").
 			Mark(ierr.ErrValidation)
 	}
 
-	featureUsageRecords, err := s.featureUsageRepo.GetDailyUsage(ctx, req.StartTime, req.EndTime, req.ExternalCustomerIDs)
+	featureUsageRecords, err := s.featureUsageRepo.GetUsageByWindow(ctx, req.StartTime, req.EndTime, req.ExternalCustomerIDs, req.Window)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get daily usage").
@@ -2426,8 +2426,8 @@ func (s *featureUsageTrackingService) GetDailyRevenue(ctx context.Context, req *
 	}
 
 	if len(featureUsageRecords) == 0 {
-		return &dto.GetDailyRevenueResponse{
-			Data: []dto.DailyRevenueInfo{},
+		return &dto.GetRevenueResponse{
+			Data: []dto.RevenueInfo{},
 		}, nil
 	}
 
@@ -2442,8 +2442,8 @@ func (s *featureUsageTrackingService) GetDailyRevenue(ctx context.Context, req *
 	// Fetch all prices in bulk
 	priceMap := make(map[string]*price.Price, len(priceIDSet))
 	if len(priceIDSet) == 0 {
-		return &dto.GetDailyRevenueResponse{
-			Data: []dto.DailyRevenueInfo{},
+		return &dto.GetRevenueResponse{
+			Data: []dto.RevenueInfo{},
 		}, nil
 	}
 
@@ -2507,15 +2507,15 @@ func (s *featureUsageTrackingService) GetDailyRevenue(ctx context.Context, req *
 	}
 
 	// Build customer map from aggregated window costs
-	customerMap := make(map[string]*dto.DailyRevenueInfo, len(featureUsageRecords)/daysCount)
+	customerMap := make(map[string]*dto.RevenueInfo, len(featureUsageRecords)/daysCount)
 
 	for key, cost := range windowCostMap {
 		customerInfo, exists := customerMap[key.customerID]
 		if !exists {
-			customerInfo = &dto.DailyRevenueInfo{
+			customerInfo = &dto.RevenueInfo{
 				ExternalCustomerID: key.customerID,
 				TotalCost:          decimal.Zero,
-				Windows:            make([]dto.DailyRevenueWindow, 0, daysCount),
+				Windows:            make([]dto.RevenueWindow, 0, daysCount),
 			}
 			customerMap[key.customerID] = customerInfo
 		}
@@ -2524,14 +2524,14 @@ func (s *featureUsageTrackingService) GetDailyRevenue(ctx context.Context, req *
 		customerInfo.TotalCost = customerInfo.TotalCost.Add(cost)
 
 		// Add window
-		customerInfo.Windows = append(customerInfo.Windows, dto.DailyRevenueWindow{
+		customerInfo.Windows = append(customerInfo.Windows, dto.RevenueWindow{
 			Cost:      cost,
 			Timestamp: key.timestamp,
 		})
 	}
 
 	// Convert map to slice with pre-allocated capacity
-	finalRecords := make([]dto.DailyRevenueInfo, 0, len(customerMap))
+	finalRecords := make([]dto.RevenueInfo, 0, len(customerMap))
 	for _, customerInfo := range customerMap {
 		// Sort windows by timestamp
 		sort.Slice(customerInfo.Windows, func(i, j int) bool {
@@ -2545,7 +2545,7 @@ func (s *featureUsageTrackingService) GetDailyRevenue(ctx context.Context, req *
 		return finalRecords[i].ExternalCustomerID < finalRecords[j].ExternalCustomerID
 	})
 
-	return &dto.GetDailyRevenueResponse{
+	return &dto.GetRevenueResponse{
 		Data: finalRecords,
 	}, nil
 }

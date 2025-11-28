@@ -1791,26 +1791,29 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 	return records, nil
 }
 
-func (r *FeatureUsageRepository) GetDailyUsage(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string) ([]*events.FeatureUsage, error) {
+func (r *FeatureUsageRepository) GetUsageByWindow(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string, window types.WindowSize) ([]*events.FeatureUsage, error) {
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
+	windowExpr := r.formatWindowSize(window, nil)
+
+	// Initialize args for parameterized query
+	args := []interface{}{tenantID, environmentID, startTime, endTime}
+
 	// Build query with GROUP BY for daily usage aggregated by external_customer_id and price_id
-	query := `
+	query := fmt.Sprintf(`
 		SELECT 
 			external_customer_id,
 			price_id,
-			toStartOfDay(timestamp) AS window_time,
+			%s AS window_time,
 			SUM(qty_total * sign) AS quantity
 		FROM feature_usage FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-	`
-
-	args := []interface{}{tenantID, environmentID, startTime, endTime}
+	`, windowExpr)
 
 	// Add external_customer_id filter if provided
 	if len(externalCustomerIDs) > 0 {

@@ -361,28 +361,29 @@ type GetHuggingFaceBillingDataResponse struct {
 	Data []EventCostInfo `json:"requests"`
 }
 
-type GetDailyRevenueRequest struct {
-	StartTime           time.Time `json:"start_time,omitempty"`
-	EndTime             time.Time `json:"end_time,omitempty"`
-	ExternalCustomerIDs []string  `json:"external_customer_ids,omitempty"`
+type GetRevenueRequest struct {
+	StartTime           time.Time        `json:"start_time,omitempty"`
+	EndTime             time.Time        `json:"end_time,omitempty"`
+	ExternalCustomerIDs []string         `json:"external_customer_ids,omitempty"`
+	Window              types.WindowSize `json:"window,omitempty"`
 }
 
-type GetDailyRevenueResponse struct {
-	Data []DailyRevenueInfo `json:"data"`
+type GetRevenueResponse struct {
+	Data []RevenueInfo `json:"data"`
 }
 
-type DailyRevenueInfo struct {
-	ExternalCustomerID string               `json:"external_customer_id"`
-	TotalCost          decimal.Decimal      `json:"total_cost"`
-	Windows            []DailyRevenueWindow `json:"windows"`
+type RevenueInfo struct {
+	ExternalCustomerID string          `json:"external_customer_id"`
+	TotalCost          decimal.Decimal `json:"total_cost"`
+	Windows            []RevenueWindow `json:"windows"`
 }
 
-type DailyRevenueWindow struct {
+type RevenueWindow struct {
 	Cost      decimal.Decimal `json:"cost"`
 	Timestamp time.Time       `json:"timestamp"`
 }
 
-func (r *GetDailyRevenueRequest) Validate() error {
+func (r *GetRevenueRequest) Validate() error {
 
 	if err := validator.ValidateRequest(r); err != nil {
 		return err
