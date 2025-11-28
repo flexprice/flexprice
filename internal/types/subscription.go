@@ -191,6 +191,8 @@ type SubscriptionFilter struct {
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+	// InvoicingCustomerIDs filters by invoicing customer ID
+	InvoicingCustomerIDs []string `json:"invoicing_customer_ids,omitempty" form:"invoicing_customer_ids"`
 	// PlanID filters by plan ID
 	PlanID string `json:"plan_id,omitempty" form:"plan_id"`
 	// SubscriptionStatus filters by subscription status

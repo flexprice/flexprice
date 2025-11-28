@@ -5427,6 +5427,22 @@ func (c *SubscriptionClient) QueryCouponApplications(s *Subscription) *CouponApp
 	return query
 }
 
+// QueryInvoicingCustomer queries the invoicing_customer edge of a Subscription.
+func (c *SubscriptionClient) QueryInvoicingCustomer(s *Subscription) *CustomerQuery {
+	query := (&CustomerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(customer.Table, customer.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, subscription.InvoicingCustomerTable, subscription.InvoicingCustomerColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SubscriptionClient) Hooks() []Hook {
 	return c.hooks.Subscription

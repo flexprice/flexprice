@@ -389,8 +389,11 @@ func (s *subscriptionPaymentProcessor) processPayment(
 		"price_type_amounts", priceTypeAmounts)
 
 	// Step 3: Check available credits and determine what they can pay for
+	// Use invoicing customer ID for wallet operations - if invoice is for invoicing customer,
+	// use invoicing customer's wallets; otherwise use subscription customer's wallets
+	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	availableCredits := s.checkAvailableCredits(ctx, sub, inv)
-	walletPayableAmount := s.calculateWalletPayableAmount(ctx, sub.CustomerID, priceTypeAmounts, availableCredits)
+	walletPayableAmount := s.calculateWalletPayableAmount(ctx, invoicingCustomerID, priceTypeAmounts, availableCredits)
 
 	s.Logger.Infow("wallet payment analysis",
 		"subscription_id", sub.ID,
@@ -727,17 +730,20 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 	}
 
 	// Check if customer has Stripe entity mapping
+	// Use invoicing customer ID for Stripe operations - payment should use invoicing customer's payment methods
+	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	customerService := NewCustomerService(*s.ServiceParams)
-	if !stripeIntegration.CustomerSvc.HasCustomerStripeMapping(ctx, sub.CustomerID, customerService) {
-		s.Logger.Warnw("no Stripe entity mapping found for customer",
+	if !stripeIntegration.CustomerSvc.HasCustomerStripeMapping(ctx, invoicingCustomerID, customerService) {
+		s.Logger.Warnw("no Stripe entity mapping found for invoicing customer",
 			"subscription_id", sub.ID,
-			"customer_id", sub.CustomerID,
+			"subscription_customer_id", sub.CustomerID,
+			"invoicing_customer_id", invoicingCustomerID,
 		)
 		return decimal.Zero
 	}
 
-	// Get payment method ID
-	paymentMethodID := s.getPaymentMethodID(ctx, sub)
+	// Get payment method ID - use invoicing customer's payment methods
+	paymentMethodID := s.getPaymentMethodID(ctx, sub, invoicingCustomerID)
 	if paymentMethodID == "" {
 		s.Logger.Warnw("no payment method available for automatic charging",
 			"subscription_id", sub.ID,
@@ -756,9 +762,10 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		Currency:          inv.Currency,
 		ProcessPayment:    true,
 		Metadata: types.Metadata{
-			"customer_id":     sub.CustomerID,
-			"subscription_id": sub.ID,
-			"payment_source":  "subscription_auto_payment",
+			"customer_id":              sub.GetInvoicingCustomerID(), // Use invoicing customer ID for payment
+			"subscription_customer_id": sub.CustomerID,               // Include subscription customer ID for reference
+			"subscription_id":          sub.ID,
+			"payment_source":           "subscription_auto_payment",
 		},
 	}
 
@@ -767,7 +774,8 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 		s.Logger.Errorw("failed to create payment record for card charge",
 			"error", err,
 			"subscription_id", sub.ID,
-			"customer_id", sub.CustomerID,
+			"subscription_customer_id", sub.CustomerID,
+			"invoicing_customer_id", invoicingCustomerID,
 			"payment_method_id", paymentMethodID,
 			"amount", amount,
 		)
@@ -799,7 +807,8 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 }
 
 // getPaymentMethodID gets the payment method ID for the subscription
-func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, sub *subscription.Subscription) string {
+// Uses invoicing customer ID for payment method lookup - payment should use invoicing customer's payment methods
+func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, sub *subscription.Subscription, invoicingCustomerID string) string {
 	// Use subscription's payment method if set
 	if sub.GatewayPaymentMethodID != nil && *sub.GatewayPaymentMethodID != "" {
 		s.Logger.Infow("using subscription gateway payment method",
@@ -809,7 +818,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 		return *sub.GatewayPaymentMethodID
 	}
 
-	// Get customer's default payment method from Stripe
+	// Get invoicing customer's default payment method from Stripe
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
 		s.Logger.Warnw("failed to get Stripe integration",
@@ -820,27 +829,30 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	}
 
 	customerService := NewCustomerService(*s.ServiceParams)
-	defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, sub.CustomerID, customerService)
+	defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, invoicingCustomerID, customerService)
 	if err != nil {
-		s.Logger.Warnw("failed to get default payment method",
+		s.Logger.Warnw("failed to get default payment method for invoicing customer",
 			"error", err,
 			"subscription_id", sub.ID,
-			"customer_id", sub.CustomerID,
+			"subscription_customer_id", sub.CustomerID,
+			"invoicing_customer_id", invoicingCustomerID,
 		)
 		return ""
 	}
 
 	if defaultPaymentMethod == nil {
-		s.Logger.Warnw("customer has no default payment method",
+		s.Logger.Warnw("invoicing customer has no default payment method",
 			"subscription_id", sub.ID,
-			"customer_id", sub.CustomerID,
+			"subscription_customer_id", sub.CustomerID,
+			"invoicing_customer_id", invoicingCustomerID,
 		)
 		return ""
 	}
 
-	s.Logger.Infow("using customer default payment method",
+	s.Logger.Infow("using invoicing customer default payment method",
 		"subscription_id", sub.ID,
-		"customer_id", sub.CustomerID,
+		"subscription_customer_id", sub.CustomerID,
+		"invoicing_customer_id", invoicingCustomerID,
 		"payment_method_id", defaultPaymentMethod.ID,
 	)
 
@@ -900,20 +912,22 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 		"invoice_id", inv.ID,
 	)
 
-	// Get customer ID from subscription
-	customerID := sub.CustomerID
+	// Use invoicing customer ID for wallet operations - if invoice is for invoicing customer,
+	// use invoicing customer's wallets; otherwise use subscription customer's wallets
+	invoicingCustomerID := sub.GetInvoicingCustomerID()
 	currency := inv.Currency
 
 	// Get wallets suitable for payment
 	walletPaymentService := NewWalletPaymentService(*s.ServiceParams)
-	wallets, err := walletPaymentService.GetWalletsForPayment(ctx, customerID, currency, WalletPaymentOptions{
+	wallets, err := walletPaymentService.GetWalletsForPayment(ctx, invoicingCustomerID, currency, WalletPaymentOptions{
 		Strategy:        PromotionalFirstStrategy,
 		MaxWalletsToUse: 5,
 	})
 	if err != nil {
 		s.Logger.Errorw("failed to get wallets for payment",
 			"error", err,
-			"customer_id", customerID,
+			"subscription_customer_id", sub.CustomerID,
+			"invoicing_customer_id", invoicingCustomerID,
 			"currency", currency,
 		)
 		return decimal.Zero
@@ -932,7 +946,8 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 
 	s.Logger.Infow("total available credits calculated",
 		"subscription_id", sub.ID,
-		"customer_id", customerID,
+		"subscription_customer_id", sub.CustomerID,
+		"invoicing_customer_id", invoicingCustomerID,
 		"currency", currency,
 		"total_available", totalAvailable,
 		"wallets_count", len(wallets),

@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -503,6 +504,20 @@ func (sc *SubscriptionCreate) SetNillableEnableTrueUp(b *bool) *SubscriptionCrea
 	return sc
 }
 
+// SetInvoicingCustomerID sets the "invoicing_customer_id" field.
+func (sc *SubscriptionCreate) SetInvoicingCustomerID(s string) *SubscriptionCreate {
+	sc.mutation.SetInvoicingCustomerID(s)
+	return sc
+}
+
+// SetNillableInvoicingCustomerID sets the "invoicing_customer_id" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableInvoicingCustomerID(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetInvoicingCustomerID(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -597,6 +612,11 @@ func (sc *SubscriptionCreate) AddCouponApplications(c ...*CouponApplication) *Su
 		ids[i] = c[i].ID
 	}
 	return sc.AddCouponApplicationIDs(ids...)
+}
+
+// SetInvoicingCustomer sets the "invoicing_customer" edge to the Customer entity.
+func (sc *SubscriptionCreate) SetInvoicingCustomer(c *Customer) *SubscriptionCreate {
+	return sc.SetInvoicingCustomerID(c.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -1121,6 +1141,23 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   subscription.InvoicingCustomerTable,
+			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.InvoicingCustomerID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

@@ -88,6 +88,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetEnableTrueUp(sub.EnableTrueUp).
+		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		Save(ctx)
 
 	if err != nil {
@@ -178,6 +179,7 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetPaymentBehavior(subscription.PaymentBehavior(sub.PaymentBehavior)).
 		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
+		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableEndDate(sub.EndDate).
@@ -542,6 +544,8 @@ func (o SubscriptionQueryOptions) GetFieldName(field string) string {
 		return subscription.FieldCustomerID
 	case "plan_id":
 		return subscription.FieldPlanID
+	case "invoicing_customer_id":
+		return subscription.FieldInvoicingCustomerID
 	default:
 		return field
 	}
@@ -571,6 +575,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	// Apply customer filter
 	if f.CustomerID != "" {
 		query = query.Where(subscription.CustomerID(f.CustomerID))
+	}
+
+	// Apply invoicing customer filter
+	if len(f.InvoicingCustomerIDs) > 0 {
+		query = query.Where(subscription.InvoicingCustomerIDIn(f.InvoicingCustomerIDs...))
 	}
 
 	// Apply plan filter

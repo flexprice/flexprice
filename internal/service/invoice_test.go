@@ -1632,3 +1632,134 @@ func (s *InvoiceServiceSuite) TestUpdateInvoice() {
 	s.Require().NotNil(updatedPaidInvoice.InvoicePDFURL)
 	s.Require().Equal("https://example.com/paid-invoice.pdf", *updatedPaidInvoice.InvoicePDFURL)
 }
+
+// TestCreateSubscriptionInvoiceWithInvoicingCustomerID tests invoice creation with invoicing customer ID
+func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithInvoicingCustomerID() {
+	// Create invoicing customer
+	invoicingCustomer := &customer.Customer{
+		ID:         "cust_invoicing_123",
+		ExternalID: "ext_cust_invoicing_123",
+		Name:       "Invoicing Customer",
+		Email:      "invoicing@example.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), invoicingCustomer))
+
+	// Create subscription with invoicing customer ID
+	subscriptionWithInvoicing := &subscription.Subscription{
+		ID:                  "sub_with_invoicing",
+		PlanID:              s.testData.plan.ID,
+		CustomerID:          s.testData.customer.ID,
+		InvoicingCustomerID: lo.ToPtr(invoicingCustomer.ID),
+		StartDate:           s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart:  s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:    s.testData.now.Add(6 * 24 * time.Hour),
+		Currency:            "usd",
+		BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:  1,
+		SubscriptionStatus:  types.SubscriptionStatusActive,
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), subscriptionWithInvoicing, []*subscription.SubscriptionLineItem{}))
+
+	// Create some usage events
+	for i := 0; i < 100; i++ {
+		event := &events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           subscriptionWithInvoicing.TenantID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID, // Usage tracked by subscription customer
+			Timestamp:          s.testData.now.Add(-1 * time.Hour),
+			Properties:         map[string]interface{}{},
+		}
+		s.NoError(s.eventRepo.InsertEvent(s.GetContext(), event))
+	}
+
+	// Create subscription invoice
+	req := &dto.CreateSubscriptionInvoiceRequest{
+		SubscriptionID: subscriptionWithInvoicing.ID,
+		PeriodStart:    subscriptionWithInvoicing.CurrentPeriodStart,
+		PeriodEnd:      subscriptionWithInvoicing.CurrentPeriodEnd,
+		ReferencePoint: types.ReferencePointPeriodStart,
+	}
+	got, _, err := s.service.CreateSubscriptionInvoice(
+		s.GetContext(),
+		req,
+		nil,
+		types.InvoiceFlowManual,
+		false,
+	)
+
+	// Verify invoice was created with invoicing customer ID
+	s.NoError(err)
+	if got != nil {
+		s.NotEmpty(got.ID)
+		// Invoice should have invoicing customer ID, not subscription customer ID
+		s.Equal(invoicingCustomer.ID, got.CustomerID, "Invoice should use invoicing customer ID")
+		s.NotEqual(s.testData.customer.ID, got.CustomerID, "Invoice should NOT use subscription customer ID")
+		s.Equal(types.InvoiceTypeSubscription, got.InvoiceType)
+		if got.SubscriptionID != nil {
+			s.Equal(subscriptionWithInvoicing.ID, *got.SubscriptionID)
+		}
+	}
+}
+
+// TestCreateSubscriptionInvoiceWithoutInvoicingCustomerID tests backward compatibility
+func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithoutInvoicingCustomerID() {
+	// Create subscription without invoicing customer ID (backward compatibility)
+	subscriptionWithoutInvoicing := &subscription.Subscription{
+		ID:                  "sub_without_invoicing",
+		PlanID:              s.testData.plan.ID,
+		CustomerID:          s.testData.customer.ID,
+		InvoicingCustomerID: nil, // No invoicing customer ID
+		StartDate:           s.testData.now.Add(-30 * 24 * time.Hour),
+		CurrentPeriodStart:  s.testData.now.Add(-24 * time.Hour),
+		CurrentPeriodEnd:    s.testData.now.Add(6 * 24 * time.Hour),
+		Currency:            "usd",
+		BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount:  1,
+		SubscriptionStatus:  types.SubscriptionStatusActive,
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(s.GetContext(), subscriptionWithoutInvoicing, []*subscription.SubscriptionLineItem{}))
+
+	// Create some usage events
+	for i := 0; i < 100; i++ {
+		event := &events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           subscriptionWithoutInvoicing.TenantID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID,
+			Timestamp:          s.testData.now.Add(-1 * time.Hour),
+			Properties:         map[string]interface{}{},
+		}
+		s.NoError(s.eventRepo.InsertEvent(s.GetContext(), event))
+	}
+
+	// Create subscription invoice
+	req := &dto.CreateSubscriptionInvoiceRequest{
+		SubscriptionID: subscriptionWithoutInvoicing.ID,
+		PeriodStart:    subscriptionWithoutInvoicing.CurrentPeriodStart,
+		PeriodEnd:      subscriptionWithoutInvoicing.CurrentPeriodEnd,
+		ReferencePoint: types.ReferencePointPeriodStart,
+	}
+	got, _, err := s.service.CreateSubscriptionInvoice(
+		s.GetContext(),
+		req,
+		nil,
+		types.InvoiceFlowManual,
+		false,
+	)
+
+	// Verify invoice was created with subscription customer ID (fallback)
+	s.NoError(err)
+	if got != nil {
+		s.NotEmpty(got.ID)
+		// Invoice should fallback to subscription customer ID
+		s.Equal(s.testData.customer.ID, got.CustomerID, "Invoice should fallback to subscription customer ID")
+		s.Equal(types.InvoiceTypeSubscription, got.InvoiceType)
+		if got.SubscriptionID != nil {
+			s.Equal(subscriptionWithoutInvoicing.ID, *got.SubscriptionID)
+		}
+	}
+}
