@@ -223,6 +223,11 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 		}
 	}
 
+	// Validate expand fields
+	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
+		return nil, err
+	}
+
 	if err := filter.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid filter parameters").
@@ -244,6 +249,55 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 	response := make([]*dto.CustomerResponse, 0, len(customers))
 	for _, c := range customers {
 		response = append(response, &dto.CustomerResponse{Customer: c})
+	}
+
+	if len(response) == 0 {
+		return &dto.ListCustomersResponse{
+			Items:      response,
+			Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+		}, nil
+	}
+
+	// Expand parent customers if requested
+	var parentCustomersByID map[string]*dto.CustomerResponse
+	if filter.GetExpand().Has(types.ExpandParentCustomer) {
+		// Collect all unique parent customer IDs
+		parentCustomerIDs := make([]string, 0)
+		parentCustomerIDSet := make(map[string]bool)
+		for _, c := range customers {
+			if c.ParentCustomerID != nil && !parentCustomerIDSet[*c.ParentCustomerID] {
+				parentCustomerIDs = append(parentCustomerIDs, *c.ParentCustomerID)
+				parentCustomerIDSet[*c.ParentCustomerID] = true
+			}
+		}
+
+		if len(parentCustomerIDs) > 0 {
+			// Fetch parent customers in bulk
+			parentFilter := types.NewNoLimitCustomerFilter()
+			parentFilter.CustomerIDs = parentCustomerIDs
+
+			parentCustomers, err := s.CustomerRepo.List(ctx, parentFilter)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create a map for quick parent customer lookup
+			parentCustomersByID = make(map[string]*dto.CustomerResponse, len(parentCustomers))
+			for _, pc := range parentCustomers {
+				parentCustomersByID[pc.ID] = &dto.CustomerResponse{Customer: pc}
+			}
+
+			s.Logger.Debugw("fetched parent customers for customers", "count", len(parentCustomers))
+		}
+	}
+
+	// Attach parent customers to response items
+	for _, resp := range response {
+		if resp.Customer.ParentCustomerID != nil {
+			if parentCustomer, ok := parentCustomersByID[*resp.Customer.ParentCustomerID]; ok {
+				resp.ParentCustomer = parentCustomer
+			}
+		}
 	}
 
 	return &dto.ListCustomersResponse{
