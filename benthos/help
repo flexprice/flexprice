@@ -1,0 +1,48 @@
+#!/bin/bash
+# Quick helper to show usage
+
+cat << 'EOF'
+╔═══════════════════════════════════════════════════════════╗
+║  Benthos-Flexprice Collector - Quick Start               ║
+╚═══════════════════════════════════════════════════════════╝
+
+📝 SETUP (once):
+   
+   1. Create .env file with your credentials:
+      
+      cat > .env << 'ENVFILE'
+      export FLEXPRICE_KAFKA_BROKERS="your-broker.confluent.cloud:9092"
+      export FLEXPRICE_KAFKA_SASL_USER="RBWUPLCZBZJDGJMF"
+      export FLEXPRICE_KAFKA_SASL_PASSWORD="your-password"
+      export FLEXPRICE_API_KEY="your-api-key"
+      export FLEXPRICE_API_HOST="api.cloud.flexprice.io"
+      ENVFILE
+
+   2. Load credentials:
+      source .env
+
+🚀 RUN:
+
+   Terminal 1 - Start Benthos service:
+   ────────────────────────────────────
+   ./benthos-flexprice -c kafka-staging.yaml
+   
+   (Keep this running - it consumes from Kafka)
+
+   Terminal 2 - Send test events:
+   ────────────────────────────────────
+   ./send-events 10    # Send 10 events
+   ./send-events 50    # Send 50 events
+   ./send-events 1     # Send 1 event
+
+🔍 VERIFY:
+
+   • Check Benthos logs (Terminal 1) for "Event accepted"
+   • Go to: https://app.cloud.flexprice.io/events
+   • Filter by source: "kafka-staging-benthos"
+   • Look for customers: test-customer-0, test-customer-1, test-customer-2
+
+📚 More details: cat QUICKSTART.md
+
+EOF
+

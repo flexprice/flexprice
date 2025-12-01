@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+*.test
+*.out
+benthos-flexprice
+
+# Config files (should be mounted or passed as env vars)
+.env
+*.local
+
+# Documentation
+*.md
+!README.md
+
+# Test configs (keep examples)
+config.yaml
+config-*.yaml
+test.sh
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
