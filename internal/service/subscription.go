@@ -81,6 +81,21 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	// Validate invoicing customer if provided
 	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
+		// Validate that invoicing customer is either the customer itself or the customer's parent
+		isCustomerID := *req.InvoicingCustomerID == req.CustomerID
+		isParentID := customer.ParentCustomerID != nil && *req.InvoicingCustomerID == *customer.ParentCustomerID
+
+		if !isCustomerID && !isParentID {
+			return nil, ierr.NewError("invalid invoicing customer").
+				WithHint("The invoicing customer must be either the customer itself or the customer's parent").
+				WithReportableDetails(map[string]interface{}{
+					"invoicing_customer_id": *req.InvoicingCustomerID,
+					"customer_id":           req.CustomerID,
+					"parent_customer_id":    customer.ParentCustomerID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		invoicingCustomer, err := s.CustomerRepo.Get(ctx, *req.InvoicingCustomerID)
 		if err != nil {
 			return nil, err
