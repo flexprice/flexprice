@@ -1,0 +1,42 @@
+# Benthos Flexprice Integration - Simple HTTP Test
+# Generates synthetic usage events and sends them to Flexprice API
+
+input:
+  generate:
+    interval: 100ms  # Generate one event every 100ms
+    count: 100       # Total events to generate
+    mapping: |
+      root.event_name = "model.usage"
+      root.external_customer_id = "cust_" + uuid_v4().slice(0, 8)
+      root.properties = {
+        "credits": random_int(min: 1, max: 100),
+        "model": ["gpt-4", "gpt-3.5-turbo", "claude-3"].index(random_int(max: 2)),
+        "region": ["us-east-1", "us-west-2", "eu-west-1"].index(random_int(max: 2))
+      }
+      root.source = "benthos-test"
+
+pipeline:
+  processors:
+    - log:
+        level: INFO
+        message: "Sending event: ${!json(\"event_name\")} for customer: ${!json(\"external_customer_id\")}"
+
+output:
+  http_client:
+    url: "${FLEXPRICE_BASE_URL:http://localhost:8080}/v1/events"
+    verb: POST
+    headers:
+      Content-Type: application/json
+      x-api-key: "${FLEXPRICE_API_KEY:test_key}"
+    timeout: 10s
+    retry_period: 1s
+    retries: 3
+    successful_on:
+      - 202
+    backoff_on:
+      - 429
+    drop_on:
+      - 400
+      - 401
+      - 403
+

@@ -1,0 +1,46 @@
+# Benthos Flexprice - Bulk Events Test
+# Sends events in batches for better performance
+
+input:
+  generate:
+    interval: 10ms
+    count: 1000
+    mapping: |
+      root.event_name = "api.request"
+      root.external_customer_id = "cust_" + uuid_v4().slice(0, 8)
+      root.properties = {
+        "endpoint": ["/api/chat", "/api/completion", "/api/embedding"].index(random_int(max: 2)),
+        "status_code": [200, 201, 204].index(random_int(max: 2)),
+        "response_time_ms": random_int(min: 50, max: 500)
+      }
+      root.source = "benthos-bulk-test"
+
+pipeline:
+  processors:
+    - log:
+        level: DEBUG
+        message: "Event: ${!json(\"external_customer_id\")}"
+
+output:
+  # Batch events before sending
+  broker:
+    pattern: fan_out
+    outputs:
+      - http_client:
+          url: "${FLEXPRICE_BASE_URL:http://localhost:8080}/v1/events/bulk"
+          verb: POST
+          headers:
+            Content-Type: application/json
+            x-api-key: "${FLEXPRICE_API_KEY:test_key}"
+          timeout: 30s
+          batching:
+            count: 100  # Send 100 events per batch
+            period: 1s  # Or every second
+            processors:
+              - archive:
+                  format: json_array
+              - mapping: |
+                  root.events = this
+          successful_on:
+            - 202
+

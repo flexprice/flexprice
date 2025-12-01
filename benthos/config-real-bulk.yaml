@@ -1,0 +1,46 @@
+# Benthos Config - Bulk Events for Real Customer
+# Sends batched events for faster testing
+
+input:
+  generate:
+    interval: 10ms   # Generate very fast
+    count: 500       # Generate 500 events (will use 500-5000 units depending on random values)
+    mapping: |
+      root.event_name = "feature 1"
+      root.external_customer_id = "334230687423"
+      root.properties = {
+        "feature 1": random_int(min: 1, max: 10),
+        "session_id": uuid_v4().slice(0, 8),
+        "environment": "test"
+      }
+      root.source = "benthos-bulk-test"
+      root.timestamp = now().format_timestamp("2006-01-02T15:04:05Z07:00")
+
+pipeline:
+  processors:
+    - log:
+        level: DEBUG
+        message: "Generated event with usage: ${!json(\"properties.feature 1\")}"
+
+output:
+  broker:
+    pattern: fan_out
+    outputs:
+      - http_client:
+          url: "${FLEXPRICE_BASE_URL:http://localhost:8080}/v1/events/bulk"
+          verb: POST
+          headers:
+            Content-Type: application/json
+            x-api-key: "${FLEXPRICE_API_KEY}"
+          timeout: 30s
+          batching:
+            count: 100  # Send 100 events per batch
+            period: 1s
+            processors:
+              - archive:
+                  format: json_array
+              - mapping: |
+                  root.events = this
+          successful_on:
+            - 202
+
