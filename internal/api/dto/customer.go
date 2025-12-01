@@ -104,6 +104,7 @@ type UpdateCustomerRequest struct {
 // @Description Customer response object containing all customer information
 type CustomerResponse struct {
 	*customer.Customer
+	ParentCustomer *CustomerResponse `json:"parent_customer,omitempty"`
 }
 
 // ListCustomersResponse represents the response for listing customers

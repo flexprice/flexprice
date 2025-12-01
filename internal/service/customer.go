@@ -188,11 +188,20 @@ func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.Cust
 
 	customer, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
 
-	return &dto.CustomerResponse{Customer: customer}, nil
+	resp := &dto.CustomerResponse{Customer: customer}
+
+	if customer.ParentCustomerID != nil {
+		parentResp, err := s.GetCustomer(ctx, *customer.ParentCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		resp.ParentCustomer = parentResp
+	}
+
+	return resp, nil
 }
 
 func (s *customerService) GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
