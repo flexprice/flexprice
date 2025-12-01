@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -29,6 +30,19 @@ func NewCustomerService(params ServiceParams) CustomerService {
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Validate parent customer ID if provided
+	if req.ParentCustomerID != nil {
+		parentCustomer, err := s.CustomerRepo.Get(ctx, *req.ParentCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		if parentCustomer.ParentCustomerID != nil {
+			return nil, ierr.NewError("parent customer cannot be a child").
+				WithHint("Choose a parent customer that isn't a child of another").
+				Mark(ierr.ErrInvalidOperation)
+		}
 	}
 
 	cust := req.ToCustomer(ctx)
@@ -247,8 +261,28 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 
 	cust, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
+	}
+
+	if req.ParentCustomerID != nil {
+		newParentID := strings.TrimSpace(*req.ParentCustomerID)
+		currentParentID := ""
+		if cust.ParentCustomerID != nil {
+			currentParentID = strings.TrimSpace(*cust.ParentCustomerID)
+		}
+
+		// Only run validations if the hierarchy is changing
+		if newParentID != currentParentID {
+			if err := s.validateParentCustomerAssignment(ctx, cust, newParentID); err != nil {
+				return nil, err
+			}
+
+			if newParentID == "" {
+				cust.ParentCustomerID = nil
+			} else {
+				cust.ParentCustomerID = lo.ToPtr(newParentID)
+			}
+		}
 	}
 
 	// Update basic fields
@@ -465,6 +499,62 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 	}
 
 	return &dto.CustomerResponse{Customer: customer}, nil
+}
+
+func (s *customerService) validateParentCustomerAssignment(ctx context.Context, cust *customer.Customer, newParentID string) error {
+	// Do not allow hierarchy changes when customer has non-cancelled subscriptions
+	subFilter := types.NewSubscriptionFilter()
+	subFilter.CustomerID = cust.ID
+	subFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
+	subFilter.Limit = lo.ToPtr(1)
+
+	subs, err := s.SubRepo.List(ctx, subFilter)
+	if err != nil {
+		return err
+	}
+	if len(subs) > 0 {
+		return ierr.NewError("customer hierarchy cannot change with active subscriptions").
+			WithHint("Cancel or transfer subscriptions before updating parent hierarchy").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if newParentID == "" {
+		// Resetting parent - nothing else to validate
+		return nil
+	}
+
+	if newParentID == cust.ID {
+		return ierr.NewError("customer cannot be its own parent").
+			WithHint("Please provide a different customer as parent").
+			Mark(ierr.ErrValidation)
+	}
+
+	parentCustomer, err := s.CustomerRepo.Get(ctx, newParentID)
+	if err != nil {
+		return err
+	}
+	if parentCustomer.ParentCustomerID != nil {
+		return ierr.NewError("parent customer cannot have its own parent").
+			WithHint("Nested hierarchies are not supported; pick a top-level customer as parent").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	// A customer that already has children cannot become a child itself
+	childFilter := types.NewCustomerFilter()
+	childFilter.ParentCustomerIDs = []string{cust.ID}
+	childFilter.Limit = lo.ToPtr(1)
+
+	children, err := s.CustomerRepo.List(ctx, childFilter)
+	if err != nil {
+		return err
+	}
+	if len(children) > 0 {
+		return ierr.NewError("customer already acts as a parent").
+			WithHint("A customer cannot be both parent and child; detach child customers first").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return nil
 }
 
 func (s *customerService) publishWebhookEvent(ctx context.Context, eventName string, customerID string) {

@@ -73,6 +73,7 @@ func (r *customerRepository) Create(ctx context.Context, c *domainCustomer.Custo
 		SetCreatedAt(c.CreatedAt).
 		SetUpdatedAt(c.UpdatedAt).
 		SetCreatedBy(c.CreatedBy).
+		SetNillableParentCustomerID(c.ParentCustomerID).
 		SetUpdatedBy(c.UpdatedBy).
 		SetEnvironmentID(c.EnvironmentID).
 		Save(ctx)
@@ -334,6 +335,7 @@ func (r *customerRepository) Update(ctx context.Context, c *domainCustomer.Custo
 		SetAddressPostalCode(c.AddressPostalCode).
 		SetAddressCountry(c.AddressCountry).
 		SetMetadata(c.Metadata).
+		SetNillableParentCustomerID(c.ParentCustomerID).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		Save(ctx)

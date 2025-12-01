@@ -57,6 +57,8 @@ type CreateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
+
+	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
 }
 
 // UpdateCustomerRequest represents the request to update an existing customer
@@ -94,6 +96,8 @@ type UpdateCustomerRequest struct {
 
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
+
+	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
 }
 
 // CustomerResponse represents the response for customer operations
@@ -149,6 +153,7 @@ func (r *CreateCustomerRequest) ToCustomer(ctx context.Context) *customer.Custom
 		AddressPostalCode: r.AddressPostalCode,
 		AddressCountry:    r.AddressCountry,
 		Metadata:          r.Metadata,
+		ParentCustomerID:  r.ParentCustomerID,
 		EnvironmentID:     types.GetEnvironmentID(ctx),
 		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}
