@@ -784,9 +784,7 @@ func (c *Client) CreateQuote(ctx context.Context, req *QuoteCreateRequest) (*Quo
 		}
 		c.logger.Errorw("hubspot create quote error",
 			"status", resp.StatusCode,
-			"body", responseBody,
-			"url", url,
-			"request_body", string(reqBody))
+			"url", url)
 		return nil, ierr.NewError("failed to create quote in HubSpot").
 			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, responseBody)).
 			Mark(ierr.ErrHTTPClient)
@@ -853,9 +851,7 @@ func (c *Client) UpdateQuote(ctx context.Context, quoteID string, properties Quo
 			}
 			c.logger.Errorw("HubSpot API error updating quote",
 				"status_code", httpErr.StatusCode,
-				"url", url,
-				"request_body", string(reqBody),
-				"response_body", responseBody)
+				"url", url)
 			return ierr.NewError("failed to update quote in HubSpot").
 				WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", httpErr.StatusCode, responseBody)).
 				Mark(ierr.ErrHTTPClient)
@@ -876,9 +872,7 @@ func (c *Client) UpdateQuote(ctx context.Context, quoteID string, properties Quo
 		}
 		c.logger.Errorw("hubspot update quote error",
 			"status", resp.StatusCode,
-			"body", responseBody,
-			"url", url,
-			"request_body", string(reqBody))
+			"url", url)
 		return ierr.NewError("failed to update quote in HubSpot").
 			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, responseBody)).
 			Mark(ierr.ErrHTTPClient)
@@ -916,8 +910,7 @@ func (c *Client) CreateQuoteLineItem(ctx context.Context, req *QuoteLineItemCrea
 		if httpErr, ok := httpclient.IsHTTPError(err); ok {
 			c.logger.Errorw("HubSpot API error creating quote line item",
 				"status_code", httpErr.StatusCode,
-				"url", url,
-				"request_body", string(reqBody))
+				"url", url)
 			return nil, ierr.NewError("failed to create quote line item in HubSpot").
 				WithHint(fmt.Sprintf("HubSpot API returned status %d", httpErr.StatusCode)).
 				Mark(ierr.ErrHTTPClient)
@@ -934,9 +927,7 @@ func (c *Client) CreateQuoteLineItem(ctx context.Context, req *QuoteLineItemCrea
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		c.logger.Errorw("hubspot create quote line item error",
 			"status", resp.StatusCode,
-			"body", string(resp.Body),
-			"url", url,
-			"request_body", string(reqBody))
+			"url", url)
 		return nil, ierr.NewError("failed to create quote line item in HubSpot").
 			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
 			Mark(ierr.ErrHTTPClient)

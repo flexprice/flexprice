@@ -73,23 +73,23 @@ func (h *Handler) HandleWebhookEvent(
 
 		// Process deal.propertyChange events
 		if event.SubscriptionType == string(hubspot.SubscriptionTypeDealPropertyChange) {
-			// Only process dealstage property changes to "closedwon"
-			if event.PropertyName != hubspot.PropertyNameDealStage || event.PropertyValue != string(hubspot.DealStageClosedWon) {
-				h.logger.Infow("skipping event - not a closed won deal",
-					"property_name", event.PropertyName,
-					"property_value", event.PropertyValue)
-				continue
-			}
+		// Only process dealstage property changes to "closedwon"
+		if event.PropertyName != hubspot.PropertyNameDealStage || event.PropertyValue != string(hubspot.DealStageClosedWon) {
+			h.logger.Infow("skipping event - not a closed won deal",
+				"property_name", event.PropertyName,
+				"property_value", event.PropertyValue)
+			continue
+		}
 
-			// Process the closed won deal (convert ObjectID to string)
-			dealIDStr := strconv.FormatInt(event.ObjectID, 10)
-			if err := h.handleDealClosedWon(ctx, dealIDStr, services); err != nil {
-				h.logger.Errorw("failed to handle deal closed won event",
-					"error", err,
-					"deal_id", event.ObjectID)
-				// Continue processing other events even if one fails
-				continue
-			}
+		// Process the closed won deal (convert ObjectID to string)
+		dealIDStr := strconv.FormatInt(event.ObjectID, 10)
+		if err := h.handleDealClosedWon(ctx, dealIDStr, services); err != nil {
+			h.logger.Errorw("failed to handle deal closed won event",
+				"error", err,
+				"deal_id", event.ObjectID)
+			// Continue processing other events even if one fails
+			continue
+		}
 			continue
 		}
 

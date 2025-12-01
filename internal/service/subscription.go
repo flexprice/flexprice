@@ -543,10 +543,48 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 			sub = updatedSub
 		}
 
-		// if the subscription is created with incomplete status, but it doesn't create an invoice, we need to mark it as active
-		// This applies regardless of collection method - if there's no invoice to pay, the subscription should be active
-		if (sub.SubscriptionStatus == types.SubscriptionStatusIncomplete || sub.SubscriptionStatus == types.SubscriptionStatusDraft) && (invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded) {
-			sub.SubscriptionStatus = types.SubscriptionStatusActive
+		// If subscription is still in draft/incomplete status after invoice creation, set appropriate status
+		// This applies when:
+		// 1. No invoice was created (zero amount) - subscription should be active
+		// 2. Invoice payment succeeded - subscription should be active
+		// 3. Invoice exists and collection method is charge_automatically - set status based on payment_behavior
+		//    - allow_incomplete: set to incomplete when payment is pending
+		//    - default_active: set to active when payment is pending
+		//    - error_if_incomplete: should not happen in activation, but handle gracefully
+		//    - default_incomplete: set to incomplete when payment is pending
+		targetStatus := sub.SubscriptionStatus
+
+		if sub.SubscriptionStatus == types.SubscriptionStatusIncomplete || sub.SubscriptionStatus == types.SubscriptionStatusDraft {
+			if invoice == nil || invoice.PaymentStatus == types.PaymentStatusSucceeded {
+				// No invoice created or payment succeeded - activate subscription
+				targetStatus = types.SubscriptionStatusActive
+			} else {
+				// Set status based on payment_behavior
+				paymentBehavior := types.PaymentBehavior(sub.PaymentBehavior)
+
+				switch paymentBehavior {
+				case types.PaymentBehaviorAllowIncomplete:
+					// Payment pending with allow_incomplete -> set to incomplete
+					targetStatus = types.SubscriptionStatusIncomplete
+				case types.PaymentBehaviorDefaultIncomplete:
+					// Payment pending with default_incomplete -> set to incomplete
+					targetStatus = types.SubscriptionStatusIncomplete
+				case types.PaymentBehaviorDefaultActive:
+					// Payment pending with default_active -> set to active
+					targetStatus = types.SubscriptionStatusActive
+				case types.PaymentBehaviorErrorIfIncomplete:
+					// This shouldn't happen in activation flow, but set to incomplete as fallback
+					// The payment processor would have thrown an error during creation
+					targetStatus = types.SubscriptionStatusIncomplete
+				default:
+					// Default to active for backward compatibility
+					targetStatus = types.SubscriptionStatusActive
+				}
+			}
+		}
+
+		if sub.SubscriptionStatus != targetStatus {
+			sub.SubscriptionStatus = targetStatus
 			err = s.SubRepo.Update(ctx, sub)
 			if err != nil {
 				return err
