@@ -104,8 +104,13 @@ type CreateSubscriptionRequest struct {
 
 	// invoicing_customer_id is the customer ID to use for invoicing
 	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
-	// If not provided, the subscription customer will be used for invoicing
-	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
+	// This field is set internally based on InvoiceBillingConfig and is not exposed in the API
+	InvoicingCustomerID *string `json:"-"`
+
+	// invoice_billing_config determines which customer should receive invoices for a subscription
+	// "invoiced_by_parent" - Invoices are sent to the parent customer
+	// "invoiced_via_self" - Invoices are sent to the subscription's customer
+	InvoiceBillingConfig *types.InvoiceBillingConfig `json:"invoice_billing_config,omitempty"`
 
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
@@ -377,6 +382,16 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
+	}
+
+	// Set default for invoice billing config if not provided
+	if r.InvoiceBillingConfig == nil {
+		r.InvoiceBillingConfig = lo.ToPtr(types.InvoiceBillingConfigInvoicedViaSelf)
+	} else {
+		// Validate invoice billing config if provided
+		if err := r.InvoiceBillingConfig.Validate(); err != nil {
+			return err
+		}
 	}
 
 	// Set default value to Billing Period Count if not provided

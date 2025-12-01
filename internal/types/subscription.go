@@ -7,6 +7,38 @@ import (
 	"github.com/samber/lo"
 )
 
+// InvoiceBillingConfig determines which customer should receive invoices for a subscription
+type InvoiceBillingConfig string
+
+const (
+	// InvoiceBillingConfigInvoicedByParent - Invoices are sent to the parent customer
+	InvoiceBillingConfigInvoicedByParent InvoiceBillingConfig = "invoiced_by_parent"
+
+	// InvoiceBillingConfigInvoicedViaSelf - Invoices are sent to the subscription's customer
+	InvoiceBillingConfigInvoicedViaSelf InvoiceBillingConfig = "invoiced_via_self"
+)
+
+func (i InvoiceBillingConfig) String() string {
+	return string(i)
+}
+
+func (i InvoiceBillingConfig) Validate() error {
+	allowed := []InvoiceBillingConfig{
+		InvoiceBillingConfigInvoicedByParent,
+		InvoiceBillingConfigInvoicedViaSelf,
+	}
+	if !lo.Contains(allowed, i) {
+		return ierr.NewError("invalid invoice billing config").
+			WithHint("Invalid invoice billing config").
+			WithReportableDetails(map[string]any{
+				"invoice_billing_config": i,
+				"allowed_values":         allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SubscriptionLineItemEntityType is the type of the source of a subscription line item
 // It is optional and can be used to differentiate between plan and addon line items
 type SubscriptionLineItemEntityType string

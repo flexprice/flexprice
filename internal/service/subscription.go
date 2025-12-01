@@ -79,23 +79,24 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate invoicing customer if provided
-	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
-		// Validate that invoicing customer is either the customer itself or the customer's parent
-		isCustomerID := *req.InvoicingCustomerID == req.CustomerID
-		isParentID := customer.ParentCustomerID != nil && *req.InvoicingCustomerID == *customer.ParentCustomerID
-
-		if !isCustomerID && !isParentID {
-			return nil, ierr.NewError("invalid invoicing customer").
-				WithHint("The invoicing customer must be either the customer itself or the customer's parent").
+	// Handle InvoiceBillingConfig to set InvoicingCustomerID internally
+	// The DTO layer ensures InvoiceBillingConfig is always set (defaults to invoiced_via_self)
+	// For invoiced_via_self, we don't need to set InvoicingCustomerID as it defaults to subscription customer
+	if *req.InvoiceBillingConfig == types.InvoiceBillingConfigInvoicedByParent {
+		// Set invoicing customer to parent customer
+		if customer.ParentCustomerID == nil {
+			return nil, ierr.NewError("customer does not have a parent customer").
+				WithHint("The customer must have a parent customer to use invoiced_by_parent configuration").
 				WithReportableDetails(map[string]interface{}{
-					"invoicing_customer_id": *req.InvoicingCustomerID,
-					"customer_id":           req.CustomerID,
-					"parent_customer_id":    customer.ParentCustomerID,
+					"customer_id": req.CustomerID,
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		req.InvoicingCustomerID = customer.ParentCustomerID
+	}
 
+	// Validate that the invoicing customer exists and is active
+	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
 		invoicingCustomer, err := s.CustomerRepo.Get(ctx, *req.InvoicingCustomerID)
 		if err != nil {
 			return nil, err
