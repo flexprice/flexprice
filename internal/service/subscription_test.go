@@ -367,7 +367,9 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
 		CurrentPeriodStart: s.testData.now.Add(-24 * time.Hour),
 		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingAnchor:      s.testData.now.Add(-30 * 24 * time.Hour),
 		Currency:           "usd",
+		BillingCycle:       types.BillingCycleAnniversary,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
@@ -3200,6 +3202,8 @@ func (s *SubscriptionServiceSuite) TestProcessSubscriptionPeriod() {
 
 	sub.CurrentPeriodStart = periodStart
 	sub.CurrentPeriodEnd = periodEnd
+	// Set billing anchor to align with the period start for anniversary billing
+	sub.BillingAnchor = periodStart
 
 	// Update the subscription in the repository
 	err := s.GetStores().SubscriptionRepo.Update(s.GetContext(), sub)
