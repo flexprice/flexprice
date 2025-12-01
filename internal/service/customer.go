@@ -32,8 +32,20 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 		return nil, err
 	}
 
-	// Validate parent customer ID if provided
-	if req.ParentCustomerID != nil {
+	// Resolve and validate parent customer if provided (by ID or external ID)
+	if req.ParentCustomerExternalID != nil {
+		parent, err := s.CustomerRepo.GetByLookupKey(ctx, *req.ParentCustomerExternalID)
+		if err != nil {
+			return nil, err
+		}
+		if parent.ParentCustomerID != nil {
+			return nil, ierr.NewError("parent customer cannot be a child").
+				WithHint("Choose a parent customer that isn't a child of another").
+				Mark(ierr.ErrInvalidOperation)
+		}
+		// Normalize to internal ID for downstream logic
+		req.ParentCustomerID = lo.ToPtr(parent.ID)
+	} else if req.ParentCustomerID != nil {
 		parentCustomer, err := s.CustomerRepo.Get(ctx, *req.ParentCustomerID)
 		if err != nil {
 			return nil, err
