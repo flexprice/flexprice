@@ -18340,6 +18340,7 @@ type CustomerMutation struct {
 	address_state       *string
 	address_postal_code *string
 	address_country     *string
+	parent_customer_id  *string
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*Customer, error)
@@ -19205,6 +19206,55 @@ func (m *CustomerMutation) ResetAddressCountry() {
 	delete(m.clearedFields, customer.FieldAddressCountry)
 }
 
+// SetParentCustomerID sets the "parent_customer_id" field.
+func (m *CustomerMutation) SetParentCustomerID(s string) {
+	m.parent_customer_id = &s
+}
+
+// ParentCustomerID returns the value of the "parent_customer_id" field in the mutation.
+func (m *CustomerMutation) ParentCustomerID() (r string, exists bool) {
+	v := m.parent_customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentCustomerID returns the old "parent_customer_id" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldParentCustomerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentCustomerID: %w", err)
+	}
+	return oldValue.ParentCustomerID, nil
+}
+
+// ClearParentCustomerID clears the value of the "parent_customer_id" field.
+func (m *CustomerMutation) ClearParentCustomerID() {
+	m.parent_customer_id = nil
+	m.clearedFields[customer.FieldParentCustomerID] = struct{}{}
+}
+
+// ParentCustomerIDCleared returns if the "parent_customer_id" field was cleared in this mutation.
+func (m *CustomerMutation) ParentCustomerIDCleared() bool {
+	_, ok := m.clearedFields[customer.FieldParentCustomerID]
+	return ok
+}
+
+// ResetParentCustomerID resets all changes to the "parent_customer_id" field.
+func (m *CustomerMutation) ResetParentCustomerID() {
+	m.parent_customer_id = nil
+	delete(m.clearedFields, customer.FieldParentCustomerID)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -19239,7 +19289,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -19291,6 +19341,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.address_country != nil {
 		fields = append(fields, customer.FieldAddressCountry)
 	}
+	if m.parent_customer_id != nil {
+		fields = append(fields, customer.FieldParentCustomerID)
+	}
 	return fields
 }
 
@@ -19333,6 +19386,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.AddressPostalCode()
 	case customer.FieldAddressCountry:
 		return m.AddressCountry()
+	case customer.FieldParentCustomerID:
+		return m.ParentCustomerID()
 	}
 	return nil, false
 }
@@ -19376,6 +19431,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAddressPostalCode(ctx)
 	case customer.FieldAddressCountry:
 		return m.OldAddressCountry(ctx)
+	case customer.FieldParentCustomerID:
+		return m.OldParentCustomerID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -19504,6 +19561,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAddressCountry(v)
 		return nil
+	case customer.FieldParentCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentCustomerID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -19567,6 +19631,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldAddressCountry) {
 		fields = append(fields, customer.FieldAddressCountry)
 	}
+	if m.FieldCleared(customer.FieldParentCustomerID) {
+		fields = append(fields, customer.FieldParentCustomerID)
+	}
 	return fields
 }
 
@@ -19613,6 +19680,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldAddressCountry:
 		m.ClearAddressCountry()
+		return nil
+	case customer.FieldParentCustomerID:
+		m.ClearParentCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -19672,6 +19742,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldAddressCountry:
 		m.ResetAddressCountry()
+		return nil
+	case customer.FieldParentCustomerID:
+		m.ResetParentCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)

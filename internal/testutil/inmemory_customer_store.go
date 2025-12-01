@@ -151,6 +151,16 @@ func customerFilterFn(ctx context.Context, c *customer.Customer, filter interfac
 		return false
 	}
 
+	// Apply parent customer ID filter
+	if len(f.ParentCustomerIDs) > 0 {
+		if c.ParentCustomerID == nil {
+			return false
+		}
+		if !lo.Contains(f.ParentCustomerIDs, *c.ParentCustomerID) {
+			return false
+		}
+	}
+
 	// Apply email filter
 	if f.Email != "" && !strings.EqualFold(c.Email, f.Email) {
 		return false

@@ -500,6 +500,10 @@ func (o CustomerQueryOptions) applyEntityQueryOptions(_ context.Context, f *type
 		query = query.Where(customer.ExternalID(f.ExternalID))
 	}
 
+	if len(f.ParentCustomerIDs) > 0 {
+		query = query.Where(customer.ParentCustomerIDIn(f.ParentCustomerIDs...))
+	}
+
 	if f.Email != "" {
 		query = query.Where(customer.Email(f.Email))
 	}
