@@ -11,7 +11,8 @@ type SyncConfig struct {
 	Subscription *EntitySyncConfig `json:"subscription,omitempty"`
 	Invoice      *EntitySyncConfig `json:"invoice,omitempty"`
 	// CRM sync (HubSpot, Salesforce, etc.)
-	Deal *EntitySyncConfig `json:"deal,omitempty"`
+	Deal  *EntitySyncConfig `json:"deal,omitempty"`
+	Quote *EntitySyncConfig `json:"quote,omitempty"`
 }
 
 // EntitySyncConfig defines sync direction for an entity
@@ -28,7 +29,8 @@ func DefaultSyncConfig() *SyncConfig {
 		Subscription: &EntitySyncConfig{Inbound: false, Outbound: false},
 		Invoice:      &EntitySyncConfig{Inbound: false, Outbound: false},
 		// CRM sync
-		Deal: &EntitySyncConfig{Inbound: false, Outbound: false},
+		Deal:  &EntitySyncConfig{Inbound: false, Outbound: false},
+		Quote: &EntitySyncConfig{Inbound: false, Outbound: false},
 	}
 }
 
@@ -52,6 +54,10 @@ func (s *SyncConfig) Validate() error {
 
 	if s.Deal != nil && s.Deal.Inbound {
 		return ierr.NewError("deal inbound sync is not allowed").Mark(ierr.ErrValidation)
+	}
+
+	if s.Quote != nil && s.Quote.Inbound {
+		return ierr.NewError("quote inbound sync is not allowed").Mark(ierr.ErrValidation)
 	}
 
 	return nil

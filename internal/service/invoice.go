@@ -37,7 +37,7 @@ type InvoiceService interface {
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
-	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error)
+	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
 	GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error)
@@ -1271,7 +1271,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	return nil
 }
 
-func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error) {
+func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error) {
 	s.Logger.Infow("creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
 		"period_start", req.PeriodStart,
@@ -1288,6 +1288,17 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Reject invoice creation for draft subscriptions (unless isDraftSubscription is true)
+	if !isDraftSubscription && subscription.SubscriptionStatus == types.SubscriptionStatusDraft {
+		return nil, nil, ierr.NewError("cannot create invoice for draft subscription").
+			WithHint("Draft subscriptions must be activated before invoice creation").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":     req.SubscriptionID,
+				"subscription_status": subscription.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Prepare invoice request using billing service
@@ -2210,8 +2221,8 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			Mark(ierr.ErrValidation)
 	}
 
-	// Get subscription with line items
-	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
+	// Get sub with line items
+	sub, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2244,7 +2255,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		referencePoint := types.ReferencePointPeriodEnd
 
 		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx,
-			subscription,
+			sub,
 			*inv.PeriodStart,
 			*inv.PeriodEnd,
 			referencePoint,
@@ -2253,7 +2264,10 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			return err
 		}
 
-		// STEP 3: Update invoice totals and metadata
+		// STEP 3: Update invoice totals, metadata, and customer ID
+		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
+		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
+		inv.CustomerID = newInvoiceReq.CustomerID
 		inv.AmountDue = newInvoiceReq.AmountDue
 		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
 		inv.Description = newInvoiceReq.Description

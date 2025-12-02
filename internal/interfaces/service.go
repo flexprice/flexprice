@@ -117,6 +117,9 @@ type SubscriptionService interface {
 
 	// ListByCustomerID retrieves all active subscriptions for a customer
 	ListByCustomerID(ctx context.Context, customerID string) ([]*subscription.Subscription, error)
+
+	// ActivateDraftSubscription activates a draft subscription with a new start date
+	ActivateDraftSubscription(ctx context.Context, subID string, req dto.ActivateDraftSubscriptionRequest) (*dto.SubscriptionResponse, error)
 }
 
 type ServiceDependencies struct {

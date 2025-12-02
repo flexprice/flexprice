@@ -23,12 +23,13 @@ const (
 
 // subscription event names
 const (
-	WebhookEventSubscriptionCreated   = "subscription.created"
-	WebhookEventSubscriptionActivated = "subscription.activated"
-	WebhookEventSubscriptionUpdated   = "subscription.updated"
-	WebhookEventSubscriptionPaused    = "subscription.paused"
-	WebhookEventSubscriptionCancelled = "subscription.cancelled"
-	WebhookEventSubscriptionResumed   = "subscription.resumed"
+	WebhookEventSubscriptionCreated      = "subscription.created"
+	WebhookEventSubscriptionDraftCreated = "subscription.draft.created"
+	WebhookEventSubscriptionActivated    = "subscription.activated"
+	WebhookEventSubscriptionUpdated      = "subscription.updated"
+	WebhookEventSubscriptionPaused       = "subscription.paused"
+	WebhookEventSubscriptionCancelled    = "subscription.cancelled"
+	WebhookEventSubscriptionResumed      = "subscription.resumed"
 )
 
 // subscription phase event names

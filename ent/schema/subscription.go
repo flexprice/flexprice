@@ -61,10 +61,8 @@ func (Subscription) Fields() []ent.Field {
 			NotEmpty().
 			Immutable(),
 		field.Time("billing_anchor").
-			Immutable().
 			Default(time.Now),
 		field.Time("start_date").
-			Immutable().
 			Default(time.Now),
 		field.Time("end_date").
 			Optional().
@@ -155,6 +153,13 @@ func (Subscription) Fields() []ent.Field {
 		field.Bool("enable_true_up").
 			Default(false).
 			Comment("Enable Commitment True Up Fee"),
+		field.String("invoicing_customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Customer ID to use for invoicing (can differ from the subscription customer)"),
 	}
 }
 
@@ -169,6 +174,10 @@ func (Subscription) Edges() []ent.Edge {
 			Comment("Subscription can have multiple coupon associations"),
 		edge.To("coupon_applications", CouponApplication.Type).
 			Comment("Subscription can have multiple coupon applications"),
+		edge.To("invoicing_customer", Customer.Type).
+			Unique().
+			Field("invoicing_customer_id").
+			Comment("Customer to use for invoicing (can differ from the subscription customer)"),
 	}
 }
 

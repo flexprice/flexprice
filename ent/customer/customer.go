@@ -47,6 +47,8 @@ const (
 	FieldAddressPostalCode = "address_postal_code"
 	// FieldAddressCountry holds the string denoting the address_country field in the database.
 	FieldAddressCountry = "address_country"
+	// FieldParentCustomerID holds the string denoting the parent_customer_id field in the database.
+	FieldParentCustomerID = "parent_customer_id"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
 )
@@ -71,6 +73,7 @@ var Columns = []string{
 	FieldAddressState,
 	FieldAddressPostalCode,
 	FieldAddressCountry,
+	FieldParentCustomerID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -188,4 +191,9 @@ func ByAddressPostalCode(opts ...sql.OrderTermOption) OrderOption {
 // ByAddressCountry orders the results by the address_country field.
 func ByAddressCountry(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAddressCountry, opts...).ToFunc()
+}
+
+// ByParentCustomerID orders the results by the parent_customer_id field.
+func ByParentCustomerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentCustomerID, opts...).ToFunc()
 }

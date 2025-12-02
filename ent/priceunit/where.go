@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
-	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/shopspring/decimal"
 )
@@ -904,29 +903,6 @@ func PrecisionLT(v int) predicate.PriceUnit {
 // PrecisionLTE applies the LTE predicate on the "precision" field.
 func PrecisionLTE(v int) predicate.PriceUnit {
 	return predicate.PriceUnit(sql.FieldLTE(FieldPrecision, v))
-}
-
-// HasPrices applies the HasEdge predicate on the "prices" edge.
-func HasPrices() predicate.PriceUnit {
-	return predicate.PriceUnit(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, PricesTable, PricesColumn),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasPricesWith applies the HasEdge predicate on the "prices" edge with a given conditions (other predicates).
-func HasPricesWith(preds ...predicate.Price) predicate.PriceUnit {
-	return predicate.PriceUnit(func(s *sql.Selector) {
-		step := newPricesStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
 }
 
 // And groups predicates with the AND operator between them.

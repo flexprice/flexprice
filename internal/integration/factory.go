@@ -181,6 +181,15 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 		f.logger,
 	)
 
+	// Create quote sync service
+	quoteSyncSvc := hubspot.NewQuoteSyncService(
+		hubspotClient,
+		f.customerRepo,
+		f.subscriptionRepo,
+		f.priceRepo,
+		f.logger,
+	)
+
 	// Create webhook handler
 	webhookHandler := hubspotwebhook.NewHandler(
 		hubspotClient,
@@ -194,6 +203,7 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 		CustomerSvc:    customerSvc,
 		InvoiceSyncSvc: invoiceSyncSvc,
 		DealSyncSvc:    dealSyncSvc,
+		QuoteSyncSvc:   quoteSyncSvc,
 		WebhookHandler: webhookHandler,
 	}, nil
 }
@@ -379,6 +389,7 @@ type HubSpotIntegration struct {
 	CustomerSvc    hubspot.HubSpotCustomerService
 	InvoiceSyncSvc *hubspot.InvoiceSyncService
 	DealSyncSvc    *hubspot.DealSyncService
+	QuoteSyncSvc   *hubspot.QuoteSyncService
 	WebhookHandler *hubspotwebhook.Handler
 }
 

@@ -35,6 +35,7 @@ const (
 	ExpandGroups             ExpandableField = "groups"
 	ExpandWallet             ExpandableField = "wallet"
 	ExpandFeature            ExpandableField = "feature"
+	ExpandParentCustomer     ExpandableField = "parent_customer"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -130,6 +131,14 @@ var (
 			ExpandCustomer: {},
 			ExpandWallet:   {},
 			ExpandFeature:  {},
+		},
+	}
+
+	// CustomerExpandConfig defines what can be expanded on a customer
+	CustomerExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandParentCustomer},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandParentCustomer: {},
 		},
 	}
 )

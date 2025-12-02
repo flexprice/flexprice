@@ -100,7 +100,18 @@ type CreateSubscriptionRequest struct {
 
 	// external_customer_id is the customer id in your DB
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
-	ExternalCustomerID string               `json:"external_customer_id"`
+	ExternalCustomerID string `json:"external_customer_id"`
+
+	// invoicing_customer_id is the customer ID to use for invoicing
+	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
+	// This field is set internally based on InvoiceBillingConfig and is not exposed in the API
+	InvoicingCustomerID *string `json:"-"`
+
+	// invoice_billing determines which customer should receive invoices for a subscription
+	// "invoice_to_parent" - Invoices are sent to the parent customer
+	// "invoice_to_self" - Invoices are sent to the subscription's customer
+	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
+
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -274,6 +285,27 @@ func (r *CancelSubscriptionRequest) Validate() error {
 	return nil
 }
 
+// ActivateDraftSubscriptionRequest represents the request to activate a draft subscription
+type ActivateDraftSubscriptionRequest struct {
+	// start_date is the new start date for the subscription when activating
+	StartDate *time.Time `json:"start_date" validate:"required"`
+}
+
+// Validate validates the activation request
+func (r *ActivateDraftSubscriptionRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.StartDate == nil {
+		return ierr.NewError("start_date is required").
+			WithHint("Start date is required to activate a draft subscription").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 type SubscriptionResponse struct {
 	*subscription.Subscription
 	Plan     *PlanResponse     `json:"plan"`
@@ -350,6 +382,16 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
+	}
+
+	// Set default for invoice billing if not provided
+	if r.InvoiceBilling == nil {
+		r.InvoiceBilling = lo.ToPtr(types.InvoiceBillingInvoiceToSelf)
+	} else {
+		// Validate invoice billing if provided
+		if err := r.InvoiceBilling.Validate(); err != nil {
+			return err
+		}
 	}
 
 	// Set default value to Billing Period Count if not provided
@@ -444,6 +486,15 @@ func (r *CreateSubscriptionRequest) Validate() error {
 				"trial_end":  *r.TrialEnd,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Validate draft subscription constraints
+	if r.SubscriptionStatus == types.SubscriptionStatusDraft {
+		if len(r.Phases) > 0 {
+			return ierr.NewError("phases are not allowed for draft subscriptions").
+				WithHint("Draft subscriptions cannot have phases").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Validate commitment amount and overage factor
@@ -773,6 +824,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		PaymentBehavior:        string(paymentBehavior),
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
+		InvoicingCustomerID:    r.InvoicingCustomerID,
 	}
 
 	// Set commitment amount and overage factor if provided
