@@ -100,7 +100,18 @@ type CreateSubscriptionRequest struct {
 
 	// external_customer_id is the customer id in your DB
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
-	ExternalCustomerID string               `json:"external_customer_id"`
+	ExternalCustomerID string `json:"external_customer_id"`
+
+	// invoicing_customer_id is the customer ID to use for invoicing
+	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
+	// This field is set internally based on InvoiceBillingConfig and is not exposed in the API
+	InvoicingCustomerID *string `json:"-"`
+
+	// invoice_billing determines which customer should receive invoices for a subscription
+	// "invoice_to_parent" - Invoices are sent to the parent customer
+	// "invoice_to_self" - Invoices are sent to the subscription's customer
+	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
+
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -371,6 +382,16 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PaymentBehavior == nil {
 		defaultPaymentBehavior := types.PaymentBehaviorDefaultActive
 		r.PaymentBehavior = &defaultPaymentBehavior
+	}
+
+	// Set default for invoice billing if not provided
+	if r.InvoiceBilling == nil {
+		r.InvoiceBilling = lo.ToPtr(types.InvoiceBillingInvoiceToSelf)
+	} else {
+		// Validate invoice billing if provided
+		if err := r.InvoiceBilling.Validate(); err != nil {
+			return err
+		}
 	}
 
 	// Set default value to Billing Period Count if not provided
@@ -803,6 +824,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		PaymentBehavior:        string(paymentBehavior),
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
+		InvoicingCustomerID:    r.InvoicingCustomerID,
 	}
 
 	// Set commitment amount and overage factor if provided

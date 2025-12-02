@@ -79,6 +79,40 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			Mark(ierr.ErrValidation)
 	}
 
+	// Handle InvoiceBilling to set InvoicingCustomerID internally
+	// The DTO layer ensures InvoiceBilling is always set (defaults to invoice_to_self)
+	// For invoice_to_self, we don't need to set InvoicingCustomerID as it defaults to subscription customer
+	if lo.FromPtr(req.InvoiceBilling) == types.InvoiceBillingInvoiceToParent {
+		// Set invoicing customer to parent customer
+		if customer.ParentCustomerID == nil {
+			return nil, ierr.NewError("customer does not have a parent customer").
+				WithHint("The customer must have a parent customer to use invoice_to_parent").
+				WithReportableDetails(map[string]interface{}{
+					"customer_id": req.CustomerID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+		req.InvoicingCustomerID = customer.ParentCustomerID
+	}
+
+	// Validate that the invoicing customer exists and is active
+	if req.InvoicingCustomerID != nil && *req.InvoicingCustomerID != "" {
+		invoicingCustomer, err := s.CustomerRepo.Get(ctx, *req.InvoicingCustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		if invoicingCustomer.Status != types.StatusPublished {
+			return nil, ierr.NewError("invoicing customer is not active").
+				WithHint("The invoicing customer must be active").
+				WithReportableDetails(map[string]interface{}{
+					"invoicing_customer_id": *req.InvoicingCustomerID,
+					"status":                invoicingCustomer.Status,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
 	if err != nil {
 		return nil, err

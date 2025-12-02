@@ -144,6 +144,11 @@ func AddressCountry(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldAddressCountry, v))
 }
 
+// ParentCustomerID applies equality check predicate on the "parent_customer_id" field. It's identical to ParentCustomerIDEQ.
+func ParentCustomerID(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldParentCustomerID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldTenantID, v))
@@ -1242,6 +1247,81 @@ func AddressCountryEqualFold(v string) predicate.Customer {
 // AddressCountryContainsFold applies the ContainsFold predicate on the "address_country" field.
 func AddressCountryContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldAddressCountry, v))
+}
+
+// ParentCustomerIDEQ applies the EQ predicate on the "parent_customer_id" field.
+func ParentCustomerIDEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDNEQ applies the NEQ predicate on the "parent_customer_id" field.
+func ParentCustomerIDNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDIn applies the In predicate on the "parent_customer_id" field.
+func ParentCustomerIDIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldParentCustomerID, vs...))
+}
+
+// ParentCustomerIDNotIn applies the NotIn predicate on the "parent_customer_id" field.
+func ParentCustomerIDNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldParentCustomerID, vs...))
+}
+
+// ParentCustomerIDGT applies the GT predicate on the "parent_customer_id" field.
+func ParentCustomerIDGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDGTE applies the GTE predicate on the "parent_customer_id" field.
+func ParentCustomerIDGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDLT applies the LT predicate on the "parent_customer_id" field.
+func ParentCustomerIDLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDLTE applies the LTE predicate on the "parent_customer_id" field.
+func ParentCustomerIDLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDContains applies the Contains predicate on the "parent_customer_id" field.
+func ParentCustomerIDContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDHasPrefix applies the HasPrefix predicate on the "parent_customer_id" field.
+func ParentCustomerIDHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDHasSuffix applies the HasSuffix predicate on the "parent_customer_id" field.
+func ParentCustomerIDHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDIsNil applies the IsNil predicate on the "parent_customer_id" field.
+func ParentCustomerIDIsNil() predicate.Customer {
+	return predicate.Customer(sql.FieldIsNull(FieldParentCustomerID))
+}
+
+// ParentCustomerIDNotNil applies the NotNil predicate on the "parent_customer_id" field.
+func ParentCustomerIDNotNil() predicate.Customer {
+	return predicate.Customer(sql.FieldNotNull(FieldParentCustomerID))
+}
+
+// ParentCustomerIDEqualFold applies the EqualFold predicate on the "parent_customer_id" field.
+func ParentCustomerIDEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldParentCustomerID, v))
+}
+
+// ParentCustomerIDContainsFold applies the ContainsFold predicate on the "parent_customer_id" field.
+func ParentCustomerIDContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldParentCustomerID, v))
 }
 
 // And groups predicates with the AND operator between them.

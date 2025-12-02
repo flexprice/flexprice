@@ -7,6 +7,38 @@ import (
 	"github.com/samber/lo"
 )
 
+// InvoiceBilling determines which customer should receive invoices for a subscription
+type InvoiceBilling string
+
+const (
+	// InvoiceBillingInvoiceToParent - Invoices are sent to the parent customer
+	InvoiceBillingInvoiceToParent InvoiceBilling = "invoice_to_parent"
+
+	// InvoiceBillingInvoiceToSelf - Invoices are sent to the subscription's customer
+	InvoiceBillingInvoiceToSelf InvoiceBilling = "invoice_to_self"
+)
+
+func (i InvoiceBilling) String() string {
+	return string(i)
+}
+
+func (i InvoiceBilling) Validate() error {
+	allowed := []InvoiceBilling{
+		InvoiceBillingInvoiceToParent,
+		InvoiceBillingInvoiceToSelf,
+	}
+	if !lo.Contains(allowed, i) {
+		return ierr.NewError("invalid invoice billing").
+			WithHint("Invalid invoice billing").
+			WithReportableDetails(map[string]any{
+				"invoice_billing": i,
+				"allowed_values":  allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // SubscriptionLineItemEntityType is the type of the source of a subscription line item
 // It is optional and can be used to differentiate between plan and addon line items
 type SubscriptionLineItemEntityType string
@@ -191,6 +223,8 @@ type SubscriptionFilter struct {
 	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
 	// CustomerID filters by customer ID
 	CustomerID string `json:"customer_id,omitempty" form:"customer_id"`
+	// InvoicingCustomerIDs filters by invoicing customer ID
+	InvoicingCustomerIDs []string `json:"invoicing_customer_ids,omitempty" form:"invoicing_customer_ids"`
 	// PlanID filters by plan ID
 	PlanID string `json:"plan_id,omitempty" form:"plan_id"`
 	// SubscriptionStatus filters by subscription status

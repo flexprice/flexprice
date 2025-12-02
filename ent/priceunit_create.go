@@ -10,7 +10,6 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/shopspring/decimal"
 )
@@ -168,21 +167,6 @@ func (puc *PriceUnitCreate) SetNillablePrecision(i *int) *PriceUnitCreate {
 func (puc *PriceUnitCreate) SetID(s string) *PriceUnitCreate {
 	puc.mutation.SetID(s)
 	return puc
-}
-
-// AddPriceIDs adds the "prices" edge to the Price entity by IDs.
-func (puc *PriceUnitCreate) AddPriceIDs(ids ...string) *PriceUnitCreate {
-	puc.mutation.AddPriceIDs(ids...)
-	return puc
-}
-
-// AddPrices adds the "prices" edges to the Price entity.
-func (puc *PriceUnitCreate) AddPrices(p ...*Price) *PriceUnitCreate {
-	ids := make([]string, len(p))
-	for i := range p {
-		ids[i] = p[i].ID
-	}
-	return puc.AddPriceIDs(ids...)
 }
 
 // Mutation returns the PriceUnitMutation object of the builder.
@@ -394,22 +378,6 @@ func (puc *PriceUnitCreate) createSpec() (*PriceUnit, *sqlgraph.CreateSpec) {
 	if value, ok := puc.mutation.Precision(); ok {
 		_spec.SetField(priceunit.FieldPrecision, field.TypeInt, value)
 		_node.Precision = value
-	}
-	if nodes := puc.mutation.PricesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: true,
-			Table:   priceunit.PricesTable,
-			Columns: []string{priceunit.PricesColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(price.FieldID, field.TypeString),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

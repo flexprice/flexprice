@@ -18340,6 +18340,7 @@ type CustomerMutation struct {
 	address_state       *string
 	address_postal_code *string
 	address_country     *string
+	parent_customer_id  *string
 	clearedFields       map[string]struct{}
 	done                bool
 	oldValue            func(context.Context) (*Customer, error)
@@ -19205,6 +19206,55 @@ func (m *CustomerMutation) ResetAddressCountry() {
 	delete(m.clearedFields, customer.FieldAddressCountry)
 }
 
+// SetParentCustomerID sets the "parent_customer_id" field.
+func (m *CustomerMutation) SetParentCustomerID(s string) {
+	m.parent_customer_id = &s
+}
+
+// ParentCustomerID returns the value of the "parent_customer_id" field in the mutation.
+func (m *CustomerMutation) ParentCustomerID() (r string, exists bool) {
+	v := m.parent_customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentCustomerID returns the old "parent_customer_id" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldParentCustomerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentCustomerID: %w", err)
+	}
+	return oldValue.ParentCustomerID, nil
+}
+
+// ClearParentCustomerID clears the value of the "parent_customer_id" field.
+func (m *CustomerMutation) ClearParentCustomerID() {
+	m.parent_customer_id = nil
+	m.clearedFields[customer.FieldParentCustomerID] = struct{}{}
+}
+
+// ParentCustomerIDCleared returns if the "parent_customer_id" field was cleared in this mutation.
+func (m *CustomerMutation) ParentCustomerIDCleared() bool {
+	_, ok := m.clearedFields[customer.FieldParentCustomerID]
+	return ok
+}
+
+// ResetParentCustomerID resets all changes to the "parent_customer_id" field.
+func (m *CustomerMutation) ResetParentCustomerID() {
+	m.parent_customer_id = nil
+	delete(m.clearedFields, customer.FieldParentCustomerID)
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -19239,7 +19289,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, customer.FieldTenantID)
 	}
@@ -19291,6 +19341,9 @@ func (m *CustomerMutation) Fields() []string {
 	if m.address_country != nil {
 		fields = append(fields, customer.FieldAddressCountry)
 	}
+	if m.parent_customer_id != nil {
+		fields = append(fields, customer.FieldParentCustomerID)
+	}
 	return fields
 }
 
@@ -19333,6 +19386,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.AddressPostalCode()
 	case customer.FieldAddressCountry:
 		return m.AddressCountry()
+	case customer.FieldParentCustomerID:
+		return m.ParentCustomerID()
 	}
 	return nil, false
 }
@@ -19376,6 +19431,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldAddressPostalCode(ctx)
 	case customer.FieldAddressCountry:
 		return m.OldAddressCountry(ctx)
+	case customer.FieldParentCustomerID:
+		return m.OldParentCustomerID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Customer field %s", name)
 }
@@ -19504,6 +19561,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAddressCountry(v)
 		return nil
+	case customer.FieldParentCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentCustomerID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
 }
@@ -19567,6 +19631,9 @@ func (m *CustomerMutation) ClearedFields() []string {
 	if m.FieldCleared(customer.FieldAddressCountry) {
 		fields = append(fields, customer.FieldAddressCountry)
 	}
+	if m.FieldCleared(customer.FieldParentCustomerID) {
+		fields = append(fields, customer.FieldParentCustomerID)
+	}
 	return fields
 }
 
@@ -19613,6 +19680,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 		return nil
 	case customer.FieldAddressCountry:
 		m.ClearAddressCountry()
+		return nil
+	case customer.FieldParentCustomerID:
+		m.ClearParentCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer nullable field %s", name)
@@ -19672,6 +19742,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldAddressCountry:
 		m.ResetAddressCountry()
+		return nil
+	case customer.FieldParentCustomerID:
+		m.ResetParentCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown Customer field %s", name)
@@ -36539,6 +36612,7 @@ type PriceMutation struct {
 	currency                  *string
 	display_amount            *string
 	price_unit_type           *string
+	price_unit_id             *string
 	price_unit                *string
 	price_unit_amount         *float64
 	addprice_unit_amount      *float64
@@ -36572,8 +36646,6 @@ type PriceMutation struct {
 	end_date                  *time.Time
 	group_id                  *string
 	clearedFields             map[string]struct{}
-	price_unit_edge           *string
-	clearedprice_unit_edge    bool
 	done                      bool
 	oldValue                  func(context.Context) (*Price, error)
 	predicates                []predicate.Price
@@ -37140,12 +37212,12 @@ func (m *PriceMutation) ResetPriceUnitType() {
 
 // SetPriceUnitID sets the "price_unit_id" field.
 func (m *PriceMutation) SetPriceUnitID(s string) {
-	m.price_unit_edge = &s
+	m.price_unit_id = &s
 }
 
 // PriceUnitID returns the value of the "price_unit_id" field in the mutation.
 func (m *PriceMutation) PriceUnitID() (r string, exists bool) {
-	v := m.price_unit_edge
+	v := m.price_unit_id
 	if v == nil {
 		return
 	}
@@ -37155,7 +37227,7 @@ func (m *PriceMutation) PriceUnitID() (r string, exists bool) {
 // OldPriceUnitID returns the old "price_unit_id" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
 	}
@@ -37171,7 +37243,7 @@ func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v string, err error
 
 // ClearPriceUnitID clears the value of the "price_unit_id" field.
 func (m *PriceMutation) ClearPriceUnitID() {
-	m.price_unit_edge = nil
+	m.price_unit_id = nil
 	m.clearedFields[price.FieldPriceUnitID] = struct{}{}
 }
 
@@ -37183,7 +37255,7 @@ func (m *PriceMutation) PriceUnitIDCleared() bool {
 
 // ResetPriceUnitID resets all changes to the "price_unit_id" field.
 func (m *PriceMutation) ResetPriceUnitID() {
-	m.price_unit_edge = nil
+	m.price_unit_id = nil
 	delete(m.clearedFields, price.FieldPriceUnitID)
 }
 
@@ -38497,46 +38569,6 @@ func (m *PriceMutation) ResetGroupID() {
 	delete(m.clearedFields, price.FieldGroupID)
 }
 
-// SetPriceUnitEdgeID sets the "price_unit_edge" edge to the PriceUnit entity by id.
-func (m *PriceMutation) SetPriceUnitEdgeID(id string) {
-	m.price_unit_edge = &id
-}
-
-// ClearPriceUnitEdge clears the "price_unit_edge" edge to the PriceUnit entity.
-func (m *PriceMutation) ClearPriceUnitEdge() {
-	m.clearedprice_unit_edge = true
-	m.clearedFields[price.FieldPriceUnitID] = struct{}{}
-}
-
-// PriceUnitEdgeCleared reports if the "price_unit_edge" edge to the PriceUnit entity was cleared.
-func (m *PriceMutation) PriceUnitEdgeCleared() bool {
-	return m.PriceUnitIDCleared() || m.clearedprice_unit_edge
-}
-
-// PriceUnitEdgeID returns the "price_unit_edge" edge ID in the mutation.
-func (m *PriceMutation) PriceUnitEdgeID() (id string, exists bool) {
-	if m.price_unit_edge != nil {
-		return *m.price_unit_edge, true
-	}
-	return
-}
-
-// PriceUnitEdgeIDs returns the "price_unit_edge" edge IDs in the mutation.
-// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
-// PriceUnitEdgeID instead. It exists only for internal usage by the builders.
-func (m *PriceMutation) PriceUnitEdgeIDs() (ids []string) {
-	if id := m.price_unit_edge; id != nil {
-		ids = append(ids, *id)
-	}
-	return
-}
-
-// ResetPriceUnitEdge resets all changes to the "price_unit_edge" edge.
-func (m *PriceMutation) ResetPriceUnitEdge() {
-	m.price_unit_edge = nil
-	m.clearedprice_unit_edge = false
-}
-
 // Where appends a list predicates to the PriceMutation builder.
 func (m *PriceMutation) Where(ps ...predicate.Price) {
 	m.predicates = append(m.predicates, ps...)
@@ -38605,7 +38637,7 @@ func (m *PriceMutation) Fields() []string {
 	if m.price_unit_type != nil {
 		fields = append(fields, price.FieldPriceUnitType)
 	}
-	if m.price_unit_edge != nil {
+	if m.price_unit_id != nil {
 		fields = append(fields, price.FieldPriceUnitID)
 	}
 	if m.price_unit != nil {
@@ -39509,28 +39541,19 @@ func (m *PriceMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PriceMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.price_unit_edge != nil {
-		edges = append(edges, price.EdgePriceUnitEdge)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *PriceMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case price.EdgePriceUnitEdge:
-		if id := m.price_unit_edge; id != nil {
-			return []ent.Value{*id}
-		}
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PriceMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 0)
 	return edges
 }
 
@@ -39542,42 +39565,25 @@ func (m *PriceMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PriceMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedprice_unit_edge {
-		edges = append(edges, price.EdgePriceUnitEdge)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *PriceMutation) EdgeCleared(name string) bool {
-	switch name {
-	case price.EdgePriceUnitEdge:
-		return m.clearedprice_unit_edge
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *PriceMutation) ClearEdge(name string) error {
-	switch name {
-	case price.EdgePriceUnitEdge:
-		m.ClearPriceUnitEdge()
-		return nil
-	}
 	return fmt.Errorf("unknown Price unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *PriceMutation) ResetEdge(name string) error {
-	switch name {
-	case price.EdgePriceUnitEdge:
-		m.ResetPriceUnitEdge()
-		return nil
-	}
 	return fmt.Errorf("unknown Price edge %s", name)
 }
 
@@ -39602,9 +39608,6 @@ type PriceUnitMutation struct {
 	precision       *int
 	addprecision    *int
 	clearedFields   map[string]struct{}
-	prices          map[string]struct{}
-	removedprices   map[string]struct{}
-	clearedprices   bool
 	done            bool
 	oldValue        func(context.Context) (*PriceUnit, error)
 	predicates      []predicate.PriceUnit
@@ -40241,60 +40244,6 @@ func (m *PriceUnitMutation) ResetPrecision() {
 	m.addprecision = nil
 }
 
-// AddPriceIDs adds the "prices" edge to the Price entity by ids.
-func (m *PriceUnitMutation) AddPriceIDs(ids ...string) {
-	if m.prices == nil {
-		m.prices = make(map[string]struct{})
-	}
-	for i := range ids {
-		m.prices[ids[i]] = struct{}{}
-	}
-}
-
-// ClearPrices clears the "prices" edge to the Price entity.
-func (m *PriceUnitMutation) ClearPrices() {
-	m.clearedprices = true
-}
-
-// PricesCleared reports if the "prices" edge to the Price entity was cleared.
-func (m *PriceUnitMutation) PricesCleared() bool {
-	return m.clearedprices
-}
-
-// RemovePriceIDs removes the "prices" edge to the Price entity by IDs.
-func (m *PriceUnitMutation) RemovePriceIDs(ids ...string) {
-	if m.removedprices == nil {
-		m.removedprices = make(map[string]struct{})
-	}
-	for i := range ids {
-		delete(m.prices, ids[i])
-		m.removedprices[ids[i]] = struct{}{}
-	}
-}
-
-// RemovedPrices returns the removed IDs of the "prices" edge to the Price entity.
-func (m *PriceUnitMutation) RemovedPricesIDs() (ids []string) {
-	for id := range m.removedprices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// PricesIDs returns the "prices" edge IDs in the mutation.
-func (m *PriceUnitMutation) PricesIDs() (ids []string) {
-	for id := range m.prices {
-		ids = append(ids, id)
-	}
-	return
-}
-
-// ResetPrices resets all changes to the "prices" edge.
-func (m *PriceUnitMutation) ResetPrices() {
-	m.prices = nil
-	m.clearedprices = false
-	m.removedprices = nil
-}
-
 // Where appends a list predicates to the PriceUnitMutation builder.
 func (m *PriceUnitMutation) Where(ps ...predicate.PriceUnit) {
 	m.predicates = append(m.predicates, ps...)
@@ -40668,85 +40617,49 @@ func (m *PriceUnitMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *PriceUnitMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.prices != nil {
-		edges = append(edges, priceunit.EdgePrices)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *PriceUnitMutation) AddedIDs(name string) []ent.Value {
-	switch name {
-	case priceunit.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.prices))
-		for id := range m.prices {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *PriceUnitMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.removedprices != nil {
-		edges = append(edges, priceunit.EdgePrices)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *PriceUnitMutation) RemovedIDs(name string) []ent.Value {
-	switch name {
-	case priceunit.EdgePrices:
-		ids := make([]ent.Value, 0, len(m.removedprices))
-		for id := range m.removedprices {
-			ids = append(ids, id)
-		}
-		return ids
-	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *PriceUnitMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
-	if m.clearedprices {
-		edges = append(edges, priceunit.EdgePrices)
-	}
+	edges := make([]string, 0, 0)
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *PriceUnitMutation) EdgeCleared(name string) bool {
-	switch name {
-	case priceunit.EdgePrices:
-		return m.clearedprices
-	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *PriceUnitMutation) ClearEdge(name string) error {
-	switch name {
-	}
 	return fmt.Errorf("unknown PriceUnit unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *PriceUnitMutation) ResetEdge(name string) error {
-	switch name {
-	case priceunit.EdgePrices:
-		m.ResetPrices()
-		return nil
-	}
 	return fmt.Errorf("unknown PriceUnit edge %s", name)
 }
 
@@ -44142,6 +44055,8 @@ type SubscriptionMutation struct {
 	coupon_applications        map[string]struct{}
 	removedcoupon_applications map[string]struct{}
 	clearedcoupon_applications bool
+	invoicing_customer         *string
+	clearedinvoicing_customer  bool
 	done                       bool
 	oldValue                   func(context.Context) (*Subscription, error)
 	predicates                 []predicate.Subscription
@@ -45841,6 +45756,55 @@ func (m *SubscriptionMutation) ResetEnableTrueUp() {
 	m.enable_true_up = nil
 }
 
+// SetInvoicingCustomerID sets the "invoicing_customer_id" field.
+func (m *SubscriptionMutation) SetInvoicingCustomerID(s string) {
+	m.invoicing_customer = &s
+}
+
+// InvoicingCustomerID returns the value of the "invoicing_customer_id" field in the mutation.
+func (m *SubscriptionMutation) InvoicingCustomerID() (r string, exists bool) {
+	v := m.invoicing_customer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicingCustomerID returns the old "invoicing_customer_id" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldInvoicingCustomerID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicingCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicingCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicingCustomerID: %w", err)
+	}
+	return oldValue.InvoicingCustomerID, nil
+}
+
+// ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
+func (m *SubscriptionMutation) ClearInvoicingCustomerID() {
+	m.invoicing_customer = nil
+	m.clearedFields[subscription.FieldInvoicingCustomerID] = struct{}{}
+}
+
+// InvoicingCustomerIDCleared returns if the "invoicing_customer_id" field was cleared in this mutation.
+func (m *SubscriptionMutation) InvoicingCustomerIDCleared() bool {
+	_, ok := m.clearedFields[subscription.FieldInvoicingCustomerID]
+	return ok
+}
+
+// ResetInvoicingCustomerID resets all changes to the "invoicing_customer_id" field.
+func (m *SubscriptionMutation) ResetInvoicingCustomerID() {
+	m.invoicing_customer = nil
+	delete(m.clearedFields, subscription.FieldInvoicingCustomerID)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -46165,6 +46129,33 @@ func (m *SubscriptionMutation) ResetCouponApplications() {
 	m.removedcoupon_applications = nil
 }
 
+// ClearInvoicingCustomer clears the "invoicing_customer" edge to the Customer entity.
+func (m *SubscriptionMutation) ClearInvoicingCustomer() {
+	m.clearedinvoicing_customer = true
+	m.clearedFields[subscription.FieldInvoicingCustomerID] = struct{}{}
+}
+
+// InvoicingCustomerCleared reports if the "invoicing_customer" edge to the Customer entity was cleared.
+func (m *SubscriptionMutation) InvoicingCustomerCleared() bool {
+	return m.InvoicingCustomerIDCleared() || m.clearedinvoicing_customer
+}
+
+// InvoicingCustomerIDs returns the "invoicing_customer" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// InvoicingCustomerID instead. It exists only for internal usage by the builders.
+func (m *SubscriptionMutation) InvoicingCustomerIDs() (ids []string) {
+	if id := m.invoicing_customer; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetInvoicingCustomer resets all changes to the "invoicing_customer" edge.
+func (m *SubscriptionMutation) ResetInvoicingCustomer() {
+	m.invoicing_customer = nil
+	m.clearedinvoicing_customer = false
+}
+
 // Where appends a list predicates to the SubscriptionMutation builder.
 func (m *SubscriptionMutation) Where(ps ...predicate.Subscription) {
 	m.predicates = append(m.predicates, ps...)
@@ -46199,7 +46190,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 38)
+	fields := make([]string, 0, 39)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -46314,6 +46305,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.enable_true_up != nil {
 		fields = append(fields, subscription.FieldEnableTrueUp)
 	}
+	if m.invoicing_customer != nil {
+		fields = append(fields, subscription.FieldInvoicingCustomerID)
+	}
 	return fields
 }
 
@@ -46398,6 +46392,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.ProrationBehavior()
 	case subscription.FieldEnableTrueUp:
 		return m.EnableTrueUp()
+	case subscription.FieldInvoicingCustomerID:
+		return m.InvoicingCustomerID()
 	}
 	return nil, false
 }
@@ -46483,6 +46479,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldProrationBehavior(ctx)
 	case subscription.FieldEnableTrueUp:
 		return m.OldEnableTrueUp(ctx)
+	case subscription.FieldInvoicingCustomerID:
+		return m.OldInvoicingCustomerID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -46758,6 +46756,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEnableTrueUp(v)
 		return nil
+	case subscription.FieldInvoicingCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicingCustomerID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -46857,6 +46862,9 @@ func (m *SubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(subscription.FieldGatewayPaymentMethodID) {
 		fields = append(fields, subscription.FieldGatewayPaymentMethodID)
 	}
+	if m.FieldCleared(subscription.FieldInvoicingCustomerID) {
+		fields = append(fields, subscription.FieldInvoicingCustomerID)
+	}
 	return fields
 }
 
@@ -46912,6 +46920,9 @@ func (m *SubscriptionMutation) ClearField(name string) error {
 		return nil
 	case subscription.FieldGatewayPaymentMethodID:
 		m.ClearGatewayPaymentMethodID()
+		return nil
+	case subscription.FieldInvoicingCustomerID:
+		m.ClearInvoicingCustomerID()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription nullable field %s", name)
@@ -47035,13 +47046,16 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 	case subscription.FieldEnableTrueUp:
 		m.ResetEnableTrueUp()
 		return nil
+	case subscription.FieldInvoicingCustomerID:
+		m.ResetInvoicingCustomerID()
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.line_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47059,6 +47073,9 @@ func (m *SubscriptionMutation) AddedEdges() []string {
 	}
 	if m.coupon_applications != nil {
 		edges = append(edges, subscription.EdgeCouponApplications)
+	}
+	if m.invoicing_customer != nil {
+		edges = append(edges, subscription.EdgeInvoicingCustomer)
 	}
 	return edges
 }
@@ -47103,13 +47120,17 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgeInvoicingCustomer:
+		if id := m.invoicing_customer; id != nil {
+			return []ent.Value{*id}
+		}
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.removedline_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47177,7 +47198,7 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 6)
+	edges := make([]string, 0, 7)
 	if m.clearedline_items {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47195,6 +47216,9 @@ func (m *SubscriptionMutation) ClearedEdges() []string {
 	}
 	if m.clearedcoupon_applications {
 		edges = append(edges, subscription.EdgeCouponApplications)
+	}
+	if m.clearedinvoicing_customer {
+		edges = append(edges, subscription.EdgeInvoicingCustomer)
 	}
 	return edges
 }
@@ -47215,6 +47239,8 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 		return m.clearedcoupon_associations
 	case subscription.EdgeCouponApplications:
 		return m.clearedcoupon_applications
+	case subscription.EdgeInvoicingCustomer:
+		return m.clearedinvoicing_customer
 	}
 	return false
 }
@@ -47223,6 +47249,9 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *SubscriptionMutation) ClearEdge(name string) error {
 	switch name {
+	case subscription.EdgeInvoicingCustomer:
+		m.ClearInvoicingCustomer()
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription unique edge %s", name)
 }
@@ -47248,6 +47277,9 @@ func (m *SubscriptionMutation) ResetEdge(name string) error {
 		return nil
 	case subscription.EdgeCouponApplications:
 		m.ResetCouponApplications()
+		return nil
+	case subscription.EdgeInvoicingCustomer:
+		m.ResetInvoicingCustomer()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription edge %s", name)
