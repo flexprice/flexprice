@@ -56,7 +56,7 @@ Events must be JSON with these fields:
 }
 ```
 
-**Important:** If your meter aggregates a property (like `SUM` of `"feature 1"`), send it as a **number**, not a string.
+**⚠️ SDK Note:** Due to SDK limitations, numeric property values must be converted to strings in your Bloblang transform using `"%v".format(this.value)` - the API will convert them back to numbers for aggregation.
 
 ## Configuration
 
@@ -176,8 +176,10 @@ pipeline:
         root.event_name = this.eventType
         root.external_customer_id = this.userId
         
-        # Preserve numeric types for aggregation
-        root.properties = this.data
+        # Convert ALL property values to strings for SDK compatibility
+        root.properties = this.data.map_each(kv -> {
+          kv.key: "%v".format(kv.value)
+        })
         
         # Add source tracking
         root.source = "my-service"

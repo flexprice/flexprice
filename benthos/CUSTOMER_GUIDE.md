@@ -75,11 +75,14 @@ pipeline:
         # Transform Vapi events to Flexprice format
         root.event_name = "voice_call"
         root.external_customer_id = this.customer_id
+        
+        # Convert numeric values to strings for SDK compatibility
         root.properties = {
-          "duration_seconds": this.duration_seconds,
+          "duration_seconds": "%v".format(this.duration_seconds),
           "model": this.model,
           "call_id": this.call_id
         }
+        
         root.source = "vapi-production"
         root.timestamp = this.timestamp
 
@@ -270,7 +273,7 @@ Before running the collector, set up in your Flexprice account:
 | `timestamp` | Optional | Event time (defaults to now) | `"2025-12-01T10:30:00Z"` |
 | `source` | Optional | Event source tracking | `"vapi-production"` |
 
-**Important:** If your meter aggregates a property (e.g., `SUM` of `duration_seconds`), send it as a **number**, not a string.
+**⚠️ Important:** Due to SDK limitations, numeric property values must be converted to **strings** in your Bloblang transform using `"%v".format(this.value)` - the API will convert them back to numbers for aggregation.
 
 ---
 
