@@ -5,7 +5,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -216,11 +215,7 @@ func (Price) Fields() []ent.Field {
 
 // Edges of the Price.
 func (Price) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.To("price_unit_edge", PriceUnit.Type).
-			Field("price_unit_id").
-			Unique(),
-	}
+	return nil
 }
 
 // Indexes of the Price.

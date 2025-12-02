@@ -226,6 +226,20 @@ func (cc *CustomerCreate) SetNillableAddressCountry(s *string) *CustomerCreate {
 	return cc
 }
 
+// SetParentCustomerID sets the "parent_customer_id" field.
+func (cc *CustomerCreate) SetParentCustomerID(s string) *CustomerCreate {
+	cc.mutation.SetParentCustomerID(s)
+	return cc
+}
+
+// SetNillableParentCustomerID sets the "parent_customer_id" field if the given value is not nil.
+func (cc *CustomerCreate) SetNillableParentCustomerID(s *string) *CustomerCreate {
+	if s != nil {
+		cc.SetParentCustomerID(*s)
+	}
+	return cc
+}
+
 // SetID sets the "id" field.
 func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	cc.mutation.SetID(s)
@@ -422,6 +436,10 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.AddressCountry(); ok {
 		_spec.SetField(customer.FieldAddressCountry, field.TypeString, value)
 		_node.AddressCountry = value
+	}
+	if value, ok := cc.mutation.ParentCustomerID(); ok {
+		_spec.SetField(customer.FieldParentCustomerID, field.TypeString, value)
+		_node.ParentCustomerID = &value
 	}
 	return _node, _spec
 }

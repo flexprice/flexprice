@@ -11,7 +11,6 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/price"
-	"github.com/flexprice/flexprice/ent/priceunit"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -95,31 +94,8 @@ type Price struct {
 	// EndDate holds the value of the "end_date" field.
 	EndDate *time.Time `json:"end_date,omitempty"`
 	// GroupID holds the value of the "group_id" field.
-	GroupID *string `json:"group_id,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the PriceQuery when eager-loading is set.
-	Edges        PriceEdges `json:"edges"`
+	GroupID      *string `json:"group_id,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// PriceEdges holds the relations/edges for other nodes in the graph.
-type PriceEdges struct {
-	// PriceUnitEdge holds the value of the price_unit_edge edge.
-	PriceUnitEdge *PriceUnit `json:"price_unit_edge,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// PriceUnitEdgeOrErr returns the PriceUnitEdge value or an error if the edge
-// was not loaded in eager-loading, or loaded but was not found.
-func (e PriceEdges) PriceUnitEdgeOrErr() (*PriceUnit, error) {
-	if e.PriceUnitEdge != nil {
-		return e.PriceUnitEdge, nil
-	} else if e.loadedTypes[0] {
-		return nil, &NotFoundError{label: priceunit.Label}
-	}
-	return nil, &NotLoadedError{edge: "price_unit_edge"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -416,11 +392,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pr *Price) Value(name string) (ent.Value, error) {
 	return pr.selectValues.Get(name)
-}
-
-// QueryPriceUnitEdge queries the "price_unit_edge" edge of the Price entity.
-func (pr *Price) QueryPriceUnitEdge() *PriceUnitQuery {
-	return NewPriceClient(pr.config).QueryPriceUnitEdge(pr)
 }
 
 // Update returns a builder for updating this Price.
