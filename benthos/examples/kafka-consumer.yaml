@@ -1,4 +1,4 @@
-# Benthos Flexprice - Kafka Consumer Example
+# Bento Flexprice - Kafka Consumer Example
 # This configuration consumes events from a Kafka topic and forwards them to Flexprice
 
 input:
@@ -12,7 +12,7 @@ input:
       - ${KAFKA_TOPIC:events}
     
     # Consumer group for tracking offset
-    consumer_group: benthos-flexprice-consumer
+    consumer_group: bento-flexprice-consumer
     
     # Start from the oldest message on first run
     start_from_oldest: true
@@ -75,7 +75,7 @@ output:
 # Optional: Metrics configuration
 metrics:
   prometheus:
-    prefix: benthos_flexprice_kafka
+    prefix: bento_flexprice_kafka
     
 logger:
   level: INFO

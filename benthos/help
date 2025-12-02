@@ -3,7 +3,7 @@
 
 cat << 'EOF'
 ╔═══════════════════════════════════════════════════════════╗
-║  Benthos-Flexprice Collector - Quick Start               ║
+║  Bento-Flexprice Collector - Quick Start                 ║
 ╚═══════════════════════════════════════════════════════════╝
 
 📝 SETUP (once):
@@ -23,9 +23,9 @@ cat << 'EOF'
 
 🚀 RUN:
 
-   Terminal 1 - Start Benthos service:
+   Terminal 1 - Start Bento service:
    ────────────────────────────────────
-   ./benthos-flexprice -c kafka-staging.yaml
+   ./bento-flexprice -c kafka-staging.yaml
    
    (Keep this running - it consumes from Kafka)
 
@@ -37,9 +37,9 @@ cat << 'EOF'
 
 🔍 VERIFY:
 
-   • Check Benthos logs (Terminal 1) for "Event accepted"
+   • Check Bento logs (Terminal 1) for "Event accepted"
    • Go to: https://app.cloud.flexprice.io/events
-   • Filter by source: "kafka-staging-benthos"
+   • Filter by source: "kafka-staging-bento"
    • Look for customers: test-customer-0, test-customer-1, test-customer-2
 
 📚 More details: cat QUICKSTART.md

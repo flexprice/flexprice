@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	flexprice "github.com/flexprice/go-sdk"
@@ -22,7 +23,7 @@ func flexpriceConfigSpec() *service.ConfigSpec {
 	return service.NewConfigSpec().
 		Summary("Send events to Flexprice using the official Go SDK").
 		Description("This output plugin uses the Flexprice Go SDK to send events to the Flexprice API. " +
-			"It supports single event ingestion with automatic retries and error handling.").
+			"It supports both single and bulk event ingestion with automatic batching, retries and error handling.").
 		Field(service.NewStringField("api_host").
 			Description("The host of the Flexprice API (e.g., api.cloud.flexprice.io)").
 			Default("api.cloud.flexprice.io")).
@@ -32,31 +33,48 @@ func flexpriceConfigSpec() *service.ConfigSpec {
 			Default("")).
 		Field(service.NewStringField("scheme").
 			Description("The scheme for the API (http or https)").
-			Default("https"))
+			Default("https")).
+		Field(service.NewBatchPolicyField("batching")).
+		Field(service.NewOutputMaxInFlightField().Default(10))
 }
 
-// init registers the Flexprice output plugin with Bento
+// init registers the Flexprice output plugin with Bento as a batch output
 func init() {
-	err := service.RegisterOutput(
+	err := service.RegisterBatchOutput(
 		"flexprice",
 		flexpriceConfigSpec(),
-		func(conf *service.ParsedConfig, mgr *service.Resources) (service.Output, int, error) {
+		func(conf *service.ParsedConfig, mgr *service.Resources) (
+			output service.BatchOutput,
+			batchPolicy service.BatchPolicy,
+			maxInFlight int,
+			err error,
+		) {
+			// Parse batch policy
+			if batchPolicy, err = conf.FieldBatchPolicy("batching"); err != nil {
+				return
+			}
+
+			// Parse max in flight
+			if maxInFlight, err = conf.FieldInt("max_in_flight"); err != nil {
+				return
+			}
+
 			// Parse configuration
 			apiHost, err := conf.FieldString("api_host")
 			if err != nil {
-				return nil, 0, err
+				return nil, batchPolicy, 0, err
 			}
 			apiKey, err := conf.FieldString("api_key")
 			if err != nil {
-				return nil, 0, err
+				return nil, batchPolicy, 0, err
 			}
 			scheme, err := conf.FieldString("scheme")
 			if err != nil {
-				return nil, 0, err
+				return nil, batchPolicy, 0, err
 			}
 
 			if apiKey == "" {
-				return nil, 0, fmt.Errorf("api_key is required")
+				return nil, batchPolicy, 0, fmt.Errorf("api_key is required")
 			}
 
 			// Initialize Flexprice SDK client
@@ -67,13 +85,12 @@ func init() {
 
 			client := flexprice.NewAPIClient(config)
 
-			output := &flexpriceOutput{
+			output = &flexpriceOutput{
 				client: client,
 				logger: mgr.Logger(),
 			}
 
-			// Return output with maxInFlight of 10 for better throughput
-			return output, 10, nil
+			return output, batchPolicy, maxInFlight, nil
 		},
 	)
 	if err != nil {
@@ -81,81 +98,82 @@ func init() {
 	}
 }
 
-// flexpriceOutput implements the service.Output interface using the Flexprice Go SDK
+// flexpriceOutput implements the service.BatchOutput interface using the Flexprice Go SDK
 type flexpriceOutput struct {
 	client *flexprice.APIClient
 	logger *service.Logger
 }
 
-// Connect implements service.Output
+// Connect implements service.BatchOutput
 func (f *flexpriceOutput) Connect(ctx context.Context) error {
 	f.logger.Info("Flexprice output connected and ready")
 	return nil
 }
 
-// Write implements service.Output - sends events to Flexprice using the Go SDK
-func (f *flexpriceOutput) Write(ctx context.Context, msg *service.Message) error {
-	// Parse message into Flexprice DtoIngestEventRequest
-	var eventRequest flexprice.DtoIngestEventRequest
+// WriteBatch implements service.BatchOutput - sends events to Flexprice using the Go SDK
+// This method handles both single events and bulk batches efficiently
+func (f *flexpriceOutput) WriteBatch(ctx context.Context, batch service.MessageBatch) error {
+	// Parse all messages into event requests
+	events := make([]flexprice.DtoIngestEventRequest, 0, len(batch))
 
-	// Convert structured data to event request
-	// This handles the JSON unmarshaling internally
-	msgBytes, err := msg.AsBytes()
+	err := batch.WalkWithBatchedErrors(func(_ int, msg *service.Message) error {
+		msgBytes, err := msg.AsBytes()
+		if err != nil {
+			return fmt.Errorf("failed to read message: %w", err)
+		}
+
+		var eventRequest flexprice.DtoIngestEventRequest
+		if err := json.Unmarshal(msgBytes, &eventRequest); err != nil {
+			f.logger.Errorf("Failed to parse message as DtoIngestEventRequest: %v", err)
+			return fmt.Errorf("failed to parse message: %w", err)
+		}
+
+		// Validate required fields
+		if eventRequest.EventName == "" {
+			return fmt.Errorf("event_name is required")
+		}
+		if eventRequest.ExternalCustomerId == "" {
+			return fmt.Errorf("external_customer_id is required")
+		}
+
+		// Set default timestamp if not provided
+		if eventRequest.Timestamp == nil || *eventRequest.Timestamp == "" {
+			now := time.Now().Format(time.RFC3339)
+			eventRequest.Timestamp = &now
+		}
+
+		events = append(events, eventRequest)
+		return nil
+	})
+
 	if err != nil {
-		return fmt.Errorf("failed to read message: %w", err)
+		// Return batch errors - Bento will handle retrying failed messages
+		return err
 	}
 
-	if err := json.Unmarshal(msgBytes, &eventRequest); err != nil {
-		f.logger.Errorf("Failed to parse message as DtoIngestEventRequest: %v", err)
-		return fmt.Errorf("failed to parse message: %w", err)
+	// No events to send (all failed validation)
+	if len(events) == 0 {
+		return fmt.Errorf("no valid events in batch")
 	}
 
-	// Validate required fields
-	if eventRequest.EventName == "" {
-		return fmt.Errorf("event_name is required")
-	}
-	if eventRequest.ExternalCustomerId == "" {
-		return fmt.Errorf("external_customer_id is required")
+	// Use bulk endpoint if we have multiple events, single endpoint for one event
+	if len(events) == 1 {
+		return f.sendSingleEvent(ctx, events[0])
 	}
 
-	// Set default timestamp if not provided
-	if eventRequest.Timestamp == nil || *eventRequest.Timestamp == "" {
-		now := time.Now().Format(time.RFC3339)
-		eventRequest.Timestamp = &now
-	}
+	return f.sendBulkEvents(ctx, events)
+}
 
-	// Send event using Flexprice Go SDK
-	f.logger.Infof("📤 Sending event: %s for customer: %s", eventRequest.EventName, eventRequest.ExternalCustomerId)
+// sendSingleEvent sends a single event using the single event API
+func (f *flexpriceOutput) sendSingleEvent(ctx context.Context, event flexprice.DtoIngestEventRequest) error {
+	f.logger.Infof("📤 Sending event: %s for customer: %s", event.EventName, event.ExternalCustomerId)
 
 	result, httpResp, err := f.client.EventsAPI.EventsPost(ctx).
-		Event(eventRequest).
+		Event(event).
 		Execute()
 
 	if err != nil {
-		f.logger.Errorf("Failed to send event: %v", err)
-
-		// Check HTTP status code for retry logic
-		if httpResp != nil {
-			switch httpResp.StatusCode {
-			case 400:
-				// Bad request - don't retry
-				return fmt.Errorf("bad request (400): %w", err)
-			case 401, 403:
-				// Authentication error - fail fast
-				return fmt.Errorf("authentication failed (%d): %w", httpResp.StatusCode, err)
-			case 429:
-				// Rate limited - retry
-				f.logger.Warnf("Rate limited (429), will retry")
-				return fmt.Errorf("rate limited (429): %w", err)
-			case 500, 502, 503, 504:
-				// Server error - retry
-				f.logger.Errorf("Server error (%d), will retry", httpResp.StatusCode)
-				return fmt.Errorf("server error (%d): %w", httpResp.StatusCode, err)
-			}
-		}
-
-		// Unknown error - retry
-		return fmt.Errorf("failed to send event: %w", err)
+		return f.handleAPIError(err, httpResp, "single event")
 	}
 
 	// Check for successful response
@@ -175,7 +193,68 @@ func (f *flexpriceOutput) Write(ctx context.Context, msg *service.Message) error
 	return fmt.Errorf("unexpected status code: %d", httpResp.StatusCode)
 }
 
-// Close implements service.Output
+// sendBulkEvents sends multiple events using the bulk API
+func (f *flexpriceOutput) sendBulkEvents(ctx context.Context, events []flexprice.DtoIngestEventRequest) error {
+	f.logger.Infof("📦 Sending bulk batch: %d events", len(events))
+
+	// Create bulk request
+	bulkRequest := flexprice.NewDtoBulkIngestEventRequest(events)
+
+	result, httpResp, err := f.client.EventsAPI.EventsBulkPost(ctx).
+		Event(*bulkRequest).
+		Execute()
+
+	if err != nil {
+		return f.handleAPIError(err, httpResp, fmt.Sprintf("bulk batch (%d events)", len(events)))
+	}
+
+	// Check for successful response
+	if httpResp.StatusCode == 202 {
+		if result != nil {
+			f.logger.Infof("✅ Bulk batch accepted successfully: %d events processed", len(events))
+			if msg, ok := result["message"]; ok {
+				f.logger.Debugf("Response: %v", msg)
+			}
+		}
+		return nil
+	}
+
+	// Unexpected status code
+	f.logger.Warnf("Unexpected status code for bulk batch: %d", httpResp.StatusCode)
+	return fmt.Errorf("unexpected status code: %d", httpResp.StatusCode)
+}
+
+// handleAPIError processes API errors and determines retry behavior
+func (f *flexpriceOutput) handleAPIError(err error, httpResp *http.Response, operation string) error {
+	f.logger.Errorf("Failed to send %s: %v", operation, err)
+
+	// Check HTTP status code for retry logic
+	if httpResp != nil {
+		switch httpResp.StatusCode {
+		case 400:
+			// Bad request - don't retry
+			f.logger.Errorf("Bad request (400) for %s - check event format", operation)
+			return fmt.Errorf("bad request (400): %w", err)
+		case 401, 403:
+			// Authentication error - fail fast
+			f.logger.Errorf("Authentication failed (%d) for %s", httpResp.StatusCode, operation)
+			return fmt.Errorf("authentication failed (%d): %w", httpResp.StatusCode, err)
+		case 429:
+			// Rate limited - retry
+			f.logger.Warnf("Rate limited (429) for %s, will retry", operation)
+			return fmt.Errorf("rate limited (429): %w", err)
+		case 500, 502, 503, 504:
+			// Server error - retry
+			f.logger.Errorf("Server error (%d) for %s, will retry", httpResp.StatusCode, operation)
+			return fmt.Errorf("server error (%d): %w", httpResp.StatusCode, err)
+		}
+	}
+
+	// Unknown error - retry
+	return fmt.Errorf("failed to send %s: %w", operation, err)
+}
+
+// Close implements service.BatchOutput
 func (f *flexpriceOutput) Close(ctx context.Context) error {
 	f.logger.Info("Closing Flexprice output")
 	return nil

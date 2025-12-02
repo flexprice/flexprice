@@ -1,126 +1,96 @@
-# Bento-Flexprice Customer Guide
+# Flexprice Event Collector - Customer Guide
 
-## Overview
+Stream usage events from Kafka/Postgres/APIs to Flexprice for usage-based billing. No code changes required.
 
-`bento-flexprice` is a pre-built stream processor that forwards usage events from **your data sources** (Kafka, databases, APIs) to **Flexprice** for usage-based billing. No code changes required in your application.
-
-> **Note**: Built on [Bento](https://github.com/warpstreamlabs/bento), the MIT-licensed fork of Benthos, ensuring complete open-source freedom.
-
-## Use Case Example: Vapi (Voice Agent Company)
-
-**Scenario:** Vapi tracks voice call usage in their Kafka topic and wants to send it to Flexprice for billing.
-
-### Vapi's Current Events (Kafka)
-```json
-{
-  "call_id": "call_123",
-  "customer_id": "vapi_cust_456",
-  "duration_seconds": 120,
-  "model": "gpt-4",
-  "timestamp": "2025-12-01T10:30:00Z"
-}
-```
-
-### Flexprice Event Format (Required)
-```json
-{
-  "event_name": "voice_call",
-  "external_customer_id": "vapi_cust_456",
-  "properties": {
-    "duration_seconds": 120,
-    "model": "gpt-4"
-  },
-  "source": "vapi-production",
-  "timestamp": "2025-12-01T10:30:00Z"
-}
-```
+> Built on [Bento](https://github.com/warpstreamlabs/bento) - Open source stream processor (MIT license)
 
 ---
 
-## Setup Steps (5 Minutes)
+## Quick Start (5 Minutes)
 
-### 1. Clone & Build
+### 1. Download Binary
 
 ```bash
-git clone https://github.com/flexprice/bento-flexprice.git
-cd bento-flexprice
-go build -o bento-flexprice main.go
+# Download from GitHub releases
+curl -L https://github.com/flexprice/flexprice/releases/latest/download/bento-flexprice-linux -o bento-flexprice
+chmod +x bento-flexprice
 ```
 
 ### 2. Create Config File
 
-**`vapi-config.yaml`:**
+**Example: Vapi (Voice AI company) streaming call usage from Kafka**
 
+**`config.yaml`:**
 ```yaml
 input:
   kafka:
-    addresses: 
-      - ${VAPI_KAFKA_BROKERS}
-    topics:
-      - vapi-usage-events
-    consumer_group: vapi-to-flexprice
-    start_from_oldest: false
+    addresses: ["${KAFKA_BROKERS}"]
+    topics: ["usage-events"]
+    consumer_group: "flexprice-collector"
     
-    # Authentication (if needed)
+    # Auth (Confluent Cloud / AWS MSK)
     tls:
       enabled: true
     sasl:
       mechanism: PLAIN
-      user: ${VAPI_KAFKA_USER}
-      password: ${VAPI_KAFKA_PASSWORD}
+      user: "${KAFKA_USER}"
+      password: "${KAFKA_PASSWORD}"
 
 pipeline:
   processors:
+    # Transform your events → Flexprice format
     - mapping: |
-        # Transform Vapi events to Flexprice format
         root.event_name = "voice_call"
         root.external_customer_id = this.customer_id
-        
-        # Convert numeric values to strings for SDK compatibility
         root.properties = {
-          "duration_seconds": "%v".format(this.duration_seconds),
-          "model": this.model,
-          "call_id": this.call_id
+          "duration_seconds": this.duration_seconds.string(),
+          "model": this.model
         }
-        
-        root.source = "vapi-production"
         root.timestamp = this.timestamp
+        root.source = "production"
 
 output:
   flexprice:
-    api_host: ${FLEXPRICE_API_HOST}
-    api_key: ${FLEXPRICE_API_KEY}
+    api_host: "${FLEXPRICE_API_HOST}"
+    api_key: "${FLEXPRICE_API_KEY}"
     scheme: https
+    
+    # Bulk event batching (10x fewer API calls)
+    batching:
+      count: 100       # Send when 100 events accumulated
+      period: 5s       # Or after 5 seconds
+    
+    max_in_flight: 10  # Concurrent requests
+
+logger:
+  level: INFO
 ```
 
 ### 3. Set Environment Variables
 
-**`.env.production`:**
-
 ```bash
-# Flexprice credentials (from Flexprice dashboard)
+# Flexprice (from dashboard → Settings → API Keys)
 export FLEXPRICE_API_HOST=api.cloud.flexprice.io
-export FLEXPRICE_API_KEY=fp_your_key_here
+export FLEXPRICE_API_KEY=fp_live_xxxxx
 
 # Your Kafka cluster
-export VAPI_KAFKA_BROKERS=kafka.vapi.ai:9092
-export VAPI_KAFKA_USER=service_account
-export VAPI_KAFKA_PASSWORD=xxx
+export KAFKA_BROKERS=pkc-xxxxx.aws.confluent.cloud:9092
+export KAFKA_USER=your-api-key
+export KAFKA_PASSWORD=your-api-secret
 ```
 
-### 4. Run the Collector
+### 4. Run
 
 ```bash
-source .env.production
-./bento-flexprice -c vapi-config.yaml
+./bento-flexprice -c config.yaml
 ```
 
 **Expected Output:**
 ```
 INFO Flexprice output connected and ready
 INFO Input type kafka is now active
-INFO 📤 Sending event: voice_call for customer: vapi_cust_456
-INFO ✅ Event accepted successfully, ID: evt_xxx
+INFO 📦 Sending bulk batch: 100 events
+INFO ✅ Bulk batch accepted successfully: 100 events processed
 ```
 
 ---
@@ -129,31 +99,23 @@ INFO ✅ Event accepted successfully, ID: evt_xxx
 
 ### Docker
 
-**Dockerfile:**
 ```dockerfile
-FROM golang:1.21 AS builder
-WORKDIR /app
-COPY . .
-RUN go build -o bento-flexprice main.go
-
 FROM debian:bookworm-slim
-COPY --from=builder /app/bento-flexprice /usr/local/bin/
-COPY vapi-config.yaml /config/
-CMD ["bento-flexprice", "-c", "/config/vapi-config.yaml"]
+COPY bento-flexprice /usr/local/bin/
+COPY config.yaml /etc/bento/
+CMD ["bento-flexprice", "-c", "/etc/bento/config.yaml"]
 ```
 
-**Run:**
 ```bash
-docker build -t vapi/bento-flexprice:latest .
-
 docker run -d \
-  --name vapi-flexprice-collector \
+  --name flexprice-collector \
+  --restart unless-stopped \
   -e FLEXPRICE_API_HOST=api.cloud.flexprice.io \
-  -e FLEXPRICE_API_KEY=fp_xxx \
-  -e VAPI_KAFKA_BROKERS=kafka.vapi.ai:9092 \
-  -e VAPI_KAFKA_USER=xxx \
-  -e VAPI_KAFKA_PASSWORD=xxx \
-  vapi/bento-flexprice:latest
+  -e FLEXPRICE_API_KEY=fp_live_xxx \
+  -e KAFKA_BROKERS=your-kafka:9092 \
+  -e KAFKA_USER=xxx \
+  -e KAFKA_PASSWORD=xxx \
+  your-org/flexprice-collector:latest
 ```
 
 ### Kubernetes
@@ -162,38 +124,26 @@ docker run -d \
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: bento-flexprice
+  name: flexprice-collector
 spec:
-  replicas: 2
+  replicas: 2  # Scale horizontally
   template:
     spec:
       containers:
       - name: bento
-        image: vapi/bento-flexprice:latest
+        image: your-org/flexprice-collector:latest
         env:
-        - name: FLEXPRICE_API_HOST
-          value: api.cloud.flexprice.io
         - name: FLEXPRICE_API_KEY
           valueFrom:
             secretKeyRef:
-              name: flexprice-secrets
+              name: flexprice
               key: api-key
-        - name: VAPI_KAFKA_BROKERS
-          value: kafka.vapi.ai:9092
-        - name: VAPI_KAFKA_USER
-          valueFrom:
-            secretKeyRef:
-              name: kafka-secrets
-              key: username
-        - name: VAPI_KAFKA_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: kafka-secrets
-              key: password
+        - name: KAFKA_BROKERS
+          value: "kafka:9092"
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
+            memory: "256Mi"
+            cpu: "200m"
           limits:
             memory: "512Mi"
             cpu: "500m"
@@ -201,182 +151,198 @@ spec:
 
 ---
 
-## Data Flow
+## Before You Start
 
-```
-┌─────────────────┐
-│  Your Kafka     │  Your event format
-│  vapi-usage-    │  (duration_seconds, customer_id, etc.)
-│     events      │
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│     Bento       │  Transform with Bloblang:
-│  (Transform)    │  - Map your fields → Flexprice fields
-│                 │  - No code changes needed
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│   Flexprice     │  POST /v1/events
-│      API        │  (Standard Flexprice format)
-└─────────────────┘
-         │
-         v
-┌─────────────────┐
-│  Flexprice UI   │  Usage tracked automatically:
-│                 │  - Real-time meters
-│                 │  - Per-customer usage
-│                 │  - Automated invoicing
-└─────────────────┘
-```
-
----
-
-## Prerequisites in Flexprice
-
-Before running the collector, set up in your Flexprice account:
+### In Flexprice Dashboard:
 
 1. **Create Meter**
-   - Name: `voice_call`
-   - Event name: `voice_call`
+   - Name: `voice_call` (must match `event_name` in config)
    - Aggregation: `SUM` of `duration_seconds`
 
 2. **Import Customers**
-   - Ensure `external_customer_id` in events matches your customer IDs in Flexprice
+   - Ensure `external_customer_id` matches your IDs
 
 3. **Generate API Key**
-   - Go to Settings → API Keys
-   - Create key with `events:write` permission
+   - Settings → API Keys → Create Key
 
 ---
 
-## Key Features
+## Event Format
 
-- ✅ **No Code Changes** - Just config and deploy
-- ✅ **Reliable** - Built-in retries and error handling
-- ✅ **Scalable** - Run multiple replicas for high throughput
-- ✅ **Flexible** - Transform any event format with Bloblang
-- ✅ **Observable** - Prometheus metrics at `:4195/metrics`
-- ✅ **Production-Ready** - Battle-tested Benthos core + Flexprice SDK
+Your events are transformed to Flexprice format:
+
+```yaml
+# Your Kafka event:
+{
+  "customer_id": "cust_123",
+  "duration_seconds": 120,
+  "model": "gpt-4"
+}
+
+# Transformed to Flexprice:
+{
+  "event_name": "voice_call",           # Required
+  "external_customer_id": "cust_123",   # Required
+  "properties": {
+    "duration_seconds": "120",          # For SUM aggregation
+    "model": "gpt-4"
+  },
+  "timestamp": "2025-12-02T10:00:00Z",  # Optional
+  "source": "production"                # Optional
+}
+```
+
+**⚠️ Important:** Convert numeric properties to strings using `.string()` in mapping - Flexprice API converts them back for aggregation.
 
 ---
 
-## Event Format Requirements
+## Data Sources
 
-| Field | Required | Description | Example |
-|-------|----------|-------------|---------|
-| `event_name` | ✅ Yes | Must match Flexprice meter name | `"voice_call"` |
-| `external_customer_id` | ✅ Yes | Your customer identifier | `"vapi_cust_456"` |
-| `properties` | Optional | Event metadata (use numbers for SUM/COUNT) | `{"duration_seconds": 120}` |
-| `timestamp` | Optional | Event time (defaults to now) | `"2025-12-01T10:30:00Z"` |
-| `source` | Optional | Event source tracking | `"vapi-production"` |
+### Kafka (shown above)
 
-**⚠️ Important:** Due to SDK limitations, numeric property values must be converted to **strings** in your Bloblang transform using `"%v".format(this.value)` - the API will convert them back to numbers for aggregation.
+### PostgreSQL CDC
+
+```yaml
+input:
+  sql_select:
+    driver: postgres
+    dsn: "postgres://user:pass@localhost/db"
+    table: "usage_events"
+    columns: ["*"]
+    where: "created_at > $1"
+    args_mapping: "root = [timestamp_unix()]"
+```
+
+### HTTP Webhook
+
+```yaml
+input:
+  http_server:
+    address: "0.0.0.0:8080"
+    path: "/webhook"
+```
+
+### File/S3
+
+```yaml
+input:
+  aws_s3:
+    bucket: "usage-logs"
+    prefix: "events/"
+```
+
+[See all 200+ inputs](https://warpstreamlabs.github.io/bento/docs/components/inputs/about)
 
 ---
 
-## Monitoring & Observability
+## Monitoring
 
-Bento exposes metrics on port **4195**:
-
-- **Prometheus Metrics**: `http://localhost:4195/metrics`
-- **Health Check**: `http://localhost:4195/ping`
-- **Runtime Stats**: `http://localhost:4195/stats`
-
-### Key Metrics to Monitor
+Metrics available at `http://localhost:4195/metrics` (Prometheus format):
 
 ```
-benthos_input_received_total          # Events received from Kafka
-benthos_output_sent_total             # Events sent to Flexprice
-benthos_output_error_total            # Failed sends
-benthos_processor_error_total         # Transform errors
+# Key metrics
+bento_input_received_total     # Events from Kafka
+bento_output_sent_total        # Events to Flexprice  
+bento_output_batch_sent_total  # Bulk batches sent
+bento_output_error_total       # Failed sends
 ```
+
+**Health check:** `http://localhost:4195/ping`
+
+---
+
+## Bulk Event Batching
+
+The collector automatically batches events for 10-100x better performance:
+
+```yaml
+batching:
+  count: 100    # Batch size
+  period: 5s    # Max wait time
+```
+
+**Benefits:**
+- 1000 events = 10 API calls (instead of 1000)
+- Lower latency and costs
+- Automatic optimization (1 event = single API call)
 
 ---
 
 ## Error Handling
 
-| Status Code | Behavior |
-|-------------|----------|
-| **202 Accepted** | ✅ Success - event accepted |
-| **400 Bad Request** | ❌ Dropped - validation error (logged) |
-| **401/403 Auth Error** | 🛑 Stop - invalid API key |
-| **429 Rate Limited** | 🔄 Retry with exponential backoff |
-| **5xx Server Error** | 🔄 Retry with exponential backoff |
-| **Network Error** | 🔄 Retry with exponential backoff |
+| Status | Behavior |
+|--------|----------|
+| 202 | ✅ Success |
+| 400 | ❌ Dropped (logged) |
+| 401/403 | 🛑 Fatal (bad API key) |
+| 429/5xx | 🔄 Retry with backoff |
 
 ---
 
 ## Troubleshooting
 
-### Events not appearing in Flexprice
+### Events not showing in Flexprice?
 
-1. **Check event name matches meter:**
-   ```bash
-   # Look in Bento logs:
-   INFO 📤 Sending event: voice_call for customer: vapi_cust_456
+1. **Check event name:** Must match meter name exactly
+   ```
+   INFO 📤 Sending event: voice_call for customer: cust_123
    ```
 
-2. **Verify customer exists:**
-   - `external_customer_id` must match a customer in Flexprice
+2. **Verify customer exists:** `external_customer_id` must be in Flexprice
 
-3. **Check property types:**
-   ```json
-   // ✅ Correct (number)
-   {"duration_seconds": 120}
-   
-   // ❌ Wrong (string)
-   {"duration_seconds": "120"}
+3. **Check logs for errors:**
+   ```
+   ERROR Failed to send event: 400 Bad Request
    ```
 
-4. **Check API response:**
-   ```bash
-   # Success:
-   INFO ✅ Event accepted successfully, ID: evt_xxx
-   
-   # Error:
-   ERROR Failed to send event: 400 Bad Request: {"error": "..."}
-   ```
+### Kafka not connecting?
 
-### Kafka connection issues
+```bash
+# Test credentials
+echo $KAFKA_BROKERS
+echo $KAFKA_USER
 
-- **Verify brokers**: `echo $VAPI_KAFKA_BROKERS`
-- **Test credentials**: Use `kafka-console-consumer` to verify access
-- **Check TLS/SASL**: Ensure config matches your Kafka cluster auth
+# Check TLS/SASL settings match your cluster
+```
 
-### High memory usage
+### High memory usage?
 
-- Reduce `max_processing_period` in Kafka config
-- Lower `commit_period` to commit offsets more frequently
-- Scale horizontally (more replicas) instead of vertically
+- Scale horizontally (more replicas)
+- Reduce batch size
+- Add `fetch_buffer_cap: 256` to Kafka config
+
+---
+
+## Production Checklist
+
+- [ ] Download/build `bento-flexprice` binary
+- [ ] Create meter in Flexprice (matching `event_name`)
+- [ ] Import customers to Flexprice
+- [ ] Generate API key
+- [ ] Create config file with event mapping
+- [ ] Test locally with sample events
+- [ ] Deploy to production (Docker/K8s)
+- [ ] Set up monitoring (`/metrics` endpoint)
+- [ ] Verify events in Flexprice dashboard
+
+---
+
+## Example Companies Using This
+
+- **Vapi** - Voice AI call duration tracking
+- **Modal** - GPU compute time tracking  
+- **Liveblocks** - Collaborative editing events
+- **Incident.io** - API usage tracking
 
 ---
 
 ## Support
 
-- **Documentation**: [docs.flexprice.io](https://docs.flexprice.io)
-- **GitHub Issues**: [github.com/flexprice/bento-flexprice/issues](https://github.com/flexprice/bento-flexprice/issues)
-- **Bento Docs**: [warpstreamlabs.github.io/bento](https://warpstreamlabs.github.io/bento/)
-- **Contact**: support@flexprice.io
+- **Docs:** [docs.flexprice.io](https://docs.flexprice.io)
+- **Bento Docs:** [warpstreamlabs.github.io/bento](https://warpstreamlabs.github.io/bento)
+- **Issues:** [github.com/flexprice/flexprice/issues](https://github.com/flexprice/flexprice/issues)
+- **Email:** support@flexprice.io
 
 ---
 
-## Quick Start Checklist
-
-- [ ] Clone repository and build binary
-- [ ] Create meter in Flexprice (with matching `event_name`)
-- [ ] Import customers to Flexprice
-- [ ] Generate API key in Flexprice
-- [ ] Create config file mapping your events → Flexprice format
-- [ ] Set environment variables (API key, Kafka credentials)
-- [ ] Test locally with `./benthos-flexprice -c your-config.yaml`
-- [ ] Deploy to production (Docker/K8s)
-- [ ] Monitor metrics at `:4195/metrics`
-- [ ] Verify events in Flexprice UI
-
----
-
-**Ready to get started?** Follow the setup steps above and you'll be streaming usage events to Flexprice in minutes! 🚀
-
+**Ready in 5 minutes.** Download, configure, deploy. 🚀

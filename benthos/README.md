@@ -2,7 +2,7 @@
 
 Custom Bento distribution for streaming usage events to Flexprice from any data source (Kafka, databases, APIs, etc.).
 
-> **Note**: This project uses [Bento](https://github.com/warpstreamlabs/bento), the MIT-licensed fork of Benthos, ensuring complete open-source freedom without vendor restrictions.
+> **Note**: This project uses [Bento](https://github.com/warpstreamlabs/bento), an open-source stream processor (MIT license), ensuring complete freedom without vendor restrictions.
 
 ## Features
 
@@ -17,7 +17,7 @@ Custom Bento distribution for streaming usage events to Flexprice from any data 
 ### 1. Build the Binary
 
 ```bash
-cd benthos
+cd bento
 go build -o bento-flexprice main.go
 ```
 
@@ -79,7 +79,7 @@ input:
       - localhost:29092
     topics:
       - events
-    consumer_group: benthos-flexprice
+    consumer_group: bento-flexprice
     start_from_oldest: true
 ```
 
@@ -92,7 +92,7 @@ input:
       - ${KAFKA_BROKERS}
     topics:
       - your-topic
-    consumer_group: benthos-flexprice
+    consumer_group: bento-flexprice
     start_from_oldest: false
     
     # Enable TLS
@@ -121,7 +121,7 @@ export FLEXPRICE_API_KEY=fp_xxx
 export FLEXPRICE_KAFKA_BROKERS=pkc-xxx.us-east-1.aws.confluent.cloud:9092
 export FLEXPRICE_KAFKA_SASL_USER=your_user
 export FLEXPRICE_KAFKA_SASL_PASSWORD=your_password
-export FLEXPRICE_KAFKA_CONSUMER_GROUP=benthos-flexprice-prod
+export FLEXPRICE_KAFKA_CONSUMER_GROUP=bento-flexprice-prod
 ```
 
 **2. Load and run:**
@@ -217,7 +217,7 @@ docker exec -it flexprice-kafka-1 kafka-console-producer \
 {"event_name":"api.request","external_customer_id":"cust_123","properties":{"endpoint":"/api/users","count":5}}
 ```
 
-**Run Benthos:**
+**Run Bento:**
 
 ```bash
 export KAFKA_BROKER=localhost:29092
@@ -308,7 +308,7 @@ go build -o bento-flexprice main.go
 ## Project Structure
 
 ```
-benthos/
+bento/
 ├── main.go                    # Entry point (imports custom plugin)
 ├── output/
 │   └── flexprice.go          # Custom Flexprice output plugin
@@ -370,6 +370,6 @@ benthos/
 
 ## Related
 
-- [Bento](https://github.com/warpstreamlabs/bento) - Stream processor (MIT-licensed Benthos fork)
-- [benthos-openmeter](https://github.com/openmeterio/benthos-openmeter) - Inspiration
+- [Bento](https://github.com/warpstreamlabs/bento) - Open source stream processor (MIT license)
+- [OpenMeter Bento Plugin](https://github.com/openmeterio/openmeter) - Inspiration
 - [Flexprice](https://flexprice.io) - Usage-based billing

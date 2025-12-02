@@ -85,10 +85,10 @@ func main() {
 			ExternalCustomerID: "334230687423", // Real external customer ID
 			Properties: map[string]string{
 				"feature 1": fmt.Sprintf("%d", i+1), // Send as string, Flexprice will convert to number
-				"test_run":  "real-customer-benthos-test",
+				"test_run":  "real-customer-bento-test",
 				"sequence":  fmt.Sprintf("%d", i+1),
 			},
-			Source:    "kafka-staging-benthos",
+			Source:    "kafka-staging-bento",
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 		}
 
@@ -115,11 +115,12 @@ func main() {
 			sent++
 		}
 
-		time.Sleep(200 * time.Millisecond)
+		// Send fast for bulk testing (10ms delay instead of 200ms)
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	fmt.Printf("\n📊 Summary:\n")
 	fmt.Printf("   ✅ Sent: %d\n", sent)
 	fmt.Printf("   ❌ Failed: %d\n", failed)
-	fmt.Printf("\n✅ Done! Benthos should now process these events.\n")
+	fmt.Printf("\n✅ Done! Bento should now process these events.\n")
 }
