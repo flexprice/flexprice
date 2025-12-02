@@ -1,0 +1,83 @@
+# Bento Flexprice - Kafka Consumer Example
+# This configuration consumes events from a Kafka topic and forwards them to Flexprice
+
+input:
+  kafka:
+    # Kafka broker addresses
+    addresses:
+      - ${KAFKA_BROKER:localhost:29092}
+    
+    # Topics to consume from
+    topics:
+      - ${KAFKA_TOPIC:events}
+    
+    # Consumer group for tracking offset
+    consumer_group: bento-flexprice-consumer
+    
+    # Start from the oldest message on first run
+    start_from_oldest: true
+    
+    # Commit period for offset commits
+    commit_period: 1s
+    
+    # Maximum batch size
+    max_processing_period: 100ms
+
+pipeline:
+  processors:
+    # Transform Kafka message to Flexprice event format
+    - mapping: |
+        # Map Kafka message fields to Flexprice event schema
+        root.event_name = this.event_name
+        root.external_customer_id = this.external_customer_id.or(this.customer_id)
+        
+        # Handle properties - use existing or create empty object
+        root.properties = this.properties.or({})
+        
+        # Set source to indicate it came from Kafka
+        root.source = "kafka-stream"
+        
+        # Use existing timestamp or generate new one
+        root.timestamp = this.timestamp.or(now().format_timestamp("2006-01-02T15:04:05Z07:00"))
+        
+        # Optional fields
+        root.event_id = this.event_id.or("")
+        root.customer_id = this.customer_id.or("")
+    
+    # Log each event being processed
+    - log:
+        level: INFO
+        message: |
+          Processing Kafka event:
+          - Event: ${!json("event_name")}
+          - Customer: ${!json("external_customer_id")}
+          - Source: kafka-stream
+    
+    # Optional: Add error handling
+    - catch:
+        - log:
+            level: ERROR
+            message: "Failed to process event: ${!error()}"
+
+output:
+  flexprice:
+    # Flexprice API configuration
+    api_host: ${FLEXPRICE_API_HOST:api.cloud.flexprice.io}
+    api_key: ${FLEXPRICE_API_KEY}
+    scheme: ${FLEXPRICE_SCHEME:https}
+  
+  # Optional: Add retry policy
+  retry_period: 1s
+  max_retries: 3
+  backoff:
+    max_interval: 30s
+
+# Optional: Metrics configuration
+metrics:
+  prometheus:
+    prefix: bento_flexprice_kafka
+    
+logger:
+  level: INFO
+  format: json
+

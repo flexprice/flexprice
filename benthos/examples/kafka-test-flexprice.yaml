@@ -1,0 +1,90 @@
+# Bento Flexprice - Staging Kafka Consumer
+# Consumes from bento-testing topic and sends to Flexprice
+
+input:
+  kafka:
+    # Staging Kafka brokers
+    addresses: 
+      - ${FLEXPRICE_KAFKA_BROKERS}
+    
+    # Test topic
+    topics:
+      - benthos-testing
+    
+    # Consumer group (use a new group name to skip old messages)
+    consumer_group: ${FLEXPRICE_KAFKA_CONSUMER_GROUP:bento-flexprice-v3}
+    
+    # Start from NEWEST to skip old broken messages
+    start_from_oldest: false
+    
+    # SASL Authentication for Confluent Cloud
+    tls:
+      enabled: true
+    
+    sasl:
+      mechanism: PLAIN
+      user: ${FLEXPRICE_KAFKA_SASL_USER}
+      password: ${FLEXPRICE_KAFKA_SASL_PASSWORD}
+    
+    # Client ID
+    client_id: ${FLEXPRICE_KAFKA_CLIENT_ID:bento-flexprice-collector}
+    
+    # Performance tuning for batching
+    commit_period: 1s
+    max_processing_period: 100ms
+    
+    # Fetch settings - get messages faster for batching
+    fetch_buffer_cap: 256  # Fetch up to 256 messages at once
+
+pipeline:
+  processors:
+    # Transform Kafka message to Flexprice event format
+    - mapping: |
+        # Required fields
+        root.event_name = this.event_name
+        root.external_customer_id = this.external_customer_id.or(this.customer_id)
+        
+        # Properties - ensure all values are strings
+        root.properties = if this.properties.type() == "object" {
+          this.properties.map_each(p -> p.value.string())
+        } else {
+          {}
+        }
+        
+        # Source tracking
+        root.source = "kafka-staging-bento"
+        
+        # Timestamp handling
+        root.timestamp = this.timestamp.or(now().format_timestamp("2006-01-02T15:04:05Z07:00"))
+        
+        # Optional fields
+        root.event_id = this.event_id.or("")
+        root.customer_id = this.customer_id.or("")
+    
+    # Log each event
+    - log:
+        level: INFO
+        message: |
+          [KAFKA→FLEXPRICE] Processing event:
+          - Event Name: ${!json("event_name")}
+          - Customer ID: ${!json("external_customer_id")}
+          - Timestamp: ${!json("timestamp")}
+
+output:
+  flexprice:
+    api_host: ${FLEXPRICE_API_HOST}
+    api_key: ${FLEXPRICE_API_KEY}
+    scheme: https
+    
+    # Batching configuration - efficiently send multiple events in bulk
+    batching:
+      count: 10      # Send bulk when we have 10 events
+      period: 2s     # Or send after 2 seconds (increased for Kafka lag)
+    
+    # Maximum concurrent requests
+    max_in_flight: 10
+
+logger:
+  level: INFO
+  format: logfmt
+  add_timestamp: true

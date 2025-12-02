@@ -136,3 +136,10 @@ temp/*
 Thumbs.db
 
 server
+
+# Benthos/Bento binaries and test tools
+benthos/benthos-flexprice
+benthos/bento-flexprice
+benthos/send-events
+benthos/send-events.mod
+benthos/send-events.sum

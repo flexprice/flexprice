@@ -1,0 +1,44 @@
+# Bento Flexprice - Generate Random Events Example
+# This configuration generates synthetic usage events and sends them to Flexprice
+
+input:
+  generate:
+    interval: 100ms  # Generate one event every 100ms
+    count: 100       # Total events to generate
+    mapping: |
+      # Generate random event data using Bloblang
+      root.event_name = "api.request"
+      root.external_customer_id = "cust_" + uuid_v4().slice(0, 8)
+      root.properties = {
+        "endpoint": ["/api/users", "/api/orders", "/api/products"].index(random_int(max: 2)),
+        "method": ["GET", "POST", "PUT", "DELETE"].index(random_int(max: 3)),
+        "status_code": [200, 201, 204, 400, 404, 500].index(random_int(max: 5)),
+        "response_time_ms": random_int(min: 10, max: 500),
+        "user_agent": "bento-generator/1.0"
+      }
+      root.source = "bento-generator"
+      root.timestamp = now().format_timestamp("2006-01-02T15:04:05Z07:00")
+
+pipeline:
+  processors:
+    # Log each event being sent
+    - log:
+        level: INFO
+        message: |
+          Sending event: ${!json("event_name")}
+          Customer: ${!json("external_customer_id")}
+          Endpoint: ${!json("properties.endpoint")}
+          Status: ${!json("properties.status_code")}
+
+output:
+  flexprice:
+    # Flexprice API configuration
+    api_host: ${FLEXPRICE_API_HOST:api.cloud.flexprice.io}
+    api_key: ${FLEXPRICE_API_KEY}
+    scheme: ${FLEXPRICE_SCHEME:https}
+
+# Optional: Metrics configuration
+metrics:
+  prometheus:
+    prefix: bento_flexprice
+
