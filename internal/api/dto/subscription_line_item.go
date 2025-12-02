@@ -176,10 +176,10 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 // Validate validates the delete subscription line item request
 func (r *DeleteSubscriptionLineItemRequest) Validate() error {
 	// Validate effective from date is not in the past if provided
-	// Use a small buffer (1 second) to account for microsecond-level timing differences
+	// Use a small buffer (5 seconds) to account for microsecond-level timing differences
 	// when effectiveFrom defaults to time.Now() and StartDate is very recent
 	// This allows effectiveFrom to be slightly before StartDate (within buffer) due to timing
-	buffer := 1 * time.Second
+	buffer := 5 * time.Second
 	if r.EffectiveFrom != nil && r.EffectiveFrom.Before(time.Now().UTC().Add(-buffer)) {
 		return ierr.NewError("effective_from must be in the future or present").
 			WithHint("Effective from date must be in the future or present").
