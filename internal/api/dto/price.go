@@ -669,8 +669,11 @@ type UpdatePriceRequest struct {
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 
-	// GroupID is the id of the group to update the price in
-	GroupID string `json:"group_id,omitempty"`
+	// GroupID is the id of the group to update the price in.
+	// If not provided (nil), the group will not be changed
+	// If provided as empty string (""), the group will be removed (price will be ungrouped)
+	// If provided as a group ID, the price will be assigned to that group (must exist and be published)
+	GroupID *string `json:"group_id,omitempty"`
 }
 
 func (r *UpdatePriceRequest) Validate() error {
@@ -721,10 +724,11 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	createReq.ParentPriceID = existingPrice.GetRootPriceID()
 
 	// GroupID is the id of the group to update the price in
-	if r.GroupID != "" {
-		createReq.GroupID = r.GroupID
-	} else {
+	// If GroupID is nil, keep existing group. If it's a pointer to empty string, clear it. Otherwise, use the new value.
+	if r.GroupID == nil {
 		createReq.GroupID = existingPrice.GroupID
+	} else {
+		createReq.GroupID = *r.GroupID
 	}
 
 	// Determine target billing model (use request billing model if provided, otherwise existing)
