@@ -51,6 +51,7 @@ const (
 	TemporalExecuteExportWorkflow        TemporalWorkflowType = "ExecuteExportWorkflow"
 	TemporalHubSpotDealSyncWorkflow      TemporalWorkflowType = "HubSpotDealSyncWorkflow"
 	TemporalHubSpotInvoiceSyncWorkflow   TemporalWorkflowType = "HubSpotInvoiceSyncWorkflow"
+	TemporalHubSpotQuoteSyncWorkflow     TemporalWorkflowType = "HubSpotQuoteSyncWorkflow"
 )
 
 // String returns the string representation of the workflow type
@@ -68,6 +69,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalExecuteExportWorkflow,        // "ExecuteExportWorkflow"
 		TemporalHubSpotDealSyncWorkflow,      // "HubSpotDealSyncWorkflow"
 		TemporalHubSpotInvoiceSyncWorkflow,   // "HubSpotInvoiceSyncWorkflow"
+		TemporalHubSpotQuoteSyncWorkflow,     // "HubSpotQuoteSyncWorkflow"
 	}
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
@@ -81,7 +83,7 @@ func (w TemporalWorkflowType) Validate() error {
 // TaskQueue returns the logical task queue for the workflow
 func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 	switch w {
-	case TemporalTaskProcessingWorkflow, TemporalSubscriptionChangeWorkflow, TemporalSubscriptionCreationWorkflow, TemporalHubSpotDealSyncWorkflow, TemporalHubSpotInvoiceSyncWorkflow:
+	case TemporalTaskProcessingWorkflow, TemporalSubscriptionChangeWorkflow, TemporalSubscriptionCreationWorkflow, TemporalHubSpotDealSyncWorkflow, TemporalHubSpotInvoiceSyncWorkflow, TemporalHubSpotQuoteSyncWorkflow:
 		return TemporalTaskQueueTask
 	case TemporalPriceSyncWorkflow:
 		return TemporalTaskQueuePrice
@@ -110,6 +112,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 			TemporalTaskProcessingWorkflow,
 			TemporalHubSpotDealSyncWorkflow,
 			TemporalHubSpotInvoiceSyncWorkflow,
+			TemporalHubSpotQuoteSyncWorkflow,
 		}
 	case TemporalTaskQueuePrice:
 		return []TemporalWorkflowType{

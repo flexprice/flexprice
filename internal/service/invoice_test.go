@@ -434,6 +434,7 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoice() {
 				req,
 				nil,
 				types.InvoiceFlowManual,
+				false,
 			)
 
 			if tt.wantErr {

@@ -93,6 +93,8 @@ type Subscription struct {
 	CustomerTimezone string `json:"customer_timezone,omitempty"`
 	// ProrationBehavior holds the value of the "proration_behavior" field.
 	ProrationBehavior string `json:"proration_behavior,omitempty"`
+	// Enable Commitment True Up Fee
+	EnableTrueUp bool `json:"enable_true_up,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -181,7 +183,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case subscription.FieldMetadata:
 			values[i] = new([]byte)
-		case subscription.FieldCancelAtPeriodEnd:
+		case subscription.FieldCancelAtPeriodEnd, subscription.FieldEnableTrueUp:
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion:
 			values[i] = new(sql.NullInt64)
@@ -442,6 +444,12 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.ProrationBehavior = value.String
 			}
+		case subscription.FieldEnableTrueUp:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field enable_true_up", values[i])
+			} else if value.Valid {
+				s.EnableTrueUp = value.Bool
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -634,6 +642,9 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("proration_behavior=")
 	builder.WriteString(s.ProrationBehavior)
+	builder.WriteString(", ")
+	builder.WriteString("enable_true_up=")
+	builder.WriteString(fmt.Sprintf("%v", s.EnableTrueUp))
 	builder.WriteByte(')')
 	return builder.String()
 }

@@ -238,3 +238,9 @@ func (c *Connection) IsDealOutboundEnabled() bool {
 	config := c.GetSyncConfig()
 	return config.Deal != nil && config.Deal.Outbound
 }
+
+// IsQuoteOutboundEnabled checks if quote outbound sync is enabled
+func (c *Connection) IsQuoteOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Quote != nil && config.Quote.Outbound
+}

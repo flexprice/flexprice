@@ -60,9 +60,14 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.Logger,
 	)
 
+	hubspotQuoteSyncActivities := hubspotActivities.NewQuoteSyncActivities(
+		params.IntegrationFactory,
+		params.Logger,
+	)
+
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities)
+		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -81,6 +86,7 @@ func buildWorkerConfig(
 	exportActivity *exportActivities.ExportActivity,
 	hubspotDealSyncActivities *hubspotActivities.DealSyncActivities,
 	hubspotInvoiceSyncActivities *hubspotActivities.InvoiceSyncActivities,
+	hubspotQuoteSyncActivities *hubspotActivities.QuoteSyncActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	activitiesList := []interface{}{}
@@ -91,12 +97,14 @@ func buildWorkerConfig(
 			workflows.TaskProcessingWorkflow,
 			workflows.HubSpotDealSyncWorkflow,
 			workflows.HubSpotInvoiceSyncWorkflow,
+			workflows.HubSpotQuoteSyncWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			taskActivities.ProcessTask,
 			hubspotDealSyncActivities.CreateLineItems,
 			hubspotDealSyncActivities.UpdateDealAmount,
 			hubspotInvoiceSyncActivities.SyncInvoiceToHubSpot,
+			hubspotQuoteSyncActivities.CreateQuoteAndLineItems,
 		)
 
 	case types.TemporalTaskQueuePrice:

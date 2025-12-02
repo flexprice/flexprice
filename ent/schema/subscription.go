@@ -61,10 +61,8 @@ func (Subscription) Fields() []ent.Field {
 			NotEmpty().
 			Immutable(),
 		field.Time("billing_anchor").
-			Immutable().
 			Default(time.Now),
 		field.Time("start_date").
-			Immutable().
 			Default(time.Now),
 		field.Time("end_date").
 			Optional().
@@ -152,6 +150,9 @@ func (Subscription) Fields() []ent.Field {
 			NotEmpty().
 			Immutable().
 			Default(string(types.ProrationBehaviorNone)),
+		field.Bool("enable_true_up").
+			Default(false).
+			Comment("Enable Commitment True Up Fee"),
 	}
 }
 

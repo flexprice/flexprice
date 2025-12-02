@@ -117,11 +117,12 @@ type LineItemCreateRequest struct {
 
 // LineItemProperties represents HubSpot line item properties
 type LineItemProperties struct {
-	Name        string `json:"name"`                  // Product/service name
-	Quantity    string `json:"quantity"`              // Quantity as string (e.g., "1", "2.5")
-	Price       string `json:"price"`                 // Price per unit as decimal (e.g., "10.00")
-	Amount      string `json:"amount,omitempty"`      // Total amount as decimal (quantity * price)
-	Description string `json:"description,omitempty"` // Optional description
+	Name                 string `json:"name"`                                // Product/service name
+	Quantity             string `json:"quantity"`                            // Quantity as string (e.g., "1", "2.5")
+	Price                string `json:"price"`                               // Price per unit as decimal (e.g., "10.00")
+	Amount               string `json:"amount,omitempty"`                    // Total amount as decimal (quantity * price)
+	RecurringBillingFreq string `json:"recurringbillingfrequency,omitempty"` // Billing frequency (e.g., "monthly", "annually")
+	Description          string `json:"description,omitempty"`               // Optional description
 }
 
 // LineItemResponse represents a HubSpot line item response
@@ -185,6 +186,45 @@ type AssociationType struct {
 
 // DealLineItemResponse represents a HubSpot line item response
 type DealLineItemResponse struct {
+	ID         string                 `json:"id"`
+	Properties map[string]interface{} `json:"properties"`
+	CreatedAt  time.Time              `json:"createdAt"`
+	UpdatedAt  time.Time              `json:"updatedAt"`
+}
+
+// Quote DTOs
+
+// QuoteCreateRequest represents a request to create a HubSpot quote
+type QuoteCreateRequest struct {
+	Properties QuoteProperties `json:"properties"`
+}
+
+// QuoteProperties represents HubSpot quote properties
+type QuoteProperties struct {
+	Title          string `json:"hs_title,omitempty"`           // Quote title
+	ExpirationDate string `json:"hs_expiration_date,omitempty"` // Date format: "YYYY-MM-DD" (per docs examples)
+	Status         string `json:"hs_status,omitempty"`          // Quote status: DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, etc.
+	ESignEnabled   string `json:"hs_esign_enabled,omitempty"`   // Enable e-signature: "true" or "false" as string (per docs line 59)
+}
+
+// QuoteResponse represents a HubSpot quote response
+type QuoteResponse struct {
+	ID         string                 `json:"id"`
+	Properties map[string]interface{} `json:"properties"`
+	CreatedAt  time.Time              `json:"createdAt"`
+	UpdatedAt  time.Time              `json:"updatedAt"`
+}
+
+// Quote Line Item DTOs
+
+// QuoteLineItemCreateRequest represents a request to create a HubSpot line item for a quote
+type QuoteLineItemCreateRequest struct {
+	Properties   DealLineItemProperties `json:"properties"` // Reuse DealLineItemProperties structure
+	Associations []LineItemAssociation  `json:"associations,omitempty"`
+}
+
+// QuoteTemplate represents a HubSpot quote template
+type QuoteTemplate struct {
 	ID         string                 `json:"id"`
 	Properties map[string]interface{} `json:"properties"`
 	CreatedAt  time.Time              `json:"createdAt"`

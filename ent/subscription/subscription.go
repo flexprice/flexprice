@@ -90,6 +90,8 @@ const (
 	FieldCustomerTimezone = "customer_timezone"
 	// FieldProrationBehavior holds the string denoting the proration_behavior field in the database.
 	FieldProrationBehavior = "proration_behavior"
+	// FieldEnableTrueUp holds the string denoting the enable_true_up field in the database.
+	FieldEnableTrueUp = "enable_true_up"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -188,6 +190,7 @@ var Columns = []string{
 	FieldGatewayPaymentMethodID,
 	FieldCustomerTimezone,
 	FieldProrationBehavior,
+	FieldEnableTrueUp,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -253,6 +256,8 @@ var (
 	DefaultProrationBehavior string
 	// ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	ProrationBehaviorValidator func(string) error
+	// DefaultEnableTrueUp holds the default value on creation for the "enable_true_up" field.
+	DefaultEnableTrueUp bool
 )
 
 // PaymentBehavior defines the type for the "payment_behavior" enum field.
@@ -495,6 +500,11 @@ func ByCustomerTimezone(opts ...sql.OrderTermOption) OrderOption {
 // ByProrationBehavior orders the results by the proration_behavior field.
 func ByProrationBehavior(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProrationBehavior, opts...).ToFunc()
+}
+
+// ByEnableTrueUp orders the results by the enable_true_up field.
+func ByEnableTrueUp(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEnableTrueUp, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

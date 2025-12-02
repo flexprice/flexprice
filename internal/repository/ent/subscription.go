@@ -87,6 +87,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetPaymentBehavior(subscription.PaymentBehavior(sub.PaymentBehavior)).
 		SetCollectionMethod(subscription.CollectionMethod(sub.CollectionMethod)).
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
+		SetEnableTrueUp(sub.EnableTrueUp).
 		Save(ctx)
 
 	if err != nil {
@@ -165,6 +166,8 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 	// Set all fields
 	query.
 		SetLookupKey(sub.LookupKey).
+		SetStartDate(sub.StartDate).
+		SetBillingAnchor(sub.BillingAnchor).
 		SetSubscriptionStatus(string(sub.SubscriptionStatus)).
 		SetCurrentPeriodStart(sub.CurrentPeriodStart).
 		SetCurrentPeriodEnd(sub.CurrentPeriodEnd).

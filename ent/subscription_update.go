@@ -109,6 +109,34 @@ func (su *SubscriptionUpdate) SetNillableSubscriptionStatus(s *string) *Subscrip
 	return su
 }
 
+// SetBillingAnchor sets the "billing_anchor" field.
+func (su *SubscriptionUpdate) SetBillingAnchor(t time.Time) *SubscriptionUpdate {
+	su.mutation.SetBillingAnchor(t)
+	return su
+}
+
+// SetNillableBillingAnchor sets the "billing_anchor" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableBillingAnchor(t *time.Time) *SubscriptionUpdate {
+	if t != nil {
+		su.SetBillingAnchor(*t)
+	}
+	return su
+}
+
+// SetStartDate sets the "start_date" field.
+func (su *SubscriptionUpdate) SetStartDate(t time.Time) *SubscriptionUpdate {
+	su.mutation.SetStartDate(t)
+	return su
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableStartDate(t *time.Time) *SubscriptionUpdate {
+	if t != nil {
+		su.SetStartDate(*t)
+	}
+	return su
+}
+
 // SetEndDate sets the "end_date" field.
 func (su *SubscriptionUpdate) SetEndDate(t time.Time) *SubscriptionUpdate {
 	su.mutation.SetEndDate(t)
@@ -416,6 +444,20 @@ func (su *SubscriptionUpdate) SetCustomerTimezone(s string) *SubscriptionUpdate 
 func (su *SubscriptionUpdate) SetNillableCustomerTimezone(s *string) *SubscriptionUpdate {
 	if s != nil {
 		su.SetCustomerTimezone(*s)
+	}
+	return su
+}
+
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (su *SubscriptionUpdate) SetEnableTrueUp(b bool) *SubscriptionUpdate {
+	su.mutation.SetEnableTrueUp(b)
+	return su
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableEnableTrueUp(b *bool) *SubscriptionUpdate {
+	if b != nil {
+		su.SetEnableTrueUp(*b)
 	}
 	return su
 }
@@ -731,6 +773,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := su.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
 	}
+	if value, ok := su.mutation.BillingAnchor(); ok {
+		_spec.SetField(subscription.FieldBillingAnchor, field.TypeTime, value)
+	}
+	if value, ok := su.mutation.StartDate(); ok {
+		_spec.SetField(subscription.FieldStartDate, field.TypeTime, value)
+	}
 	if value, ok := su.mutation.EndDate(); ok {
 		_spec.SetField(subscription.FieldEndDate, field.TypeTime, value)
 	}
@@ -817,6 +865,9 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.CustomerTimezone(); ok {
 		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+	}
+	if value, ok := su.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1182,6 +1233,34 @@ func (suo *SubscriptionUpdateOne) SetNillableSubscriptionStatus(s *string) *Subs
 	return suo
 }
 
+// SetBillingAnchor sets the "billing_anchor" field.
+func (suo *SubscriptionUpdateOne) SetBillingAnchor(t time.Time) *SubscriptionUpdateOne {
+	suo.mutation.SetBillingAnchor(t)
+	return suo
+}
+
+// SetNillableBillingAnchor sets the "billing_anchor" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableBillingAnchor(t *time.Time) *SubscriptionUpdateOne {
+	if t != nil {
+		suo.SetBillingAnchor(*t)
+	}
+	return suo
+}
+
+// SetStartDate sets the "start_date" field.
+func (suo *SubscriptionUpdateOne) SetStartDate(t time.Time) *SubscriptionUpdateOne {
+	suo.mutation.SetStartDate(t)
+	return suo
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableStartDate(t *time.Time) *SubscriptionUpdateOne {
+	if t != nil {
+		suo.SetStartDate(*t)
+	}
+	return suo
+}
+
 // SetEndDate sets the "end_date" field.
 func (suo *SubscriptionUpdateOne) SetEndDate(t time.Time) *SubscriptionUpdateOne {
 	suo.mutation.SetEndDate(t)
@@ -1489,6 +1568,20 @@ func (suo *SubscriptionUpdateOne) SetCustomerTimezone(s string) *SubscriptionUpd
 func (suo *SubscriptionUpdateOne) SetNillableCustomerTimezone(s *string) *SubscriptionUpdateOne {
 	if s != nil {
 		suo.SetCustomerTimezone(*s)
+	}
+	return suo
+}
+
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (suo *SubscriptionUpdateOne) SetEnableTrueUp(b bool) *SubscriptionUpdateOne {
+	suo.mutation.SetEnableTrueUp(b)
+	return suo
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableEnableTrueUp(b *bool) *SubscriptionUpdateOne {
+	if b != nil {
+		suo.SetEnableTrueUp(*b)
 	}
 	return suo
 }
@@ -1834,6 +1927,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	if value, ok := suo.mutation.SubscriptionStatus(); ok {
 		_spec.SetField(subscription.FieldSubscriptionStatus, field.TypeString, value)
 	}
+	if value, ok := suo.mutation.BillingAnchor(); ok {
+		_spec.SetField(subscription.FieldBillingAnchor, field.TypeTime, value)
+	}
+	if value, ok := suo.mutation.StartDate(); ok {
+		_spec.SetField(subscription.FieldStartDate, field.TypeTime, value)
+	}
 	if value, ok := suo.mutation.EndDate(); ok {
 		_spec.SetField(subscription.FieldEndDate, field.TypeTime, value)
 	}
@@ -1920,6 +2019,9 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.CustomerTimezone(); ok {
 		_spec.SetField(subscription.FieldCustomerTimezone, field.TypeString, value)
+	}
+	if value, ok := suo.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
