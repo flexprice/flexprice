@@ -1,8 +1,10 @@
-# Benthos-Flexprice Customer Guide
+# Bento-Flexprice Customer Guide
 
 ## Overview
 
-`benthos-flexprice` is a pre-built stream processor that forwards usage events from **your data sources** (Kafka, databases, APIs) to **Flexprice** for usage-based billing. No code changes required in your application.
+`bento-flexprice` is a pre-built stream processor that forwards usage events from **your data sources** (Kafka, databases, APIs) to **Flexprice** for usage-based billing. No code changes required in your application.
+
+> **Note**: Built on [Bento](https://github.com/warpstreamlabs/bento), the MIT-licensed fork of Benthos, ensuring complete open-source freedom.
 
 ## Use Case Example: Vapi (Voice Agent Company)
 
@@ -40,9 +42,9 @@
 ### 1. Clone & Build
 
 ```bash
-git clone https://github.com/flexprice/benthos-flexprice.git
-cd benthos-flexprice
-go build -o benthos-flexprice main.go
+git clone https://github.com/flexprice/bento-flexprice.git
+cd bento-flexprice
+go build -o bento-flexprice main.go
 ```
 
 ### 2. Create Config File
@@ -107,7 +109,7 @@ export VAPI_KAFKA_PASSWORD=xxx
 
 ```bash
 source .env.production
-./benthos-flexprice -c vapi-config.yaml
+./bento-flexprice -c vapi-config.yaml
 ```
 
 **Expected Output:**
@@ -129,17 +131,17 @@ INFO ✅ Event accepted successfully, ID: evt_xxx
 FROM golang:1.21 AS builder
 WORKDIR /app
 COPY . .
-RUN go build -o benthos-flexprice main.go
+RUN go build -o bento-flexprice main.go
 
 FROM debian:bookworm-slim
-COPY --from=builder /app/benthos-flexprice /usr/local/bin/
+COPY --from=builder /app/bento-flexprice /usr/local/bin/
 COPY vapi-config.yaml /config/
-CMD ["benthos-flexprice", "-c", "/config/vapi-config.yaml"]
+CMD ["bento-flexprice", "-c", "/config/vapi-config.yaml"]
 ```
 
 **Run:**
 ```bash
-docker build -t vapi/benthos-flexprice:latest .
+docker build -t vapi/bento-flexprice:latest .
 
 docker run -d \
   --name vapi-flexprice-collector \
@@ -148,7 +150,7 @@ docker run -d \
   -e VAPI_KAFKA_BROKERS=kafka.vapi.ai:9092 \
   -e VAPI_KAFKA_USER=xxx \
   -e VAPI_KAFKA_PASSWORD=xxx \
-  vapi/benthos-flexprice:latest
+  vapi/bento-flexprice:latest
 ```
 
 ### Kubernetes
@@ -157,14 +159,14 @@ docker run -d \
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: benthos-flexprice
+  name: bento-flexprice
 spec:
   replicas: 2
   template:
     spec:
       containers:
-      - name: benthos
-        image: vapi/benthos-flexprice:latest
+      - name: bento
+        image: vapi/bento-flexprice:latest
         env:
         - name: FLEXPRICE_API_HOST
           value: api.cloud.flexprice.io
@@ -207,7 +209,7 @@ spec:
          │
          v
 ┌─────────────────┐
-│    Benthos      │  Transform with Bloblang:
+│     Bento       │  Transform with Bloblang:
 │  (Transform)    │  - Map your fields → Flexprice fields
 │                 │  - No code changes needed
 └────────┬────────┘
@@ -274,7 +276,7 @@ Before running the collector, set up in your Flexprice account:
 
 ## Monitoring & Observability
 
-Benthos exposes metrics on port **4195**:
+Bento exposes metrics on port **4195**:
 
 - **Prometheus Metrics**: `http://localhost:4195/metrics`
 - **Health Check**: `http://localhost:4195/ping`
@@ -310,7 +312,7 @@ benthos_processor_error_total         # Transform errors
 
 1. **Check event name matches meter:**
    ```bash
-   # Look in Benthos logs:
+   # Look in Bento logs:
    INFO 📤 Sending event: voice_call for customer: vapi_cust_456
    ```
 
@@ -352,8 +354,8 @@ benthos_processor_error_total         # Transform errors
 ## Support
 
 - **Documentation**: [docs.flexprice.io](https://docs.flexprice.io)
-- **GitHub Issues**: [github.com/flexprice/benthos-flexprice/issues](https://github.com/flexprice/benthos-flexprice/issues)
-- **Benthos Docs**: [benthos.dev](https://www.benthos.dev/)
+- **GitHub Issues**: [github.com/flexprice/bento-flexprice/issues](https://github.com/flexprice/bento-flexprice/issues)
+- **Bento Docs**: [warpstreamlabs.github.io/bento](https://warpstreamlabs.github.io/bento/)
 - **Contact**: support@flexprice.io
 
 ---

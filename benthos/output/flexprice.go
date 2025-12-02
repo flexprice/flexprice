@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/benthosdev/benthos/v4/public/service"
 	flexprice "github.com/flexprice/go-sdk"
+	"github.com/warpstreamlabs/bento/public/service"
 )
 
 // flexpriceConfig holds the configuration for the Flexprice output plugin
@@ -35,7 +35,7 @@ func flexpriceConfigSpec() *service.ConfigSpec {
 			Default("https"))
 }
 
-// init registers the Flexprice output plugin with Benthos
+// init registers the Flexprice output plugin with Bento
 func init() {
 	err := service.RegisterOutput(
 		"flexprice",

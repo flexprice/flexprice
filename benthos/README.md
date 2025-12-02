@@ -1,6 +1,8 @@
-# Benthos Flexprice Collector
+# Bento Flexprice Collector
 
-Custom Benthos distribution for streaming usage events to Flexprice from any data source (Kafka, databases, APIs, etc.).
+Custom Bento distribution for streaming usage events to Flexprice from any data source (Kafka, databases, APIs, etc.).
+
+> **Note**: This project uses [Bento](https://github.com/warpstreamlabs/bento), the MIT-licensed fork of Benthos, ensuring complete open-source freedom without vendor restrictions.
 
 ## Features
 
@@ -16,7 +18,7 @@ Custom Benthos distribution for streaming usage events to Flexprice from any dat
 
 ```bash
 cd benthos
-go build -o benthos-flexprice main.go
+go build -o bento-flexprice main.go
 ```
 
 ### 2. Set Environment Variables
@@ -30,10 +32,10 @@ export FLEXPRICE_API_KEY=your_api_key_here
 
 ```bash
 # Generate random events (for testing)
-./benthos-flexprice -c examples/generate.yaml
+./bento-flexprice -c examples/generate.yaml
 
 # Consume from Kafka
-./benthos-flexprice -c examples/kafka-consumer.yaml
+./bento-flexprice -c examples/kafka-consumer.yaml
 ```
 
 ## Event Format
@@ -126,7 +128,7 @@ export FLEXPRICE_KAFKA_CONSUMER_GROUP=benthos-flexprice-prod
 
 ```bash
 source .env.staging
-./benthos-flexprice -c examples/kafka-staging.yaml
+./bento-flexprice -c examples/kafka-staging.yaml
 ```
 
 **3. Send test events:**
@@ -189,7 +191,7 @@ pipeline:
 ### Test 1: Generate Random Events
 
 ```bash
-./benthos-flexprice -c examples/generate.yaml
+./bento-flexprice -c examples/generate.yaml
 ```
 
 Generates 100 random events and sends to Flexprice.
@@ -218,23 +220,23 @@ docker exec -it flexprice-kafka-1 kafka-console-producer \
 ```bash
 export KAFKA_BROKER=localhost:29092
 export KAFKA_TOPIC=events
-./benthos-flexprice -c examples/kafka-consumer.yaml
+./bento-flexprice -c examples/kafka-consumer.yaml
 ```
 
 ### Test 3: Docker
 
 ```bash
-docker build -t benthos-flexprice .
+docker build -t bento-flexprice .
 
 docker run --rm \
   -e FLEXPRICE_API_HOST=api.cloud.flexprice.io \
   -e FLEXPRICE_API_KEY=your_key \
-  benthos-flexprice:latest
+  bento-flexprice:latest
 ```
 
 ## Monitoring
 
-Benthos exposes metrics on port **4195**:
+Bento exposes metrics on port **4195**:
 
 - **Metrics**: `http://localhost:4195/metrics` (Prometheus)
 - **Health**: `http://localhost:4195/ping`
@@ -247,7 +249,7 @@ Benthos exposes metrics on port **4195**:
 **Check 1: Event name matches meter**
 
 ```bash
-# In Benthos logs, look for:
+# In Bento logs, look for:
 INFO[...] 📤 Sending event: feature 1 for customer: cust_...
 ```
 
@@ -298,7 +300,7 @@ ERROR[...] Failed to send event: 400 Bad Request
 ```bash
 # Clean and rebuild
 go mod tidy
-go build -o benthos-flexprice main.go
+go build -o bento-flexprice main.go
 ```
 
 ## Project Structure
@@ -362,10 +364,10 @@ benthos/
 
 - **Documentation**: [docs.flexprice.io](https://docs.flexprice.io)
 - **Issues**: [GitHub Issues](https://github.com/flexprice/flexprice/issues)
-- **Benthos Docs**: [benthos.dev](https://www.benthos.dev/)
+- **Bento Docs**: [warpstreamlabs.github.io/bento](https://warpstreamlabs.github.io/bento/)
 
 ## Related
 
+- [Bento](https://github.com/warpstreamlabs/bento) - Stream processor (MIT-licensed Benthos fork)
 - [benthos-openmeter](https://github.com/openmeterio/benthos-openmeter) - Inspiration
-- [Benthos](https://www.benthos.dev/) - Stream processor
 - [Flexprice](https://flexprice.io) - Usage-based billing

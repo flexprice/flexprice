@@ -19,11 +19,11 @@ import (
 )
 
 type Event struct {
-	EventName          string                 `json:"event_name"`
-	ExternalCustomerID string                 `json:"external_customer_id"`
-	Properties         map[string]interface{} `json:"properties"`
-	Source             string                 `json:"source"`
-	Timestamp          string                 `json:"timestamp"`
+	EventName          string            `json:"event_name"`
+	ExternalCustomerID string            `json:"external_customer_id"`
+	Properties         map[string]string `json:"properties"`
+	Source             string            `json:"source"`
+	Timestamp          string            `json:"timestamp"`
 }
 
 func main() {
@@ -83,10 +83,10 @@ func main() {
 		event := Event{
 			EventName:          "feature 1",    // Meter event_name
 			ExternalCustomerID: "334230687423", // Real external customer ID
-			Properties: map[string]interface{}{
-				"feature 1": float64(i + 1), // Numeric value for SUM aggregation
+			Properties: map[string]string{
+				"feature 1": fmt.Sprintf("%d", i+1), // Send as string, Flexprice will convert to number
 				"test_run":  "real-customer-benthos-test",
-				"sequence":  i + 1,
+				"sequence":  fmt.Sprintf("%d", i+1),
 			},
 			Source:    "kafka-staging-benthos",
 			Timestamp: time.Now().UTC().Format(time.RFC3339),

@@ -12,7 +12,7 @@ input:
       - benthos-testing
     
     # Consumer group (use a new group name to skip old messages)
-    consumer_group: ${FLEXPRICE_KAFKA_CONSUMER_GROUP:benthos-flexprice-fresh}
+    consumer_group: ${FLEXPRICE_KAFKA_CONSUMER_GROUP:benthos-flexprice-v2}
     
     # Start from NEWEST to skip old broken messages
     start_from_oldest: false
