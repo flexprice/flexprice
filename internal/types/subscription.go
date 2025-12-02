@@ -7,32 +7,32 @@ import (
 	"github.com/samber/lo"
 )
 
-// InvoiceBillingConfig determines which customer should receive invoices for a subscription
-type InvoiceBillingConfig string
+// InvoiceBilling determines which customer should receive invoices for a subscription
+type InvoiceBilling string
 
 const (
-	// InvoiceBillingConfigInvoicedByParent - Invoices are sent to the parent customer
-	InvoiceBillingConfigInvoicedByParent InvoiceBillingConfig = "invoiced_by_parent"
+	// InvoiceBillingInvoiceToParent - Invoices are sent to the parent customer
+	InvoiceBillingInvoiceToParent InvoiceBilling = "invoice_to_parent"
 
-	// InvoiceBillingConfigInvoicedViaSelf - Invoices are sent to the subscription's customer
-	InvoiceBillingConfigInvoicedViaSelf InvoiceBillingConfig = "invoiced_via_self"
+	// InvoiceBillingInvoiceToSelf - Invoices are sent to the subscription's customer
+	InvoiceBillingInvoiceToSelf InvoiceBilling = "invoice_to_self"
 )
 
-func (i InvoiceBillingConfig) String() string {
+func (i InvoiceBilling) String() string {
 	return string(i)
 }
 
-func (i InvoiceBillingConfig) Validate() error {
-	allowed := []InvoiceBillingConfig{
-		InvoiceBillingConfigInvoicedByParent,
-		InvoiceBillingConfigInvoicedViaSelf,
+func (i InvoiceBilling) Validate() error {
+	allowed := []InvoiceBilling{
+		InvoiceBillingInvoiceToParent,
+		InvoiceBillingInvoiceToSelf,
 	}
 	if !lo.Contains(allowed, i) {
-		return ierr.NewError("invalid invoice billing config").
-			WithHint("Invalid invoice billing config").
+		return ierr.NewError("invalid invoice billing").
+			WithHint("Invalid invoice billing").
 			WithReportableDetails(map[string]any{
-				"invoice_billing_config": i,
-				"allowed_values":         allowed,
+				"invoice_billing": i,
+				"allowed_values":  allowed,
 			}).
 			Mark(ierr.ErrValidation)
 	}

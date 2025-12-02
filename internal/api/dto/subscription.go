@@ -107,10 +107,10 @@ type CreateSubscriptionRequest struct {
 	// This field is set internally based on InvoiceBillingConfig and is not exposed in the API
 	InvoicingCustomerID *string `json:"-"`
 
-	// invoice_billing_config determines which customer should receive invoices for a subscription
-	// "invoiced_by_parent" - Invoices are sent to the parent customer
-	// "invoiced_via_self" - Invoices are sent to the subscription's customer
-	InvoiceBillingConfig *types.InvoiceBillingConfig `json:"invoice_billing_config,omitempty"`
+	// invoice_billing determines which customer should receive invoices for a subscription
+	// "invoice_to_parent" - Invoices are sent to the parent customer
+	// "invoice_to_self" - Invoices are sent to the subscription's customer
+	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
 
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
@@ -384,12 +384,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.PaymentBehavior = &defaultPaymentBehavior
 	}
 
-	// Set default for invoice billing config if not provided
-	if r.InvoiceBillingConfig == nil {
-		r.InvoiceBillingConfig = lo.ToPtr(types.InvoiceBillingConfigInvoicedViaSelf)
+	// Set default for invoice billing if not provided
+	if r.InvoiceBilling == nil {
+		r.InvoiceBilling = lo.ToPtr(types.InvoiceBillingInvoiceToSelf)
 	} else {
-		// Validate invoice billing config if provided
-		if err := r.InvoiceBillingConfig.Validate(); err != nil {
+		// Validate invoice billing if provided
+		if err := r.InvoiceBilling.Validate(); err != nil {
 			return err
 		}
 	}
