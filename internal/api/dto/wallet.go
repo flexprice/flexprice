@@ -457,6 +457,7 @@ type WalletBalanceResponse struct {
 	RealTimeCreditBalance *decimal.Decimal `json:"real_time_credit_balance,omitempty"`
 	BalanceUpdatedAt      *time.Time       `json:"balance_updated_at,omitempty"`
 	CurrentPeriodUsage    *decimal.Decimal `json:"current_period_usage,omitempty"`
+	UnpaidInvoicesAmount  *decimal.Decimal `json:"unpaid_invoices_amount,omitempty"`
 }
 
 type ExpiredCreditsResponseItem struct {
