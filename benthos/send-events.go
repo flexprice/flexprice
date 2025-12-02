@@ -21,11 +21,9 @@ import (
 type Event struct {
 	EventName          string                 `json:"event_name"`
 	ExternalCustomerID string                 `json:"external_customer_id"`
-	CustomerID         string                 `json:"customer_id,omitempty"`
 	Properties         map[string]interface{} `json:"properties"`
 	Source             string                 `json:"source"`
 	Timestamp          string                 `json:"timestamp"`
-	EventID            string                 `json:"event_id,omitempty"`
 }
 
 func main() {
@@ -80,20 +78,18 @@ func main() {
 	failed := 0
 
 	for i := 0; i < numEvents; i++ {
+		// Using REAL customer external_id from subscription: "334230687423"
+		// NOT the internal customer_id "cust_01KB01JF360SNFB2EX7KRFHX0N"
 		event := Event{
-			EventName:          []string{"api_request", "model_usage", "storage_usage", "feature_usage"}[i%4],
-			ExternalCustomerID: fmt.Sprintf("test-customer-%d", i%3),
-			CustomerID:         fmt.Sprintf("test-customer-%d", i%3),
+			EventName:          "feature 1",    // Meter event_name
+			ExternalCustomerID: "334230687423", // Real external customer ID
 			Properties: map[string]interface{}{
-				"endpoint": "/api/users",
-				"method":   "GET",
-				"status":   "200", // String instead of number
-				"test_run": "benthos-staging-test",
-				"sequence": fmt.Sprintf("%d", i), // String instead of number
+				"feature 1": float64(i + 1), // Numeric value for SUM aggregation
+				"test_run":  "real-customer-benthos-test",
+				"sequence":  i + 1,
 			},
-			Source:    "manual-test-producer",
+			Source:    "kafka-staging-benthos",
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
-			EventID:   fmt.Sprintf("test-%d", time.Now().UnixMilli()),
 		}
 
 		// Marshal to JSON
