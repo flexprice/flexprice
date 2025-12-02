@@ -82,7 +82,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	// Handle InvoiceBilling to set InvoicingCustomerID internally
 	// The DTO layer ensures InvoiceBilling is always set (defaults to invoice_to_self)
 	// For invoice_to_self, we don't need to set InvoicingCustomerID as it defaults to subscription customer
-	if *req.InvoiceBilling == types.InvoiceBillingInvoiceToParent {
+	if lo.FromPtr(req.InvoiceBilling) == types.InvoiceBillingInvoiceToParent {
 		// Set invoicing customer to parent customer
 		if customer.ParentCustomerID == nil {
 			return nil, ierr.NewError("customer does not have a parent customer").
