@@ -144,6 +144,8 @@ func (s *billingService) CalculateFixedCharges(
 				priceUnitAmount = &convertedAmount
 			}
 		}
+		// This ensures line items are stored with proper currency precision
+		roundedAmount := types.RoundToCurrencyPrecision(amount, sub.Currency)
 
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
 			EntityID:        lo.ToPtr(item.EntityID),
@@ -154,7 +156,7 @@ func (s *billingService) CalculateFixedCharges(
 			PriceUnit:       lo.ToPtr(item.PriceUnit),
 			PriceUnitAmount: priceUnitAmount,
 			DisplayName:     lo.ToPtr(item.DisplayName),
-			Amount:          amount,
+			Amount:          roundedAmount,
 			Quantity:        item.Quantity,
 			PeriodStart:     lo.ToPtr(periodStart),
 			PeriodEnd:       lo.ToPtr(periodEnd),
@@ -163,7 +165,7 @@ func (s *billingService) CalculateFixedCharges(
 			},
 		})
 
-		fixedCost = fixedCost.Add(amount)
+		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
 	return fixedCostLineItems, fixedCost, nil
@@ -470,7 +472,10 @@ func (s *billingService) CalculateUsageCharges(
 
 			// Add the amount to total usage cost
 			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
-			totalUsageCost = totalUsageCost.Add(lineItemAmount)
+
+			// Round to currency precision before creating line item
+			roundedLineItemAmount := types.RoundToCurrencyPrecision(lineItemAmount, sub.Currency)
+			totalUsageCost = totalUsageCost.Add(roundedLineItemAmount)
 
 			// Create metadata for the line item, including overage information if applicable
 			metadata := types.Metadata{
@@ -510,12 +515,12 @@ func (s *billingService) CalculateUsageCharges(
 			// Calculate price unit amount if price unit is available
 			var priceUnitAmount *decimal.Decimal
 			if item.PriceUnit != "" {
-				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), lineItemAmount)
+				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), roundedLineItemAmount)
 				if err != nil {
 					s.Logger.Warnw("failed to convert amount to price unit",
 						"error", err,
 						"price_unit", item.PriceUnit,
-						"amount", lineItemAmount)
+						"amount", roundedLineItemAmount)
 				} else {
 					priceUnitAmount = &convertedAmount
 				}
@@ -532,7 +537,7 @@ func (s *billingService) CalculateUsageCharges(
 				PriceUnit:        lo.ToPtr(item.PriceUnit),
 				PriceUnitAmount:  priceUnitAmount,
 				DisplayName:      displayName,
-				Amount:           lineItemAmount,
+				Amount:           roundedLineItemAmount,
 				Quantity:         quantityForCalculation,
 				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
 				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
@@ -917,7 +922,10 @@ func (s *billingService) CalculateUsageChargesForPreview(
 
 			// Add the amount to total usage cost
 			lineItemAmount := decimal.NewFromFloat(matchingCharge.Amount)
-			totalUsageCost = totalUsageCost.Add(lineItemAmount)
+
+			// Round to currency precision before creating line item
+			roundedLineItemAmount := types.RoundToCurrencyPrecision(lineItemAmount, sub.Currency)
+			totalUsageCost = totalUsageCost.Add(roundedLineItemAmount)
 
 			// Create metadata for the line item, including overage information if applicable
 			metadata := types.Metadata{
@@ -957,12 +965,12 @@ func (s *billingService) CalculateUsageChargesForPreview(
 			// Calculate price unit amount if price unit is available
 			var priceUnitAmount *decimal.Decimal
 			if item.PriceUnit != "" {
-				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), lineItemAmount)
+				convertedAmount, err := s.PriceUnitRepo.ConvertToPriceUnit(ctx, item.PriceUnit, types.GetTenantID(ctx), types.GetEnvironmentID(ctx), roundedLineItemAmount)
 				if err != nil {
 					s.Logger.Warnw("failed to convert amount to price unit",
 						"error", err,
 						"price_unit", item.PriceUnit,
-						"amount", lineItemAmount)
+						"amount", roundedLineItemAmount)
 				} else {
 					priceUnitAmount = &convertedAmount
 				}
@@ -979,7 +987,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 				PriceUnit:        lo.ToPtr(item.PriceUnit),
 				PriceUnitAmount:  priceUnitAmount,
 				DisplayName:      displayName,
-				Amount:           lineItemAmount,
+				Amount:           roundedLineItemAmount,
 				Quantity:         quantityForCalculation,
 				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
 				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),

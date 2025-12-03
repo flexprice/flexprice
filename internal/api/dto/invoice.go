@@ -531,6 +531,10 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 }
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
+	// Round line item amount to currency precision
+	// This ensures consistent display and prevents cumulative precision issues
+	roundedAmount := types.RoundToCurrencyPrecision(r.Amount, inv.Currency)
+
 	return &invoice.InvoiceLineItem{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
 		InvoiceID:        inv.ID,
@@ -546,7 +550,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		PriceUnit:        r.PriceUnit,
 		PriceUnitAmount:  r.PriceUnitAmount,
 		DisplayName:      r.DisplayName,
-		Amount:           r.Amount,
+		Amount:           roundedAmount,
 		Quantity:         r.Quantity,
 		Currency:         inv.Currency,
 		PeriodStart:      r.PeriodStart,
