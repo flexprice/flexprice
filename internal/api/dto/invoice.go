@@ -532,7 +532,7 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
 	// Round line item amount to currency precision
-	// This ensures consistent display and prevents cumulative precision issues
+	// This handles one-off invoices that don't go through billing.CreateInvoiceRequestForCharges
 	roundedAmount := types.RoundToCurrencyPrecision(r.Amount, inv.Currency)
 
 	return &invoice.InvoiceLineItem{
