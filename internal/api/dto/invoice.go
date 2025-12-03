@@ -531,7 +531,6 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 }
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
-
 	return &invoice.InvoiceLineItem{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
 		InvoiceID:        inv.ID,
