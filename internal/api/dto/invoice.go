@@ -547,7 +547,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		PriceUnit:        r.PriceUnit,
 		PriceUnitAmount:  r.PriceUnitAmount,
 		DisplayName:      r.DisplayName,
-		Amount:           roundedAmount,
+		Amount:           r.Amount,
 		Quantity:         r.Quantity,
 		Currency:         inv.Currency,
 		PeriodStart:      r.PeriodStart,
