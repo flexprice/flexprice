@@ -21,6 +21,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
+
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -4711,6 +4712,24 @@ func (s *subscriptionService) ProcessSubscriptionEntitlementOverrides(
 	return nil
 }
 
+func (s *subscriptionService) ListAllTenantSubscriptions(ctx context.Context, filter *types.SubscriptionFilter) (*dto.ListSubscriptionsResponse, error) {
+	if filter == nil {
+		filter = types.NewNoLimitSubscriptionFilter()
+	}
+	subs, err := s.SubRepo.ListAllTenant(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	response := &dto.ListSubscriptionsResponse{
+		Items: make([]*dto.SubscriptionResponse, len(subs)),
+	}
+	for i, sub := range subs {
+		response.Items[i] = &dto.SubscriptionResponse{
+			Subscription: sub,
+		}
+	}
+	return response, nil
+}
 func (s *subscriptionService) GetUpcomingCreditGrantApplications(ctx context.Context, req *dto.GetUpcomingCreditGrantApplicationsRequest) (*dto.ListCreditGrantApplicationsResponse, error) {
 	// Validate request
 	if err := req.Validate(); err != nil {

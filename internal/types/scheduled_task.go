@@ -8,9 +8,10 @@ import (
 type ScheduledTaskInterval string
 
 const (
-	ScheduledTaskIntervalCustom ScheduledTaskInterval = "custom" // 10 minutes for testing
-	ScheduledTaskIntervalHourly ScheduledTaskInterval = "hourly"
-	ScheduledTaskIntervalDaily  ScheduledTaskInterval = "daily"
+	ScheduledTaskIntervalEvery15Minutes ScheduledTaskInterval = "15MIN"
+	ScheduledTaskIntervalCustom         ScheduledTaskInterval = "custom" // 10 minutes for testing
+	ScheduledTaskIntervalHourly         ScheduledTaskInterval = "hourly"
+	ScheduledTaskIntervalDaily          ScheduledTaskInterval = "daily"
 )
 
 // Validate validates the scheduled task interval

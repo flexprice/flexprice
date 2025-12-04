@@ -139,6 +139,9 @@ const (
 
 	// DEFAULT_FLOATING_PRECISION is the default floating point precision
 	DEFAULT_FLOATING_PRECISION = 2
+
+	// DEFAULT_BATCH_SIZE is the default batch size for fetching subscriptions
+	DEFAULT_BATCH_SIZE = 100
 )
 
 func (b BillingCadence) Validate() error {

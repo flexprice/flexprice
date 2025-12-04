@@ -250,3 +250,28 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 
 	c.JSON(http.StatusOK, response)
 }
+
+// @Summary Schedule update billing period
+// @Description Schedule an update billing period workflow
+// @Tags ScheduledTasks
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.ScheduleUpdateBillingPeriodRequest true "Schedule Update Billing Period Request"
+// @Success 200 {object} dto.ScheduleUpdateBillingPeriodResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /tasks/scheduled/schedule-update-billing-period [post]
+func (h *ScheduledTaskHandler) ScheduleUpdateBillingPeriod(c *gin.Context) {
+
+	response, err := h.service.ScheduleUpdateBillingPeriod(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to schedule update billing period", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": response,
+	})
+}
