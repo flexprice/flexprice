@@ -1,0 +1,123 @@
+{{- if not .Values.clickhouse.external.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-clickhouse
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  type: {{ .Values.clickhouse.internal.service.type }}
+  ports:
+    - port: {{ .Values.clickhouse.internal.service.httpPort }}
+      targetPort: 8123
+      protocol: TCP
+      name: http
+    - port: {{ .Values.clickhouse.internal.service.nativePort }}
+      targetPort: 9000
+      protocol: TCP
+      name: native
+    - port: {{ .Values.clickhouse.internal.service.interserverPort }}
+      targetPort: 9009
+      protocol: TCP
+      name: interserver
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "flexprice.fullname" . }}-clickhouse
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  serviceName: {{ include "flexprice.fullname" . }}-clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: clickhouse
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: clickhouse
+    spec:
+      securityContext:
+        fsGroup: 101
+        runAsUser: 101
+      containers:
+        - name: clickhouse
+          image: "{{ .Values.clickhouse.internal.image.repository }}:{{ .Values.clickhouse.internal.image.tag }}"
+          imagePullPolicy: {{ .Values.clickhouse.internal.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8123
+              protocol: TCP
+            - name: native
+              containerPort: 9000
+              protocol: TCP
+            - name: interserver
+              containerPort: 9009
+              protocol: TCP
+          env:
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "flexprice.fullname" . }}-secrets
+                  key: clickhouse-password
+            - name: CLICKHOUSE_DB
+              value: {{ .Values.clickhouse.database | quote }}
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+          resources:
+            {{- toYaml .Values.clickhouse.internal.resources | nindent 12 }}
+          # Note: ulimits are not directly configurable in Kubernetes securityContext
+          # They are set at the container runtime level. If needed, configure via:
+          # - RuntimeClass with ulimit settings
+          # - Container runtime configuration
+          # - Init container or sidecar
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+  {{- if .Values.clickhouse.internal.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        {{- if .Values.clickhouse.internal.persistence.storageClass }}
+        storageClassName: {{ .Values.clickhouse.internal.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.clickhouse.internal.persistence.size }}
+  {{- end }}
+{{- end }}
+
