@@ -1,0 +1,3 @@
+flexprice>=1.0.16
+python-dotenv>=1.0.1
+anyio>=4.4.0
