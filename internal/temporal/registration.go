@@ -7,6 +7,7 @@ import (
 	exportActivities "github.com/flexprice/flexprice/internal/temporal/activities/export"
 	hubspotActivities "github.com/flexprice/flexprice/internal/temporal/activities/hubspot"
 	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
+	qbActivities "github.com/flexprice/flexprice/internal/temporal/activities/quickbooks"
 	taskActivities "github.com/flexprice/flexprice/internal/temporal/activities/task"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
@@ -29,6 +30,14 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 	taskService := service.NewTaskService(params)
 	taskActivities := taskActivities.NewTaskActivities(taskService)
+
+	// QuickBooks price sync activities
+	qbPriceSyncActivities := qbActivities.NewQuickBooksPriceSyncActivities(
+		params.IntegrationFactory,
+		params.PlanRepo,
+		params.PriceRepo,
+		params.Logger,
+	)
 
 	// Export activities
 	taskActivity := exportActivities.NewTaskActivity(params.TaskRepo, params.Logger)
@@ -67,7 +76,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities)
+		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -87,6 +96,7 @@ func buildWorkerConfig(
 	hubspotDealSyncActivities *hubspotActivities.DealSyncActivities,
 	hubspotInvoiceSyncActivities *hubspotActivities.InvoiceSyncActivities,
 	hubspotQuoteSyncActivities *hubspotActivities.QuoteSyncActivities,
+	qbPriceSyncActivities *qbActivities.QuickBooksPriceSyncActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	activitiesList := []interface{}{}
@@ -108,8 +118,14 @@ func buildWorkerConfig(
 		)
 
 	case types.TemporalTaskQueuePrice:
-		workflowsList = append(workflowsList, workflows.PriceSyncWorkflow)
-		activitiesList = append(activitiesList, planActivities.SyncPlanPrices)
+		workflowsList = append(workflowsList,
+			workflows.PriceSyncWorkflow,
+			workflows.QuickBooksPriceSyncWorkflow,
+		)
+		activitiesList = append(activitiesList,
+			planActivities.SyncPlanPrices,
+			qbPriceSyncActivities.SyncPriceToQuickBooks,
+		)
 
 	case types.TemporalTaskQueueExport:
 		// Export workflows

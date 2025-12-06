@@ -184,6 +184,7 @@ func main() {
 			integration.NewFactory,
 			syncExport.NewExportService,
 			service.NewServiceParams,
+			service.NewOAuthService,
 			service.NewTenantService,
 			service.NewAuthService,
 			service.NewUserService,
@@ -295,6 +296,7 @@ func provideHandlers(
 	db postgres.IClient,
 	scheduledTaskService service.ScheduledTaskService,
 	rbacService *rbac.RBACService,
+	oauthService service.OAuthService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
@@ -339,6 +341,7 @@ func provideHandlers(
 		ScheduledTask:            v1.NewScheduledTaskHandler(scheduledTaskService, logger),
 		AlertLogsHandler:         v1.NewAlertLogsHandler(alertLogsService, customerService, walletService, featureService, logger),
 		RBAC:                     v1.NewRBACHandler(rbacService, userService, logger),
+		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
 		CronKafkaLagMonitoring:   cron.NewKafkaLagMonitoringHandler(logger, eventService),
 	}
 }

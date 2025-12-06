@@ -27,17 +27,6 @@ func NewConnectionHandler(
 	}
 }
 
-// @Summary Create a connection
-// @Description Create a new integration connection
-// @Tags Connections
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param connection body dto.CreateConnectionRequest true "Connection"
-// @Success 201 {object} dto.ConnectionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /connections [post]
 func (h *ConnectionHandler) CreateConnection(c *gin.Context) {
 	var req dto.CreateConnectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

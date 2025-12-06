@@ -193,3 +193,11 @@ email:
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file
+
+# Generic OAuth configuration for multiple integration providers
+oauth:
+  # Base redirect URI - MUST be registered in each OAuth provider's app settings
+  # Development: http://localhost:3000/tools/integrations/oauth/callback
+  # Staging: https://admin-dev.flexprice.io/tools/integrations/oauth/callback
+  # Production: https://admin.flexprice.io/tools/integrations/oauth/callback
+  redirect_uri: ""

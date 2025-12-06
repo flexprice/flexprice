@@ -27,3 +27,28 @@ func (p *PriceSyncWorkflowInput) Validate() error {
 
 	return nil
 }
+
+// QuickBooksPriceSyncWorkflowInput represents input for the QuickBooks price sync workflow
+type QuickBooksPriceSyncWorkflowInput struct {
+	PriceID       string `json:"price_id"`
+	PlanID        string `json:"plan_id"`
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	UserID        string `json:"user_id"`
+}
+
+func (q *QuickBooksPriceSyncWorkflowInput) Validate() error {
+	if q.PriceID == "" || q.PlanID == "" {
+		return ierr.NewError("price ID and plan ID are required").
+			WithHint("Price ID and Plan ID are required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if q.TenantID == "" || q.EnvironmentID == "" || q.UserID == "" {
+		return ierr.NewError("tenant ID, environment ID and user ID are required").
+			WithHint("Tenant ID, environment ID and user ID are required").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}

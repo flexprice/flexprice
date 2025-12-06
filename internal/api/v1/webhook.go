@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/integration"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
+	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -651,4 +652,107 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 		"environment_id", environmentID,
 		"event_id", event.ID,
 		"event_type", event.EventType)
+}
+
+// @Summary Handle QuickBooks webhook events
+// @Description Process incoming QuickBooks webhook events for payment sync
+// @Tags Webhooks
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param environment_id path string true "Environment ID"
+// @Param intuit-signature header string false "QuickBooks webhook signature"
+// @Success 200 {object} map[string]interface{} "Webhook processed successfully"
+// @Failure 401 {object} map[string]interface{} "Unauthorized - invalid signature"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /webhooks/quickbooks/{tenant_id}/{environment_id} [post]
+func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
+	// Always return 200 OK to QuickBooks to prevent retries
+	// We log errors internally but don't expose them to QuickBooks
+	defer func() {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Webhook received",
+		})
+	}()
+
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
+	// Read the raw request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read request body", "error", err)
+		return
+	}
+
+	// Get QuickBooks signature from headers
+	signature := c.GetHeader("intuit-signature")
+
+	// Log webhook receipt (without sensitive data)
+	h.logger.Debugw("received QuickBooks webhook",
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"has_signature", signature != "",
+		"body_length", len(body))
+
+	// Set context with tenant and environment IDs
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Get QuickBooks integration
+	qbIntegration, err := h.integrationFactory.GetQuickBooksIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get QuickBooks integration", "error", err)
+		return
+	}
+
+	// Verify webhook signature (if signature provided)
+	if signature != "" {
+		err = qbIntegration.WebhookHandler.VerifyWebhookSignature(ctx, body, signature)
+		if err != nil {
+			h.logger.Errorw("failed to verify QuickBooks webhook signature",
+				"error", err,
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			// Don't return 401 - QuickBooks expects 200
+			return
+		}
+		h.logger.Debugw("QuickBooks webhook signature verified",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	} else {
+		h.logger.Warnw("QuickBooks webhook received without signature",
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"note", "Consider configuring webhook verifier token for security")
+	}
+
+	// Create service dependencies for webhook handler
+	serviceDeps := &quickbookswebhook.ServiceDependencies{
+		PaymentService: h.paymentService,
+		InvoiceService: h.invoiceService,
+	}
+
+	// Handle the webhook event
+	err = qbIntegration.WebhookHandler.HandleWebhook(ctx, body, serviceDeps)
+	if err != nil {
+		h.logger.Errorw("failed to handle QuickBooks webhook event",
+			"error", err,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
+	h.logger.Infow("successfully processed QuickBooks webhook",
+		"tenant_id", tenantID,
+		"environment_id", environmentID)
 }

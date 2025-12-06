@@ -42,6 +42,7 @@ type Configuration struct {
 	FeatureFlag              FeatureFlagConfig              `mapstructure:"feature_flag" validate:"required"`
 	Email                    EmailConfig                    `mapstructure:"email" validate:"required"`
 	RBAC                     RBACConfig                     `mapstructure:"rbac" validate:"omitempty"`
+	OAuth                    OAuthConfig                    `mapstructure:"oauth" validate:"required"`
 }
 
 type CacheConfig struct {
@@ -378,4 +379,11 @@ func (c PostgresConfig) HasSeparateReader() bool {
 
 type RBACConfig struct {
 	RolesConfigPath string `mapstructure:"roles_config_path" json:"roles_config_path"`
+}
+
+// OAuthConfig holds generic OAuth configuration for multiple providers
+type OAuthConfig struct {
+	// Base redirect URI - provider-specific paths may be appended
+	// Example: "https://admin-dev.flexprice.io/tools/integrations/oauth/callback"
+	RedirectURI string `mapstructure:"redirect_uri" validate:"required,url"`
 }

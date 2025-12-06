@@ -346,6 +346,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 	switch workflowType {
 	case types.TemporalPriceSyncWorkflow:
 		return s.buildPriceSyncInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalQuickBooksPriceSyncWorkflow:
+		return s.buildQuickBooksPriceSyncInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalTaskProcessingWorkflow:
 		return s.buildTaskProcessingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalHubSpotDealSyncWorkflow:
@@ -385,6 +387,41 @@ func (s *temporalService) buildPriceSyncInput(_ context.Context, tenantID, envir
 		EnvironmentID: environmentID,
 		UserID:        userID,
 	}, nil
+}
+
+// buildQuickBooksPriceSyncInput builds input for QuickBooks price sync workflow
+func (s *temporalService) buildQuickBooksPriceSyncInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(models.QuickBooksPriceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		return input, nil
+	}
+
+	// Handle map input with price_id and plan_id
+	if paramsMap, ok := params.(map[string]interface{}); ok {
+		priceID, _ := paramsMap["price_id"].(string)
+		planID, _ := paramsMap["plan_id"].(string)
+
+		if priceID == "" || planID == "" {
+			return nil, errors.NewError("price ID and plan ID are required").
+				WithHint("Provide map with price_id and plan_id").
+				Mark(errors.ErrValidation)
+		}
+
+		return models.QuickBooksPriceSyncWorkflowInput{
+			PriceID:       priceID,
+			PlanID:        planID,
+			TenantID:      tenantID,
+			EnvironmentID: environmentID,
+			UserID:        userID,
+		}, nil
+	}
+
+	return nil, errors.NewError("invalid input for QuickBooks price sync").
+		WithHint("Provide QuickBooksPriceSyncWorkflowInput or map with price_id and plan_id").
+		Mark(errors.ErrValidation)
 }
 
 // buildTaskProcessingInput builds input for task processing workflow

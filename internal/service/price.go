@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -116,6 +117,11 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	// Sync new price to Chargebee if it belongs to a plan
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
+	}
+
+	// Sync new price to QuickBooks if it belongs to a plan
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		s.syncPriceToQuickBooksIfEnabled(ctx, p.ID, p.EntityID)
 	}
 
 	return response, nil
@@ -247,12 +253,36 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		return nil, err
 	}
 
-	// Sync prices to Chargebee if integration is available and prices are for a plan
-	// Use the centralized sync function for each price
+	// Sync prices to integrations if available and prices are for a plan
+	s.Logger.Debugw("Bulk price sync check",
+		"response_nil", response == nil,
+		"response_items_count", func() int {
+			if response == nil {
+				return -1
+			}
+			return len(response.Items)
+		}())
+
 	if response != nil && len(response.Items) > 0 {
+		// Use background context for sync operations to prevent request context cancellation
+		// from affecting the sync process. Each sync is independent and should complete
+		// regardless of whether the HTTP request times out.
+		// However, we need to preserve tenant/environment context values for database queries.
+		syncCtx := context.Background()
+		syncCtx = context.WithValue(syncCtx, types.CtxTenantID, types.GetTenantID(ctx))
+		syncCtx = context.WithValue(syncCtx, types.CtxUserID, types.GetUserID(ctx))
+		syncCtx = context.WithValue(syncCtx, types.CtxEnvironmentID, types.GetEnvironmentID(ctx))
+		if roles := ctx.Value(types.CtxRoles); roles != nil {
+			syncCtx = context.WithValue(syncCtx, types.CtxRoles, roles)
+		}
+
 		for _, priceResp := range response.Items {
 			if priceResp.Price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-				s.syncPriceToChargebeeIfEnabled(ctx, priceResp.Price.ID, priceResp.Price.EntityID)
+				// Sync to Chargebee with background context
+				s.syncPriceToChargebeeIfEnabled(syncCtx, priceResp.Price.ID, priceResp.Price.EntityID)
+
+				// Sync to QuickBooks via Temporal workflow (async, non-blocking)
+				s.syncPriceToQuickBooksIfEnabled(syncCtx, priceResp.Price.ID, priceResp.Price.EntityID)
 			}
 		}
 	}
@@ -474,6 +504,11 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	// Sync new price to Chargebee if it belongs to a plan
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
+	}
+
+	// Sync new price to QuickBooks if it belongs to a plan
+	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		s.syncPriceToQuickBooksIfEnabled(ctx, p.ID, p.EntityID)
 	}
 
 	return response, nil
@@ -908,6 +943,11 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 		// Sync new price to Chargebee if it belongs to a plan
 		if newPriceResp.Price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 			s.syncPriceToChargebeeIfEnabled(ctx, newPriceResp.Price.ID, newPriceResp.Price.EntityID)
+		}
+
+		// Sync new price to QuickBooks if it belongs to a plan
+		if newPriceResp.Price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+			s.syncPriceToQuickBooksIfEnabled(ctx, newPriceResp.Price.ID, newPriceResp.Price.EntityID)
 		}
 
 		return newPriceResp, nil
@@ -1432,4 +1472,64 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 			"price_id", priceID,
 			"plan_id", planID)
 	}
+}
+
+// syncPriceToQuickBooksIfEnabled syncs a price to QuickBooks via Temporal workflow if the integration is enabled.
+// This is a non-blocking operation that offloads the sync to Temporal, preventing blocking and duplicate entity mappings.
+// All QuickBooks syncs go through Temporal for reliability, retries, and proper async handling.
+func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, priceID, planID string) {
+	// Get global Temporal service
+	temporalSvc := temporalService.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.Debugw("Temporal service not available, skipping QuickBooks sync",
+			"price_id", priceID)
+		return
+		}
+
+	// Check if QuickBooks integration is available
+	if s.IntegrationFactory == nil {
+		return
+	}
+
+	// Quick check: does QuickBooks connection exist?
+	_, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			// Connection not configured - skip silently
+			s.Logger.Debugw("QB TEMPORAL SYNC - connection not found, skipping",
+				"price_id", priceID)
+			return
+		}
+		// Actual error - log but don't fail
+		s.Logger.Errorw("error checking QuickBooks connection",
+			"price_id", priceID,
+			"plan_id", planID,
+			"error", err)
+		return
+	}
+
+	// Trigger Temporal workflow for QuickBooks price sync
+	workflowInput := map[string]interface{}{
+		"price_id": priceID,
+		"plan_id":  planID,
+	}
+
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalQuickBooksPriceSyncWorkflow,
+		workflowInput,
+	)
+	if err != nil {
+		s.Logger.Errorw("failed to start QuickBooks sync workflow",
+			"price_id", priceID,
+			"plan_id", planID,
+			"error", err)
+		return
+	}
+
+	s.Logger.Debugw("QuickBooks sync workflow started",
+			"price_id", priceID,
+			"plan_id", planID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
 }

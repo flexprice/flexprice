@@ -133,6 +133,59 @@ func (c *ChargebeeConnectionMetadata) Validate() error {
 	return nil
 }
 
+// QuickBooksConnectionMetadata represents QuickBooks-specific connection metadata
+type QuickBooksConnectionMetadata struct {
+	// Required for initial connection setup
+	ClientID     string `json:"client_id"`     // OAuth Client ID (encrypted)
+	ClientSecret string `json:"client_secret"` // OAuth Client Secret (encrypted)
+	RealmID      string `json:"realm_id"`      // QuickBooks Company ID (not encrypted)
+	Environment  string `json:"environment"`   // "sandbox" or "production"
+
+	// Optional - for initial setup via auth code (will be cleared after token exchange)
+	AuthCode    string `json:"auth_code,omitempty"`    // OAuth Authorization Code (temporary, encrypted)
+	RedirectURI string `json:"redirect_uri,omitempty"` // OAuth Redirect URI (temporary)
+
+	// Managed internally - set after auth code exchange or token refresh
+	AccessToken  string `json:"access_token,omitempty"`  // OAuth Access Token (encrypted)
+	RefreshToken string `json:"refresh_token,omitempty"` // OAuth Refresh Token (encrypted)
+
+	// Webhook security
+	WebhookVerifierToken string `json:"webhook_verifier_token,omitempty"` // QuickBooks webhook verifier token (encrypted)
+
+	// Optional configuration
+	IncomeAccountID string `json:"income_account_id,omitempty"` // QuickBooks Income Account ID (optional, defaults to "79")
+
+	// Temporary OAuth session data (only used during OAuth flow, cleared after completion)
+	OAuthSessionData string `json:"oauth_session_data,omitempty"` // Encrypted JSON containing session_id, csrf_state, credentials, etc.
+}
+
+// Validate validates the QuickBooks connection metadata
+func (q *QuickBooksConnectionMetadata) Validate() error {
+	if q.ClientID == "" {
+		return ierr.NewError("client_id is required").
+			WithHint("QuickBooks OAuth client ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if q.ClientSecret == "" {
+		return ierr.NewError("client_secret is required").
+			WithHint("QuickBooks OAuth client secret is required").
+			Mark(ierr.ErrValidation)
+	}
+	if q.RealmID == "" {
+		return ierr.NewError("realm_id is required").
+			WithHint("QuickBooks Company ID (realm ID) is required").
+			Mark(ierr.ErrValidation)
+	}
+	if q.Environment != "sandbox" && q.Environment != "production" {
+		return ierr.NewError("environment must be 'sandbox' or 'production'").
+			WithHint("QuickBooks environment must be either 'sandbox' or 'production'").
+			Mark(ierr.ErrValidation)
+	}
+	// Note: AccessToken and RefreshToken are not required during validation
+	// They will be generated internally via auth code exchange or token refresh
+	return nil
+}
+
 // ConnectionSettings represents general connection settings
 type ConnectionSettings struct {
 	InvoiceSyncEnable *bool `json:"invoice_sync_enable,omitempty"`
@@ -175,13 +228,14 @@ func (g *GenericConnectionMetadata) Validate() error {
 
 // ConnectionMetadata represents structured connection metadata
 type ConnectionMetadata struct {
-	Stripe    *StripeConnectionMetadata    `json:"stripe,omitempty"`
-	S3        *S3ConnectionMetadata        `json:"s3,omitempty"`
-	HubSpot   *HubSpotConnectionMetadata   `json:"hubspot,omitempty"`
-	Razorpay  *RazorpayConnectionMetadata  `json:"razorpay,omitempty"`
-	Chargebee *ChargebeeConnectionMetadata `json:"chargebee,omitempty"`
-	Generic   *GenericConnectionMetadata   `json:"generic,omitempty"`
-	Settings  *ConnectionSettings          `json:"settings,omitempty"`
+	Stripe     *StripeConnectionMetadata     `json:"stripe,omitempty"`
+	S3         *S3ConnectionMetadata         `json:"s3,omitempty"`
+	HubSpot    *HubSpotConnectionMetadata    `json:"hubspot,omitempty"`
+	Razorpay   *RazorpayConnectionMetadata   `json:"razorpay,omitempty"`
+	Chargebee  *ChargebeeConnectionMetadata  `json:"chargebee,omitempty"`
+	QuickBooks *QuickBooksConnectionMetadata `json:"quickbooks,omitempty"`
+	Generic    *GenericConnectionMetadata    `json:"generic,omitempty"`
+	Settings   *ConnectionSettings           `json:"settings,omitempty"`
 }
 
 // Validate validates the connection metadata based on provider type
@@ -222,6 +276,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.Chargebee.Validate()
+	case SecretProviderQuickBooks:
+		if c.QuickBooks == nil {
+			return ierr.NewError("quickbooks metadata is required").
+				WithHint("QuickBooks metadata is required for quickbooks provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.QuickBooks.Validate()
 	default:
 		// For other providers or unknown types, use generic format
 		if c.Generic == nil {
