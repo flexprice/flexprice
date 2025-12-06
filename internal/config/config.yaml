@@ -178,6 +178,11 @@ feature_usage_tracking_lazy:
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_lazy"
 
+wallet_balance_alert:
+  topic: "wallet_alert"
+  rate_limit: 1
+  consumer_group: "v1_wallet_alert_service"
+
 feature_flag:
   # This flag is used to enable/disable feature usage for analytics
   enable_feature_usage_for_analytics: true # TODO: cleanup by 15th October 2025

@@ -81,6 +81,7 @@ const (
 	UUID_PREFIX_CONNECTION                 = "conn"
 	UUID_PREFIX_WALLET                     = "wallet"
 	UUID_PREFIX_WALLET_TRANSACTION         = "wtxn"
+	UUID_PREFIX_WALLET_ALERT               = "walert"
 	UUID_PREFIX_ENVIRONMENT                = "env"
 	UUID_PREFIX_USER                       = "user"
 	UUID_PREFIX_TENANT                     = "tenant"

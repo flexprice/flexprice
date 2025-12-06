@@ -1,6 +1,8 @@
 package wallet
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -119,4 +121,38 @@ func FromEntList(es []*ent.Wallet) []*Wallet {
 		wallets[i] = FromEnt(e)
 	}
 	return wallets
+}
+
+type WalletBalanceAlertEvent struct {
+	ID                    string    `json:"id"`
+	CustomerID            string    `json:"customer_id"`
+	ForceCalculateBalance bool      `json:"force_calculate_balance"`
+	TenantID              string    `json:"tenant_id"`
+	EnvironmentID         string    `json:"environment_id"`
+	Timestamp             time.Time `json:"timestamp"`
+	Source                string    `json:"source"`              // e.g., "wallet_credit", "wallet_debit", "manual", "cron"
+	WalletID              string    `json:"wallet_id,omitempty"` // Optional: specific wallet that triggered the event
+}
+
+func (e *WalletBalanceAlertEvent) Validate() error {
+
+	if e.CustomerID == "" {
+		return ierr.NewError("customer_id is required").
+			WithHint("customer_id is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if e.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("tenant_id is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if e.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("environment_id is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

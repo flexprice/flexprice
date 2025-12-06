@@ -223,6 +223,8 @@ func main() {
 			service.NewAlertLogsService,
 			service.NewGroupService,
 			service.NewScheduledTaskService,
+			service.NewWalletPaymentService,
+			service.NewWalletBalanceAlertService,
 		),
 	)
 
@@ -410,6 +412,7 @@ func startServer(
 	eventPostProcessingSvc service.EventPostProcessingService,
 	eventConsumptionSvc service.EventConsumptionService,
 	featureUsageSvc service.FeatureUsageTrackingService,
+	walletBalanceAlertSvc service.WalletBalanceAlertService,
 	params service.ServiceParams,
 ) {
 	mode := cfg.Deployment.Mode
@@ -425,14 +428,14 @@ func startServer(
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, walletBalanceAlertSvc, cfg, true)
 		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeAPI:
 		startAPIServer(lc, r, cfg, log)
 
 		// Register all handlers and start router once (no event consumption)
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, false)
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, walletBalanceAlertSvc, cfg, false)
 		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
@@ -443,7 +446,7 @@ func startServer(
 		}
 
 		// Register all handlers and start router once
-		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, cfg, true)
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, walletBalanceAlertSvc, cfg, true)
 		startRouter(lc, router, log)
 	default:
 		log.Fatalf("Unknown deployment mode: %s", mode)
@@ -508,6 +511,7 @@ func registerRouterHandlers(
 	eventPostProcessingSvc service.EventPostProcessingService,
 	eventConsumptionSvc service.EventConsumptionService,
 	featureUsageSvc service.FeatureUsageTrackingService,
+	walletBalanceAlertSvc service.WalletBalanceAlertService,
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
@@ -523,6 +527,7 @@ func registerRouterHandlers(
 		eventPostProcessingSvc.RegisterHandler(router, cfg)
 		featureUsageSvc.RegisterHandler(router, cfg)
 		featureUsageSvc.RegisterHandlerLazy(router, cfg)
+		walletBalanceAlertSvc.RegisterHandler(router, cfg)
 	}
 }
 
