@@ -237,7 +237,7 @@ func (s *onboardingService) generateEvents(ctx context.Context, eventMsg *types.
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
 	// Calculate total events to generate
-	totalEvents := eventMsg.Duration * 5
+	totalEvents := eventMsg.Duration * 100
 	numMeters := len(eventMsg.Meters)
 
 	if numMeters == 0 {
