@@ -4748,7 +4748,7 @@ func (s *SubscriptionServiceSuite) TestProcessAutoCancellationWithInvoicingCusto
 	// Enable auto-cancellation settings - create setting directly via repository
 	setting := &settings.Setting{
 		ID:  s.GetUUID(),
-		Key: string(types.SettingKeySubscriptionConfig),
+		Key: types.SettingKeySubscriptionConfig,
 		Value: map[string]interface{}{
 			"auto_cancellation_enabled": true,
 			"grace_period_days":         gracePeriodDays,

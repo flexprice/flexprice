@@ -12,6 +12,10 @@ type SettingResponse struct {
 	*settings.Setting
 }
 
+func NewSettingResponse(s *settings.Setting) *SettingResponse {
+	return &SettingResponse{Setting: s}
+}
+
 // CreateSettingRequest represents the request to create a new setting
 type CreateSettingRequest struct {
 	Key   types.SettingKey       `json:"key" validate:"required"`

@@ -27,33 +27,49 @@ func NewSettingsService(params ServiceParams) SettingsService {
 	}
 }
 
-// GetSetting retrieves a setting and returns it as a typed struct
-// Simple: DB map -> typed struct using stateless conversion
-func GetSetting[T any](
-	s *settingsService,
-	ctx context.Context,
-	key types.SettingKey,
-) (T, error) {
+// Helper: Check if setting is tenant-level (no environment_id)
+func isTenantLevelSetting(key types.SettingKey) bool {
+	return key == types.SettingKeyEnvConfig
+}
+
+// Helper: Fetch setting from repository (handles tenant-level vs environment-level)
+func (s *settingsService) fetchSetting(ctx context.Context, key types.SettingKey) (*settings.Setting, error) {
+	if isTenantLevelSetting(key) {
+		return s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
+	}
+	return s.SettingsRepo.GetByKey(ctx, key)
+}
+
+// Helper: Get default value for a setting key
+func getDefaultValue[T any](key types.SettingKey) (T, error) {
 	var zero T
 
-	var setting *settings.Setting
-	var err error
-
-	if key == types.SettingKeyEnvConfig {
-		setting, err = s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
-	} else {
-		setting, err = s.SettingsRepo.GetByKey(ctx, key)
+	defaults, err := types.GetDefaultSettings()
+	if err != nil {
+		return zero, err
+	}
+	defaultSetting, exists := defaults[key]
+	if !exists {
+		return zero, ierr.NewErrorf("unknown setting key: %s", key).
+			WithHintf("Unknown setting key: %s", key).
+			Mark(ierr.ErrValidation)
 	}
 
+	return typesSettings.ToStruct[T](defaultSetting.DefaultValue)
+}
+
+// GetSetting retrieves a setting and returns it as a typed struct
+func GetSetting[T any](s *settingsService, ctx context.Context, key types.SettingKey) (T, error) {
+	var zero T
+
+	setting, err := s.fetchSetting(ctx, key)
 	if ent.IsNotFound(err) {
-		// Return default value
 		return getDefaultValue[T](key)
 	}
 	if err != nil {
 		return zero, err
 	}
 
-	// Simple conversion: map -> typed struct
 	typedValue, err := typesSettings.ToStruct[T](setting.Value)
 	if err != nil {
 		return zero, ierr.WithError(err).
@@ -64,34 +80,35 @@ func GetSetting[T any](
 	return typedValue, nil
 }
 
-// getDefaultValue returns the default value for a setting key
-func getDefaultValue[T any](key types.SettingKey) (T, error) {
-	var zero T
-
-	defaults := types.GetDefaultSettings()
-	defaultSetting, exists := defaults[key]
-	if !exists {
-		return zero, ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
-	}
-
-	// Convert default map to typed struct
-	return typesSettings.ToStruct[T](defaultSetting.DefaultValue)
-}
-
+// getSettingByKey fetches setting and returns as DTO response
 func getSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
-	// Get typed config
-	config, err := GetSetting[T](s, ctx, key)
+	setting, err := s.fetchSetting(ctx, key)
+
+	if ent.IsNotFound(err) {
+		// Setting doesn't exist, return default value
+		config, err := getDefaultValue[T](key)
+		if err != nil {
+			return nil, err
+		}
+
+		valueMap, err := typesSettings.ToMap(config)
+		if err != nil {
+			return nil, err
+		}
+
+		return dto.NewSettingResponse(&settings.Setting{
+			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+			BaseModel: types.GetDefaultBaseModel(ctx),
+			Key:       key,
+			Value:     valueMap,
+		}), nil
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert typed struct -> map for response
-	valueMap, err := typesSettings.ToMap(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dto.SettingResponse{Key: key.String(), Value: valueMap}, nil
+	// Use the actual Setting object fetched from DB (with all metadata)
+	return dto.NewSettingResponse(setting), nil
 }
 
 func (s *settingsService) GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
@@ -109,22 +126,16 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	}
 }
 
-// UpdateSetting updates a setting value
-// Simple: typed struct -> map for DB storage
-func UpdateSetting[T types.SettingConfig](
-	s *settingsService,
-	ctx context.Context,
-	key types.SettingKey,
-	value T,
-) error {
-	// Validate the typed struct
+// UpdateSetting updates a setting value (creates if doesn't exist)
+func UpdateSetting[T types.SettingConfig](s *settingsService, ctx context.Context, key types.SettingKey, value T) error {
+	// Validate
 	if err := value.Validate(); err != nil {
 		return ierr.WithError(err).
 			WithHintf("Validation failed for setting %s", key).
 			Mark(ierr.ErrValidation)
 	}
 
-	// Convert typed struct -> map for DB
+	// Convert to map
 	valueMap, err := typesSettings.ToMap(value)
 	if err != nil {
 		return ierr.WithError(err).
@@ -132,23 +143,18 @@ func UpdateSetting[T types.SettingConfig](
 			Mark(ierr.ErrValidation)
 	}
 
-	var setting *settings.Setting
-	isEnvConfig := key == types.SettingKeyEnvConfig
-	if isEnvConfig {
-		setting, err = s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
-	} else {
-		setting, err = s.SettingsRepo.GetByKey(ctx, key)
-	}
+	// Fetch existing setting
+	setting, err := s.fetchSetting(ctx, key)
 
 	if ent.IsNotFound(err) {
 		// Create new setting
 		newSetting := &settings.Setting{
 			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
 			BaseModel: types.GetDefaultBaseModel(ctx),
-			Key:       key.String(),
+			Key:       key,
 			Value:     valueMap,
 		}
-		if !isEnvConfig {
+		if !isTenantLevelSetting(key) {
 			newSetting.EnvironmentID = types.GetEnvironmentID(ctx)
 		}
 		return s.SettingsRepo.Create(ctx, newSetting)
@@ -169,26 +175,24 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 		return nil, err
 	}
 
-	// Convert current to map
+	// Convert to map and merge with request
 	currentMap, err := typesSettings.ToMap(current)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHintf("Failed to convert current setting %s to map for merging", key).
+			WithHintf("Failed to convert current setting %s to map", key).
 			Mark(ierr.ErrValidation)
 	}
 
-	// Merge with request values
 	for k, v := range req.Value {
 		currentMap[k] = v
 	}
 
-	// Convert merged map back to typed struct
+	// Convert merged map back to typed struct and update
 	merged, err := typesSettings.ToStruct[T](currentMap)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update with merged typed struct
 	if err := UpdateSetting[T](s, ctx, key, merged); err != nil {
 		return nil, err
 	}
@@ -215,18 +219,9 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	}
 }
 
-func DeleteSetting[T any](
-	s *settingsService,
-	ctx context.Context,
-	key types.SettingKey,
-) error {
-	var err error
-	if key == types.SettingKeyEnvConfig {
-		_, err = s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
-	} else {
-		_, err = s.SettingsRepo.GetByKey(ctx, key)
-	}
-
+func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
+	// Check if setting exists
+	_, err := s.fetchSetting(ctx, key)
 	if ent.IsNotFound(err) {
 		return ierr.NewErrorf("setting with key '%s' not found", key).Mark(ierr.ErrNotFound)
 	}
@@ -234,23 +229,9 @@ func DeleteSetting[T any](
 		return err
 	}
 
-	if key == types.SettingKeyEnvConfig {
+	// Delete based on setting type
+	if isTenantLevelSetting(key) {
 		return s.SettingsRepo.DeleteTenantLevelSettingByKey(ctx, key)
 	}
 	return s.SettingsRepo.DeleteByKey(ctx, key)
-}
-
-func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
-	switch key {
-	case types.SettingKeyInvoiceConfig:
-		return DeleteSetting[types.InvoiceConfig](s, ctx, key)
-	case types.SettingKeySubscriptionConfig:
-		return DeleteSetting[types.SubscriptionConfig](s, ctx, key)
-	case types.SettingKeyInvoicePDFConfig:
-		return DeleteSetting[types.InvoicePDFConfig](s, ctx, key)
-	case types.SettingKeyEnvConfig:
-		return DeleteSetting[types.EnvConfig](s, ctx, key)
-	default:
-		return ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
-	}
 }
