@@ -122,7 +122,9 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	case types.SettingKeyEnvConfig:
 		return getSettingByKey[types.EnvConfig](s, ctx, key)
 	default:
-		return nil, ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
+		return nil, ierr.NewErrorf("unknown setting key: %s", key).
+			WithHintf("Unknown setting key: %s", key).
+			Mark(ierr.ErrValidation)
 	}
 }
 
@@ -215,7 +217,9 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	case types.SettingKeyEnvConfig:
 		return updateSettingByKey[types.EnvConfig](s, ctx, key, req)
 	default:
-		return nil, ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
+		return nil, ierr.NewErrorf("unknown setting key: %s", key).
+			WithHintf("Unknown setting key: %s", key).
+			Mark(ierr.ErrValidation)
 	}
 }
 
@@ -223,7 +227,9 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 	// Check if setting exists
 	_, err := s.fetchSetting(ctx, key)
 	if ent.IsNotFound(err) {
-		return ierr.NewErrorf("setting with key '%s' not found", key).Mark(ierr.ErrNotFound)
+		return ierr.NewErrorf("setting with key '%s' not found", key).
+			WithHintf("Setting with key %s not found", key).
+			Mark(ierr.ErrNotFound)
 	}
 	if err != nil {
 		return err
