@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/json"
-	"errors"
 	"strings"
 	"time"
 
@@ -26,8 +25,24 @@ const (
 	SettingKeyEnvConfig          SettingKey = "env_config"
 )
 
-func (s SettingKey) String() string {
-	return string(s)
+func (s *SettingKey) Validate() error {
+
+	allowedKeys := []SettingKey{
+		SettingKeyInvoiceConfig,
+		SettingKeySubscriptionConfig,
+		SettingKeyInvoicePDFConfig,
+		SettingKeyEnvConfig,
+	}
+
+	if !lo.Contains(allowedKeys, *s) {
+		return ierr.NewErrorf("invalid setting key: %s", *s).
+			WithHint("Please provide a valid setting key").
+			WithReportableDetails(map[string]any{
+				"allowed": allowedKeys,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // DefaultSettingValue represents a default setting configuration
@@ -91,7 +106,7 @@ type TenantEnvSubscriptionConfig struct {
 
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ConvertToMap utility
-func GetDefaultSettings() map[SettingKey]DefaultSettingValue {
+func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	// Define defaults as typed structs
 	defaultInvoiceConfig := InvoiceConfig{
 		InvoiceNumberPrefix:                    "INV",
@@ -120,10 +135,30 @@ func GetDefaultSettings() map[SettingKey]DefaultSettingValue {
 	}
 
 	// Convert typed structs to maps using centralized utility
-	invoiceConfigMap, _ := ConvertToMap(defaultInvoiceConfig)
-	subscriptionConfigMap, _ := ConvertToMap(defaultSubscriptionConfig)
-	invoicePDFConfigMap, _ := ConvertToMap(defaultInvoicePDFConfig)
-	envConfigMap, _ := ConvertToMap(defaultEnvConfig)
+	invoiceConfigMap, err := ConvertToMap(defaultInvoiceConfig)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to convert default invoice config to map").
+			Mark(ierr.ErrValidation)
+	}
+	subscriptionConfigMap, err := ConvertToMap(defaultSubscriptionConfig)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to convert default subscription config to map").
+			Mark(ierr.ErrValidation)
+	}
+	invoicePDFConfigMap, err := ConvertToMap(defaultInvoicePDFConfig)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to convert default invoice PDF config to map").
+			Mark(ierr.ErrValidation)
+	}
+	envConfigMap, err := ConvertToMap(defaultEnvConfig)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to convert default env config to map").
+			Mark(ierr.ErrValidation)
+	}
 
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
@@ -150,26 +185,34 @@ func GetDefaultSettings() map[SettingKey]DefaultSettingValue {
 			Description:  "Default configuration for environment creation limits (production and sandbox)",
 			Required:     true,
 		},
-	}
+	}, nil
 }
 
 // IsValidSettingKey checks if a setting key is valid
 func IsValidSettingKey(key string) bool {
-	_, exists := GetDefaultSettings()[SettingKey(key)]
+	defaults, err := GetDefaultSettings()
+	if err != nil {
+		return false
+	}
+	_, exists := defaults[SettingKey(key)]
 	return exists
 }
 
 // ValidateSettingValue validates a setting value based on its key
 // Uses centralized conversion (inline to avoid import cycle)
-func ValidateSettingValue(key string, value map[string]interface{}) error {
-	if value == nil {
-		return errors.New("value cannot be nil")
+func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
+	if err := key.Validate(); err != nil {
+		return err
 	}
 
-	settingKey := SettingKey(key)
+	if value == nil {
+		return ierr.NewErrorf("value cannot be nil").
+			WithHint("Please provide a valid setting value").
+			Mark(ierr.ErrValidation)
+	}
 
 	// Use inline conversion (same logic as settings.ToStruct)
-	switch settingKey {
+	switch key {
 	case SettingKeyInvoiceConfig:
 		config, err := convertToStruct[InvoiceConfig](value)
 		if err != nil {
