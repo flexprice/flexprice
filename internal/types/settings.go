@@ -8,7 +8,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
 	workflows "github.com/flexprice/flexprice/internal/workflows/types"
-	"github.com/go-viper/mapstructure/v2"
 	"github.com/samber/lo"
 )
 
@@ -87,18 +86,9 @@ type EnvConfig struct {
 	Development int `json:"development" validate:"required,min=0"`
 }
 
-// WorkflowConfig represents the configuration for customer onboarding workflow
-type WorkflowConfig struct {
-	*workflows.WorkflowConfig
-}
-
-// Validate implements SettingConfig interface
-func (c *WorkflowConfig) Validate() error {
-	if c == nil || c.WorkflowConfig == nil {
-		return nil
-	}
-	return c.WorkflowConfig.Validate()
-}
+// WorkflowConfig is an alias for workflows.WorkflowConfig
+// We use it directly instead of embedding to avoid conversion issues
+type WorkflowConfig = workflows.WorkflowConfig
 
 // Validate implements SettingConfig interface
 func (c EnvConfig) Validate() error {
@@ -259,7 +249,7 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return config.Validate()
 
 	case SettingKeyCustomerOnboarding:
-		config, err := convertToStruct[workflows.WorkflowConfig](value)
+		config, err := convertToStruct[WorkflowConfig](value)
 		if err != nil {
 			return err
 		}
@@ -273,6 +263,8 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 }
 
 // convertToStruct is the same as settings.ToStruct but inline to avoid import cycle
+// Uses JSON marshal/unmarshal instead of mapstructure for better handling of nested structs,
+// slices, and custom types like decimal.Decimal
 func convertToStruct[T any](value map[string]interface{}) (T, error) {
 	var result T
 
@@ -280,20 +272,21 @@ func convertToStruct[T any](value map[string]interface{}) (T, error) {
 		return result, nil
 	}
 
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		Result:           &result,
-		TagName:          "json",
-		WeaklyTypedInput: true,
-	})
+	// Convert map to JSON bytes, then unmarshal directly to struct
+	// This leverages Go's built-in JSON unmarshaling which handles:
+	// - Nested structs and slices
+	// - Custom types with UnmarshalJSON methods
+	// - Type conversions (string to decimal, etc.)
+	jsonBytes, err := json.Marshal(value)
 	if err != nil {
 		return result, ierr.WithError(err).
-			WithHint("Failed to create mapstructure decoder").
+			WithHint("Failed to marshal map to JSON").
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := decoder.Decode(value); err != nil {
+	if err := json.Unmarshal(jsonBytes, &result); err != nil {
 		return result, ierr.WithError(err).
-			WithHint("Failed to decode map to struct").
+			WithHint("Failed to unmarshal JSON to struct").
 			Mark(ierr.ErrValidation)
 	}
 

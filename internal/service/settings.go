@@ -205,7 +205,7 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	case types.SettingKeyEnvConfig:
 		return getSettingByKey[types.EnvConfig](s, ctx, key)
 	case types.SettingKeyCustomerOnboarding:
-		return getSettingByKey[*types.WorkflowConfig](s, ctx, key)
+		return getSettingByKey[types.WorkflowConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
