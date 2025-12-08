@@ -253,7 +253,7 @@ type InvoiceConfig struct {
 	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty" validate:"required"`
 	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty" validate:"required,min=0"`
 	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`
-	InvoiceNumberSeparator                 string              `json:"separator,omitempty" validate:"required"`
+	InvoiceNumberSeparator                 string              `json:"separator,omitempty"` // Empty string ("") is valid for no separator
 	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty" validate:"required,min=1,max=10"`
 	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
