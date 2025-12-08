@@ -23,6 +23,20 @@ type WorkflowConfig struct {
 	Actions      []WorkflowActionConfig `json:"actions" binding:"required"`
 }
 
+func (c *WorkflowConfig) Validate() error {
+	if err := validator.ValidateRequest(c); err != nil {
+		return err
+	}
+
+	for _, action := range c.Actions {
+		if err := action.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 type WorkflowActionConfig interface {
 	Validate() error
 	GetAction() WorkflowAction

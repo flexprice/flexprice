@@ -204,6 +204,8 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		return getSettingByKey[types.InvoicePDFConfig](s, ctx, key)
 	case types.SettingKeyEnvConfig:
 		return getSettingByKey[types.EnvConfig](s, ctx, key)
+	case types.SettingKeyCustomerOnboarding:
+		return getSettingByKey[*types.WorkflowConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -236,6 +238,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.InvoicePDFConfig](s, ctx, key, req)
 	case types.SettingKeyEnvConfig:
 		return updateSettingByKey[types.EnvConfig](s, ctx, key, req)
+	case types.SettingKeyCustomerOnboarding:
+		return updateSettingByKey[*types.WorkflowConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).

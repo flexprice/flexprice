@@ -7,6 +7,7 @@ import (
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/validator"
+	workflows "github.com/flexprice/flexprice/internal/workflows/types"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/samber/lo"
 )
@@ -23,6 +24,7 @@ const (
 	SettingKeySubscriptionConfig SettingKey = "subscription_config"
 	SettingKeyInvoicePDFConfig   SettingKey = "invoice_pdf_config"
 	SettingKeyEnvConfig          SettingKey = "env_config"
+	SettingKeyCustomerOnboarding SettingKey = "customer_onboarding"
 )
 
 func (s *SettingKey) Validate() error {
@@ -32,6 +34,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeySubscriptionConfig,
 		SettingKeyInvoicePDFConfig,
 		SettingKeyEnvConfig,
+		SettingKeyCustomerOnboarding,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -50,7 +53,6 @@ type DefaultSettingValue struct {
 	Key          SettingKey             `json:"key"`
 	DefaultValue map[string]interface{} `json:"default_value"`
 	Description  string                 `json:"description"`
-	Required     bool                   `json:"required"`
 }
 
 // SubscriptionConfig represents the configuration for subscription auto-cancellation
@@ -83,6 +85,11 @@ func (c InvoicePDFConfig) Validate() error {
 type EnvConfig struct {
 	Production  int `json:"production" validate:"required,min=0"`
 	Development int `json:"development" validate:"required,min=0"`
+}
+
+// WorkflowConfig represents the configuration for customer onboarding workflow
+type WorkflowConfig struct {
+	*workflows.WorkflowConfig
 }
 
 // Validate implements SettingConfig interface
@@ -134,30 +141,31 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		Development: 2,
 	}
 
+	defaultCustomerOnboardingConfig := workflows.WorkflowConfig{
+		WorkflowType: workflows.WorkflowTypeCustomerOnboarding,
+		Actions:      []workflows.WorkflowActionConfig{},
+	}
+
 	// Convert typed structs to maps using centralized utility
 	invoiceConfigMap, err := ConvertToMap(defaultInvoiceConfig)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to convert default invoice config to map").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 	subscriptionConfigMap, err := ConvertToMap(defaultSubscriptionConfig)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to convert default subscription config to map").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 	invoicePDFConfigMap, err := ConvertToMap(defaultInvoicePDFConfig)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to convert default invoice PDF config to map").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 	envConfigMap, err := ConvertToMap(defaultEnvConfig)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to convert default env config to map").
-			Mark(ierr.ErrValidation)
+		return nil, err
+	}
+	customerOnboardingConfigMap, err := ConvertToMap(defaultCustomerOnboardingConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	return map[SettingKey]DefaultSettingValue{
@@ -165,25 +173,26 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyInvoiceConfig,
 			DefaultValue: invoiceConfigMap,
 			Description:  "Default configuration for invoice generation and management",
-			Required:     true,
 		},
 		SettingKeySubscriptionConfig: {
 			Key:          SettingKeySubscriptionConfig,
 			DefaultValue: subscriptionConfigMap,
 			Description:  "Default configuration for subscription auto-cancellation (grace period and enabled flag)",
-			Required:     true,
 		},
 		SettingKeyInvoicePDFConfig: {
 			Key:          SettingKeyInvoicePDFConfig,
 			DefaultValue: invoicePDFConfigMap,
 			Description:  "Default configuration for invoice PDF generation",
-			Required:     true,
 		},
 		SettingKeyEnvConfig: {
 			Key:          SettingKeyEnvConfig,
 			DefaultValue: envConfigMap,
 			Description:  "Default configuration for environment creation limits (production and sandbox)",
-			Required:     true,
+		},
+		SettingKeyCustomerOnboarding: {
+			Key:          SettingKeyCustomerOnboarding,
+			DefaultValue: customerOnboardingConfigMap,
+			Description:  "Default configuration for customer onboarding workflow",
 		},
 	}, nil
 }
@@ -236,6 +245,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyEnvConfig:
 		config, err := convertToStruct[EnvConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyCustomerOnboarding:
+		config, err := convertToStruct[workflows.WorkflowConfig](value)
 		if err != nil {
 			return err
 		}
