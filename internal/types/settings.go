@@ -93,6 +93,14 @@ type WorkflowConfig struct {
 }
 
 // Validate implements SettingConfig interface
+func (c *WorkflowConfig) Validate() error {
+	if c == nil || c.WorkflowConfig == nil {
+		return nil
+	}
+	return c.WorkflowConfig.Validate()
+}
+
+// Validate implements SettingConfig interface
 func (c EnvConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
@@ -143,7 +151,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 
 	defaultCustomerOnboardingConfig := workflows.WorkflowConfig{
 		WorkflowType: workflows.WorkflowTypeCustomerOnboarding,
-		Actions:      []workflows.WorkflowActionConfig{},
+		Actions:      []workflows.WorkflowActionConfig{}, // Empty actions by default
 	}
 
 	// Convert typed structs to maps using centralized utility
