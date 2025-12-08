@@ -8,274 +8,324 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConvertToType_Success(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays:         3,
-		AutoCancellationEnabled: false,
+func TestToStruct_SubscriptionConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]interface{}
+		expected types.SubscriptionConfig
+		wantErr  bool
+	}{
+		{
+			name: "valid subscription config",
+			input: map[string]interface{}{
+				"grace_period_days":         7,
+				"auto_cancellation_enabled": true,
+			},
+			expected: types.SubscriptionConfig{
+				GracePeriodDays:         7,
+				AutoCancellationEnabled: true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "with float64 type coercion",
+			input: map[string]interface{}{
+				"grace_period_days":         float64(5),
+				"auto_cancellation_enabled": false,
+			},
+			expected: types.SubscriptionConfig{
+				GracePeriodDays:         5,
+				AutoCancellationEnabled: false,
+			},
+			wantErr: false,
+		},
+		{
+			name:     "nil input returns zero value",
+			input:    nil,
+			expected: types.SubscriptionConfig{},
+			wantErr:  false,
+		},
 	}
 
-	value := map[string]interface{}{
-		"grace_period_days":         5,
-		"auto_cancellation_enabled": true,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ToStruct[types.SubscriptionConfig](tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected.GracePeriodDays, result.GracePeriodDays)
+				assert.Equal(t, tt.expected.AutoCancellationEnabled, result.AutoCancellationEnabled)
+			}
+		})
 	}
-
-	result, err := ConvertToType(value, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, 5, result.GracePeriodDays)
-	assert.Equal(t, true, result.AutoCancellationEnabled)
 }
 
-func TestConvertToType_NilValue_ReturnsDefaults(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays:         3,
-		AutoCancellationEnabled: false,
+func TestToStruct_InvoicePDFConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]interface{}
+		expected types.InvoicePDFConfig
+		wantErr  bool
+	}{
+		{
+			name: "valid invoice PDF config",
+			input: map[string]interface{}{
+				"template_name": string(types.TemplateInvoiceDefault),
+				"group_by":      []string{"customer", "date"},
+			},
+			expected: types.InvoicePDFConfig{
+				TemplateName: types.TemplateInvoiceDefault,
+				GroupBy:      []string{"customer", "date"},
+			},
+			wantErr: false,
+		},
+		{
+			name: "empty group_by",
+			input: map[string]interface{}{
+				"template_name": string(types.TemplateInvoiceDefault),
+				"group_by":      []string{},
+			},
+			expected: types.InvoicePDFConfig{
+				TemplateName: types.TemplateInvoiceDefault,
+				GroupBy:      []string{},
+			},
+			wantErr: false,
+		},
 	}
 
-	result, err := ConvertToType[types.SubscriptionConfig](nil, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, 3, result.GracePeriodDays)
-	assert.Equal(t, false, result.AutoCancellationEnabled)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ToStruct[types.InvoicePDFConfig](tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected.TemplateName, result.TemplateName)
+				assert.Equal(t, tt.expected.GroupBy, result.GroupBy)
+			}
+		})
+	}
 }
 
-func TestConvertToType_Float64ToInt(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays: 3,
+func TestToStruct_EnvConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    map[string]interface{}
+		expected types.EnvConfig
+		wantErr  bool
+	}{
+		{
+			name: "valid env config",
+			input: map[string]interface{}{
+				"production":  2,
+				"development": 5,
+			},
+			expected: types.EnvConfig{
+				Production:  2,
+				Development: 5,
+			},
+			wantErr: false,
+		},
+		{
+			name: "with float64 type coercion",
+			input: map[string]interface{}{
+				"production":  float64(1),
+				"development": float64(3),
+			},
+			expected: types.EnvConfig{
+				Production:  1,
+				Development: 3,
+			},
+			wantErr: false,
+		},
 	}
 
-	// JSON unmarshaling converts numbers to float64
-	value := map[string]interface{}{
-		"grace_period_days": 7.0, // float64
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ToStruct[types.EnvConfig](tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected.Production, result.Production)
+				assert.Equal(t, tt.expected.Development, result.Development)
+			}
+		})
 	}
-
-	result, err := ConvertToType(value, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, 7, result.GracePeriodDays) // Should be int
 }
 
-func TestConvertToType_PartialUpdate_MergesDefaults(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays:         3,
-		AutoCancellationEnabled: false,
+func TestToMap_SubscriptionConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    types.SubscriptionConfig
+		expected map[string]interface{}
+		wantErr  bool
+	}{
+		{
+			name: "valid subscription config",
+			input: types.SubscriptionConfig{
+				GracePeriodDays:         10,
+				AutoCancellationEnabled: true,
+			},
+			expected: map[string]interface{}{
+				"grace_period_days":         float64(10),
+				"auto_cancellation_enabled": true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "disabled auto-cancellation",
+			input: types.SubscriptionConfig{
+				GracePeriodDays:         3,
+				AutoCancellationEnabled: false,
+			},
+			expected: map[string]interface{}{
+				"grace_period_days":         float64(3),
+				"auto_cancellation_enabled": false,
+			},
+			wantErr: false,
+		},
 	}
 
-	// Only update one field
-	value := map[string]interface{}{
-		"grace_period_days": 10,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ToMap(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected["grace_period_days"], result["grace_period_days"])
+				assert.Equal(t, tt.expected["auto_cancellation_enabled"], result["auto_cancellation_enabled"])
+			}
+		})
 	}
-
-	result, err := ConvertToType(value, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, 10, result.GracePeriodDays)            // Updated
-	assert.Equal(t, false, result.AutoCancellationEnabled) // From defaults
 }
 
-func TestConvertToType_PointerField(t *testing.T) {
-	dueDateDays := 5
-	defaultConfig := types.InvoiceConfig{
-		InvoiceNumberPrefix:        "INV",
-		InvoiceNumberFormat:        types.InvoiceNumberFormatYYYYMM,
-		InvoiceNumberStartSequence: 1,
-		InvoiceNumberTimezone:      "UTC",
-		InvoiceNumberSeparator:     "-",
-		InvoiceNumberSuffixLength:  5,
-		DueDateDays:                &dueDateDays,
+func TestToMap_InvoicePDFConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    types.InvoicePDFConfig
+		expected map[string]interface{}
+		wantErr  bool
+	}{
+		{
+			name: "valid invoice PDF config",
+			input: types.InvoicePDFConfig{
+				TemplateName: types.TemplateInvoiceDefault,
+				GroupBy:      []string{"customer", "product"},
+			},
+			expected: map[string]interface{}{
+				"template_name": string(types.TemplateInvoiceDefault),
+				"group_by":      []interface{}{"customer", "product"},
+			},
+			wantErr: false,
+		},
 	}
 
-	value := map[string]interface{}{
-		"prefix":         "BILL",
-		"due_date_days":  7.0, // float64
-		"start_sequence": 100.0,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ToMap(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected["template_name"], result["template_name"])
+				assert.NotNil(t, result["group_by"])
+			}
+		})
 	}
-
-	result, err := ConvertToType(value, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, "BILL", result.InvoiceNumberPrefix)
-	require.NotNil(t, result.DueDateDays)
-	assert.Equal(t, 7, *result.DueDateDays)
-	assert.Equal(t, 100, result.InvoiceNumberStartSequence)
 }
 
-func TestConvertToType_ArrayHandling(t *testing.T) {
-	defaultConfig := types.InvoicePDFConfig{
-		TemplateName: types.TemplateInvoiceDefault,
-		GroupBy:      []string{},
+func TestToMap_EnvConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    types.EnvConfig
+		expected map[string]interface{}
+		wantErr  bool
+	}{
+		{
+			name: "valid env config",
+			input: types.EnvConfig{
+				Production:  1,
+				Development: 2,
+			},
+			expected: map[string]interface{}{
+				"production":  float64(1),
+				"development": float64(2),
+			},
+			wantErr: false,
+		},
 	}
 
-	value := map[string]interface{}{
-		"template_name": "custom.typ",
-		"group_by":      []interface{}{"meter", "feature"},
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ToMap(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expected["production"], result["production"])
+				assert.Equal(t, tt.expected["development"], result["development"])
+			}
+		})
 	}
-
-	result, err := ConvertToType(value, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, types.TemplateName("custom.typ"), result.TemplateName)
-	assert.Equal(t, []string{"meter", "feature"}, result.GroupBy)
 }
 
-func TestConvertToType_EmptyArray(t *testing.T) {
-	defaultConfig := types.InvoicePDFConfig{
-		TemplateName: types.TemplateInvoiceDefault,
-		GroupBy:      []string{"default"},
-	}
-
-	value := map[string]interface{}{
-		"group_by": []interface{}{}, // Empty array
-	}
-
-	result, err := ConvertToType(value, defaultConfig)
-	require.NoError(t, err)
-	assert.Empty(t, result.GroupBy) // Should be empty, not default
-}
-
-func TestConvertToType_NilArrayVsEmptyArray(t *testing.T) {
-	defaultConfig := types.InvoicePDFConfig{
-		TemplateName: types.TemplateInvoiceDefault,
-		GroupBy:      []string{"default"},
-	}
-
-	// Test with explicit empty array
-	value1 := map[string]interface{}{
-		"group_by": []interface{}{},
-	}
-	result1, err := ConvertToType(value1, defaultConfig)
-	require.NoError(t, err)
-	assert.NotNil(t, result1.GroupBy)
-	assert.Empty(t, result1.GroupBy)
-
-	// Test with nil (field omitted) - should use defaults
-	value2 := map[string]interface{}{
-		"template_name": "test.typ",
-		// group_by omitted
-	}
-	result2, err := ConvertToType(value2, defaultConfig)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"default"}, result2.GroupBy)
-}
-
-func TestConvertFromType_Success(t *testing.T) {
-	config := types.SubscriptionConfig{
-		GracePeriodDays:         5,
-		AutoCancellationEnabled: true,
-	}
-
-	result, err := ConvertFromType(config)
-	require.NoError(t, err)
-	assert.Equal(t, float64(5), result["grace_period_days"]) // JSON converts int to float64
-	assert.Equal(t, true, result["auto_cancellation_enabled"])
-}
-
-func TestConvertFromType_WithPointers(t *testing.T) {
-	dueDateDays := 7
-	config := types.InvoiceConfig{
-		InvoiceNumberPrefix: "INV",
-		InvoiceNumberFormat: types.InvoiceNumberFormatYYYYMM,
-		DueDateDays:         &dueDateDays,
-	}
-
-	result, err := ConvertFromType(config)
-	require.NoError(t, err)
-	assert.Equal(t, "INV", result["prefix"])
-	assert.Equal(t, float64(7), result["due_date_days"])
-}
-
-func TestConvertFromType_EmptyStruct(t *testing.T) {
-	config := types.SubscriptionConfig{}
-
-	result, err := ConvertFromType(config)
-	require.NoError(t, err)
-	assert.Equal(t, float64(0), result["grace_period_days"])
-	assert.Equal(t, false, result["auto_cancellation_enabled"])
-}
-
-func TestMergeWithDefaults(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays:         3,
-		AutoCancellationEnabled: false,
-	}
-
-	value := map[string]interface{}{
-		"grace_period_days": 10,
-	}
-
-	result := mergeWithDefaults(value, defaultConfig)
-	assert.Equal(t, 10, result["grace_period_days"])            // From value
-	assert.Equal(t, false, result["auto_cancellation_enabled"]) // From defaults
-}
-
-func TestMergeWithDefaults_EmptyValue(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays:         3,
-		AutoCancellationEnabled: false,
-	}
-
-	value := map[string]interface{}{}
-
-	result := mergeWithDefaults(value, defaultConfig)
-	assert.Equal(t, float64(3), result["grace_period_days"])
-	assert.Equal(t, false, result["auto_cancellation_enabled"])
-}
-
-func TestMergeWithDefaults_ValueOverridesDefaults(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{
-		GracePeriodDays:         3,
-		AutoCancellationEnabled: false,
-	}
-
-	value := map[string]interface{}{
-		"grace_period_days":         7,
-		"auto_cancellation_enabled": true,
-	}
-
-	result := mergeWithDefaults(value, defaultConfig)
-	assert.Equal(t, 7, result["grace_period_days"])
-	assert.Equal(t, true, result["auto_cancellation_enabled"])
-}
-
-func TestConvertRoundTrip(t *testing.T) {
+// Test round-trip conversion: struct -> map -> struct
+func TestRoundTrip_SubscriptionConfig(t *testing.T) {
 	original := types.SubscriptionConfig{
-		GracePeriodDays:         5,
+		GracePeriodDays:         15,
 		AutoCancellationEnabled: true,
 	}
 
 	// Convert to map
-	valueMap, err := ConvertFromType(original)
+	asMap, err := ToMap(original)
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ConvertToType(valueMap, types.SubscriptionConfig{})
+	result, err := ToStruct[types.SubscriptionConfig](asMap)
 	require.NoError(t, err)
 
+	// Should be equal
 	assert.Equal(t, original.GracePeriodDays, result.GracePeriodDays)
 	assert.Equal(t, original.AutoCancellationEnabled, result.AutoCancellationEnabled)
 }
 
-func TestConvertToType_InvalidJSON(t *testing.T) {
-	defaultConfig := types.SubscriptionConfig{}
-
-	// Create a map with a type that can't be JSON marshaled
-	value := map[string]interface{}{
-		"grace_period_days": make(chan int), // Channels can't be JSON marshaled
+func TestRoundTrip_InvoicePDFConfig(t *testing.T) {
+	original := types.InvoicePDFConfig{
+		TemplateName: types.TemplateInvoiceDefault,
+		GroupBy:      []string{"customer", "date", "product"},
 	}
 
-	_, err := ConvertToType(value, defaultConfig)
-	assert.Error(t, err)
-	// The error message from json.Marshal includes "unsupported type"
-	assert.Contains(t, err.Error(), "unsupported type")
+	// Convert to map
+	asMap, err := ToMap(original)
+	require.NoError(t, err)
+
+	// Convert back to struct
+	result, err := ToStruct[types.InvoicePDFConfig](asMap)
+	require.NoError(t, err)
+
+	// Should be equal
+	assert.Equal(t, original.TemplateName, result.TemplateName)
+	assert.Equal(t, original.GroupBy, result.GroupBy)
 }
 
-func TestConvertToType_AllFieldTypes(t *testing.T) {
-	envConfig := types.EnvConfig{
-		Production:  1,
-		Development: 2,
+func TestRoundTrip_EnvConfig(t *testing.T) {
+	original := types.EnvConfig{
+		Production:  3,
+		Development: 10,
 	}
 
-	value := map[string]interface{}{
-		"production":  5.0,
-		"development": 10.0,
-	}
-
-	result, err := ConvertToType(value, envConfig)
+	// Convert to map
+	asMap, err := ToMap(original)
 	require.NoError(t, err)
-	assert.Equal(t, 5, result.Production)
-	assert.Equal(t, 10, result.Development)
+
+	// Convert back to struct
+	result, err := ToStruct[types.EnvConfig](asMap)
+	require.NoError(t, err)
+
+	// Should be equal
+	assert.Equal(t, original.Production, result.Production)
+	assert.Equal(t, original.Development, result.Development)
 }

@@ -1,12 +1,21 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/samber/lo"
 )
+
+// SettingConfig defines the interface for setting configuration validation
+type SettingConfig interface {
+	Validate() error
+}
 
 type SettingKey string
 
@@ -31,20 +40,39 @@ type DefaultSettingValue struct {
 
 // SubscriptionConfig represents the configuration for subscription auto-cancellation
 type SubscriptionConfig struct {
-	GracePeriodDays         int  `json:"grace_period_days"`
+	GracePeriodDays         int  `json:"grace_period_days" validate:"required,min=1"`
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
+}
+
+// Validate implements SettingConfig interface
+func (c SubscriptionConfig) Validate() error {
+	return validator.ValidateRequest(c)
 }
 
 // InvoicePDFConfig represents configuration for invoice PDF generation
 type InvoicePDFConfig struct {
-	TemplateName TemplateName `json:"template_name"`
-	GroupBy      []string     `json:"group_by"`
+	TemplateName TemplateName `json:"template_name" validate:"required"`
+	GroupBy      []string     `json:"group_by" validate:"omitempty,dive,required"`
+}
+
+// Validate implements SettingConfig interface
+func (c InvoicePDFConfig) Validate() error {
+	if err := validator.ValidateRequest(c); err != nil {
+		return err
+	}
+	// Additional validation for TemplateName enum
+	return c.TemplateName.Validate()
 }
 
 // EnvConfig represents environment creation limits configuration
 type EnvConfig struct {
-	Production  int `json:"production"`
-	Development int `json:"development"`
+	Production  int `json:"production" validate:"required,min=0"`
+	Development int `json:"development" validate:"required,min=0"`
+}
+
+// Validate implements SettingConfig interface
+func (c EnvConfig) Validate() error {
+	return validator.ValidateRequest(c)
 }
 
 // TenantEnvConfig represents a generic configuration for a specific tenant and environment
@@ -62,49 +90,65 @@ type TenantEnvSubscriptionConfig struct {
 }
 
 // GetDefaultSettings returns the default settings configuration for all setting keys
+// Uses typed structs and converts them to maps using ConvertToMap utility
 func GetDefaultSettings() map[SettingKey]DefaultSettingValue {
+	// Define defaults as typed structs
+	defaultInvoiceConfig := InvoiceConfig{
+		InvoiceNumberPrefix:                    "INV",
+		InvoiceNumberFormat:                    InvoiceNumberFormatYYYYMM,
+		InvoiceNumberStartSequence:             1,
+		InvoiceNumberTimezone:                  "UTC",
+		InvoiceNumberSeparator:                 "-",
+		InvoiceNumberSuffixLength:              5,
+		DueDateDays:                            lo.ToPtr(1),
+		AutoCompletePurchasedCreditTransaction: false,
+	}
+
+	defaultSubscriptionConfig := SubscriptionConfig{
+		GracePeriodDays:         3,
+		AutoCancellationEnabled: false,
+	}
+
+	defaultInvoicePDFConfig := InvoicePDFConfig{
+		TemplateName: TemplateInvoiceDefault,
+		GroupBy:      []string{},
+	}
+
+	defaultEnvConfig := EnvConfig{
+		Production:  1,
+		Development: 2,
+	}
+
+	// Convert typed structs to maps using centralized utility
+	invoiceConfigMap, _ := ConvertToMap(defaultInvoiceConfig)
+	subscriptionConfigMap, _ := ConvertToMap(defaultSubscriptionConfig)
+	invoicePDFConfigMap, _ := ConvertToMap(defaultInvoicePDFConfig)
+	envConfigMap, _ := ConvertToMap(defaultEnvConfig)
+
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
-			Key: SettingKeyInvoiceConfig,
-			DefaultValue: map[string]interface{}{
-				"prefix":         "INV",
-				"format":         string(InvoiceNumberFormatYYYYMM),
-				"start_sequence": 1,
-				"timezone":       "UTC",
-				"separator":      "-",
-				"suffix_length":  5,
-				"due_date_days":  1, // Default to 1 day after period end
-				"auto_complete_purchased_credit_transaction": false,
-			},
-			Description: "Default configuration for invoice generation and management",
-			Required:    true,
+			Key:          SettingKeyInvoiceConfig,
+			DefaultValue: invoiceConfigMap,
+			Description:  "Default configuration for invoice generation and management",
+			Required:     true,
 		},
 		SettingKeySubscriptionConfig: {
-			Key: SettingKeySubscriptionConfig,
-			DefaultValue: map[string]interface{}{
-				"grace_period_days":         3,
-				"auto_cancellation_enabled": false,
-			},
-			Description: "Default configuration for subscription auto-cancellation (grace period and enabled flag)",
-			Required:    true,
+			Key:          SettingKeySubscriptionConfig,
+			DefaultValue: subscriptionConfigMap,
+			Description:  "Default configuration for subscription auto-cancellation (grace period and enabled flag)",
+			Required:     true,
 		},
 		SettingKeyInvoicePDFConfig: {
-			Key: SettingKeyInvoicePDFConfig,
-			DefaultValue: map[string]interface{}{
-				"template_name": TemplateInvoiceDefault,
-				"group_by":      []string{},
-			},
-			Description: "Default configuration for invoice PDF generation",
-			Required:    true,
+			Key:          SettingKeyInvoicePDFConfig,
+			DefaultValue: invoicePDFConfigMap,
+			Description:  "Default configuration for invoice PDF generation",
+			Required:     true,
 		},
 		SettingKeyEnvConfig: {
-			Key: SettingKeyEnvConfig,
-			DefaultValue: map[string]interface{}{
-				string(EnvironmentProduction):  1,
-				string(EnvironmentDevelopment): 2,
-			},
-			Description: "Default configuration for environment creation limits (production and sandbox)",
-			Required:    true,
+			Key:          SettingKeyEnvConfig,
+			DefaultValue: envConfigMap,
+			Description:  "Default configuration for environment creation limits (production and sandbox)",
+			Required:     true,
 		},
 	}
 }
@@ -116,20 +160,44 @@ func IsValidSettingKey(key string) bool {
 }
 
 // ValidateSettingValue validates a setting value based on its key
+// Uses centralized conversion (inline to avoid import cycle)
 func ValidateSettingValue(key string, value map[string]interface{}) error {
 	if value == nil {
 		return errors.New("value cannot be nil")
 	}
 
-	switch SettingKey(key) {
+	settingKey := SettingKey(key)
+
+	// Use inline conversion (same logic as settings.ToStruct)
+	switch settingKey {
 	case SettingKeyInvoiceConfig:
-		return ValidateInvoiceConfig(value)
+		config, err := convertToStruct[InvoiceConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	case SettingKeySubscriptionConfig:
-		return ValidateSubscriptionConfig(value)
+		config, err := convertToStruct[SubscriptionConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	case SettingKeyInvoicePDFConfig:
-		return ValidateInvoicePDFConfig(value)
+		config, err := convertToStruct[InvoicePDFConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	case SettingKeyEnvConfig:
-		return ValidateEnvConfig(value)
+		config, err := convertToStruct[EnvConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -137,337 +205,51 @@ func ValidateSettingValue(key string, value map[string]interface{}) error {
 	}
 }
 
-// ValidateInvoiceConfig validates invoice configuration settings
-func ValidateInvoiceConfig(value map[string]interface{}) error {
+// convertToStruct is the same as settings.ToStruct but inline to avoid import cycle
+func convertToStruct[T any](value map[string]interface{}) (T, error) {
+	var result T
+
 	if value == nil {
-		return errors.New("invoice_config value cannot be nil")
+		return result, nil
 	}
 
-	// Check if this is a partial update (only optional fields)
-	// Optional fields: due_date_days, auto_complete_purchased_credit_transaction
-	hasOnlyOptionalFields := true
-
-	// Validate due_date_days if present
-	if dueDateDaysRaw, exists := value["due_date_days"]; exists {
-		var dueDateDays int
-		switch v := dueDateDaysRaw.(type) {
-		case int:
-			dueDateDays = v
-		case float64:
-			if v != float64(int(v)) {
-				return errors.New("invoice_config: 'due_date_days' must be a whole number")
-			}
-			dueDateDays = int(v)
-		default:
-			return ierr.NewErrorf("invoice_config: 'due_date_days' must be an integer, got %T", dueDateDaysRaw).
-				WithHintf("Invoice config due date days must be an integer, got %T", dueDateDaysRaw).
-				Mark(ierr.ErrValidation)
-		}
-
-		if dueDateDays < 0 {
-			return errors.New("invoice_config: 'due_date_days' must be greater than or equal to 0")
-		}
-	}
-
-	// Validate auto_complete_purchased_credit_transaction if present
-	if autoCompletePurchasedCreditTransactionRaw, exists := value["auto_complete_purchased_credit_transaction"]; exists {
-		if _, ok := autoCompletePurchasedCreditTransactionRaw.(bool); !ok {
-			return ierr.NewErrorf("invoice_config: 'auto_complete_purchased_credit_transaction' must be a boolean, got %T", autoCompletePurchasedCreditTransactionRaw).
-				WithHintf("Invoice config auto complete purchased credit transaction must be a boolean, got %T", autoCompletePurchasedCreditTransactionRaw).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Check if there are any required fields present
-	requiredFields := []string{"prefix", "format", "start_sequence", "timezone", "separator", "suffix_length"}
-	for _, field := range requiredFields {
-		if _, exists := value[field]; exists {
-			hasOnlyOptionalFields = false
-			break
-		}
-	}
-
-	// If only optional fields are present, return early (validation passed)
-	if hasOnlyOptionalFields {
-		return nil
-	}
-
-	// If not a due_date_days only update, validate all required fields
-	// Validate prefix
-	prefixRaw, exists := value["prefix"]
-	if !exists {
-		return ierr.NewErrorf("invoice_config: 'prefix' is required").
-			WithHintf("Invoice config prefix is required").
-			Mark(ierr.ErrValidation)
-	}
-	prefix, ok := prefixRaw.(string)
-	if !ok {
-		return ierr.NewErrorf("invoice_config: 'prefix' must be a string, got %T", prefixRaw).
-			WithHintf("Invoice config prefix must be a string, got %T", prefixRaw).
-			Mark(ierr.ErrValidation)
-	}
-	if strings.TrimSpace(prefix) == "" {
-		return ierr.NewErrorf("invoice_config: 'prefix' cannot be empty").
-			WithHintf("Invoice config prefix cannot be empty").
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:           &result,
+		TagName:          "json",
+		WeaklyTypedInput: true,
+	})
+	if err != nil {
+		return result, ierr.WithError(err).
+			WithHint("Failed to create mapstructure decoder").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate format
-	formatRaw, exists := value["format"]
-	if !exists {
-		return ierr.NewErrorf("invoice_config: 'format' is required").
-			WithHintf("Invoice config format is required").
-			Mark(ierr.ErrValidation)
-	}
-	formatStr, ok := formatRaw.(string)
-	if !ok {
-		return ierr.NewErrorf("invoice_config: 'format' must be a string, got %T", formatRaw).
-			WithHintf("Invoice config format must be a string, got %T", formatRaw).
+	if err := decoder.Decode(value); err != nil {
+		return result, ierr.WithError(err).
+			WithHint("Failed to decode map to struct").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate against enum values
-	format := InvoiceNumberFormat(formatStr)
-	validFormats := []InvoiceNumberFormat{
-		InvoiceNumberFormatYYYYMM,
-		InvoiceNumberFormatYYYYMMDD,
-		InvoiceNumberFormatYYMMDD,
-		InvoiceNumberFormatYY,
-		InvoiceNumberFormatYYYY,
-	}
-	found := false
-	for _, validFormat := range validFormats {
-		if format == validFormat {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return ierr.NewErrorf("invoice_config: 'format' must be one of %v, got %s", validFormats, formatStr).
-			WithHintf("Invoice config format must be one of %v, got %s", validFormats, formatStr).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate start_sequence
-	startSeqRaw, exists := value["start_sequence"]
-	if !exists {
-		return errors.New("invoice_config: 'start_sequence' is required")
-	}
-
-	var startSeq int
-	switch v := startSeqRaw.(type) {
-	case int:
-		startSeq = v
-	case float64:
-		if v != float64(int(v)) {
-			return ierr.NewErrorf("invoice_config: 'start_sequence' must be a whole number").
-				WithHintf("Invoice config start sequence must be a whole number").
-				Mark(ierr.ErrValidation)
-		}
-		startSeq = int(v)
-	default:
-		return ierr.NewErrorf("invoice_config: 'start_sequence' must be an integer, got %T", startSeqRaw).
-			WithHintf("Invoice config start sequence must be an integer, got %T", startSeqRaw).
-			Mark(ierr.ErrValidation)
-	}
-
-	if startSeq < 0 {
-		return ierr.NewErrorf("invoice_config: 'start_sequence' must be greater than or equal to 0").
-			WithHintf("Invoice config start sequence must be greater than or equal to 0").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate timezone
-	timezoneRaw, exists := value["timezone"]
-	if !exists {
-		return ierr.NewErrorf("invoice_config: 'timezone' is required").
-			WithHintf("Invoice config timezone is required").
-			Mark(ierr.ErrValidation)
-	}
-	timezone, ok := timezoneRaw.(string)
-	if !ok {
-		return ierr.NewErrorf("invoice_config: 'timezone' must be a string, got %T", timezoneRaw).
-			WithHintf("Invoice config timezone must be a string, got %T", timezoneRaw).
-			Mark(ierr.ErrValidation)
-	}
-	if strings.TrimSpace(timezone) == "" {
-		return ierr.NewErrorf("invoice_config: 'timezone' cannot be empty").
-			WithHintf("Invoice config timezone cannot be empty").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate timezone by trying to load it (support both IANA names and common abbreviations)
-	if err := validateTimezone(timezone); err != nil {
-		return ierr.NewErrorf("invoice_config: invalid timezone '%s': %v", timezone, err).
-			WithHintf("Invoice config invalid timezone '%s': %v", timezone, err).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate separator
-	separatorRaw, exists := value["separator"]
-	if !exists {
-		return errors.New("invoice_config: 'separator' is required")
-	}
-	_, separatorOk := separatorRaw.(string)
-	if !separatorOk {
-		return ierr.NewErrorf("invoice_config: 'separator' must be a string, got %T", separatorRaw).
-			WithHintf("Invoice config separator must be a string, got %T", separatorRaw).
-			Mark(ierr.ErrValidation)
-	}
-	// Note: Empty separator ("") is allowed to generate invoice numbers without separators
-
-	// Validate suffix_length
-	suffixLengthRaw, exists := value["suffix_length"]
-	if !exists {
-		return ierr.NewErrorf("invoice_config: 'suffix_length' is required").
-			WithHintf("Invoice config suffix length is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	var suffixLength int
-	switch v := suffixLengthRaw.(type) {
-	case int:
-		suffixLength = v
-	case float64:
-		if v != float64(int(v)) {
-			return ierr.NewErrorf("invoice_config: 'suffix_length' must be a whole number").
-				WithHintf("Invoice config suffix length must be a whole number").
-				Mark(ierr.ErrValidation)
-		}
-		suffixLength = int(v)
-	default:
-		return ierr.NewErrorf("invoice_config: 'suffix_length' must be an integer, got %T", suffixLengthRaw).
-			WithHintf("Invoice config suffix length must be an integer, got %T", suffixLengthRaw).
-			Mark(ierr.ErrValidation)
-	}
-
-	if suffixLength < 1 || suffixLength > 10 {
-		return ierr.NewErrorf("invoice_config: 'suffix_length' must be between 1 and 10").
-			WithHintf("Invoice config suffix length must be between 1 and 10").
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
+	return result, nil
 }
 
-func ValidateInvoicePDFConfig(value map[string]interface{}) error {
-
-	if value == nil {
-		return errors.New("invoice_pdf_config value cannot be nil")
-	}
-
-	// Validate template_name
-	templateNameRaw, exists := value["template_name"]
-	if !exists {
-		return ierr.NewErrorf("invoice_pdf_config: 'template_name' is required").
-			WithHintf("Invoice PDF config template name is required").
+// ConvertToMap converts a struct to map - inline to avoid import cycle
+func ConvertToMap[T any](value T) (map[string]interface{}, error) {
+	jsonBytes, err := json.Marshal(value)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to marshal value to JSON").
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate template name
-	templateName, ok := templateNameRaw.(string)
-	if !ok {
-		return ierr.NewErrorf("invoice_pdf_config: 'template_name' must be a string, got %T", templateNameRaw).
-			WithHintf("Invoice PDF config template name must be a string, got %T", templateNameRaw).
+	var result map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &result); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to unmarshal JSON to map").
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := TemplateName(templateName).Validate(); err != nil {
-		return err
-	}
-
-	// Validate group_by
-
-	// Validate group by if provided
-	if groupByRaw, exists := value["group_by"]; exists {
-		switch v := groupByRaw.(type) {
-		case []string:
-			// Already correct type - no validation needed
-		case []interface{}:
-			// Convert []interface{} to []string and validate each element
-			for i, item := range v {
-				if _, ok := item.(string); !ok {
-					return ierr.NewErrorf("invoice_pdf_config: 'group_by' element %d must be a string, got %T", i, item).
-						WithHintf("Invoice PDF config group by elements must be strings").
-						Mark(ierr.ErrValidation)
-				}
-			}
-		default:
-			return ierr.NewErrorf("invoice_pdf_config: 'group_by' must be an array of strings, got %T", groupByRaw).
-				WithHintf("Invoice PDF config group by must be an array of strings, got %T", groupByRaw).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	return nil
-}
-
-func ValidateSubscriptionConfig(value map[string]interface{}) error {
-	if value == nil {
-		return errors.New("subscription_config value cannot be nil")
-	}
-
-	// Validate grace_period_days if provided
-	if gracePeriodDaysRaw, exists := value["grace_period_days"]; exists {
-		var gracePeriodDays int
-		switch v := gracePeriodDaysRaw.(type) {
-		case int:
-			gracePeriodDays = v
-		case float64:
-			if v != float64(int(v)) {
-				return ierr.NewErrorf("subscription_config: 'grace_period_days' must be a whole number").
-					WithHintf("Subscription config grace period days must be a whole number").
-					Mark(ierr.ErrValidation)
-			}
-			gracePeriodDays = int(v)
-		default:
-			return ierr.NewErrorf("subscription_config: 'grace_period_days' must be an integer, got %T", gracePeriodDaysRaw).
-				WithHintf("Subscription config grace period days must be an integer, got %T", gracePeriodDaysRaw).
-				Mark(ierr.ErrValidation)
-		}
-
-		if gracePeriodDays < 1 {
-			return ierr.NewErrorf("subscription_config: 'grace_period_days' must be greater than or equal to 1").
-				WithHintf("Subscription config grace period days must be greater than or equal to 1").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Validate auto_cancellation_enabled if provided
-	if autoCancellationEnabledRaw, exists := value["auto_cancellation_enabled"]; exists {
-		autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool)
-		if !ok {
-			return ierr.NewErrorf("subscription_config: 'auto_cancellation_enabled' must be a boolean, got %T", autoCancellationEnabledRaw).
-				WithHintf("Subscription config auto cancellation enabled must be a boolean, got %T", autoCancellationEnabledRaw).
-				Mark(ierr.ErrValidation)
-		}
-		// Store the validated value back for consistency
-		value["auto_cancellation_enabled"] = autoCancellationEnabled
-	}
-
-	// If due_date_days is provided in full config, validate it
-	if dueDateDaysRaw, exists := value["due_date_days"]; exists {
-		var dueDateDays int
-		switch v := dueDateDaysRaw.(type) {
-		case int:
-			dueDateDays = v
-		case float64:
-			if v != float64(int(v)) {
-				return errors.New("invoice_config: 'due_date_days' must be a whole number")
-			}
-			dueDateDays = int(v)
-		default:
-			return ierr.NewErrorf("invoice_config: 'due_date_days' must be an integer, got %T", dueDateDaysRaw).
-				WithHintf("Invoice config due date days must be an integer, got %T", dueDateDaysRaw).
-				Mark(ierr.ErrValidation)
-		}
-
-		if dueDateDays < 0 {
-			return errors.New("invoice_config: 'due_date_days' must be greater than or equal to 0")
-		}
-	}
-
-	return nil
+	return result, nil
 }
 
 // timezoneAbbreviationMap maps common three-letter timezone abbreviations to IANA timezone identifiers
@@ -515,72 +297,9 @@ func ResolveTimezone(timezone string) string {
 	return timezone
 }
 
-// validateTimezone validates a timezone by converting abbreviations and checking with time.LoadLocation
-func validateTimezone(timezone string) error {
+// ValidateTimezone validates a timezone by converting abbreviations and checking with time.LoadLocation
+func ValidateTimezone(timezone string) error {
 	resolvedTimezone := ResolveTimezone(timezone)
 	_, err := time.LoadLocation(resolvedTimezone)
 	return err
-}
-
-// ValidateEnvConfig validates environment configuration settings
-func ValidateEnvConfig(value map[string]interface{}) error {
-	if value == nil {
-		return errors.New("env_config value cannot be nil")
-	}
-
-	// Define valid keys - only production and development are allowed
-	validKeys := map[string]bool{
-		string(EnvironmentProduction):  true,
-		string(EnvironmentDevelopment): true,
-	}
-
-	// Check for invalid keys
-	for key := range value {
-		if !validKeys[key] {
-			return ierr.NewErrorf("env_config: invalid key '%s'. Only '%s' and '%s' are allowed", key, EnvironmentProduction, EnvironmentDevelopment).
-				WithHintf("Environment config only accepts keys: '%s' and '%s'", EnvironmentProduction, EnvironmentDevelopment).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Validate each environment type limit
-	envTypes := []EnvironmentType{EnvironmentProduction, EnvironmentDevelopment}
-	for _, envType := range envTypes {
-		envTypeKey := string(envType)
-		if limitRaw, exists := value[envTypeKey]; exists {
-			if err := validateEnvLimit(envTypeKey, limitRaw); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-// validateEnvLimit validates a single environment limit value
-func validateEnvLimit(envTypeKey string, limitRaw interface{}) error {
-	var limit int
-	switch v := limitRaw.(type) {
-	case int:
-		limit = v
-	case float64:
-		if v != float64(int(v)) {
-			return ierr.NewErrorf("env_config: '%s' must be a whole number", envTypeKey).
-				WithHintf("Environment config for %s must be a whole number", envTypeKey).
-				Mark(ierr.ErrValidation)
-		}
-		limit = int(v)
-	default:
-		return ierr.NewErrorf("env_config: '%s' must be an integer, got %T", envTypeKey, limitRaw).
-			WithHintf("Environment config for %s must be an integer, got %T", envTypeKey, limitRaw).
-			Mark(ierr.ErrValidation)
-	}
-
-	if limit < 0 {
-		return ierr.NewErrorf("env_config: '%s' must be greater than or equal to 0", envTypeKey).
-			WithHintf("Environment config for %s must be greater than or equal to 0", envTypeKey).
-			Mark(ierr.ErrValidation)
-	}
-
-	return nil
 }

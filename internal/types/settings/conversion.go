@@ -4,45 +4,41 @@ import (
 	"encoding/json"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/go-viper/mapstructure/v2"
 )
 
-// ConvertToType converts map[string]interface{} to typed struct with defaults merged
-func ConvertToType[T any](
-	value map[string]interface{},
-	defaultValue T,
-) (T, error) {
+// ToStruct converts a map[string]interface{} to a typed struct
+// Completely stateless - just give it a value and it returns the typed struct
+func ToStruct[T any](value map[string]interface{}) (T, error) {
 	var result T
 
-	// If value is nil, return defaults
 	if value == nil {
-		return defaultValue, nil
+		return result, nil
 	}
 
-	// Merge with defaults (value takes precedence)
-	merged := mergeWithDefaults(value, defaultValue)
-
-	// JSON marshal/unmarshal for type conversion
-	// This handles type coercion (float64 to int, etc.)
-	jsonBytes, err := json.Marshal(merged)
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		Result:           &result,
+		TagName:          "json",
+		WeaklyTypedInput: true, // Allows type coercion (e.g., float64 to int)
+	})
 	if err != nil {
 		return result, ierr.WithError(err).
-			WithHint("Failed to marshal setting value to JSON").
+			WithHint("Failed to create mapstructure decoder").
 			Mark(ierr.ErrValidation)
 	}
 
-	err = json.Unmarshal(jsonBytes, &result)
-	if err != nil {
+	if err := decoder.Decode(value); err != nil {
 		return result, ierr.WithError(err).
-			WithHint("Failed to unmarshal setting value to target type").
+			WithHint("Failed to decode map to struct").
 			Mark(ierr.ErrValidation)
 	}
 
 	return result, nil
 }
 
-// ConvertFromType converts typed struct to map[string]interface{}
-func ConvertFromType[T any](value T) (map[string]interface{}, error) {
-	// JSON marshal/unmarshal for conversion
+// ToMap converts a typed struct to map[string]interface{}
+// Completely stateless - just give it a struct and it returns the map
+func ToMap[T any](value T) (map[string]interface{}, error) {
 	jsonBytes, err := json.Marshal(value)
 	if err != nil {
 		return nil, ierr.WithError(err).
@@ -51,40 +47,11 @@ func ConvertFromType[T any](value T) (map[string]interface{}, error) {
 	}
 
 	var result map[string]interface{}
-	err = json.Unmarshal(jsonBytes, &result)
-	if err != nil {
+	if err := json.Unmarshal(jsonBytes, &result); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to unmarshal JSON to map").
 			Mark(ierr.ErrValidation)
 	}
 
 	return result, nil
-}
-
-// mergeWithDefaults merges value map with defaults from typed struct
-// Value map takes precedence over defaults
-func mergeWithDefaults[T any](
-	value map[string]interface{},
-	defaults T,
-) map[string]interface{} {
-	// Convert defaults to map
-	defaultMap, err := ConvertFromType(defaults)
-	if err != nil {
-		// If conversion fails, just use the value as-is
-		return value
-	}
-
-	merged := make(map[string]interface{})
-
-	// Copy defaults first
-	for k, v := range defaultMap {
-		merged[k] = v
-	}
-
-	// Override with actual values
-	for k, v := range value {
-		merged[k] = v
-	}
-
-	return merged
 }

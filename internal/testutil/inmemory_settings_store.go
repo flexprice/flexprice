@@ -75,8 +75,9 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key types.SettingK
 		Mark(ierr.ErrNotFound)
 }
 
-// GetTenantSettingByKey retrieves a tenant-level setting by key (without environment_id)
-func (s *InMemorySettingsStore) GetTenantSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+// GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
+// This is for settings that apply tenant-wide across all environments
+func (s *InMemorySettingsStore) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 	tenantID := types.GetTenantID(ctx)
 
 	s.mu.RLock()
@@ -129,8 +130,8 @@ func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key types.Setti
 		Mark(ierr.ErrNotFound)
 }
 
-// DeleteTenantSettingByKey deletes a tenant-level setting by key (without environment_id)
-func (s *InMemorySettingsStore) DeleteTenantSettingByKey(ctx context.Context, key types.SettingKey) error {
+// DeleteTenantLevelSettingByKey deletes a tenant-level setting by key (without environment_id)
+func (s *InMemorySettingsStore) DeleteTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) error {
 	tenantID := types.GetTenantID(ctx)
 
 	s.mu.Lock()

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -12,7 +11,6 @@ import (
 	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 )
 
-// SettingsService defines the interface for managing settings operations
 type SettingsService interface {
 	GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
 	UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error)
@@ -21,105 +19,16 @@ type SettingsService interface {
 
 type settingsService struct {
 	ServiceParams
-	registry *typesSettings.SettingRegistry
 }
 
 func NewSettingsService(params ServiceParams) SettingsService {
-	registry := typesSettings.NewSettingRegistry()
-
-	// Register InvoiceConfig
-	typesSettings.Register(
-		registry,
-		types.SettingKeyInvoiceConfig,
-		types.InvoiceConfig{
-			InvoiceNumberPrefix:        "INV",
-			InvoiceNumberFormat:        types.InvoiceNumberFormatYYYYMM,
-			InvoiceNumberStartSequence: 1,
-			InvoiceNumberTimezone:      "UTC",
-			InvoiceNumberSeparator:     "-",
-			InvoiceNumberSuffixLength:  5,
-			DueDateDays:                intPtr(1),
-		},
-		validateInvoiceConfig,
-		"Invoice generation configuration",
-	)
-
-	// Register SubscriptionConfig
-	typesSettings.Register(
-		registry,
-		types.SettingKeySubscriptionConfig,
-		types.SubscriptionConfig{
-			GracePeriodDays:         3,
-			AutoCancellationEnabled: false,
-		},
-		validateSubscriptionConfig,
-		"Subscription auto-cancellation configuration",
-	)
-
-	// Register InvoicePDFConfig
-	typesSettings.Register(
-		registry,
-		types.SettingKeyInvoicePDFConfig,
-		types.InvoicePDFConfig{
-			TemplateName: types.TemplateInvoiceDefault,
-			GroupBy:      []string{},
-		},
-		validateInvoicePDFConfig,
-		"Invoice PDF generation configuration",
-	)
-
-	// Register EnvConfig
-	typesSettings.Register(
-		registry,
-		types.SettingKeyEnvConfig,
-		types.EnvConfig{
-			Production:  1,
-			Development: 2,
-		},
-		validateEnvConfig,
-		"Environment creation limits",
-	)
-
 	return &settingsService{
 		ServiceParams: params,
-		registry:      registry,
 	}
 }
 
-// Helper for pointer int
-func intPtr(i int) *int {
-	return &i
-}
-
-// Typed validators that wrap existing validation logic
-func validateInvoiceConfig(config types.InvoiceConfig) error {
-	// Delegate to existing ValidateInvoiceConfig after converting to map
-	valueMap, err := typesSettings.ConvertFromType(config)
-	if err != nil {
-		return err
-	}
-	return types.ValidateInvoiceConfig(valueMap)
-}
-
-func validateSubscriptionConfig(config types.SubscriptionConfig) error {
-	if config.GracePeriodDays < 1 {
-		return fmt.Errorf("grace_period_days must be >= 1")
-	}
-	return nil
-}
-
-func validateInvoicePDFConfig(config types.InvoicePDFConfig) error {
-	return config.TemplateName.Validate()
-}
-
-func validateEnvConfig(config types.EnvConfig) error {
-	if config.Production < 0 || config.Development < 0 {
-		return fmt.Errorf("environment limits must be >= 0")
-	}
-	return nil
-}
-
-// GetSetting retrieves a setting with compile-time type safety
+// GetSetting retrieves a setting and returns it as a typed struct
+// Simple: DB map -> typed struct using stateless conversion
 func GetSetting[T any](
 	s *settingsService,
 	ctx context.Context,
@@ -127,68 +36,65 @@ func GetSetting[T any](
 ) (T, error) {
 	var zero T
 
-	// Get type definition from registry
-	settingType, err := typesSettings.GetType[T](s.registry, key)
-	if err != nil {
-		return zero, ierr.WithError(err).
-			WithHintf("Unknown setting type for key %s", key).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Handle tenant-level vs environment-level
 	var setting *settings.Setting
+	var err error
+
 	if key == types.SettingKeyEnvConfig {
-		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+		setting, err = s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
 	} else {
 		setting, err = s.SettingsRepo.GetByKey(ctx, key)
 	}
 
-	// If not found, return defaults
 	if ent.IsNotFound(err) {
-		return settingType.DefaultValue, nil
+		// Return default value
+		return getDefaultValue[T](key)
 	}
 	if err != nil {
 		return zero, err
 	}
 
-	// Convert to typed value
-	typedValue, err := typesSettings.ConvertToType[T](
-		setting.Value,
-		settingType.DefaultValue,
-	)
+	// Simple conversion: map -> typed struct
+	typedValue, err := typesSettings.ToStruct[T](setting.Value)
 	if err != nil {
 		return zero, ierr.WithError(err).
 			WithHintf("Failed to convert setting %s", key).
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate
-	if settingType.Validator != nil {
-		if err := settingType.Validator(typedValue); err != nil {
-			return zero, ierr.WithError(err).
-				WithHintf("Validation failed for setting %s", key).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
 	return typedValue, nil
 }
 
-// getSettingByKey is a generic helper that gets a setting and converts it to DTO
+// getDefaultValue returns the default value for a setting key
+func getDefaultValue[T any](key types.SettingKey) (T, error) {
+	var zero T
+
+	defaults := types.GetDefaultSettings()
+	defaultSetting, exists := defaults[key]
+	if !exists {
+		return zero, ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
+	}
+
+	// Convert default map to typed struct
+	return typesSettings.ToStruct[T](defaultSetting.DefaultValue)
+}
+
 func getSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
+	// Get typed config
 	config, err := GetSetting[T](s, ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	valueMap, err := typesSettings.ConvertFromType(config)
+
+	// Convert typed struct -> map for response
+	valueMap, err := typesSettings.ToMap(config)
 	if err != nil {
 		return nil, err
 	}
+
 	return &dto.SettingResponse{Key: key.String(), Value: valueMap}, nil
 }
 
 func (s *settingsService) GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
-	// Use generic helper based on key type
 	switch key {
 	case types.SettingKeyInvoiceConfig:
 		return getSettingByKey[types.InvoiceConfig](s, ctx, key)
@@ -203,43 +109,33 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	}
 }
 
-// UpdateSetting updates a setting with compile-time type safety
-func UpdateSetting[T any](
+// UpdateSetting updates a setting value
+// Simple: typed struct -> map for DB storage
+func UpdateSetting[T types.SettingConfig](
 	s *settingsService,
 	ctx context.Context,
 	key types.SettingKey,
 	value T,
 ) error {
-	// Get type definition
-	settingType, err := typesSettings.GetType[T](s.registry, key)
-	if err != nil {
+	// Validate the typed struct
+	if err := value.Validate(); err != nil {
 		return ierr.WithError(err).
-			WithHintf("Unknown setting type for key %s", key).
+			WithHintf("Validation failed for setting %s", key).
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate before conversion
-	if settingType.Validator != nil {
-		if err := settingType.Validator(value); err != nil {
-			return ierr.WithError(err).
-				WithHintf("Validation failed for setting %s", key).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Convert to map for storage
-	valueMap, err := typesSettings.ConvertFromType(value)
+	// Convert typed struct -> map for DB
+	valueMap, err := typesSettings.ToMap(value)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHintf("Failed to convert setting %s", key).
 			Mark(ierr.ErrValidation)
 	}
 
-	// Check if setting exists
 	var setting *settings.Setting
 	isEnvConfig := key == types.SettingKeyEnvConfig
 	if isEnvConfig {
-		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+		setting, err = s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
 	} else {
 		setting, err = s.SettingsRepo.GetByKey(ctx, key)
 	}
@@ -261,79 +157,50 @@ func UpdateSetting[T any](
 		return err
 	}
 
-	// Merge with existing value (new value takes precedence)
-	if setting.Value == nil {
-		setting.Value = make(map[string]interface{})
-	}
-	// Merge: copy existing values, then override with new values
-	mergedValue := make(map[string]interface{})
-	for k, v := range setting.Value {
-		mergedValue[k] = v
-	}
-	for k, v := range valueMap {
-		mergedValue[k] = v
-	}
-
-	// Convert merged back to type for validation
-	mergedTyped, err := typesSettings.ConvertToType[T](mergedValue, settingType.DefaultValue)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHintf("Failed to convert merged value for validation").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Validate merged value
-	if settingType.Validator != nil {
-		if err := settingType.Validator(mergedTyped); err != nil {
-			return ierr.WithError(err).
-				WithHintf("Validation failed for merged setting %s", key).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Update setting with merged value
-	setting.Value = mergedValue
+	// Update existing setting
+	setting.Value = valueMap
 	return s.SettingsRepo.Update(ctx, setting)
 }
 
-// updateSettingByKey is a generic helper that handles the update logic for any setting type
-func updateSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
-	// Get current config
+func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
+	// Get current setting
 	current, err := GetSetting[T](s, ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	// Merge with request values
-	currentMap, err := typesSettings.ConvertFromType(current)
+
+	// Convert current to map
+	currentMap, err := typesSettings.ToMap(current)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHintf("Failed to convert current setting %s to map for merging", key).
 			Mark(ierr.ErrValidation)
 	}
+
+	// Merge with request values
 	for k, v := range req.Value {
 		currentMap[k] = v
 	}
-	// Convert back to type
-	var zero T
-	merged, err := typesSettings.ConvertToType[T](currentMap, zero)
+
+	// Convert merged map back to typed struct
+	merged, err := typesSettings.ToStruct[T](currentMap)
 	if err != nil {
 		return nil, err
 	}
-	// Update
+
+	// Update with merged typed struct
 	if err := UpdateSetting[T](s, ctx, key, merged); err != nil {
 		return nil, err
 	}
-	// Return updated
+
 	return s.GetSettingByKey(ctx, key)
 }
 
 func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
-	// Validate request
 	if err := req.Validate(key); err != nil {
 		return nil, err
 	}
 
-	// Use generic helper based on key type
 	switch key {
 	case types.SettingKeyInvoiceConfig:
 		return updateSettingByKey[types.InvoiceConfig](s, ctx, key, req)
@@ -348,23 +215,14 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	}
 }
 
-// DeleteSetting deletes a setting with compile-time type safety
 func DeleteSetting[T any](
 	s *settingsService,
 	ctx context.Context,
 	key types.SettingKey,
 ) error {
-	// Validate that key is registered
-	_, err := typesSettings.GetType[T](s.registry, key)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHintf("Unknown setting type for key %s", key).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Check if setting exists
+	var err error
 	if key == types.SettingKeyEnvConfig {
-		_, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+		_, err = s.SettingsRepo.GetTenantLevelSettingByKey(ctx, key)
 	} else {
 		_, err = s.SettingsRepo.GetByKey(ctx, key)
 	}
@@ -376,15 +234,13 @@ func DeleteSetting[T any](
 		return err
 	}
 
-	// Delete the setting
 	if key == types.SettingKeyEnvConfig {
-		return s.SettingsRepo.DeleteTenantSettingByKey(ctx, key)
+		return s.SettingsRepo.DeleteTenantLevelSettingByKey(ctx, key)
 	}
 	return s.SettingsRepo.DeleteByKey(ctx, key)
 }
 
 func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
-	// Use generic method based on key type
 	switch key {
 	case types.SettingKeyInvoiceConfig:
 		return DeleteSetting[types.InvoiceConfig](s, ctx, key)

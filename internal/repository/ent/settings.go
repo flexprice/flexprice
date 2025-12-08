@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 	"github.com/lib/pq"
 )
 
@@ -230,10 +231,11 @@ func (r *settingsRepository) GetByKey(ctx context.Context, key types.SettingKey)
 	return setting, nil
 }
 
-// GetTenantSettingByKey retrieves a tenant-level setting by key (without environment_id)
-func (r *settingsRepository) GetTenantSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+// GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
+// This is for settings that apply tenant-wide across all environments
+func (r *settingsRepository) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 	client := r.client.Reader(ctx)
-	r.log.Debugw("getting tenant setting by key", "key", key)
+	r.log.Debugw("getting tenant-level setting by key", "key", key)
 
 	s, err := client.Settings.Query().
 		Where(
@@ -254,7 +256,7 @@ func (r *settingsRepository) GetTenantSettingByKey(ctx context.Context, key type
 				Mark(ierr.ErrNotFound)
 		}
 		return nil, ierr.WithError(err).
-			WithHint("Failed to get tenant setting by key").
+			WithHint("Failed to get tenant-level setting by key").
 			Mark(ierr.ErrDatabase)
 	}
 
@@ -304,9 +306,9 @@ func (r *settingsRepository) DeleteByKey(ctx context.Context, key types.SettingK
 	return nil
 }
 
-func (r *settingsRepository) DeleteTenantSettingByKey(ctx context.Context, key types.SettingKey) error {
+func (r *settingsRepository) DeleteTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) error {
 	// Get the tenant-level setting first for cache invalidation
-	setting, err := r.GetTenantSettingByKey(ctx, key)
+	setting, err := r.GetTenantLevelSettingByKey(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -437,7 +439,8 @@ func (r *settingsRepository) ListAllTenantEnvSettingsByKey(ctx context.Context, 
 	return configs, nil
 }
 
-// ListSubscriptionConfigs returns all subscription configs across all tenants and environments
+// GetAllTenantEnvSubscriptionSettings returns all subscription configs across all tenants and environments
+// Uses simple stateless conversion from map to struct
 func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Context) ([]*types.TenantEnvSubscriptionConfig, error) {
 	// Get all configs for subscription key
 	configs, err := r.ListAllTenantEnvSettingsByKey(ctx, types.SettingKeySubscriptionConfig)
@@ -445,13 +448,17 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 		return nil, err
 	}
 
-	// Convert to subscription configs and apply subscription-specific logic
+	// Convert to subscription configs using simple stateless conversion
 	subscriptionConfigs := make([]*types.TenantEnvSubscriptionConfig, 0, len(configs))
 	for _, config := range configs {
-		subscriptionConfig := &types.TenantEnvSubscriptionConfig{
-			TenantID:           config.TenantID,
-			EnvironmentID:      config.EnvironmentID,
-			SubscriptionConfig: extractSubscriptionConfig(config.Config),
+		// Simple conversion: map -> typed struct
+		subscriptionConfig, err := typesSettings.ToStruct[types.SubscriptionConfig](config.Config)
+		if err != nil {
+			r.log.Warnw("failed to convert subscription config",
+				"tenant_id", config.TenantID,
+				"environment_id", config.EnvironmentID,
+				"error", err)
+			continue
 		}
 
 		r.log.Debugw("processing subscription config",
@@ -462,7 +469,11 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 
 		// Only include if auto-cancellation is enabled
 		if subscriptionConfig.AutoCancellationEnabled {
-			subscriptionConfigs = append(subscriptionConfigs, subscriptionConfig)
+			subscriptionConfigs = append(subscriptionConfigs, &types.TenantEnvSubscriptionConfig{
+				TenantID:           config.TenantID,
+				EnvironmentID:      config.EnvironmentID,
+				SubscriptionConfig: &subscriptionConfig,
+			})
 		} else {
 			r.log.Infow("skipping subscription config - auto-cancellation disabled",
 				"tenant_id", config.TenantID,
@@ -471,35 +482,4 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 	}
 
 	return subscriptionConfigs, nil
-}
-
-// Helper function to extract subscription config from setting value
-func extractSubscriptionConfig(value map[string]interface{}) *types.SubscriptionConfig {
-	// Get default values from central defaults
-	defaultSettings := types.GetDefaultSettings()
-	defaultConfig := defaultSettings[types.SettingKeySubscriptionConfig].DefaultValue
-
-	config := &types.SubscriptionConfig{
-		GracePeriodDays:         defaultConfig["grace_period_days"].(int),
-		AutoCancellationEnabled: defaultConfig["auto_cancellation_enabled"].(bool),
-	}
-
-	// Extract grace_period_days
-	if gracePeriodDaysRaw, exists := value["grace_period_days"]; exists {
-		switch v := gracePeriodDaysRaw.(type) {
-		case float64:
-			config.GracePeriodDays = int(v)
-		case int:
-			config.GracePeriodDays = v
-		}
-	}
-
-	// Extract auto_cancellation_enabled
-	if autoCancellationEnabledRaw, exists := value["auto_cancellation_enabled"]; exists {
-		if autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool); ok {
-			config.AutoCancellationEnabled = autoCancellationEnabled
-		}
-	}
-
-	return config
 }

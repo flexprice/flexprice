@@ -2,6 +2,7 @@ package types
 
 import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -248,14 +249,52 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix                    string              `json:"prefix,omitempty"`
-	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty"`
-	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty"`
-	InvoiceNumberTimezone                  string              `json:"timezone,omitempty"`
-	InvoiceNumberSeparator                 string              `json:"separator,omitempty"`
-	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty"`
-	DueDateDays                            *int                `json:"due_date_days,omitempty"` // Number of days after period end when payment is due
+	InvoiceNumberPrefix                    string              `json:"prefix,omitempty" validate:"required,min=1"`
+	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty" validate:"required"`
+	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty" validate:"required,min=0"`
+	InvoiceNumberTimezone                  string              `json:"timezone,omitempty" validate:"required,min=1"`
+	InvoiceNumberSeparator                 string              `json:"separator,omitempty" validate:"required"`
+	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty" validate:"required,min=1,max=10"`
+	DueDateDays                            *int                `json:"due_date_days,omitempty" validate:"omitempty,min=0"` // Number of days after period end when payment is due
 	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
+}
+
+// Validate implements SettingConfig interface
+func (c InvoiceConfig) Validate() error {
+	// Validate struct using validation tags
+	if err := validator.ValidateRequest(c); err != nil {
+		return err
+	}
+
+	// Additional custom validation for InvoiceNumberFormat enum
+	validFormats := []InvoiceNumberFormat{
+		InvoiceNumberFormatYYYYMM,
+		InvoiceNumberFormatYYYYMMDD,
+		InvoiceNumberFormatYYMMDD,
+		InvoiceNumberFormatYY,
+		InvoiceNumberFormatYYYY,
+	}
+	valid := false
+	for _, validFormat := range validFormats {
+		if c.InvoiceNumberFormat == validFormat {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return ierr.NewErrorf("invoice_config: 'format' must be one of %v, got %s", validFormats, c.InvoiceNumberFormat).
+			WithHintf("Invoice config format must be one of %v", validFormats).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate timezone directly on the struct
+	if err := ValidateTimezone(c.InvoiceNumberTimezone); err != nil {
+		return ierr.WithError(err).
+			WithHintf("Invalid timezone: %s", c.InvoiceNumberTimezone).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
 
 // InvoiceFilter represents the filter options for listing invoices
