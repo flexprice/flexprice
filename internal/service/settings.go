@@ -304,7 +304,12 @@ func updateSettingByKey[T any](s *settingsService, ctx context.Context, key type
 		return nil, err
 	}
 	// Merge with request values
-	currentMap, _ := typesSettings.ConvertFromType(current)
+	currentMap, err := typesSettings.ConvertFromType(current)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHintf("Failed to convert current setting %s to map for merging", key).
+			Mark(ierr.ErrValidation)
+	}
 	for k, v := range req.Value {
 		currentMap[k] = v
 	}
