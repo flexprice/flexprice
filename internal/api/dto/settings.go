@@ -23,58 +23,6 @@ type SettingResponse struct {
 	UpdatedBy     string                 `json:"updated_by,omitempty"`
 }
 
-func ConvertToInvoiceConfig(value map[string]interface{}) (*types.InvoiceConfig, error) {
-
-	invoiceConfig := &types.InvoiceConfig{}
-	if dueDateDaysRaw, exists := value["due_date_days"]; exists {
-		switch v := dueDateDaysRaw.(type) {
-		case int:
-			dueDateDays := v
-			invoiceConfig.DueDateDays = &dueDateDays
-		case float64:
-			dueDateDays := int(v)
-			invoiceConfig.DueDateDays = &dueDateDays
-		}
-	} else {
-		// Get default value and convert to pointer
-		defaultDays := types.GetDefaultSettings()[types.SettingKeyInvoiceConfig].DefaultValue["due_date_days"].(int)
-		invoiceConfig.DueDateDays = &defaultDays
-	}
-
-	if invoiceNumberPrefix, ok := value["prefix"].(string); ok {
-		invoiceConfig.InvoiceNumberPrefix = invoiceNumberPrefix
-	}
-	if invoiceNumberFormat, ok := value["format"].(string); ok {
-		invoiceConfig.InvoiceNumberFormat = types.InvoiceNumberFormat(invoiceNumberFormat)
-	}
-
-	if invoiceNumberTimezone, ok := value["timezone"].(string); ok {
-		invoiceConfig.InvoiceNumberTimezone = invoiceNumberTimezone
-	}
-	if startSequenceRaw, exists := value["start_sequence"]; exists {
-		switch v := startSequenceRaw.(type) {
-		case int:
-			invoiceConfig.InvoiceNumberStartSequence = v
-		case float64:
-			invoiceConfig.InvoiceNumberStartSequence = int(v)
-		}
-	}
-
-	if invoiceNumberSeparator, ok := value["separator"].(string); ok {
-		invoiceConfig.InvoiceNumberSeparator = invoiceNumberSeparator
-	}
-	if suffixLengthRaw, exists := value["suffix_length"]; exists {
-		switch v := suffixLengthRaw.(type) {
-		case int:
-			invoiceConfig.InvoiceNumberSuffixLength = v
-		case float64:
-			invoiceConfig.InvoiceNumberSuffixLength = int(v)
-		}
-	}
-
-	return invoiceConfig, nil
-}
-
 // CreateSettingRequest represents the request to create a new setting
 type CreateSettingRequest struct {
 	Key   types.SettingKey       `json:"key" validate:"required"`

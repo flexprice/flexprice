@@ -35,6 +35,18 @@ type SubscriptionConfig struct {
 	AutoCancellationEnabled bool `json:"auto_cancellation_enabled"`
 }
 
+// InvoicePDFConfig represents configuration for invoice PDF generation
+type InvoicePDFConfig struct {
+	TemplateName TemplateName `json:"template_name"`
+	GroupBy      []string     `json:"group_by"`
+}
+
+// EnvConfig represents environment creation limits configuration
+type EnvConfig struct {
+	Production  int `json:"production"`
+	Development int `json:"development"`
+}
+
 // TenantEnvConfig represents a generic configuration for a specific tenant and environment
 type TenantEnvConfig struct {
 	TenantID      string                 `json:"tenant_id"`
@@ -47,58 +59,6 @@ type TenantEnvSubscriptionConfig struct {
 	TenantID      string `json:"tenant_id"`
 	EnvironmentID string `json:"environment_id"`
 	*SubscriptionConfig
-}
-
-// ToTenantEnvConfig converts a TenantEnvSubscriptionConfig to a generic TenantEnvConfig
-func (t *TenantEnvSubscriptionConfig) ToTenantEnvConfig() *TenantEnvConfig {
-	return &TenantEnvConfig{
-		TenantID:      t.TenantID,
-		EnvironmentID: t.EnvironmentID,
-		Config: map[string]interface{}{
-			"grace_period_days":         t.GracePeriodDays,
-			"auto_cancellation_enabled": t.AutoCancellationEnabled,
-		},
-	}
-}
-
-// FromTenantEnvConfig creates a TenantEnvSubscriptionConfig from a generic TenantEnvConfig
-func TenantEnvSubscriptionConfigFromConfig(config *TenantEnvConfig) *TenantEnvSubscriptionConfig {
-	return &TenantEnvSubscriptionConfig{
-		TenantID:           config.TenantID,
-		EnvironmentID:      config.EnvironmentID,
-		SubscriptionConfig: extractSubscriptionConfigFromValue(config.Config),
-	}
-}
-
-// Helper function to extract subscription config from setting value
-func extractSubscriptionConfigFromValue(value map[string]interface{}) *SubscriptionConfig {
-	// Get default values from central defaults
-	defaultSettings := GetDefaultSettings()
-	defaultConfig := defaultSettings[SettingKeySubscriptionConfig].DefaultValue
-
-	config := &SubscriptionConfig{
-		GracePeriodDays:         defaultConfig["grace_period_days"].(int),
-		AutoCancellationEnabled: defaultConfig["auto_cancellation_enabled"].(bool),
-	}
-
-	// Extract grace_period_days
-	if gracePeriodDaysRaw, exists := value["grace_period_days"]; exists {
-		switch v := gracePeriodDaysRaw.(type) {
-		case float64:
-			config.GracePeriodDays = int(v)
-		case int:
-			config.GracePeriodDays = v
-		}
-	}
-
-	// Extract auto_cancellation_enabled
-	if autoCancellationEnabledRaw, exists := value["auto_cancellation_enabled"]; exists {
-		if autoCancellationEnabled, ok := autoCancellationEnabledRaw.(bool); ok {
-			config.AutoCancellationEnabled = autoCancellationEnabled
-		}
-	}
-
-	return config
 }
 
 // GetDefaultSettings returns the default settings configuration for all setting keys

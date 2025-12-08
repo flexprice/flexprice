@@ -248,13 +248,14 @@ const (
 //
 // Note: Sequences reset monthly and are tenant-environment-scoped for isolation.
 type InvoiceConfig struct {
-	InvoiceNumberPrefix        string              `json:"prefix,omitempty"`
-	InvoiceNumberFormat        InvoiceNumberFormat `json:"format,omitempty"`
-	InvoiceNumberStartSequence int                 `json:"start_sequence,omitempty"`
-	InvoiceNumberTimezone      string              `json:"timezone,omitempty"`
-	InvoiceNumberSeparator     string              `json:"separator,omitempty"`
-	InvoiceNumberSuffixLength  int                 `json:"suffix_length,omitempty"`
-	DueDateDays                *int                `json:"due_date_days,omitempty"` // Number of days after period end when payment is due
+	InvoiceNumberPrefix                    string              `json:"prefix,omitempty"`
+	InvoiceNumberFormat                    InvoiceNumberFormat `json:"format,omitempty"`
+	InvoiceNumberStartSequence             int                 `json:"start_sequence,omitempty"`
+	InvoiceNumberTimezone                  string              `json:"timezone,omitempty"`
+	InvoiceNumberSeparator                 string              `json:"separator,omitempty"`
+	InvoiceNumberSuffixLength              int                 `json:"suffix_length,omitempty"`
+	DueDateDays                            *int                `json:"due_date_days,omitempty"` // Number of days after period end when payment is due
+	AutoCompletePurchasedCreditTransaction bool                `json:"auto_complete_purchased_credit_transaction,omitempty"`
 }
 
 // InvoiceFilter represents the filter options for listing invoices

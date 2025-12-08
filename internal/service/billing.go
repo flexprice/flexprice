@@ -1555,17 +1555,15 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	metadata types.Metadata, // mark optional
 ) (*dto.CreateInvoiceRequest, error) {
 	// Get invoice config for tenant
-	settingsService := NewSettingsService(s.ServiceParams)
-	invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// Use the safe conversion function
-	invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	invoiceConfig, err := GetSetting[types.InvoiceConfig](
+		settingsSvc,
+		ctx,
+		types.SettingKeyInvoiceConfig,
+	)
 	if err != nil {
 		return nil, ierr.WithError(err).
-			WithHint("Failed to parse invoice configuration").
+			WithHint("Failed to get invoice configuration").
 			Mark(ierr.ErrValidation)
 	}
 

@@ -176,21 +176,19 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		if req.InvoiceNumber != nil {
 			invoiceNumber = *req.InvoiceNumber
 		} else {
-			settingsService := NewSettingsService(s.ServiceParams)
-			invoiceConfigResponse, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoiceConfig)
-			if err != nil {
-				return err
-			}
-
-			// Use the safe conversion function
-			invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+			settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+			invoiceConfig, err := GetSetting[types.InvoiceConfig](
+				settingsSvc,
+				ctx,
+				types.SettingKeyInvoiceConfig,
+			)
 			if err != nil {
 				return ierr.WithError(err).
-					WithHint("Failed to parse invoice configuration").
+					WithHint("Failed to get invoice configuration").
 					Mark(ierr.ErrValidation)
 			}
 
-			invoiceNumber, err = s.InvoiceRepo.GetNextInvoiceNumber(ctx, invoiceConfig)
+			invoiceNumber, err = s.InvoiceRepo.GetNextInvoiceNumber(ctx, &invoiceConfig)
 			if err != nil {
 				return err
 			}
@@ -1838,8 +1836,12 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 // GetInvoicePDF implements InvoiceService.
 func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, error) {
 
-	settingsService := NewSettingsService(s.ServiceParams)
-	settings, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoicePDFConfig)
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	pdfConfig, err := GetSetting[types.InvoicePDFConfig](
+		settingsSvc,
+		ctx,
+		types.SettingKeyInvoicePDFConfig,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1847,9 +1849,9 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 	// validate request
 	req := dto.GetInvoiceWithBreakdownRequest{ID: id}
 
-	// Get properly typed values (type conversion is handled in GetSettingWithDefaults)
-	req.GroupBy = settings.Value["group_by"].([]string)
-	templateName := types.TemplateName(settings.Value["template_name"].(string))
+	// Use typed config directly
+	req.GroupBy = pdfConfig.GroupBy
+	templateName := pdfConfig.TemplateName
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}

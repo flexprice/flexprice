@@ -7,36 +7,236 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/settings"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	typesSettings "github.com/flexprice/flexprice/internal/types/settings"
 )
 
 // SettingsService defines the interface for managing settings operations
 type SettingsService interface {
-
-	// Key-based operations
 	GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
 	UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error)
 	DeleteSettingByKey(ctx context.Context, key types.SettingKey) error
-
-	// Get setting with field-level defaults
-	GetSettingWithDefaults(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error)
 }
 
 type settingsService struct {
 	ServiceParams
+	registry *typesSettings.SettingRegistry
 }
 
 func NewSettingsService(params ServiceParams) SettingsService {
+	registry := typesSettings.NewSettingRegistry()
+
+	// Register InvoiceConfig
+	typesSettings.Register(
+		registry,
+		types.SettingKeyInvoiceConfig,
+		types.InvoiceConfig{
+			InvoiceNumberPrefix:        "INV",
+			InvoiceNumberFormat:        types.InvoiceNumberFormatYYYYMM,
+			InvoiceNumberStartSequence: 1,
+			InvoiceNumberTimezone:      "UTC",
+			InvoiceNumberSeparator:     "-",
+			InvoiceNumberSuffixLength:  5,
+			DueDateDays:                intPtr(1),
+		},
+		validateInvoiceConfig,
+		"Invoice generation configuration",
+	)
+
+	// Register SubscriptionConfig
+	typesSettings.Register(
+		registry,
+		types.SettingKeySubscriptionConfig,
+		types.SubscriptionConfig{
+			GracePeriodDays:         3,
+			AutoCancellationEnabled: false,
+		},
+		validateSubscriptionConfig,
+		"Subscription auto-cancellation configuration",
+	)
+
+	// Register InvoicePDFConfig
+	typesSettings.Register(
+		registry,
+		types.SettingKeyInvoicePDFConfig,
+		types.InvoicePDFConfig{
+			TemplateName: types.TemplateInvoiceDefault,
+			GroupBy:      []string{},
+		},
+		validateInvoicePDFConfig,
+		"Invoice PDF generation configuration",
+	)
+
+	// Register EnvConfig
+	typesSettings.Register(
+		registry,
+		types.SettingKeyEnvConfig,
+		types.EnvConfig{
+			Production:  1,
+			Development: 2,
+		},
+		validateEnvConfig,
+		"Environment creation limits",
+	)
+
 	return &settingsService{
 		ServiceParams: params,
+		registry:      registry,
 	}
 }
 
-func (s *settingsService) GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
-	// For env_config, use tenant-level query (no environment_id)
-	var setting *settings.Setting
-	var err error
+// Helper for pointer int
+func intPtr(i int) *int {
+	return &i
+}
 
+// Typed validators that wrap existing validation logic
+func validateInvoiceConfig(config types.InvoiceConfig) error {
+	// Delegate to existing ValidateInvoiceConfig after converting to map
+	valueMap, err := typesSettings.ConvertFromType(config)
+	if err != nil {
+		return err
+	}
+	return types.ValidateInvoiceConfig(valueMap)
+}
+
+func validateSubscriptionConfig(config types.SubscriptionConfig) error {
+	if config.GracePeriodDays < 1 {
+		return fmt.Errorf("grace_period_days must be >= 1")
+	}
+	return nil
+}
+
+func validateInvoicePDFConfig(config types.InvoicePDFConfig) error {
+	return config.TemplateName.Validate()
+}
+
+func validateEnvConfig(config types.EnvConfig) error {
+	if config.Production < 0 || config.Development < 0 {
+		return fmt.Errorf("environment limits must be >= 0")
+	}
+	return nil
+}
+
+// GetSetting retrieves a setting with compile-time type safety
+func GetSetting[T any](
+	s *settingsService,
+	ctx context.Context,
+	key types.SettingKey,
+) (T, error) {
+	var zero T
+
+	// Get type definition from registry
+	settingType, err := typesSettings.GetType[T](s.registry, key)
+	if err != nil {
+		return zero, ierr.WithError(err).
+			WithHintf("Unknown setting type for key %s", key).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Handle tenant-level vs environment-level
+	var setting *settings.Setting
+	if key == types.SettingKeyEnvConfig {
+		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+	} else {
+		setting, err = s.SettingsRepo.GetByKey(ctx, key)
+	}
+
+	// If not found, return defaults
+	if ent.IsNotFound(err) {
+		return settingType.DefaultValue, nil
+	}
+	if err != nil {
+		return zero, err
+	}
+
+	// Convert to typed value
+	typedValue, err := typesSettings.ConvertToType[T](
+		setting.Value,
+		settingType.DefaultValue,
+	)
+	if err != nil {
+		return zero, ierr.WithError(err).
+			WithHintf("Failed to convert setting %s", key).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate
+	if settingType.Validator != nil {
+		if err := settingType.Validator(typedValue); err != nil {
+			return zero, ierr.WithError(err).
+				WithHintf("Validation failed for setting %s", key).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return typedValue, nil
+}
+
+// getSettingByKey is a generic helper that gets a setting and converts it to DTO
+func getSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
+	config, err := GetSetting[T](s, ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	valueMap, err := typesSettings.ConvertFromType(config)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.SettingResponse{Key: key.String(), Value: valueMap}, nil
+}
+
+func (s *settingsService) GetSettingByKey(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
+	// Use generic helper based on key type
+	switch key {
+	case types.SettingKeyInvoiceConfig:
+		return getSettingByKey[types.InvoiceConfig](s, ctx, key)
+	case types.SettingKeySubscriptionConfig:
+		return getSettingByKey[types.SubscriptionConfig](s, ctx, key)
+	case types.SettingKeyInvoicePDFConfig:
+		return getSettingByKey[types.InvoicePDFConfig](s, ctx, key)
+	case types.SettingKeyEnvConfig:
+		return getSettingByKey[types.EnvConfig](s, ctx, key)
+	default:
+		return nil, ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
+	}
+}
+
+// UpdateSetting updates a setting with compile-time type safety
+func UpdateSetting[T any](
+	s *settingsService,
+	ctx context.Context,
+	key types.SettingKey,
+	value T,
+) error {
+	// Get type definition
+	settingType, err := typesSettings.GetType[T](s.registry, key)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHintf("Unknown setting type for key %s", key).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate before conversion
+	if settingType.Validator != nil {
+		if err := settingType.Validator(value); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Validation failed for setting %s", key).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Convert to map for storage
+	valueMap, err := typesSettings.ConvertFromType(value)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHintf("Failed to convert setting %s", key).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check if setting exists
+	var setting *settings.Setting
 	isEnvConfig := key == types.SettingKeyEnvConfig
 	if isEnvConfig {
 		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
@@ -44,223 +244,152 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		setting, err = s.SettingsRepo.GetByKey(ctx, key)
 	}
 
-	if err != nil {
-		// If setting not found, check if we should return default values
-		if ent.IsNotFound(err) {
-			// Check if this key has default values
-			if defaultSetting, exists := types.GetDefaultSettings()[key]; exists {
-				// Create and return a setting with default values
-
-				defaultSettingModel := &settings.Setting{
-					ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
-					Key:           defaultSetting.Key.String(),
-					Value:         defaultSetting.DefaultValue,
-					EnvironmentID: types.GetEnvironmentID(ctx),
-					BaseModel:     types.GetDefaultBaseModel(ctx),
-				}
-				if isEnvConfig {
-					defaultSettingModel.EnvironmentID = ""
-				} else {
-					defaultSettingModel.EnvironmentID = types.GetEnvironmentID(ctx)
-				}
-				// env_config: EnvironmentID remains empty (zero value), repository will set to NULL
-				return dto.SettingFromDomain(defaultSettingModel), nil
-			}
+	if ent.IsNotFound(err) {
+		// Create new setting
+		newSetting := &settings.Setting{
+			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
+			BaseModel: types.GetDefaultBaseModel(ctx),
+			Key:       key.String(),
+			Value:     valueMap,
 		}
-		return nil, err
+		if !isEnvConfig {
+			newSetting.EnvironmentID = types.GetEnvironmentID(ctx)
+		}
+		return s.SettingsRepo.Create(ctx, newSetting)
+	}
+	if err != nil {
+		return err
 	}
 
-	return dto.SettingFromDomain(setting), nil
+	// Merge with existing value (new value takes precedence)
+	if setting.Value == nil {
+		setting.Value = make(map[string]interface{})
+	}
+	// Merge: copy existing values, then override with new values
+	mergedValue := make(map[string]interface{})
+	for k, v := range setting.Value {
+		mergedValue[k] = v
+	}
+	for k, v := range valueMap {
+		mergedValue[k] = v
+	}
+
+	// Convert merged back to type for validation
+	mergedTyped, err := typesSettings.ConvertToType[T](mergedValue, settingType.DefaultValue)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHintf("Failed to convert merged value for validation").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate merged value
+	if settingType.Validator != nil {
+		if err := settingType.Validator(mergedTyped); err != nil {
+			return ierr.WithError(err).
+				WithHintf("Validation failed for merged setting %s", key).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Update setting with merged value
+	setting.Value = mergedValue
+	return s.SettingsRepo.Update(ctx, setting)
 }
 
-func (s *settingsService) createSetting(ctx context.Context, req *dto.CreateSettingRequest) (*dto.SettingResponse, error) {
-	setting := req.ToSetting(ctx)
-
-	err := s.SettingsRepo.Create(ctx, setting)
+// updateSettingByKey is a generic helper that handles the update logic for any setting type
+func updateSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
+	// Get current config
+	current, err := GetSetting[T](s, ctx, key)
 	if err != nil {
 		return nil, err
 	}
-
-	return dto.SettingFromDomain(setting), nil
-}
-
-func (s *settingsService) updateSetting(ctx context.Context, setting *settings.Setting) (*dto.SettingResponse, error) {
-	err := s.SettingsRepo.Update(ctx, setting)
+	// Merge with request values
+	currentMap, _ := typesSettings.ConvertFromType(current)
+	for k, v := range req.Value {
+		currentMap[k] = v
+	}
+	// Convert back to type
+	var zero T
+	merged, err := typesSettings.ConvertToType[T](currentMap, zero)
 	if err != nil {
 		return nil, err
 	}
-
-	return dto.SettingFromDomain(setting), nil
+	// Update
+	if err := UpdateSetting[T](s, ctx, key, merged); err != nil {
+		return nil, err
+	}
+	// Return updated
+	return s.GetSettingByKey(ctx, key)
 }
 
 func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.SettingKey, req *dto.UpdateSettingRequest) (*dto.SettingResponse, error) {
-	// STEP 1: Validate the request
+	// Validate request
 	if err := req.Validate(key); err != nil {
 		return nil, err
 	}
 
-	// STEP 2: Check if the setting exists
-	// For env_config, use tenant-level query (no environment_id)
-	var setting *settings.Setting
-	var err error
+	// Use generic helper based on key type
+	switch key {
+	case types.SettingKeyInvoiceConfig:
+		return updateSettingByKey[types.InvoiceConfig](s, ctx, key, req)
+	case types.SettingKeySubscriptionConfig:
+		return updateSettingByKey[types.SubscriptionConfig](s, ctx, key, req)
+	case types.SettingKeyInvoicePDFConfig:
+		return updateSettingByKey[types.InvoicePDFConfig](s, ctx, key, req)
+	case types.SettingKeyEnvConfig:
+		return updateSettingByKey[types.EnvConfig](s, ctx, key, req)
+	default:
+		return nil, ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
+	}
+}
+
+// DeleteSetting deletes a setting with compile-time type safety
+func DeleteSetting[T any](
+	s *settingsService,
+	ctx context.Context,
+	key types.SettingKey,
+) error {
+	// Validate that key is registered
+	_, err := typesSettings.GetType[T](s.registry, key)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHintf("Unknown setting type for key %s", key).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check if setting exists
 	if key == types.SettingKeyEnvConfig {
-		setting, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
+		_, err = s.SettingsRepo.GetTenantSettingByKey(ctx, key)
 	} else {
-		setting, err = s.SettingsRepo.GetByKey(ctx, key)
+		_, err = s.SettingsRepo.GetByKey(ctx, key)
 	}
 
 	if ent.IsNotFound(err) {
-		createReq := &dto.CreateSettingRequest{
-			Key:   key,
-			Value: req.Value,
-		}
-		if err := createReq.Validate(); err != nil {
-			return nil, err
-		}
-		return s.createSetting(ctx, createReq)
+		return ierr.NewErrorf("setting with key '%s' not found", key).Mark(ierr.ErrNotFound)
 	}
-
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	// Merge request values with existing values (don't replace completely)
-	if setting.Value == nil {
-		setting.Value = make(map[string]interface{})
-	}
-
-	// Merge the request values into existing values
-	for key, value := range req.Value {
-		setting.Value[key] = value
-	}
-
-	// For env_config, ensure environment_id is not set (will be stored as NULL)
-	// Don't set it - repository will handle NULL conversion
-
-	return s.updateSetting(ctx, setting)
-}
-
-func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
-	// For env_config, delete tenant-level setting (empty environment_id)
+	// Delete the setting
 	if key == types.SettingKeyEnvConfig {
 		return s.SettingsRepo.DeleteTenantSettingByKey(ctx, key)
 	}
-
 	return s.SettingsRepo.DeleteByKey(ctx, key)
 }
 
-// GetSettingWithDefaults retrieves a setting by key and merges it with provided default values
-// If the setting doesn't exist in the database, it returns the default values
-// If the setting exists, it merges the default values with the stored values,
-// giving preference to stored values for fields that exist in both
-func (s *settingsService) GetSettingWithDefaults(ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
-	// First, get the setting using GetSettingByKey which handles defaults for non-existent settings
-
-	setting, err := s.GetSettingByKey(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-
-	// If we get here, the setting exists in the database
-	// Now we need to merge it with default values
-	defaultSetting, exists := types.GetDefaultSettings()[key]
-	if !exists {
-		// No default values to merge, return the existing setting as-is
-		return setting, nil
-	}
-
-	// Create a new map to store the final merged values
-	mergedValues := make(map[string]interface{})
-
-	// First, copy all default values to the merged map
-	for k, v := range defaultSetting.DefaultValue {
-		mergedValues[k] = v
-	}
-
-	// Then, override with stored values (giving preference to stored values)
-	for k, v := range setting.Value {
-		mergedValues[k] = v
-	}
-
-	// Normalize types for known setting keys to ensure consistent typing
-	if err := s.normalizeSettingTypes(key, mergedValues); err != nil {
-		return nil, err
-	}
-
-	for k, v := range mergedValues {
-		if v, ok := v.(int); ok {
-			mergedValues[k] = v
-		}
-		if v, ok := v.(float64); ok {
-			mergedValues[k] = int(v)
-		}
-	}
-
-	// Create a response with the merged values
-	settingModel := &settings.Setting{
-		ID:            setting.ID,
-		Key:           setting.Key,
-		Value:         mergedValues,
-		EnvironmentID: setting.EnvironmentID,
-		BaseModel: types.BaseModel{
-			TenantID:  setting.TenantID,
-			Status:    types.Status(setting.Status),
-			CreatedAt: setting.CreatedAt,
-			UpdatedAt: setting.UpdatedAt,
-			CreatedBy: setting.CreatedBy,
-			UpdatedBy: setting.UpdatedBy,
-		},
-	}
-
-	return dto.SettingFromDomain(settingModel), nil
-}
-
-// normalizeSettingTypes normalizes types for known setting keys to ensure consistent typing
-func (s *settingsService) normalizeSettingTypes(key types.SettingKey, values map[string]interface{}) error {
+func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.SettingKey) error {
+	// Use generic method based on key type
 	switch key {
+	case types.SettingKeyInvoiceConfig:
+		return DeleteSetting[types.InvoiceConfig](s, ctx, key)
+	case types.SettingKeySubscriptionConfig:
+		return DeleteSetting[types.SubscriptionConfig](s, ctx, key)
 	case types.SettingKeyInvoicePDFConfig:
-		return s.normalizeInvoicePDFConfigTypes(values)
+		return DeleteSetting[types.InvoicePDFConfig](s, ctx, key)
+	case types.SettingKeyEnvConfig:
+		return DeleteSetting[types.EnvConfig](s, ctx, key)
 	default:
-		// No normalization needed for other setting keys
-		return nil
+		return ierr.NewErrorf("unknown setting key: %s", key).Mark(ierr.ErrValidation)
 	}
-}
-
-// normalizeInvoicePDFConfigTypes normalizes types for invoice PDF config settings
-func (s *settingsService) normalizeInvoicePDFConfigTypes(values map[string]interface{}) error {
-	// Normalize group_by field
-	if groupByRaw, exists := values["group_by"]; exists {
-		switch v := groupByRaw.(type) {
-		case []string:
-			// Already correct type - no change needed
-		case []interface{}:
-			// Convert []interface{} to []string
-			groupByParams := make([]string, len(v))
-			for i, item := range v {
-				if str, ok := item.(string); ok {
-					groupByParams[i] = str
-				} else {
-					return fmt.Errorf("group_by element %d must be a string, got %T", i, item)
-				}
-			}
-			values["group_by"] = groupByParams
-		default:
-			return fmt.Errorf("group_by must be an array of strings, got %T", groupByRaw)
-		}
-	}
-
-	// Normalize template_name field
-	if templateNameRaw, exists := values["template_name"]; exists {
-		switch v := templateNameRaw.(type) {
-		case string:
-			// Already correct type - no change needed
-		case types.TemplateName:
-			// Convert to string
-			values["template_name"] = string(v)
-		default:
-			return fmt.Errorf("template_name must be a string, got %T", templateNameRaw)
-		}
-	}
-
-	return nil
 }
