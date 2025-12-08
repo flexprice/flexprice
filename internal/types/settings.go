@@ -1,7 +1,6 @@
 package types
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
 
@@ -110,7 +109,7 @@ type TenantEnvSubscriptionConfig struct {
 }
 
 // GetDefaultSettings returns the default settings configuration for all setting keys
-// Uses typed structs and converts them to maps using ConvertToMap utility
+// Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	// Define defaults as typed structs
 	defaultInvoiceConfig := InvoiceConfig{
@@ -145,23 +144,23 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	// Convert typed structs to maps using centralized utility
-	invoiceConfigMap, err := ConvertToMap(defaultInvoiceConfig)
+	invoiceConfigMap, err := ToMap(defaultInvoiceConfig)
 	if err != nil {
 		return nil, err
 	}
-	subscriptionConfigMap, err := ConvertToMap(defaultSubscriptionConfig)
+	subscriptionConfigMap, err := ToMap(defaultSubscriptionConfig)
 	if err != nil {
 		return nil, err
 	}
-	invoicePDFConfigMap, err := ConvertToMap(defaultInvoicePDFConfig)
+	invoicePDFConfigMap, err := ToMap(defaultInvoicePDFConfig)
 	if err != nil {
 		return nil, err
 	}
-	envConfigMap, err := ConvertToMap(defaultEnvConfig)
+	envConfigMap, err := ToMap(defaultEnvConfig)
 	if err != nil {
 		return nil, err
 	}
-	customerOnboardingConfigMap, err := ConvertToMap(defaultCustomerOnboardingConfig)
+	customerOnboardingConfigMap, err := ToMap(defaultCustomerOnboardingConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -218,38 +217,38 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Use inline conversion (same logic as settings.ToStruct)
+	// Use ToStruct from conversion.go (same package, no import cycle)
 	switch key {
 	case SettingKeyInvoiceConfig:
-		config, err := convertToStruct[InvoiceConfig](value)
+		config, err := ToStruct[InvoiceConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeySubscriptionConfig:
-		config, err := convertToStruct[SubscriptionConfig](value)
+		config, err := ToStruct[SubscriptionConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeyInvoicePDFConfig:
-		config, err := convertToStruct[InvoicePDFConfig](value)
+		config, err := ToStruct[InvoicePDFConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeyEnvConfig:
-		config, err := convertToStruct[EnvConfig](value)
+		config, err := ToStruct[EnvConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeyCustomerOnboarding:
-		config, err := convertToStruct[WorkflowConfig](value)
+		config, err := ToStruct[WorkflowConfig](value)
 		if err != nil {
 			return err
 		}
@@ -260,56 +259,6 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 			WithHintf("Unknown setting key: %s", key).
 			Mark(ierr.ErrValidation)
 	}
-}
-
-// convertToStruct is the same as settings.ToStruct but inline to avoid import cycle
-// Uses JSON marshal/unmarshal instead of mapstructure for better handling of nested structs,
-// slices, and custom types like decimal.Decimal
-func convertToStruct[T any](value map[string]interface{}) (T, error) {
-	var result T
-
-	if value == nil {
-		return result, nil
-	}
-
-	// Convert map to JSON bytes, then unmarshal directly to struct
-	// This leverages Go's built-in JSON unmarshaling which handles:
-	// - Nested structs and slices
-	// - Custom types with UnmarshalJSON methods
-	// - Type conversions (string to decimal, etc.)
-	jsonBytes, err := json.Marshal(value)
-	if err != nil {
-		return result, ierr.WithError(err).
-			WithHint("Failed to marshal map to JSON").
-			Mark(ierr.ErrValidation)
-	}
-
-	if err := json.Unmarshal(jsonBytes, &result); err != nil {
-		return result, ierr.WithError(err).
-			WithHint("Failed to unmarshal JSON to struct").
-			Mark(ierr.ErrValidation)
-	}
-
-	return result, nil
-}
-
-// ConvertToMap converts a struct to map - inline to avoid import cycle
-func ConvertToMap[T any](value T) (map[string]interface{}, error) {
-	jsonBytes, err := json.Marshal(value)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to marshal value to JSON").
-			Mark(ierr.ErrValidation)
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(jsonBytes, &result); err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to unmarshal JSON to map").
-			Mark(ierr.ErrValidation)
-	}
-
-	return result, nil
 }
 
 // timezoneAbbreviationMap maps common three-letter timezone abbreviations to IANA timezone identifiers
