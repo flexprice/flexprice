@@ -1,9 +1,8 @@
-package settings
+package types
 
 import (
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,7 +11,7 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]interface{}
-		expected types.SubscriptionConfig
+		expected SubscriptionConfig
 		wantErr  bool
 	}{
 		{
@@ -21,7 +20,7 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 				"grace_period_days":         7,
 				"auto_cancellation_enabled": true,
 			},
-			expected: types.SubscriptionConfig{
+			expected: SubscriptionConfig{
 				GracePeriodDays:         7,
 				AutoCancellationEnabled: true,
 			},
@@ -33,7 +32,7 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 				"grace_period_days":         float64(5),
 				"auto_cancellation_enabled": false,
 			},
-			expected: types.SubscriptionConfig{
+			expected: SubscriptionConfig{
 				GracePeriodDays:         5,
 				AutoCancellationEnabled: false,
 			},
@@ -42,14 +41,14 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 		{
 			name:     "nil input returns zero value",
 			input:    nil,
-			expected: types.SubscriptionConfig{},
+			expected: SubscriptionConfig{},
 			wantErr:  false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToStruct[types.SubscriptionConfig](tt.input)
+			result, err := ToStruct[SubscriptionConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -65,17 +64,17 @@ func TestToStruct_InvoicePDFConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]interface{}
-		expected types.InvoicePDFConfig
+		expected InvoicePDFConfig
 		wantErr  bool
 	}{
 		{
 			name: "valid invoice PDF config",
 			input: map[string]interface{}{
-				"template_name": string(types.TemplateInvoiceDefault),
+				"template_name": string(TemplateInvoiceDefault),
 				"group_by":      []string{"customer", "date"},
 			},
-			expected: types.InvoicePDFConfig{
-				TemplateName: types.TemplateInvoiceDefault,
+			expected: InvoicePDFConfig{
+				TemplateName: TemplateInvoiceDefault,
 				GroupBy:      []string{"customer", "date"},
 			},
 			wantErr: false,
@@ -83,11 +82,11 @@ func TestToStruct_InvoicePDFConfig(t *testing.T) {
 		{
 			name: "empty group_by",
 			input: map[string]interface{}{
-				"template_name": string(types.TemplateInvoiceDefault),
+				"template_name": string(TemplateInvoiceDefault),
 				"group_by":      []string{},
 			},
-			expected: types.InvoicePDFConfig{
-				TemplateName: types.TemplateInvoiceDefault,
+			expected: InvoicePDFConfig{
+				TemplateName: TemplateInvoiceDefault,
 				GroupBy:      []string{},
 			},
 			wantErr: false,
@@ -96,7 +95,7 @@ func TestToStruct_InvoicePDFConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToStruct[types.InvoicePDFConfig](tt.input)
+			result, err := ToStruct[InvoicePDFConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -112,7 +111,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]interface{}
-		expected types.EnvConfig
+		expected EnvConfig
 		wantErr  bool
 	}{
 		{
@@ -121,7 +120,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 				"production":  2,
 				"development": 5,
 			},
-			expected: types.EnvConfig{
+			expected: EnvConfig{
 				Production:  2,
 				Development: 5,
 			},
@@ -133,7 +132,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 				"production":  float64(1),
 				"development": float64(3),
 			},
-			expected: types.EnvConfig{
+			expected: EnvConfig{
 				Production:  1,
 				Development: 3,
 			},
@@ -143,7 +142,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToStruct[types.EnvConfig](tt.input)
+			result, err := ToStruct[EnvConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -158,13 +157,13 @@ func TestToStruct_EnvConfig(t *testing.T) {
 func TestToMap_SubscriptionConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    types.SubscriptionConfig
+		input    SubscriptionConfig
 		expected map[string]interface{}
 		wantErr  bool
 	}{
 		{
 			name: "valid subscription config",
-			input: types.SubscriptionConfig{
+			input: SubscriptionConfig{
 				GracePeriodDays:         10,
 				AutoCancellationEnabled: true,
 			},
@@ -176,7 +175,7 @@ func TestToMap_SubscriptionConfig(t *testing.T) {
 		},
 		{
 			name: "disabled auto-cancellation",
-			input: types.SubscriptionConfig{
+			input: SubscriptionConfig{
 				GracePeriodDays:         3,
 				AutoCancellationEnabled: false,
 			},
@@ -205,18 +204,18 @@ func TestToMap_SubscriptionConfig(t *testing.T) {
 func TestToMap_InvoicePDFConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    types.InvoicePDFConfig
+		input    InvoicePDFConfig
 		expected map[string]interface{}
 		wantErr  bool
 	}{
 		{
 			name: "valid invoice PDF config",
-			input: types.InvoicePDFConfig{
-				TemplateName: types.TemplateInvoiceDefault,
+			input: InvoicePDFConfig{
+				TemplateName: TemplateInvoiceDefault,
 				GroupBy:      []string{"customer", "product"},
 			},
 			expected: map[string]interface{}{
-				"template_name": string(types.TemplateInvoiceDefault),
+				"template_name": string(TemplateInvoiceDefault),
 				"group_by":      []interface{}{"customer", "product"},
 			},
 			wantErr: false,
@@ -240,13 +239,13 @@ func TestToMap_InvoicePDFConfig(t *testing.T) {
 func TestToMap_EnvConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    types.EnvConfig
+		input    EnvConfig
 		expected map[string]interface{}
 		wantErr  bool
 	}{
 		{
 			name: "valid env config",
-			input: types.EnvConfig{
+			input: EnvConfig{
 				Production:  1,
 				Development: 2,
 			},
@@ -274,7 +273,7 @@ func TestToMap_EnvConfig(t *testing.T) {
 
 // Test round-trip conversion: struct -> map -> struct
 func TestRoundTrip_SubscriptionConfig(t *testing.T) {
-	original := types.SubscriptionConfig{
+	original := SubscriptionConfig{
 		GracePeriodDays:         15,
 		AutoCancellationEnabled: true,
 	}
@@ -284,7 +283,7 @@ func TestRoundTrip_SubscriptionConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ToStruct[types.SubscriptionConfig](asMap)
+	result, err := ToStruct[SubscriptionConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal
@@ -293,8 +292,8 @@ func TestRoundTrip_SubscriptionConfig(t *testing.T) {
 }
 
 func TestRoundTrip_InvoicePDFConfig(t *testing.T) {
-	original := types.InvoicePDFConfig{
-		TemplateName: types.TemplateInvoiceDefault,
+	original := InvoicePDFConfig{
+		TemplateName: TemplateInvoiceDefault,
 		GroupBy:      []string{"customer", "date", "product"},
 	}
 
@@ -303,7 +302,7 @@ func TestRoundTrip_InvoicePDFConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ToStruct[types.InvoicePDFConfig](asMap)
+	result, err := ToStruct[InvoicePDFConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal
@@ -312,7 +311,7 @@ func TestRoundTrip_InvoicePDFConfig(t *testing.T) {
 }
 
 func TestRoundTrip_EnvConfig(t *testing.T) {
-	original := types.EnvConfig{
+	original := EnvConfig{
 		Production:  3,
 		Development: 10,
 	}
@@ -322,7 +321,7 @@ func TestRoundTrip_EnvConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ToStruct[types.EnvConfig](asMap)
+	result, err := ToStruct[EnvConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal
