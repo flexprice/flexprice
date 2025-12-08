@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/lib/pq"
 )
 
@@ -448,7 +449,7 @@ func (r *settingsRepository) GetAllTenantEnvSubscriptionSettings(ctx context.Con
 	subscriptionConfigs := make([]*types.TenantEnvSubscriptionConfig, 0, len(configs))
 	for _, config := range configs {
 		// Simple conversion: map -> typed struct
-		subscriptionConfig, err := types.ToStruct[types.SubscriptionConfig](config.Config)
+		subscriptionConfig, err := utils.ToStruct[types.SubscriptionConfig](config.Config)
 		if err != nil {
 			r.log.Warnw("failed to convert subscription config",
 				"tenant_id", config.TenantID,

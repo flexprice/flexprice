@@ -3,6 +3,7 @@ package types
 import (
 	"testing"
 
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +49,7 @@ func TestToStruct_SubscriptionConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToStruct[SubscriptionConfig](tt.input)
+			result, err := utils.ToStruct[SubscriptionConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -95,7 +96,7 @@ func TestToStruct_InvoicePDFConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToStruct[InvoicePDFConfig](tt.input)
+			result, err := utils.ToStruct[InvoicePDFConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -142,7 +143,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToStruct[EnvConfig](tt.input)
+			result, err := utils.ToStruct[EnvConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -189,7 +190,7 @@ func TestToMap_SubscriptionConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToMap(tt.input)
+			result, err := utils.ToMap(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -224,7 +225,7 @@ func TestToMap_InvoicePDFConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToMap(tt.input)
+			result, err := utils.ToMap(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -259,7 +260,7 @@ func TestToMap_EnvConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := ToMap(tt.input)
+			result, err := utils.ToMap(tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -279,11 +280,11 @@ func TestRoundTrip_SubscriptionConfig(t *testing.T) {
 	}
 
 	// Convert to map
-	asMap, err := ToMap(original)
+	asMap, err := utils.ToMap(original)
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ToStruct[SubscriptionConfig](asMap)
+	result, err := utils.ToStruct[SubscriptionConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal
@@ -298,11 +299,11 @@ func TestRoundTrip_InvoicePDFConfig(t *testing.T) {
 	}
 
 	// Convert to map
-	asMap, err := ToMap(original)
+	asMap, err := utils.ToMap(original)
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ToStruct[InvoicePDFConfig](asMap)
+	result, err := utils.ToStruct[InvoicePDFConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal
@@ -317,11 +318,11 @@ func TestRoundTrip_EnvConfig(t *testing.T) {
 	}
 
 	// Convert to map
-	asMap, err := ToMap(original)
+	asMap, err := utils.ToMap(original)
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := ToStruct[EnvConfig](asMap)
+	result, err := utils.ToStruct[EnvConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal

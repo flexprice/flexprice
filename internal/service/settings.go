@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/settings"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // ============================================================================
@@ -74,7 +75,7 @@ func getDefaultValue[T any](key types.SettingKey) (T, error) {
 			Mark(ierr.ErrValidation)
 	}
 
-	return types.ToStruct[T](defaultSetting.DefaultValue)
+	return utils.ToStruct[T](defaultSetting.DefaultValue)
 }
 
 // GetSetting retrieves a setting and returns it as a typed struct
@@ -110,7 +111,7 @@ func GetSetting[T any](s *settingsService, ctx context.Context, key types.Settin
 	}
 
 	// Convert map to typed struct
-	typedValue, err := types.ToStruct[T](setting.Value)
+	typedValue, err := utils.ToStruct[T](setting.Value)
 	if err != nil {
 		return zero, ierr.WithError(err).
 			WithHintf("Failed to convert setting %s", key).
@@ -150,7 +151,7 @@ func UpdateSetting[T types.SettingConfig](s *settingsService, ctx context.Contex
 	}
 
 	// Convert typed struct to map for database storage
-	valueMap, err := types.ToMap(value)
+	valueMap, err := utils.ToMap(value)
 	if err != nil {
 		return ierr.WithError(err).
 			WithHintf("Failed to convert setting %s", key).
@@ -287,7 +288,7 @@ func getSettingByKey[T any](s *settingsService, ctx context.Context, key types.S
 		}
 
 		// Convert typed struct to map for response
-		valueMap, err := types.ToMap(config)
+		valueMap, err := utils.ToMap(config)
 		if err != nil {
 			return nil, err
 		}
@@ -318,7 +319,7 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	}
 
 	// Convert current setting to map
-	currentMap, err := types.ToMap(current)
+	currentMap, err := utils.ToMap(current)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHintf("Failed to convert current setting %s to map", key).
@@ -331,7 +332,7 @@ func updateSettingByKey[T types.SettingConfig](s *settingsService, ctx context.C
 	}
 
 	// Convert merged map back to typed struct for validation
-	merged, err := types.ToStruct[T](currentMap)
+	merged, err := utils.ToStruct[T](currentMap)
 	if err != nil {
 		return nil, err
 	}

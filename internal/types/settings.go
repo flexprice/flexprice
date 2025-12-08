@@ -5,6 +5,7 @@ import (
 	"time"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
 	workflows "github.com/flexprice/flexprice/internal/workflows/types"
 	"github.com/samber/lo"
@@ -144,23 +145,23 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	// Convert typed structs to maps using centralized utility
-	invoiceConfigMap, err := ToMap(defaultInvoiceConfig)
+	invoiceConfigMap, err := utils.ToMap(defaultInvoiceConfig)
 	if err != nil {
 		return nil, err
 	}
-	subscriptionConfigMap, err := ToMap(defaultSubscriptionConfig)
+	subscriptionConfigMap, err := utils.ToMap(defaultSubscriptionConfig)
 	if err != nil {
 		return nil, err
 	}
-	invoicePDFConfigMap, err := ToMap(defaultInvoicePDFConfig)
+	invoicePDFConfigMap, err := utils.ToMap(defaultInvoicePDFConfig)
 	if err != nil {
 		return nil, err
 	}
-	envConfigMap, err := ToMap(defaultEnvConfig)
+	envConfigMap, err := utils.ToMap(defaultEnvConfig)
 	if err != nil {
 		return nil, err
 	}
-	customerOnboardingConfigMap, err := ToMap(defaultCustomerOnboardingConfig)
+	customerOnboardingConfigMap, err := utils.ToMap(defaultCustomerOnboardingConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -220,35 +221,35 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 	// Use ToStruct from conversion.go (same package, no import cycle)
 	switch key {
 	case SettingKeyInvoiceConfig:
-		config, err := ToStruct[InvoiceConfig](value)
+		config, err := utils.ToStruct[InvoiceConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeySubscriptionConfig:
-		config, err := ToStruct[SubscriptionConfig](value)
+		config, err := utils.ToStruct[SubscriptionConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeyInvoicePDFConfig:
-		config, err := ToStruct[InvoicePDFConfig](value)
+		config, err := utils.ToStruct[InvoicePDFConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeyEnvConfig:
-		config, err := ToStruct[EnvConfig](value)
+		config, err := utils.ToStruct[EnvConfig](value)
 		if err != nil {
 			return err
 		}
 		return config.Validate()
 
 	case SettingKeyCustomerOnboarding:
-		config, err := ToStruct[WorkflowConfig](value)
+		config, err := utils.ToStruct[WorkflowConfig](value)
 		if err != nil {
 			return err
 		}

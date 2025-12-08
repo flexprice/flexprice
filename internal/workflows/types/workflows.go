@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/shopspring/decimal"
 )
@@ -27,6 +28,8 @@ type WorkflowConfig struct {
 }
 
 // UnmarshalJSON implements custom JSON unmarshaling to handle interface types
+// This method is automatically used by utils.ToStruct when converting from map[string]interface{}
+// to WorkflowConfig, as utils.ToStruct uses json.Unmarshal internally
 func (c *WorkflowConfig) UnmarshalJSON(data []byte) error {
 	// First, unmarshal into a temporary struct to get the raw data
 	var temp struct {
@@ -44,43 +47,51 @@ func (c *WorkflowConfig) UnmarshalJSON(data []byte) error {
 	c.Actions = make([]WorkflowActionConfig, 0, len(temp.Actions))
 
 	// Unmarshal each action based on its "action" field
+	// Convert json.RawMessage to map, then use utils.ToStruct for type-safe conversion
 	for _, actionData := range temp.Actions {
-		// First, check what type of action this is
-		var actionType struct {
-			Action WorkflowAction `json:"action"`
-		}
-		if err := json.Unmarshal(actionData, &actionType); err != nil {
+		// Convert json.RawMessage to map[string]interface{}
+		var actionMap map[string]interface{}
+		if err := json.Unmarshal(actionData, &actionMap); err != nil {
 			return ierr.WithError(err).
-				WithHint("Failed to determine action type").
+				WithHint("Failed to unmarshal action data to map").
 				Mark(ierr.ErrValidation)
 		}
 
-		// Unmarshal into the appropriate concrete type
+		// Get action type from map (avoid duplicate unmarshaling)
+		actionTypeStr, ok := actionMap["action"].(string)
+		if !ok {
+			return ierr.NewError("action field is required and must be a string").
+				WithHint("Please provide a valid action type").
+				Mark(ierr.ErrValidation)
+		}
+		actionType := WorkflowAction(actionTypeStr)
+
+		// Use utils.ToStruct to unmarshal into the appropriate concrete type
 		var action WorkflowActionConfig
-		switch actionType.Action {
+		switch actionType {
 		case WorkflowActionCreateWallet:
-			var walletAction CreateWalletActionConfig
-			if err := json.Unmarshal(actionData, &walletAction); err != nil {
+			walletAction, err := utils.ToStruct[CreateWalletActionConfig](actionMap)
+			if err != nil {
 				return ierr.WithError(err).
-					WithHintf("Failed to unmarshal create_wallet action: %v", err).
+					WithHintf("Failed to convert create_wallet action: %v", err).
 					Mark(ierr.ErrValidation)
 			}
 			action = &walletAction
 
 		case WorkflowActionCreateSubscription:
-			var subAction CreateSubscriptionActionConfig
-			if err := json.Unmarshal(actionData, &subAction); err != nil {
+			subAction, err := utils.ToStruct[CreateSubscriptionActionConfig](actionMap)
+			if err != nil {
 				return ierr.WithError(err).
-					WithHintf("Failed to unmarshal create_subscription action: %v", err).
+					WithHintf("Failed to convert create_subscription action: %v", err).
 					Mark(ierr.ErrValidation)
 			}
 			action = &subAction
 
 		default:
-			return ierr.NewErrorf("unknown action type: %s", actionType.Action).
+			return ierr.NewErrorf("unknown action type: %s", actionType).
 				WithHint("Please provide a valid action type").
 				WithReportableDetails(map[string]any{
-					"action": actionType.Action,
+					"action": actionType,
 					"allowed": []WorkflowAction{
 						WorkflowActionCreateWallet,
 						WorkflowActionCreateSubscription,
@@ -96,6 +107,8 @@ func (c *WorkflowConfig) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON implements custom JSON marshaling to include action type discriminator
+// This method is automatically used by utils.ToMap when converting from WorkflowConfig
+// to map[string]interface{}, as utils.ToMap uses json.Marshal internally
 func (c *WorkflowConfig) MarshalJSON() ([]byte, error) {
 	if c == nil {
 		return json.Marshal(nil)
@@ -111,11 +124,12 @@ func (c *WorkflowConfig) MarshalJSON() ([]byte, error) {
 	// Only iterate if Actions is not nil
 	if c.Actions != nil {
 		for _, action := range c.Actions {
-			// Marshal the action to JSON
+			// Marshal action directly - structs have proper JSON tags
+			// This is more efficient than ToMap -> Marshal, and works correctly
 			actionJSON, err := json.Marshal(action)
 			if err != nil {
 				return nil, ierr.WithError(err).
-					WithHint("Failed to marshal action").
+					WithHint("Failed to marshal action to JSON").
 					Mark(ierr.ErrValidation)
 			}
 			actionsData = append(actionsData, actionJSON)
