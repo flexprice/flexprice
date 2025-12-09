@@ -223,7 +223,7 @@ func (c *CreateWalletActionConfig) ToDTO(params interface{}) (interface{}, error
 
 // CreateSubscriptionActionConfig represents configuration for creating a subscription action
 type CreateSubscriptionActionConfig struct {
-	Action       WorkflowAction `json:"action"` // Type discriminator - automatically set to "create_subscription"
+	Action       WorkflowAction `json:"action"`
 	PlanID       string         `json:"plan_id,omitempty"`
 	BillingCycle string         `json:"billing_cycle,omitempty"`
 }
