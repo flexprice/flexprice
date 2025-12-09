@@ -190,9 +190,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	// Publish webhook event for customer creation
 	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 
-	// Handle customer onboarding workflow (log error but don't fail customer creation)
 	if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
-		return nil, err
 		s.Logger.Errorw("failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
 	}
 
