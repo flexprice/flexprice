@@ -422,7 +422,10 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Context, walletID string, idempotencyKey *string, req *dto.TopUpWalletRequest) (string, string, error) {
 	// Initialize required services
 	invoiceService := NewInvoiceService(s.ServiceParams)
-	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+
+	settingsService := &settingsService{
+		ServiceParams: s.ServiceParams,
+	}
 
 	// Retrieve wallet and customer details
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
@@ -432,7 +435,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 
 	// Get invoice config setting to check auto_complete flag
 	invoiceConfig, err := GetSetting[types.InvoiceConfig](
-		settingsSvc,
+		settingsService,
 		ctx,
 		types.SettingKeyInvoiceConfig,
 	)
