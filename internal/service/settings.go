@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/settings"
+	workflowDomain "github.com/flexprice/flexprice/internal/domain/workflow"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/utils"
@@ -206,7 +207,7 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	case types.SettingKeyEnvConfig:
 		return getSettingByKey[types.EnvConfig](s, ctx, key)
 	case types.SettingKeyCustomerOnboarding:
-		return getSettingByKey[types.WorkflowConfig](s, ctx, key)
+		return getSettingByKey[workflowDomain.WorkflowConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -240,7 +241,7 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	case types.SettingKeyEnvConfig:
 		return updateSettingByKey[types.EnvConfig](s, ctx, key, req)
 	case types.SettingKeyCustomerOnboarding:
-		return updateSettingByKey[*types.WorkflowConfig](s, ctx, key, req)
+		return updateSettingByKey[*workflowDomain.WorkflowConfig](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).

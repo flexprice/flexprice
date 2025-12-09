@@ -7,7 +7,6 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
-	workflows "github.com/flexprice/flexprice/internal/workflows/types"
 	"github.com/samber/lo"
 )
 
@@ -86,10 +85,6 @@ type EnvConfig struct {
 	Development int `json:"development" validate:"required,min=0"`
 }
 
-// WorkflowConfig is an alias for workflows.WorkflowConfig
-// We use it directly instead of embedding to avoid conversion issues
-type WorkflowConfig = workflows.WorkflowConfig
-
 // Validate implements SettingConfig interface
 func (c EnvConfig) Validate() error {
 	return validator.ValidateRequest(c)
@@ -139,9 +134,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		Development: 2,
 	}
 
-	defaultCustomerOnboardingConfig := workflows.WorkflowConfig{
-		WorkflowType: workflows.WorkflowTypeCustomerOnboarding,
-		Actions:      []workflows.WorkflowActionConfig{}, // Empty actions by default
+	// Note: WorkflowConfig is now defined in service package to avoid import cycles
+	// We'll use a map for the default config to avoid importing service package here
+	defaultCustomerOnboardingConfig := map[string]interface{}{
+		"workflow_type": "customer_onboarding",
+		"actions":       []interface{}{},
 	}
 
 	// Convert typed structs to maps using centralized utility
@@ -161,10 +158,8 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	customerOnboardingConfigMap, err := utils.ToMap(defaultCustomerOnboardingConfig)
-	if err != nil {
-		return nil, err
-	}
+	// Already a map, no conversion needed
+	customerOnboardingConfigMap := defaultCustomerOnboardingConfig
 
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
@@ -249,11 +244,19 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return config.Validate()
 
 	case SettingKeyCustomerOnboarding:
-		config, err := utils.ToStruct[WorkflowConfig](value)
-		if err != nil {
-			return err
+		// WorkflowConfig validation is handled in the service layer
+		// Here we just do basic structure validation
+		if _, ok := value["workflow_type"]; !ok {
+			return ierr.NewError("workflow_type is required").
+				WithHint("Please provide a workflow_type").
+				Mark(ierr.ErrValidation)
 		}
-		return config.Validate()
+		if _, ok := value["actions"]; !ok {
+			return ierr.NewError("actions field is required").
+				WithHint("Please provide an actions array").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).
