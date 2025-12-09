@@ -21,8 +21,7 @@ const (
 type WalletType string
 
 const (
-	WalletTypePromotional WalletType = "PROMOTIONAL"
-	WalletTypePrePaid     WalletType = "PRE_PAID"
+	WalletTypePrePaid WalletType = "PRE_PAID"
 )
 
 func (t WalletType) Validate() error {
@@ -31,7 +30,6 @@ func (t WalletType) Validate() error {
 	}
 
 	allowedValues := []string{
-		string(WalletTypePromotional),
 		string(WalletTypePrePaid),
 	}
 	if !lo.Contains(allowedValues, string(t)) {

@@ -1158,11 +1158,11 @@ func (s *InvoiceServiceSuite) setupWallets() {
 	})
 
 	// Create test wallets for the test customer
-	// 1. Promotional wallet with $50
+	// 1. Prepaid wallet with $50
 	promoWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
 		CustomerID:     s.testData.customer.ID,
 		Currency:       "usd",
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePrePaid,
 		ConversionRate: decimal.NewFromInt(1),
 		Config:         types.GetDefaultWalletConfig(),
 	})

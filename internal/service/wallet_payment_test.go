@@ -119,7 +119,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(50),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePrePaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.promotional))
@@ -167,7 +167,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(10),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePrePaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.smallBalance))
@@ -215,7 +215,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(100),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusClosed,
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePrePaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.inactive))
