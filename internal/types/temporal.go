@@ -13,9 +13,10 @@ type TemporalTaskQueue string
 
 const (
 	// Task Queues - logical groupings to limit worker count
-	TemporalTaskQueueTask   TemporalTaskQueue = "task"
-	TemporalTaskQueuePrice  TemporalTaskQueue = "price"
-	TemporalTaskQueueExport TemporalTaskQueue = "export"
+	TemporalTaskQueueTask      TemporalTaskQueue = "task"
+	TemporalTaskQueuePrice     TemporalTaskQueue = "price"
+	TemporalTaskQueueExport    TemporalTaskQueue = "export"
+	TemporalTaskQueueWorkflows TemporalTaskQueue = "workflows"
 )
 
 // String returns the string representation of the task queue
@@ -29,6 +30,7 @@ func (tq TemporalTaskQueue) Validate() error {
 		TemporalTaskQueueTask,
 		TemporalTaskQueuePrice,
 		TemporalTaskQueueExport,
+		TemporalTaskQueueWorkflows,
 	}
 	if lo.Contains(allowedQueues, tq) {
 		return nil
@@ -52,6 +54,7 @@ const (
 	TemporalHubSpotDealSyncWorkflow      TemporalWorkflowType = "HubSpotDealSyncWorkflow"
 	TemporalHubSpotInvoiceSyncWorkflow   TemporalWorkflowType = "HubSpotInvoiceSyncWorkflow"
 	TemporalHubSpotQuoteSyncWorkflow     TemporalWorkflowType = "HubSpotQuoteSyncWorkflow"
+	TemporalCustomerOnboardingWorkflow   TemporalWorkflowType = "CustomerOnboardingWorkflow"
 )
 
 // String returns the string representation of the workflow type
@@ -70,6 +73,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalHubSpotDealSyncWorkflow,      // "HubSpotDealSyncWorkflow"
 		TemporalHubSpotInvoiceSyncWorkflow,   // "HubSpotInvoiceSyncWorkflow"
 		TemporalHubSpotQuoteSyncWorkflow,     // "HubSpotQuoteSyncWorkflow"
+		TemporalCustomerOnboardingWorkflow,   // "CustomerOnboardingWorkflow"
 	}
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
@@ -89,6 +93,8 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueuePrice
 	case TemporalExecuteExportWorkflow:
 		return TemporalTaskQueueExport
+	case TemporalCustomerOnboardingWorkflow:
+		return TemporalTaskQueueWorkflows
 	default:
 		return TemporalTaskQueueTask // Default fallback
 	}
@@ -122,6 +128,10 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 		return []TemporalWorkflowType{
 			TemporalExecuteExportWorkflow,
 		}
+	case TemporalTaskQueueWorkflows:
+		return []TemporalWorkflowType{
+			TemporalCustomerOnboardingWorkflow,
+		}
 	default:
 		return []TemporalWorkflowType{}
 	}
@@ -133,5 +143,6 @@ func GetAllTaskQueues() []TemporalTaskQueue {
 		TemporalTaskQueueTask,
 		TemporalTaskQueuePrice,
 		TemporalTaskQueueExport,
+		TemporalTaskQueueWorkflows,
 	}
 }

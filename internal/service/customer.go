@@ -3,14 +3,16 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
-	workflowDomain "github.com/flexprice/flexprice/internal/domain/workflow"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -192,6 +194,7 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	// Handle customer onboarding workflow (log error but don't fail customer creation)
 	if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
 		s.Logger.Errorw("failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
+		return nil, err
 	}
 
 	return &dto.CustomerResponse{Customer: cust}, nil
@@ -716,10 +719,12 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 	settingsService := &settingsService{
 		ServiceParams: s.ServiceParams,
 	}
-	workflowConfig, err := GetSetting[*workflowDomain.WorkflowConfig](settingsService, ctx, types.SettingKeyCustomerOnboarding)
+	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](settingsService, ctx, types.SettingKeyCustomerOnboarding)
 	if err != nil {
 		return err
 	}
+
+	fmt.Println("workflowConfig", lo.FromPtr(workflowConfig))
 
 	// If there are no actions, return
 	if len(workflowConfig.Actions) == 0 {
@@ -727,135 +732,77 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		return nil
 	}
 
-	// For each action, execute the action
-	return s.executeWorkflowActions(ctx, workflowConfig, customer)
-}
+	// Copy necessary context values
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+	userID := types.GetUserID(ctx)
 
-// executeWorkflowActions executes workflow actions based on the workflow config and customer data
-func (s *customerService) executeWorkflowActions(ctx context.Context, workflowConfig *workflowDomain.WorkflowConfig, customer *customer.Customer) error {
-	s.Logger.Infow("executing workflow actions", "customer_id", customer.ID, "action_count", len(workflowConfig.Actions))
+	s.Logger.Infow("executing customer onboarding workflow",
+		"customer_id", customer.ID,
+		"tenant_id", tenantID,
+		"environment_id", envID,
+		"user_id", userID,
+		"action_count", len(workflowConfig.Actions))
 
-	for i, action := range workflowConfig.Actions {
-		actionType := action.GetAction()
-		s.Logger.Debugw("executing workflow action", "customer_id", customer.ID, "action_index", i, "action_type", actionType)
-
-		// Get the action config and customer object -> convert to DTO -> execute action
-		if err := s.executeWorkflowAction(ctx, action, customer); err != nil {
-			s.Logger.Errorw("failed to execute workflow action",
-				"customer_id", customer.ID,
-				"action_index", i,
-				"action_type", actionType,
-				"error", err)
-			return ierr.WithError(err).
-				WithHint("Failed to execute workflow action during customer onboarding").
-				WithReportableDetails(map[string]interface{}{
-					"customer_id":  customer.ID,
-					"action_type":  actionType,
-					"action_index": i,
-				}).
-				Mark(ierr.ErrInternal)
-		}
+	// Prepare workflow input with all necessary IDs
+	input := &workflowModels.CustomerOnboardingWorkflowInput{
+		CustomerID:     customer.ID,
+		TenantID:       tenantID,
+		EnvironmentID:  envID,
+		UserID:         userID,
+		WorkflowConfig: *workflowConfig,
 	}
 
-	s.Logger.Infow("successfully executed all workflow actions", "customer_id", customer.ID, "action_count", len(workflowConfig.Actions))
-	return nil
-}
-
-// executeWorkflowAction executes a single workflow action - simplified approach
-func (s *customerService) executeWorkflowAction(ctx context.Context, action workflowDomain.WorkflowActionConfig, customer *customer.Customer) error {
-	actionType := action.GetAction()
-
-	// Validate the action config
-	if err := action.Validate(); err != nil {
-		return err
-	}
-
-	// Determine currency for subscription actions
-	currency := "USD" // Default currency
-	if actionType == workflowDomain.WorkflowActionCreateSubscription {
-		if subAction, ok := action.(*workflowDomain.CreateSubscriptionActionConfig); ok {
-			// Get prices for the plan to determine currency
-			priceService := NewPriceService(s.ServiceParams)
-			pricesResp, err := priceService.GetPricesByPlanID(ctx, dto.GetPricesByPlanRequest{
-				PlanID: subAction.PlanID,
-			})
-			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to get prices for plan").
-					WithReportableDetails(map[string]interface{}{
-						"plan_id": subAction.PlanID,
-					}).
-					Mark(ierr.ErrDatabase)
-			}
-
-			// Use first price's currency if available
-			if len(pricesResp.Items) > 0 && pricesResp.Items[0].Currency != "" {
-				currency = pricesResp.Items[0].Currency
-			}
-		}
-	}
-
-	// Convert action config to DTO using flexible parameters
-	params := &workflowDomain.WorkflowActionParams{
-		CustomerID: customer.ID,
-		Currency:   currency,
-	}
-
-	dtoInterface, err := action.ToDTO(params)
-	if err != nil {
-		return err
-	}
-
-	// Execute the action based on type
-	switch actionType {
-	case workflowDomain.WorkflowActionCreateWallet:
-		walletReq, ok := dtoInterface.(*dto.CreateWalletRequest)
-		if !ok {
-			return ierr.NewError("invalid DTO type for create_wallet action").
-				WithHint("Expected CreateWalletRequest").
-				Mark(ierr.ErrInternal)
-		}
-
-		walletService := NewWalletService(s.ServiceParams)
-		walletResp, err := walletService.CreateWallet(ctx, walletReq)
-		if err != nil {
-			return err
-		}
-
-		s.Logger.Infow("created wallet for customer",
-			"customer_id", customer.ID,
-			"wallet_id", walletResp.ID,
-			"currency", walletResp.Currency)
-
-	case workflowDomain.WorkflowActionCreateSubscription:
-		subReq, ok := dtoInterface.(dto.CreateSubscriptionRequest)
-		if !ok {
-			return ierr.NewError("invalid DTO type for create_subscription action").
-				WithHint("Expected CreateSubscriptionRequest").
-				Mark(ierr.ErrInternal)
-		}
-
-		subscriptionService := NewSubscriptionService(s.ServiceParams)
-		subResp, err := subscriptionService.CreateSubscription(ctx, subReq)
-		if err != nil {
-			return err
-		}
-
-		s.Logger.Infow("created subscription for customer",
-			"customer_id", customer.ID,
-			"subscription_id", subResp.ID,
-			"plan_id", subReq.PlanID,
-			"currency", currency)
-
-	default:
-		return ierr.NewErrorf("unknown workflow action type: %s", actionType).
-			WithHint("Please provide a valid action type").
+	// Validate input
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for customer onboarding",
+			"error", err,
+			"customer_id", customer.ID)
+		fmt.Println("error in validate", err)
+		return ierr.WithError(err).
+			WithHint("Invalid workflow input for customer onboarding").
 			WithReportableDetails(map[string]interface{}{
 				"customer_id": customer.ID,
-				"action_type": actionType,
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
+	fmt.Println("input", input)
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return ierr.NewError("temporal service not available").
+			WithHint("Customer onboarding workflow requires Temporal service").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	fmt.Println("before executing workflow")
+	// Execute workflow via Temporal
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalCustomerOnboardingWorkflow,
+		input,
+	)
+	if err != nil {
+		s.Logger.Errorw("failed to start customer onboarding workflow",
+			"error", err,
+			"customer_id", customer.ID)
+		return ierr.WithError(err).
+			WithHint("Failed to start customer onboarding workflow").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.Infow("customer onboarding workflow started successfully",
+		"customer_id", customer.ID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
 
 	return nil
 }
