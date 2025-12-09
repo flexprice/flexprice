@@ -12,10 +12,6 @@ import (
 	"github.com/flexprice/flexprice/internal/utils"
 )
 
-// ============================================================================
-// Service Interface
-// ============================================================================
-
 type SettingsService interface {
 	// GetSettingByKey returns a setting as a DTO response (for API endpoints)
 	// Use this when you need the full Setting object with metadata (ID, timestamps, etc.)
@@ -207,7 +203,7 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	case types.SettingKeyEnvConfig:
 		return getSettingByKey[types.EnvConfig](s, ctx, key)
 	case types.SettingKeyCustomerOnboarding:
-		return getSettingByKey[workflowModels.WorkflowConfig](s, ctx, key)
+		return getSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
