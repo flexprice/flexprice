@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -193,8 +192,8 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 
 	// Handle customer onboarding workflow (log error but don't fail customer creation)
 	if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
-		s.Logger.Errorw("failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
 		return nil, err
+		s.Logger.Errorw("failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
 	}
 
 	return &dto.CustomerResponse{Customer: cust}, nil
@@ -724,8 +723,6 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		return err
 	}
 
-	fmt.Println("workflowConfig", lo.FromPtr(workflowConfig))
-
 	// If there are no actions, return
 	if len(workflowConfig.Actions) == 0 {
 		s.Logger.Infow("no actions found for customer onboarding", "customer_id", customer.ID)
@@ -758,7 +755,6 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 		s.Logger.Errorw("invalid workflow input for customer onboarding",
 			"error", err,
 			"customer_id", customer.ID)
-		fmt.Println("error in validate", err)
 		return ierr.WithError(err).
 			WithHint("Invalid workflow input for customer onboarding").
 			WithReportableDetails(map[string]interface{}{
@@ -766,8 +762,6 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 			}).
 			Mark(ierr.ErrValidation)
 	}
-
-	fmt.Println("input", input)
 
 	// Get global temporal service
 	temporalSvc := temporalservice.GetGlobalTemporalService()
@@ -780,7 +774,6 @@ func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer
 			Mark(ierr.ErrInternal)
 	}
 
-	fmt.Println("before executing workflow")
 	// Execute workflow via Temporal
 	workflowRun, err := temporalSvc.ExecuteWorkflow(
 		ctx,

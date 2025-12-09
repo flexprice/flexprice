@@ -91,12 +91,14 @@ func (a *CustomerActivities) CreateWalletActivity(ctx context.Context, input mod
 // CreateSubscriptionActivity creates a subscription for a customer based on workflow configuration
 func (a *CustomerActivities) CreateSubscriptionActivity(ctx context.Context, input models.CreateSubscriptionActivityInput) (*models.CreateSubscriptionActivityResult, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("Starting CreateSubscriptionActivity", "customer_id", input.CustomerID, "plan_id", input.SubscriptionConfig.PlanID)
 
-	// Validate input
+	// Validate input first before accessing any nested fields
 	if err := input.Validate(); err != nil {
 		return nil, err
 	}
+
+	// Now safe to log plan_id after validation
+	logger.Info("Starting CreateSubscriptionActivity", "customer_id", input.CustomerID, "plan_id", input.SubscriptionConfig.PlanID)
 
 	// Set tenant_id, environment_id, and user_id in context for proper BaseModel creation
 	ctx = types.SetTenantID(ctx, input.TenantID)
