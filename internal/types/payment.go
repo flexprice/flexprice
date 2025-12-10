@@ -52,7 +52,6 @@ const (
 	PaymentMethodTypeCard        PaymentMethodType = "CARD"
 	PaymentMethodTypeACH         PaymentMethodType = "ACH"
 	PaymentMethodTypeOffline     PaymentMethodType = "OFFLINE"
-	PaymentMethodTypeCredits     PaymentMethodType = "CREDITS"
 	PaymentMethodTypePaymentLink PaymentMethodType = "PAYMENT_LINK"
 )
 
@@ -65,7 +64,6 @@ func (s PaymentMethodType) Validate() error {
 		PaymentMethodTypeCard,
 		PaymentMethodTypeACH,
 		PaymentMethodTypeOffline,
-		PaymentMethodTypeCredits,
 		PaymentMethodTypePaymentLink,
 	}
 	if !lo.Contains(allowed, s) {

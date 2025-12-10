@@ -3,7 +3,6 @@ package service
 import (
 	"testing"
 
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -22,7 +21,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 	tests := []struct {
 		name               string
 		invoiceType        string // "A" (USAGE only), "B" (FIXED only), "C" (Mixed)
-		walletConfig       []types.WalletConfigPriceType
 		walletBalance      decimal.Decimal
 		cardAvailable      bool
 		expectedResult     string // "Success" or "Failed"
@@ -34,18 +32,16 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W1_ALL_60_CardAvailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
 			expectedCardPays:   decimal.Zero,
 			expectedWalletPays: decimal.NewFromFloat(50.0),
-			description:        "A: $50 USAGE, W1 (ALL) $60, Card ✅ → Success: Card $0, Wallet $50",
+			description:        "A: $50 USAGE, W1 $60, Card ✅ → Success: Card $0, Wallet $50",
 		},
 		{
 			name:               "A_W1_ALL_30_CardAvailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -56,7 +52,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W1_ALL_30_CardUnavailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -67,7 +62,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W2_FIXED_60_CardAvailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -78,7 +72,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W2_FIXED_60_CardUnavailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -89,7 +82,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W3_USAGE_60_CardAvailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -100,7 +92,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W3_USAGE_30_CardAvailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -111,7 +102,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W3_USAGE_30_CardUnavailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -122,7 +112,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W4_None_0_CardAvailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{},
 			walletBalance:      decimal.Zero,
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -133,7 +122,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "A_W4_None_0_CardUnavailable",
 			invoiceType:        "A",
-			walletConfig:       []types.WalletConfigPriceType{},
 			walletBalance:      decimal.Zero,
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -146,7 +134,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W1_ALL_60_CardAvailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -157,7 +144,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W1_ALL_30_CardAvailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -168,7 +154,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W1_ALL_30_CardUnavailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -179,7 +164,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W2_FIXED_60_CardAvailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -190,7 +174,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W2_FIXED_30_CardAvailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -201,7 +184,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W2_FIXED_30_CardUnavailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -212,7 +194,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W3_USAGE_60_CardAvailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -223,7 +204,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W3_USAGE_60_CardUnavailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -234,7 +214,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W4_None_0_CardAvailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{},
 			walletBalance:      decimal.Zero,
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -245,7 +224,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "B_W4_None_0_CardUnavailable",
 			invoiceType:        "B",
-			walletConfig:       []types.WalletConfigPriceType{},
 			walletBalance:      decimal.Zero,
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -258,7 +236,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W1_ALL_60_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(60.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -269,7 +246,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W1_ALL_40_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(40.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -280,7 +256,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W1_ALL_40_CardUnavailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll},
 			walletBalance:      decimal.NewFromFloat(40.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -291,7 +266,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W2_FIXED_30_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -302,7 +276,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W2_FIXED_10_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(10.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -313,7 +286,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W2_FIXED_30_CardUnavailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed},
 			walletBalance:      decimal.NewFromFloat(30.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -324,7 +296,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W3_USAGE_40_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(40.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -335,7 +306,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W3_USAGE_20_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(20.0),
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -346,7 +316,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W3_USAGE_40_CardUnavailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage},
 			walletBalance:      decimal.NewFromFloat(40.0),
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -357,7 +326,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W4_None_0_CardAvailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{},
 			walletBalance:      decimal.Zero,
 			cardAvailable:      true,
 			expectedResult:     "Success",
@@ -368,7 +336,6 @@ func (s *PaymentFlowTestSuite) TestPaymentFlowCases() {
 		{
 			name:               "C_W4_None_0_CardUnavailable",
 			invoiceType:        "C",
-			walletConfig:       []types.WalletConfigPriceType{},
 			walletBalance:      decimal.Zero,
 			cardAvailable:      false,
 			expectedResult:     "Failed",
@@ -402,8 +369,8 @@ func (s *PaymentFlowTestSuite) TestMultiWalletScenarios() {
 			name:        "C_W1_25_ALL_W2_15_FIXED_CardAvailable",
 			invoiceType: "C",
 			wallets: []walletConfig{
-				{balance: decimal.NewFromFloat(25.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
-				{balance: decimal.NewFromFloat(15.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed}},
+				{balance: decimal.NewFromFloat(25.0)},
+				{balance: decimal.NewFromFloat(15.0)},
 			},
 			cardAvailable:       true,
 			expectedResult:      "Success",
@@ -416,8 +383,8 @@ func (s *PaymentFlowTestSuite) TestMultiWalletScenarios() {
 			name:        "C_W1_25_ALL_W3_20_USAGE_CardAvailable",
 			invoiceType: "C",
 			wallets: []walletConfig{
-				{balance: decimal.NewFromFloat(25.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}},
-				{balance: decimal.NewFromFloat(20.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}},
+				{balance: decimal.NewFromFloat(25.0)},
+				{balance: decimal.NewFromFloat(20.0)},
 			},
 			cardAvailable:       true,
 			expectedResult:      "Success",
@@ -430,8 +397,8 @@ func (s *PaymentFlowTestSuite) TestMultiWalletScenarios() {
 			name:        "C_W2_15_FIXED_W3_35_USAGE_CardAvailable",
 			invoiceType: "C",
 			wallets: []walletConfig{
-				{balance: decimal.NewFromFloat(15.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed}},
-				{balance: decimal.NewFromFloat(35.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}},
+				{balance: decimal.NewFromFloat(15.0)},
+				{balance: decimal.NewFromFloat(35.0)},
 			},
 			cardAvailable:       true,
 			expectedResult:      "Success",
@@ -444,8 +411,8 @@ func (s *PaymentFlowTestSuite) TestMultiWalletScenarios() {
 			name:        "C_W2_10_FIXED_W3_20_USAGE_CardAvailable",
 			invoiceType: "C",
 			wallets: []walletConfig{
-				{balance: decimal.NewFromFloat(10.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed}},
-				{balance: decimal.NewFromFloat(20.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}},
+				{balance: decimal.NewFromFloat(10.0)},
+				{balance: decimal.NewFromFloat(20.0)},
 			},
 			cardAvailable:       true,
 			expectedResult:      "Success",
@@ -458,8 +425,8 @@ func (s *PaymentFlowTestSuite) TestMultiWalletScenarios() {
 			name:        "C_W2_10_FIXED_W3_20_USAGE_CardUnavailable",
 			invoiceType: "C",
 			wallets: []walletConfig{
-				{balance: decimal.NewFromFloat(10.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeFixed}},
-				{balance: decimal.NewFromFloat(20.0), config: []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}},
+				{balance: decimal.NewFromFloat(10.0)},
+				{balance: decimal.NewFromFloat(20.0)},
 			},
 			cardAvailable:       false,
 			expectedResult:      "Failed",
@@ -479,13 +446,11 @@ func (s *PaymentFlowTestSuite) TestMultiWalletScenarios() {
 
 type walletConfig struct {
 	balance decimal.Decimal
-	config  []types.WalletConfigPriceType
 }
 
 func (s *PaymentFlowTestSuite) testPaymentFlowCase(tc struct {
 	name               string
 	invoiceType        string
-	walletConfig       []types.WalletConfigPriceType
 	walletBalance      decimal.Decimal
 	cardAvailable      bool
 	expectedResult     string
@@ -504,8 +469,8 @@ func (s *PaymentFlowTestSuite) testPaymentFlowCase(tc struct {
 		invoiceAmount = decimal.NewFromFloat(50.0)
 	}
 
-	// Calculate wallet payable amount based on restrictions
-	walletPayableAmount := s.calculateWalletPayableAmount(tc.walletConfig, tc.walletBalance, tc.invoiceType)
+	// Calculate wallet payable amount (no restrictions - wallet can pay full balance)
+	walletPayableAmount := tc.walletBalance
 
 	// Calculate payment split
 	cardAmount := decimal.Zero
@@ -539,7 +504,7 @@ func (s *PaymentFlowTestSuite) testPaymentFlowCase(tc struct {
 	// Log the test case for verification
 	s.T().Logf("Payment flow test case: %s - %s", tc.name, tc.description)
 	s.T().Logf("  Invoice: %s, Amount: %s", tc.invoiceType, invoiceAmount)
-	s.T().Logf("  Wallet Config: %v, Balance: %s", tc.walletConfig, tc.walletBalance)
+	s.T().Logf("  Wallet Balance: %s", tc.walletBalance)
 	s.T().Logf("  Card Available: %v", tc.cardAvailable)
 	s.T().Logf("  Expected: %s (Card: %s, Wallet: %s)", tc.expectedResult, tc.expectedCardPays, tc.expectedWalletPays)
 	s.T().Logf("  Actual: %s (Card: %s, Wallet: %s)",
@@ -565,11 +530,10 @@ func (s *PaymentFlowTestSuite) testMultiWalletScenario(tc struct {
 		invoiceAmount = decimal.NewFromFloat(50.0)
 	}
 
-	// Calculate total wallet payable amount
+	// Calculate total wallet payable amount (no restrictions - wallets can pay full balance)
 	totalWalletPayableAmount := decimal.Zero
 	for _, wallet := range tc.wallets {
-		walletPayableAmount := s.calculateWalletPayableAmount(wallet.config, wallet.balance, tc.invoiceType)
-		totalWalletPayableAmount = totalWalletPayableAmount.Add(walletPayableAmount)
+		totalWalletPayableAmount = totalWalletPayableAmount.Add(wallet.balance)
 	}
 
 	// Calculate payment split
@@ -612,68 +576,4 @@ func (s *PaymentFlowTestSuite) testMultiWalletScenario(tc struct {
 	s.T().Logf("  Actual: %s (Card: %s, Wallets: %s)",
 		map[bool]string{true: "Success", false: "Failed"}[paymentSucceeds],
 		cardAmount, totalWalletAmount)
-}
-
-// calculateWalletPayableAmount calculates how much a wallet can pay based on its restrictions
-func (s *PaymentFlowTestSuite) calculateWalletPayableAmount(walletConfig []types.WalletConfigPriceType, walletBalance decimal.Decimal, invoiceType string) decimal.Decimal {
-	if len(walletConfig) == 0 {
-		return decimal.Zero
-	}
-
-	// Check if wallet has ALL access
-	hasAllAccess := false
-	for _, config := range walletConfig {
-		if config == types.WalletConfigPriceTypeAll {
-			hasAllAccess = true
-			break
-		}
-	}
-
-	if hasAllAccess {
-		return walletBalance
-	}
-
-	// Calculate based on specific price type restrictions
-	var allowedAmount decimal.Decimal
-	switch invoiceType {
-	case "A": // Pure USAGE
-		for _, config := range walletConfig {
-			if config == types.WalletConfigPriceTypeUsage {
-				allowedAmount = walletBalance
-				break
-			}
-		}
-	case "B": // Pure FIXED
-		for _, config := range walletConfig {
-			if config == types.WalletConfigPriceTypeFixed {
-				allowedAmount = walletBalance
-				break
-			}
-		}
-	case "C": // Mixed - calculate proportionally
-		fixedAmount := decimal.NewFromFloat(20.0)
-		usageAmount := decimal.NewFromFloat(30.0)
-
-		walletCanPayFixed := false
-		walletCanPayUsage := false
-
-		for _, config := range walletConfig {
-			if config == types.WalletConfigPriceTypeFixed {
-				walletCanPayFixed = true
-			}
-			if config == types.WalletConfigPriceTypeUsage {
-				walletCanPayUsage = true
-			}
-		}
-
-		if walletCanPayFixed && walletCanPayUsage {
-			allowedAmount = walletBalance
-		} else if walletCanPayFixed {
-			allowedAmount = decimal.Min(walletBalance, fixedAmount)
-		} else if walletCanPayUsage {
-			allowedAmount = decimal.Min(walletBalance, usageAmount)
-		}
-	}
-
-	return allowedAmount
 }

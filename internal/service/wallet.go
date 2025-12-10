@@ -866,12 +866,8 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 		}, nil
 	}
 
-	// Determine if we should include usage based on wallet's allowed price types
-	// If wallet has no allowed price types (nil or empty), treat as ALL (include usage)
-	// Otherwise, check if wallet allows USAGE or ALL price types
-	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
+	// Always include usage for prepaid wallets
+	shouldIncludeUsage := true
 
 	// Initialize current period usage
 	currentPeriodUsage := decimal.Zero
@@ -1891,10 +1887,8 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}, nil
 	}
 
-	// If wallet has no allowed price types (nil or empty), treat as ALL (include usage)
-	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
-		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
+	// Always include usage for prepaid wallets
+	shouldIncludeUsage := true
 
 	totalPendingCharges := decimal.Zero
 	if shouldIncludeUsage {

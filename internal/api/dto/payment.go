@@ -212,7 +212,7 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 		p.GatewayPaymentID = nil
 		if p.PaymentMethodID != "" {
 			return nil, ierr.NewError("payment method id is not allowed for offline payment method type").
-				WithHint("Do not provide payment method ID for offline or credits payment methods").
+				WithHint("Do not provide payment method ID for offline payment methods").
 				WithReportableDetails(map[string]interface{}{
 					"payment_method_type": r.PaymentMethodType,
 					"payment_method_id":   r.PaymentMethodID,
@@ -233,7 +233,7 @@ func (r *CreatePaymentRequest) ToPayment(ctx context.Context) (*payment.Payment,
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	} else if r.PaymentMethodType != types.PaymentMethodTypeCredits && r.PaymentMethodType != types.PaymentMethodTypePaymentLink && r.PaymentMethodType != types.PaymentMethodTypeCard {
+	} else if r.PaymentMethodType != types.PaymentMethodTypePaymentLink && r.PaymentMethodType != types.PaymentMethodTypeCard {
 		if p.PaymentMethodID == "" {
 			return nil, ierr.NewError("payment method id is required for online payment method type").
 				WithHint("Payment method ID is required for online payment methods").

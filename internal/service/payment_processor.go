@@ -9,7 +9,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/payment"
-	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
@@ -100,8 +99,6 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	case types.PaymentMethodTypeOffline:
 		// For offline payments, we just mark them as succeeded immediately
 		processErr = nil
-	case types.PaymentMethodTypeCredits:
-		processErr = p.handleCreditsPayment(ctx, paymentObj)
 	case types.PaymentMethodTypePaymentLink:
 		// For payment links, create the actual payment link
 		// If status is already PENDING, skip creation
@@ -125,7 +122,8 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		processErr = ierr.NewError(fmt.Sprintf("unsupported payment method type: %s", paymentObj.PaymentMethodType)).
 			WithHint("Unsupported payment method type").
 			WithReportableDetails(map[string]interface{}{
-				"payment_id": paymentObj.ID,
+				"payment_id":          paymentObj.ID,
+				"payment_method_type": paymentObj.PaymentMethodType,
 			}).
 			Mark(ierr.ErrInvalidOperation)
 	}
@@ -544,83 +542,6 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 
 	return nil
 }
-
-func (p *paymentProcessor) handleCreditsPayment(ctx context.Context, paymentObj *payment.Payment) error {
-	// In case of credits, we need to find the wallet by the set payment method id
-	selectedWallet, err := p.WalletRepo.GetWalletByID(ctx, paymentObj.PaymentMethodID)
-	if err != nil {
-		return err
-	}
-
-	// Validate wallet status
-	if selectedWallet.WalletStatus != types.WalletStatusActive {
-		return ierr.NewError("wallet is not active").
-			WithHint("Wallet is not active").
-			WithReportableDetails(map[string]interface{}{
-				"wallet_id": selectedWallet.ID,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Validate currency match
-	if !types.IsMatchingCurrency(selectedWallet.Currency, paymentObj.Currency) {
-		return ierr.NewError("wallet currency does not match payment currency").
-			WithHint("Wallet currency does not match payment currency").
-			WithReportableDetails(map[string]interface{}{
-				"wallet_id": selectedWallet.ID,
-				"currency":  paymentObj.Currency,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Validate sufficient balance
-	if selectedWallet.Balance.LessThan(paymentObj.Amount) {
-		return ierr.NewError("wallet balance is less than payment amount").
-			WithHint("Wallet balance is less than payment amount").
-			WithReportableDetails(map[string]interface{}{
-				"wallet_id": selectedWallet.ID,
-				"amount":    paymentObj.Amount,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	// Create wallet operation
-	operation := &wallet.WalletOperation{
-		WalletID:          selectedWallet.ID,
-		Type:              types.TransactionTypeDebit,
-		Amount:            paymentObj.Amount,
-		ReferenceType:     types.WalletTxReferenceTypePayment,
-		ReferenceID:       paymentObj.ID,
-		Description:       fmt.Sprintf("Payment for invoice %s", paymentObj.DestinationID),
-		TransactionReason: types.TransactionReasonInvoicePayment,
-		Metadata: types.Metadata{
-			"payment_id":     paymentObj.ID,
-			"invoice_id":     paymentObj.DestinationID,
-			"payment_method": string(paymentObj.PaymentMethodType),
-			"wallet_type":    string(selectedWallet.WalletType),
-		},
-	}
-
-	// Create wallet service
-	walletService := NewWalletService(p.ServiceParams)
-
-	// Transactional workflow begins here
-	err = p.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Debit wallet
-		if err := walletService.DebitWallet(ctx, operation); err != nil {
-			return err
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (p *paymentProcessor) handlePostProcessing(ctx context.Context, paymentObj *payment.Payment) error {
 	switch paymentObj.DestinationType {
 	case types.PaymentDestinationTypeInvoice:

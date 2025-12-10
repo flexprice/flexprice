@@ -1878,63 +1878,13 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 				}
 			}
 
-			// For renewal flows (InvoiceFlowRenewal), manual flows, or cancel flows, payment failure is not a blocker
-			// The invoice will remain in pending state and can be retried later
-			s.Logger.Infow("payment failed but continuing with invoice processing for flow type",
-				"invoice_id", inv.ID,
-				"subscription_id", sub.ID,
-				"flow_type", flowType,
-				"error", err.Error())
-		}
-	} else if inv.AmountDue.GreaterThan(decimal.Zero) {
-		// For non-subscription invoices, validate and use credits payment logic
-		// Validate invoice status
-		if inv.InvoiceStatus != types.InvoiceStatusFinalized {
-			return ierr.NewError("invoice must be finalized").
-				WithHint("Invoice must be finalized before attempting payment").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate payment status
-		if inv.PaymentStatus == types.PaymentStatusSucceeded {
-			return ierr.NewError("invoice is already paid by payment status").
-				WithHint("Invoice is already paid").
-				WithReportableDetails(map[string]any{
-					"invoice_id":     inv.ID,
-					"payment_status": inv.PaymentStatus,
-				}).
-				Mark(ierr.ErrInvalidOperation)
-		}
-
-		// Check if there's any amount remaining to pay
-		if inv.AmountRemaining.LessThanOrEqual(decimal.Zero) {
-			return ierr.NewError("invoice has no remaining amount to pay").
-				WithHint("Invoice has no remaining amount to pay").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Use credits payment logic
-		paymentProcessor := NewSubscriptionPaymentProcessor(&s.ServiceParams)
-
-		// Create invoice response for payment processing
-		invoiceResponse := &dto.InvoiceResponse{
-			ID:              inv.ID,
-			AmountDue:       inv.AmountDue,
-			AmountRemaining: inv.AmountRemaining,
-			CustomerID:      inv.CustomerID,
-			Currency:        inv.Currency,
-			PaymentStatus:   inv.PaymentStatus,
-		}
-
-		amountPaid := paymentProcessor.ProcessCreditsPaymentForInvoice(ctx, invoiceResponse, nil)
-		if amountPaid.GreaterThan(decimal.Zero) {
-			s.Logger.Infow("credits payment successful for non-subscription invoice",
-				"invoice_id", inv.ID,
-				"amount_paid", amountPaid)
-		} else {
-			s.Logger.Infow("no credits payment made for non-subscription invoice",
-				"invoice_id", inv.ID,
-				"amount_due", inv.AmountDue)
+		// For renewal flows (InvoiceFlowRenewal), manual flows, or cancel flows, payment failure is not a blocker
+		// The invoice will remain in pending state and can be retried later
+		s.Logger.Infow("payment failed but continuing with invoice processing for flow type",
+			"invoice_id", inv.ID,
+			"subscription_id", sub.ID,
+			"flow_type", flowType,
+			"error", err.Error())
 		}
 	}
 

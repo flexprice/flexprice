@@ -280,47 +280,15 @@ func (f *WalletTransactionFilter) IsUnlimited() bool {
 	return f.QueryFilter.IsUnlimited()
 }
 
-type WalletConfigPriceType string
-
-const (
-	WalletConfigPriceTypeAll   WalletConfigPriceType = "ALL"
-	WalletConfigPriceTypeUsage WalletConfigPriceType = WalletConfigPriceType(PRICE_TYPE_USAGE)
-	WalletConfigPriceTypeFixed WalletConfigPriceType = WalletConfigPriceType(PRICE_TYPE_FIXED)
-)
-
 // WalletConfig represents configuration constraints for a wallet
 type WalletConfig struct {
-	// AllowedPriceTypes is a list of price types that are allowed for the wallet
-	// nil means all price types are allowed
-	AllowedPriceTypes []WalletConfigPriceType `json:"allowed_price_types,omitempty"`
 }
 
 func GetDefaultWalletConfig() *WalletConfig {
-	return &WalletConfig{
-		AllowedPriceTypes: []WalletConfigPriceType{WalletConfigPriceTypeAll},
-	}
+	return &WalletConfig{}
 }
 
 func (c WalletConfig) Validate() error {
-	allowedPriceTypes := []string{
-		string(WalletConfigPriceTypeAll),
-		string(WalletConfigPriceTypeUsage),
-		string(WalletConfigPriceTypeFixed),
-	}
-
-	if c.AllowedPriceTypes != nil {
-		for _, priceType := range c.AllowedPriceTypes {
-			if !lo.Contains(allowedPriceTypes, string(priceType)) {
-				return ierr.NewError("invalid price type").
-					WithHint("Invalid price type").
-					WithReportableDetails(map[string]any{
-						"allowed": allowedPriceTypes,
-						"type":    priceType,
-					}).
-					Mark(ierr.ErrValidation)
-			}
-		}
-	}
 	return nil
 }
 

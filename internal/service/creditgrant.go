@@ -410,11 +410,6 @@ func (s *creditGrantService) ApplyCreditGrantToWallet(ctx context.Context, grant
 			Name:       "Subscription Wallet",
 			CustomerID: subscription.CustomerID,
 			Currency:   subscription.Currency,
-			Config: &types.WalletConfig{
-				AllowedPriceTypes: []types.WalletConfigPriceType{
-					types.WalletConfigPriceTypeUsage,
-				},
-			},
 		}
 
 		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)

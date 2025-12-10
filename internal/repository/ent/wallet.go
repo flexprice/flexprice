@@ -845,10 +845,8 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 			update.SetAutoTopupAmount(w.AutoTopupAmount)
 		}
 	}
-	// Check if Config has any non-nil fields
-	if w.Config.AllowedPriceTypes != nil {
-		update.SetConfig(w.Config)
-	}
+	// Set Config (WalletConfig is now always valid)
+	update.SetConfig(w.Config)
 	if w.AlertConfig != nil {
 		update.SetAlertConfig(w.AlertConfig)
 	}
