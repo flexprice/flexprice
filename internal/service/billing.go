@@ -1796,6 +1796,7 @@ func aggregateMeteredEntitlementsForBilling(entitlements []*entitlement.Entitlem
 	return &dto.AggregatedEntitlement{
 		IsEnabled:        len(entitlements) > 0,
 		UsageLimit:       finalLimit,
+		IsUnlimited:      hasUnlimitedEntitlement,
 		IsSoftLimit:      isSoftLimit,
 		UsageResetPeriod: usageResetPeriod,
 	}
@@ -1814,7 +1815,8 @@ func aggregateBooleanEntitlementsForBilling(entitlements []*entitlement.Entitlem
 	}
 
 	return &dto.AggregatedEntitlement{
-		IsEnabled: isEnabled,
+		IsEnabled:   isEnabled,
+		IsUnlimited: false,
 	}
 }
 
@@ -1836,6 +1838,7 @@ func aggregateStaticEntitlementsForBilling(entitlements []*entitlement.Entitleme
 	return &dto.AggregatedEntitlement{
 		IsEnabled:    isEnabled,
 		StaticValues: staticValues,
+		IsUnlimited:  false,
 	}
 }
 
@@ -1901,6 +1904,7 @@ func (s *billingService) AggregateEntitlements(entitlements []*dto.EntitlementRe
 			EntitlementID:  ent.ID,
 			IsEnabled:      ent.IsEnabled,
 			UsageLimit:     ent.UsageLimit,
+			IsUnlimited:    ent.UsageLimit == nil,
 			StaticValue:    ent.StaticValue,
 		}
 
