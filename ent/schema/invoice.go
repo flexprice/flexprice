@@ -124,6 +124,12 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Default(decimal.Zero),
+		field.Other("total_credits_applied", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Default(decimal.Zero).
+			Comment("Total credits applied to this invoice"),
 		field.Other("total", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
@@ -227,5 +233,7 @@ func (Invoice) Indexes() []ent.Index {
 		index.Fields("subscription_id", "period_start", "period_end").
 			StorageKey("idx_subscription_period_unique").
 			Annotations(entsql.IndexWhere("invoice_status != 'VOIDED' AND subscription_id IS NOT NULL")),
+		index.Fields("total_credits_applied").
+			Annotations(entsql.IndexWhere("total_credits_applied > 0")),
 	}
 }

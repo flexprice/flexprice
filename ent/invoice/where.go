@@ -171,6 +171,11 @@ func TotalDiscount(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTotalDiscount, v))
 }
 
+// TotalCreditsApplied applies equality check predicate on the "total_credits_applied" field. It's identical to TotalCreditsAppliedEQ.
+func TotalCreditsApplied(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotalCreditsApplied, v))
+}
+
 // Total applies equality check predicate on the "total" field. It's identical to TotalEQ.
 func Total(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTotal, v))
@@ -1449,6 +1454,46 @@ func TotalDiscountIsNil() predicate.Invoice {
 // TotalDiscountNotNil applies the NotNil predicate on the "total_discount" field.
 func TotalDiscountNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldTotalDiscount))
+}
+
+// TotalCreditsAppliedEQ applies the EQ predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedNEQ applies the NEQ predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedNEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedIn applies the In predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldTotalCreditsApplied, vs...))
+}
+
+// TotalCreditsAppliedNotIn applies the NotIn predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedNotIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldTotalCreditsApplied, vs...))
+}
+
+// TotalCreditsAppliedGT applies the GT predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedGT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedGTE applies the GTE predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedGTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedLT applies the LT predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedLT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedLTE applies the LTE predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedLTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldTotalCreditsApplied, v))
 }
 
 // TotalEQ applies the EQ predicate on the "total" field.

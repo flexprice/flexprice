@@ -61,6 +61,8 @@ type Invoice struct {
 	TotalTax *decimal.Decimal `json:"total_tax,omitempty"`
 	// TotalDiscount holds the value of the "total_discount" field.
 	TotalDiscount *decimal.Decimal `json:"total_discount,omitempty"`
+	// Total credits applied to this invoice
+	TotalCreditsApplied decimal.Decimal `json:"total_credits_applied,omitempty"`
 	// Total holds the value of the "total" field.
 	Total decimal.Decimal `json:"total,omitempty"`
 	// Description holds the value of the "description" field.
@@ -137,7 +139,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoice.FieldMetadata:
 			values[i] = new([]byte)
-		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotal:
+		case invoice.FieldAmountDue, invoice.FieldAmountPaid, invoice.FieldAmountRemaining, invoice.FieldSubtotal, invoice.FieldAdjustmentAmount, invoice.FieldRefundedAmount, invoice.FieldTotalCreditsApplied, invoice.FieldTotal:
 			values[i] = new(decimal.Decimal)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
@@ -294,6 +296,12 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				i.TotalDiscount = new(decimal.Decimal)
 				*i.TotalDiscount = *value.S.(*decimal.Decimal)
+			}
+		case invoice.FieldTotalCreditsApplied:
+			if value, ok := values[j].(*decimal.Decimal); !ok {
+				return fmt.Errorf("unexpected type %T for field total_credits_applied", values[j])
+			} else if value != nil {
+				i.TotalCreditsApplied = *value
 			}
 		case invoice.FieldTotal:
 			if value, ok := values[j].(*decimal.Decimal); !ok {
@@ -518,6 +526,9 @@ func (i *Invoice) String() string {
 		builder.WriteString("total_discount=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
+	builder.WriteString(", ")
+	builder.WriteString("total_credits_applied=")
+	builder.WriteString(fmt.Sprintf("%v", i.TotalCreditsApplied))
 	builder.WriteString(", ")
 	builder.WriteString("total=")
 	builder.WriteString(fmt.Sprintf("%v", i.Total))

@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // InvoiceLineItemUpdate is the builder for updating InvoiceLineItem entities.
@@ -118,6 +119,40 @@ func (iliu *InvoiceLineItemUpdate) SetMetadata(m map[string]string) *InvoiceLine
 // ClearMetadata clears the value of the "metadata" field.
 func (iliu *InvoiceLineItemUpdate) ClearMetadata() *InvoiceLineItemUpdate {
 	iliu.mutation.ClearMetadata()
+	return iliu
+}
+
+// SetCreditsApplied sets the "credits_applied" field.
+func (iliu *InvoiceLineItemUpdate) SetCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdate {
+	iliu.mutation.SetCreditsApplied(d)
+	return iliu
+}
+
+// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillableCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdate {
+	if d != nil {
+		iliu.SetCreditsApplied(*d)
+	}
+	return iliu
+}
+
+// SetWalletTransactionID sets the "wallet_transaction_id" field.
+func (iliu *InvoiceLineItemUpdate) SetWalletTransactionID(s string) *InvoiceLineItemUpdate {
+	iliu.mutation.SetWalletTransactionID(s)
+	return iliu
+}
+
+// SetNillableWalletTransactionID sets the "wallet_transaction_id" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillableWalletTransactionID(s *string) *InvoiceLineItemUpdate {
+	if s != nil {
+		iliu.SetWalletTransactionID(*s)
+	}
+	return iliu
+}
+
+// ClearWalletTransactionID clears the value of the "wallet_transaction_id" field.
+func (iliu *InvoiceLineItemUpdate) ClearWalletTransactionID() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearWalletTransactionID()
 	return iliu
 }
 
@@ -290,6 +325,15 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.MetadataCleared() {
 		_spec.ClearField(invoicelineitem.FieldMetadata, field.TypeJSON)
 	}
+	if value, ok := iliu.mutation.CreditsApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
+	}
+	if value, ok := iliu.mutation.WalletTransactionID(); ok {
+		_spec.SetField(invoicelineitem.FieldWalletTransactionID, field.TypeString, value)
+	}
+	if iliu.mutation.WalletTransactionIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldWalletTransactionID, field.TypeString)
+	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -444,6 +488,40 @@ func (iliuo *InvoiceLineItemUpdateOne) SetMetadata(m map[string]string) *Invoice
 // ClearMetadata clears the value of the "metadata" field.
 func (iliuo *InvoiceLineItemUpdateOne) ClearMetadata() *InvoiceLineItemUpdateOne {
 	iliuo.mutation.ClearMetadata()
+	return iliuo
+}
+
+// SetCreditsApplied sets the "credits_applied" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetCreditsApplied(d)
+	return iliuo
+}
+
+// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillableCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if d != nil {
+		iliuo.SetCreditsApplied(*d)
+	}
+	return iliuo
+}
+
+// SetWalletTransactionID sets the "wallet_transaction_id" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetWalletTransactionID(s string) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetWalletTransactionID(s)
+	return iliuo
+}
+
+// SetNillableWalletTransactionID sets the "wallet_transaction_id" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillableWalletTransactionID(s *string) *InvoiceLineItemUpdateOne {
+	if s != nil {
+		iliuo.SetWalletTransactionID(*s)
+	}
+	return iliuo
+}
+
+// ClearWalletTransactionID clears the value of the "wallet_transaction_id" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearWalletTransactionID() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearWalletTransactionID()
 	return iliuo
 }
 
@@ -645,6 +723,15 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.MetadataCleared() {
 		_spec.ClearField(invoicelineitem.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := iliuo.mutation.CreditsApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
+	}
+	if value, ok := iliuo.mutation.WalletTransactionID(); ok {
+		_spec.SetField(invoicelineitem.FieldWalletTransactionID, field.TypeString, value)
+	}
+	if iliuo.mutation.WalletTransactionIDCleared() {
+		_spec.ClearField(invoicelineitem.FieldWalletTransactionID, field.TypeString)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

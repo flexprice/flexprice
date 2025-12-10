@@ -261,6 +261,20 @@ func (iu *InvoiceUpdate) ClearTotalDiscount() *InvoiceUpdate {
 	return iu
 }
 
+// SetTotalCreditsApplied sets the "total_credits_applied" field.
+func (iu *InvoiceUpdate) SetTotalCreditsApplied(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetTotalCreditsApplied(d)
+	return iu
+}
+
+// SetNillableTotalCreditsApplied sets the "total_credits_applied" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTotalCreditsApplied(d *decimal.Decimal) *InvoiceUpdate {
+	if d != nil {
+		iu.SetTotalCreditsApplied(*d)
+	}
+	return iu
+}
+
 // SetTotal sets the "total" field.
 func (iu *InvoiceUpdate) SetTotal(d decimal.Decimal) *InvoiceUpdate {
 	iu.mutation.SetTotal(d)
@@ -712,6 +726,9 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if iu.mutation.TotalDiscountCleared() {
 		_spec.ClearField(invoice.FieldTotalDiscount, field.TypeOther)
 	}
+	if value, ok := iu.mutation.TotalCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
+	}
 	if value, ok := iu.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
 	}
@@ -1139,6 +1156,20 @@ func (iuo *InvoiceUpdateOne) SetNillableTotalDiscount(d *decimal.Decimal) *Invoi
 // ClearTotalDiscount clears the value of the "total_discount" field.
 func (iuo *InvoiceUpdateOne) ClearTotalDiscount() *InvoiceUpdateOne {
 	iuo.mutation.ClearTotalDiscount()
+	return iuo
+}
+
+// SetTotalCreditsApplied sets the "total_credits_applied" field.
+func (iuo *InvoiceUpdateOne) SetTotalCreditsApplied(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetTotalCreditsApplied(d)
+	return iuo
+}
+
+// SetNillableTotalCreditsApplied sets the "total_credits_applied" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTotalCreditsApplied(d *decimal.Decimal) *InvoiceUpdateOne {
+	if d != nil {
+		iuo.SetTotalCreditsApplied(*d)
+	}
 	return iuo
 }
 
@@ -1622,6 +1653,9 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.TotalDiscountCleared() {
 		_spec.ClearField(invoice.FieldTotalDiscount, field.TypeOther)
+	}
+	if value, ok := iuo.mutation.TotalCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
 	}
 	if value, ok := iuo.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)

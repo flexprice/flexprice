@@ -69,6 +69,10 @@ const (
 	FieldPeriodEnd = "period_end"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldCreditsApplied holds the string denoting the credits_applied field in the database.
+	FieldCreditsApplied = "credits_applied"
+	// FieldWalletTransactionID holds the string denoting the wallet_transaction_id field in the database.
+	FieldWalletTransactionID = "wallet_transaction_id"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -121,6 +125,8 @@ var Columns = []string{
 	FieldPeriodStart,
 	FieldPeriodEnd,
 	FieldMetadata,
+	FieldCreditsApplied,
+	FieldWalletTransactionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -156,6 +162,8 @@ var (
 	DefaultQuantity decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
+	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
+	DefaultCreditsApplied decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the InvoiceLineItem queries.
@@ -294,6 +302,16 @@ func ByPeriodStart(opts ...sql.OrderTermOption) OrderOption {
 // ByPeriodEnd orders the results by the period_end field.
 func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
+}
+
+// ByCreditsApplied orders the results by the credits_applied field.
+func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreditsApplied, opts...).ToFunc()
+}
+
+// ByWalletTransactionID orders the results by the wallet_transaction_id field.
+func ByWalletTransactionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWalletTransactionID, opts...).ToFunc()
 }
 
 // ByInvoiceField orders the results by invoice field.

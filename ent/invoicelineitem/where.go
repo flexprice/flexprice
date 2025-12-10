@@ -196,6 +196,16 @@ func PeriodEnd(v time.Time) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
+// CreditsApplied applies equality check predicate on the "credits_applied" field. It's identical to CreditsAppliedEQ.
+func CreditsApplied(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCreditsApplied, v))
+}
+
+// WalletTransactionID applies equality check predicate on the "wallet_transaction_id" field. It's identical to WalletTransactionIDEQ.
+func WalletTransactionID(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldWalletTransactionID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -1889,6 +1899,121 @@ func MetadataIsNil() predicate.InvoiceLineItem {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldMetadata))
+}
+
+// CreditsAppliedEQ applies the EQ predicate on the "credits_applied" field.
+func CreditsAppliedEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCreditsApplied, v))
+}
+
+// CreditsAppliedNEQ applies the NEQ predicate on the "credits_applied" field.
+func CreditsAppliedNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldCreditsApplied, v))
+}
+
+// CreditsAppliedIn applies the In predicate on the "credits_applied" field.
+func CreditsAppliedIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldCreditsApplied, vs...))
+}
+
+// CreditsAppliedNotIn applies the NotIn predicate on the "credits_applied" field.
+func CreditsAppliedNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldCreditsApplied, vs...))
+}
+
+// CreditsAppliedGT applies the GT predicate on the "credits_applied" field.
+func CreditsAppliedGT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldCreditsApplied, v))
+}
+
+// CreditsAppliedGTE applies the GTE predicate on the "credits_applied" field.
+func CreditsAppliedGTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldCreditsApplied, v))
+}
+
+// CreditsAppliedLT applies the LT predicate on the "credits_applied" field.
+func CreditsAppliedLT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldCreditsApplied, v))
+}
+
+// CreditsAppliedLTE applies the LTE predicate on the "credits_applied" field.
+func CreditsAppliedLTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldCreditsApplied, v))
+}
+
+// WalletTransactionIDEQ applies the EQ predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDNEQ applies the NEQ predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDNEQ(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDIn applies the In predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldWalletTransactionID, vs...))
+}
+
+// WalletTransactionIDNotIn applies the NotIn predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDNotIn(vs ...string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldWalletTransactionID, vs...))
+}
+
+// WalletTransactionIDGT applies the GT predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDGT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDGTE applies the GTE predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDGTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDLT applies the LT predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDLT(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDLTE applies the LTE predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDLTE(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDContains applies the Contains predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDContains(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContains(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDHasPrefix applies the HasPrefix predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDHasPrefix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasPrefix(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDHasSuffix applies the HasSuffix predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDHasSuffix(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldHasSuffix(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDIsNil applies the IsNil predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldWalletTransactionID))
+}
+
+// WalletTransactionIDNotNil applies the NotNil predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldWalletTransactionID))
+}
+
+// WalletTransactionIDEqualFold applies the EqualFold predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDEqualFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEqualFold(FieldWalletTransactionID, v))
+}
+
+// WalletTransactionIDContainsFold applies the ContainsFold predicate on the "wallet_transaction_id" field.
+func WalletTransactionIDContainsFold(v string) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldWalletTransactionID, v))
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

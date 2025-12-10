@@ -57,6 +57,8 @@ const (
 	FieldTotalTax = "total_tax"
 	// FieldTotalDiscount holds the string denoting the total_discount field in the database.
 	FieldTotalDiscount = "total_discount"
+	// FieldTotalCreditsApplied holds the string denoting the total_credits_applied field in the database.
+	FieldTotalCreditsApplied = "total_credits_applied"
 	// FieldTotal holds the string denoting the total field in the database.
 	FieldTotal = "total"
 	// FieldDescription holds the string denoting the description field in the database.
@@ -135,6 +137,7 @@ var Columns = []string{
 	FieldRefundedAmount,
 	FieldTotalTax,
 	FieldTotalDiscount,
+	FieldTotalCreditsApplied,
 	FieldTotal,
 	FieldDescription,
 	FieldDueDate,
@@ -202,6 +205,8 @@ var (
 	DefaultTotalTax decimal.Decimal
 	// DefaultTotalDiscount holds the default value on creation for the "total_discount" field.
 	DefaultTotalDiscount decimal.Decimal
+	// DefaultTotalCreditsApplied holds the default value on creation for the "total_credits_applied" field.
+	DefaultTotalCreditsApplied decimal.Decimal
 	// DefaultTotal holds the default value on creation for the "total" field.
 	DefaultTotal decimal.Decimal
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -319,6 +324,11 @@ func ByTotalTax(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalDiscount orders the results by the total_discount field.
 func ByTotalDiscount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalDiscount, opts...).ToFunc()
+}
+
+// ByTotalCreditsApplied orders the results by the total_credits_applied field.
+func ByTotalCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalCreditsApplied, opts...).ToFunc()
 }
 
 // ByTotal orders the results by the total field.
