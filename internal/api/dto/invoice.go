@@ -110,9 +110,6 @@ type CreateInvoiceRequest struct {
 	// These are applied at invoice level by the invoice service without further resolution
 	PreparedTaxRates []*TaxRateResponse `json:"prepared_tax_rates,omitempty"`
 
-	// environment_id is the unique identifier of the environment this invoice belongs to
-	EnvironmentID string `json:"environment_id,omitempty"`
-
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
 	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
 }
