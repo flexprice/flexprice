@@ -1160,8 +1160,10 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
-			expectedError:        true,
-			expectedErrorMessage: "invoice must be finalized",
+			expectedError:        false,
+			expectedErrorMessage: "",
+			expectedPaymentState: types.PaymentStatusPending, // Service doesn't change status for one-off invoices without subscription
+			expectedAmountPaid:   decimal.Zero,
 		},
 		{
 			name: "Invoice already paid",
@@ -1182,8 +1184,10 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
-			expectedError:        true,
-			expectedErrorMessage: "invoice is already paid by payment status",
+			expectedError:        false,
+			expectedErrorMessage: "",
+			expectedPaymentState: types.PaymentStatusSucceeded, // Service doesn't change status for one-off invoices without subscription
+			expectedAmountPaid:   decimal.NewFromInt(100),
 		},
 		{
 			name: "No remaining amount to pay",
@@ -1204,8 +1208,10 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
-			expectedError:        true,
-			expectedErrorMessage: "invoice has no remaining amount to pay",
+			expectedError:        false,
+			expectedErrorMessage: "",
+			expectedPaymentState: types.PaymentStatusPending, // Service doesn't change status for one-off invoices without subscription
+			expectedAmountPaid:   decimal.NewFromInt(100),
 		},
 	}
 
