@@ -34,6 +34,9 @@ type FeatureUsageRepository interface {
 
 	// GetFeatureUsageByEventIDs gets feature usage records by event IDs
 	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*FeatureUsage, error)
+
+	// GetUsageByWindow gets usage records by window
+	GetUsageByWindow(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string, window types.WindowSize) ([]*FeatureUsage, error)
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation

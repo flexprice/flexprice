@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -141,5 +142,34 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageByEventIDs(ctx context.Contex
 
 	var result []*events.FeatureUsage
 
+	return result, nil
+}
+
+func (s *InMemoryFeatureUsageStore) GetUsageByWindow(ctx context.Context, startTime, endTime time.Time, externalCustomerIDs []string, window types.WindowSize) ([]*events.FeatureUsage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	// Create a set of external customer IDs for efficient lookup
+	customerIDSet := make(map[string]bool)
+	for _, id := range externalCustomerIDs {
+		customerIDSet[id] = true
+	}
+
+	result := make([]*events.FeatureUsage, 0)
+	for _, usage := range s.usage {
+		// Check time range
+		if !usage.Timestamp.After(startTime) || !usage.Timestamp.Before(endTime) {
+			continue
+		}
+
+		// Filter by external customer IDs if provided
+		if len(externalCustomerIDs) > 0 {
+			if !customerIDSet[usage.ExternalCustomerID] {
+				continue
+			}
+		}
+
+		result = append(result, usage)
+	}
 	return result, nil
 }
