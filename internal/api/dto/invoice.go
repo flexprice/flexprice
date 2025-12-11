@@ -556,89 +556,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 
 // InvoiceLineItemResponse represents a line item in invoice response payloads
 type InvoiceLineItemResponse struct {
-	// id is the unique identifier for this line item
-	ID string `json:"id"`
-
-	// invoice_id is the unique identifier of the invoice this line item belongs to
-	InvoiceID string `json:"invoice_id"`
-
-	// customer_id is the unique identifier of the customer associated with this line item
-	CustomerID string `json:"customer_id"`
-
-	// subscription_id is the optional unique identifier of the subscription associated with this line item
-	SubscriptionID *string `json:"subscription_id,omitempty"`
-
-	// price_id is the optional unique identifier of the price associated with this line item
-	PriceID *string `json:"price_id"`
-
-	// plan_id is the optional unique identifier of the plan associated with this line item
-	PlanID *string `json:"plan_id,omitempty"`
-
-	// entity_id is the optional unique identifier of the entity associated with this line item
-	EntityID *string `json:"entity_id,omitempty"`
-
-	// entity_type is the optional type of the entity associated with this line item
-	EntityType *string `json:"entity_type,omitempty"`
-
-	// plan_display_name is the optional human-readable name of the plan
-	PlanDisplayName *string `json:"plan_display_name,omitempty"`
-
-	// price_type indicates the type of pricing (fixed, usage, tiered, etc.)
-	PriceType *string `json:"price_type,omitempty"`
-
-	// meter_id is the optional unique identifier of the meter used for usage tracking
-	MeterID *string `json:"meter_id,omitempty"`
-
-	// meter_display_name is the optional human-readable name of the meter
-	MeterDisplayName *string `json:"meter_display_name,omitempty"`
-
-	// price_unit_id is the optional unique identifier of the price unit associated with this line item
-	PriceUnitID *string `json:"price_unit_id,omitempty"`
-
-	// price_unit is the optional 3-digit ISO code of the price unit associated with this line item
-	PriceUnit *string `json:"price_unit,omitempty"`
-
-	// price_unit_amount is the optional amount converted to the price unit currency
-	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
-
-	// display_name is the optional human-readable name for this line item
-	DisplayName *string `json:"display_name,omitempty"`
-
-	// amount is the monetary amount for this line item
-	Amount decimal.Decimal `json:"amount"`
-
-	// quantity is the quantity of units for this line item
-	Quantity decimal.Decimal `json:"quantity"`
-
-	// currency is the three-letter ISO currency code for this line item
-	Currency string `json:"currency"`
-
-	// period_start is the optional start date of the period this line item covers
-	PeriodStart *time.Time `json:"period_start,omitempty"`
-
-	// period_end is the optional end date of the period this line item covers
-	PeriodEnd *time.Time `json:"period_end,omitempty"`
-
-	// metadata contains additional custom key-value pairs for storing extra information about this line item
-	Metadata types.Metadata `json:"metadata,omitempty"`
-
-	// tenant_id is the unique identifier of the tenant this line item belongs to
-	TenantID string `json:"tenant_id"`
-
-	// status represents the current status of this line item
-	Status string `json:"status"`
-
-	// created_at is the timestamp when this line item was created
-	CreatedAt time.Time `json:"created_at"`
-
-	// updated_at is the timestamp when this line item was last updated
-	UpdatedAt time.Time `json:"updated_at"`
-
-	// created_by is the identifier of the user who created this line item
-	CreatedBy string `json:"created_by,omitempty"`
-
-	// updated_by is the identifier of the user who last updated this line item
-	UpdatedBy string `json:"updated_by,omitempty"`
+	invoice.InvoiceLineItem
 
 	// usage_analytics contains usage analytics for this line item (legacy - grouped by source)
 	UsageAnalytics []SourceUsageItem `json:"usage_analytics,omitempty"`
@@ -653,33 +571,7 @@ func NewInvoiceLineItemResponse(item *invoice.InvoiceLineItem) *InvoiceLineItemR
 	}
 
 	return &InvoiceLineItemResponse{
-		ID:               item.ID,
-		InvoiceID:        item.InvoiceID,
-		CustomerID:       item.CustomerID,
-		SubscriptionID:   item.SubscriptionID,
-		EntityID:         item.EntityID,
-		EntityType:       item.EntityType,
-		PlanDisplayName:  item.PlanDisplayName,
-		PriceID:          item.PriceID,
-		PriceType:        item.PriceType,
-		MeterID:          item.MeterID,
-		MeterDisplayName: item.MeterDisplayName,
-		PriceUnitID:      item.PriceUnitID,
-		PriceUnit:        item.PriceUnit,
-		PriceUnitAmount:  item.PriceUnitAmount,
-		DisplayName:      item.DisplayName,
-		Amount:           item.Amount,
-		Quantity:         item.Quantity,
-		Currency:         item.Currency,
-		PeriodStart:      item.PeriodStart,
-		PeriodEnd:        item.PeriodEnd,
-		Metadata:         item.Metadata,
-		TenantID:         item.TenantID,
-		Status:           string(item.Status),
-		CreatedAt:        item.CreatedAt,
-		UpdatedAt:        item.UpdatedAt,
-		CreatedBy:        item.CreatedBy,
-		UpdatedBy:        item.UpdatedBy,
+		InvoiceLineItem: *item,
 	}
 }
 
@@ -779,6 +671,9 @@ type InvoiceResponse struct {
 
 	// total_discount is the total discount amount from coupon applications
 	TotalDiscount decimal.Decimal `json:"total_discount"`
+
+	// total_credits_applied is the total credits applied to this invoice
+	TotalCreditsApplied decimal.Decimal `json:"total_credits_applied"`
 
 	// subtotal is the amount before taxes and discounts are applied
 	Subtotal decimal.Decimal `json:"subtotal"`
@@ -916,41 +811,42 @@ func NewInvoiceResponse(inv *invoice.Invoice) *InvoiceResponse {
 	}
 
 	resp := &InvoiceResponse{
-		ID:              inv.ID,
-		CustomerID:      inv.CustomerID,
-		SubscriptionID:  inv.SubscriptionID,
-		InvoiceType:     inv.InvoiceType,
-		InvoiceStatus:   inv.InvoiceStatus,
-		PaymentStatus:   inv.PaymentStatus,
-		Currency:        inv.Currency,
-		AmountDue:       inv.AmountDue,
-		Total:           inv.Total,
-		TotalTax:        inv.TotalTax,
-		TotalDiscount:   inv.TotalDiscount,
-		Subtotal:        inv.Subtotal,
-		AmountPaid:      inv.AmountPaid,
-		AmountRemaining: inv.AmountRemaining,
-		InvoiceNumber:   inv.InvoiceNumber,
-		IdempotencyKey:  inv.IdempotencyKey,
-		BillingSequence: inv.BillingSequence,
-		Description:     inv.Description,
-		DueDate:         inv.DueDate,
-		BillingPeriod:   inv.BillingPeriod,
-		PeriodStart:     inv.PeriodStart,
-		PeriodEnd:       inv.PeriodEnd,
-		PaidAt:          inv.PaidAt,
-		VoidedAt:        inv.VoidedAt,
-		FinalizedAt:     inv.FinalizedAt,
-		InvoicePDFURL:   inv.InvoicePDFURL,
-		BillingReason:   inv.BillingReason,
-		Metadata:        inv.Metadata,
-		Version:         inv.Version,
-		TenantID:        inv.TenantID,
-		Status:          string(inv.Status),
-		CreatedAt:       inv.CreatedAt,
-		UpdatedAt:       inv.UpdatedAt,
-		CreatedBy:       inv.CreatedBy,
-		UpdatedBy:       inv.UpdatedBy,
+		ID:                  inv.ID,
+		CustomerID:          inv.CustomerID,
+		SubscriptionID:      inv.SubscriptionID,
+		InvoiceType:         inv.InvoiceType,
+		InvoiceStatus:       inv.InvoiceStatus,
+		PaymentStatus:       inv.PaymentStatus,
+		Currency:            inv.Currency,
+		AmountDue:           inv.AmountDue,
+		Total:               inv.Total,
+		TotalTax:            inv.TotalTax,
+		TotalDiscount:       inv.TotalDiscount,
+		TotalCreditsApplied: inv.TotalCreditsApplied,
+		Subtotal:            inv.Subtotal,
+		AmountPaid:          inv.AmountPaid,
+		AmountRemaining:     inv.AmountRemaining,
+		InvoiceNumber:       inv.InvoiceNumber,
+		IdempotencyKey:      inv.IdempotencyKey,
+		BillingSequence:     inv.BillingSequence,
+		Description:         inv.Description,
+		DueDate:             inv.DueDate,
+		BillingPeriod:       inv.BillingPeriod,
+		PeriodStart:         inv.PeriodStart,
+		PeriodEnd:           inv.PeriodEnd,
+		PaidAt:              inv.PaidAt,
+		VoidedAt:            inv.VoidedAt,
+		FinalizedAt:         inv.FinalizedAt,
+		InvoicePDFURL:       inv.InvoicePDFURL,
+		BillingReason:       inv.BillingReason,
+		Metadata:            inv.Metadata,
+		Version:             inv.Version,
+		TenantID:            inv.TenantID,
+		Status:              string(inv.Status),
+		CreatedAt:           inv.CreatedAt,
+		UpdatedAt:           inv.UpdatedAt,
+		CreatedBy:           inv.CreatedBy,
+		UpdatedBy:           inv.UpdatedBy,
 	}
 
 	// Add overpaid amount if payment status is OVERPAID

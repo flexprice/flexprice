@@ -78,6 +78,8 @@ type InvoiceLineItem struct {
 	CreditsApplied decimal.Decimal `json:"credits_applied,omitempty"`
 	// Reference to wallet transaction that applied credits to this line item
 	WalletTransactionID *string `json:"wallet_transaction_id,omitempty"`
+	// Amount in invoice currency reduced from line item due to discount application (both line-item and proportionally allocated invoice-level discounts)
+	DiscountApplied decimal.Decimal `json:"discount_applied,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -124,7 +126,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata:
 			values[i] = new([]byte)
-		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity, invoicelineitem.FieldCreditsApplied:
+		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity, invoicelineitem.FieldCreditsApplied, invoicelineitem.FieldDiscountApplied:
 			values[i] = new(decimal.Decimal)
 		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldWalletTransactionID:
 			values[i] = new(sql.NullString)
@@ -342,6 +344,12 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 				ili.WalletTransactionID = new(string)
 				*ili.WalletTransactionID = value.String
 			}
+		case invoicelineitem.FieldDiscountApplied:
+			if value, ok := values[i].(*decimal.Decimal); !ok {
+				return fmt.Errorf("unexpected type %T for field discount_applied", values[i])
+			} else if value != nil {
+				ili.DiscountApplied = *value
+			}
 		default:
 			ili.selectValues.Set(columns[i], values[i])
 		}
@@ -504,6 +512,9 @@ func (ili *InvoiceLineItem) String() string {
 		builder.WriteString("wallet_transaction_id=")
 		builder.WriteString(*v)
 	}
+	builder.WriteString(", ")
+	builder.WriteString("discount_applied=")
+	builder.WriteString(fmt.Sprintf("%v", ili.DiscountApplied))
 	builder.WriteByte(')')
 	return builder.String()
 }

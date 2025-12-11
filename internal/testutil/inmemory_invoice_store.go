@@ -36,29 +36,32 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			continue
 		}
 		lineItems = append(lineItems, &invoice.InvoiceLineItem{
-			ID:               item.ID,
-			InvoiceID:        item.InvoiceID,
-			CustomerID:       item.CustomerID,
-			SubscriptionID:   item.SubscriptionID,
-			EntityID:         item.EntityID,
-			EntityType:       item.EntityType,
-			PlanDisplayName:  item.PlanDisplayName,
-			PriceID:          item.PriceID,
-			PriceType:        item.PriceType,
-			MeterID:          item.MeterID,
-			MeterDisplayName: item.MeterDisplayName,
-			PriceUnitID:      item.PriceUnitID,
-			PriceUnit:        item.PriceUnit,
-			PriceUnitAmount:  item.PriceUnitAmount,
-			DisplayName:      item.DisplayName,
-			Amount:           item.Amount,
-			Quantity:         item.Quantity,
-			Currency:         item.Currency,
-			PeriodStart:      item.PeriodStart,
-			PeriodEnd:        item.PeriodEnd,
-			Metadata:         item.Metadata,
-			EnvironmentID:    item.EnvironmentID,
-			BaseModel:        item.BaseModel,
+			ID:                  item.ID,
+			InvoiceID:           item.InvoiceID,
+			CustomerID:          item.CustomerID,
+			SubscriptionID:      item.SubscriptionID,
+			EntityID:            item.EntityID,
+			EntityType:          item.EntityType,
+			PlanDisplayName:     item.PlanDisplayName,
+			PriceID:             item.PriceID,
+			PriceType:           item.PriceType,
+			MeterID:             item.MeterID,
+			MeterDisplayName:    item.MeterDisplayName,
+			PriceUnitID:         item.PriceUnitID,
+			PriceUnit:           item.PriceUnit,
+			PriceUnitAmount:     item.PriceUnitAmount,
+			DisplayName:         item.DisplayName,
+			Amount:              item.Amount,
+			Quantity:            item.Quantity,
+			Currency:            item.Currency,
+			PeriodStart:         item.PeriodStart,
+			PeriodEnd:           item.PeriodEnd,
+			CreditsApplied:      item.CreditsApplied,
+			DiscountApplied:     item.DiscountApplied,
+			WalletTransactionID: item.WalletTransactionID,
+			Metadata:            item.Metadata,
+			EnvironmentID:       item.EnvironmentID,
+			BaseModel:           item.BaseModel,
 		})
 	}
 
@@ -140,6 +143,52 @@ func (s *InMemoryInvoiceStore) RemoveLineItems(ctx context.Context, invoiceID st
 	inv.LineItems = lo.Filter(inv.LineItems, func(item *invoice.InvoiceLineItem, _ int) bool {
 		return !lo.Contains(itemIDs, item.ID)
 	})
+
+	return s.Update(ctx, inv)
+}
+
+func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice.InvoiceLineItem) error {
+	if item == nil {
+		return ierr.NewError("line item cannot be nil").
+			WithHint("Line item cannot be nil").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get the invoice that contains this line item
+	inv, err := s.Get(ctx, item.InvoiceID)
+	if err != nil {
+		return err
+	}
+
+	// Find and update the line item
+	found := false
+	for i, lineItem := range inv.LineItems {
+		if lineItem.ID == item.ID {
+			// Update the fields that UpdateLineItem is supposed to update
+			inv.LineItems[i].PeriodStart = item.PeriodStart
+			inv.LineItems[i].PeriodEnd = item.PeriodEnd
+			inv.LineItems[i].CreditsApplied = item.CreditsApplied
+			inv.LineItems[i].DiscountApplied = item.DiscountApplied
+			inv.LineItems[i].WalletTransactionID = item.WalletTransactionID
+			inv.LineItems[i].Metadata = item.Metadata
+			inv.LineItems[i].Status = item.Status
+			inv.LineItems[i].UpdatedAt = time.Now().UTC()
+			// Use UpdatedBy from item if provided, otherwise get from context
+			if item.UpdatedBy != "" {
+				inv.LineItems[i].UpdatedBy = item.UpdatedBy
+			} else {
+				inv.LineItems[i].UpdatedBy = types.GetUserID(ctx)
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ierr.NewError("line item not found").
+			WithHintf("Line item %s not found in invoice %s", item.ID, item.InvoiceID).
+			Mark(ierr.ErrNotFound)
+	}
 
 	return s.Update(ctx, inv)
 }

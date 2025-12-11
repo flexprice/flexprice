@@ -206,6 +206,11 @@ func WalletTransactionID(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldWalletTransactionID, v))
 }
 
+// DiscountApplied applies equality check predicate on the "discount_applied" field. It's identical to DiscountAppliedEQ.
+func DiscountApplied(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldDiscountApplied, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -2014,6 +2019,46 @@ func WalletTransactionIDEqualFold(v string) predicate.InvoiceLineItem {
 // WalletTransactionIDContainsFold applies the ContainsFold predicate on the "wallet_transaction_id" field.
 func WalletTransactionIDContainsFold(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldContainsFold(FieldWalletTransactionID, v))
+}
+
+// DiscountAppliedEQ applies the EQ predicate on the "discount_applied" field.
+func DiscountAppliedEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldDiscountApplied, v))
+}
+
+// DiscountAppliedNEQ applies the NEQ predicate on the "discount_applied" field.
+func DiscountAppliedNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldDiscountApplied, v))
+}
+
+// DiscountAppliedIn applies the In predicate on the "discount_applied" field.
+func DiscountAppliedIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldDiscountApplied, vs...))
+}
+
+// DiscountAppliedNotIn applies the NotIn predicate on the "discount_applied" field.
+func DiscountAppliedNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldDiscountApplied, vs...))
+}
+
+// DiscountAppliedGT applies the GT predicate on the "discount_applied" field.
+func DiscountAppliedGT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldDiscountApplied, v))
+}
+
+// DiscountAppliedGTE applies the GTE predicate on the "discount_applied" field.
+func DiscountAppliedGTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldDiscountApplied, v))
+}
+
+// DiscountAppliedLT applies the LT predicate on the "discount_applied" field.
+func DiscountAppliedLT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldDiscountApplied, v))
+}
+
+// DiscountAppliedLTE applies the LTE predicate on the "discount_applied" field.
+func DiscountAppliedLTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldDiscountApplied, v))
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

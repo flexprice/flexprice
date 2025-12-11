@@ -53,6 +53,7 @@ type InvoiceService interface {
 	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
+	DistributeInvoiceLevelDiscount(lineItems []*invoice.InvoiceLineItem, totalDiscountAmount decimal.Decimal) error
 }
 
 type invoiceService struct {
@@ -260,7 +261,12 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
-		// Apply taxes to invoice
+		// Apply credit adjustments
+		if err := s.applyCreditAdjustmentsToInvoice(ctx, inv); err != nil {
+			return err
+		}
+
+		// Apply taxes to invoice (now considers credits)
 		if err := s.applyTaxesToInvoice(ctx, inv, req); err != nil {
 			return err
 		}
@@ -1878,13 +1884,13 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 				}
 			}
 
-		// For renewal flows (InvoiceFlowRenewal), manual flows, or cancel flows, payment failure is not a blocker
-		// The invoice will remain in pending state and can be retried later
-		s.Logger.Infow("payment failed but continuing with invoice processing for flow type",
-			"invoice_id", inv.ID,
-			"subscription_id", sub.ID,
-			"flow_type", flowType,
-			"error", err.Error())
+			// For renewal flows (InvoiceFlowRenewal), manual flows, or cancel flows, payment failure is not a blocker
+			// The invoice will remain in pending state and can be retried later
+			s.Logger.Infow("payment failed but continuing with invoice processing for flow type",
+				"invoice_id", inv.ID,
+				"subscription_id", sub.ID,
+				"flow_type", flowType,
+				"error", err.Error())
 		}
 	}
 
@@ -2581,6 +2587,49 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 	return nil
 }
 
+// applyCreditAdjustmentsToInvoice applies wallet credits as adjustments to invoice line items
+func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, inv *invoice.Invoice) error {
+	s.Logger.Debugw("applying credit adjustments to invoice",
+		"invoice_id", inv.ID,
+		"customer_id", inv.CustomerID,
+		"currency", inv.Currency,
+	)
+
+	// Create credit adjustment service
+	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
+
+	// Apply credits to the invoice
+	creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(ctx, inv)
+	if err != nil {
+		return err
+	}
+
+	// Update invoice with credits applied
+	inv.TotalCreditsApplied = creditResult.TotalCreditsApplied
+
+	// Recalculate total after credits are applied
+	// Formula: total = subtotal - discount - credits + tax
+	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
+	// total = subtotal - discount - credits
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(creditResult.TotalCreditsApplied)
+	if newTotal.IsNegative() {
+		newTotal = decimal.Zero
+	}
+	inv.Total = newTotal
+	inv.AmountDue = inv.Total
+	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+
+	s.Logger.Debugw("successfully applied credit adjustments to invoice",
+		"invoice_id", inv.ID,
+		"total_credits_applied", creditResult.TotalCreditsApplied,
+		"new_total", inv.Total,
+		"subtotal", inv.Subtotal,
+		"total_discount", inv.TotalDiscount,
+	)
+
+	return nil
+}
+
 // applyTaxesToInvoice applies taxes to an invoice.
 // For one-off invoices, uses prepared tax rates from req.PreparedTaxRates.
 // For subscription invoices, prepares tax rates from subscription associations.
@@ -2616,8 +2665,8 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 
 	// Update the invoice with calculated tax amounts
 	inv.TotalTax = taxResult.TotalTaxAmount
-	// Discount-first-then-tax: total = subtotal - discount + tax
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Add(taxResult.TotalTaxAmount)
+	// Enhanced formula: total = subtotal - discount - credits + tax
+	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(taxResult.TotalTaxAmount)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
 	}
@@ -3276,7 +3325,7 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *dto
 }
 
 // isSafeUpdateForPaidInvoice checks if the update request contains only safe fields for paid invoices
-func isSafeUpdateForPaidInvoice(req dto.UpdateInvoiceRequest) bool {
+func isSafeUpdateForPaidInvoice(_ dto.UpdateInvoiceRequest) bool {
 	// Currently, UpdateInvoiceRequest only contains InvoicePDFURL and DueDate
 	// Both of these are considered safe for paid invoices
 	// In the future, if more fields are added, they should be categorized here
@@ -3292,4 +3341,53 @@ func (s *invoiceService) DeleteInvoice(ctx context.Context, id string) error {
 	return ierr.NewError("invoice deletion not implemented").
 		WithHint("Invoice deletion is not currently supported").
 		Mark(ierr.ErrNotFound)
+}
+
+// DistributeInvoiceLevelDiscount proportionally distributes an invoice-level discount across all line items
+// Formula: Proportional Discount Amount = (Line Item Amount / Total Invoice Amount) × Total Discount Amount
+func (s *invoiceService) DistributeInvoiceLevelDiscount(lineItems []*invoice.InvoiceLineItem, totalDiscountAmount decimal.Decimal) error {
+	if totalDiscountAmount.IsZero() {
+		// No discount to distribute, set all line items to zero
+		for _, lineItem := range lineItems {
+			lineItem.DiscountApplied = decimal.Zero
+		}
+		return nil
+	}
+
+	// Calculate total invoice amount (sum of all line items)
+	totalInvoiceAmount := decimal.Zero
+	for _, lineItem := range lineItems {
+		totalInvoiceAmount = totalInvoiceAmount.Add(lineItem.Amount)
+	}
+
+	if totalInvoiceAmount.IsZero() {
+		return ierr.NewError("cannot distribute discount on zero-amount invoice").
+			WithHint("Total invoice amount is zero, cannot calculate proportional discount").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Distribute discount proportionally
+	distributedTotal := decimal.Zero
+	for i, lineItem := range lineItems {
+		if i == len(lineItems)-1 {
+			// For the last line item, use the remaining amount to avoid rounding errors
+			lineItem.DiscountApplied = totalDiscountAmount.Sub(distributedTotal)
+		} else {
+			// Calculate proportional discount: (lineItem.Amount / totalInvoiceAmount) × totalDiscountAmount
+			proportion := lineItem.Amount.Div(totalInvoiceAmount)
+			lineItem.DiscountApplied = proportion.Mul(totalDiscountAmount).Round(8) // Round to 8 decimal places for precision
+			distributedTotal = distributedTotal.Add(lineItem.DiscountApplied)
+		}
+	}
+
+	// Validation: ensure all discount_applied values are non-negative
+	for _, lineItem := range lineItems {
+		if lineItem.DiscountApplied.IsNegative() {
+			return ierr.NewError("proportional discount calculation resulted in negative value").
+				WithHint("Line item discount cannot be negative").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
 }

@@ -389,6 +389,20 @@ func (ilic *InvoiceLineItemCreate) SetNillableWalletTransactionID(s *string) *In
 	return ilic
 }
 
+// SetDiscountApplied sets the "discount_applied" field.
+func (ilic *InvoiceLineItemCreate) SetDiscountApplied(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetDiscountApplied(d)
+	return ilic
+}
+
+// SetNillableDiscountApplied sets the "discount_applied" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableDiscountApplied(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetDiscountApplied(*d)
+	}
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -478,6 +492,10 @@ func (ilic *InvoiceLineItemCreate) defaults() {
 		v := invoicelineitem.DefaultCreditsApplied
 		ilic.mutation.SetCreditsApplied(v)
 	}
+	if _, ok := ilic.mutation.DiscountApplied(); !ok {
+		v := invoicelineitem.DefaultDiscountApplied
+		ilic.mutation.SetDiscountApplied(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -531,6 +549,9 @@ func (ilic *InvoiceLineItemCreate) check() error {
 	}
 	if _, ok := ilic.mutation.CreditsApplied(); !ok {
 		return &ValidationError{Name: "credits_applied", err: errors.New(`ent: missing required field "InvoiceLineItem.credits_applied"`)}
+	}
+	if _, ok := ilic.mutation.DiscountApplied(); !ok {
+		return &ValidationError{Name: "discount_applied", err: errors.New(`ent: missing required field "InvoiceLineItem.discount_applied"`)}
 	}
 	if len(ilic.mutation.InvoiceIDs()) == 0 {
 		return &ValidationError{Name: "invoice", err: errors.New(`ent: missing required edge "InvoiceLineItem.invoice"`)}
@@ -681,6 +702,10 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.WalletTransactionID(); ok {
 		_spec.SetField(invoicelineitem.FieldWalletTransactionID, field.TypeString, value)
 		_node.WalletTransactionID = &value
+	}
+	if value, ok := ilic.mutation.DiscountApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldDiscountApplied, field.TypeOther, value)
+		_node.DiscountApplied = value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

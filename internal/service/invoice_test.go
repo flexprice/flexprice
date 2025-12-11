@@ -1129,74 +1129,6 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 	}
 }
 
-func (s *InvoiceServiceSuite) setupWallets() {
-	// Clear all stores to prevent conflicts with previous tests
-	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
-	// Create wallet service
-	walletService := NewWalletService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		SubRepo:          s.GetStores().SubscriptionRepo,
-		PlanRepo:         s.GetStores().PlanRepo,
-		PriceRepo:        s.GetStores().PriceRepo,
-		EventRepo:        s.eventRepo,
-		MeterRepo:        s.GetStores().MeterRepo,
-		CustomerRepo:     s.GetStores().CustomerRepo,
-		InvoiceRepo:      s.invoiceRepo,
-		EntitlementRepo:  s.GetStores().EntitlementRepo,
-		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
-		FeatureRepo:      s.GetStores().FeatureRepo,
-		TenantRepo:       s.GetStores().TenantRepo,
-		UserRepo:         s.GetStores().UserRepo,
-		AuthRepo:         s.GetStores().AuthRepo,
-		WalletRepo:       s.GetStores().WalletRepo,
-		PaymentRepo:      s.GetStores().PaymentRepo,
-		AlertLogsRepo:    s.GetStores().AlertLogsRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
-	})
-
-	// Create test wallets for the test customer
-	// 1. Prepaid wallet with $50
-	promoWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
-		CustomerID:     s.testData.customer.ID,
-		Currency:       "usd",
-		WalletType:     types.WalletTypePrePaid,
-		ConversionRate: decimal.NewFromInt(1),
-		Config:         types.GetDefaultWalletConfig(),
-	})
-	s.NoError(err)
-
-	// Top up the promotional wallet
-	_, err = walletService.TopUpWallet(s.GetContext(), promoWallet.ID, &dto.TopUpWalletRequest{
-		CreditsToAdd:      decimal.NewFromInt(50),
-		IdempotencyKey:    lo.ToPtr("test_topup_1"),
-		TransactionReason: types.TransactionReasonFreeCredit,
-		Description:       "Test top-up for AttemptPayment",
-	})
-	s.NoError(err)
-
-	// 2. Prepaid wallet with $100
-	prepaidWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
-		CustomerID:     s.testData.customer.ID,
-		Currency:       "usd",
-		WalletType:     types.WalletTypePrePaid,
-		ConversionRate: decimal.NewFromInt(1),
-		Config:         types.GetDefaultWalletConfig(),
-	})
-	s.NoError(err)
-
-	// Top up the prepaid wallet
-	_, err = walletService.TopUpWallet(s.GetContext(), prepaidWallet.ID, &dto.TopUpWalletRequest{
-		CreditsToAdd:      decimal.NewFromInt(100),
-		IdempotencyKey:    lo.ToPtr("test_topup_2"),
-		TransactionReason: types.TransactionReasonFreeCredit,
-		Description:       "Test top-up for AttemptPayment",
-	})
-	s.NoError(err)
-}
-
 func (s *InvoiceServiceSuite) TestAttemptPayment() {
 	s.GetStores().InvoiceRepo.(*testutil.InMemoryInvoiceStore).Clear()
 
@@ -1204,64 +1136,11 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 	testCases := []struct {
 		name                 string
 		setupInvoice         func() *invoice.Invoice
-		setupWallets         func()
 		expectedError        bool
 		expectedErrorMessage string
 		expectedPaymentState types.PaymentStatus
 		expectedAmountPaid   decimal.Decimal
 	}{
-		{
-			name: "Successfully pay invoice with wallets",
-			setupInvoice: func() *invoice.Invoice {
-				inv := &invoice.Invoice{
-					ID:              "inv_test_full_payment",
-					CustomerID:      s.testData.customer.ID,
-					InvoiceType:     types.InvoiceTypeOneOff,
-					InvoiceStatus:   types.InvoiceStatusFinalized,
-					PaymentStatus:   types.PaymentStatusPending,
-					Currency:        "usd",
-					AmountDue:       decimal.NewFromInt(100),
-					AmountPaid:      decimal.Zero,
-					AmountRemaining: decimal.NewFromInt(100),
-					Description:     "Test Invoice - Full Payment",
-					BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
-				}
-				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
-				return inv
-			},
-			setupWallets: func() {
-				s.setupWallets() // Ensure wallets are set up with sufficient balance
-			},
-			expectedError:        false,
-			expectedPaymentState: types.PaymentStatusSucceeded,
-			expectedAmountPaid:   decimal.NewFromInt(100),
-		},
-		{
-			name: "Partially pay invoice with insufficient wallet balance",
-			setupInvoice: func() *invoice.Invoice {
-				inv := &invoice.Invoice{
-					ID:              "inv_test_partial_payment",
-					CustomerID:      s.testData.customer.ID,
-					InvoiceType:     types.InvoiceTypeOneOff,
-					InvoiceStatus:   types.InvoiceStatusFinalized,
-					PaymentStatus:   types.PaymentStatusPending,
-					Currency:        "usd",
-					AmountDue:       decimal.NewFromInt(200),
-					AmountPaid:      decimal.Zero,
-					AmountRemaining: decimal.NewFromInt(200),
-					Description:     "Test Invoice - Partial Payment",
-					BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
-				}
-				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
-				return inv
-			},
-			setupWallets: func() {
-				s.setupWallets() // Ensure wallets are set up with limited balance
-			},
-			expectedError:        false,
-			expectedPaymentState: types.PaymentStatusPending, // Still pending as it's partially paid
-			expectedAmountPaid:   decimal.NewFromInt(150),    // 50 (promo) + 100 (prepaid)
-		},
 		{
 			name: "Invoice not in finalized state",
 			setupInvoice: func() *invoice.Invoice {
@@ -1280,9 +1159,6 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				}
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
-			},
-			setupWallets: func() {
-				s.setupWallets()
 			},
 			expectedError:        true,
 			expectedErrorMessage: "invoice must be finalized",
@@ -1306,9 +1182,6 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
-			setupWallets: func() {
-				s.setupWallets()
-			},
 			expectedError:        true,
 			expectedErrorMessage: "invoice is already paid by payment status",
 		},
@@ -1331,44 +1204,8 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
 				return inv
 			},
-			setupWallets: func() {
-				s.setupWallets()
-			},
 			expectedError:        true,
 			expectedErrorMessage: "invoice has no remaining amount to pay",
-		},
-		{
-			name: "Customer with no wallets",
-			setupInvoice: func() *invoice.Invoice {
-				// Create a customer with no wallets
-				customer := &customer.Customer{
-					ID:         "cust_no_wallets",
-					ExternalID: "ext_cust_no_wallets",
-					Name:       "Customer With No Wallets",
-					Email:      "no-wallets@example.com",
-					BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
-				}
-				s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), customer))
-
-				inv := &invoice.Invoice{
-					ID:              "inv_test_no_wallets",
-					CustomerID:      customer.ID, // Customer with no wallets
-					InvoiceType:     types.InvoiceTypeOneOff,
-					InvoiceStatus:   types.InvoiceStatusFinalized,
-					PaymentStatus:   types.PaymentStatusPending,
-					Currency:        "usd",
-					AmountDue:       decimal.NewFromInt(100),
-					AmountPaid:      decimal.Zero,
-					AmountRemaining: decimal.NewFromInt(100),
-					Description:     "Test Invoice - No Wallets",
-					BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
-				}
-				s.NoError(s.invoiceRepo.Create(s.GetContext(), inv))
-				return inv
-			},
-			expectedError:        false,
-			expectedPaymentState: types.PaymentStatusPending, // Still pending as nothing was paid
-			expectedAmountPaid:   decimal.Zero,               // No payment processed
 		},
 	}
 
@@ -1376,11 +1213,6 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 		s.Run(tc.name, func() {
 			// Setup invoice for this test case
 			inv := tc.setupInvoice()
-
-			// Setup wallets if specified
-			if tc.setupWallets != nil {
-				tc.setupWallets()
-			}
 
 			// Attempt payment
 			err := s.service.AttemptPayment(s.GetContext(), inv.ID)
@@ -1394,16 +1226,6 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 						"Error message mismatch for test case: %s\nFull error: %v",
 						tc.name, err)
 				}
-
-				// Additional debugging: log wallets for the customer
-				wallets, walletErr := s.GetStores().WalletRepo.GetWalletsByCustomerID(s.GetContext(), inv.CustomerID)
-				s.NoError(walletErr, "Failed to retrieve wallets for customer")
-				s.T().Logf("Wallets for customer %s: %+v", inv.CustomerID, wallets)
-
-				// Log customer details
-				customer, custErr := s.GetStores().CustomerRepo.Get(s.GetContext(), inv.CustomerID)
-				s.NoError(custErr, "Failed to retrieve customer details")
-				s.T().Logf("Customer details: %+v", customer)
 
 				return
 			}
@@ -1762,4 +1584,180 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithoutInvoicingCusto
 			s.Equal(subscriptionWithoutInvoicing.ID, *got.SubscriptionID)
 		}
 	}
+}
+
+func (s *InvoiceServiceSuite) TestDistributeInvoiceLevelDiscount() {
+	tests := []struct {
+		name                 string
+		lineItems            []*invoice.InvoiceLineItem
+		totalDiscountAmount  decimal.Decimal
+		expectedDistribution []decimal.Decimal
+		expectError          bool
+	}{
+		{
+			name: "proportional distribution with two items",
+			lineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:     "item1",
+					Amount: decimal.NewFromInt(1000), // $1,000
+				},
+				{
+					ID:     "item2",
+					Amount: decimal.NewFromInt(5000), // $5,000
+				},
+			},
+			totalDiscountAmount: decimal.NewFromInt(600), // 10% of $6,000
+			expectedDistribution: []decimal.Decimal{
+				decimal.NewFromInt(100), // $100 for item1 (1000/6000 * 600)
+				decimal.NewFromInt(500), // $500 for item2 (5000/6000 * 600)
+			},
+			expectError: false,
+		},
+		{
+			name: "zero discount amount",
+			lineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:     "item1",
+					Amount: decimal.NewFromInt(1000),
+				},
+				{
+					ID:     "item2",
+					Amount: decimal.NewFromInt(2000),
+				},
+			},
+			totalDiscountAmount: decimal.Zero,
+			expectedDistribution: []decimal.Decimal{
+				decimal.Zero,
+				decimal.Zero,
+			},
+			expectError: false,
+		},
+		{
+			name: "single line item gets full discount",
+			lineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:     "item1",
+					Amount: decimal.NewFromInt(1000),
+				},
+			},
+			totalDiscountAmount: decimal.NewFromInt(100),
+			expectedDistribution: []decimal.Decimal{
+				decimal.NewFromInt(100),
+			},
+			expectError: false,
+		},
+		{
+			name: "zero total amount should error",
+			lineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:     "item1",
+					Amount: decimal.Zero,
+				},
+				{
+					ID:     "item2",
+					Amount: decimal.Zero,
+				},
+			},
+			totalDiscountAmount:  decimal.NewFromInt(100),
+			expectedDistribution: nil,
+			expectError:          true,
+		},
+		{
+			name: "three items with different amounts",
+			lineItems: []*invoice.InvoiceLineItem{
+				{
+					ID:     "item1",
+					Amount: decimal.NewFromInt(300), // $300
+				},
+				{
+					ID:     "item2",
+					Amount: decimal.NewFromInt(500), // $500
+				},
+				{
+					ID:     "item3",
+					Amount: decimal.NewFromInt(200), // $200
+				},
+			},
+			totalDiscountAmount: decimal.NewFromInt(100), // $100 discount on $1,000 total
+			expectedDistribution: []decimal.Decimal{
+				decimal.NewFromInt(30), // $30 for item1 (300/1000 * 100)
+				decimal.NewFromInt(50), // $50 for item2 (500/1000 * 100)
+				decimal.NewFromInt(20), // $20 for item3 (200/1000 * 100)
+			},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			// Create a copy of line items to avoid modifying the test data
+			lineItemsCopy := make([]*invoice.InvoiceLineItem, len(tt.lineItems))
+			for i, item := range tt.lineItems {
+				lineItemsCopy[i] = &invoice.InvoiceLineItem{
+					ID:     item.ID,
+					Amount: item.Amount,
+				}
+			}
+
+			err := s.service.DistributeInvoiceLevelDiscount(lineItemsCopy, tt.totalDiscountAmount)
+
+			if tt.expectError {
+				s.Error(err)
+				return
+			}
+
+			s.NoError(err)
+			s.Equal(len(tt.expectedDistribution), len(lineItemsCopy))
+
+			// Verify each line item has the expected discount
+			totalDistributed := decimal.Zero
+			for i, item := range lineItemsCopy {
+				s.True(tt.expectedDistribution[i].Equal(item.DiscountApplied),
+					"Expected discount for item %d: %s, got: %s",
+					i, tt.expectedDistribution[i], item.DiscountApplied)
+				totalDistributed = totalDistributed.Add(item.DiscountApplied)
+
+				// Verify discount is non-negative
+				s.True(item.DiscountApplied.GreaterThanOrEqual(decimal.Zero))
+			}
+
+			// Verify total distributed equals total discount (accounting for rounding)
+			s.True(tt.totalDiscountAmount.Equal(totalDistributed),
+				"Total distributed (%s) should equal total discount (%s)",
+				totalDistributed, tt.totalDiscountAmount)
+		})
+	}
+}
+
+func (s *InvoiceServiceSuite) TestDistributeInvoiceLevelDiscountRounding() {
+	// Test case with amounts that would cause rounding issues
+	lineItems := []*invoice.InvoiceLineItem{
+		{
+			ID:     "item1",
+			Amount: decimal.NewFromFloat(33.33), // 1/3 of 100
+		},
+		{
+			ID:     "item2",
+			Amount: decimal.NewFromFloat(33.33), // 1/3 of 100
+		},
+		{
+			ID:     "item3",
+			Amount: decimal.NewFromFloat(33.34), // 1/3 of 100 (with rounding)
+		},
+	}
+
+	totalDiscountAmount := decimal.NewFromInt(10) // $10 discount on $100 total
+
+	err := s.service.DistributeInvoiceLevelDiscount(lineItems, totalDiscountAmount)
+	s.NoError(err)
+
+	// Verify the total distributed equals the total discount despite rounding
+	totalDistributed := decimal.Zero
+	for _, item := range lineItems {
+		totalDistributed = totalDistributed.Add(item.DiscountApplied)
+	}
+
+	s.True(totalDiscountAmount.Equal(totalDistributed),
+		"Total distributed (%s) should equal total discount (%s) despite rounding",
+		totalDistributed, totalDiscountAmount)
 }

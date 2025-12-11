@@ -28403,6 +28403,7 @@ type InvoiceLineItemMutation struct {
 	metadata                   *map[string]string
 	credits_applied            *decimal.Decimal
 	wallet_transaction_id      *string
+	discount_applied           *decimal.Decimal
 	clearedFields              map[string]struct{}
 	invoice                    *string
 	clearedinvoice             bool
@@ -29809,6 +29810,42 @@ func (m *InvoiceLineItemMutation) ResetWalletTransactionID() {
 	delete(m.clearedFields, invoicelineitem.FieldWalletTransactionID)
 }
 
+// SetDiscountApplied sets the "discount_applied" field.
+func (m *InvoiceLineItemMutation) SetDiscountApplied(d decimal.Decimal) {
+	m.discount_applied = &d
+}
+
+// DiscountApplied returns the value of the "discount_applied" field in the mutation.
+func (m *InvoiceLineItemMutation) DiscountApplied() (r decimal.Decimal, exists bool) {
+	v := m.discount_applied
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDiscountApplied returns the old "discount_applied" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldDiscountApplied(ctx context.Context) (v decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDiscountApplied is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDiscountApplied requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDiscountApplied: %w", err)
+	}
+	return oldValue.DiscountApplied, nil
+}
+
+// ResetDiscountApplied resets all changes to the "discount_applied" field.
+func (m *InvoiceLineItemMutation) ResetDiscountApplied() {
+	m.discount_applied = nil
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -29924,7 +29961,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 29)
+	fields := make([]string, 0, 30)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -30012,6 +30049,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.wallet_transaction_id != nil {
 		fields = append(fields, invoicelineitem.FieldWalletTransactionID)
 	}
+	if m.discount_applied != nil {
+		fields = append(fields, invoicelineitem.FieldDiscountApplied)
+	}
 	return fields
 }
 
@@ -30078,6 +30118,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.CreditsApplied()
 	case invoicelineitem.FieldWalletTransactionID:
 		return m.WalletTransactionID()
+	case invoicelineitem.FieldDiscountApplied:
+		return m.DiscountApplied()
 	}
 	return nil, false
 }
@@ -30145,6 +30187,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldCreditsApplied(ctx)
 	case invoicelineitem.FieldWalletTransactionID:
 		return m.OldWalletTransactionID(ctx)
+	case invoicelineitem.FieldDiscountApplied:
+		return m.OldDiscountApplied(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -30356,6 +30400,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWalletTransactionID(v)
+		return nil
+	case invoicelineitem.FieldDiscountApplied:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDiscountApplied(v)
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
@@ -30609,6 +30660,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldWalletTransactionID:
 		m.ResetWalletTransactionID()
+		return nil
+	case invoicelineitem.FieldDiscountApplied:
+		m.ResetDiscountApplied()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)

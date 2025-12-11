@@ -11,28 +11,31 @@ import (
 
 // InvoiceLineItem represents a single line item in an invoice
 type InvoiceLineItem struct {
-	ID               string           `json:"id"`
-	InvoiceID        string           `json:"invoice_id"`
-	CustomerID       string           `json:"customer_id"`
-	SubscriptionID   *string          `json:"subscription_id,omitempty"`
-	EntityID         *string          `json:"entity_id,omitempty"`
-	EntityType       *string          `json:"entity_type,omitempty"`
-	PlanDisplayName  *string          `json:"plan_display_name,omitempty"`
-	PriceID          *string          `json:"price_id,omitempty"`
-	PriceType        *string          `json:"price_type,omitempty"`
-	MeterID          *string          `json:"meter_id,omitempty"`
-	MeterDisplayName *string          `json:"meter_display_name,omitempty"`
-	PriceUnitID      *string          `json:"price_unit_id,omitempty"`
-	PriceUnit        *string          `json:"price_unit,omitempty"`
-	PriceUnitAmount  *decimal.Decimal `json:"price_unit_amount,omitempty"`
-	DisplayName      *string          `json:"display_name,omitempty"`
-	Amount           decimal.Decimal  `json:"amount"`
-	Quantity         decimal.Decimal  `json:"quantity"`
-	Currency         string           `json:"currency"`
-	PeriodStart      *time.Time       `json:"period_start,omitempty"`
-	PeriodEnd        *time.Time       `json:"period_end,omitempty"`
-	Metadata         types.Metadata   `json:"metadata,omitempty"`
-	EnvironmentID    string           `json:"environment_id"`
+	ID                  string           `json:"id"`
+	InvoiceID           string           `json:"invoice_id"`
+	CustomerID          string           `json:"customer_id"`
+	SubscriptionID      *string          `json:"subscription_id,omitempty"`
+	EntityID            *string          `json:"entity_id,omitempty"`
+	EntityType          *string          `json:"entity_type,omitempty"`
+	PlanDisplayName     *string          `json:"plan_display_name,omitempty"`
+	PriceID             *string          `json:"price_id,omitempty"`
+	PriceType           *string          `json:"price_type,omitempty"`
+	MeterID             *string          `json:"meter_id,omitempty"`
+	MeterDisplayName    *string          `json:"meter_display_name,omitempty"`
+	PriceUnitID         *string          `json:"price_unit_id,omitempty"`
+	PriceUnit           *string          `json:"price_unit,omitempty"`
+	PriceUnitAmount     *decimal.Decimal `json:"price_unit_amount,omitempty"`
+	DisplayName         *string          `json:"display_name,omitempty"`
+	Amount              decimal.Decimal  `json:"amount"`
+	Quantity            decimal.Decimal  `json:"quantity"`
+	Currency            string           `json:"currency"`
+	PeriodStart         *time.Time       `json:"period_start,omitempty"`
+	PeriodEnd           *time.Time       `json:"period_end,omitempty"`
+	CreditsApplied      decimal.Decimal  `json:"credits_applied"`
+	WalletTransactionID *string          `json:"wallet_transaction_id,omitempty"`
+	DiscountApplied     decimal.Decimal  `json:"discount_applied"`
+	Metadata            types.Metadata   `json:"metadata,omitempty"`
+	EnvironmentID       string           `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -43,28 +46,31 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 	}
 
 	return &InvoiceLineItem{
-		ID:               e.ID,
-		InvoiceID:        e.InvoiceID,
-		CustomerID:       e.CustomerID,
-		SubscriptionID:   e.SubscriptionID,
-		EntityID:         e.EntityID,
-		EntityType:       e.EntityType,
-		PlanDisplayName:  e.PlanDisplayName,
-		PriceID:          e.PriceID,
-		PriceType:        e.PriceType,
-		MeterID:          e.MeterID,
-		MeterDisplayName: e.MeterDisplayName,
-		PriceUnitID:      e.PriceUnitID,
-		PriceUnit:        e.PriceUnit,
-		PriceUnitAmount:  e.PriceUnitAmount,
-		DisplayName:      e.DisplayName,
-		Amount:           e.Amount,
-		Quantity:         e.Quantity,
-		Currency:         e.Currency,
-		PeriodStart:      e.PeriodStart,
-		PeriodEnd:        e.PeriodEnd,
-		Metadata:         e.Metadata,
-		EnvironmentID:    e.EnvironmentID,
+		ID:                  e.ID,
+		InvoiceID:           e.InvoiceID,
+		CustomerID:          e.CustomerID,
+		SubscriptionID:      e.SubscriptionID,
+		EntityID:            e.EntityID,
+		EntityType:          e.EntityType,
+		PlanDisplayName:     e.PlanDisplayName,
+		PriceID:             e.PriceID,
+		PriceType:           e.PriceType,
+		MeterID:             e.MeterID,
+		MeterDisplayName:    e.MeterDisplayName,
+		PriceUnitID:         e.PriceUnitID,
+		PriceUnit:           e.PriceUnit,
+		PriceUnitAmount:     e.PriceUnitAmount,
+		DisplayName:         e.DisplayName,
+		Amount:              e.Amount,
+		Quantity:            e.Quantity,
+		Currency:            e.Currency,
+		PeriodStart:         e.PeriodStart,
+		PeriodEnd:           e.PeriodEnd,
+		CreditsApplied:      e.CreditsApplied,
+		WalletTransactionID: e.WalletTransactionID,
+		DiscountApplied:     e.DiscountApplied,
+		Metadata:            e.Metadata,
+		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -84,6 +90,10 @@ func (i *InvoiceLineItem) Validate() error {
 
 	if i.Quantity.IsNegative() {
 		return ierr.NewError("invoice line item validation failed").WithHint("quantity must be non negative").Mark(ierr.ErrValidation)
+	}
+
+	if i.DiscountApplied.IsNegative() {
+		return ierr.NewError("invoice line item validation failed").WithHint("discount_applied must be non negative").Mark(ierr.ErrValidation)
 	}
 
 	if i.PeriodStart != nil && i.PeriodEnd != nil {

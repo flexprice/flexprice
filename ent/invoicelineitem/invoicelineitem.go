@@ -73,6 +73,8 @@ const (
 	FieldCreditsApplied = "credits_applied"
 	// FieldWalletTransactionID holds the string denoting the wallet_transaction_id field in the database.
 	FieldWalletTransactionID = "wallet_transaction_id"
+	// FieldDiscountApplied holds the string denoting the discount_applied field in the database.
+	FieldDiscountApplied = "discount_applied"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -127,6 +129,7 @@ var Columns = []string{
 	FieldMetadata,
 	FieldCreditsApplied,
 	FieldWalletTransactionID,
+	FieldDiscountApplied,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -164,6 +167,8 @@ var (
 	CurrencyValidator func(string) error
 	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
 	DefaultCreditsApplied decimal.Decimal
+	// DefaultDiscountApplied holds the default value on creation for the "discount_applied" field.
+	DefaultDiscountApplied decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the InvoiceLineItem queries.
@@ -312,6 +317,11 @@ func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
 // ByWalletTransactionID orders the results by the wallet_transaction_id field.
 func ByWalletTransactionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWalletTransactionID, opts...).ToFunc()
+}
+
+// ByDiscountApplied orders the results by the discount_applied field.
+func ByDiscountApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDiscountApplied, opts...).ToFunc()
 }
 
 // ByInvoiceField orders the results by invoice field.

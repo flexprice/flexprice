@@ -156,6 +156,20 @@ func (iliu *InvoiceLineItemUpdate) ClearWalletTransactionID() *InvoiceLineItemUp
 	return iliu
 }
 
+// SetDiscountApplied sets the "discount_applied" field.
+func (iliu *InvoiceLineItemUpdate) SetDiscountApplied(d decimal.Decimal) *InvoiceLineItemUpdate {
+	iliu.mutation.SetDiscountApplied(d)
+	return iliu
+}
+
+// SetNillableDiscountApplied sets the "discount_applied" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillableDiscountApplied(d *decimal.Decimal) *InvoiceLineItemUpdate {
+	if d != nil {
+		iliu.SetDiscountApplied(*d)
+	}
+	return iliu
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (iliu *InvoiceLineItemUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
 	iliu.mutation.AddCouponApplicationIDs(ids...)
@@ -333,6 +347,9 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if iliu.mutation.WalletTransactionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldWalletTransactionID, field.TypeString)
+	}
+	if value, ok := iliu.mutation.DiscountApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldDiscountApplied, field.TypeOther, value)
 	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -522,6 +539,20 @@ func (iliuo *InvoiceLineItemUpdateOne) SetNillableWalletTransactionID(s *string)
 // ClearWalletTransactionID clears the value of the "wallet_transaction_id" field.
 func (iliuo *InvoiceLineItemUpdateOne) ClearWalletTransactionID() *InvoiceLineItemUpdateOne {
 	iliuo.mutation.ClearWalletTransactionID()
+	return iliuo
+}
+
+// SetDiscountApplied sets the "discount_applied" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetDiscountApplied(d decimal.Decimal) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetDiscountApplied(d)
+	return iliuo
+}
+
+// SetNillableDiscountApplied sets the "discount_applied" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillableDiscountApplied(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if d != nil {
+		iliuo.SetDiscountApplied(*d)
+	}
 	return iliuo
 }
 
@@ -732,6 +763,9 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.WalletTransactionIDCleared() {
 		_spec.ClearField(invoicelineitem.FieldWalletTransactionID, field.TypeString)
+	}
+	if value, ok := iliuo.mutation.DiscountApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldDiscountApplied, field.TypeOther, value)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

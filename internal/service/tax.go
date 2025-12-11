@@ -914,8 +914,8 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 		"invoice_id", inv.ID,
 		"tax_rates_count", len(taxRates))
 
-	// Discount-first policy: taxable amount is subtotal minus total discount (clamped at zero)
-	taxableAmount := inv.Subtotal.Sub(inv.TotalDiscount)
+	// Discount-first policy: taxable amount is subtotal minus total discount and credits (clamped at zero)
+	taxableAmount := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied)
 	if taxableAmount.IsNegative() {
 		taxableAmount = decimal.Zero
 	}

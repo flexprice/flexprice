@@ -161,6 +161,12 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Reference to wallet transaction that applied credits to this line item"),
+		field.Other("discount_applied", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Default(decimal.Zero).
+			Comment("Amount in invoice currency reduced from line item due to discount application (both line-item and proportionally allocated invoice-level discounts)"),
 	}
 }
 
