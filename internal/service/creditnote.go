@@ -762,7 +762,9 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 
 	// Update amounts and payment status based on credit note type
 	if cn.CreditNoteType == types.CreditNoteTypeRefund {
-		inv.RefundedAmount = inv.RefundedAmount.Add(cn.TotalAmount)
+		// Round credit note amount when it comes from external source
+		roundedCreditAmount := types.RoundToCurrencyPrecision(cn.TotalAmount, inv.Currency)
+		inv.RefundedAmount = inv.RefundedAmount.Add(roundedCreditAmount)
 
 		// Update payment status based on refund amount
 		if inv.RefundedAmount.Equal(inv.AmountPaid) {
@@ -772,8 +774,15 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 		}
 
 	} else if cn.CreditNoteType == types.CreditNoteTypeAdjustment {
-		inv.AdjustmentAmount = inv.AdjustmentAmount.Add(cn.TotalAmount)
+		// Round credit note amount when it comes from external source
+		roundedCreditAmount := types.RoundToCurrencyPrecision(cn.TotalAmount, inv.Currency)
+		inv.AdjustmentAmount = inv.AdjustmentAmount.Add(roundedCreditAmount)
+
+		// Calculate AmountDue from Total - AdjustmentAmount
 		inv.AmountDue = inv.Total.Sub(inv.AdjustmentAmount)
+		if inv.AmountDue.IsNegative() {
+			inv.AmountDue = decimal.Zero
+		}
 
 		// Recalculate remaining amount (ensure it doesn't go negative)
 		inv.AmountRemaining = decimal.Max(inv.AmountDue.Sub(inv.AmountPaid), decimal.Zero)
@@ -783,6 +792,9 @@ func (c *creditNoteService) RecalculateInvoiceAmountsForCreditNote(ctx context.C
 			inv.PaymentStatus = types.PaymentStatusSucceeded
 		}
 	}
+
+	// Round credit note affected amounts
+	inv.RoundCreditNoteAmounts()
 
 	if err := c.InvoiceRepo.Update(ctx, inv); err != nil {
 		return err

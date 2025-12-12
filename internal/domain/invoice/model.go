@@ -255,3 +255,63 @@ func (i *Invoice) Validate() error {
 
 	return nil
 }
+
+// RoundLineItemsAndSubtotal rounds line items and recalculates subtotal from rounded line items.
+// This should be called when line items are added or modified.
+func (inv *Invoice) RoundLineItemsAndSubtotal() {
+	// Round each line item individually
+	for _, lineItem := range inv.LineItems {
+		lineItem.Amount = types.RoundToCurrencyPrecision(lineItem.Amount, inv.Currency)
+	}
+
+	// Recalculate subtotal from rounded line items
+	// This ensures Subtotal = sum(rounded line items) exactly
+	subtotal := decimal.Zero
+	for _, lineItem := range inv.LineItems {
+		subtotal = subtotal.Add(lineItem.Amount)
+	}
+	inv.Subtotal = subtotal
+}
+
+// RoundInvoiceComponents rounds invoice calculation components (discounts, credits, taxes, total, adjustments).
+// This should be called when discounts/credits/taxes change but line items don't.
+// Note: We round but don't recalculate Total, as it may be affected by factors like credit note adjustments.
+func (inv *Invoice) RoundInvoiceComponents() {
+	inv.TotalDiscount = types.RoundToCurrencyPrecision(inv.TotalDiscount, inv.Currency)
+	inv.TotalCreditsApplied = types.RoundToCurrencyPrecision(inv.TotalCreditsApplied, inv.Currency)
+	inv.TotalTax = types.RoundToCurrencyPrecision(inv.TotalTax, inv.Currency)
+	inv.Total = types.RoundToCurrencyPrecision(inv.Total, inv.Currency)
+	inv.AdjustmentAmount = types.RoundToCurrencyPrecision(inv.AdjustmentAmount, inv.Currency)
+	inv.RefundedAmount = types.RoundToCurrencyPrecision(inv.RefundedAmount, inv.Currency)
+}
+
+// RoundPaymentAmounts rounds payment-related amounts (AmountPaid, AmountDue, AmountRemaining)
+// to ensure currency precision. This should be called after any payment amount updates.
+func (inv *Invoice) RoundPaymentAmounts() {
+	inv.AmountPaid = types.RoundToCurrencyPrecision(inv.AmountPaid, inv.Currency)
+	inv.AmountDue = types.RoundToCurrencyPrecision(inv.AmountDue, inv.Currency)
+	// Recalculate AmountRemaining from rounded amounts to ensure consistency
+	inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+	if inv.AmountRemaining.IsNegative() {
+		inv.AmountRemaining = decimal.Zero
+	}
+	// Round AmountRemaining to ensure currency precision
+	inv.AmountRemaining = types.RoundToCurrencyPrecision(inv.AmountRemaining, inv.Currency)
+}
+
+// RoundCreditNoteAmounts rounds amounts affected by credit note adjustments.
+// This should be called when credit notes are applied.
+func (inv *Invoice) RoundCreditNoteAmounts() {
+	// Round adjustment and refund amounts
+	inv.AdjustmentAmount = types.RoundToCurrencyPrecision(inv.AdjustmentAmount, inv.Currency)
+	inv.RefundedAmount = types.RoundToCurrencyPrecision(inv.RefundedAmount, inv.Currency)
+
+	// Round Total (preserve existing value, don't recalculate)
+	inv.Total = types.RoundToCurrencyPrecision(inv.Total, inv.Currency)
+
+	// Round AmountDue (may be Total - AdjustmentAmount, so round after calculation)
+	inv.AmountDue = types.RoundToCurrencyPrecision(inv.AmountDue, inv.Currency)
+
+	// Round payment amounts
+	inv.RoundPaymentAmounts()
+}

@@ -593,8 +593,9 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	}
 
 	// Update invoice payment status and amounts
-	invoice.AmountPaid = totalPaid
-	invoice.AmountRemaining = invoice.AmountDue.Sub(totalPaid)
+	// Round total paid amount when it comes from external source (sum of payments)
+	invoice.AmountPaid = types.RoundToCurrencyPrecision(totalPaid, invoice.Currency)
+	invoice.AmountRemaining = invoice.AmountDue.Sub(invoice.AmountPaid)
 	if invoice.AmountRemaining.IsZero() {
 		paidAt := time.Now().UTC()
 		invoice.PaidAt = &paidAt
@@ -605,6 +606,8 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 	if invoice.AmountRemaining.LessThan(decimal.Zero) {
 		invoice.AmountRemaining = decimal.Zero
 	}
+	// Round AmountRemaining to ensure currency precision
+	invoice.AmountRemaining = types.RoundToCurrencyPrecision(invoice.AmountRemaining, invoice.Currency)
 
 	if invoice.AmountRemaining.IsZero() {
 		invoice.PaymentStatus = types.PaymentStatusSucceeded
