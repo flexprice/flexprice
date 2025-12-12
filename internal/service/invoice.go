@@ -276,6 +276,11 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
+		// Round the invoice amounts to the currency precision
+		if err := s.roundInvoiceAmounts(ctx, inv); err != nil {
+			return err
+		}
+
 		resp = dto.NewInvoiceResponse(inv)
 		return nil
 	})
@@ -295,6 +300,24 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 
 	s.publishInternalWebhookEvent(ctx, eventName, resp.ID)
 	return resp, nil
+}
+
+// roundInvoiceAmounts performs full invoice rounding for creation/recalculation scenarios.
+// It composes the granular rounding methods to round all invoice amounts.
+func (s *invoiceService) roundInvoiceAmounts(_ context.Context, inv *invoice.Invoice) error {
+	// Round line items and recalculate subtotal
+	inv.RoundLineItemsAndSubtotal()
+
+	// Round invoice components (discounts, credits, taxes, total, adjustments)
+	inv.RoundInvoiceComponents()
+
+	// Round payment-related amounts
+	// Note: AmountDue may not equal Total if adjustment credit notes are applied
+	// (AmountDue = Total - AdjustmentAmount), so we round it but don't recalculate
+	inv.AmountDue = types.RoundToCurrencyPrecision(inv.AmountDue, inv.Currency)
+	inv.RoundPaymentAmounts()
+
+	return nil
 }
 
 func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error) {
@@ -1273,8 +1296,9 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 	switch status {
 	case types.PaymentStatusPending:
 		if amount != nil {
-			inv.AmountPaid = *amount
-			inv.AmountRemaining = inv.AmountDue.Sub(*amount)
+			// Round payment amount when it comes from external source
+			inv.AmountPaid = types.RoundToCurrencyPrecision(*amount, inv.Currency)
+			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
 		}
 	case types.PaymentStatusSucceeded:
 		inv.AmountPaid = inv.AmountDue
@@ -1285,6 +1309,9 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 		inv.AmountRemaining = inv.AmountDue
 		inv.PaidAt = nil
 	}
+
+	// Round payment amounts to ensure currency precision
+	inv.RoundPaymentAmounts()
 
 	// Validate the final state
 	if err := inv.Validate(); err != nil {
@@ -1364,12 +1391,16 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	switch status {
 	case types.PaymentStatusPending:
 		if amount != nil {
-			inv.AmountPaid = inv.AmountPaid.Add(*amount)
+			// Round payment amount when it comes from external source
+			roundedAmount := types.RoundToCurrencyPrecision(*amount, inv.Currency)
+			inv.AmountPaid = inv.AmountPaid.Add(roundedAmount)
 			inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
 		}
 	case types.PaymentStatusSucceeded:
 		if amount != nil {
-			inv.AmountPaid = inv.AmountPaid.Add(*amount)
+			// Round payment amount when it comes from external source
+			roundedAmount := types.RoundToCurrencyPrecision(*amount, inv.Currency)
+			inv.AmountPaid = inv.AmountPaid.Add(roundedAmount)
 		} else {
 			inv.AmountPaid = inv.AmountDue
 		}
@@ -1393,7 +1424,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	case types.PaymentStatusOverpaid:
 		// Handle additional payments to an already overpaid invoice
 		if amount != nil {
-			inv.AmountPaid = inv.AmountPaid.Add(*amount)
+			// Round payment amount when it comes from external source
+			roundedAmount := types.RoundToCurrencyPrecision(*amount, inv.Currency)
+			inv.AmountPaid = inv.AmountPaid.Add(roundedAmount)
 		}
 		// For overpaid invoices, amount_remaining is always 0
 		inv.AmountRemaining = decimal.Zero
@@ -1409,6 +1442,9 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 		// Don't change amount_paid for failed payments
 		inv.PaidAt = nil
 	}
+
+	// Round payment amounts to ensure currency precision
+	inv.RoundPaymentAmounts()
 
 	// Validate the final state
 	if err := inv.Validate(); err != nil {
@@ -2260,13 +2296,23 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 	// Calculate total adjustment credits
 	inv.AdjustmentAmount = totalAdjustmentAmount
 	inv.RefundedAmount = totalRefundAmount
-	inv.AmountDue = inv.Total.Sub(totalAdjustmentAmount)
+
+	// Calculate AmountDue from Total - AdjustmentAmount
+	inv.AmountDue = inv.Total.Sub(inv.AdjustmentAmount)
+	if inv.AmountDue.IsNegative() {
+		inv.AmountDue = decimal.Zero
+	}
+
+	// Recalculate remaining amount
 	remaining := inv.AmountDue.Sub(inv.AmountPaid)
 	if remaining.IsPositive() {
 		inv.AmountRemaining = remaining
 	} else {
 		inv.AmountRemaining = decimal.Zero
 	}
+
+	// Round only credit note affected amounts (more efficient than full rounding)
+	inv.RoundCreditNoteAmounts()
 
 	// Update the payment status if the invoice is fully paid
 	if inv.AmountRemaining.Equal(decimal.Zero) {
@@ -2419,8 +2465,12 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
 		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
 		inv.CustomerID = newInvoiceReq.CustomerID
+		// AmountDue will be rounded in roundInvoiceAmounts at the end
 		inv.AmountDue = newInvoiceReq.AmountDue
-		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
+		inv.AmountRemaining = inv.AmountDue.Sub(inv.AmountPaid)
+		if inv.AmountRemaining.IsNegative() {
+			inv.AmountRemaining = decimal.Zero
+		}
 		inv.Description = newInvoiceReq.Description
 		if newInvoiceReq.Metadata != nil {
 			inv.Metadata = newInvoiceReq.Metadata
@@ -2438,6 +2488,8 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		// STEP 4: Create new line items from the fresh calculation
 		newLineItems := make([]*invoice.InvoiceLineItem, len(newInvoiceReq.LineItems))
 		for i, lineItemReq := range newInvoiceReq.LineItems {
+			// Round line item amount to ensure currency precision
+			roundedAmount := types.RoundToCurrencyPrecision(lineItemReq.Amount, inv.Currency)
 
 			lineItem := &invoice.InvoiceLineItem{
 				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
@@ -2449,7 +2501,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 				PriceID:         lineItemReq.PriceID,
 				PriceType:       lineItemReq.PriceType,
 				DisplayName:     lineItemReq.DisplayName,
-				Amount:          lineItemReq.Amount,
+				Amount:          roundedAmount,
 				Quantity:        lineItemReq.Quantity,
 				Currency:        inv.Currency,
 				PeriodStart:     lineItemReq.PeriodStart,
@@ -2475,6 +2527,11 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 
 		// STEP 7: Apply taxes after recalculation
 		if err := s.RecalculateTaxesOnInvoice(txCtx, inv); err != nil {
+			return err
+		}
+
+		// STEP 8: Round all invoice amounts to ensure currency precision and consistency
+		if err := s.roundInvoiceAmounts(txCtx, inv); err != nil {
 			return err
 		}
 
@@ -2559,14 +2616,14 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 		return err
 	}
 
-	// Update the invoice with calculated discount amounts
+	// Update the invoice with calculated discount amounts (will be rounded in roundInvoiceAmounts)
 	inv.TotalDiscount = couponResult.TotalDiscountAmount
 
 	// Calculate new total based on subtotal - discount (discount-first approach)
 	// This ensures consistency with tax calculation which uses subtotal - discount
 	// ApplyDiscount already ensures individual discounts don't make prices negative,
 	// and the service applies discounts sequentially, so total discount is already validated
-	newTotal := inv.Subtotal.Sub(couponResult.TotalDiscountAmount)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 		inv.TotalDiscount = inv.Subtotal
@@ -2574,9 +2631,9 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 
 	inv.Total = newTotal
 
-	// Update AmountDue and AmountRemaining to reflect new total
-	inv.AmountDue = newTotal
-	inv.AmountRemaining = newTotal.Sub(inv.AmountPaid)
+	// Update AmountDue and AmountRemaining to reflect new total (will be rounded in roundInvoiceAmounts)
+	inv.AmountDue = inv.Total
+	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
 	s.Logger.Infow("successfully updated invoice with coupon discounts",
 		"invoice_id", inv.ID,
@@ -2604,14 +2661,15 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 		return err
 	}
 
-	// Update invoice with credits applied
+	// Update invoice with credits applied (will be rounded in roundInvoiceAmounts)
 	inv.TotalCreditsApplied = creditResult.TotalCreditsApplied
 
 	// Recalculate total after credits are applied
 	// Formula: total = subtotal - discount - credits + tax
 	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
 	// total = subtotal - discount - credits
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(creditResult.TotalCreditsApplied)
+	// Note: Rounding is handled by roundInvoiceAmounts at the end, not here to avoid precision loss
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 	}
@@ -2663,10 +2721,12 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 		return err
 	}
 
-	// Update the invoice with calculated tax amounts
+	// Update the invoice with calculated tax amounts (will be rounded in roundInvoiceAmounts)
 	inv.TotalTax = taxResult.TotalTaxAmount
+
 	// Enhanced formula: total = subtotal - discount - credits + tax
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(taxResult.TotalTaxAmount)
+	// Note: Rounding is handled by roundInvoiceAmounts at the end, not here to avoid precision loss
+	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(inv.TotalTax)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
 	}
