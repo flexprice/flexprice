@@ -61,6 +61,8 @@ type Invoice struct {
 	TotalTax *decimal.Decimal `json:"total_tax,omitempty"`
 	// TotalDiscount holds the value of the "total_discount" field.
 	TotalDiscount *decimal.Decimal `json:"total_discount,omitempty"`
+	// Total credits applied to this invoice
+	TotalCreditsApplied *decimal.Decimal `json:"total_credits_applied,omitempty"`
 	// Total holds the value of the "total" field.
 	Total decimal.Decimal `json:"total,omitempty"`
 	// Description holds the value of the "description" field.
@@ -133,7 +135,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoice.FieldTotalTax, invoice.FieldTotalDiscount:
+		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoice.FieldMetadata:
 			values[i] = new([]byte)
@@ -294,6 +296,13 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				i.TotalDiscount = new(decimal.Decimal)
 				*i.TotalDiscount = *value.S.(*decimal.Decimal)
+			}
+		case invoice.FieldTotalCreditsApplied:
+			if value, ok := values[j].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field total_credits_applied", values[j])
+			} else if value.Valid {
+				i.TotalCreditsApplied = new(decimal.Decimal)
+				*i.TotalCreditsApplied = *value.S.(*decimal.Decimal)
 			}
 		case invoice.FieldTotal:
 			if value, ok := values[j].(*decimal.Decimal); !ok {
@@ -516,6 +525,11 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	if v := i.TotalDiscount; v != nil {
 		builder.WriteString("total_discount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := i.TotalCreditsApplied; v != nil {
+		builder.WriteString("total_credits_applied=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

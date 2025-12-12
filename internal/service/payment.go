@@ -7,7 +7,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
-	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -62,23 +61,6 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	// validate the invoice payment eligibility
 	if err := s.validateInvoicePaymentEligibility(ctx, invoice, req); err != nil {
 		return nil, err
-	}
-
-	// select the wallet for the payment in case of credits payment where wallet id is not provided
-	if p.PaymentMethodType == types.PaymentMethodTypeCredits && p.PaymentMethodID == "" {
-		selectedWallet, err := s.selectWalletForPayment(ctx, invoice, req)
-		if err != nil {
-			return nil, err
-		}
-
-		p.PaymentMethodID = selectedWallet.ID
-
-		// Add wallet information to metadata
-		if p.Metadata == nil {
-			p.Metadata = types.Metadata{}
-		}
-		p.Metadata["wallet_type"] = string(selectedWallet.WalletType)
-		p.Metadata["wallet_id"] = selectedWallet.ID
 	}
 
 	// Handle payment link creation
@@ -160,58 +142,6 @@ func (s *paymentService) validateInvoicePaymentEligibility(_ context.Context, in
 	}
 
 	return nil
-}
-
-func (s *paymentService) selectWalletForPayment(ctx context.Context, invoice *invoice.Invoice, p *dto.CreatePaymentRequest) (*wallet.Wallet, error) {
-	// Use the wallet payment service to find a suitable wallet
-	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
-
-	// Use default options (promotional wallets first, then prepaid)
-	options := DefaultWalletPaymentOptions()
-	options.AdditionalMetadata = p.Metadata
-	options.MaxWalletsToUse = 1 // Only need one wallet for this payment
-
-	// Get wallets suitable for payment
-	wallets, err := walletPaymentService.GetWalletsForPayment(ctx, invoice.CustomerID, p.Currency, options)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to find customer wallets").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": invoice.CustomerID,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	if len(wallets) == 0 || len(wallets) > 1 {
-		return nil, ierr.NewError("no wallets found for customer").
-			WithHint("Customer must have at least one wallet to use credits").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": invoice.CustomerID,
-			}).
-			Mark(ierr.ErrNotFound)
-	}
-
-	// Find first wallet with sufficient balance
-	var selectedWallet *wallet.Wallet
-	for _, w := range wallets {
-		if w.Balance.GreaterThanOrEqual(p.Amount) {
-			selectedWallet = w
-			break
-		}
-	}
-
-	if selectedWallet == nil {
-		return nil, ierr.NewError("no wallet with sufficient balance found").
-			WithHint("Customer does not have an active wallet with sufficient balance").
-			WithReportableDetails(map[string]interface{}{
-				"customer_id": invoice.CustomerID,
-				"amount":      p.Amount,
-				"currency":    p.Currency,
-			}).
-			Mark(ierr.ErrInvalidOperation)
-	}
-
-	return selectedWallet, nil
 }
 
 // GetPayment gets a payment by ID

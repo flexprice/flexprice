@@ -20,6 +20,7 @@ type Repository interface {
 	// Edge-specific operations
 	AddLineItems(ctx context.Context, invoiceID string, items []*InvoiceLineItem) error
 	RemoveLineItems(ctx context.Context, invoiceID string, itemIDs []string) error
+	UpdateLineItem(ctx context.Context, item *InvoiceLineItem) error
 
 	// Bulk operations with edges
 	CreateWithLineItems(ctx context.Context, inv *Invoice) error

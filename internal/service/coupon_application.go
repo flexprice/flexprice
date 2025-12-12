@@ -318,6 +318,31 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 				"final_subtotal", discountResult.FinalPrice)
 		}
 
+		// Step 3: Set discount_applied for each line item
+		// Calculate invoice-level discount amount (total discount minus line item discounts)
+		invoiceLevelDiscount := totalDiscount
+		for _, lineItemDiscount := range lineItemDiscounts {
+			invoiceLevelDiscount = invoiceLevelDiscount.Sub(lineItemDiscount)
+		}
+
+		invoiceService := NewInvoiceService(s.ServiceParams)
+		// First, distribute invoice-level discounts proportionally if any exist
+		if invoiceLevelDiscount.GreaterThan(decimal.Zero) {
+			if err := invoiceService.DistributeInvoiceLevelDiscount(inv.LineItems, invoiceLevelDiscount); err != nil {
+				s.Logger.Warnw("failed to distribute invoice-level discount proportionally",
+					"error", err,
+					"invoice_level_discount", invoiceLevelDiscount)
+				return err
+			}
+		} 
+
+		// Then, add line item level discounts to the proportional amounts
+		for _, lineItem := range inv.LineItems {
+			if lineItemDiscount, exists := lineItemDiscounts[lineItem.ID]; exists {
+				lineItem.DiscountApplied = lineItem.DiscountApplied.Add(lineItemDiscount)
+			}
+		}
+
 		result = &CouponCalculationResult{
 			TotalDiscountAmount: totalDiscount,
 			AppliedCoupons:      appliedCoupons,

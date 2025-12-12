@@ -285,6 +285,20 @@ func (ic *InvoiceCreate) SetNillableTotalDiscount(d *decimal.Decimal) *InvoiceCr
 	return ic
 }
 
+// SetTotalCreditsApplied sets the "total_credits_applied" field.
+func (ic *InvoiceCreate) SetTotalCreditsApplied(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotalCreditsApplied(d)
+	return ic
+}
+
+// SetNillableTotalCreditsApplied sets the "total_credits_applied" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotalCreditsApplied(d *decimal.Decimal) *InvoiceCreate {
+	if d != nil {
+		ic.SetTotalCreditsApplied(*d)
+	}
+	return ic
+}
+
 // SetTotal sets the "total" field.
 func (ic *InvoiceCreate) SetTotal(d decimal.Decimal) *InvoiceCreate {
 	ic.mutation.SetTotal(d)
@@ -628,6 +642,10 @@ func (ic *InvoiceCreate) defaults() {
 		v := invoice.DefaultTotalDiscount
 		ic.mutation.SetTotalDiscount(v)
 	}
+	if _, ok := ic.mutation.TotalCreditsApplied(); !ok {
+		v := invoice.DefaultTotalCreditsApplied
+		ic.mutation.SetTotalCreditsApplied(v)
+	}
 	if _, ok := ic.mutation.Total(); !ok {
 		v := invoice.DefaultTotal
 		ic.mutation.SetTotal(v)
@@ -817,6 +835,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.TotalDiscount(); ok {
 		_spec.SetField(invoice.FieldTotalDiscount, field.TypeOther, value)
 		_node.TotalDiscount = &value
+	}
+	if value, ok := ic.mutation.TotalCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
+		_node.TotalCreditsApplied = &value
 	}
 	if value, ok := ic.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)

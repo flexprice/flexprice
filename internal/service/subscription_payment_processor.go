@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
-	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 
@@ -15,7 +14,6 @@ import (
 // SubscriptionPaymentProcessor handles payment processing for subscriptions
 type SubscriptionPaymentProcessor interface {
 	HandlePaymentBehavior(ctx context.Context, subscription *subscription.Subscription, invoice *dto.InvoiceResponse, behavior types.PaymentBehavior, flowType types.InvoiceFlowType) error
-	ProcessCreditsPaymentForInvoice(ctx context.Context, inv *dto.InvoiceResponse, sub *subscription.Subscription) decimal.Decimal
 }
 
 type subscriptionPaymentProcessor struct {
@@ -370,66 +368,14 @@ func (s *subscriptionPaymentProcessor) processPayment(
 		return result
 	}
 
-	// Step 1: Get the full invoice with line items to analyze price types
-	fullInvoice, err := s.InvoiceRepo.Get(ctx, inv.ID)
-	if err != nil {
-		s.Logger.Errorw("failed to get invoice with line items for payment analysis",
-			"error", err,
-			"invoice_id", inv.ID)
-		result.Success = false
-		return result
-	}
-
-	// Step 2: Calculate price type breakdown
-	walletPaymentService := &walletPaymentService{ServiceParams: *s.ServiceParams}
-	priceTypeAmounts := walletPaymentService.calculatePriceTypeAmounts(fullInvoice.LineItems)
-	s.Logger.Infow("calculated price type breakdown for payment split",
-		"subscription_id", sub.ID,
-		"invoice_id", inv.ID,
-		"price_type_amounts", priceTypeAmounts)
-
-	// Step 3: Check available credits and determine what they can pay for
-	// Use invoicing customer ID for wallet operations - if invoice is for invoicing customer,
-	// use invoicing customer's wallets; otherwise use subscription customer's wallets
-	invoicingCustomerID := sub.GetInvoicingCustomerID()
-	availableCredits := s.checkAvailableCredits(ctx, sub, inv)
-	walletPayableAmount := s.calculateWalletPayableAmount(ctx, invoicingCustomerID, priceTypeAmounts, availableCredits)
-
-	s.Logger.Infow("wallet payment analysis",
-		"subscription_id", sub.ID,
-		"available_credits", availableCredits,
-		"wallet_payable_amount", walletPayableAmount,
-		"invoice_amount", remainingAmount)
-
-	// Step 4: Determine payment split based on price type restrictions
-	var cardAmount, walletAmount decimal.Decimal
-
-	cardAmount = remainingAmount.Sub(walletPayableAmount)
-	walletAmount = walletPayableAmount
-
-	if walletAmount.IsZero() {
-		s.Logger.Infow("wallet cannot pay any amount due to price type restrictions, paying entirely with card",
-			"subscription_id", sub.ID,
-			"card_amount", cardAmount)
-	} else if cardAmount.IsZero() {
-		s.Logger.Infow("wallet can pay entire amount, paying entirely with wallet",
-			"subscription_id", sub.ID,
-			"wallet_amount", walletAmount)
-	} else {
-		s.Logger.Infow("splitting payment between card and wallet based on price types",
-			"subscription_id", sub.ID,
-			"card_amount", cardAmount,
-			"wallet_amount", walletAmount)
-	}
-
-	// Step 3: Process card payment first (if needed)
-	if cardAmount.GreaterThan(decimal.Zero) {
+	// Process card payment for the full remaining amount
+	if remainingAmount.GreaterThan(decimal.Zero) {
 		s.Logger.Infow("attempting card payment",
 			"subscription_id", sub.ID,
-			"card_amount", cardAmount,
+			"card_amount", remainingAmount,
 		)
 
-		cardAmountPaid := s.processPaymentMethodCharge(ctx, sub, inv, cardAmount)
+		cardAmountPaid := s.processPaymentMethodCharge(ctx, sub, inv, remainingAmount)
 		if cardAmountPaid.GreaterThan(decimal.Zero) {
 			result.AmountPaid = result.AmountPaid.Add(cardAmountPaid)
 			result.RemainingAmount = result.RemainingAmount.Sub(cardAmountPaid)
@@ -444,80 +390,13 @@ func (s *subscriptionPaymentProcessor) processPayment(
 				"remaining_amount", result.RemainingAmount,
 			)
 		} else {
-			// Card payment failed - check if we should allow partial wallet payment
-			allowPartialWallet := s.shouldAllowPartialWalletPayment(
-				behavior,
-				flowType,
-			)
-
-			// If invoice is synced to Stripe, don't allow partial payments
-			stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
-			if err == nil {
-				if stripeIntegration.InvoiceSyncSvc.IsInvoiceSyncedToStripe(ctx, inv.ID) {
-					s.Logger.Warnw("card payment failed, invoice is synced to Stripe - not allowing partial wallet payment",
-						"subscription_id", sub.ID,
-						"invoice_id", inv.ID,
-						"attempted_card_amount", cardAmount,
-						"wallet_amount_available", walletAmount,
-					)
-					allowPartialWallet = false
-				}
-			}
-
-			if !allowPartialWallet {
-				// Card payment failed - do not attempt wallet payment
-				// The invoice cannot be fully paid, so we stop here
-				s.Logger.Warnw("card payment failed, not attempting wallet payment",
-					"subscription_id", sub.ID,
-					"attempted_card_amount", cardAmount,
-					"wallet_amount_available", walletAmount,
-					"collection_method", sub.CollectionMethod,
-					"behavior", behavior,
-					"flow_type", flowType,
-				)
-
-				result.Success = false
-				return result
-			} else {
-				// Card payment failed but we allow partial wallet payment
-				s.Logger.Warnw("card payment failed, but allowing partial wallet payment",
-					"subscription_id", sub.ID,
-					"attempted_card_amount", cardAmount,
-					"wallet_amount_available", walletAmount,
-					"collection_method", sub.CollectionMethod,
-					"behavior", behavior,
-					"flow_type", flowType,
-				)
-			}
-		}
-	}
-
-	// Step 4: Process wallet payment (only if card payment succeeded or not needed)
-	if walletAmount.GreaterThan(decimal.Zero) {
-		s.Logger.Infow("attempting wallet payment",
-			"subscription_id", sub.ID,
-			"wallet_amount", walletAmount,
-		)
-
-		creditsUsed := s.processCreditsPayment(ctx, sub, inv)
-		if creditsUsed.GreaterThan(decimal.Zero) {
-			result.AmountPaid = result.AmountPaid.Add(creditsUsed)
-			result.RemainingAmount = result.RemainingAmount.Sub(creditsUsed)
-			result.PaymentMethods = append(result.PaymentMethods, PaymentMethodUsed{
-				Type:   "credits",
-				Amount: creditsUsed,
-			})
-
-			s.Logger.Infow("wallet payment successful",
+			// Card payment failed
+			s.Logger.Warnw("card payment failed",
 				"subscription_id", sub.ID,
-				"credits_used", creditsUsed,
-				"remaining_amount", result.RemainingAmount,
+				"attempted_card_amount", remainingAmount,
 			)
-		} else {
-			s.Logger.Warnw("wallet payment failed",
-				"subscription_id", sub.ID,
-				"attempted_wallet_amount", walletAmount,
-			)
+			result.Success = false
+			return result
 		}
 	}
 
@@ -533,169 +412,6 @@ func (s *subscriptionPaymentProcessor) processPayment(
 	)
 
 	return result
-}
-
-// processCreditsPayment processes payment using customer's credits/wallets
-func (s *subscriptionPaymentProcessor) processCreditsPayment(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	inv *dto.InvoiceResponse,
-) decimal.Decimal {
-	subscriptionID := ""
-	if sub != nil {
-		subscriptionID = sub.ID
-	}
-	s.Logger.Infow("processing credits payment",
-		"subscription_id", subscriptionID,
-		"invoice_id", inv.ID,
-		"amount_due", inv.AmountDue,
-	)
-
-	// Get the full invoice with line items from the repository
-	fullInvoice, err := s.InvoiceRepo.Get(ctx, inv.ID)
-	if err != nil {
-		s.Logger.Errorw("failed to get invoice with line items for wallet payment",
-			"error", err,
-			"invoice_id", inv.ID)
-		return decimal.Zero
-	}
-
-	// Use the full domain invoice with line items for wallet payment service
-	domainInvoice := fullInvoice
-
-	// Use wallet payment service to process payment
-	walletPaymentService := NewWalletPaymentService(*s.ServiceParams)
-	metadata := types.Metadata{
-		"payment_source": "subscription_auto_payment",
-	}
-	if sub != nil {
-		metadata["subscription_id"] = sub.ID
-	}
-
-	amountPaid, err := walletPaymentService.ProcessInvoicePaymentWithWallets(ctx, domainInvoice, WalletPaymentOptions{
-		Strategy:           PromotionalFirstStrategy,
-		MaxWalletsToUse:    5,
-		AdditionalMetadata: metadata,
-	})
-
-	if err != nil {
-		s.Logger.Errorw("credits payment failed",
-			"error", err,
-			"subscription_id", subscriptionID,
-			"invoice_id", inv.ID,
-		)
-		return decimal.Zero
-	}
-
-	s.Logger.Infow("credits payment completed",
-		"subscription_id", subscriptionID,
-		"invoice_id", inv.ID,
-		"amount_paid", amountPaid,
-	)
-
-	return amountPaid
-}
-
-// ProcessCreditsPaymentForInvoice is a public wrapper for processCreditsPayment to be used by other services
-func (s *subscriptionPaymentProcessor) ProcessCreditsPaymentForInvoice(
-	ctx context.Context,
-	inv *dto.InvoiceResponse,
-	sub *subscription.Subscription,
-) decimal.Decimal {
-	return s.processCreditsPayment(ctx, sub, inv)
-}
-
-// calculateWalletPayableAmount determines how much wallets can pay based on price type restrictions
-func (s *subscriptionPaymentProcessor) calculateWalletPayableAmount(
-	ctx context.Context,
-	customerID string,
-	priceTypeAmounts map[string]decimal.Decimal,
-	availableCredits decimal.Decimal,
-) decimal.Decimal {
-	if availableCredits.IsZero() {
-		return decimal.Zero
-	}
-
-	// Get customer's wallets to check their configurations
-	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
-	if err != nil {
-		s.Logger.Errorw("failed to get wallets for payment analysis",
-			"error", err,
-			"customer_id", customerID)
-		return decimal.Zero
-	}
-
-	// Filter active wallets with balance
-	activeWallets := make([]*wallet.Wallet, 0)
-	for _, w := range wallets {
-		if w.WalletStatus == types.WalletStatusActive && w.Balance.GreaterThan(decimal.Zero) {
-			activeWallets = append(activeWallets, w)
-		}
-	}
-	wallets = activeWallets
-
-	if len(wallets) == 0 {
-		return decimal.Zero
-	}
-
-	// Calculate total payable amount across all wallets
-	totalPayableAmount := decimal.Zero
-	remainingCredits := availableCredits
-
-	for _, wallet := range wallets {
-		if remainingCredits.IsZero() {
-			break
-		}
-
-		walletPayableAmount := s.calculateWalletAllowedAmount(wallet, priceTypeAmounts)
-		actualPayableAmount := decimal.Min(walletPayableAmount, wallet.Balance)
-		actualPayableAmount = decimal.Min(actualPayableAmount, remainingCredits)
-
-		totalPayableAmount = totalPayableAmount.Add(actualPayableAmount)
-		remainingCredits = remainingCredits.Sub(actualPayableAmount)
-
-		s.Logger.Debugw("wallet payment analysis",
-			"wallet_id", wallet.ID,
-			"wallet_config", wallet.Config,
-			"wallet_balance", wallet.Balance,
-			"wallet_payable_amount", walletPayableAmount,
-			"actual_payable_amount", actualPayableAmount)
-	}
-
-	return totalPayableAmount
-}
-
-// calculateWalletAllowedAmount calculates how much a single wallet can pay based on its price type restrictions
-func (s *subscriptionPaymentProcessor) calculateWalletAllowedAmount(
-	wallet *wallet.Wallet,
-	priceTypeAmounts map[string]decimal.Decimal,
-) decimal.Decimal {
-	// If wallet has no allowed price types, use default (ALL)
-	if len(wallet.Config.AllowedPriceTypes) == 0 {
-		// Can pay for everything
-		totalAmount := decimal.Zero
-		for _, amount := range priceTypeAmounts {
-			totalAmount = totalAmount.Add(amount)
-		}
-		return totalAmount
-	}
-
-	allowedAmount := decimal.Zero
-
-	for _, allowedType := range wallet.Config.AllowedPriceTypes {
-		allowedTypeStr := string(allowedType)
-		if allowedTypeStr == "ALL" {
-			// Can pay for everything
-			for _, amount := range priceTypeAmounts {
-				allowedAmount = allowedAmount.Add(amount)
-			}
-			break
-		} else if amount, exists := priceTypeAmounts[allowedTypeStr]; exists {
-			allowedAmount = allowedAmount.Add(amount)
-		}
-	}
-
-	return allowedAmount
 }
 
 // processPaymentMethodCharge processes payment using payment method (card, etc.)
@@ -880,78 +596,4 @@ func (s *subscriptionPaymentProcessor) hasStripeConnection(ctx context.Context) 
 	)
 
 	return true
-}
-
-// shouldAllowPartialWalletPayment determines if partial wallet payment should be allowed
-// when card payment fails based on behavior and flow type
-func (s *subscriptionPaymentProcessor) shouldAllowPartialWalletPayment(
-	behavior types.PaymentBehavior,
-	flowType types.InvoiceFlowType,
-) bool {
-	switch flowType {
-	case types.InvoiceFlowSubscriptionCreation:
-		// For subscription_creation flow, only allow if behavior is default_active
-		return behavior == types.PaymentBehaviorDefaultActive
-	case types.InvoiceFlowRenewal, types.InvoiceFlowManual, types.InvoiceFlowCancel:
-		// For renewal, manual, or cancel flows, always allow partial wallet payment
-		return true
-	default:
-		// Default: don't allow partial wallet payment
-		return false
-	}
-}
-
-// checkAvailableCredits checks how much credits are available without consuming them
-func (s *subscriptionPaymentProcessor) checkAvailableCredits(
-	ctx context.Context,
-	sub *subscription.Subscription,
-	inv *dto.InvoiceResponse,
-) decimal.Decimal {
-	s.Logger.Infow("checking available credits",
-		"subscription_id", sub.ID,
-		"invoice_id", inv.ID,
-	)
-
-	// Use invoicing customer ID for wallet operations - if invoice is for invoicing customer,
-	// use invoicing customer's wallets; otherwise use subscription customer's wallets
-	invoicingCustomerID := sub.GetInvoicingCustomerID()
-	currency := inv.Currency
-
-	// Get wallets suitable for payment
-	walletPaymentService := NewWalletPaymentService(*s.ServiceParams)
-	wallets, err := walletPaymentService.GetWalletsForPayment(ctx, invoicingCustomerID, currency, WalletPaymentOptions{
-		Strategy:        PromotionalFirstStrategy,
-		MaxWalletsToUse: 5,
-	})
-	if err != nil {
-		s.Logger.Errorw("failed to get wallets for payment",
-			"error", err,
-			"subscription_customer_id", sub.CustomerID,
-			"invoicing_customer_id", invoicingCustomerID,
-			"currency", currency,
-		)
-		return decimal.Zero
-	}
-
-	// Calculate total available credits
-	totalAvailable := decimal.Zero
-	for _, w := range wallets {
-		totalAvailable = totalAvailable.Add(w.Balance)
-		s.Logger.Debugw("wallet balance",
-			"wallet_id", w.ID,
-			"wallet_type", w.WalletType,
-			"balance", w.Balance,
-		)
-	}
-
-	s.Logger.Infow("total available credits calculated",
-		"subscription_id", sub.ID,
-		"subscription_customer_id", sub.CustomerID,
-		"invoicing_customer_id", invoicingCustomerID,
-		"currency", currency,
-		"total_available", totalAvailable,
-		"wallets_count", len(wallets),
-	)
-
-	return totalAvailable
 }

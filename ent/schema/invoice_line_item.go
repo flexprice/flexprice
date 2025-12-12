@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -147,6 +148,27 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.Other("credits_applied", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Nillable().
+			Default(decimal.Zero).
+			Comment("Amount in invoice currency reduced from line item due to credit application"),
+		field.String("wallet_transaction_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Reference to wallet transaction that applied credits to this line item"),
+		field.Other("discount_applied", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Default(decimal.Zero).
+			Comment("Amount in invoice currency reduced from line item due to discount application (both line-item and proportionally allocated invoice-level discounts)"),
 	}
 }
 
@@ -173,5 +195,7 @@ func (InvoiceLineItem) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "price_id", "status"),
 		index.Fields("tenant_id", "environment_id", "meter_id", "status"),
 		index.Fields("period_start", "period_end"),
+		index.Fields("credits_applied").Annotations(entsql.IndexWhere("credits_applied > 0")),
+		index.Fields("wallet_transaction_id").Annotations(entsql.IndexWhere("wallet_transaction_id IS NOT NULL")),
 	}
 }
