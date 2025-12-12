@@ -6,6 +6,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -66,7 +67,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		Currency:            e.Currency,
 		PeriodStart:         e.PeriodStart,
 		PeriodEnd:           e.PeriodEnd,
-		CreditsApplied:      e.CreditsApplied,
+		CreditsApplied:      lo.FromPtrOr(e.CreditsApplied, decimal.Zero),
 		WalletTransactionID: e.WalletTransactionID,
 		DiscountApplied:     e.DiscountApplied,
 		Metadata:            e.Metadata,

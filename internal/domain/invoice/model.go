@@ -156,7 +156,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		Subtotal:            e.Subtotal,
 		Total:               e.Total,
 		TotalDiscount:       lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
-		TotalCreditsApplied: e.TotalCreditsApplied,
+		TotalCreditsApplied: lo.FromPtrOr(e.TotalCreditsApplied, decimal.Zero),
 		TotalTax:            lo.FromPtrOr(e.TotalTax, decimal.Zero),
 		AmountRemaining:     e.AmountRemaining,
 		AdjustmentAmount:    e.AdjustmentAmount,
