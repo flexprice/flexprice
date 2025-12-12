@@ -547,9 +547,6 @@ func (ilic *InvoiceLineItemCreate) check() error {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "InvoiceLineItem.currency": %w`, err)}
 		}
 	}
-	if _, ok := ilic.mutation.CreditsApplied(); !ok {
-		return &ValidationError{Name: "credits_applied", err: errors.New(`ent: missing required field "InvoiceLineItem.credits_applied"`)}
-	}
 	if _, ok := ilic.mutation.DiscountApplied(); !ok {
 		return &ValidationError{Name: "discount_applied", err: errors.New(`ent: missing required field "InvoiceLineItem.discount_applied"`)}
 	}
@@ -697,7 +694,7 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	}
 	if value, ok := ilic.mutation.CreditsApplied(); ok {
 		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
-		_node.CreditsApplied = value
+		_node.CreditsApplied = &value
 	}
 	if value, ok := ilic.mutation.WalletTransactionID(); ok {
 		_spec.SetField(invoicelineitem.FieldWalletTransactionID, field.TypeString, value)

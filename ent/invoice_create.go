@@ -714,9 +714,6 @@ func (ic *InvoiceCreate) check() error {
 	if _, ok := ic.mutation.AmountRemaining(); !ok {
 		return &ValidationError{Name: "amount_remaining", err: errors.New(`ent: missing required field "Invoice.amount_remaining"`)}
 	}
-	if _, ok := ic.mutation.TotalCreditsApplied(); !ok {
-		return &ValidationError{Name: "total_credits_applied", err: errors.New(`ent: missing required field "Invoice.total_credits_applied"`)}
-	}
 	if _, ok := ic.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Invoice.version"`)}
 	}
@@ -841,7 +838,7 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := ic.mutation.TotalCreditsApplied(); ok {
 		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
-		_node.TotalCreditsApplied = value
+		_node.TotalCreditsApplied = &value
 	}
 	if value, ok := ic.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)

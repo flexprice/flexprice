@@ -75,7 +75,7 @@ type InvoiceLineItem struct {
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// Amount in invoice currency reduced from line item due to credit application
-	CreditsApplied decimal.Decimal `json:"credits_applied,omitempty"`
+	CreditsApplied *decimal.Decimal `json:"credits_applied,omitempty"`
 	// Reference to wallet transaction that applied credits to this line item
 	WalletTransactionID *string `json:"wallet_transaction_id,omitempty"`
 	// Amount in invoice currency reduced from line item due to discount application (both line-item and proportionally allocated invoice-level discounts)
@@ -122,11 +122,11 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoicelineitem.FieldPriceUnitAmount:
+		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata:
 			values[i] = new([]byte)
-		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity, invoicelineitem.FieldCreditsApplied, invoicelineitem.FieldDiscountApplied:
+		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity, invoicelineitem.FieldDiscountApplied:
 			values[i] = new(decimal.Decimal)
 		case invoicelineitem.FieldID, invoicelineitem.FieldTenantID, invoicelineitem.FieldStatus, invoicelineitem.FieldCreatedBy, invoicelineitem.FieldUpdatedBy, invoicelineitem.FieldEnvironmentID, invoicelineitem.FieldInvoiceID, invoicelineitem.FieldCustomerID, invoicelineitem.FieldSubscriptionID, invoicelineitem.FieldEntityID, invoicelineitem.FieldEntityType, invoicelineitem.FieldPlanDisplayName, invoicelineitem.FieldPriceID, invoicelineitem.FieldPriceType, invoicelineitem.FieldMeterID, invoicelineitem.FieldMeterDisplayName, invoicelineitem.FieldPriceUnitID, invoicelineitem.FieldPriceUnit, invoicelineitem.FieldDisplayName, invoicelineitem.FieldCurrency, invoicelineitem.FieldWalletTransactionID:
 			values[i] = new(sql.NullString)
@@ -332,10 +332,11 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 				}
 			}
 		case invoicelineitem.FieldCreditsApplied:
-			if value, ok := values[i].(*decimal.Decimal); !ok {
+			if value, ok := values[i].(*sql.NullScanner); !ok {
 				return fmt.Errorf("unexpected type %T for field credits_applied", values[i])
-			} else if value != nil {
-				ili.CreditsApplied = *value
+			} else if value.Valid {
+				ili.CreditsApplied = new(decimal.Decimal)
+				*ili.CreditsApplied = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldWalletTransactionID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -505,8 +506,10 @@ func (ili *InvoiceLineItem) String() string {
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", ili.Metadata))
 	builder.WriteString(", ")
-	builder.WriteString("credits_applied=")
-	builder.WriteString(fmt.Sprintf("%v", ili.CreditsApplied))
+	if v := ili.CreditsApplied; v != nil {
+		builder.WriteString("credits_applied=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	if v := ili.WalletTransactionID; v != nil {
 		builder.WriteString("wallet_transaction_id=")

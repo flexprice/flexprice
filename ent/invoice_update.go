@@ -275,6 +275,12 @@ func (iu *InvoiceUpdate) SetNillableTotalCreditsApplied(d *decimal.Decimal) *Inv
 	return iu
 }
 
+// ClearTotalCreditsApplied clears the value of the "total_credits_applied" field.
+func (iu *InvoiceUpdate) ClearTotalCreditsApplied() *InvoiceUpdate {
+	iu.mutation.ClearTotalCreditsApplied()
+	return iu
+}
+
 // SetTotal sets the "total" field.
 func (iu *InvoiceUpdate) SetTotal(d decimal.Decimal) *InvoiceUpdate {
 	iu.mutation.SetTotal(d)
@@ -729,6 +735,9 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := iu.mutation.TotalCreditsApplied(); ok {
 		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
 	}
+	if iu.mutation.TotalCreditsAppliedCleared() {
+		_spec.ClearField(invoice.FieldTotalCreditsApplied, field.TypeOther)
+	}
 	if value, ok := iu.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)
 	}
@@ -1170,6 +1179,12 @@ func (iuo *InvoiceUpdateOne) SetNillableTotalCreditsApplied(d *decimal.Decimal) 
 	if d != nil {
 		iuo.SetTotalCreditsApplied(*d)
 	}
+	return iuo
+}
+
+// ClearTotalCreditsApplied clears the value of the "total_credits_applied" field.
+func (iuo *InvoiceUpdateOne) ClearTotalCreditsApplied() *InvoiceUpdateOne {
+	iuo.mutation.ClearTotalCreditsApplied()
 	return iuo
 }
 
@@ -1656,6 +1671,9 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if value, ok := iuo.mutation.TotalCreditsApplied(); ok {
 		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
+	}
+	if iuo.mutation.TotalCreditsAppliedCleared() {
+		_spec.ClearField(invoice.FieldTotalCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iuo.mutation.Total(); ok {
 		_spec.SetField(invoice.FieldTotal, field.TypeOther, value)

@@ -152,6 +152,8 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
+			Optional().
+			Nillable().
 			Default(decimal.Zero).
 			Comment("Amount in invoice currency reduced from line item due to credit application"),
 		field.String("wallet_transaction_id").

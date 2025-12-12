@@ -26386,7 +26386,7 @@ func (m *InvoiceMutation) TotalCreditsApplied() (r decimal.Decimal, exists bool)
 // OldTotalCreditsApplied returns the old "total_credits_applied" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldTotalCreditsApplied(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *InvoiceMutation) OldTotalCreditsApplied(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTotalCreditsApplied is only allowed on UpdateOne operations")
 	}
@@ -26400,9 +26400,22 @@ func (m *InvoiceMutation) OldTotalCreditsApplied(ctx context.Context) (v decimal
 	return oldValue.TotalCreditsApplied, nil
 }
 
+// ClearTotalCreditsApplied clears the value of the "total_credits_applied" field.
+func (m *InvoiceMutation) ClearTotalCreditsApplied() {
+	m.total_credits_applied = nil
+	m.clearedFields[invoice.FieldTotalCreditsApplied] = struct{}{}
+}
+
+// TotalCreditsAppliedCleared returns if the "total_credits_applied" field was cleared in this mutation.
+func (m *InvoiceMutation) TotalCreditsAppliedCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldTotalCreditsApplied]
+	return ok
+}
+
 // ResetTotalCreditsApplied resets all changes to the "total_credits_applied" field.
 func (m *InvoiceMutation) ResetTotalCreditsApplied() {
 	m.total_credits_applied = nil
+	delete(m.clearedFields, invoice.FieldTotalCreditsApplied)
 }
 
 // SetTotal sets the "total" field.
@@ -28002,6 +28015,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldTotalDiscount) {
 		fields = append(fields, invoice.FieldTotalDiscount)
 	}
+	if m.FieldCleared(invoice.FieldTotalCreditsApplied) {
+		fields = append(fields, invoice.FieldTotalCreditsApplied)
+	}
 	if m.FieldCleared(invoice.FieldTotal) {
 		fields = append(fields, invoice.FieldTotal)
 	}
@@ -28087,6 +28103,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldTotalDiscount:
 		m.ClearTotalDiscount()
+		return nil
+	case invoice.FieldTotalCreditsApplied:
+		m.ClearTotalCreditsApplied()
 		return nil
 	case invoice.FieldTotal:
 		m.ClearTotal()
@@ -29742,7 +29761,7 @@ func (m *InvoiceLineItemMutation) CreditsApplied() (r decimal.Decimal, exists bo
 // OldCreditsApplied returns the old "credits_applied" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldCreditsApplied(ctx context.Context) (v decimal.Decimal, err error) {
+func (m *InvoiceLineItemMutation) OldCreditsApplied(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCreditsApplied is only allowed on UpdateOne operations")
 	}
@@ -29756,9 +29775,22 @@ func (m *InvoiceLineItemMutation) OldCreditsApplied(ctx context.Context) (v deci
 	return oldValue.CreditsApplied, nil
 }
 
+// ClearCreditsApplied clears the value of the "credits_applied" field.
+func (m *InvoiceLineItemMutation) ClearCreditsApplied() {
+	m.credits_applied = nil
+	m.clearedFields[invoicelineitem.FieldCreditsApplied] = struct{}{}
+}
+
+// CreditsAppliedCleared returns if the "credits_applied" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) CreditsAppliedCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldCreditsApplied]
+	return ok
+}
+
 // ResetCreditsApplied resets all changes to the "credits_applied" field.
 func (m *InvoiceLineItemMutation) ResetCreditsApplied() {
 	m.credits_applied = nil
+	delete(m.clearedFields, invoicelineitem.FieldCreditsApplied)
 }
 
 // SetWalletTransactionID sets the "wallet_transaction_id" field.
@@ -30492,6 +30524,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldMetadata) {
 		fields = append(fields, invoicelineitem.FieldMetadata)
 	}
+	if m.FieldCleared(invoicelineitem.FieldCreditsApplied) {
+		fields = append(fields, invoicelineitem.FieldCreditsApplied)
+	}
 	if m.FieldCleared(invoicelineitem.FieldWalletTransactionID) {
 		fields = append(fields, invoicelineitem.FieldWalletTransactionID)
 	}
@@ -30562,6 +30597,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case invoicelineitem.FieldCreditsApplied:
+		m.ClearCreditsApplied()
 		return nil
 	case invoicelineitem.FieldWalletTransactionID:
 		m.ClearWalletTransactionID()

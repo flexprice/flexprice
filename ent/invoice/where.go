@@ -1496,6 +1496,16 @@ func TotalCreditsAppliedLTE(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldLTE(FieldTotalCreditsApplied, v))
 }
 
+// TotalCreditsAppliedIsNil applies the IsNil predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldTotalCreditsApplied))
+}
+
+// TotalCreditsAppliedNotNil applies the NotNil predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldTotalCreditsApplied))
+}
+
 // TotalEQ applies the EQ predicate on the "total" field.
 func TotalEQ(v decimal.Decimal) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTotal, v))

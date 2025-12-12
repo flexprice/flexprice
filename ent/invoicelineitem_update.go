@@ -136,6 +136,12 @@ func (iliu *InvoiceLineItemUpdate) SetNillableCreditsApplied(d *decimal.Decimal)
 	return iliu
 }
 
+// ClearCreditsApplied clears the value of the "credits_applied" field.
+func (iliu *InvoiceLineItemUpdate) ClearCreditsApplied() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearCreditsApplied()
+	return iliu
+}
+
 // SetWalletTransactionID sets the "wallet_transaction_id" field.
 func (iliu *InvoiceLineItemUpdate) SetWalletTransactionID(s string) *InvoiceLineItemUpdate {
 	iliu.mutation.SetWalletTransactionID(s)
@@ -342,6 +348,9 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if value, ok := iliu.mutation.CreditsApplied(); ok {
 		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
 	}
+	if iliu.mutation.CreditsAppliedCleared() {
+		_spec.ClearField(invoicelineitem.FieldCreditsApplied, field.TypeOther)
+	}
 	if value, ok := iliu.mutation.WalletTransactionID(); ok {
 		_spec.SetField(invoicelineitem.FieldWalletTransactionID, field.TypeString, value)
 	}
@@ -519,6 +528,12 @@ func (iliuo *InvoiceLineItemUpdateOne) SetNillableCreditsApplied(d *decimal.Deci
 	if d != nil {
 		iliuo.SetCreditsApplied(*d)
 	}
+	return iliuo
+}
+
+// ClearCreditsApplied clears the value of the "credits_applied" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearCreditsApplied() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearCreditsApplied()
 	return iliuo
 }
 
@@ -757,6 +772,9 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if value, ok := iliuo.mutation.CreditsApplied(); ok {
 		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
+	}
+	if iliuo.mutation.CreditsAppliedCleared() {
+		_spec.ClearField(invoicelineitem.FieldCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iliuo.mutation.WalletTransactionID(); ok {
 		_spec.SetField(invoicelineitem.FieldWalletTransactionID, field.TypeString, value)

@@ -1946,6 +1946,16 @@ func CreditsAppliedLTE(v decimal.Decimal) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldLTE(FieldCreditsApplied, v))
 }
 
+// CreditsAppliedIsNil applies the IsNil predicate on the "credits_applied" field.
+func CreditsAppliedIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldCreditsApplied))
+}
+
+// CreditsAppliedNotNil applies the NotNil predicate on the "credits_applied" field.
+func CreditsAppliedNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldCreditsApplied))
+}
+
 // WalletTransactionIDEQ applies the EQ predicate on the "wallet_transaction_id" field.
 func WalletTransactionIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldWalletTransactionID, v))
