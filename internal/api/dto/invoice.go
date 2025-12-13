@@ -50,13 +50,13 @@ type CreateInvoiceRequest struct {
 	Currency string `json:"currency" validate:"required"`
 
 	// amount_due is the total amount that needs to be paid for this invoice
-	AmountDue decimal.Decimal `json:"amount_due" validate:"required"`
+	AmountDue decimal.Decimal `json:"amount_due" validate:"required" swaggertype:"string"`
 
 	// total is the total amount of the invoice including taxes and discounts
-	Total decimal.Decimal `json:"total" validate:"required"`
+	Total decimal.Decimal `json:"total" validate:"required" swaggertype:"string"`
 
 	// subtotal is the amount before taxes and discounts are applied
-	Subtotal decimal.Decimal `json:"subtotal" validate:"required"`
+	Subtotal decimal.Decimal `json:"subtotal" validate:"required" swaggertype:"string"`
 
 	// description is an optional text description of the invoice
 	Description string `json:"description,omitempty"`
@@ -83,7 +83,7 @@ type CreateInvoiceRequest struct {
 	PaymentStatus *types.PaymentStatus `json:"payment_status,omitempty"`
 
 	// amount_paid is the amount that has been paid towards this invoice
-	AmountPaid *decimal.Decimal `json:"amount_paid,omitempty"`
+	AmountPaid *decimal.Decimal `json:"amount_paid,omitempty" swaggertype:"string"`
 
 	// line_items contains the individual items that make up this invoice
 	LineItems []CreateInvoiceLineItemRequest `json:"line_items,omitempty"`
@@ -144,7 +144,7 @@ type CreateProrationInvoiceRequest struct {
 // ProrationResult represents the result of proration calculations
 type ProrationResult struct {
 	// total_proration_amount is the net amount (credits - charges)
-	TotalProrationAmount decimal.Decimal `json:"total_proration_amount"`
+	TotalProrationAmount decimal.Decimal `json:"total_proration_amount" swaggertype:"string"`
 
 	// line_item_results contains per-line-item proration details
 	LineItemResults map[string]*ProrationLineItemResult `json:"line_item_results"`
@@ -162,7 +162,7 @@ type ProrationLineItemResult struct {
 	ChargeItems []ProrationLineItem `json:"charge_items"`
 
 	// net_amount is the net amount for this line item
-	NetAmount decimal.Decimal `json:"net_amount"`
+	NetAmount decimal.Decimal `json:"net_amount" swaggertype:"string"`
 
 	// proration_date is when the proration takes effect
 	ProrationDate time.Time `json:"proration_date"`
@@ -177,7 +177,7 @@ type ProrationLineItem struct {
 	Description string `json:"description"`
 
 	// amount is the monetary amount (positive for charge, negative for credit)
-	Amount decimal.Decimal `json:"amount"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 
 	// start_date is the period start this item covers
 	StartDate time.Time `json:"start_date"`
@@ -186,7 +186,7 @@ type ProrationLineItem struct {
 	EndDate time.Time `json:"end_date"`
 
 	// quantity is the quantity
-	Quantity decimal.Decimal `json:"quantity"`
+	Quantity decimal.Decimal `json:"quantity" swaggertype:"string"`
 
 	// price_id is the associated price ID
 	PriceID string `json:"price_id"`
@@ -464,16 +464,16 @@ type CreateInvoiceLineItemRequest struct {
 	PriceUnit *string `json:"price_unit,omitempty"`
 
 	// price_unit_amount is the optional amount converted to the price unit currency
-	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty" swaggertype:"string"`
 
 	// display_name is the optional human-readable name for this line item
 	DisplayName *string `json:"display_name,omitempty"`
 
 	// amount is the monetary amount for this line item
-	Amount decimal.Decimal `json:"amount" validate:"required"`
+	Amount decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
 
 	// quantity is the quantity of units for this line item
-	Quantity decimal.Decimal `json:"quantity" validate:"required"`
+	Quantity decimal.Decimal `json:"quantity" validate:"required" swaggertype:"string"`
 
 	// period_start is the optional start date of the period this line item covers
 	PeriodStart *time.Time `json:"period_start,omitempty"`
@@ -602,16 +602,16 @@ type InvoiceLineItemResponse struct {
 	PriceUnit *string `json:"price_unit,omitempty"`
 
 	// price_unit_amount is the optional amount converted to the price unit currency
-	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty" swaggertype:"string"`
 
 	// display_name is the optional human-readable name for this line item
 	DisplayName *string `json:"display_name,omitempty"`
 
 	// amount is the monetary amount for this line item
-	Amount decimal.Decimal `json:"amount"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 
 	// quantity is the quantity of units for this line item
-	Quantity decimal.Decimal `json:"quantity"`
+	Quantity decimal.Decimal `json:"quantity" swaggertype:"string"`
 
 	// currency is the three-letter ISO currency code for this line item
 	Currency string `json:"currency"`
@@ -707,7 +707,7 @@ type UpdatePaymentStatusRequest struct {
 	PaymentStatus types.PaymentStatus `json:"payment_status" binding:"required"`
 
 	// amount is the optional payment amount to record
-	Amount *decimal.Decimal `json:"amount,omitempty"`
+	Amount *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 }
 
 func (r *UpdatePaymentStatusRequest) Validate() error {
@@ -775,25 +775,25 @@ type InvoiceResponse struct {
 	Currency string `json:"currency"`
 
 	// amount_due is the total amount that needs to be paid for this invoice
-	AmountDue decimal.Decimal `json:"amount_due"`
+	AmountDue decimal.Decimal `json:"amount_due" swaggertype:"string"`
 
 	// total is the total amount of the invoice including taxes and discounts
-	Total decimal.Decimal `json:"total"`
+	Total decimal.Decimal `json:"total" swaggertype:"string"`
 
 	// total_discount is the total discount amount from coupon applications
-	TotalDiscount decimal.Decimal `json:"total_discount"`
+	TotalDiscount decimal.Decimal `json:"total_discount" swaggertype:"string"`
 
 	// subtotal is the amount before taxes and discounts are applied
-	Subtotal decimal.Decimal `json:"subtotal"`
+	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
 	// amount_paid is the amount that has been paid towards this invoice
-	AmountPaid decimal.Decimal `json:"amount_paid"`
+	AmountPaid decimal.Decimal `json:"amount_paid" swaggertype:"string"`
 
 	// amount_remaining is the amount still outstanding on this invoice
-	AmountRemaining decimal.Decimal `json:"amount_remaining"`
+	AmountRemaining decimal.Decimal `json:"amount_remaining" swaggertype:"string"`
 
 	// overpaid_amount is the amount overpaid if payment_status is OVERPAID (amount_paid - total)
-	OverpaidAmount *decimal.Decimal `json:"overpaid_amount,omitempty"`
+	OverpaidAmount *decimal.Decimal `json:"overpaid_amount,omitempty" swaggertype:"string"`
 
 	// invoice_number is the optional human-readable identifier for the invoice
 	InvoiceNumber *string `json:"invoice_number,omitempty"`
@@ -868,7 +868,7 @@ type InvoiceResponse struct {
 	Customer *CustomerResponse `json:"customer,omitempty"`
 
 	// total_tax is the total tax amount for this invoice
-	TotalTax decimal.Decimal `json:"total_tax"`
+	TotalTax decimal.Decimal `json:"total_tax" swaggertype:"string"`
 
 	// tax_applied_records contains the tax applied records associated with this invoice
 	Taxes []*TaxAppliedResponse `json:"taxes,omitempty"`
@@ -1050,13 +1050,13 @@ type CustomerInvoiceSummary struct {
 	Currency string `json:"currency"`
 
 	// total_revenue_amount is the total revenue generated from this customer in this currency
-	TotalRevenueAmount decimal.Decimal `json:"total_revenue_amount"`
+	TotalRevenueAmount decimal.Decimal `json:"total_revenue_amount" swaggertype:"string"`
 
 	// total_unpaid_amount is the total amount of unpaid invoices in this currency
-	TotalUnpaidAmount decimal.Decimal `json:"total_unpaid_amount"`
+	TotalUnpaidAmount decimal.Decimal `json:"total_unpaid_amount" swaggertype:"string"`
 
 	// total_overdue_amount is the total amount of overdue invoices in this currency
-	TotalOverdueAmount decimal.Decimal `json:"total_overdue_amount"`
+	TotalOverdueAmount decimal.Decimal `json:"total_overdue_amount" swaggertype:"string"`
 
 	// total_invoice_count is the total number of invoices for this customer in this currency
 	TotalInvoiceCount int `json:"total_invoice_count"`
@@ -1068,10 +1068,10 @@ type CustomerInvoiceSummary struct {
 	OverdueInvoiceCount int `json:"overdue_invoice_count"`
 
 	// unpaid_usage_charges is the total amount of unpaid usage-based charges in this currency
-	UnpaidUsageCharges decimal.Decimal `json:"unpaid_usage_charges"`
+	UnpaidUsageCharges decimal.Decimal `json:"unpaid_usage_charges" swaggertype:"string"`
 
 	// unpaid_fixed_charges is the total amount of unpaid fixed charges in this currency
-	UnpaidFixedCharges decimal.Decimal `json:"unpaid_fixed_charges"`
+	UnpaidFixedCharges decimal.Decimal `json:"unpaid_fixed_charges" swaggertype:"string"`
 }
 
 // CustomerMultiCurrencyInvoiceSummary represents invoice summaries across all currencies for a customer
@@ -1235,11 +1235,11 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 	Invoices []*InvoiceResponse `json:"invoices"`
 
 	// total_unpaid_amount is the total amount of unpaid invoices to be paid
-	TotalUnpaidAmount decimal.Decimal `json:"total_unpaid_amount"`
+	TotalUnpaidAmount decimal.Decimal `json:"total_unpaid_amount" swaggertype:"string"`
 
 	// total_unpaid_usage_charges is the total amount of unpaid usage charges to be paid
-	TotalUnpaidUsageCharges decimal.Decimal `json:"total_unpaid_usage_charges"`
+	TotalUnpaidUsageCharges decimal.Decimal `json:"total_unpaid_usage_charges" swaggertype:"string"`
 
 	// total_unpaid_fixed_charges is the total amount of unpaid fixed charges to be paid
-	TotalUnpaidFixedCharges decimal.Decimal `json:"total_unpaid_fixed_charges"`
+	TotalUnpaidFixedCharges decimal.Decimal `json:"total_unpaid_fixed_charges" swaggertype:"string"`
 }

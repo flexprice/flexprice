@@ -20,7 +20,7 @@ type CreatePaymentRequest struct {
 	PaymentMethodType      types.PaymentMethodType      `json:"payment_method_type" binding:"required"`
 	PaymentMethodID        string                       `json:"payment_method_id"`
 	PaymentGateway         *types.PaymentGatewayType    `json:"payment_gateway,omitempty"`
-	Amount                 decimal.Decimal              `json:"amount" binding:"required"`
+	Amount                 decimal.Decimal              `json:"amount" binding:"required" swaggertype:"string"`
 	Currency               string                       `json:"currency" binding:"required"`
 	SuccessURL             string                       `json:"success_url,omitempty"`
 	CancelURL              string                       `json:"cancel_url,omitempty"`
@@ -49,7 +49,7 @@ type PaymentResponse struct {
 	DestinationID          string                       `json:"destination_id"`
 	PaymentMethodType      types.PaymentMethodType      `json:"payment_method_type"`
 	PaymentMethodID        string                       `json:"payment_method_id"`
-	Amount                 decimal.Decimal              `json:"amount"`
+	Amount                 decimal.Decimal              `json:"amount" swaggertype:"string"`
 	Currency               string                       `json:"currency"`
 	PaymentStatus          types.PaymentStatus          `json:"payment_status"`
 	TrackAttempts          bool                         `json:"track_attempts"`

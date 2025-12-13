@@ -17,11 +17,11 @@ type CouponApplication struct {
 	InvoiceLineItemID   *string                `json:"invoice_line_item_id,omitempty" db:"invoice_line_item_id"`
 	SubscriptionID      *string                `json:"subscription_id,omitempty" db:"subscription_id"`
 	AppliedAt           time.Time              `json:"applied_at" db:"applied_at"`
-	OriginalPrice       decimal.Decimal        `json:"original_price" db:"original_price"`
-	FinalPrice          decimal.Decimal        `json:"final_price" db:"final_price"`
-	DiscountedAmount    decimal.Decimal        `json:"discounted_amount" db:"discounted_amount"`
+	OriginalPrice       decimal.Decimal        `json:"original_price" db:"original_price" swaggertype:"string"`
+	FinalPrice          decimal.Decimal        `json:"final_price" db:"final_price" swaggertype:"string"`
+	DiscountedAmount    decimal.Decimal        `json:"discounted_amount" db:"discounted_amount" swaggertype:"string"`
 	DiscountType        types.CouponType       `json:"discount_type" db:"discount_type"`
-	DiscountPercentage  *decimal.Decimal       `json:"discount_percentage,omitempty" db:"discount_percentage"`
+	DiscountPercentage  *decimal.Decimal       `json:"discount_percentage,omitempty" db:"discount_percentage" swaggertype:"string"`
 	Currency            string                 `json:"currency" db:"currency"`
 	CouponSnapshot      map[string]interface{} `json:"coupon_snapshot,omitempty" db:"coupon_snapshot"`
 	Metadata            map[string]string      `json:"metadata,omitempty" db:"metadata"`

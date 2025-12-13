@@ -678,14 +678,20 @@ const docTemplate = `{
                             "flexprice",
                             "stripe",
                             "s3",
-                            "hubspot"
+                            "hubspot",
+                            "razorpay",
+                            "chargebee",
+                            "quickbooks"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
                             "SecretProviderFlexPrice",
                             "SecretProviderStripe",
                             "SecretProviderS3",
-                            "SecretProviderHubSpot"
+                            "SecretProviderHubSpot",
+                            "SecretProviderRazorpay",
+                            "SecretProviderChargebee",
+                            "SecretProviderQuickBooks"
                         ],
                         "name": "provider_type",
                         "in": "query"
@@ -716,55 +722,6 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.ListConnectionsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Create a new integration connection",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Connections"
-                ],
-                "summary": "Create a connection",
-                "parameters": [
-                    {
-                        "description": "Connection",
-                        "name": "connection",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateConnectionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ConnectionResponse"
                         }
                     },
                     "400": {
@@ -2636,6 +2593,15 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "parent_customer_ids",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "start_time",
                         "in": "query"
@@ -3182,6 +3148,58 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/customers/{id}/grants/upcoming": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get upcoming credit grant applications for a customer",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Get upcoming credit grant applications",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCreditGrantApplicationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4421,6 +4439,37 @@ const docTemplate = `{
                 }
             }
         },
+        "/events/huggingface-inference": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieve hugging face inference data for events",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get hugging face inference data",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetHuggingFaceBillingDataResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/events/monitoring": {
             "get": {
                 "security": [
@@ -4436,6 +4485,14 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get monitoring data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Window size for time series data (e.g., 'HOUR', 'DAY') - optional",
+                        "name": "window_size",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4443,8 +4500,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/dto.GetMonitoringDataResponse"
                         }
                     },
+                    "400": {
+                        "description": "Validation error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8328,6 +8391,22 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "ExternalCustomerID filters by external customer ID",
+                        "name": "external_customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "InvoicingCustomerIDs filters by invoicing customer ID",
+                        "name": "invoicing_customer_ids",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
@@ -8395,7 +8474,8 @@ const docTemplate = `{
                                 "incomplete_expired",
                                 "past_due",
                                 "trialing",
-                                "unpaid"
+                                "unpaid",
+                                "draft"
                             ],
                             "type": "string"
                         },
@@ -8844,6 +8924,64 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscriptions/{id}/activate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Activate a draft subscription with a new start date",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Activate draft subscription",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Activate Draft Subscription Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ActivateDraftSubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions/{id}/cancel": {
             "post": {
                 "security": [
@@ -9072,6 +9210,58 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.SubscriptionEntitlementsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/grants/upcoming": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get upcoming credit grant applications for a subscription",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get upcoming credit grant applications",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCreditGrantApplicationsResponse"
                         }
                     },
                     "400": {
@@ -11314,7 +11504,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.WalletResponse"
+                            "$ref": "#/definitions/dto.TopUpWalletResponse"
                         }
                     },
                     "400": {
@@ -11540,6 +11730,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhooks/chargebee/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming Chargebee webhook events for payment status updates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle Chargebee webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Basic Auth credentials",
+                        "name": "Authorization",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/hubspot/{tenant_id}/{environment_id}": {
             "post": {
                 "description": "Process incoming HubSpot webhook events for deal closed won and customer creation",
@@ -11572,6 +11829,120 @@ const docTemplate = `{
                         "type": "string",
                         "description": "HubSpot webhook signature",
                         "name": "X-HubSpot-Signature-v3",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook received (always returns 200)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/quickbooks/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming QuickBooks webhook events for payment sync",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle QuickBooks webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "QuickBooks webhook signature",
+                        "name": "intuit-signature",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid signature",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/razorpay/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming Razorpay webhook events for payment capture and failure",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle Razorpay webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Razorpay webhook signature",
+                        "name": "X-Razorpay-Signature",
                         "in": "header",
                         "required": true
                     }
@@ -11650,51 +12021,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "addon.Addon": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.AddonType"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
-                }
-            }
-        },
         "costsheet.Filter": {
             "type": "object",
             "properties": {
@@ -11761,83 +12087,11 @@ const docTemplate = `{
                 }
             }
         },
-        "coupon.Coupon": {
-            "type": "object",
-            "properties": {
-                "amount_off": {
-                    "type": "number"
-                },
-                "cadence": {
-                    "$ref": "#/definitions/types.CouponCadence"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "duration_in_periods": {
-                    "type": "integer"
-                },
-                "environment_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "max_redemptions": {
-                    "type": "integer"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                },
-                "percentage_off": {
-                    "type": "number"
-                },
-                "redeem_after": {
-                    "type": "string"
-                },
-                "redeem_before": {
-                    "type": "string"
-                },
-                "rules": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "total_redemptions": {
-                    "type": "integer"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.CouponType"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
-                }
-            }
-        },
         "coupon_association.CouponAssociation": {
             "type": "object",
             "properties": {
                 "coupon": {
-                    "$ref": "#/definitions/coupon.Coupon"
+                    "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_coupon.Coupon"
                 },
                 "coupon_id": {
                     "type": "string"
@@ -11940,76 +12194,14 @@ const docTemplate = `{
                 }
             }
         },
-        "customer.Customer": {
+        "dto.ActivateDraftSubscriptionRequest": {
             "type": "object",
+            "required": [
+                "start_date"
+            ],
             "properties": {
-                "address_city": {
-                    "description": "AddressCity is the city of the customer's address",
-                    "type": "string"
-                },
-                "address_country": {
-                    "description": "AddressCountry is the country of the customer's address (ISO 3166-1 alpha-2)",
-                    "type": "string"
-                },
-                "address_line1": {
-                    "description": "AddressLine1 is the first line of the customer's address",
-                    "type": "string"
-                },
-                "address_line2": {
-                    "description": "AddressLine2 is the second line of the customer's address",
-                    "type": "string"
-                },
-                "address_postal_code": {
-                    "description": "AddressPostalCode is the postal code of the customer's address",
-                    "type": "string"
-                },
-                "address_state": {
-                    "description": "AddressState is the state of the customer's address",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "email": {
-                    "description": "Email is the email of the customer",
-                    "type": "string"
-                },
-                "environment_id": {
-                    "description": "EnvironmentID is the environment identifier for the customer",
-                    "type": "string"
-                },
-                "external_id": {
-                    "description": "ExternalID is the external identifier for the customer",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "ID is the unique identifier for the customer",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "Metadata",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "name": {
-                    "description": "Name is the name of the customer",
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
+                "start_date": {
+                    "description": "start_date is the new start date for the subscription when activating",
                     "type": "string"
                 }
             }
@@ -12383,10 +12575,6 @@ const docTemplate = `{
                 "cancellation_type"
             ],
             "properties": {
-                "_": {
-                    "description": "SuppressWebhook is an internal flag to suppress webhook events during cancellation.",
-                    "type": "boolean"
-                },
                 "cancellation_type": {
                     "description": "CancellationType determines when the cancellation takes effect",
                     "allOf": [
@@ -12450,7 +12638,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_credit_amount": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -12550,13 +12738,13 @@ const docTemplate = `{
                 },
                 "total_cost": {
                     "description": "Aggregated metrics",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_events": {
                     "type": "integer"
                 },
                 "total_quantity": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -12564,13 +12752,13 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cost": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "event_count": {
                     "type": "integer"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "timestamp": {
                     "type": "string"
@@ -12654,19 +12842,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "discount_percentage": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "discount_type": {
                     "$ref": "#/definitions/types.CouponType"
                 },
                 "discounted_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "environment_id": {
                     "type": "string"
                 },
                 "final_price": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "id": {
                     "type": "string"
@@ -12684,7 +12872,7 @@ const docTemplate = `{
                     }
                 },
                 "original_price": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -12707,7 +12895,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "coupon": {
-                    "$ref": "#/definitions/coupon.Coupon"
+                    "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_coupon.Coupon"
                 },
                 "coupon_id": {
                     "type": "string"
@@ -12767,7 +12955,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount_off": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "cadence": {
                     "$ref": "#/definitions/types.CouponCadence"
@@ -12803,7 +12991,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "percentage_off": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "redeem_after": {
                     "type": "string"
@@ -13005,32 +13193,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateConnectionRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "provider_type"
-            ],
-            "properties": {
-                "encrypted_secret_data": {
-                    "$ref": "#/definitions/types.ConnectionMetadata"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "provider_type": {
-                    "$ref": "#/definitions/types.SecretProvider"
-                },
-                "sync_config": {
-                    "$ref": "#/definitions/types.SyncConfig"
-                }
-            }
-        },
         "dto.CreateCostsheetRequest": {
             "type": "object",
             "required": [
@@ -13075,7 +13237,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "amount_off": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "cadence": {
                     "enum": [
@@ -13108,7 +13270,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "percentage_off": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "redeem_after": {
                     "type": "string"
@@ -13146,7 +13308,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.CreditGrantCadence"
                 },
                 "credits": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -13192,7 +13354,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "amount is the monetary amount to be credited for this line item",
-                    "type": "number"
+                    "type": "string"
                 },
                 "display_name": {
                     "description": "display_name is an optional human-readable name for this credit note line item",
@@ -13325,6 +13487,14 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "name is the full name or company name of the customer",
+                    "type": "string"
+                },
+                "parent_customer_external_id": {
+                    "description": "parent_customer_external_id is the external ID of the parent customer from your system\nExactly one of parent_customer_id or parent_customer_external_id may be provided",
+                    "type": "string"
+                },
+                "parent_customer_id": {
+                    "description": "parent_customer_id is the internal FlexPrice ID of the parent customer",
                     "type": "string"
                 },
                 "tax_rate_overrides": {
@@ -13512,7 +13682,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "amount is the monetary amount for this line item",
-                    "type": "number"
+                    "type": "string"
                 },
                 "display_name": {
                     "description": "display_name is the optional human-readable name for this line item",
@@ -13572,11 +13742,11 @@ const docTemplate = `{
                 },
                 "price_unit_amount": {
                     "description": "price_unit_amount is the optional amount converted to the price unit currency",
-                    "type": "number"
+                    "type": "string"
                 },
                 "quantity": {
                     "description": "quantity is the quantity of units for this line item",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -13592,11 +13762,11 @@ const docTemplate = `{
             "properties": {
                 "amount_due": {
                     "description": "amount_due is the total amount that needs to be paid for this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_paid": {
                     "description": "amount_paid is the amount that has been paid towards this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_period": {
                     "description": "billing_period is the period this invoice covers (e.g., \"monthly\", \"yearly\")",
@@ -13723,7 +13893,7 @@ const docTemplate = `{
                 },
                 "subtotal": {
                     "description": "subtotal is the amount before taxes and discounts are applied",
-                    "type": "number"
+                    "type": "string"
                 },
                 "tax_rate_overrides": {
                     "description": "tax_rate_overrides is the tax rate overrides to be applied to the invoice",
@@ -13741,7 +13911,7 @@ const docTemplate = `{
                 },
                 "total": {
                     "description": "total is the total amount of the invoice including taxes and discounts",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -13787,7 +13957,7 @@ const docTemplate = `{
             ],
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "cancel_url": {
                     "type": "string"
@@ -14169,7 +14339,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "conversion_rate": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -14264,7 +14434,7 @@ const docTemplate = `{
                 },
                 "commitment_amount": {
                     "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
-                    "type": "number"
+                    "type": "string"
                 },
                 "coupons": {
                     "type": "array",
@@ -14290,6 +14460,10 @@ const docTemplate = `{
                     "description": "Timezone of the customer.\nIf not set, the default value is UTC.",
                     "type": "string"
                 },
+                "enable_true_up": {
+                    "description": "Enable Commitment True Up Fee",
+                    "type": "boolean"
+                },
                 "end_date": {
                     "type": "string"
                 },
@@ -14299,6 +14473,14 @@ const docTemplate = `{
                 },
                 "gateway_payment_method_id": {
                     "type": "string"
+                },
+                "invoice_billing": {
+                    "description": "invoice_billing determines which customer should receive invoices for a subscription\n\"invoice_to_parent\" - Invoices are sent to the parent customer\n\"invoice_to_self\" - Invoices are sent to the subscription's customer",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.InvoiceBilling"
+                        }
+                    ]
                 },
                 "line_item_coupons": {
                     "type": "object",
@@ -14320,7 +14502,7 @@ const docTemplate = `{
                 },
                 "overage_factor": {
                     "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
-                    "type": "number"
+                    "type": "string"
                 },
                 "override_entitlements": {
                     "description": "OverrideEntitlements allows customizing specific entitlements for this subscription",
@@ -14364,6 +14546,14 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                },
+                "subscription_status": {
+                    "description": "SubscriptionStatus determines the initial status of the subscription\nIf set to \"draft\", the subscription will be created as a draft (skips invoice creation and payment processing)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SubscriptionStatus"
+                        }
+                    ]
                 },
                 "tax_rate_overrides": {
                     "description": "tax_rate_overrides is the tax rate overrides\tto be applied to the subscription",
@@ -14461,7 +14651,7 @@ const docTemplate = `{
                 },
                 "fixed_value": {
                     "description": "fixed_value is the fixed monetary amount when tax_rate_type is \"fixed\"",
-                    "type": "number"
+                    "type": "string"
                 },
                 "metadata": {
                     "description": "metadata contains additional key-value pairs for storing extra information",
@@ -14476,7 +14666,7 @@ const docTemplate = `{
                 },
                 "percentage_value": {
                     "description": "percentage_value is the percentage value (0-100) when tax_rate_type is \"percentage\"",
-                    "type": "number"
+                    "type": "string"
                 },
                 "scope": {
                     "description": "scope defines where this tax rate applies",
@@ -14554,10 +14744,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "auto_topup_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_min_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_trigger": {
                     "$ref": "#/definitions/types.AutoTopupTrigger"
@@ -14567,8 +14757,8 @@ const docTemplate = `{
                 },
                 "conversion_rate": {
                     "description": "amount in the currency =  number of credits * conversion_rate\nex if conversion_rate is 1, then 1 USD = 1 credit\nex if conversion_rate is 2, then 1 USD = 0.5 credits\nex if conversion_rate is 0.5, then 1 USD = 2 credits",
-                    "type": "number",
-                    "default": 1
+                    "type": "string",
+                    "default": "1"
                 },
                 "currency": {
                     "type": "string"
@@ -14589,8 +14779,8 @@ const docTemplate = `{
                 },
                 "initial_credits_to_load": {
                     "description": "initial_credits_to_load is the number of credits to load to the wallet\nif not provided, the wallet will be created with 0 balance\nNOTE: this is not the amount in the currency, but the number of credits",
-                    "type": "number",
-                    "default": 0
+                    "type": "string",
+                    "default": "0"
                 },
                 "initial_credits_to_load_expiry_date": {
                     "description": "initial_credits_to_load_expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)\nfor ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC\nhence they will be available for use until 2024-12-31 23:59:59 UTC",
@@ -14604,6 +14794,77 @@ const docTemplate = `{
                 },
                 "wallet_type": {
                     "$ref": "#/definitions/types.WalletType"
+                }
+            }
+        },
+        "dto.CreditGrantApplicationResponse": {
+            "type": "object",
+            "properties": {
+                "application_reason": {
+                    "$ref": "#/definitions/types.CreditGrantApplicationReason"
+                },
+                "application_status": {
+                    "$ref": "#/definitions/types.ApplicationStatus"
+                },
+                "applied_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "credit_grant_id": {
+                    "type": "string"
+                },
+                "credits": {
+                    "type": "number"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "failure_reason": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "idempotency_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "retry_count": {
+                    "type": "integer"
+                },
+                "scheduled_for": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "subscription_status_at_application": {
+                    "$ref": "#/definitions/types.SubscriptionStatus"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
                 }
             }
         },
@@ -14712,7 +14973,7 @@ const docTemplate = `{
                     "description": "customer contains the customer information associated with this credit note",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/customer.Customer"
+                            "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_customer.Customer"
                         }
                     ]
                 },
@@ -14852,19 +15113,19 @@ const docTemplate = `{
                 },
                 "total_overdue_amount": {
                     "description": "total_overdue_amount is the total amount of overdue invoices in this currency",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_revenue_amount": {
                     "description": "total_revenue_amount is the total revenue generated from this customer in this currency",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_unpaid_amount": {
                     "description": "total_unpaid_amount is the total amount of unpaid invoices in this currency",
-                    "type": "number"
+                    "type": "string"
                 },
                 "unpaid_fixed_charges": {
                     "description": "unpaid_fixed_charges is the total amount of unpaid fixed charges in this currency",
-                    "type": "number"
+                    "type": "string"
                 },
                 "unpaid_invoice_count": {
                     "description": "unpaid_invoice_count is the number of unpaid invoices for this customer in this currency",
@@ -14872,7 +15133,7 @@ const docTemplate = `{
                 },
                 "unpaid_usage_charges": {
                     "description": "unpaid_usage_charges is the total amount of unpaid usage-based charges in this currency",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -14955,6 +15216,13 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "Name is the name of the customer",
+                    "type": "string"
+                },
+                "parent_customer": {
+                    "$ref": "#/definitions/dto.CustomerResponse"
+                },
+                "parent_customer_id": {
+                    "description": "ParentCustomerID is the parent customer identifier for the customer",
                     "type": "string"
                 },
                 "status": {
@@ -15224,6 +15492,28 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.EventCostInfo": {
+            "type": "object",
+            "properties": {
+                "costNanoUsd": {
+                    "type": "string"
+                },
+                "requestId": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.EventCountPoint": {
+            "type": "object",
+            "properties": {
+                "event_count": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.FeatureResponse": {
             "type": "object",
             "properties": {
@@ -15287,7 +15577,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "current_usage": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "feature": {
                     "$ref": "#/definitions/dto.FeatureResponse"
@@ -15314,7 +15604,7 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "usage_percent": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -15381,29 +15671,29 @@ const docTemplate = `{
                 },
                 "margin": {
                     "description": "Revenue - Cost",
-                    "type": "number"
+                    "type": "string"
                 },
                 "margin_percent": {
                     "description": "(Margin / Revenue) * 100",
-                    "type": "number"
+                    "type": "string"
                 },
                 "roi": {
                     "description": "(Revenue - Cost) / Cost",
-                    "type": "number"
+                    "type": "string"
                 },
                 "roi_percent": {
                     "description": "ROI * 100",
-                    "type": "number"
+                    "type": "string"
                 },
                 "start_time": {
                     "type": "string"
                 },
                 "total_cost": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_revenue": {
                     "description": "Derived metrics",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -15500,11 +15790,28 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GetHuggingFaceBillingDataResponse": {
+            "type": "object",
+            "properties": {
+                "requests": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.EventCostInfo"
+                    }
+                }
+            }
+        },
         "dto.GetMonitoringDataResponse": {
             "type": "object",
             "properties": {
                 "consumption_lag": {
                     "type": "integer"
+                },
+                "points": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.EventCountPoint"
+                    }
                 },
                 "post_processing_lag": {
                     "type": "integer"
@@ -15603,7 +15910,7 @@ const docTemplate = `{
                     }
                 },
                 "total_cost": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -15779,7 +16086,7 @@ const docTemplate = `{
                     }
                 },
                 "multiplier": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "property_name": {
                     "description": "will be empty/ignored in case of COUNT",
@@ -15959,7 +16266,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "amount for this line item",
-                    "type": "number"
+                    "type": "string"
                 },
                 "description": {
                     "description": "description of the line item",
@@ -15979,11 +16286,11 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "description": "quantity for this line item",
-                    "type": "number"
+                    "type": "string"
                 },
                 "unit_price": {
                     "description": "unit_price for this line item",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -15992,7 +16299,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "amount is the monetary amount for this line item",
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "description": "created_at is the timestamp when this line item was created",
@@ -16076,7 +16383,7 @@ const docTemplate = `{
                 },
                 "price_unit_amount": {
                     "description": "price_unit_amount is the optional amount converted to the price unit currency",
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_unit_id": {
                     "description": "price_unit_id is the optional unique identifier of the price unit associated with this line item",
@@ -16084,7 +16391,7 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "description": "quantity is the quantity of units for this line item",
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "description": "status represents the current status of this line item",
@@ -16142,15 +16449,15 @@ const docTemplate = `{
                 },
                 "subtotal": {
                     "description": "subtotal is the subtotal amount before taxes",
-                    "type": "number"
+                    "type": "string"
                 },
                 "tax_amount": {
                     "description": "tax_amount is the total tax amount",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total": {
                     "description": "total is the total amount including taxes",
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -16159,15 +16466,15 @@ const docTemplate = `{
             "properties": {
                 "amount_due": {
                     "description": "amount_due is the total amount that needs to be paid for this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_paid": {
                     "description": "amount_paid is the amount that has been paid towards this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_remaining": {
                     "description": "amount_remaining is the amount still outstanding on this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_period": {
                     "description": "billing_period is the period this invoice covers (e.g., \"monthly\", \"yearly\")",
@@ -16273,7 +16580,7 @@ const docTemplate = `{
                 },
                 "overpaid_amount": {
                     "description": "overpaid_amount is the amount overpaid if payment_status is OVERPAID (amount_paid - total)",
-                    "type": "number"
+                    "type": "string"
                 },
                 "paid_at": {
                     "description": "paid_at is the timestamp when this invoice was paid",
@@ -16313,7 +16620,7 @@ const docTemplate = `{
                 },
                 "subtotal": {
                     "description": "subtotal is the amount before taxes and discounts are applied",
-                    "type": "number"
+                    "type": "string"
                 },
                 "taxes": {
                     "description": "tax_applied_records contains the tax applied records associated with this invoice",
@@ -16328,15 +16635,15 @@ const docTemplate = `{
                 },
                 "total": {
                     "description": "total is the total amount of the invoice including taxes and discounts",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_discount": {
                     "description": "total_discount is the total discount amount from coupon applications",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_tax": {
                     "description": "total_tax is the total tax amount for this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "updated_at": {
                     "description": "updated_at is the timestamp when this invoice was last updated",
@@ -16436,6 +16743,20 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.CouponResponse"
+                    }
+                },
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
+                }
+            }
+        },
+        "dto.ListCreditGrantApplicationsResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantApplicationResponse"
                     }
                 },
                 "pagination": {
@@ -16775,7 +17096,7 @@ const docTemplate = `{
             "properties": {
                 "credits": {
                     "description": "credits is the number of credits to debit from the wallet",
-                    "type": "number"
+                    "type": "string"
                 },
                 "description": {
                     "description": "description to add any specific details about the transaction",
@@ -16880,7 +17201,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "Amount is the new price amount that overrides the original price (optional)",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_model": {
                     "$ref": "#/definitions/types.BillingModel"
@@ -16891,7 +17212,7 @@ const docTemplate = `{
                 },
                 "quantity": {
                     "description": "Quantity for this line item (optional)",
-                    "type": "number"
+                    "type": "string"
                 },
                 "tier_mode": {
                     "description": "TierMode determines how to calculate the price for a given quantity",
@@ -17002,7 +17323,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "attempts": {
                     "type": "array",
@@ -17182,7 +17503,7 @@ const docTemplate = `{
                 },
                 "amount": {
                     "description": "Amount stored in main currency units (e.g., dollars, not cents)\nFor USD: 12.50 means $12.50",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_cadence": {
                     "$ref": "#/definitions/types.BillingCadence"
@@ -17200,7 +17521,7 @@ const docTemplate = `{
                 },
                 "conversion_rate": {
                     "description": "ConversionRate is the rate of the price unit to the base currency\nFor BTC: 1 BTC = 100000000 USD",
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -17289,7 +17610,7 @@ const docTemplate = `{
                 },
                 "price_unit_amount": {
                     "description": "PriceUnitAmount is the amount stored in price unit\nFor BTC: 0.00000001 means 0.00000001 BTC",
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_unit_id": {
                     "description": "PriceUnitID is the id of the price unit",
@@ -17380,7 +17701,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "conversion_rate": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -17421,10 +17742,10 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "charge_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "credit_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "description": {
                     "type": "string"
@@ -17433,7 +17754,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "original_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "plan_name": {
                     "type": "string"
@@ -17451,7 +17772,7 @@ const docTemplate = `{
             "properties": {
                 "charge_amount": {
                     "description": "charge_amount is the charge amount for the new subscription",
-                    "type": "number"
+                    "type": "string"
                 },
                 "charge_description": {
                     "description": "charge_description describes what the charge is for",
@@ -17459,7 +17780,7 @@ const docTemplate = `{
                 },
                 "credit_amount": {
                     "description": "credit_amount is the credit amount from the old subscription",
-                    "type": "number"
+                    "type": "string"
                 },
                 "credit_description": {
                     "description": "credit_description describes what the credit is for",
@@ -17487,7 +17808,7 @@ const docTemplate = `{
                 },
                 "net_amount": {
                     "description": "net_amount is the net amount (charge - credit)",
-                    "type": "number"
+                    "type": "string"
                 },
                 "proration_date": {
                     "description": "proration_date is the date used for proration calculations",
@@ -17971,7 +18292,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "start_date": {
                     "type": "string"
@@ -18214,7 +18535,7 @@ const docTemplate = `{
                 },
                 "commitment_amount": {
                     "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
-                    "type": "number"
+                    "type": "string"
                 },
                 "coupon_associations": {
                     "description": "CouponAssociations are the coupon associations for this subscription",
@@ -18228,6 +18549,13 @@ const docTemplate = `{
                 },
                 "created_by": {
                     "type": "string"
+                },
+                "credit_grants": {
+                    "description": "Credit grants are the credit grants for this subscription",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
                 },
                 "currency": {
                     "description": "Currency is the currency of the subscription in lowercase 3 digit ISO codes",
@@ -18251,6 +18579,9 @@ const docTemplate = `{
                 "customer_timezone": {
                     "type": "string"
                 },
+                "enable_true_up": {
+                    "type": "boolean"
+                },
                 "end_date": {
                     "description": "EndDate is the end date of the subscription",
                     "type": "string"
@@ -18265,6 +18596,10 @@ const docTemplate = `{
                 },
                 "id": {
                     "description": "ID is the unique identifier for the subscription",
+                    "type": "string"
+                },
+                "invoicing_customer_id": {
+                    "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)",
                     "type": "string"
                 },
                 "latest_invoice": {
@@ -18290,7 +18625,7 @@ const docTemplate = `{
                 },
                 "overage_factor": {
                     "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
-                    "type": "number"
+                    "type": "string"
                 },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
@@ -18554,7 +18889,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Status"
                 },
                 "tax_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "tax_association_id": {
                     "type": "string"
@@ -18566,7 +18901,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "taxable_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "tenant_id": {
                     "type": "string"
@@ -18705,7 +19040,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "fixed_value": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "id": {
                     "type": "string"
@@ -18720,7 +19055,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "percentage_value": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "scope": {
                     "$ref": "#/definitions/types.TaxRateScope"
@@ -18810,24 +19145,23 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "value": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
         "dto.TopUpWalletRequest": {
             "type": "object",
             "required": [
-                "idempotency_key",
                 "transaction_reason"
             ],
             "properties": {
                 "amount": {
                     "description": "amount is the amount in the currency of the wallet to be added\nNOTE: this is not the number of credits to add, but the amount in the currency\namount = credits_to_add * conversion_rate\nif both amount and credits_to_add are provided, amount will be ignored\nex if the wallet has a conversion_rate of 2 then adding an amount of\n10 USD in the wallet wil add 5 credits in the wallet",
-                    "type": "number"
+                    "type": "string"
                 },
                 "credits_to_add": {
                     "description": "credits_to_add is the number of credits to add to the wallet",
-                    "type": "number"
+                    "type": "string"
                 },
                 "description": {
                     "description": "description to add any specific details about the transaction",
@@ -18855,6 +19189,31 @@ const docTemplate = `{
                 },
                 "transaction_reason": {
                     "$ref": "#/definitions/types.TransactionReason"
+                }
+            }
+        },
+        "dto.TopUpWalletResponse": {
+            "type": "object",
+            "properties": {
+                "invoice_id": {
+                    "description": "Invoice ID if an invoice was created (only for PURCHASED_CREDIT_INVOICED)",
+                    "type": "string"
+                },
+                "wallet": {
+                    "description": "Wallet details after the operation",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.WalletResponse"
+                        }
+                    ]
+                },
+                "wallet_transaction": {
+                    "description": "Wallet transaction created (could be PENDING or COMPLETED)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.WalletTransactionResponse"
+                        }
+                    ]
                 }
             }
         },
@@ -18908,6 +19267,14 @@ const docTemplate = `{
         "dto.UpdateConnectionRequest": {
             "type": "object",
             "properties": {
+                "encrypted_secret_data": {
+                    "description": "For updating webhook tokens, etc.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ConnectionMetadata"
+                        }
+                    ]
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
@@ -19036,6 +19403,14 @@ const docTemplate = `{
                 "name": {
                     "description": "name is the updated name or company name for the customer",
                     "type": "string"
+                },
+                "parent_customer_external_id": {
+                    "description": "parent_customer_external_id is the external ID of the parent customer from your system\nExactly one of parent_customer_id or parent_customer_external_id may be provided\nIf you provide the external ID, the parent customer value will be ignored",
+                    "type": "string"
+                },
+                "parent_customer_id": {
+                    "description": "parent_customer_id is the internal FlexPrice ID of the parent customer",
+                    "type": "string"
                 }
             }
         },
@@ -19156,7 +19531,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "amount is the optional payment amount to record",
-                    "type": "number"
+                    "type": "string"
                 },
                 "payment_status": {
                     "description": "payment_status is the new payment status to set for the invoice (paid, unpaid, etc.)",
@@ -19181,7 +19556,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.CreditGrantCadence"
                 },
                 "credits": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "expiration_duration": {
                     "type": "integer"
@@ -19425,7 +19800,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "Amount is the new price amount that overrides the original price (optional)",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_model": {
                     "$ref": "#/definitions/types.BillingModel"
@@ -19479,7 +19854,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "conversion_rate": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "name": {
                     "type": "string"
@@ -19511,7 +19886,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "Amount is the new price amount that overrides the original price",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_model": {
                     "$ref": "#/definitions/types.BillingModel"
@@ -19619,10 +19994,10 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "auto_topup_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_min_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_trigger": {
                     "$ref": "#/definitions/types.AutoTopupTrigger"
@@ -19651,7 +20026,7 @@ const docTemplate = `{
                     "description": "Full addon object (only if expand includes \"addon\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/addon.Addon"
+                            "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_addon.Addon"
                         }
                     ]
                 },
@@ -19672,7 +20047,7 @@ const docTemplate = `{
                     "description": "Full feature object (only if expand includes \"feature\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/feature.Feature"
+                            "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_feature.Feature"
                         }
                     ]
                 },
@@ -19698,7 +20073,7 @@ const docTemplate = `{
                     "description": "Full plan object (only if expand includes \"plan\")",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/plan.Plan"
+                            "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_plan.Plan"
                         }
                     ]
                 },
@@ -19750,10 +20125,10 @@ const docTemplate = `{
                     ]
                 },
                 "total_cost": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_usage": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "unit": {
                     "type": "string"
@@ -19767,7 +20142,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "cost": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "event_count": {
                     "description": "Number of events in this time window",
@@ -19777,7 +20152,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "usage": {
-                    "type": "number"
+                    "type": "string"
                 }
             }
         },
@@ -19857,16 +20232,16 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "auto_topup_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_min_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_trigger": {
                     "$ref": "#/definitions/types.AutoTopupTrigger"
                 },
                 "balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "balance_updated_at": {
                     "type": "string"
@@ -19875,7 +20250,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.WalletConfig"
                 },
                 "conversion_rate": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -19884,13 +20259,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "credit_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "currency": {
                     "type": "string"
                 },
                 "current_period_usage": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "customer_id": {
                     "type": "string"
@@ -19911,15 +20286,18 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "real_time_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "real_time_credit_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 },
                 "tenant_id": {
+                    "type": "string"
+                },
+                "unpaid_invoices_amount": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -19949,28 +20327,28 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "auto_topup_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_min_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "auto_topup_trigger": {
                     "$ref": "#/definitions/types.AutoTopupTrigger"
                 },
                 "balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
                 },
                 "conversion_rate": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
                 "credit_balance": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "currency": {
                     "type": "string"
@@ -20005,22 +20383,22 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
                 "credit_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "credit_balance_after": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "credit_balance_before": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "credits_available": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "description": {
                     "type": "string"
@@ -20086,7 +20464,206 @@ const docTemplate = `{
                 }
             }
         },
-        "feature.Feature": {
+        "gin.H": {
+            "type": "object",
+            "additionalProperties": {}
+        },
+        "github_com_flexprice_flexprice_internal_domain_addon.Addon": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.AddonType"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_flexprice_flexprice_internal_domain_coupon.Coupon": {
+            "type": "object",
+            "properties": {
+                "amount_off": {
+                    "type": "string"
+                },
+                "cadence": {
+                    "$ref": "#/definitions/types.CouponCadence"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "duration_in_periods": {
+                    "type": "integer"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_redemptions": {
+                    "type": "integer"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "percentage_off": {
+                    "type": "string"
+                },
+                "redeem_after": {
+                    "type": "string"
+                },
+                "redeem_before": {
+                    "type": "string"
+                },
+                "rules": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "total_redemptions": {
+                    "type": "integer"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.CouponType"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_flexprice_flexprice_internal_domain_customer.Customer": {
+            "type": "object",
+            "properties": {
+                "address_city": {
+                    "description": "AddressCity is the city of the customer's address",
+                    "type": "string"
+                },
+                "address_country": {
+                    "description": "AddressCountry is the country of the customer's address (ISO 3166-1 alpha-2)",
+                    "type": "string"
+                },
+                "address_line1": {
+                    "description": "AddressLine1 is the first line of the customer's address",
+                    "type": "string"
+                },
+                "address_line2": {
+                    "description": "AddressLine2 is the second line of the customer's address",
+                    "type": "string"
+                },
+                "address_postal_code": {
+                    "description": "AddressPostalCode is the postal code of the customer's address",
+                    "type": "string"
+                },
+                "address_state": {
+                    "description": "AddressState is the state of the customer's address",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "email": {
+                    "description": "Email is the email of the customer",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the customer",
+                    "type": "string"
+                },
+                "external_id": {
+                    "description": "ExternalID is the external identifier for the customer",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the customer",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "description": "Name is the name of the customer",
+                    "type": "string"
+                },
+                "parent_customer_id": {
+                    "description": "ParentCustomerID is the parent customer identifier for the customer",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_flexprice_flexprice_internal_domain_feature.Feature": {
             "type": "object",
             "properties": {
                 "alert_settings": {
@@ -20142,9 +20719,49 @@ const docTemplate = `{
                 }
             }
         },
-        "gin.H": {
+        "github_com_flexprice_flexprice_internal_domain_plan.Plan": {
             "type": "object",
-            "additionalProperties": {}
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_order": {
+                    "type": "integer"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
         },
         "github_com_flexprice_flexprice_internal_types.Value": {
             "type": "object",
@@ -20186,7 +20803,7 @@ const docTemplate = `{
                 },
                 "multiplier": {
                     "description": "Multiplier is the multiplier for the aggregation\nFor ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000\nto scale up by a factor of 1000. If not provided, it will be null.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "type": {
                     "$ref": "#/definitions/types.AggregationType"
@@ -20285,50 +20902,6 @@ const docTemplate = `{
                 }
             }
         },
-        "plan.Plan": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_order": {
-                    "type": "integer"
-                },
-                "environment_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
-                    "type": "string"
-                }
-            }
-        },
         "price.JSONBFilters": {
             "type": "object",
             "additionalProperties": {
@@ -20362,7 +20935,7 @@ const docTemplate = `{
             "properties": {
                 "amount": {
                     "description": "Amount stored in main currency units (e.g., dollars, not cents)\nFor USD: 12.50 means $12.50",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_cadence": {
                     "$ref": "#/definitions/types.BillingCadence"
@@ -20380,7 +20953,7 @@ const docTemplate = `{
                 },
                 "conversion_rate": {
                     "description": "ConversionRate is the rate of the price unit to the base currency\nFor BTC: 1 BTC = 100000000 USD",
-                    "type": "number"
+                    "type": "string"
                 },
                 "created_at": {
                     "type": "string"
@@ -20456,7 +21029,7 @@ const docTemplate = `{
                 },
                 "price_unit_amount": {
                     "description": "PriceUnitAmount is the amount stored in price unit\nFor BTC: 0.00000001 means 0.00000001 BTC",
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_unit_id": {
                     "description": "PriceUnitID is the id of the price unit",
@@ -20519,11 +21092,11 @@ const docTemplate = `{
             "properties": {
                 "flat_amount": {
                     "description": "flat_amount is the flat amount for the given tier (optional)\nApplied on top of unit_amount*quantity. Useful for cases like \"2.7$ + 5c\"",
-                    "type": "number"
+                    "type": "string"
                 },
                 "unit_amount": {
                     "description": "unit_amount is the amount per unit for the given tier",
-                    "type": "number"
+                    "type": "string"
                 },
                 "up_to": {
                     "description": "up_to is the quantity up to which this tier applies. It is null for the last tier.\nIMPORTANT: Tier boundaries are INCLUSIVE.\n- If up_to is 1000, then quantity less than or equal to 1000 belongs to this tier\n- This behavior is consistent across both VOLUME and SLAB tier modes",
@@ -20665,7 +21238,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "start_date": {
                     "type": "string"
@@ -21117,6 +21690,23 @@ const docTemplate = `{
                 "AlertTypeFeatureWalletBalance"
             ]
         },
+        "types.ApplicationStatus": {
+            "type": "string",
+            "enum": [
+                "applied",
+                "failed",
+                "pending",
+                "skipped",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ApplicationStatusApplied",
+                "ApplicationStatusFailed",
+                "ApplicationStatusPending",
+                "ApplicationStatusSkipped",
+                "ApplicationStatusCancelled"
+            ]
+        },
         "types.AutoTopupTrigger": {
             "type": "string",
             "enum": [
@@ -21204,6 +21794,31 @@ const docTemplate = `{
                 "CancellationTypeEndOfPeriod"
             ]
         },
+        "types.ChargebeeConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "Chargebee API key (encrypted)",
+                    "type": "string"
+                },
+                "site": {
+                    "description": "Chargebee site name (not encrypted)",
+                    "type": "string"
+                },
+                "webhook_password": {
+                    "description": "Basic Auth password for webhooks (encrypted)",
+                    "type": "string"
+                },
+                "webhook_secret": {
+                    "description": "Chargebee Webhook Secret (encrypted, optional, NOT USED in v2)",
+                    "type": "string"
+                },
+                "webhook_username": {
+                    "description": "Basic Auth username for webhooks (encrypted)",
+                    "type": "string"
+                }
+            }
+        },
         "types.CollectionMethod": {
             "type": "string",
             "enum": [
@@ -21272,11 +21887,20 @@ const docTemplate = `{
         "types.ConnectionMetadata": {
             "type": "object",
             "properties": {
+                "chargebee": {
+                    "$ref": "#/definitions/types.ChargebeeConnectionMetadata"
+                },
                 "generic": {
                     "$ref": "#/definitions/types.GenericConnectionMetadata"
                 },
                 "hubspot": {
                     "$ref": "#/definitions/types.HubSpotConnectionMetadata"
+                },
+                "quickbooks": {
+                    "$ref": "#/definitions/types.QuickBooksConnectionMetadata"
+                },
+                "razorpay": {
+                    "$ref": "#/definitions/types.RazorpayConnectionMetadata"
                 },
                 "s3": {
                     "$ref": "#/definitions/types.S3ConnectionMetadata"
@@ -21319,6 +21943,19 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "CouponTypeFixed",
                 "CouponTypePercentage"
+            ]
+        },
+        "types.CreditGrantApplicationReason": {
+            "type": "string",
+            "enum": [
+                "first_time_recurring_credit_grant",
+                "recurring_credit_grant",
+                "onetime_credit_grant"
+            ],
+            "x-enum-varnames": [
+                "ApplicationReasonFirstTimeRecurringCreditGrant",
+                "ApplicationReasonRecurringCreditGrant",
+                "ApplicationReasonOnetimeCreditGrant"
             ]
         },
         "types.CreditGrantCadence": {
@@ -21483,6 +22120,12 @@ const docTemplate = `{
                         "asc",
                         "desc"
                     ]
+                },
+                "parent_customer_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "sort": {
                     "type": "array",
@@ -21816,7 +22459,10 @@ const docTemplate = `{
                 "subscription",
                 "payment",
                 "credit_note",
-                "addon"
+                "addon",
+                "item",
+                "item_price",
+                "price"
             ],
             "x-enum-varnames": [
                 "IntegrationEntityTypeCustomer",
@@ -21825,7 +22471,21 @@ const docTemplate = `{
                 "IntegrationEntityTypeSubscription",
                 "IntegrationEntityTypePayment",
                 "IntegrationEntityTypeCreditNote",
-                "IntegrationEntityTypeAddon"
+                "IntegrationEntityTypeAddon",
+                "IntegrationEntityTypeItem",
+                "IntegrationEntityTypeItemPrice",
+                "IntegrationEntityTypePrice"
+            ]
+        },
+        "types.InvoiceBilling": {
+            "type": "string",
+            "enum": [
+                "invoice_to_parent",
+                "invoice_to_self"
+            ],
+            "x-enum-varnames": [
+                "InvoiceBillingInvoiceToParent",
+                "InvoiceBillingInvoiceToSelf"
             ]
         },
         "types.InvoiceBillingReason": {
@@ -22057,10 +22717,12 @@ const docTemplate = `{
         "types.PaymentGatewayType": {
             "type": "string",
             "enum": [
-                "stripe"
+                "stripe",
+                "razorpay"
             ],
             "x-enum-varnames": [
-                "PaymentGatewayTypeStripe"
+                "PaymentGatewayTypeStripe",
+                "PaymentGatewayTypeRazorpay"
             ]
         },
         "types.PaymentMethodType": {
@@ -22246,6 +22908,72 @@ const docTemplate = `{
                 }
             }
         },
+        "types.QuickBooksConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "Managed internally - set after auth code exchange or token refresh",
+                    "type": "string"
+                },
+                "auth_code": {
+                    "description": "Optional - for initial setup via auth code (will be cleared after token exchange)",
+                    "type": "string"
+                },
+                "client_id": {
+                    "description": "Required for initial connection setup",
+                    "type": "string"
+                },
+                "client_secret": {
+                    "description": "OAuth Client Secret (encrypted)",
+                    "type": "string"
+                },
+                "environment": {
+                    "description": "\"sandbox\" or \"production\"",
+                    "type": "string"
+                },
+                "income_account_id": {
+                    "description": "Optional configuration",
+                    "type": "string"
+                },
+                "oauth_session_data": {
+                    "description": "Temporary OAuth session data (only used during OAuth flow, cleared after completion)",
+                    "type": "string"
+                },
+                "realm_id": {
+                    "description": "QuickBooks Company ID (not encrypted)",
+                    "type": "string"
+                },
+                "redirect_uri": {
+                    "description": "OAuth Redirect URI (temporary)",
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "description": "OAuth Refresh Token (encrypted)",
+                    "type": "string"
+                },
+                "webhook_verifier_token": {
+                    "description": "Webhook security",
+                    "type": "string"
+                }
+            }
+        },
+        "types.RazorpayConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "key_id": {
+                    "description": "Razorpay Key ID (encrypted)",
+                    "type": "string"
+                },
+                "secret_key": {
+                    "description": "Razorpay Secret Key (encrypted)",
+                    "type": "string"
+                },
+                "webhook_secret": {
+                    "description": "Razorpay Webhook Secret (encrypted, optional)",
+                    "type": "string"
+                }
+            }
+        },
         "types.ResetUsage": {
             "type": "string",
             "enum": [
@@ -22392,13 +23120,19 @@ const docTemplate = `{
                 "flexprice",
                 "stripe",
                 "s3",
-                "hubspot"
+                "hubspot",
+                "razorpay",
+                "chargebee",
+                "quickbooks"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
                 "SecretProviderStripe",
                 "SecretProviderS3",
-                "SecretProviderHubSpot"
+                "SecretProviderHubSpot",
+                "SecretProviderRazorpay",
+                "SecretProviderChargebee",
+                "SecretProviderQuickBooks"
             ]
         },
         "types.SecretType": {
@@ -22510,10 +23244,21 @@ const docTemplate = `{
                 "expand": {
                     "type": "string"
                 },
+                "external_customer_id": {
+                    "description": "ExternalCustomerID filters by external customer ID",
+                    "type": "string"
+                },
                 "filters": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "invoicing_customer_ids": {
+                    "description": "InvoicingCustomerIDs filters by invoicing customer ID",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
                     }
                 },
                 "limit": {
@@ -22588,7 +23333,8 @@ const docTemplate = `{
                 "incomplete_expired",
                 "past_due",
                 "trialing",
-                "unpaid"
+                "unpaid",
+                "draft"
             ],
             "x-enum-varnames": [
                 "SubscriptionStatusActive",
@@ -22598,7 +23344,8 @@ const docTemplate = `{
                 "SubscriptionStatusIncompleteExpired",
                 "SubscriptionStatusPastDue",
                 "SubscriptionStatusTrialing",
-                "SubscriptionStatusUnpaid"
+                "SubscriptionStatusUnpaid",
+                "SubscriptionStatusDraft"
             ]
         },
         "types.SyncConfig": {
@@ -22615,13 +23362,24 @@ const docTemplate = `{
                 "invoice": {
                     "$ref": "#/definitions/types.EntitySyncConfig"
                 },
-                "plan": {
-                    "description": "Integration sync (Stripe, Razorpay, etc.)",
+                "payment": {
+                    "description": "Payment sync (QuickBooks bidirectional)",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.EntitySyncConfig"
                         }
                     ]
+                },
+                "plan": {
+                    "description": "Integration sync (Stripe, Razorpay, QuickBooks, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.EntitySyncConfig"
+                        }
+                    ]
+                },
+                "quote": {
+                    "$ref": "#/definitions/types.EntitySyncConfig"
                 },
                 "subscription": {
                     "$ref": "#/definitions/types.EntitySyncConfig"

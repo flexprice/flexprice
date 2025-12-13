@@ -61,11 +61,7 @@ build/
 # =============================================================================
 
 # Generated SDK code - ignore all generated files in language-specific directories
-api/go/src/
-api/go/examples/
-api/javascript/src/
-api/javascript/examples/
-api/python/flexprice/
+api/*/*
 
 # But keep configuration and build files for each language
 !api/go/go.mod

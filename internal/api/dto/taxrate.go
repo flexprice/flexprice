@@ -23,10 +23,10 @@ type CreateTaxRateRequest struct {
 	Description string `json:"description,omitempty"`
 
 	// percentage_value is the percentage value (0-100) when tax_rate_type is "percentage"
-	PercentageValue *decimal.Decimal `json:"percentage_value,omitempty"`
+	PercentageValue *decimal.Decimal `json:"percentage_value,omitempty" swaggertype:"string"`
 
 	// fixed_value is the fixed monetary amount when tax_rate_type is "fixed"
-	FixedValue *decimal.Decimal `json:"fixed_value,omitempty"`
+	FixedValue *decimal.Decimal `json:"fixed_value,omitempty" swaggertype:"string"`
 
 	// tax_rate_type determines how the tax is calculated ("percentage" or "fixed")
 	TaxRateType types.TaxRateType `json:"tax_rate_type"`

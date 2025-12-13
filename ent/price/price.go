@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -27,6 +28,8 @@ const (
 	FieldUpdatedBy = "updated_by"
 	// FieldEnvironmentID holds the string denoting the environment_id field in the database.
 	FieldEnvironmentID = "environment_id"
+	// FieldDisplayName holds the string denoting the display_name field in the database.
+	FieldDisplayName = "display_name"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
 	// FieldCurrency holds the string denoting the currency field in the database.
@@ -45,6 +48,8 @@ const (
 	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
 	FieldConversionRate = "conversion_rate"
+	// FieldMinQuantity holds the string denoting the min_quantity field in the database.
+	FieldMinQuantity = "min_quantity"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -103,6 +108,7 @@ var Columns = []string{
 	FieldCreatedBy,
 	FieldUpdatedBy,
 	FieldEnvironmentID,
+	FieldDisplayName,
 	FieldAmount,
 	FieldCurrency,
 	FieldDisplayAmount,
@@ -112,6 +118,7 @@ var Columns = []string{
 	FieldPriceUnitAmount,
 	FieldDisplayPriceUnitAmount,
 	FieldConversionRate,
+	FieldMinQuantity,
 	FieldType,
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
@@ -159,6 +166,8 @@ var (
 	UpdateDefaultUpdatedAt func() time.Time
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
+	// DefaultAmount holds the default value on creation for the "amount" field.
+	DefaultAmount decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// DisplayAmountValidator is a validator for the "display_amount" field. It is called by the builders before save.
@@ -167,6 +176,10 @@ var (
 	DefaultPriceUnitType string
 	// PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
 	PriceUnitTypeValidator func(string) error
+	// DefaultPriceUnitAmount holds the default value on creation for the "price_unit_amount" field.
+	DefaultPriceUnitAmount decimal.Decimal
+	// DefaultConversionRate holds the default value on creation for the "conversion_rate" field.
+	DefaultConversionRate decimal.Decimal
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
@@ -228,6 +241,11 @@ func ByEnvironmentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEnvironmentID, opts...).ToFunc()
 }
 
+// ByDisplayName orders the results by the display_name field.
+func ByDisplayName(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDisplayName, opts...).ToFunc()
+}
+
 // ByAmount orders the results by the amount field.
 func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
@@ -271,6 +289,11 @@ func ByDisplayPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByConversionRate orders the results by the conversion_rate field.
 func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
+}
+
+// ByMinQuantity orders the results by the min_quantity field.
+func ByMinQuantity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMinQuantity, opts...).ToFunc()
 }
 
 // ByType orders the results by the type field.

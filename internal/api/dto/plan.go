@@ -16,14 +16,11 @@ import (
 )
 
 type CreatePlanRequest struct {
-	Name         string                         `json:"name" validate:"required"`
-	LookupKey    string                         `json:"lookup_key"`
-	Description  string                         `json:"description"`
-	DisplayOrder *int                           `json:"display_order,omitempty"`
-	Prices       []CreatePlanPriceRequest       `json:"prices"`
-	Entitlements []CreatePlanEntitlementRequest `json:"entitlements"`
-	CreditGrants []CreateCreditGrantRequest     `json:"credit_grants"`
-	Metadata     types.Metadata                 `json:"metadata"`
+	Name         string         `json:"name" validate:"required"`
+	LookupKey    string         `json:"lookup_key"`
+	Description  string         `json:"description"`
+	DisplayOrder *int           `json:"display_order,omitempty"`
+	Metadata     types.Metadata `json:"metadata,omitempty"`
 }
 
 type GetPricesByPlanRequest struct {
@@ -88,35 +85,6 @@ func (r *CreatePlanRequest) Validate() error {
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
-	}
-
-	for _, price := range r.Prices {
-		if price.CreatePriceRequest == nil {
-			return errors.NewError("price request cannot be nil").
-				WithHint("Please provide valid price configuration").
-				Mark(errors.ErrValidation)
-		}
-
-		// Ensure price_unit_type is set, default to FIAT if not provided
-		if price.PriceUnitType == "" {
-			price.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
-		}
-
-		if err := price.Validate(); err != nil {
-			return err
-		}
-	}
-
-	for _, ent := range r.Entitlements {
-		if err := ent.Validate(); err != nil {
-			return err
-		}
-	}
-
-	for _, cg := range r.CreditGrants {
-		if err := r.validateCreditGrantForPlan(cg); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -279,35 +247,11 @@ type PlanResponse struct {
 }
 
 type UpdatePlanRequest struct {
-	Name         *string                        `json:"name,omitempty"`
-	LookupKey    *string                        `json:"lookup_key,omitempty"`
-	Description  *string                        `json:"description,omitempty"`
-	DisplayOrder *int                           `json:"display_order,omitempty"`
-	Prices       []UpdatePlanPriceRequest       `json:"prices,omitempty"`
-	Entitlements []UpdatePlanEntitlementRequest `json:"entitlements,omitempty"`
-	CreditGrants []UpdatePlanCreditGrantRequest `json:"credit_grants,omitempty"`
-	Metadata     types.Metadata                 `json:"metadata,omitempty"`
-}
-
-type UpdatePlanPriceRequest struct {
-	// The ID of the price to update (present if the price is being updated)
-	ID string `json:"id,omitempty"`
-	// The price request to update existing price or create new price
-	*CreatePriceRequest
-}
-
-type UpdatePlanEntitlementRequest struct {
-	// The ID of the entitlement to update (present if the entitlement is being updated)
-	ID string `json:"id,omitempty"`
-	// The entitlement request to update existing entitlement or create new entitlement
-	*CreatePlanEntitlementRequest
-}
-
-type UpdatePlanCreditGrantRequest struct {
-	// The ID of the credit grant to update (present if the credit grant is being updated)
-	ID string `json:"id,omitempty"`
-	// The credit grant request to update existing credit grant or create new credit grant
-	*CreateCreditGrantRequest
+	Name         *string        `json:"name,omitempty"`
+	LookupKey    *string        `json:"lookup_key,omitempty"`
+	Description  *string        `json:"description,omitempty"`
+	DisplayOrder *int           `json:"display_order,omitempty"`
+	Metadata     types.Metadata `json:"metadata,omitempty"`
 }
 
 // ListPlansResponse represents the response for listing plans with prices, entitlements, and credit grants

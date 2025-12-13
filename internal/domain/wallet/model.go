@@ -15,18 +15,18 @@ type Wallet struct {
 	ID                  string                 `db:"id" json:"id"`
 	CustomerID          string                 `db:"customer_id" json:"customer_id"`
 	Currency            string                 `db:"currency" json:"currency"`
-	Balance             decimal.Decimal        `db:"balance" json:"balance"`
-	CreditBalance       decimal.Decimal        `db:"credit_balance" json:"credit_balance"`
+	Balance             decimal.Decimal        `db:"balance" json:"balance" swaggertype:"string"`
+	CreditBalance       decimal.Decimal        `db:"credit_balance" json:"credit_balance" swaggertype:"string"`
 	WalletStatus        types.WalletStatus     `db:"wallet_status" json:"wallet_status"`
 	Name                string                 `db:"name" json:"name,omitempty"`
 	Description         string                 `db:"description" json:"description"`
 	Metadata            types.Metadata         `db:"metadata" json:"metadata"`
 	AutoTopupTrigger    types.AutoTopupTrigger `db:"auto_topup_trigger" json:"auto_topup_trigger"`
-	AutoTopupMinBalance decimal.Decimal        `db:"auto_topup_min_balance" json:"auto_topup_min_balance"`
-	AutoTopupAmount     decimal.Decimal        `db:"auto_topup_amount" json:"auto_topup_amount"`
+	AutoTopupMinBalance decimal.Decimal        `db:"auto_topup_min_balance" json:"auto_topup_min_balance" swaggertype:"string"`
+	AutoTopupAmount     decimal.Decimal        `db:"auto_topup_amount" json:"auto_topup_amount" swaggertype:"string"`
 	WalletType          types.WalletType       `db:"wallet_type" json:"wallet_type"`
 	Config              types.WalletConfig     `db:"config" json:"config"`
-	ConversionRate      decimal.Decimal        `db:"conversion_rate" json:"conversion_rate"`
+	ConversionRate      decimal.Decimal        `db:"conversion_rate" json:"conversion_rate" swaggertype:"string"`
 	EnvironmentID       string                 `db:"environment_id" json:"environment_id"`
 	AlertEnabled        bool                   `db:"alert_enabled" json:"alert_enabled"`
 	AlertConfig         *types.AlertConfig     `db:"alert_config" json:"alert_config,omitempty"`

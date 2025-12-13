@@ -137,10 +137,10 @@ type CreateSubscriptionRequest struct {
 	CreditGrants []CreateCreditGrantRequest `json:"credit_grants,omitempty"`
 
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
-	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
-	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
+	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 
 	// tax_rate_overrides is the tax rate overrides	to be applied to the subscription
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
@@ -240,7 +240,7 @@ type CancelSubscriptionRequest struct {
 	Reason string `json:"reason,omitempty"`
 
 	//SuppressWebhook is an internal flag to suppress webhook events during cancellation.
-	SuppressWebhook bool `json:"_,omitempty"`
+	SuppressWebhook bool `json:"-,omitempty"`
 }
 
 // CancelSubscriptionResponse represents the enhanced cancellation response
@@ -255,7 +255,7 @@ type CancelSubscriptionResponse struct {
 	// Proration details
 	ProrationInvoice  *InvoiceResponse  `json:"proration_invoice,omitempty"`
 	ProrationDetails  []ProrationDetail `json:"proration_details"`
-	TotalCreditAmount decimal.Decimal   `json:"total_credit_amount"`
+	TotalCreditAmount decimal.Decimal   `json:"total_credit_amount" swaggertype:"string"`
 
 	// Response metadata
 	Message     string    `json:"message"`
@@ -267,9 +267,9 @@ type ProrationDetail struct {
 	LineItemID     string          `json:"line_item_id"`
 	PriceID        string          `json:"price_id"`
 	PlanName       string          `json:"plan_name,omitempty"`
-	OriginalAmount decimal.Decimal `json:"original_amount"`
-	CreditAmount   decimal.Decimal `json:"credit_amount"`
-	ChargeAmount   decimal.Decimal `json:"charge_amount"`
+	OriginalAmount decimal.Decimal `json:"original_amount" swaggertype:"string"`
+	CreditAmount   decimal.Decimal `json:"credit_amount" swaggertype:"string"`
+	ChargeAmount   decimal.Decimal `json:"charge_amount" swaggertype:"string"`
 	ProrationDays  int             `json:"proration_days"`
 	Description    string          `json:"description,omitempty"`
 }
@@ -847,7 +847,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 // SubscriptionLineItemRequest represents the request to create a subscription line item
 type SubscriptionLineItemRequest struct {
 	PriceID     string            `json:"price_id" validate:"required"`
-	Quantity    decimal.Decimal   `json:"quantity" validate:"required"`
+	Quantity    decimal.Decimal   `json:"quantity" validate:"required" swaggertype:"string"`
 	DisplayName string            `json:"display_name,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
@@ -864,12 +864,12 @@ type OverrideLineItemRequest struct {
 	PriceID string `json:"price_id" validate:"required"`
 
 	// Quantity for this line item (optional)
-	Quantity *decimal.Decimal `json:"quantity,omitempty"`
+	Quantity *decimal.Decimal `json:"quantity,omitempty" swaggertype:"string"`
 
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
 	// Amount is the new price amount that overrides the original price (optional)
-	Amount *decimal.Decimal `json:"amount,omitempty"`
+	Amount *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 
 	// TierMode determines how to calculate the price for a given quantity
 	TierMode types.BillingTier `json:"tier_mode,omitempty"`
@@ -939,13 +939,30 @@ func (r *OverrideLineItemRequest) Validate(
 	}
 
 	// Validate quantity if provided
-	if r.Quantity != nil && r.Quantity.IsNegative() {
-		return ierr.NewError("quantity must be non-negative").
-			WithHint("Override quantity cannot be negative").
-			WithReportableDetails(map[string]interface{}{
-				"quantity": r.Quantity.String(),
-			}).
-			Mark(ierr.ErrValidation)
+	if r.Quantity != nil {
+		if r.Quantity.IsNegative() {
+			return ierr.NewError("quantity must be non-negative").
+				WithHint("Override quantity cannot be negative").
+				WithReportableDetails(map[string]interface{}{
+					"quantity": r.Quantity.String(),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Quantity can only be set for fixed prices, not usage-based prices
+		if priceMap != nil {
+			if price, exists := priceMap[r.PriceID]; exists && price != nil {
+				if price.Type == types.PRICE_TYPE_USAGE {
+					return ierr.NewError("quantity cannot be set for usage-based prices").
+						WithHint("Quantity overrides are only allowed for fixed prices. Usage-based prices track quantity automatically from meter events").
+						WithReportableDetails(map[string]interface{}{
+							"price_id":   r.PriceID,
+							"price_type": price.Type,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+		}
 	}
 
 	// Validate billing model if provided

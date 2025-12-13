@@ -196,7 +196,7 @@ type GetCostBreakdownRequest struct {
 // CostBreakdownResponse represents the calculated costs for a period.
 type CostBreakdownResponse struct {
 	// TotalCost is the sum of all meter costs
-	TotalCost decimal.Decimal `json:"total_cost"`
+	TotalCost decimal.Decimal `json:"total_cost" swaggertype:"string"`
 
 	// Items contains the breakdown by meter
 	Items []CostBreakdownItem `json:"items"`
@@ -214,10 +214,10 @@ type CostBreakdownItem struct {
 	MeterName string `json:"meter_name"`
 
 	// Cost is the calculated cost for this meter
-	Cost decimal.Decimal `json:"cost"`
+	Cost decimal.Decimal `json:"cost" swaggertype:"string"`
 
 	// Usage is the total usage for this meter in the period
-	Usage decimal.Decimal `json:"usage"`
+	Usage decimal.Decimal `json:"usage" swaggertype:"string"`
 
 	// Unit is the unit of measurement
 	Unit string `json:"unit"`
@@ -232,16 +232,16 @@ type CostPeriod struct {
 // ROIResponse represents the calculated ROI metrics.
 type ROIResponse struct {
 	// ROI is the return on investment percentage
-	ROI decimal.Decimal `json:"roi"`
+	ROI decimal.Decimal `json:"roi" swaggertype:"string"`
 
 	// TotalRevenue is the total revenue for the period
-	TotalRevenue decimal.Decimal `json:"total_revenue"`
+	TotalRevenue decimal.Decimal `json:"total_revenue" swaggertype:"string"`
 
 	// TotalCost is the total cost for the period
-	TotalCost decimal.Decimal `json:"total_cost"`
+	TotalCost decimal.Decimal `json:"total_cost" swaggertype:"string"`
 
 	// Profit is the difference between revenue and cost
-	Profit decimal.Decimal `json:"profit"`
+	Profit decimal.Decimal `json:"profit" swaggertype:"string"`
 
 	// Period shows the time range for this calculation
 	Period CostPeriod `json:"period"`

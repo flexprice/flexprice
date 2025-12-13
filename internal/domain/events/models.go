@@ -54,29 +54,29 @@ type DetailedUsageAnalytic struct {
 	AggregationType types.AggregationType
 	Unit            string
 	UnitPlural      string
-	TotalUsage      decimal.Decimal
-	TotalCost       decimal.Decimal
+	TotalUsage      decimal.Decimal `swaggertype:"string"`
+	TotalCost       decimal.Decimal `swaggertype:"string"`
 	Currency        string
 	EventCount      uint64            // Number of events that contributed to this aggregation
 	Properties      map[string]string // Stores property values for flexible grouping (e.g., org_id -> "org123")
 	Points          []UsageAnalyticPoint
 
 	// All aggregation values - we fetch all and use the appropriate one based on meter type
-	MaxUsage         decimal.Decimal // MAX(qty_total * sign)
-	LatestUsage      decimal.Decimal // argMax(qty_total, timestamp)
+	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
+	LatestUsage      decimal.Decimal `swaggertype:"string"` // argMax(qty_total, timestamp)
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
 // UsageAnalyticPoint represents a data point in a time series
 type UsageAnalyticPoint struct {
 	Timestamp  time.Time
-	Usage      decimal.Decimal
-	Cost       decimal.Decimal
-	EventCount uint64 // Number of events in this time window
+	Usage      decimal.Decimal `swaggertype:"string"`
+	Cost       decimal.Decimal `swaggertype:"string"`
+	EventCount uint64          // Number of events in this time window
 
 	// All aggregation values for this time point
-	MaxUsage         decimal.Decimal // MAX(qty_total * sign)
-	LatestUsage      decimal.Decimal // argMax(qty_total, timestamp)
+	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
+	LatestUsage      decimal.Decimal `swaggertype:"string"` // argMax(qty_total, timestamp)
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
@@ -86,9 +86,9 @@ type UsageByFeatureResult struct {
 	FeatureID        string
 	MeterID          string
 	PriceID          string
-	SumTotal         decimal.Decimal
-	MaxTotal         decimal.Decimal
+	SumTotal         decimal.Decimal `swaggertype:"string"`
+	MaxTotal         decimal.Decimal `swaggertype:"string"`
 	CountDistinctIDs uint64
 	CountUniqueQty   uint64
-	LatestQty        decimal.Decimal
+	LatestQty        decimal.Decimal `swaggertype:"string"`
 }

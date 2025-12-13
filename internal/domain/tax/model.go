@@ -16,8 +16,8 @@ type TaxRate struct {
 	TaxRateStatus   types.TaxRateStatus `json:"tax_rate_status,omitempty"`
 	TaxRateType     types.TaxRateType   `json:"tax_rate_type,omitempty"`
 	Scope           types.TaxRateScope  `json:"scope,omitempty"`
-	PercentageValue *decimal.Decimal    `json:"percentage_value,omitempty"`
-	FixedValue      *decimal.Decimal    `json:"fixed_value,omitempty"`
+	PercentageValue *decimal.Decimal    `json:"percentage_value,omitempty" swaggertype:"string"`
+	FixedValue      *decimal.Decimal    `json:"fixed_value,omitempty" swaggertype:"string"`
 	Metadata        map[string]string   `json:"metadata,omitempty"`
 	types.BaseModel
 }

@@ -59,12 +59,12 @@ type ProcessedEvent struct {
 
 	// Deduplication and metrics
 	UniqueHash     string          `json:"unique_hash" ch:"unique_hash"`
-	QtyTotal       decimal.Decimal `json:"qty_total" ch:"qty_total"`
-	QtyBillable    decimal.Decimal `json:"qty_billable" ch:"qty_billable"`
-	QtyFreeApplied decimal.Decimal `json:"qty_free_applied" ch:"qty_free_applied"`
-	TierSnapshot   decimal.Decimal `json:"tier_snapshot" ch:"tier_snapshot"`
-	UnitCost       decimal.Decimal `json:"unit_cost" ch:"unit_cost"`
-	Cost           decimal.Decimal `json:"cost" ch:"cost"`
+	QtyTotal       decimal.Decimal `json:"qty_total" ch:"qty_total" swaggertype:"string"`
+	QtyBillable    decimal.Decimal `json:"qty_billable" ch:"qty_billable" swaggertype:"string"`
+	QtyFreeApplied decimal.Decimal `json:"qty_free_applied" ch:"qty_free_applied" swaggertype:"string"`
+	TierSnapshot   decimal.Decimal `json:"tier_snapshot" ch:"tier_snapshot" swaggertype:"string"`
+	UnitCost       decimal.Decimal `json:"unit_cost" ch:"unit_cost" swaggertype:"string"`
+	Cost           decimal.Decimal `json:"cost" ch:"cost" swaggertype:"string"`
 
 	// Audit fields
 	Version uint64 `json:"version" ch:"version"`
@@ -171,7 +171,7 @@ type FeatureUsage struct {
 	PeriodID       uint64 `json:"period_id" ch:"period_id"`
 	// Deduplication and metrics
 	UniqueHash string          `json:"unique_hash" ch:"unique_hash"`
-	QtyTotal   decimal.Decimal `json:"qty_total" ch:"qty_total"`
+	QtyTotal   decimal.Decimal `json:"qty_total" ch:"qty_total" swaggertype:"string"`
 
 	// Audit fields
 	Version uint64 `json:"version" ch:"version"`

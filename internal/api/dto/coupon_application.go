@@ -14,11 +14,11 @@ type CreateCouponApplicationRequest struct {
 	InvoiceID           string                 `json:"invoice_id" validate:"required"`
 	InvoiceLineItemID   *string                `json:"invoice_line_item_id,omitempty"`
 	SubscriptionID      *string                `json:"subscription_id,omitempty"`
-	OriginalPrice       decimal.Decimal        `json:"original_price" validate:"required"`
-	FinalPrice          decimal.Decimal        `json:"final_price" validate:"required"`
-	DiscountedAmount    decimal.Decimal        `json:"discounted_amount" validate:"required"`
+	OriginalPrice       decimal.Decimal        `json:"original_price" validate:"required" swaggertype:"string"`
+	FinalPrice          decimal.Decimal        `json:"final_price" validate:"required" swaggertype:"string"`
+	DiscountedAmount    decimal.Decimal        `json:"discounted_amount" validate:"required" swaggertype:"string"`
 	DiscountType        types.CouponType       `json:"discount_type" validate:"required"`
-	DiscountPercentage  *decimal.Decimal       `json:"discount_percentage,omitempty"`
+	DiscountPercentage  *decimal.Decimal       `json:"discount_percentage,omitempty" swaggertype:"string"`
 	Currency            string                 `json:"currency" validate:"required"`
 	CouponSnapshot      map[string]interface{} `json:"coupon_snapshot,omitempty"`
 	Metadata            map[string]string      `json:"metadata,omitempty"`

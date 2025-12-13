@@ -15,12 +15,12 @@ type WalletOperation struct {
 	// Amount is the amount of the transaction in the wallet's currency (e.g., USD, EUR)
 	// Priority: If Amount is provided along with CreditAmount, Amount takes precedence
 	// The Type field (CREDIT or DEBIT) determines the operation direction
-	Amount decimal.Decimal `json:"amount"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 
 	// CreditAmount is the amount of credits to add/remove from the wallet
 	// Used when you want to specify credits directly instead of currency amount
 	// Priority: Only used if Amount is not provided
-	CreditAmount decimal.Decimal `json:"credit_amount,omitempty"`
+	CreditAmount decimal.Decimal `json:"credit_amount,omitempty" swaggertype:"string"`
 
 	ReferenceType     types.WalletTxReferenceType `json:"reference_type,omitempty"`
 	ReferenceID       string                      `json:"reference_id,omitempty"`

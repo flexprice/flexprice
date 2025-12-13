@@ -68,7 +68,7 @@ type GetUsageRequest struct {
 	Filters            map[string][]string   `form:"filters,omitempty" json:"filters,omitempty"`
 	PriceID            string                `form:"-" json:"-"` // this is just for internal use to store the price id
 	MeterID            string                `form:"-" json:"-"` // this is just for internal use to store the meter id
-	Multiplier         *decimal.Decimal      `form:"multiplier" json:"multiplier,omitempty"`
+	Multiplier         *decimal.Decimal      `form:"multiplier" json:"multiplier,omitempty" swaggertype:"string"`
 	// BillingAnchor enables custom monthly billing periods for usage aggregation.
 	//
 	// When to use:
@@ -290,7 +290,7 @@ type GetUsageAnalyticsRequest struct {
 
 // GetUsageAnalyticsResponse represents the response for the usage analytics API
 type GetUsageAnalyticsResponse struct {
-	TotalCost decimal.Decimal     `json:"total_cost"`
+	TotalCost decimal.Decimal     `json:"total_cost" swaggertype:"string"`
 	Currency  string              `json:"currency"`
 	Items     []UsageAnalyticItem `json:"items"`
 }
@@ -314,8 +314,8 @@ type UsageAnalyticItem struct {
 	Unit                 string                             `json:"unit,omitempty"`
 	UnitPlural           string                             `json:"unit_plural,omitempty"`
 	AggregationType      types.AggregationType              `json:"aggregation_type,omitempty"`
-	TotalUsage           decimal.Decimal                    `json:"total_usage"`
-	TotalCost            decimal.Decimal                    `json:"total_cost"`
+	TotalUsage           decimal.Decimal                    `json:"total_usage" swaggertype:"string"`
+	TotalCost            decimal.Decimal                    `json:"total_cost" swaggertype:"string"`
 	Currency             string                             `json:"currency,omitempty"`
 	EventCount           uint64                             `json:"event_count"`          // Number of events that contributed to this aggregation
 	Properties           map[string]string                  `json:"properties,omitempty"` // Stores property values for flexible grouping (e.g., org_id -> "org123")
@@ -327,8 +327,8 @@ type UsageAnalyticItem struct {
 // UsageAnalyticPoint represents a point in the time series data
 type UsageAnalyticPoint struct {
 	Timestamp  time.Time       `json:"timestamp"`
-	Usage      decimal.Decimal `json:"usage"`
-	Cost       decimal.Decimal `json:"cost"`
+	Usage      decimal.Decimal `json:"usage" swaggertype:"string"`
+	Cost       decimal.Decimal `json:"cost" swaggertype:"string"`
 	EventCount uint64          `json:"event_count"` // Number of events in this time window
 }
 
@@ -374,7 +374,7 @@ type GetHuggingFaceBillingDataRequest struct {
 
 type EventCostInfo struct {
 	EventID       string          `json:"requestId"`
-	CostInNanoUSD decimal.Decimal `json:"costNanoUsd"`
+	CostInNanoUSD decimal.Decimal `json:"costNanoUsd" swaggertype:"string"`
 }
 
 type GetHuggingFaceBillingDataResponse struct {

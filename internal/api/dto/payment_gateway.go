@@ -9,7 +9,7 @@ import (
 type CreatePaymentLinkRequest struct {
 	InvoiceID              string                    `json:"invoice_id" binding:"required"`
 	CustomerID             string                    `json:"customer_id" binding:"required"`
-	Amount                 decimal.Decimal           `json:"amount" binding:"required"`
+	Amount                 decimal.Decimal           `json:"amount" binding:"required" swaggertype:"string"`
 	Currency               string                    `json:"currency" binding:"required"`
 	Gateway                *types.PaymentGatewayType `json:"gateway,omitempty"` // Optional, will use preferred if not specified
 	SuccessURL             string                    `json:"success_url,omitempty"`
@@ -52,7 +52,7 @@ type PaymentLinkResponse struct {
 	ID              string          `json:"id"`
 	PaymentURL      string          `json:"payment_url"`
 	PaymentIntentID string          `json:"payment_intent_id,omitempty"`
-	Amount          decimal.Decimal `json:"amount"`
+	Amount          decimal.Decimal `json:"amount" swaggertype:"string"`
 	Currency        string          `json:"currency"`
 	Status          string          `json:"status"`
 	CreatedAt       int64           `json:"created_at"`

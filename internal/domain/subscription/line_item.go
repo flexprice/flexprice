@@ -25,7 +25,7 @@ type SubscriptionLineItem struct {
 	PriceUnitID         string                               `db:"price_unit_id" json:"price_unit_id"`
 	PriceUnit           string                               `db:"price_unit" json:"price_unit"`
 	DisplayName         string                               `db:"display_name" json:"display_name,omitempty"`
-	Quantity            decimal.Decimal                      `db:"quantity" json:"quantity"`
+	Quantity            decimal.Decimal                      `db:"quantity" json:"quantity" swaggertype:"string"`
 	Currency            string                               `db:"currency" json:"currency"`
 	BillingPeriod       types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
 	InvoiceCadence      types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`

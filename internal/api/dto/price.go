@@ -11,15 +11,15 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
 type CreatePriceRequest struct {
 	Amount             string                   `json:"amount,omitempty"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
-	PlanID             string                   `json:"plan_id,omitempty"`     // TODO: This is deprecated and will be removed in the future
-	EntityType         types.PriceEntityType    `json:"entity_type,omitempty"` // TODO: this will be required in the future as we will not allow prices to be created without an entity type
-	EntityID           string                   `json:"entity_id,omitempty"`   // TODO: this will be required in the future as we will not allow prices to be created without an entity id
+	EntityType         types.PriceEntityType    `json:"entity_type" validate:"required"`
+	EntityID           string                   `json:"entity_id" validate:"required"`
 	Type               types.PriceType          `json:"type" validate:"required"`
 	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
@@ -39,6 +39,10 @@ type CreatePriceRequest struct {
 	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
 	StartDate          *time.Time               `json:"start_date,omitempty"`
 	EndDate            *time.Time               `json:"end_date,omitempty"`
+	DisplayName        string                   `json:"display_name,omitempty"`
+
+	// MinQuantity is the minimum quantity of the price
+	MinQuantity *int64 `json:"min_quantity,omitempty"`
 
 	// SkipEntityValidation is used to skip entity validation when creating a price from a subscription i.e. override price workflow
 	// This is used when creating a subscription-scoped price
@@ -76,6 +80,18 @@ type CreatePriceTier struct {
 // TODO : add all price validations
 func (r *CreatePriceRequest) Validate() error {
 	var err error
+
+	// Validate entity type
+	err = r.EntityType.Validate()
+	if err != nil {
+		return err
+	}
+
+	if r.EntityID == "" {
+		return ierr.NewError("entity_id is required when entity_type is provided").
+			WithHint("Please provide an entity id").
+			Mark(ierr.ErrValidation)
+	}
 
 	// Set default price unit type to FIAT if not provided
 	if r.PriceUnitType == "" {
@@ -279,6 +295,11 @@ func (r *CreatePriceRequest) Validate() error {
 		if r.MeterID == "" {
 			return ierr.NewError("meter_id is required when type is USAGE").
 				WithHint("Please select a metered feature to set up usage pricing").
+				Mark(ierr.ErrValidation)
+		}
+		if r.MinQuantity != nil {
+			return ierr.NewError("min_quantity cannot be set for usage pricing").
+				WithHint("min_quantity cannot be set for usage pricing").
 				Mark(ierr.ErrValidation)
 		}
 	}
@@ -607,10 +628,10 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		priceUnitTiers = priceDomain.JSONBTiers(priceTiers)
 	}
 
-	// TODO: remove this
-	if r.PlanID != "" {
-		r.EntityType = types.PRICE_ENTITY_TYPE_PLAN
-		r.EntityID = r.PlanID
+	var minQuantity *decimal.Decimal
+	if r.MinQuantity != nil {
+		minQuantityInt := int64(*r.MinQuantity)
+		minQuantity = lo.ToPtr(decimal.NewFromInt(minQuantityInt))
 	}
 
 	price := &priceDomain.Price{
@@ -634,7 +655,9 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		PriceUnitTiers:     priceUnitTiers,
 		TransformQuantity:  transformQuantity,
 		EntityType:         r.EntityType,
+		DisplayName:        r.DisplayName,
 		EntityID:           r.EntityID,
+		MinQuantity:        minQuantity,
 		StartDate:          startDate,
 		ParentPriceID:      r.ParentPriceID,
 		EndDate:            r.EndDate,
@@ -658,7 +681,7 @@ type UpdatePriceRequest struct {
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
 	// Amount is the new price amount that overrides the original price (optional)
-	Amount *decimal.Decimal `json:"amount,omitempty"`
+	Amount *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 
 	// TierMode determines how to calculate the price for a given quantity
 	TierMode types.BillingTier `json:"tier_mode,omitempty"`
@@ -816,9 +839,6 @@ type PriceResponse struct {
 	Plan        *PlanResponse      `json:"plan,omitempty"`
 	Addon       *AddonResponse     `json:"addon,omitempty"`
 	Group       *GroupResponse     `json:"group,omitempty"`
-
-	// TODO: Remove this once we have a proper price entity type
-	PlanID string `json:"plan_id,omitempty"`
 }
 
 // ListPricesResponse represents the response for listing prices

@@ -93,12 +93,9 @@ func (s *stripePlanService) CreatePlan(ctx context.Context, planID string, servi
 
 		// Create a plan with Stripe product data
 		createPlanReq := dto.CreatePlanRequest{
-			Name:         stripeProduct.Name,
-			Description:  stripeProduct.Description,
-			LookupKey:    planID,
-			Prices:       []dto.CreatePlanPriceRequest{},       // Empty prices initially
-			Entitlements: []dto.CreatePlanEntitlementRequest{}, // Empty entitlements initially
-			CreditGrants: []dto.CreateCreditGrantRequest{},     // Empty credit grants initially,
+			Name:        stripeProduct.Name,
+			Description: stripeProduct.Description,
+			LookupKey:   planID,
 		}
 
 		// Validate the request

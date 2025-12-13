@@ -17,8 +17,8 @@ type CreateCouponRequest struct {
 	RedeemBefore      *time.Time              `json:"redeem_before,omitempty"`
 	MaxRedemptions    *int                    `json:"max_redemptions,omitempty"`
 	Rules             *map[string]interface{} `json:"rules,omitempty"`
-	AmountOff         *decimal.Decimal        `json:"amount_off,omitempty"`
-	PercentageOff     *decimal.Decimal        `json:"percentage_off,omitempty"`
+	AmountOff         *decimal.Decimal        `json:"amount_off,omitempty" swaggertype:"string"`
+	PercentageOff     *decimal.Decimal        `json:"percentage_off,omitempty" swaggertype:"string"`
 	Type              types.CouponType        `json:"type" validate:"required,oneof=fixed percentage"`
 	Cadence           types.CouponCadence     `json:"cadence" validate:"required,oneof=once repeated forever"`
 	DurationInPeriods *int                    `json:"duration_in_periods,omitempty"`

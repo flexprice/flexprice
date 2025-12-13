@@ -18,7 +18,7 @@ type CreateCreditGrantRequest struct {
 	Scope                  types.CreditGrantScope               `json:"scope" binding:"required"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
-	Credits                decimal.Decimal                      `json:"credits" binding:"required"`
+	Credits                decimal.Decimal                      `json:"credits" binding:"required" swaggertype:"string"`
 	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
 	PeriodCount            *int                                 `json:"period_count,omitempty"`

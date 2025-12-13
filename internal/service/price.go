@@ -53,35 +53,15 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		return nil, err
 	}
 
-	// Handle entity type validation
-	if req.EntityType != "" {
-		if err := req.EntityType.Validate(); err != nil {
+	// Validate that the entity exists based on entity type
+	if !req.SkipEntityValidation {
+		if err := s.validateEntityExists(ctx, req.EntityType, req.EntityID); err != nil {
 			return nil, err
 		}
-
-		if req.EntityID == "" {
-			return nil, ierr.NewError("entity_id is required when entity_type is provided").
-				WithHint("Please provide an entity id").
-				Mark(ierr.ErrValidation)
-		}
-
-		// Validate that the entity exists based on entity type
-		if !req.SkipEntityValidation {
-			if err := s.validateEntityExists(ctx, req.EntityType, req.EntityID); err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		// Legacy support for plan_id
-		if req.PlanID == "" {
-			return nil, ierr.NewError("either entity_type/entity_id or plan_id is required").
-				WithHint("Please provide entity_type and entity_id, or plan_id for backward compatibility").
-				Mark(ierr.ErrValidation)
-		}
-		// Set entity type and ID from plan_id for backward compatibility
-		req.EntityType = types.PRICE_ENTITY_TYPE_PLAN
-		req.EntityID = req.PlanID
 	}
+
+	// Get display name if needed (before price creation)
+	s.getDisplayName(ctx, &req)
 
 	// Handle price unit config case
 	if req.PriceUnitConfig != nil {
@@ -91,9 +71,7 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	// Handle regular price case
 	p, err := req.ToPrice(ctx)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to parse price data").
-			Mark(ierr.ErrValidation)
+		return nil, err
 	}
 
 	// Validate group if provided
@@ -109,11 +87,6 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 
 	response := &dto.PriceResponse{Price: p}
 
-	// TODO: !REMOVE after migration
-	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = p.EntityID
-	}
-
 	// Sync new price to Chargebee if it belongs to a plan
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
@@ -125,6 +98,54 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	}
 
 	return response, nil
+}
+
+// getDisplayName extracts the display name from the entity (plan/addon) or meter
+// if SkipEntityValidation is false and DisplayName is empty.
+// If SkipEntityValidation is true, it sets default names: "Recurring" for FIXED and "Usage" for USAGE.
+// This should be called before price creation repository operations.
+func (s *priceService) getDisplayName(ctx context.Context, req *dto.CreatePriceRequest) {
+	// If display name is already set, don't override it
+	if req.DisplayName != "" {
+		return
+	}
+
+	// If validation is skipped, use default names
+	if req.SkipEntityValidation {
+		switch req.Type {
+		case types.PRICE_TYPE_FIXED:
+			req.DisplayName = "Recurring"
+		case types.PRICE_TYPE_USAGE:
+			req.DisplayName = "Usage"
+		}
+		return
+	}
+
+	// Extract from entity when validation is enabled
+	switch req.Type {
+	case types.PRICE_TYPE_FIXED:
+		// For FIXED prices, extract plan/addon name
+		if req.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+			plan, err := s.PlanRepo.Get(ctx, req.EntityID)
+			if err == nil && plan != nil {
+				req.DisplayName = plan.Name
+			}
+		} else if req.EntityType == types.PRICE_ENTITY_TYPE_ADDON {
+			addon, err := s.AddonRepo.GetByID(ctx, req.EntityID)
+			if err == nil && addon != nil {
+				req.DisplayName = addon.Name
+			}
+		}
+	case types.PRICE_TYPE_USAGE:
+		// For USAGE prices, extract meter name
+		if req.MeterID != "" {
+			meterService := NewMeterService(s.MeterRepo)
+			meter, err := meterService.GetMeter(ctx, req.MeterID)
+			if err == nil && meter != nil {
+				req.DisplayName = meter.Name
+			}
+		}
+	}
 }
 
 // validateEntityExists validates that the entity exists based on the entity type
@@ -203,6 +224,7 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 				priceUnitConfigPrices = append(priceUnitConfigPrices, priceReq)
 			} else {
 				// Handle regular prices
+				s.getDisplayName(txCtx, &priceReq)
 				price, err := priceReq.ToPrice(txCtx)
 				if err != nil {
 					return ierr.WithError(err).
@@ -228,15 +250,13 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 			// Add successful regular prices to response
 			for _, p := range regularPrices {
 				priceResp := &dto.PriceResponse{Price: p}
-				if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-					priceResp.PlanID = p.EntityID
-				}
 				response.Items = append(response.Items, priceResp)
 			}
 		}
 
 		// Handle price unit config prices individually (they need special processing)
 		for _, priceReq := range priceUnitConfigPrices {
+			s.getDisplayName(txCtx, &priceReq)
 			priceResp, err := s.createPriceWithUnitConfig(txCtx, priceReq)
 			if err != nil {
 				return ierr.WithError(err).
@@ -296,6 +316,9 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
+
+	// Get display name if needed (before price creation)
+	s.getDisplayName(ctx, &req)
 
 	// Parse price unit amount - this is the amount in the price unit currency
 	priceUnitAmount := decimal.Zero
@@ -496,11 +519,6 @@ func (s *priceService) createPriceWithUnitConfig(ctx context.Context, req dto.Cr
 
 	response := &dto.PriceResponse{Price: p}
 
-	// TODO: !REMOVE after migration
-	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = p.EntityID
-	}
-
 	// Sync new price to Chargebee if it belongs to a plan
 	if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
 		s.syncPriceToChargebeeIfEnabled(ctx, p.ID, p.EntityID)
@@ -540,11 +558,6 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 	// Set entity information
 	response.EntityType = price.EntityType
 	response.EntityID = price.EntityID
-
-	// TODO: !REMOVE after migration
-	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		response.PlanID = price.EntityID
-	}
 
 	if price.MeterID != "" {
 		meterService := NewMeterService(s.MeterRepo)
@@ -1066,7 +1079,7 @@ func (s *priceService) calculateSingletonCost(ctx context.Context, price *price.
 	if quantity.IsZero() {
 		return cost
 	}
-
+ 
 	switch price.BillingModel {
 	case types.BILLING_MODEL_FLAT_FEE:
 		cost = price.CalculateAmount(quantity)
@@ -1484,7 +1497,7 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 		s.Logger.Debugw("Temporal service not available, skipping QuickBooks sync",
 			"price_id", priceID)
 		return
-		}
+	}
 
 	// Check if QuickBooks integration is available
 	if s.IntegrationFactory == nil {
@@ -1528,8 +1541,8 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	}
 
 	s.Logger.Debugw("QuickBooks sync workflow started",
-			"price_id", priceID,
-			"plan_id", planID,
+		"price_id", priceID,
+		"plan_id", planID,
 		"workflow_id", workflowRun.GetID(),
 		"run_id", workflowRun.GetRunID())
 }

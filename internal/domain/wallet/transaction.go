@@ -13,17 +13,17 @@ type Transaction struct {
 	ID                  string                      `db:"id" json:"id"`
 	WalletID            string                      `db:"wallet_id" json:"wallet_id"`
 	Type                types.TransactionType       `db:"type" json:"type"`
-	Amount              decimal.Decimal             `db:"amount" json:"amount"`
-	CreditAmount        decimal.Decimal             `db:"credit_amount" json:"credit_amount"`
-	CreditBalanceBefore decimal.Decimal             `db:"credit_balance_before" json:"credit_balance_before"`
-	CreditBalanceAfter  decimal.Decimal             `db:"credit_balance_after" json:"credit_balance_after"`
+	Amount              decimal.Decimal             `db:"amount" json:"amount" swaggertype:"string"`
+	CreditAmount        decimal.Decimal             `db:"credit_amount" json:"credit_amount" swaggertype:"string"`
+	CreditBalanceBefore decimal.Decimal             `db:"credit_balance_before" json:"credit_balance_before" swaggertype:"string"`
+	CreditBalanceAfter  decimal.Decimal             `db:"credit_balance_after" json:"credit_balance_after" swaggertype:"string"`
 	TxStatus            types.TransactionStatus     `db:"transaction_status" json:"transaction_status"`
 	ReferenceType       types.WalletTxReferenceType `db:"reference_type" json:"reference_type"`
 	ReferenceID         string                      `db:"reference_id" json:"reference_id"`
 	Description         string                      `db:"description" json:"description"`
 	Metadata            types.Metadata              `db:"metadata" json:"metadata"`
 	ExpiryDate          *time.Time                  `db:"expiry_date" json:"expiry_date"`
-	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available"`
+	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available" swaggertype:"string"`
 	TransactionReason   types.TransactionReason     `db:"transaction_reason" json:"transaction_reason"`
 	Priority            *int                        `db:"priority" json:"priority"`
 	IdempotencyKey      string                      `db:"idempotency_key" json:"idempotency_key"`

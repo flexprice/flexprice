@@ -12,10 +12,6 @@ import (
 
 // AddSubscriptionLineItem adds a new line item to an existing subscription
 func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
-	if err := req.Validate(); err != nil {
-		return nil, err
-	}
-
 	// Get the subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
@@ -35,7 +31,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 
 	// Initialize line item params
 	params := dto.LineItemParams{
-		Subscription: sub,
+		Subscription: &dto.SubscriptionResponse{Subscription: sub},
 	}
 
 	// Get entity details and price with expanded data
@@ -45,32 +41,50 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		return nil, err
 	}
 
+	// Validate with price for MinQuantity checks
+	if err := req.Validate(price.Price); err != nil {
+		return nil, err
+	}
+
 	// Set the price in params
 	params.Price = price
 
-	if price.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
-		planService := NewPlanService(s.ServiceParams)
-		planResponse, err := planService.GetPlan(ctx, price.EntityID)
-		if err != nil {
-			return nil, err
+	// Skip entitlement check if requested
+	if req.SkipEntitlementCheck {
+		switch price.EntityType {
+		case types.PRICE_ENTITY_TYPE_PLAN:
+			planService := NewPlanService(s.ServiceParams)
+			planResponse, err := planService.GetPlan(ctx, price.EntityID)
+			if err != nil {
+				return nil, err
+			}
+			params.Plan = planResponse
+			params.EntityType = types.SubscriptionLineItemEntityTypePlan
+		case types.PRICE_ENTITY_TYPE_ADDON:
+			addonService := NewAddonService(s.ServiceParams)
+			addonResponse, err := addonService.GetAddon(ctx, price.EntityID)
+			if err != nil {
+				return nil, err
+			}
+			params.Addon = addonResponse
+			params.EntityType = types.SubscriptionLineItemEntityTypeAddon
+		case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+			subscriptionService := NewSubscriptionService(s.ServiceParams)
+			subscriptionResponse, err := subscriptionService.GetSubscription(ctx, price.EntityID)
+			if err != nil {
+				return nil, err
+			}
+			params.Subscription = subscriptionResponse
+			params.EntityType = types.SubscriptionLineItemEntityTypePlan
+		default:
+			return nil, ierr.NewError("unsupported entity type").
+				WithHint("Unsupported entity type").
+				WithReportableDetails(map[string]interface{}{
+					"entity_type": price.EntityType,
+				}).
+				Mark(ierr.ErrValidation)
 		}
-		params.Plan = planResponse
-		params.EntityType = types.SubscriptionLineItemEntityTypePlan
-	} else if price.EntityType == types.PRICE_ENTITY_TYPE_ADDON {
-		addonService := NewAddonService(s.ServiceParams)
-		addonResponse, err := addonService.GetAddon(ctx, price.EntityID)
-		if err != nil {
-			return nil, err
-		}
-		params.Addon = addonResponse
-		params.EntityType = types.SubscriptionLineItemEntityTypeAddon
-	} else {
-		return nil, ierr.NewError("unsupported entity type").
-			WithHint("Unsupported entity type").
-			WithReportableDetails(map[string]interface{}{
-				"entity_type": price.EntityType,
-			}).
-			Mark(ierr.ErrValidation)
+
 	}
 
 	// Create the line item

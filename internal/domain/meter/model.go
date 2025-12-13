@@ -62,7 +62,7 @@ type Aggregation struct {
 	// Multiplier is the multiplier for the aggregation
 	// For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
 	// to scale up by a factor of 1000. If not provided, it will be null.
-	Multiplier *decimal.Decimal `json:"multiplier,omitempty"`
+	Multiplier *decimal.Decimal `json:"multiplier,omitempty" swaggertype:"string"`
 
 	// BucketSize is used only for MAX aggregation when windowed aggregation is needed
 	// It defines the size of time windows to calculate max values within

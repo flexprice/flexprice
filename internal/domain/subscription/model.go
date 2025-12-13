@@ -93,10 +93,10 @@ type Subscription struct {
 	ActivePauseID *string `db:"active_pause_id" json:"active_pause_id,omitempty"`
 
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
-	CommitmentAmount *decimal.Decimal `db:"commitment_amount" json:"commitment_amount,omitempty"`
+	CommitmentAmount *decimal.Decimal `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
 
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
-	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty"`
+	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty" swaggertype:"string"`
 
 	// PaymentBehavior determines how subscription payments are handled
 	PaymentBehavior string `db:"payment_behavior" json:"payment_behavior"`

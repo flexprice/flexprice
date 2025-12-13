@@ -34,7 +34,7 @@ type Price struct {
 
 	// Amount stored in main currency units (e.g., dollars, not cents)
 	// For USD: 12.50 means $12.50
-	Amount decimal.Decimal `db:"amount" json:"amount"`
+	Amount decimal.Decimal `db:"amount" json:"amount" swaggertype:"string"`
 
 	// DisplayAmount is the formatted amount with currency symbol
 	// For USD: $12.50
@@ -51,7 +51,7 @@ type Price struct {
 
 	// PriceUnitAmount is the amount stored in price unit
 	// For BTC: 0.00000001 means 0.00000001 BTC
-	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`
+	PriceUnitAmount decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty" swaggertype:"string"`
 
 	// DisplayPriceUnitAmount is the formatted amount with price unit symbol
 	// For BTC: 0.00000001 BTC
@@ -63,7 +63,7 @@ type Price struct {
 
 	// ConversionRate is the rate of the price unit to the base currency
 	// For BTC: 1 BTC = 100000000 USD
-	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty"`
+	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
 
 	Type types.PriceType `db:"type" json:"type"`
 
@@ -73,6 +73,12 @@ type Price struct {
 	BillingPeriodCount int `db:"billing_period_count" json:"billing_period_count" default:"1"`
 
 	BillingModel types.BillingModel `db:"billing_model" json:"billing_model"`
+
+	// DisplayName is the name of the price
+	DisplayName string `db:"display_name" json:"display_name"`
+
+	// MinQuantity is the minimum quantity of the price
+	MinQuantity *decimal.Decimal `db:"min_quantity" json:"min_quantity"`
 
 	BillingCadence types.BillingCadence `db:"billing_cadence" json:"billing_cadence"`
 
@@ -235,11 +241,11 @@ type PriceTier struct {
 	UpTo *uint64 `json:"up_to"`
 
 	// unit_amount is the amount per unit for the given tier
-	UnitAmount decimal.Decimal `json:"unit_amount"`
+	UnitAmount decimal.Decimal `json:"unit_amount" swaggertype:"string"`
 
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
-	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty"`
+	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty" swaggertype:"string"`
 }
 
 // TODO : comeup with a better way to handle jsonb fields
@@ -376,7 +382,7 @@ func FromEnt(e *ent.Price) *Price {
 
 	return &Price{
 		ID:                     e.ID,
-		Amount:                 decimal.NewFromFloat(e.Amount),
+		Amount:                 e.Amount,
 		Currency:               e.Currency,
 		DisplayAmount:          e.DisplayAmount,
 		PriceUnitType:          types.PriceUnitType(e.PriceUnitType),
@@ -384,6 +390,7 @@ func FromEnt(e *ent.Price) *Price {
 		BillingPeriod:          types.BillingPeriod(e.BillingPeriod),
 		BillingPeriodCount:     e.BillingPeriodCount,
 		BillingModel:           types.BillingModel(e.BillingModel),
+		DisplayName:            e.DisplayName,
 		BillingCadence:         types.BillingCadence(e.BillingCadence),
 		InvoiceCadence:         types.InvoiceCadence(e.InvoiceCadence),
 		TrialPeriod:            e.TrialPeriod,
@@ -398,15 +405,16 @@ func FromEnt(e *ent.Price) *Price {
 		EnvironmentID:          e.EnvironmentID,
 		PriceUnitID:            lo.FromPtr(e.PriceUnitID),
 		PriceUnit:              e.PriceUnit,
-		PriceUnitAmount:        decimal.NewFromFloat(e.PriceUnitAmount),
+		PriceUnitAmount:        lo.FromPtrOr(e.PriceUnitAmount, decimal.Zero),
 		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,
-		ConversionRate:         decimal.NewFromFloat(e.ConversionRate),
+		ConversionRate:         lo.FromPtrOr(e.ConversionRate, decimal.Zero),
 		EntityType:             types.PriceEntityType(lo.FromPtr(e.EntityType)),
 		EntityID:               lo.FromPtr(e.EntityID),
 		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
 		GroupID:                lo.FromPtr(e.GroupID),
 		StartDate:              e.StartDate,
 		EndDate:                e.EndDate,
+		MinQuantity:            e.MinQuantity,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

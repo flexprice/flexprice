@@ -33,7 +33,7 @@ type Payment struct {
 	// The gateway_metadata field contains gateway-specific metadata (optional)
 	GatewayMetadata types.Metadata `json:"gateway_metadata,omitempty"`
 	// The amount field specifies the payment value in the given currency
-	Amount decimal.Decimal `json:"amount"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 	// The currency field uses a three-letter ISO code (USD, EUR, GBP, etc.)
 	Currency string `json:"currency"`
 	// The payment_status shows the current state of this payment (pending, succeeded, failed, etc.)

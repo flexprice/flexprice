@@ -16,8 +16,8 @@ type TaxApplied struct {
 	EntityType       types.TaxRateEntityType `json:"entity_type,omitempty"`
 	EntityID         string                  `json:"entity_id,omitempty"`
 	TaxAssociationID *string                 `json:"tax_association_id,omitempty"`
-	TaxableAmount    decimal.Decimal         `json:"taxable_amount,omitempty"`
-	TaxAmount        decimal.Decimal         `json:"tax_amount,omitempty"`
+	TaxableAmount    decimal.Decimal         `json:"taxable_amount,omitempty" swaggertype:"string"`
+	TaxAmount        decimal.Decimal         `json:"tax_amount,omitempty" swaggertype:"string"`
 	Currency         string                  `json:"currency,omitempty"`
 	AppliedAt        time.Time               `json:"applied_at,omitempty"`
 	EnvironmentID    string                  `json:"environment_id,omitempty"`

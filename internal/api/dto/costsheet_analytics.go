@@ -73,8 +73,8 @@ type CostAnalyticItem struct {
 	Properties         map[string]string `json:"properties,omitempty"`
 
 	// Aggregated metrics
-	TotalCost     decimal.Decimal `json:"total_cost"`
-	TotalQuantity decimal.Decimal `json:"total_quantity"`
+	TotalCost     decimal.Decimal `json:"total_cost" swaggertype:"string"`
+	TotalQuantity decimal.Decimal `json:"total_quantity" swaggertype:"string"`
 	TotalEvents   int64           `json:"total_events"`
 
 	// Breakdown
@@ -93,8 +93,8 @@ type CostAnalyticItem struct {
 // CostPoint represents a single point in cost time-series data
 type CostPoint struct {
 	Timestamp  time.Time       `json:"timestamp"`
-	Cost       decimal.Decimal `json:"cost"`
-	Quantity   decimal.Decimal `json:"quantity"`
+	Cost       decimal.Decimal `json:"cost" swaggertype:"string"`
+	Quantity   decimal.Decimal `json:"quantity" swaggertype:"string"`
 	EventCount int64           `json:"event_count"`
 }
 
@@ -108,8 +108,8 @@ type GetCostAnalyticsResponse struct {
 	Currency           string    `json:"currency"`
 
 	// Summary
-	TotalCost     decimal.Decimal `json:"total_cost"`
-	TotalQuantity decimal.Decimal `json:"total_quantity"`
+	TotalCost     decimal.Decimal `json:"total_cost" swaggertype:"string"`
+	TotalQuantity decimal.Decimal `json:"total_quantity" swaggertype:"string"`
 	TotalEvents   int64           `json:"total_events"`
 
 	// Detailed breakdown
@@ -128,12 +128,12 @@ type GetDetailedCostAnalyticsResponse struct {
 	CostAnalytics []CostAnalyticItem `json:"cost_analytics"`
 
 	// Derived metrics
-	TotalRevenue  decimal.Decimal `json:"total_revenue"`
-	TotalCost     decimal.Decimal `json:"total_cost"`
-	Margin        decimal.Decimal `json:"margin"`         // Revenue - Cost
-	MarginPercent decimal.Decimal `json:"margin_percent"` // (Margin / Revenue) * 100
-	ROI           decimal.Decimal `json:"roi"`            // (Revenue - Cost) / Cost
-	ROIPercent    decimal.Decimal `json:"roi_percent"`    // ROI * 100
+	TotalRevenue  decimal.Decimal `json:"total_revenue" swaggertype:"string"`
+	TotalCost     decimal.Decimal `json:"total_cost" swaggertype:"string"`
+	Margin        decimal.Decimal `json:"margin" swaggertype:"string"`         // Revenue - Cost
+	MarginPercent decimal.Decimal `json:"margin_percent" swaggertype:"string"` // (Margin / Revenue) * 100
+	ROI           decimal.Decimal `json:"roi" swaggertype:"string"`            // (Revenue - Cost) / Cost
+	ROIPercent    decimal.Decimal `json:"roi_percent" swaggertype:"string"`    // ROI * 100
 
 	Currency  string    `json:"currency"`
 	StartTime time.Time `json:"start_time"`

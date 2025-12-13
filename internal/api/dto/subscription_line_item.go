@@ -8,18 +8,20 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
 // CreateSubscriptionLineItemRequest represents the request to create a subscription line item
 type CreateSubscriptionLineItemRequest struct {
-	PriceID             string            `json:"price_id" validate:"required"`
-	Quantity            decimal.Decimal   `json:"quantity,omitempty"`
-	StartDate           *time.Time        `json:"start_date,omitempty"`
-	EndDate             *time.Time        `json:"end_date,omitempty"`
-	Metadata            map[string]string `json:"metadata,omitempty"`
-	DisplayName         string            `json:"display_name,omitempty"`
-	SubscriptionPhaseID *string           `json:"subscription_phase_id,omitempty"`
+	PriceID              string            `json:"price_id" validate:"required"`
+	Quantity             decimal.Decimal   `json:"quantity,omitempty" swaggertype:"string"`
+	StartDate            *time.Time        `json:"start_date,omitempty"`
+	EndDate              *time.Time        `json:"end_date,omitempty"`
+	Metadata             map[string]string `json:"metadata,omitempty"`
+	DisplayName          string            `json:"display_name,omitempty"`
+	SubscriptionPhaseID  *string           `json:"subscription_phase_id,omitempty"`
+	SkipEntitlementCheck bool              `json:"-"` // This is used to skip entitlement check when creating a subscription line item
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -34,7 +36,7 @@ type UpdateSubscriptionLineItemRequest struct {
 	BillingModel types.BillingModel `json:"billing_model,omitempty"`
 
 	// Amount is the new price amount that overrides the original price
-	Amount *decimal.Decimal `json:"amount,omitempty"`
+	Amount *decimal.Decimal `json:"amount,omitempty" swaggertype:"string"`
 
 	// TierMode determines how to calculate the price for a given quantity
 	TierMode types.BillingTier `json:"tier_mode,omitempty"`
@@ -51,7 +53,7 @@ type UpdateSubscriptionLineItemRequest struct {
 
 // LineItemParams contains all necessary parameters for creating a line item
 type LineItemParams struct {
-	Subscription *subscription.Subscription
+	Subscription *SubscriptionResponse
 	Price        *PriceResponse
 	Plan         *PlanResponse  // Optional, for plan-based line items
 	Addon        *AddonResponse // Optional, for addon-based line items
@@ -59,7 +61,8 @@ type LineItemParams struct {
 }
 
 // Validate validates the create subscription line item request
-func (r *CreateSubscriptionLineItemRequest) Validate() error {
+// price is optional and can be provided for MinQuantity validation
+func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price) error {
 	if r.PriceID == "" {
 		return ierr.NewError("price_id is required").
 			WithHint("Price ID is required").
@@ -82,6 +85,24 @@ func (r *CreateSubscriptionLineItemRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate MinQuantity for fixed prices
+	if price != nil && price.Type == types.PRICE_TYPE_FIXED && price.MinQuantity != nil {
+		finalQuantity := r.Quantity
+		if finalQuantity.IsZero() {
+			// Will be set to MinQuantity in ToSubscriptionLineItem, so validation passes
+			finalQuantity = *price.MinQuantity
+		}
+		if finalQuantity.LessThan(lo.FromPtr(price.MinQuantity)) {
+			return ierr.NewError("quantity must be greater than or equal to min_quantity").
+				WithHint("Quantity must be at least the minimum quantity specified for this price").
+				WithReportableDetails(map[string]interface{}{
+					"quantity":     finalQuantity.String(),
+					"min_quantity": price.MinQuantity.String(),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -100,72 +121,62 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		PriceUnitID:         params.Price.PriceUnitID,
 		PriceUnit:           params.Price.PriceUnit,
 		EntityType:          params.EntityType,
-		DisplayName:         r.DisplayName,
 		Metadata:            r.Metadata,
 		SubscriptionPhaseID: r.SubscriptionPhaseID,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
-	if params.Price != nil && params.Price.Type == types.PRICE_TYPE_USAGE {
-		// Usage-based pricing
-		lineItem.MeterID = params.Price.MeterID
-		if params.Price.Meter != nil {
-			lineItem.MeterDisplayName = params.Price.Meter.Name
-			// Meter name takes priority for display name
-			lineItem.DisplayName = params.Price.Meter.Name
-		}
-		lineItem.Quantity = decimal.Zero // Start with zero for usage-based pricing
-	} else {
-		// Fixed pricing - set default quantity first
-		if params.Price != nil {
-			lineItem.Quantity = params.Price.GetDefaultQuantity()
+	// Always use price display name (priority: request > price display name)
+	if r.DisplayName != "" {
+		lineItem.DisplayName = r.DisplayName
+	} else if params.Price != nil && params.Price.DisplayName != "" {
+		lineItem.DisplayName = params.Price.DisplayName
+	}
+
+	// Set price type specific fields
+	if params.Price != nil {
+		if params.Price.Type == types.PRICE_TYPE_USAGE {
+			lineItem.MeterID = params.Price.MeterID
+			if params.Price.Meter != nil {
+				lineItem.MeterDisplayName = params.Price.Meter.Name
+			}
+			lineItem.Quantity = decimal.Zero
 		} else {
-			lineItem.Quantity = decimal.NewFromInt(1)
-		}
-	}
-
-	// Set entity-specific fields (only if display name not already set by meter)
-	switch params.EntityType {
-	case types.SubscriptionLineItemEntityTypePlan:
-		if params.Plan != nil {
-			lineItem.EntityID = params.Plan.ID
-			lineItem.PlanDisplayName = params.Plan.Name
-			// Only use plan name if display name not set by meter
-			if lineItem.DisplayName == "" {
-				lineItem.DisplayName = params.Plan.Name
+			// For fixed prices, use MinQuantity if quantity not provided and MinQuantity exists
+			if !r.Quantity.IsZero() {
+				lineItem.Quantity = r.Quantity
+			} else if params.Price.MinQuantity != nil {
+				lineItem.Quantity = lo.FromPtr(params.Price.MinQuantity)
+			} else {
+				lineItem.Quantity = params.Price.GetDefaultQuantity()
 			}
 		}
-	case types.SubscriptionLineItemEntityTypeAddon:
-		if params.Addon != nil {
-			lineItem.EntityID = params.Addon.ID
-			// Only use addon name if display name not set by meter
-			if lineItem.DisplayName == "" {
-				lineItem.DisplayName = params.Addon.Name
-			}
-			// Add addon-specific metadata
-			if lineItem.Metadata == nil {
-				lineItem.Metadata = make(map[string]string)
-			}
-			lineItem.Metadata["addon_id"] = params.Addon.ID
-			lineItem.Metadata["subscription_id"] = params.Subscription.ID
-			lineItem.Metadata["addon_quantity"] = "1"
-			lineItem.Metadata["addon_status"] = string(types.AddonStatusActive)
+	} else {
+		lineItem.Quantity = decimal.NewFromInt(1)
+	}
+
+	// Set entity-specific fields
+	if params.EntityType == types.SubscriptionLineItemEntityTypePlan && params.Plan != nil {
+		lineItem.EntityID = params.Plan.ID
+		lineItem.PlanDisplayName = params.Plan.Name
+	} else if params.EntityType == types.SubscriptionLineItemEntityTypeAddon && params.Addon != nil {
+		lineItem.EntityID = params.Addon.ID
+		if lineItem.Metadata == nil {
+			lineItem.Metadata = make(map[string]string)
 		}
+		lineItem.Metadata["addon_id"] = params.Addon.ID
+		lineItem.Metadata["subscription_id"] = params.Subscription.ID
+		lineItem.Metadata["addon_quantity"] = "1"
+		lineItem.Metadata["addon_status"] = string(types.AddonStatusActive)
 	}
 
-	// Override quantity if provided in request
-	if !r.Quantity.IsZero() {
-		lineItem.Quantity = r.Quantity
-	}
-
-	// Set dates if provided
+	// Set dates
 	if r.StartDate != nil {
 		lineItem.StartDate = r.StartDate.UTC()
 	} else {
 		lineItem.StartDate = time.Now().UTC()
 	}
-
 	if r.EndDate != nil {
 		lineItem.EndDate = r.EndDate.UTC()
 	}

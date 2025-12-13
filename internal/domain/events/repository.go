@@ -57,17 +57,17 @@ type ProcessedEventRepository interface {
 // PeriodFeatureTotal represents aggregated usage for a feature in a period
 type PeriodFeatureTotal struct {
 	FeatureID string          `json:"feature_id"`
-	Quantity  decimal.Decimal `json:"quantity"`
-	FreeUnits decimal.Decimal `json:"free_units"`
-	Cost      decimal.Decimal `json:"cost"`
+	Quantity  decimal.Decimal `json:"quantity" swaggertype:"string"`
+	FreeUnits decimal.Decimal `json:"free_units" swaggertype:"string"`
+	Cost      decimal.Decimal `json:"cost" swaggertype:"string"`
 }
 
 // UsageAnalytic represents usage analytics data grouped by source and feature
 type UsageAnalytic struct {
 	Source    string          `json:"source"`
 	FeatureID string          `json:"feature_id"`
-	Cost      decimal.Decimal `json:"cost"`
-	Usage     decimal.Decimal `json:"usage"`
+	Cost      decimal.Decimal `json:"cost" swaggertype:"string"`
+	Usage     decimal.Decimal `json:"usage" swaggertype:"string"`
 }
 
 type UsageParams struct {
