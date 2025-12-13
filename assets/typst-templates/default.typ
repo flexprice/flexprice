@@ -220,20 +220,38 @@
   )
 
   v(1.5em)
-  // Main line items table with integrated usage breakdowns
+  let last-group = ""
+  
+  // Display items
   for (i, item) in items.enumerate() {
-    // Amount is already the total line amount, not unit price
+    let group-name = item.at("group", default: "")
+    let normalized-group = if group-name == "" or group-name == "--" { "" } else { group-name }
+    
+    // Show group header when group changes from empty to a group, or when group name changes
+    if normalized-group != "" and normalized-group != last-group {
+      if i > 0 {
+        v(0.5em)
+      }
+      table(
+        columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
+        inset: (top: 8pt, bottom: 8pt, left: 8pt, right: 8pt),
+        align: left,
+        fill: rgb("#e9ecef"),
+        stroke: (x, y) => (
+          bottom: 1pt + rgb("#d0d5db"),
+        ),
+        [#text(weight: "semibold", size: 10pt, fill: rgb("#2c3e50"))[#normalized-group]],
+        [],
+        [],
+        []
+      )
+    }
+    
     let line-total = item.amount
     let amount-display = if line-total < 0 {
       [−#currency #format-currency(calc.abs(line-total), precision: precision)]
     } else {
       [#currency #format-currency(line-total, precision: precision)]
-    }
-    
-    let description = if item.at("description", default: "Recurring") != "" {
-      item.at("description", default: "Recurring")
-    } else {
-      "-"
     }
     
     let has_period = item.at("period_start", default: "") != "" and item.at("period_end", default: "") != ""
@@ -243,7 +261,6 @@
       "-"
     }
     
-    // Display the main line item
     if i == 0 {
       // Add header only for the first item
       table(
@@ -266,7 +283,6 @@
         [#amount-display]
       )
     } else {
-      // Just the row for subsequent items
       table(
         columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
         inset: (top: 10pt, bottom: 10pt, left: 8pt, right: 8pt),
@@ -286,36 +302,28 @@
     let has_usage_breakdown = "usage_breakdown" in item and item.usage_breakdown != none and item.usage_breakdown.len() > 0
     
     if has_usage_breakdown {
-      // Show usage breakdown as sub-rows within the same table structure
       for usage_item in item.usage_breakdown {
-        // Check if grouped_by exists
         if "grouped_by" in usage_item {
-          // Extract data from the usage breakdown item
           let grouped_by = usage_item.at("grouped_by", default: none)
           let cost = usage_item.at("cost", default: none)
           let usage = usage_item.at("usage", default: none)
           
-          // Only proceed if grouped_by is not none
           if grouped_by != none {
-            // Extract resource name from grouped_by map - try multiple fields
             let resource_name = grouped_by.at("resource_name", default: 
               grouped_by.at("type", default: 
                 grouped_by.at("feature_id", default: 
                   grouped_by.at("source", default: "—"))))
             
-            // Parse cost string to float safely
             let cost_value = 0.0
             if cost != none {
               cost_value = float(str(cost))
             }
             
-            // Parse usage/units safely
             let usage_value = 0.0
             if usage != none {
               usage_value = float(str(usage))
             }
             
-            // Display usage breakdown as a sub-row with indentation
             table(
               columns: (3fr, 1.5fr, 0.8fr, 1.2fr),
               inset: (top: 6pt, bottom: 6pt, left: 2em, right: 8pt),
@@ -323,7 +331,7 @@
               fill: rgb("#f8f9fa"),
               stroke: none,
               [#text(size: 0.85em, fill: rgb("#666666"), weight: "regular")[└─ #resource_name]],
-              [],  // Empty interval column
+              [],
               [#text(size: 0.9em, weight: "medium")[#format-number(usage_value)]],
             [#text(size: 0.9em, weight: "medium")[#currency #format-currency(cost_value, precision: precision)]]
             )
@@ -332,8 +340,9 @@
       }
     }
     
-    // Only add spacing if there's usage breakdown or if it's not the last item
-    if has_usage_breakdown or i < items.len() - 1 {
+    // Update last group and add spacing
+    last-group = normalized-group
+    if i < items.len() - 1 {
       v(0.5em)
     }
   }

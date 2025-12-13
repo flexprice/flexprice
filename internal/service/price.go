@@ -919,11 +919,14 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate
 
-			// Validate group if provided
-			if req.GroupID != "" {
-				existingPrice.GroupID = req.GroupID
-				if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
-					return err
+			// Handle group update: nil = don't change, "" = clear, "group-id" = set and validate
+			if req.GroupID != nil {
+				existingPrice.GroupID = *req.GroupID
+				// Only validate if setting to a non-empty group
+				if *req.GroupID != "" {
+					if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -981,10 +984,14 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			existingPrice.EndDate = req.EffectiveFrom
 		}
 
-		if req.GroupID != "" {
-			existingPrice.GroupID = req.GroupID
-			if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
-				return nil, err
+		// Handle group update: nil = don't change, "" = clear, "group-id" = set and validate
+		if req.GroupID != nil {
+			existingPrice.GroupID = *req.GroupID
+			// Only validate if setting to a non-empty group
+			if *req.GroupID != "" {
+				if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
+					return nil, err
+				}
 			}
 		}
 
