@@ -36,6 +36,14 @@ type SubscriptionLineItem struct {
 	Metadata            map[string]string                    `db:"metadata" json:"metadata,omitempty"`
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
+	// Commitment fields
+	CommitmentAmount   *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty"`
+	CommitmentQuantity *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty"`
+	CommitmentType     types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
+	OverageFactor      *decimal.Decimal     `db:"overage_factor" json:"overage_factor,omitempty"`
+	EnableTrueUp       bool                 `db:"enable_true_up" json:"enable_true_up"`
+	IsWindowCommitment bool                 `db:"is_window_commitment" json:"is_window_commitment"`
+
 	Price *price.Price `json:"price,omitempty"`
 
 	types.BaseModel
@@ -64,6 +72,18 @@ func (li *SubscriptionLineItem) IsActive(t time.Time) bool {
 
 func (li *SubscriptionLineItem) IsUsage() bool {
 	return li.PriceType == types.PRICE_TYPE_USAGE && li.MeterID != ""
+}
+
+// HasCommitment returns true if the line item has commitment configured
+func (li *SubscriptionLineItem) HasCommitment() bool {
+	hasAmountCommitment := li.CommitmentAmount != nil && li.CommitmentAmount.GreaterThan(decimal.Zero)
+	hasQuantityCommitment := li.CommitmentQuantity != nil && li.CommitmentQuantity.GreaterThan(decimal.Zero)
+	return hasAmountCommitment || hasQuantityCommitment
+}
+
+// GetCommitmentType returns the commitment type for the line item
+func (li *SubscriptionLineItem) GetCommitmentType() types.CommitmentType {
+	return li.CommitmentType
 }
 
 // FromEntList converts a list of Ent SubscriptionLineItems to domain SubscriptionLineItems
@@ -115,6 +135,12 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		subscriptionPhaseID = e.SubscriptionPhaseID
 	}
 
+	// Handle commitment fields
+	var commitmentType types.CommitmentType
+	if e.CommitmentType != nil {
+		commitmentType = types.CommitmentType(*e.CommitmentType)
+	}
+
 	return &SubscriptionLineItem{
 		ID:                  e.ID,
 		SubscriptionID:      e.SubscriptionID,
@@ -139,6 +165,12 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		SubscriptionPhaseID: subscriptionPhaseID,
 		Metadata:            e.Metadata,
 		EnvironmentID:       e.EnvironmentID,
+		CommitmentAmount:    e.CommitmentAmount,
+		CommitmentQuantity:  e.CommitmentQuantity,
+		CommitmentType:      commitmentType,
+		OverageFactor:       e.OverageFactor,
+		EnableTrueUp:        e.EnableTrueUp,
+		IsWindowCommitment:  e.IsWindowCommitment,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

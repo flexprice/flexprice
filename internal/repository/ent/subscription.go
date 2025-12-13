@@ -720,6 +720,12 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 				SetInvoiceCadence(string(item.InvoiceCadence)).
 				SetTrialPeriod(item.TrialPeriod).
+				SetNillableCommitmentAmount(item.CommitmentAmount).
+				SetNillableCommitmentQuantity(item.CommitmentQuantity).
+				SetNillableCommitmentType(types.ToNillableString(string(item.CommitmentType))).
+				SetNillableOverageFactor(item.OverageFactor).
+				SetEnableTrueUp(item.EnableTrueUp).
+				SetIsWindowCommitment(item.IsWindowCommitment).
 				SetMetadata(item.Metadata).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).

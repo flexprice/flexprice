@@ -1637,6 +1637,8 @@ func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *
 					// Calculate cost based on meter type
 					if meter.IsBucketedMaxMeter() {
 						s.calculateBucketedCost(ctx, priceService, item, price)
+					} else if meter.IsBucketedSumMeter() {
+						s.calculateSumWithBucketCost(ctx, priceService, item, price, meter)
 					} else {
 						s.calculateRegularCost(ctx, priceService, item, meter, price)
 					}
@@ -1669,6 +1671,39 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 		// Treat total usage as single bucket
 		if item.MaxUsage.IsPositive() {
 			bucketedValues := []decimal.Decimal{item.MaxUsage}
+			cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
+		}
+	}
+
+	item.TotalCost = cost
+	item.Currency = price.Currency
+}
+
+// calculateSumWithBucketCost calculates cost for sum with bucket meters
+// Each bucket is priced independently, similar to bucketed max
+func (s *featureUsageTrackingService) calculateSumWithBucketCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter) {
+	var cost decimal.Decimal
+
+	if len(item.Points) > 0 {
+		// Use points as buckets (each point represents a bucket's sum)
+		bucketedValues := make([]decimal.Decimal, len(item.Points))
+		for i, point := range item.Points {
+			bucketedValues[i] = s.getCorrectUsageValueForPoint(point, types.AggregationSum)
+		}
+		// Calculate cost using bucketed values (each bucket is priced independently)
+		cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
+
+		// Calculate cost for each point (bucket)
+		for i := range item.Points {
+			pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationSum)
+			pointCost := priceService.CalculateCost(ctx, price, pointUsage)
+			item.Points[i].Cost = pointCost
+		}
+	} else {
+		// Treat total usage as single bucket if no points available
+		totalUsage := s.getCorrectUsageValue(item, types.AggregationSum)
+		if totalUsage.IsPositive() {
+			bucketedValues := []decimal.Decimal{totalUsage}
 			cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
 		}
 	}

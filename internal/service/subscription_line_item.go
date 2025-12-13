@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -75,6 +76,27 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 
 	// Create the line item
 	lineItem := req.ToSubscriptionLineItem(ctx, params)
+
+	// Validate line item commitment if configured
+	// Get meter if this is a usage-based line item
+	var meter *meter.Meter
+	if lineItem.PriceType == types.PRICE_TYPE_USAGE && lineItem.MeterID != "" {
+		meterFilter := types.NewNoLimitMeterFilter()
+		meterFilter.MeterIDs = []string{lineItem.MeterID}
+		meters, err := s.MeterRepo.List(ctx, meterFilter)
+		if err == nil && len(meters) > 0 {
+			meter = meters[0]
+		}
+	}
+
+	if err := s.validateLineItemCommitment(ctx, lineItem, meter); err != nil {
+		return nil, err
+	}
+
+	// Validate subscription-level commitment doesn't conflict
+	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+		return nil, err
+	}
 
 	if err := s.SubscriptionLineItemRepo.Create(ctx, lineItem); err != nil {
 		return nil, err
@@ -241,6 +263,26 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem = req.ToSubscriptionLineItem(ctx, existingLineItem, newPriceID)
 			newLineItem.StartDate = endDate // Start where the old one ends
 
+			// Validate line item commitment if configured
+			var meter *meter.Meter
+			if newLineItem.PriceType == types.PRICE_TYPE_USAGE && newLineItem.MeterID != "" {
+				meterFilter := types.NewNoLimitMeterFilter()
+				meterFilter.MeterIDs = []string{newLineItem.MeterID}
+				meters, err := s.MeterRepo.List(ctx, meterFilter)
+				if err == nil && len(meters) > 0 {
+					meter = meters[0]
+				}
+			}
+
+			if err := s.validateLineItemCommitment(ctx, newLineItem, meter); err != nil {
+				return err
+			}
+
+			// Validate subscription-level commitment doesn't conflict
+			if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+				return err
+			}
+
 			// Create the line item directly using repository
 			if err := s.SubscriptionLineItemRepo.Create(ctx, newLineItem); err != nil {
 				return err
@@ -261,15 +303,56 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 
 		return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: newLineItem}, nil
 	} else {
+		// Update metadata and commitment fields if provided
 		if req.Metadata != nil {
 			existingLineItem.Metadata = req.Metadata
+		}
+
+		// Update commitment fields if provided
+		if req.CommitmentAmount != nil {
+			existingLineItem.CommitmentAmount = req.CommitmentAmount
+		}
+		if req.CommitmentQuantity != nil {
+			existingLineItem.CommitmentQuantity = req.CommitmentQuantity
+		}
+		if req.CommitmentType != "" {
+			existingLineItem.CommitmentType = req.CommitmentType
+		}
+		if req.OverageFactor != nil {
+			existingLineItem.OverageFactor = req.OverageFactor
+		}
+		if req.EnableTrueUp != nil {
+			existingLineItem.EnableTrueUp = *req.EnableTrueUp
+		}
+		if req.IsWindowCommitment != nil {
+			existingLineItem.IsWindowCommitment = *req.IsWindowCommitment
+		}
+
+		// Validate line item commitment if configured
+		var meter *meter.Meter
+		if existingLineItem.PriceType == types.PRICE_TYPE_USAGE && existingLineItem.MeterID != "" {
+			meterFilter := types.NewNoLimitMeterFilter()
+			meterFilter.MeterIDs = []string{existingLineItem.MeterID}
+			meters, err := s.MeterRepo.List(ctx, meterFilter)
+			if err == nil && len(meters) > 0 {
+				meter = meters[0]
+			}
+		}
+
+		if err := s.validateLineItemCommitment(ctx, existingLineItem, meter); err != nil {
+			return nil, err
+		}
+
+		// Validate subscription-level commitment doesn't conflict
+		if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+			return nil, err
 		}
 
 		if err := s.SubscriptionLineItemRepo.Update(ctx, existingLineItem); err != nil {
 			return nil, err
 		}
 
-		s.Logger.Infow("updated subscription line item metadata",
+		s.Logger.Infow("updated subscription line item",
 			"subscription_id", sub.ID,
 			"line_item_id", existingLineItem.ID)
 

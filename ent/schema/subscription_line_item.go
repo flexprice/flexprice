@@ -135,6 +135,35 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		// Commitment fields
+		field.Other("commitment_amount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Nillable(),
+		field.Other("commitment_quantity", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Optional().
+			Nillable(),
+		field.String("commitment_type").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable(),
+		field.Other("overage_factor", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(10,4)",
+			}).
+			Optional().
+			Nillable(),
+		field.Bool("enable_true_up").
+			Default(false),
+		field.Bool("is_window_commitment").
+			Default(false),
 	}
 }
 

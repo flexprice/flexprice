@@ -247,7 +247,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 	result.EventName = params.EventName
 
 	// For windowed queries, we need to process all rows
-	if params.WindowSize != "" || (params.AggregationType == types.AggregationMax && params.BucketSize != "") {
+	if params.WindowSize != "" || (params.AggregationType == types.AggregationMax && params.BucketSize != "") || (params.AggregationType == types.AggregationSum && params.BucketSize != "") {
 		for rows.Next() {
 			var windowSize time.Time
 			var value decimal.Decimal
@@ -299,7 +299,40 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 					}
 					value = decimal.NewFromFloat(floatValue)
 				}
-			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
+			case types.AggregationSum:
+				if params.BucketSize != "" {
+					// For bucketed SUM, scan 3 values: total, timestamp, value
+					var totalFloat, valueFloat float64
+					if err := rows.Scan(&totalFloat, &windowSize, &valueFloat); err != nil {
+						SetSpanError(span, err)
+						return nil, ierr.WithError(err).
+							WithHint("Failed to scan float result").
+							WithReportableDetails(map[string]interface{}{
+								"window_size": windowSize,
+								"value":       valueFloat,
+								"total":       totalFloat,
+							}).
+							Mark(ierr.ErrDatabase)
+					}
+					total = decimal.NewFromFloat(totalFloat)
+					value = decimal.NewFromFloat(valueFloat)
+					// Set the overall sum as the result value
+					result.Value = total
+				} else {
+					var floatValue float64
+					if err := rows.Scan(&windowSize, &floatValue); err != nil {
+						SetSpanError(span, err)
+						return nil, ierr.WithError(err).
+							WithHint("Failed to scan float result").
+							WithReportableDetails(map[string]interface{}{
+								"window_size": windowSize,
+								"float_value": floatValue,
+							}).
+							Mark(ierr.ErrDatabase)
+					}
+					value = decimal.NewFromFloat(floatValue)
+				}
+			case types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
 				var floatValue float64
 				if err := rows.Scan(&windowSize, &floatValue); err != nil {
 					SetSpanError(span, err)
@@ -842,10 +875,12 @@ func (r *EventRepository) FindUnprocessedEventsFromFeatureUsage(ctx context.Cont
 			FROM feature_usage
 			WHERE tenant_id = ?
 			AND environment_id = ?
+			AND JSONExtractString (properties, 'flavor') = 'e3a66ab3-f932-4f62-93f8-c8c8094002b8'
 		) AS p
 		ON e.id = p.id AND e.tenant_id = p.tenant_id AND e.environment_id = p.environment_id
 		WHERE e.tenant_id = ?
 		AND e.environment_id = ?
+		AND JSONExtractString (properties, 'flavor') = 'e3a66ab3-f932-4f62-93f8-c8c8094002b8'
 	`
 
 	args := []interface{}{

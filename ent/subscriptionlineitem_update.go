@@ -359,6 +359,114 @@ func (sliu *SubscriptionLineItemUpdate) ClearMetadata() *SubscriptionLineItemUpd
 	return sliu
 }
 
+// SetCommitmentAmount sets the "commitment_amount" field.
+func (sliu *SubscriptionLineItemUpdate) SetCommitmentAmount(d decimal.Decimal) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetCommitmentAmount(d)
+	return sliu
+}
+
+// SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if d != nil {
+		sliu.SetCommitmentAmount(*d)
+	}
+	return sliu
+}
+
+// ClearCommitmentAmount clears the value of the "commitment_amount" field.
+func (sliu *SubscriptionLineItemUpdate) ClearCommitmentAmount() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearCommitmentAmount()
+	return sliu
+}
+
+// SetCommitmentQuantity sets the "commitment_quantity" field.
+func (sliu *SubscriptionLineItemUpdate) SetCommitmentQuantity(d decimal.Decimal) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetCommitmentQuantity(d)
+	return sliu
+}
+
+// SetNillableCommitmentQuantity sets the "commitment_quantity" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentQuantity(d *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if d != nil {
+		sliu.SetCommitmentQuantity(*d)
+	}
+	return sliu
+}
+
+// ClearCommitmentQuantity clears the value of the "commitment_quantity" field.
+func (sliu *SubscriptionLineItemUpdate) ClearCommitmentQuantity() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearCommitmentQuantity()
+	return sliu
+}
+
+// SetCommitmentType sets the "commitment_type" field.
+func (sliu *SubscriptionLineItemUpdate) SetCommitmentType(s string) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetCommitmentType(s)
+	return sliu
+}
+
+// SetNillableCommitmentType sets the "commitment_type" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentType(s *string) *SubscriptionLineItemUpdate {
+	if s != nil {
+		sliu.SetCommitmentType(*s)
+	}
+	return sliu
+}
+
+// ClearCommitmentType clears the value of the "commitment_type" field.
+func (sliu *SubscriptionLineItemUpdate) ClearCommitmentType() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearCommitmentType()
+	return sliu
+}
+
+// SetOverageFactor sets the "overage_factor" field.
+func (sliu *SubscriptionLineItemUpdate) SetOverageFactor(d decimal.Decimal) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetOverageFactor(d)
+	return sliu
+}
+
+// SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionLineItemUpdate {
+	if d != nil {
+		sliu.SetOverageFactor(*d)
+	}
+	return sliu
+}
+
+// ClearOverageFactor clears the value of the "overage_factor" field.
+func (sliu *SubscriptionLineItemUpdate) ClearOverageFactor() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearOverageFactor()
+	return sliu
+}
+
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (sliu *SubscriptionLineItemUpdate) SetEnableTrueUp(b bool) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetEnableTrueUp(b)
+	return sliu
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableEnableTrueUp(b *bool) *SubscriptionLineItemUpdate {
+	if b != nil {
+		sliu.SetEnableTrueUp(*b)
+	}
+	return sliu
+}
+
+// SetIsWindowCommitment sets the "is_window_commitment" field.
+func (sliu *SubscriptionLineItemUpdate) SetIsWindowCommitment(b bool) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetIsWindowCommitment(b)
+	return sliu
+}
+
+// SetNillableIsWindowCommitment sets the "is_window_commitment" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableIsWindowCommitment(b *bool) *SubscriptionLineItemUpdate {
+	if b != nil {
+		sliu.SetIsWindowCommitment(*b)
+	}
+	return sliu
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliu *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
 	sliu.mutation.AddCouponAssociationIDs(ids...)
@@ -578,6 +686,36 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if sliu.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := sliu.mutation.CommitmentAmount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther, value)
+	}
+	if sliu.mutation.CommitmentAmountCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther)
+	}
+	if value, ok := sliu.mutation.CommitmentQuantity(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther, value)
+	}
+	if sliu.mutation.CommitmentQuantityCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther)
+	}
+	if value, ok := sliu.mutation.CommitmentType(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentType, field.TypeString, value)
+	}
+	if sliu.mutation.CommitmentTypeCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentType, field.TypeString)
+	}
+	if value, ok := sliu.mutation.OverageFactor(); ok {
+		_spec.SetField(subscriptionlineitem.FieldOverageFactor, field.TypeOther, value)
+	}
+	if sliu.mutation.OverageFactorCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldOverageFactor, field.TypeOther)
+	}
+	if value, ok := sliu.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscriptionlineitem.FieldEnableTrueUp, field.TypeBool, value)
+	}
+	if value, ok := sliu.mutation.IsWindowCommitment(); ok {
+		_spec.SetField(subscriptionlineitem.FieldIsWindowCommitment, field.TypeBool, value)
 	}
 	if sliu.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -973,6 +1111,114 @@ func (sliuo *SubscriptionLineItemUpdateOne) ClearMetadata() *SubscriptionLineIte
 	return sliuo
 }
 
+// SetCommitmentAmount sets the "commitment_amount" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentAmount(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetCommitmentAmount(d)
+	return sliuo
+}
+
+// SetNillableCommitmentAmount sets the "commitment_amount" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentAmount(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if d != nil {
+		sliuo.SetCommitmentAmount(*d)
+	}
+	return sliuo
+}
+
+// ClearCommitmentAmount clears the value of the "commitment_amount" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentAmount() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearCommitmentAmount()
+	return sliuo
+}
+
+// SetCommitmentQuantity sets the "commitment_quantity" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentQuantity(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetCommitmentQuantity(d)
+	return sliuo
+}
+
+// SetNillableCommitmentQuantity sets the "commitment_quantity" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentQuantity(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if d != nil {
+		sliuo.SetCommitmentQuantity(*d)
+	}
+	return sliuo
+}
+
+// ClearCommitmentQuantity clears the value of the "commitment_quantity" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentQuantity() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearCommitmentQuantity()
+	return sliuo
+}
+
+// SetCommitmentType sets the "commitment_type" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentType(s string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetCommitmentType(s)
+	return sliuo
+}
+
+// SetNillableCommitmentType sets the "commitment_type" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentType(s *string) *SubscriptionLineItemUpdateOne {
+	if s != nil {
+		sliuo.SetCommitmentType(*s)
+	}
+	return sliuo
+}
+
+// ClearCommitmentType clears the value of the "commitment_type" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentType() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearCommitmentType()
+	return sliuo
+}
+
+// SetOverageFactor sets the "overage_factor" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetOverageFactor(d decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetOverageFactor(d)
+	return sliuo
+}
+
+// SetNillableOverageFactor sets the "overage_factor" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableOverageFactor(d *decimal.Decimal) *SubscriptionLineItemUpdateOne {
+	if d != nil {
+		sliuo.SetOverageFactor(*d)
+	}
+	return sliuo
+}
+
+// ClearOverageFactor clears the value of the "overage_factor" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearOverageFactor() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearOverageFactor()
+	return sliuo
+}
+
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetEnableTrueUp(b bool) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetEnableTrueUp(b)
+	return sliuo
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableEnableTrueUp(b *bool) *SubscriptionLineItemUpdateOne {
+	if b != nil {
+		sliuo.SetEnableTrueUp(*b)
+	}
+	return sliuo
+}
+
+// SetIsWindowCommitment sets the "is_window_commitment" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetIsWindowCommitment(b bool) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetIsWindowCommitment(b)
+	return sliuo
+}
+
+// SetNillableIsWindowCommitment sets the "is_window_commitment" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableIsWindowCommitment(b *bool) *SubscriptionLineItemUpdateOne {
+	if b != nil {
+		sliuo.SetIsWindowCommitment(*b)
+	}
+	return sliuo
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.AddCouponAssociationIDs(ids...)
@@ -1222,6 +1468,36 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.MetadataCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := sliuo.mutation.CommitmentAmount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther, value)
+	}
+	if sliuo.mutation.CommitmentAmountCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentAmount, field.TypeOther)
+	}
+	if value, ok := sliuo.mutation.CommitmentQuantity(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther, value)
+	}
+	if sliuo.mutation.CommitmentQuantityCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentQuantity, field.TypeOther)
+	}
+	if value, ok := sliuo.mutation.CommitmentType(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentType, field.TypeString, value)
+	}
+	if sliuo.mutation.CommitmentTypeCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentType, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.OverageFactor(); ok {
+		_spec.SetField(subscriptionlineitem.FieldOverageFactor, field.TypeOther, value)
+	}
+	if sliuo.mutation.OverageFactorCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldOverageFactor, field.TypeOther)
+	}
+	if value, ok := sliuo.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscriptionlineitem.FieldEnableTrueUp, field.TypeBool, value)
+	}
+	if value, ok := sliuo.mutation.IsWindowCommitment(); ok {
+		_spec.SetField(subscriptionlineitem.FieldIsWindowCommitment, field.TypeBool, value)
 	}
 	if sliuo.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
