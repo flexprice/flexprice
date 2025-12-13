@@ -38,6 +38,11 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			NotEmpty().
 			Immutable(),
+		field.String("customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional(),
 		field.String("type").
 			Default(string(types.TransactionTypeCredit)).
 			NotEmpty(),
@@ -125,6 +130,7 @@ func (WalletTransaction) Edges() []ent.Edge {
 func (WalletTransaction) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "wallet_id"),
+		index.Fields("tenant_id", "environment_id", "customer_id"),
 		index.Fields("tenant_id", "environment_id", "reference_type", "reference_id", "status"),
 		index.Fields("tenant_id", "environment_id", "created_at"),
 		index.Fields("tenant_id", "environment_id", "wallet_id", "type", "credits_available", "expiry_date").

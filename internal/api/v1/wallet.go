@@ -405,3 +405,46 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 	c.JSON(http.StatusOK, wallet)
 }
+
+// ListWalletTransactionsByFilter godoc
+// @Summary List wallet transactions by filter
+// @Description List wallet transactions by filter
+// @Tags Wallets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.WalletTransactionFilter false "Filter"
+// @Param expand query string false "Expand fields (e.g., customer,created_by_user)"
+// @Success 200 {object} dto.ListWalletTransactionsResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /wallets/transactions/search [post]
+func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
+	var filter types.WalletTransactionFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Support expand as query parameter
+	if expandParam := c.Query("expand"); expandParam != "" {
+		if filter.QueryFilter == nil {
+			filter.QueryFilter = types.NewDefaultQueryFilter()
+		}
+		filter.QueryFilter.Expand = &expandParam
+	}
+
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.walletService.ListWalletTransactionsByFilter(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

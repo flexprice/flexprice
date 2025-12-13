@@ -117,6 +117,20 @@ func (wtc *WalletTransactionCreate) SetWalletID(s string) *WalletTransactionCrea
 	return wtc
 }
 
+// SetCustomerID sets the "customer_id" field.
+func (wtc *WalletTransactionCreate) SetCustomerID(s string) *WalletTransactionCreate {
+	wtc.mutation.SetCustomerID(s)
+	return wtc
+}
+
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableCustomerID(s *string) *WalletTransactionCreate {
+	if s != nil {
+		wtc.SetCustomerID(*s)
+	}
+	return wtc
+}
+
 // SetType sets the "type" field.
 func (wtc *WalletTransactionCreate) SetType(s string) *WalletTransactionCreate {
 	wtc.mutation.SetType(s)
@@ -472,6 +486,10 @@ func (wtc *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.
 	if value, ok := wtc.mutation.WalletID(); ok {
 		_spec.SetField(wallettransaction.FieldWalletID, field.TypeString, value)
 		_node.WalletID = value
+	}
+	if value, ok := wtc.mutation.CustomerID(); ok {
+		_spec.SetField(wallettransaction.FieldCustomerID, field.TypeString, value)
+		_node.CustomerID = value
 	}
 	if value, ok := wtc.mutation.GetType(); ok {
 		_spec.SetField(wallettransaction.FieldType, field.TypeString, value)

@@ -2062,6 +2062,7 @@ var (
 		{Name: "updated_by", Type: field.TypeString, Nullable: true},
 		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "wallet_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "type", Type: field.TypeString, Default: "credit"},
 		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,9)"}},
 		{Name: "credit_amount", Type: field.TypeOther, Default: "0", SchemaType: map[string]string{"postgres": "numeric(20,9)"}},
@@ -2090,9 +2091,14 @@ var (
 				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[8]},
 			},
 			{
+				Name:    "wallettransaction_tenant_id_environment_id_customer_id",
+				Unique:  false,
+				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[9]},
+			},
+			{
 				Name:    "wallettransaction_tenant_id_environment_id_reference_type_reference_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[14], WalletTransactionsColumns[15], WalletTransactionsColumns[2]},
+				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[15], WalletTransactionsColumns[16], WalletTransactionsColumns[2]},
 			},
 			{
 				Name:    "wallettransaction_tenant_id_environment_id_created_at",
@@ -2102,7 +2108,7 @@ var (
 			{
 				Name:    "idx_tenant_wallet_type_credits_available_expiry_date",
 				Unique:  false,
-				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[8], WalletTransactionsColumns[9], WalletTransactionsColumns[20], WalletTransactionsColumns[19]},
+				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[8], WalletTransactionsColumns[10], WalletTransactionsColumns[21], WalletTransactionsColumns[20]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "credits_available > 0 AND type = 'credit'",
 				},
@@ -2110,7 +2116,7 @@ var (
 			{
 				Name:    "idx_tenant_environment_idempotency_key",
 				Unique:  true,
-				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[21]},
+				Columns: []*schema.Column{WalletTransactionsColumns[1], WalletTransactionsColumns[7], WalletTransactionsColumns[22]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "idempotency_key IS NOT NULL AND idempotency_key <> '' AND status='published'",
 				},

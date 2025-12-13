@@ -61126,6 +61126,7 @@ type WalletTransactionMutation struct {
 	updated_by            *string
 	environment_id        *string
 	wallet_id             *string
+	customer_id           *string
 	_type                 *string
 	amount                *decimal.Decimal
 	credit_amount         *decimal.Decimal
@@ -61577,6 +61578,55 @@ func (m *WalletTransactionMutation) OldWalletID(ctx context.Context) (v string, 
 // ResetWalletID resets all changes to the "wallet_id" field.
 func (m *WalletTransactionMutation) ResetWalletID() {
 	m.wallet_id = nil
+}
+
+// SetCustomerID sets the "customer_id" field.
+func (m *WalletTransactionMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *WalletTransactionMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ClearCustomerID clears the value of the "customer_id" field.
+func (m *WalletTransactionMutation) ClearCustomerID() {
+	m.customer_id = nil
+	m.clearedFields[wallettransaction.FieldCustomerID] = struct{}{}
+}
+
+// CustomerIDCleared returns if the "customer_id" field was cleared in this mutation.
+func (m *WalletTransactionMutation) CustomerIDCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldCustomerID]
+	return ok
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *WalletTransactionMutation) ResetCustomerID() {
+	m.customer_id = nil
+	delete(m.clearedFields, wallettransaction.FieldCustomerID)
 }
 
 // SetType sets the "type" field.
@@ -62265,7 +62315,7 @@ func (m *WalletTransactionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletTransactionMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.tenant_id != nil {
 		fields = append(fields, wallettransaction.FieldTenantID)
 	}
@@ -62289,6 +62339,9 @@ func (m *WalletTransactionMutation) Fields() []string {
 	}
 	if m.wallet_id != nil {
 		fields = append(fields, wallettransaction.FieldWalletID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, wallettransaction.FieldCustomerID)
 	}
 	if m._type != nil {
 		fields = append(fields, wallettransaction.FieldType)
@@ -62359,6 +62412,8 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.EnvironmentID()
 	case wallettransaction.FieldWalletID:
 		return m.WalletID()
+	case wallettransaction.FieldCustomerID:
+		return m.CustomerID()
 	case wallettransaction.FieldType:
 		return m.GetType()
 	case wallettransaction.FieldAmount:
@@ -62414,6 +62469,8 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldEnvironmentID(ctx)
 	case wallettransaction.FieldWalletID:
 		return m.OldWalletID(ctx)
+	case wallettransaction.FieldCustomerID:
+		return m.OldCustomerID(ctx)
 	case wallettransaction.FieldType:
 		return m.OldType(ctx)
 	case wallettransaction.FieldAmount:
@@ -62508,6 +62565,13 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWalletID(v)
+		return nil
+	case wallettransaction.FieldCustomerID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
 		return nil
 	case wallettransaction.FieldType:
 		v, ok := value.(string)
@@ -62668,6 +62732,9 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	if m.FieldCleared(wallettransaction.FieldEnvironmentID) {
 		fields = append(fields, wallettransaction.FieldEnvironmentID)
 	}
+	if m.FieldCleared(wallettransaction.FieldCustomerID) {
+		fields = append(fields, wallettransaction.FieldCustomerID)
+	}
 	if m.FieldCleared(wallettransaction.FieldReferenceType) {
 		fields = append(fields, wallettransaction.FieldReferenceType)
 	}
@@ -62711,6 +62778,9 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 		return nil
 	case wallettransaction.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case wallettransaction.FieldCustomerID:
+		m.ClearCustomerID()
 		return nil
 	case wallettransaction.FieldReferenceType:
 		m.ClearReferenceType()
@@ -62764,6 +62834,9 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 		return nil
 	case wallettransaction.FieldWalletID:
 		m.ResetWalletID()
+		return nil
+	case wallettransaction.FieldCustomerID:
+		m.ResetCustomerID()
 		return nil
 	case wallettransaction.FieldType:
 		m.ResetType()

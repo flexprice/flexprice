@@ -12,6 +12,7 @@ import (
 type Transaction struct {
 	ID                  string                      `db:"id" json:"id"`
 	WalletID            string                      `db:"wallet_id" json:"wallet_id"`
+	CustomerID          string                      `db:"customer_id" json:"customer_id"`
 	Type                types.TransactionType       `db:"type" json:"type"`
 	Amount              decimal.Decimal             `db:"amount" json:"amount" swaggertype:"string"`
 	CreditAmount        decimal.Decimal             `db:"credit_amount" json:"credit_amount" swaggertype:"string"`
@@ -52,6 +53,7 @@ func (t *Transaction) ToEnt() *ent.WalletTransaction {
 	return &ent.WalletTransaction{
 		ID:                  t.ID,
 		WalletID:            t.WalletID,
+		CustomerID:          t.CustomerID,
 		Type:                string(t.Type),
 		Amount:              t.Amount,
 		CreditAmount:        t.CreditAmount,
@@ -85,6 +87,7 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 	return &Transaction{
 		ID:                  e.ID,
 		WalletID:            e.WalletID,
+		CustomerID:          e.CustomerID,
 		Type:                types.TransactionType(e.Type),
 		Amount:              e.Amount,
 		CreditAmount:        e.CreditAmount,

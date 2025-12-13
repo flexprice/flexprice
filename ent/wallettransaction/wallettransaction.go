@@ -29,6 +29,8 @@ const (
 	FieldEnvironmentID = "environment_id"
 	// FieldWalletID holds the string denoting the wallet_id field in the database.
 	FieldWalletID = "wallet_id"
+	// FieldCustomerID holds the string denoting the customer_id field in the database.
+	FieldCustomerID = "customer_id"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldAmount holds the string denoting the amount field in the database.
@@ -74,6 +76,7 @@ var Columns = []string{
 	FieldUpdatedBy,
 	FieldEnvironmentID,
 	FieldWalletID,
+	FieldCustomerID,
 	FieldType,
 	FieldAmount,
 	FieldCreditAmount,
@@ -172,6 +175,11 @@ func ByEnvironmentID(opts ...sql.OrderTermOption) OrderOption {
 // ByWalletID orders the results by the wallet_id field.
 func ByWalletID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWalletID, opts...).ToFunc()
+}
+
+// ByCustomerID orders the results by the customer_id field.
+func ByCustomerID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomerID, opts...).ToFunc()
 }
 
 // ByType orders the results by the type field.

@@ -36,6 +36,7 @@ const (
 	ExpandWallet             ExpandableField = "wallet"
 	ExpandFeature            ExpandableField = "feature"
 	ExpandParentCustomer     ExpandableField = "parent_customer"
+	ExpandCreatedByUser      ExpandableField = "created_by_user"
 )
 
 // ExpandConfig defines which fields can be expanded and their nested expansions
@@ -139,6 +140,15 @@ var (
 		AllowedFields: []ExpandableField{ExpandParentCustomer},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandParentCustomer: {},
+		},
+	}
+
+	// WalletTransactionExpandConfig defines what can be expanded on a wallet transaction
+	WalletTransactionExpandConfig = ExpandConfig{
+		AllowedFields: []ExpandableField{ExpandCustomer, ExpandCreatedByUser},
+		NestedExpands: map[ExpandableField][]ExpandableField{
+			ExpandCustomer:      {},
+			ExpandCreatedByUser: {},
 		},
 	}
 )

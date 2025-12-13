@@ -319,6 +319,7 @@ func ToWalletBalanceResponse(w *wallet.Wallet) *WalletBalanceResponse {
 type WalletTransactionResponse struct {
 	ID                  string                      `json:"id"`
 	WalletID            string                      `json:"wallet_id"`
+	CustomerID          string                      `json:"customer_id,omitempty"`
 	Type                string                      `json:"type"`
 	Amount              decimal.Decimal             `json:"amount" swaggertype:"string"`
 	CreditAmount        decimal.Decimal             `json:"credit_amount" swaggertype:"string"`
@@ -333,8 +334,12 @@ type WalletTransactionResponse struct {
 	ReferenceID         string                      `json:"reference_id,omitempty"`
 	Description         string                      `json:"description,omitempty"`
 	Metadata            types.Metadata              `json:"metadata,omitempty"`
+	CreatedBy           string                      `json:"created_by,omitempty"`
 	CreatedAt           time.Time                   `json:"created_at"`
 	UpdatedAt           time.Time                   `json:"updated_at"`
+	// Expanded fields (optional, populated when expand parameter is used)
+	Customer      *CustomerResponse `json:"customer,omitempty"`
+	CreatedByUser *UserResponse     `json:"created_by_user,omitempty"`
 }
 
 // FromWalletTransaction converts a wallet transaction to a WalletTransactionResponse
@@ -342,6 +347,7 @@ func FromWalletTransaction(t *wallet.Transaction) *WalletTransactionResponse {
 	return &WalletTransactionResponse{
 		ID:                  t.ID,
 		WalletID:            t.WalletID,
+		CustomerID:          t.CustomerID,
 		Type:                string(t.Type),
 		Amount:              t.Amount,
 		CreditAmount:        t.CreditAmount,
@@ -356,7 +362,9 @@ func FromWalletTransaction(t *wallet.Transaction) *WalletTransactionResponse {
 		ReferenceID:         t.ReferenceID,
 		Description:         t.Description,
 		Metadata:            t.Metadata,
+		CreatedBy:           t.CreatedBy,
 		CreatedAt:           t.CreatedAt,
+		UpdatedAt:           t.UpdatedAt,
 	}
 }
 

@@ -6,10 +6,12 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
 	"github.com/flexprice/flexprice/internal/cache"
 	walletdomain "github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -370,6 +372,7 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetID(tx.ID).
 		SetTenantID(tx.TenantID).
 		SetWalletID(tx.WalletID).
+		SetNillableCustomerID(&tx.CustomerID).
 		SetType(string(tx.Type)).
 		SetAmount(tx.Amount).
 		SetCreditAmount(tx.CreditAmount).
@@ -525,9 +528,13 @@ func (r *walletRepository) ListWalletTransactions(ctx context.Context, f *types.
 
 	client := r.client.Reader(ctx)
 	query := client.WalletTransaction.Query()
+	var err error
 
 	// Apply entity-specific filters
-	query = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+	query, err = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+	if err != nil {
+		return nil, err
+	}
 
 	// Apply common query options
 	query = ApplyQueryOptions(ctx, query, f, r.queryOpts)
@@ -559,8 +566,12 @@ func (r *walletRepository) ListAllWalletTransactions(ctx context.Context, f *typ
 	client := r.client.Reader(ctx)
 	query := client.WalletTransaction.Query()
 	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
+	var err error
 	if f != nil {
-		query = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		query, err = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	result, err := query.All(ctx)
@@ -590,8 +601,12 @@ func (r *walletRepository) CountWalletTransactions(ctx context.Context, f *types
 	client := r.client.Reader(ctx)
 	query := client.WalletTransaction.Query()
 	query = ApplyBaseFilters(ctx, query, f, r.queryOpts)
+	var err error
 	if f != nil {
-		query = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		query, err = r.queryOpts.applyEntityQueryOptions(ctx, f, query)
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	count, err := query.Count(ctx)
@@ -741,6 +756,8 @@ func (o WalletTransactionQueryOptions) GetFieldName(field string) string {
 	switch field {
 	case "created_at":
 		return wallettransaction.FieldCreatedAt
+	case "created_by":
+		return wallettransaction.FieldCreatedBy
 	case "updated_at":
 		return wallettransaction.FieldUpdatedAt
 	case "amount":
@@ -750,10 +767,12 @@ func (o WalletTransactionQueryOptions) GetFieldName(field string) string {
 	}
 }
 
-func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.WalletTransactionFilter, query WalletTransactionQuery) WalletTransactionQuery {
+func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.WalletTransactionFilter, query WalletTransactionQuery) (WalletTransactionQuery, error) {
 	if f == nil {
-		return query
+		return query, nil
 	}
+
+	var err error
 
 	if f.WalletID != nil {
 		query = query.Where(wallettransaction.WalletID(*f.WalletID))
@@ -804,7 +823,33 @@ func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context
 		query = query.Where(wallettransaction.Priority(*f.Priority))
 	}
 
-	return query
+	// Apply filters using the generic function
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[WalletTransactionQuery, predicate.WalletTransaction](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.WalletTransaction { return predicate.WalletTransaction(p) },
+		)
+		if err != nil {
+			return query, err
+		}
+	}
+
+	// Apply sorts using the generic function
+	if f.Sort != nil {
+		query, err = dsl.ApplySorts[WalletTransactionQuery, wallettransaction.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) wallettransaction.OrderOption { return wallettransaction.OrderOption(o) },
+		)
+		if err != nil {
+			return query, err
+		}
+	}
+
+	return query, nil
 }
 
 func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walletdomain.Wallet) error {
@@ -1052,4 +1097,14 @@ func (r *walletRepository) GetCreditTopupsForExport(ctx context.Context, tenantI
 	}
 
 	return result, nil
+}
+
+func (o WalletTransactionQueryOptions) GetFieldResolver(st string) (string, error) {
+	fieldName := o.GetFieldName(st)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in wallet transaction query", st).
+			WithHintf("Unknown field name '%s' in wallet transaction query", st).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
 }
