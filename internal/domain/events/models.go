@@ -92,3 +92,15 @@ type UsageByFeatureResult struct {
 	CountUniqueQty   uint64
 	LatestQty        decimal.Decimal `swaggertype:"string"`
 }
+
+type UsageByCostSheetResult struct {
+	CostSheetID      string
+	FeatureID        string
+	MeterID          string
+	PriceID          string
+	SumTotal         decimal.Decimal
+	MaxTotal         decimal.Decimal
+	CountDistinctIDs uint64
+	CountUniqueQty   uint64
+	LatestQty        decimal.Decimal
+}

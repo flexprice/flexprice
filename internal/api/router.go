@@ -433,6 +433,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			costsheets.DELETE("/:id", handlers.Costsheet.DeleteCostsheet)
 			costsheets.GET("/active", handlers.Costsheet.GetActiveCostsheetForTenant)
 			costsheets.POST("/analytics", handlers.RevenueAnalytics.GetDetailedCostAnalytics)
+			costsheets.POST("/analytics-v2", handlers.RevenueAnalytics.GetDetailedCostAnalyticsV2)
 		}
 
 		// Credit note routes

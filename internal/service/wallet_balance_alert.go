@@ -264,7 +264,7 @@ func (s *walletBalanceAlertService) shouldThrottle(ctx context.Context, event wa
 	)
 
 	// Check if we processed this customer recently
-	_, exists := s.cache.GetWalletBalanceAlert(ctx, cacheKey)
+	_, exists := s.cache.ForceCacheGet(ctx, cacheKey)
 	if exists {
 		s.Logger.Infow("throttling wallet balance recalculation - processed recently",
 			"customer_id", event.CustomerID,
@@ -289,7 +289,7 @@ func (s *walletBalanceAlertService) markProcessed(ctx context.Context, event wal
 	)
 
 	// Set cache entry with TTL
-	s.cache.SetWalletBalanceAlert(ctx, cacheKey, time.Now().Unix(), WalletAlertThrottleDuration)
+	s.cache.ForceCacheSet(ctx, cacheKey, time.Now().Unix(), WalletAlertThrottleDuration)
 
 	s.Logger.Debugw("marked customer as processed in throttle cache",
 		"customer_id", event.CustomerID,

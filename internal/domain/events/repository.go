@@ -200,3 +200,18 @@ type FeatureUsageParams struct {
 	MeterID       string `json:"meter_id"`
 	SubLineItemID string `json:"sub_line_item_id"`
 }
+
+// Cost Usage Params
+
+type GetCostUsageEventsParams struct {
+	StartTime   time.Time `json:"start_time" validate:"required"`
+	EndTime     time.Time `json:"end_time" validate:"required"`
+	CustomerID  string    `json:"customer_id"`
+	CostSheetID string    `json:"costsheet_id"`
+	MeterID     string    `json:"meter_id"`
+	FeatureID   string    `json:"feature_id"`
+	PriceID     string    `json:"price_id"`
+	Offset      int       `json:"offset"`
+	Limit       int       `json:"limit"`
+	CountTotal  bool      `json:"count_total"`
+}

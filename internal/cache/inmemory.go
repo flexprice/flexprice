@@ -66,11 +66,11 @@ func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
 	return c.cache.Get(key)
 }
 
-func (c *InMemoryCache) GetWalletBalanceAlert(ctx context.Context, key string) (interface{}, bool) {
+func (c *InMemoryCache) ForceCacheGet(ctx context.Context, key string) (interface{}, bool) {
 	return c.cache.Get(key)
 }
 
-func (c *InMemoryCache) SetWalletBalanceAlert(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+func (c *InMemoryCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	c.cache.Set(key, value, expiration)
 }
 

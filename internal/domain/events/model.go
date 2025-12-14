@@ -181,3 +181,25 @@ type FeatureUsage struct {
 	ProcessedAt     time.Time `json:"processed_at" ch:"processed_at,timezone('UTC')"`
 	ProcessingLagMs uint32    `json:"processing_lag_ms" ch:"processing_lag_ms"`
 }
+
+type CostUsage struct {
+	// Original event fields
+	Event
+	// Processing fields
+	CostSheetID string `json:"costsheet_id" ch:"costsheet_id"`
+	PriceID     string `json:"price_id" ch:"price_id"`
+	FeatureID   string `json:"feature_id" ch:"feature_id"`
+	MeterID     string `json:"meter_id" ch:"meter_id"`
+
+	// Deduplication and metrics
+	UniqueHash string          `json:"unique_hash" ch:"unique_hash"`
+	QtyTotal   decimal.Decimal `json:"qty_total" ch:"qty_total"`
+
+	// Audit fields
+	Version uint64 `json:"version" ch:"version"`
+	Sign    int8   `json:"sign" ch:"sign"`
+
+	// Processing metadata
+	ProcessedAt     time.Time `json:"processed_at" ch:"processed_at,timezone('UTC')"`
+	ProcessingLagMs uint32    `json:"processing_lag_ms" ch:"processing_lag_ms"`
+}

@@ -26,11 +26,11 @@ type Cache interface {
 	// Flush removes all items from the cache
 	Flush(ctx context.Context)
 
-	// GetWalletBalanceAlert retrieves a value from the wallet balance alert cache
-	GetWalletBalanceAlert(ctx context.Context, key string) (interface{}, bool)
+	// ForceCacheGet retrieves a value from the cache without checking if the cache is enabled
+	ForceCacheGet(ctx context.Context, key string) (interface{}, bool)
 
-	// SetWalletBalanceAlert adds a value to the wallet balance alert cache
-	SetWalletBalanceAlert(ctx context.Context, key string, value interface{}, expiration time.Duration)
+	// ForceCacheSet adds a value to the cache without checking if the cache is enabled
+	ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration)
 }
 
 // Predefined cache key prefixes for different entity types
@@ -64,6 +64,7 @@ const (
 	PrefixSettings                 = "settings:v1:"
 	PrefixSubscriptionLineItem     = "subscription_line_item:v1:"
 	PrefixWalletAlertThrottle      = "wallet_alert_throttle:v1:"
+	PrefixCostsheet                = "costsheet:v1:"
 )
 
 // GenerateKey creates a cache key from a prefix and a set of parameters

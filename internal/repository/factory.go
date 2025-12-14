@@ -219,3 +219,7 @@ func NewGroupRepository(p RepositoryParams) group.Repository {
 func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 	return entRepo.NewScheduledTaskRepository(p.EntClient, p.Logger)
 }
+
+func NewCostSheetUsageRepository(p RepositoryParams) events.CostSheetUsageRepository {
+	return clickhouseRepo.NewCostSheetUsageRepository(p.ClickHouseDB, p.Logger)
+}
