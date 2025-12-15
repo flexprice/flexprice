@@ -4634,22 +4634,6 @@ func (c *PriceClient) GetX(ctx context.Context, id string) *Price {
 	return obj
 }
 
-// QueryPriceUnitEdge queries the price_unit_edge edge of a Price.
-func (c *PriceClient) QueryPriceUnitEdge(pr *Price) *PriceUnitQuery {
-	query := (&PriceUnitClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pr.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(price.Table, price.FieldID, id),
-			sqlgraph.To(priceunit.Table, priceunit.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, false, price.PriceUnitEdgeTable, price.PriceUnitEdgeColumn),
-		)
-		fromV = sqlgraph.Neighbors(pr.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // Hooks returns the client hooks.
 func (c *PriceClient) Hooks() []Hook {
 	return c.hooks.Price
@@ -4781,22 +4765,6 @@ func (c *PriceUnitClient) GetX(ctx context.Context, id string) *PriceUnit {
 		panic(err)
 	}
 	return obj
-}
-
-// QueryPrices queries the prices edge of a PriceUnit.
-func (c *PriceUnitClient) QueryPrices(pu *PriceUnit) *PriceQuery {
-	query := (&PriceClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := pu.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(priceunit.Table, priceunit.FieldID, id),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, priceunit.PricesTable, priceunit.PricesColumn),
-		)
-		fromV = sqlgraph.Neighbors(pu.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
 }
 
 // Hooks returns the client hooks.
@@ -5420,6 +5388,22 @@ func (c *SubscriptionClient) QueryCouponApplications(s *Subscription) *CouponApp
 			sqlgraph.From(subscription.Table, subscription.FieldID, id),
 			sqlgraph.To(couponapplication.Table, couponapplication.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscription.CouponApplicationsTable, subscription.CouponApplicationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryInvoicingCustomer queries the invoicing_customer edge of a Subscription.
+func (c *SubscriptionClient) QueryInvoicingCustomer(s *Subscription) *CustomerQuery {
+	query := (&CustomerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(customer.Table, customer.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, subscription.InvoicingCustomerTable, subscription.InvoicingCustomerColumn),
 		)
 		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
 		return fromV, nil

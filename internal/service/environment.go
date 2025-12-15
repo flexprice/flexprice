@@ -45,8 +45,11 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 	// Check environment limits for prod and sandbox environments
 	if envType == types.EnvironmentProduction || envType == types.EnvironmentDevelopment {
 		// Get env config with defaults (tenant-level, no environment_id)
-
-		config, err := s.settingsService.GetSettingWithDefaults(ctx, types.SettingKeyEnvConfig)
+		envConfig, err := GetSetting[types.EnvConfig](
+			s.settingsService.(*settingsService),
+			ctx,
+			types.SettingKeyEnvConfig,
+		)
 		if err != nil {
 			return nil, err
 		}
@@ -58,16 +61,15 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, req dto.Crea
 		}
 
 		// Determine the limit based on environment type
-		envTypeKey := string(envType)
-		limit, exists := config.Value[envTypeKey]
-		if !exists {
-			return nil, ierr.NewErrorf("environment limit not configured for type: %s", envTypeKey).
-				WithHintf("Environment limit configuration missing for type: %s", envTypeKey).
-				Mark(ierr.ErrValidation)
+		var limit int
+		if envType == types.EnvironmentProduction {
+			limit = envConfig.Production
+		} else {
+			limit = envConfig.Development
 		}
 
 		// Check if limit is reached
-		if currentCount >= limit.(int) {
+		if currentCount >= limit {
 			envTypeName := string(envType)
 			return nil, ierr.NewErrorf("environment limit reached: maximum %d %s environment(s) allowed", limit, envTypeName).
 				WithHintf("You have reached the maximum limit of %d %s environment(s)", limit, envTypeName).

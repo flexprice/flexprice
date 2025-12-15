@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -13,7 +12,6 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/predicate"
-	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/ent/priceunit"
 )
 
@@ -24,7 +22,6 @@ type PriceUnitQuery struct {
 	order      []priceunit.OrderOption
 	inters     []Interceptor
 	predicates []predicate.PriceUnit
-	withPrices *PriceQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -59,28 +56,6 @@ func (puq *PriceUnitQuery) Unique(unique bool) *PriceUnitQuery {
 func (puq *PriceUnitQuery) Order(o ...priceunit.OrderOption) *PriceUnitQuery {
 	puq.order = append(puq.order, o...)
 	return puq
-}
-
-// QueryPrices chains the current query on the "prices" edge.
-func (puq *PriceUnitQuery) QueryPrices() *PriceQuery {
-	query := (&PriceClient{config: puq.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := puq.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := puq.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(priceunit.Table, priceunit.FieldID, selector),
-			sqlgraph.To(price.Table, price.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, true, priceunit.PricesTable, priceunit.PricesColumn),
-		)
-		fromU = sqlgraph.SetNeighbors(puq.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
 }
 
 // First returns the first PriceUnit entity from the query.
@@ -275,22 +250,10 @@ func (puq *PriceUnitQuery) Clone() *PriceUnitQuery {
 		order:      append([]priceunit.OrderOption{}, puq.order...),
 		inters:     append([]Interceptor{}, puq.inters...),
 		predicates: append([]predicate.PriceUnit{}, puq.predicates...),
-		withPrices: puq.withPrices.Clone(),
 		// clone intermediate query.
 		sql:  puq.sql.Clone(),
 		path: puq.path,
 	}
-}
-
-// WithPrices tells the query-builder to eager-load the nodes that are connected to
-// the "prices" edge. The optional arguments are used to configure the query builder of the edge.
-func (puq *PriceUnitQuery) WithPrices(opts ...func(*PriceQuery)) *PriceUnitQuery {
-	query := (&PriceClient{config: puq.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	puq.withPrices = query
-	return puq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -369,11 +332,8 @@ func (puq *PriceUnitQuery) prepareQuery(ctx context.Context) error {
 
 func (puq *PriceUnitQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*PriceUnit, error) {
 	var (
-		nodes       = []*PriceUnit{}
-		_spec       = puq.querySpec()
-		loadedTypes = [1]bool{
-			puq.withPrices != nil,
-		}
+		nodes = []*PriceUnit{}
+		_spec = puq.querySpec()
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*PriceUnit).scanValues(nil, columns)
@@ -381,7 +341,6 @@ func (puq *PriceUnitQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*P
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &PriceUnit{config: puq.config}
 		nodes = append(nodes, node)
-		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -393,45 +352,7 @@ func (puq *PriceUnitQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*P
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := puq.withPrices; query != nil {
-		if err := puq.loadPrices(ctx, query, nodes,
-			func(n *PriceUnit) { n.Edges.Prices = []*Price{} },
-			func(n *PriceUnit, e *Price) { n.Edges.Prices = append(n.Edges.Prices, e) }); err != nil {
-			return nil, err
-		}
-	}
 	return nodes, nil
-}
-
-func (puq *PriceUnitQuery) loadPrices(ctx context.Context, query *PriceQuery, nodes []*PriceUnit, init func(*PriceUnit), assign func(*PriceUnit, *Price)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[string]*PriceUnit)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(price.FieldPriceUnitID)
-	}
-	query.Where(predicate.Price(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(priceunit.PricesColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.PriceUnitID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "price_unit_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
-	}
-	return nil
 }
 
 func (puq *PriceUnitQuery) sqlCount(ctx context.Context) (int, error) {

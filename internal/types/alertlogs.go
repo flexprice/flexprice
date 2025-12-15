@@ -8,6 +8,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// Default threshold for wallet alerts
+const WalletBalanceAlertThreshold = 0.5
+
 // AlertState represents the current state of a wallet alert
 type AlertState string
 

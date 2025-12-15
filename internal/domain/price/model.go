@@ -396,7 +396,7 @@ func FromEnt(e *ent.Price) *Price {
 		TransformQuantity:      JSONBTransformQuantity(e.TransformQuantity),
 		Metadata:               JSONBMetadata(e.Metadata),
 		EnvironmentID:          e.EnvironmentID,
-		PriceUnitID:            e.PriceUnitID,
+		PriceUnitID:            lo.FromPtr(e.PriceUnitID),
 		PriceUnit:              e.PriceUnit,
 		PriceUnitAmount:        decimal.NewFromFloat(e.PriceUnitAmount),
 		DisplayPriceUnitAmount: e.DisplayPriceUnitAmount,

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +23,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 	}{
 		{
 			name:           "Valid date - beginning of year",
-			input:          intPtr(20250101),
+			input:          lo.ToPtr(20250101),
 			expectedYear:   2025,
 			expectedMonth:  time.January,
 			expectedDay:    1,
@@ -34,7 +35,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Valid date - end of year",
-			input:          intPtr(20251231),
+			input:          lo.ToPtr(20251231),
 			expectedYear:   2025,
 			expectedMonth:  time.December,
 			expectedDay:    31,
@@ -46,7 +47,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Valid date - middle of month",
-			input:          intPtr(20250715),
+			input:          lo.ToPtr(20250715),
 			expectedYear:   2025,
 			expectedMonth:  time.July,
 			expectedDay:    15,
@@ -62,7 +63,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Leap year - February 29",
-			input:          intPtr(20240229),
+			input:          lo.ToPtr(20240229),
 			expectedYear:   2024,
 			expectedMonth:  time.February,
 			expectedDay:    29,
@@ -74,7 +75,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Non-leap year - February 28",
-			input:          intPtr(20250228),
+			input:          lo.ToPtr(20250228),
 			expectedYear:   2025,
 			expectedMonth:  time.February,
 			expectedDay:    28,
@@ -86,7 +87,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Single digit month and day",
-			input:          intPtr(20250101),
+			input:          lo.ToPtr(20250101),
 			expectedYear:   2025,
 			expectedMonth:  time.January,
 			expectedDay:    1,
@@ -98,7 +99,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Maximum valid date",
-			input:          intPtr(99991231),
+			input:          lo.ToPtr(99991231),
 			expectedYear:   9999,
 			expectedMonth:  time.December,
 			expectedDay:    31,
@@ -110,7 +111,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Minimum valid date",
-			input:          intPtr(10101),
+			input:          lo.ToPtr(10101),
 			expectedYear:   1,
 			expectedMonth:  time.January,
 			expectedDay:    1,
@@ -122,7 +123,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Edge case - last day of different months",
-			input:          intPtr(20250430),
+			input:          lo.ToPtr(20250430),
 			expectedYear:   2025,
 			expectedMonth:  time.April,
 			expectedDay:    30,
@@ -134,7 +135,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Edge case - first day after leap day",
-			input:          intPtr(20240301),
+			input:          lo.ToPtr(20240301),
 			expectedYear:   2024,
 			expectedMonth:  time.March,
 			expectedDay:    1,
@@ -147,7 +148,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		// Invalid date cases - these will be normalized by time.Date
 		{
 			name:           "Invalid date - February 30 (normalized to March 2)",
-			input:          intPtr(20250230),
+			input:          lo.ToPtr(20250230),
 			expectedYear:   2025,
 			expectedMonth:  time.March,
 			expectedDay:    2,
@@ -159,7 +160,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Invalid date - Month 13 (normalized to next year)",
-			input:          intPtr(20251301),
+			input:          lo.ToPtr(20251301),
 			expectedYear:   2026,
 			expectedMonth:  time.January,
 			expectedDay:    1,
@@ -171,7 +172,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Invalid date - Day 32 (normalized to next month)",
-			input:          intPtr(20250132),
+			input:          lo.ToPtr(20250132),
 			expectedYear:   2025,
 			expectedMonth:  time.February,
 			expectedDay:    1,
@@ -183,7 +184,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Edge case - Zero month (normalized)",
-			input:          intPtr(20250001),
+			input:          lo.ToPtr(20250001),
 			expectedYear:   2024,
 			expectedMonth:  time.December,
 			expectedDay:    1,
@@ -195,7 +196,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Edge case - Zero day (normalized)",
-			input:          intPtr(20250100),
+			input:          lo.ToPtr(20250100),
 			expectedYear:   2024,
 			expectedMonth:  time.December,
 			expectedDay:    31,
@@ -207,7 +208,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Edge case - All zeros except year",
-			input:          intPtr(20250000),
+			input:          lo.ToPtr(20250000),
 			expectedYear:   2024,
 			expectedMonth:  time.November,
 			expectedDay:    30,
@@ -219,7 +220,7 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 		},
 		{
 			name:           "Edge case - Negative year",
-			input:          intPtr(-20250101),
+			input:          lo.ToPtr(-20250101),
 			expectedYear:   -2026,
 			expectedMonth:  time.October,
 			expectedDay:    30,
@@ -258,22 +259,17 @@ func TestParseYYYYMMDDToDate(t *testing.T) {
 	}
 }
 
-// Helper function to create int pointer
-func intPtr(i int) *int {
-	return &i
-}
-
 // Additional test for checking specific behaviors
 func TestParseYYYYMMDDToDate_SpecificBehaviors(t *testing.T) {
 	t.Run("Verify UTC timezone", func(t *testing.T) {
-		date := intPtr(20250101)
+		date := lo.ToPtr(20250101)
 		result := ParseYYYYMMDDToDate(date)
 		_, offset := result.Zone()
 		assert.Equal(t, 0, offset, "Expected UTC timezone with 0 offset")
 	})
 
 	t.Run("Verify time components are zero", func(t *testing.T) {
-		date := intPtr(20250101)
+		date := lo.ToPtr(20250101)
 		result := ParseYYYYMMDDToDate(date)
 		assert.Equal(t, 0, result.Hour(), "Hour should be 0")
 		assert.Equal(t, 0, result.Minute(), "Minute should be 0")
@@ -283,7 +279,7 @@ func TestParseYYYYMMDDToDate_SpecificBehaviors(t *testing.T) {
 
 	t.Run("Verify date normalization", func(t *testing.T) {
 		// Test with invalid date that should be normalized
-		date := intPtr(20250229) // Not a leap year
+		date := lo.ToPtr(20250229) // Not a leap year
 		result := ParseYYYYMMDDToDate(date)
 
 		// Should be normalized to March 1, 2025
@@ -297,7 +293,7 @@ func TestParseYYYYMMDDToDate_SpecificBehaviors(t *testing.T) {
 		// Test multiple leap year cases
 		leapYears := []int{2024, 2028, 2032, 2036, 2040}
 		for _, year := range leapYears {
-			date := intPtr(year*10000 + 229) // February 29
+			date := lo.ToPtr(year*10000 + 229) // February 29
 			result := ParseYYYYMMDDToDate(date)
 
 			resultYear, month, day := result.Date()

@@ -57,12 +57,22 @@ func (h *Handler) HandleWebhookEvent(
 			"property_value", event.PropertyValue,
 			"environment_id", environmentID)
 
-		// Only process deal.propertyChange events
-		if event.SubscriptionType != string(hubspot.SubscriptionTypeDealPropertyChange) {
-			h.logger.Infow("skipping non-deal event", "subscription_type", event.SubscriptionType)
+		// Process deal.creation events
+		if event.SubscriptionType == string(hubspot.SubscriptionTypeDealCreation) {
+			// Process the deal creation (convert ObjectID to string)
+			dealIDStr := strconv.FormatInt(event.ObjectID, 10)
+			if err := h.handleDealCreated(ctx, dealIDStr, services); err != nil {
+				h.logger.Errorw("failed to handle deal created event",
+					"error", err,
+					"deal_id", event.ObjectID)
+				// Continue processing other events even if one fails
+				continue
+			}
 			continue
 		}
 
+		// Process deal.propertyChange events
+		if event.SubscriptionType == string(hubspot.SubscriptionTypeDealPropertyChange) {
 		// Only process dealstage property changes to "closedwon"
 		if event.PropertyName != hubspot.PropertyNameDealStage || event.PropertyValue != string(hubspot.DealStageClosedWon) {
 			h.logger.Infow("skipping event - not a closed won deal",
@@ -80,19 +90,22 @@ func (h *Handler) HandleWebhookEvent(
 			// Continue processing other events even if one fails
 			continue
 		}
+			continue
+		}
+
+		// Skip unsupported event types
+		h.logger.Infow("skipping unsupported event type", "subscription_type", event.SubscriptionType)
 	}
 
 	return nil
 }
 
-// handleDealClosedWon processes a deal that was marked as closed won
-func (h *Handler) handleDealClosedWon(
+// processDealContacts is a shared function that processes a deal by fetching contacts and creating customers
+func (h *Handler) processDealContacts(
 	ctx context.Context,
 	dealID string,
 	services *ServiceDependencies,
 ) error {
-	h.logger.Infow("handling deal closed won event", "deal_id", dealID)
-
 	// Step 1: Fetch deal details from HubSpot
 	deal, err := h.client.GetDeal(ctx, dealID)
 	if err != nil {
@@ -161,7 +174,38 @@ func (h *Handler) handleDealClosedWon(
 			"deal_id", dealID)
 	}
 
+	return nil
+}
+
+// handleDealClosedWon processes a deal that was marked as closed won
+func (h *Handler) handleDealClosedWon(
+	ctx context.Context,
+	dealID string,
+	services *ServiceDependencies,
+) error {
+	h.logger.Infow("handling deal closed won event", "deal_id", dealID)
+
+	if err := h.processDealContacts(ctx, dealID, services); err != nil {
+		return err
+	}
+
 	h.logger.Infow("successfully processed deal closed won event", "deal_id", dealID)
+	return nil
+}
+
+// handleDealCreated processes a deal that was created
+func (h *Handler) handleDealCreated(
+	ctx context.Context,
+	dealID string,
+	services *ServiceDependencies,
+) error {
+	h.logger.Infow("handling deal created event", "deal_id", dealID)
+
+	if err := h.processDealContacts(ctx, dealID, services); err != nil {
+		return err
+	}
+
+	h.logger.Infow("successfully processed deal created event", "deal_id", dealID)
 	return nil
 }
 

@@ -18,6 +18,10 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
+	"github.com/flexprice/flexprice/internal/integration/nomod"
+	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
+	"github.com/flexprice/flexprice/internal/integration/quickbooks"
+	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/s3"
@@ -181,6 +185,15 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 		f.logger,
 	)
 
+	// Create quote sync service
+	quoteSyncSvc := hubspot.NewQuoteSyncService(
+		hubspotClient,
+		f.customerRepo,
+		f.subscriptionRepo,
+		f.priceRepo,
+		f.logger,
+	)
+
 	// Create webhook handler
 	webhookHandler := hubspotwebhook.NewHandler(
 		hubspotClient,
@@ -194,6 +207,7 @@ func (f *Factory) GetHubSpotIntegration(ctx context.Context) (*HubSpotIntegratio
 		CustomerSvc:    customerSvc,
 		InvoiceSyncSvc: invoiceSyncSvc,
 		DealSyncSvc:    dealSyncSvc,
+		QuoteSyncSvc:   quoteSyncSvc,
 		WebhookHandler: webhookHandler,
 	}, nil
 }
@@ -322,6 +336,119 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 	}, nil
 }
 
+// GetQuickBooksIntegration returns a complete QuickBooks integration setup
+func (f *Factory) GetQuickBooksIntegration(ctx context.Context) (*QuickBooksIntegration, error) {
+	// Create QuickBooks client
+	qbClient := quickbooks.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+	)
+
+	// Create customer service
+	customerSvc := quickbooks.NewCustomerService(quickbooks.CustomerServiceParams{
+		Client:                       qbClient,
+		CustomerRepo:                 f.customerRepo,
+		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
+		Logger:                       f.logger,
+	})
+
+	// Create item sync service
+	itemSyncSvc := quickbooks.NewItemSyncService(quickbooks.ItemSyncServiceParams{
+		Client:                       qbClient,
+		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
+		MeterRepo:                    f.meterRepo,
+		Logger:                       f.logger,
+	})
+
+	// Create invoice service
+	invoiceSvc := quickbooks.NewInvoiceService(quickbooks.InvoiceServiceParams{
+		Client:                       qbClient,
+		CustomerSvc:                  customerSvc,
+		CustomerRepo:                 f.customerRepo,
+		InvoiceRepo:                  f.invoiceRepo,
+		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
+		Logger:                       f.logger,
+	})
+
+	// Create payment service
+	paymentSvc := quickbooks.NewPaymentService(quickbooks.PaymentServiceParams{
+		Client:                       qbClient,
+		InvoiceRepo:                  f.invoiceRepo,
+		EntityIntegrationMappingRepo: f.entityIntegrationMappingRepo,
+		Logger:                       f.logger,
+	})
+
+	// Create webhook handler
+	webhookHandler := quickbookswebhook.NewHandler(
+		qbClient,
+		paymentSvc,
+		f.connectionRepo,
+		f.logger,
+	)
+
+	return &QuickBooksIntegration{
+		Client:         qbClient,
+		CustomerSvc:    customerSvc,
+		ItemSyncSvc:    itemSyncSvc,
+		InvoiceSvc:     invoiceSvc,
+		PaymentSvc:     paymentSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
+// GetNomodIntegration returns a complete Nomod integration setup
+func (f *Factory) GetNomodIntegration(ctx context.Context) (*NomodIntegration, error) {
+	// Create Nomod client
+	nomodClient := nomod.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+	)
+
+	// Create customer service
+	customerSvc := nomod.NewCustomerService(
+		nomodClient,
+		f.customerRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	// Create invoice sync service
+	invoiceSyncSvc := nomod.NewInvoiceSyncService(
+		nomodClient,
+		customerSvc.(*nomod.CustomerService),
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	// Create payment service
+	paymentSvc := nomod.NewPaymentService(
+		nomodClient,
+		customerSvc,
+		invoiceSyncSvc,
+		f.logger,
+	)
+
+	// Create webhook handler
+	webhookHandler := nomodwebhook.NewHandler(
+		nomodClient,
+		paymentSvc,
+		invoiceSyncSvc,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &NomodIntegration{
+		Client:         nomodClient,
+		CustomerSvc:    customerSvc,
+		PaymentSvc:     paymentSvc,
+		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (interface{}, error) {
 	switch providerType {
@@ -333,6 +460,10 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetRazorpayIntegration(ctx)
 	case types.SecretProviderChargebee:
 		return f.GetChargebeeIntegration(ctx)
+	case types.SecretProviderQuickBooks:
+		return f.GetQuickBooksIntegration(ctx)
+	case types.SecretProviderNomod:
+		return f.GetNomodIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -350,6 +481,8 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderHubSpot,
 		types.SecretProviderRazorpay,
 		types.SecretProviderChargebee,
+		types.SecretProviderQuickBooks,
+		types.SecretProviderNomod,
 	}
 }
 
@@ -379,6 +512,7 @@ type HubSpotIntegration struct {
 	CustomerSvc    hubspot.HubSpotCustomerService
 	InvoiceSyncSvc *hubspot.InvoiceSyncService
 	DealSyncSvc    *hubspot.DealSyncService
+	QuoteSyncSvc   *hubspot.QuoteSyncService
 	WebhookHandler *hubspotwebhook.Handler
 }
 
@@ -401,6 +535,25 @@ type ChargebeeIntegration struct {
 	InvoiceSvc     chargebee.ChargebeeInvoiceService
 	PlanSyncSvc    chargebee.ChargebeePlanSyncService
 	WebhookHandler *chargebeewebhook.Handler
+}
+
+// QuickBooksIntegration contains all QuickBooks integration services
+type QuickBooksIntegration struct {
+	Client         quickbooks.QuickBooksClient
+	CustomerSvc    quickbooks.QuickBooksCustomerService
+	ItemSyncSvc    quickbooks.QuickBooksItemSyncService
+	InvoiceSvc     quickbooks.QuickBooksInvoiceService
+	PaymentSvc     quickbooks.QuickBooksPaymentService
+	WebhookHandler *quickbookswebhook.Handler
+}
+
+// NomodIntegration contains all Nomod integration services
+type NomodIntegration struct {
+	Client         nomod.NomodClient
+	CustomerSvc    nomod.NomodCustomerService
+	PaymentSvc     *nomod.PaymentService
+	InvoiceSyncSvc *nomod.InvoiceSyncService
+	WebhookHandler *nomodwebhook.Handler
 }
 
 // IntegrationProvider defines the interface for all integration providers
@@ -454,6 +607,36 @@ func (p *RazorpayProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasRazorpayConnection(ctx)
 }
 
+// QuickBooksProvider implements IntegrationProvider for QuickBooks
+type QuickBooksProvider struct {
+	integration *QuickBooksIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *QuickBooksProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderQuickBooks
+}
+
+// IsAvailable checks if QuickBooks integration is available
+func (p *QuickBooksProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasQuickBooksConnection(ctx)
+}
+
+// NomodProvider implements IntegrationProvider for Nomod
+type NomodProvider struct {
+	integration *NomodIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *NomodProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderNomod
+}
+
+// IsAvailable checks if Nomod integration is available
+func (p *NomodProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasNomodConnection(ctx)
+}
+
 // GetAvailableProviders returns all available providers for the current environment
 func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvider, error) {
 	var providers []IntegrationProvider
@@ -482,6 +665,24 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		razorpayProvider := &RazorpayProvider{integration: razorpayIntegration}
 		if razorpayProvider.IsAvailable(ctx) {
 			providers = append(providers, razorpayProvider)
+		}
+	}
+
+	// Check QuickBooks
+	quickbooksIntegration, err := f.GetQuickBooksIntegration(ctx)
+	if err == nil {
+		quickbooksProvider := &QuickBooksProvider{integration: quickbooksIntegration}
+		if quickbooksProvider.IsAvailable(ctx) {
+			providers = append(providers, quickbooksProvider)
+		}
+	}
+
+	// Check Nomod
+	nomodIntegration, err := f.GetNomodIntegration(ctx)
+	if err == nil {
+		nomodProvider := &NomodProvider{integration: nomodIntegration}
+		if nomodProvider.IsAvailable(ctx) {
+			providers = append(providers, nomodProvider)
 		}
 	}
 

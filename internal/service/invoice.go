@@ -16,6 +16,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/integration/chargebee"
+	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/integration/stripe"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -37,10 +38,10 @@ type InvoiceService interface {
 	VoidInvoice(ctx context.Context, id string, req dto.InvoiceVoidRequest) error
 	ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error
 	UpdatePaymentStatus(ctx context.Context, id string, status types.PaymentStatus, amount *decimal.Decimal) error
-	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error)
+	CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error)
 	GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error)
 	GetCustomerInvoiceSummary(ctx context.Context, customerID string, currency string) (*dto.CustomerInvoiceSummary, error)
-	GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error)
+	GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error)
 	GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error)
 	AttemptPayment(ctx context.Context, id string) error
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
@@ -176,21 +177,19 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		if req.InvoiceNumber != nil {
 			invoiceNumber = *req.InvoiceNumber
 		} else {
-			settingsService := NewSettingsService(s.ServiceParams)
-			invoiceConfigResponse, err := settingsService.GetSettingByKey(ctx, types.SettingKeyInvoiceConfig)
-			if err != nil {
-				return err
-			}
-
-			// Use the safe conversion function
-			invoiceConfig, err := dto.ConvertToInvoiceConfig(invoiceConfigResponse.Value)
+			settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+			invoiceConfig, err := GetSetting[types.InvoiceConfig](
+				settingsSvc,
+				ctx,
+				types.SettingKeyInvoiceConfig,
+			)
 			if err != nil {
 				return ierr.WithError(err).
-					WithHint("Failed to parse invoice configuration").
+					WithHint("Failed to get invoice configuration").
 					Mark(ierr.ErrValidation)
 			}
 
-			invoiceNumber, err = s.InvoiceRepo.GetNextInvoiceNumber(ctx, invoiceConfig)
+			invoiceNumber, err = s.InvoiceRepo.GetNextInvoiceNumber(ctx, &invoiceConfig)
 			if err != nil {
 				return err
 			}
@@ -238,6 +237,12 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			} else {
 				inv.PaymentStatus = types.PaymentStatusPending
 			}
+		}
+
+		// Set PaidAt if the invoice is being created with SUCCEEDED status and fully paid
+		if inv.PaymentStatus == types.PaymentStatusSucceeded && inv.AmountRemaining.IsZero() && inv.PaidAt == nil {
+			now := time.Now().UTC()
+			inv.PaidAt = &now
 		}
 
 		// Validate invoice
@@ -638,6 +643,7 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 	}
 
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdateFinalized, inv.ID)
+
 	return nil
 }
 
@@ -763,6 +769,17 @@ func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, pay
 			"error", err,
 			"invoice_id", inv.ID)
 	}
+
+	// Sync to QuickBooks if QuickBooks connection is enabled
+	if err := s.syncInvoiceToQuickBooksIfEnabled(ctx, inv); err != nil {
+		// Log error but don't fail the entire process
+		s.Logger.Errorw("failed to sync invoice to QuickBooks",
+			"error", err,
+			"invoice_id", inv.ID)
+	}
+
+	// Sync to Nomod if Nomod connection is enabled (async via Temporal)
+	s.triggerNomodInvoiceSyncWorkflow(ctx, inv.ID, inv.CustomerID)
 
 	// try to process payment for the invoice based on behavior and log any errors
 	// Pass the subscription object to avoid extra DB call
@@ -984,6 +1001,63 @@ func (s *invoiceService) syncInvoiceToChargebeeIfEnabled(ctx context.Context, in
 	return nil
 }
 
+// syncInvoiceToQuickBooksIfEnabled syncs the invoice to QuickBooks if QuickBooks connection is enabled
+func (s *invoiceService) syncInvoiceToQuickBooksIfEnabled(ctx context.Context, inv *invoice.Invoice) error {
+	// Check if QuickBooks connection exists
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderQuickBooks)
+	if err != nil || conn == nil {
+		// If connection doesn't exist (not found), this is expected - just skip sync
+		if err != nil && !ierr.IsNotFound(err) {
+			// Actual error occurred (not just missing connection)
+			s.Logger.Errorw("failed to check QuickBooks connection, skipping invoice sync",
+				"invoice_id", inv.ID,
+				"error", err)
+			return nil // Don't fail invoice creation, just skip sync
+		}
+		// Connection not found - this is expected, log at debug level
+		s.Logger.Debugw("QuickBooks connection not available, skipping invoice sync",
+			"invoice_id", inv.ID)
+		return nil // Not an error, just skip sync
+	}
+
+	// Check if invoice sync is enabled - only proceed if outbound is true
+	if !conn.IsInvoiceOutboundEnabled() {
+		s.Logger.Debugw("invoice sync disabled, skipping",
+			"invoice_id", inv.ID)
+		return nil
+	}
+
+	// Get QuickBooks integration
+	qbIntegration, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
+	if err != nil {
+		s.Logger.Errorw("failed to get QuickBooks integration, skipping invoice sync",
+			"invoice_id", inv.ID,
+			"error", err)
+		return nil // Don't fail the entire process, just skip invoice sync
+	}
+
+	s.Logger.Infow("syncing invoice to QuickBooks",
+		"invoice_id", inv.ID,
+		"customer_id", inv.CustomerID)
+
+	// Create sync request
+	syncRequest := quickbooks.QuickBooksInvoiceSyncRequest{
+		InvoiceID: inv.ID,
+	}
+
+	// Perform the sync
+	syncResponse, err := qbIntegration.InvoiceSvc.SyncInvoiceToQuickBooks(ctx, syncRequest)
+	if err != nil {
+		return err
+	}
+
+	s.Logger.Infow("successfully synced invoice to QuickBooks",
+		"invoice_id", inv.ID,
+		"quickbooks_invoice_id", syncResponse.QuickBooksInvoiceID)
+
+	return nil
+}
+
 // triggerHubSpotInvoiceSyncWorkflow triggers the HubSpot invoice sync workflow via Temporal
 func (s *invoiceService) triggerHubSpotInvoiceSyncWorkflow(ctx context.Context, invoiceID, customerID string) {
 	// Copy necessary context values
@@ -1054,6 +1128,82 @@ func (s *invoiceService) triggerHubSpotInvoiceSyncWorkflow(ctx context.Context, 
 	}
 
 	s.Logger.Infow("HubSpot invoice sync workflow started successfully",
+		"invoice_id", invoiceID,
+		"customer_id", customerID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
+}
+
+// triggerNomodInvoiceSyncWorkflow triggers the Nomod invoice sync workflow via Temporal
+func (s *invoiceService) triggerNomodInvoiceSyncWorkflow(ctx context.Context, invoiceID, customerID string) {
+	// Copy necessary context values
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	s.Logger.Infow("triggering Nomod invoice sync workflow",
+		"invoice_id", invoiceID,
+		"customer_id", customerID,
+		"tenant_id", tenantID,
+		"environment_id", envID)
+
+	// Check if Nomod connection exists and invoice outbound sync is enabled
+	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderNomod)
+	if err != nil {
+		s.Logger.Debugw("Nomod connection not found, skipping invoice sync",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
+	}
+
+	if !conn.IsInvoiceOutboundEnabled() {
+		s.Logger.Debugw("Nomod invoice outbound sync disabled, skipping invoice sync",
+			"invoice_id", invoiceID,
+			"customer_id", customerID,
+			"connection_id", conn.ID)
+		return
+	}
+
+	// Prepare workflow input with all necessary IDs
+	input := &models.NomodInvoiceSyncWorkflowInput{
+		InvoiceID:     invoiceID,
+		CustomerID:    customerID,
+		TenantID:      tenantID,
+		EnvironmentID: envID,
+	}
+
+	// Validate input
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for Nomod invoice sync",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
+	}
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		s.Logger.Warnw("temporal service not available for Nomod invoice sync",
+			"invoice_id", invoiceID)
+		return
+	}
+
+	// Start workflow - Temporal handles async execution, no need for goroutines
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalNomodInvoiceSyncWorkflow,
+		input,
+	)
+	if err != nil {
+		s.Logger.Errorw("failed to start Nomod invoice sync workflow",
+			"error", err,
+			"invoice_id", invoiceID,
+			"customer_id", customerID)
+		return
+	}
+
+	s.Logger.Infow("Nomod invoice sync workflow started successfully",
 		"invoice_id", invoiceID,
 		"customer_id", customerID,
 		"workflow_id", workflowRun.GetID(),
@@ -1137,6 +1287,29 @@ func (s *invoiceService) UpdatePaymentStatus(ctx context.Context, id string, sta
 
 	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
 		return err
+	}
+
+	// If invoice is for a purchased credit (has wallet_transaction_id in metadata) and the payment status transitioned to succeeded,
+	// complete the wallet transaction to credit the wallet
+	if status == types.PaymentStatusSucceeded {
+		// Check if this invoice is for a purchased credit (has wallet_transaction_id in metadata)
+		if inv.Metadata != nil {
+			if walletTransactionID, ok := inv.Metadata["wallet_transaction_id"]; ok && walletTransactionID != "" {
+				walletService := NewWalletService(s.ServiceParams)
+				if err := walletService.CompletePurchasedCreditTransactionWithRetry(ctx, walletTransactionID); err != nil {
+					s.Logger.Errorw("failed to complete purchased credit transaction",
+						"error", err,
+						"invoice_id", inv.ID,
+						"wallet_transaction_id", walletTransactionID,
+					)
+				} else {
+					s.Logger.Debugw("successfully completed purchased credit transaction",
+						"invoice_id", inv.ID,
+						"wallet_transaction_id", walletTransactionID,
+					)
+				}
+			}
+		}
 	}
 
 	// Publish webhook events
@@ -1271,7 +1444,7 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	return nil
 }
 
-func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType) (*dto.InvoiceResponse, *subscription.Subscription, error) {
+func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error) {
 	s.Logger.Infow("creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
 		"period_start", req.PeriodStart,
@@ -1288,6 +1461,17 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	// Reject invoice creation for draft subscriptions (unless isDraftSubscription is true)
+	if !isDraftSubscription && subscription.SubscriptionStatus == types.SubscriptionStatusDraft {
+		return nil, nil, ierr.NewError("cannot create invoice for draft subscription").
+			WithHint("Draft subscriptions must be activated before invoice creation").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":     req.SubscriptionID,
+				"subscription_status": subscription.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	// Prepare invoice request using billing service
@@ -1453,24 +1637,29 @@ func (s *invoiceService) GetCustomerInvoiceSummary(ctx context.Context, customer
 	return summary, nil
 }
 
-func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, customerID string, currency string) ([]*dto.InvoiceResponse, decimal.Decimal, error) {
+func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.GetUnpaidInvoicesToBePaidRequest) (*dto.GetUnpaidInvoicesToBePaidResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
 	unpaidInvoices := make([]*dto.InvoiceResponse, 0)
 	unpaidAmount := decimal.Zero
+	unpaidUsageCharges := decimal.Zero
+	unpaidFixedCharges := decimal.Zero
 
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
-	filter.CustomerID = customerID
+	filter.CustomerID = req.CustomerID
 	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized}
-	filter.SkipLineItems = true
 
 	invoicesResp, err := s.ListInvoices(ctx, filter)
 	if err != nil {
-		return nil, decimal.Zero, err
+		return nil, err
 	}
 
 	for _, inv := range invoicesResp.Items {
 		// filter by currency
-		if !types.IsMatchingCurrency(inv.Currency, currency) {
+		if !types.IsMatchingCurrency(inv.Currency, req.Currency) {
 			continue
 		}
 
@@ -1485,9 +1674,22 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, customer
 
 		unpaidInvoices = append(unpaidInvoices, inv)
 		unpaidAmount = unpaidAmount.Add(inv.AmountRemaining)
+
+		for _, item := range inv.LineItems {
+			if lo.FromPtr(item.PriceType) == string(types.PRICE_TYPE_USAGE) {
+				unpaidUsageCharges = unpaidUsageCharges.Add(item.Amount)
+			} else {
+				unpaidFixedCharges = unpaidFixedCharges.Add(item.Amount)
+			}
+		}
 	}
 
-	return unpaidInvoices, unpaidAmount, nil
+	return &dto.GetUnpaidInvoicesToBePaidResponse{
+		Invoices:                unpaidInvoices,
+		TotalUnpaidAmount:       unpaidAmount,
+		TotalUnpaidUsageCharges: unpaidUsageCharges,
+		TotalUnpaidFixedCharges: unpaidFixedCharges,
+	}, nil
 }
 
 func (s *invoiceService) GetCustomerMultiCurrencyInvoiceSummary(ctx context.Context, customerID string) (*dto.CustomerMultiCurrencyInvoiceSummary, error) {
@@ -1780,8 +1982,12 @@ func (s *invoiceService) GetInvoicePDFUrl(ctx context.Context, id string) (strin
 // GetInvoicePDF implements InvoiceService.
 func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, error) {
 
-	settingsService := NewSettingsService(s.ServiceParams)
-	settings, err := settingsService.GetSettingWithDefaults(ctx, types.SettingKeyInvoicePDFConfig)
+	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+	pdfConfig, err := GetSetting[types.InvoicePDFConfig](
+		settingsSvc,
+		ctx,
+		types.SettingKeyInvoicePDFConfig,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1789,9 +1995,9 @@ func (s *invoiceService) GetInvoicePDF(ctx context.Context, id string) ([]byte, 
 	// validate request
 	req := dto.GetInvoiceWithBreakdownRequest{ID: id}
 
-	// Get properly typed values (type conversion is handled in GetSettingWithDefaults)
-	req.GroupBy = settings.Value["group_by"].([]string)
-	templateName := types.TemplateName(settings.Value["template_name"].(string))
+	// Use typed config directly
+	req.GroupBy = pdfConfig.GroupBy
+	templateName := pdfConfig.TemplateName
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -2210,8 +2416,8 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			Mark(ierr.ErrValidation)
 	}
 
-	// Get subscription with line items
-	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
+	// Get sub with line items
+	sub, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
 	if err != nil {
 		return nil, err
 	}
@@ -2244,7 +2450,7 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		referencePoint := types.ReferencePointPeriodEnd
 
 		newInvoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(txCtx,
-			subscription,
+			sub,
 			*inv.PeriodStart,
 			*inv.PeriodEnd,
 			referencePoint,
@@ -2253,7 +2459,10 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			return err
 		}
 
-		// STEP 3: Update invoice totals and metadata
+		// STEP 3: Update invoice totals, metadata, and customer ID
+		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
+		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
+		inv.CustomerID = newInvoiceReq.CustomerID
 		inv.AmountDue = newInvoiceReq.AmountDue
 		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
 		inv.Description = newInvoiceReq.Description

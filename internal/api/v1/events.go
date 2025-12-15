@@ -436,19 +436,22 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 // @Tags Events
 // @Produce json
 // @Security ApiKeyAuth
+// @Param start_time query time.Time false "Start time (ISO 8601) - defaults to 24 hours ago"
+// @Param end_time query time.Time false "End time (ISO 8601) - defaults to now"
+// @Param window_size query string false "Window size for time series data (e.g., 'HOUR', 'DAY') - optional"
 // @Success 200 {object} dto.GetMonitoringDataResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Validation error"
+// @Failure 500 {object} ierr.ErrorResponse "Internal server error"
 // @Router /events/monitoring [get]
 func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Default to last 24 hours
-	endTime := time.Now().UTC()
-	startTime := endTime.Add(-24 * time.Hour)
-
-	req := dto.GetMonitoringDataRequest{
-		StartTime: startTime,
-		EndTime:   endTime,
+	var req dto.GetMonitoringDataRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Please check the query parameters").
+			Mark(ierr.ErrValidation))
+		return
 	}
 
 	// Call the service to get monitoring data

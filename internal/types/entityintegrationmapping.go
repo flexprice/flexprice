@@ -18,6 +18,7 @@ const (
 	IntegrationEntityTypeAddon        IntegrationEntityType = "addon"
 	IntegrationEntityTypeItem         IntegrationEntityType = "item"
 	IntegrationEntityTypeItemPrice    IntegrationEntityType = "item_price"
+	IntegrationEntityTypePrice        IntegrationEntityType = "price"
 )
 
 func (e IntegrationEntityType) String() string {
@@ -35,10 +36,11 @@ func (e IntegrationEntityType) Validate() error {
 		IntegrationEntityTypeAddon,
 		IntegrationEntityTypeItem,
 		IntegrationEntityTypeItemPrice,
+		IntegrationEntityTypePrice,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").
-			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price").
+			WithHint("Entity type must be one of: customer, plan, invoice, subscription, payment, credit_note, addon, item, item_price, price").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -101,14 +103,15 @@ func (f EntityIntegrationMappingFilter) Validate() error {
 	// Validate provider types if provided
 	if len(f.ProviderTypes) > 0 {
 		validProviderTypes := map[string]bool{
-			"stripe":   true,
-			"razorpay": true,
-			"paypal":   true,
+			"stripe":     true,
+			"razorpay":   true,
+			"paypal":     true,
+			"quickbooks": true,
 		}
 		for _, pt := range f.ProviderTypes {
 			if !validProviderTypes[pt] {
 				return ierr.NewError("invalid provider_type").
-					WithHint("Provider type must be one of: stripe, razorpay, paypal").
+					WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks").
 					Mark(ierr.ErrValidation)
 			}
 		}

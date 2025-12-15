@@ -5,7 +5,6 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
-	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -65,7 +64,8 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Optional(),
+			Optional().
+			Nillable(),
 		// price_unit is the code of the price unit
 		field.String("price_unit").
 			SchemaType(map[string]string{
@@ -215,11 +215,7 @@ func (Price) Fields() []ent.Field {
 
 // Edges of the Price.
 func (Price) Edges() []ent.Edge {
-	return []ent.Edge{
-		edge.To("price_unit_edge", PriceUnit.Type).
-			Field("price_unit_id").
-			Unique(),
-	}
+	return nil
 }
 
 // Indexes of the Price.

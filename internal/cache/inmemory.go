@@ -66,6 +66,14 @@ func (c *InMemoryCache) Get(_ context.Context, key string) (interface{}, bool) {
 	return c.cache.Get(key)
 }
 
+func (c *InMemoryCache) GetWalletBalanceAlert(ctx context.Context, key string) (interface{}, bool) {
+	return c.cache.Get(key)
+}
+
+func (c *InMemoryCache) SetWalletBalanceAlert(ctx context.Context, key string, value interface{}, expiration time.Duration) {
+	c.cache.Set(key, value, expiration)
+}
+
 // Set adds a value to the cache with the specified expiration
 func (c *InMemoryCache) Set(_ context.Context, key string, value interface{}, expiration time.Duration) {
 	if !c.cfg.Cache.Enabled {

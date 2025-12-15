@@ -388,3 +388,62 @@ func (s *paymentService) publishWebhookEvent(ctx context.Context, eventName stri
 		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
+
+// GetPaymentByGatewayTrackingID retrieves a payment by its gateway tracking ID and gateway type
+func (s *paymentService) GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error) {
+	s.Logger.Infow("getting payment by gateway tracking ID",
+		"gateway_tracking_id", gatewayTrackingID,
+		"gateway", gateway)
+
+	// Use List API with filters
+	filter := &types.PaymentFilter{
+		QueryFilter: &types.QueryFilter{
+			Limit: lo.ToPtr(1),
+		},
+		GatewayTrackingID: &gatewayTrackingID,
+		PaymentGateway:    &gateway,
+	}
+
+	payments, err := s.PaymentRepo.List(ctx, filter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get payment by gateway tracking ID").
+			WithReportableDetails(map[string]interface{}{
+				"gateway_tracking_id": gatewayTrackingID,
+				"gateway":             gateway,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(payments) == 0 {
+		return nil, nil
+	}
+
+	return dto.NewPaymentResponse(payments[0]), nil
+}
+
+// PaymentExistsByGatewayPaymentID checks if a payment exists with the given gateway payment ID
+func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error) {
+	s.Logger.Debugw("checking if payment exists by gateway payment ID",
+		"gateway_payment_id", gatewayPaymentID)
+
+	// Use List API with filters
+	filter := &types.PaymentFilter{
+		QueryFilter: &types.QueryFilter{
+			Limit: lo.ToPtr(1),
+		},
+		GatewayPaymentID: &gatewayPaymentID,
+	}
+
+	count, err := s.PaymentRepo.Count(ctx, filter)
+	if err != nil {
+		return false, ierr.WithError(err).
+			WithHint("Failed to check if payment exists").
+			WithReportableDetails(map[string]interface{}{
+				"gateway_payment_id": gatewayPaymentID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	return count > 0, nil
+}

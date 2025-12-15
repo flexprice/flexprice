@@ -1214,3 +1214,32 @@ func (r *GetInvoiceWithBreakdownRequest) Validate() error {
 	}
 	return nil
 }
+
+type GetUnpaidInvoicesToBePaidRequest struct {
+	// customer_id is the unique identifier of the customer
+	CustomerID string `json:"customer_id" validate:"required"`
+
+	// currency is the three-letter ISO currency code for this request
+	Currency string `json:"currency" validate:"required"`
+}
+
+func (r *GetUnpaidInvoicesToBePaidRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+	return nil
+}
+
+type GetUnpaidInvoicesToBePaidResponse struct {
+	// invoices is the list of unpaid invoices to be paid
+	Invoices []*InvoiceResponse `json:"invoices"`
+
+	// total_unpaid_amount is the total amount of unpaid invoices to be paid
+	TotalUnpaidAmount decimal.Decimal `json:"total_unpaid_amount"`
+
+	// total_unpaid_usage_charges is the total amount of unpaid usage charges to be paid
+	TotalUnpaidUsageCharges decimal.Decimal `json:"total_unpaid_usage_charges"`
+
+	// total_unpaid_fixed_charges is the total amount of unpaid fixed charges to be paid
+	TotalUnpaidFixedCharges decimal.Decimal `json:"total_unpaid_fixed_charges"`
+}

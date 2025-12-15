@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/couponassociation"
 	"github.com/flexprice/flexprice/ent/creditgrant"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
@@ -489,6 +490,34 @@ func (sc *SubscriptionCreate) SetNillableProrationBehavior(s *string) *Subscript
 	return sc
 }
 
+// SetEnableTrueUp sets the "enable_true_up" field.
+func (sc *SubscriptionCreate) SetEnableTrueUp(b bool) *SubscriptionCreate {
+	sc.mutation.SetEnableTrueUp(b)
+	return sc
+}
+
+// SetNillableEnableTrueUp sets the "enable_true_up" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableEnableTrueUp(b *bool) *SubscriptionCreate {
+	if b != nil {
+		sc.SetEnableTrueUp(*b)
+	}
+	return sc
+}
+
+// SetInvoicingCustomerID sets the "invoicing_customer_id" field.
+func (sc *SubscriptionCreate) SetInvoicingCustomerID(s string) *SubscriptionCreate {
+	sc.mutation.SetInvoicingCustomerID(s)
+	return sc
+}
+
+// SetNillableInvoicingCustomerID sets the "invoicing_customer_id" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableInvoicingCustomerID(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetInvoicingCustomerID(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -583,6 +612,11 @@ func (sc *SubscriptionCreate) AddCouponApplications(c ...*CouponApplication) *Su
 		ids[i] = c[i].ID
 	}
 	return sc.AddCouponApplicationIDs(ids...)
+}
+
+// SetInvoicingCustomer sets the "invoicing_customer" edge to the Customer entity.
+func (sc *SubscriptionCreate) SetInvoicingCustomer(c *Customer) *SubscriptionCreate {
+	return sc.SetInvoicingCustomerID(c.ID)
 }
 
 // Mutation returns the SubscriptionMutation object of the builder.
@@ -695,6 +729,10 @@ func (sc *SubscriptionCreate) defaults() {
 	if _, ok := sc.mutation.ProrationBehavior(); !ok {
 		v := subscription.DefaultProrationBehavior
 		sc.mutation.SetProrationBehavior(v)
+	}
+	if _, ok := sc.mutation.EnableTrueUp(); !ok {
+		v := subscription.DefaultEnableTrueUp
+		sc.mutation.SetEnableTrueUp(v)
 	}
 }
 
@@ -818,6 +856,9 @@ func (sc *SubscriptionCreate) check() error {
 		if err := subscription.ProrationBehaviorValidator(v); err != nil {
 			return &ValidationError{Name: "proration_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.proration_behavior": %w`, err)}
 		}
+	}
+	if _, ok := sc.mutation.EnableTrueUp(); !ok {
+		return &ValidationError{Name: "enable_true_up", err: errors.New(`ent: missing required field "Subscription.enable_true_up"`)}
 	}
 	return nil
 }
@@ -1002,6 +1043,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		_spec.SetField(subscription.FieldProrationBehavior, field.TypeString, value)
 		_node.ProrationBehavior = value
 	}
+	if value, ok := sc.mutation.EnableTrueUp(); ok {
+		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
+		_node.EnableTrueUp = value
+	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1096,6 +1141,23 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.InvoicingCustomerIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   subscription.InvoicingCustomerTable,
+			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.InvoicingCustomerID = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

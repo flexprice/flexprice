@@ -142,6 +142,61 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 			Chargebee: chargebeeMetadata,
 		}
 
+	case types.SecretProviderQuickBooks:
+		qbMetadata := &types.QuickBooksConnectionMetadata{}
+
+		// Required fields
+		if clientID, ok := flatMetadata["client_id"].(string); ok {
+			qbMetadata.ClientID = clientID
+		}
+		if clientSecret, ok := flatMetadata["client_secret"].(string); ok {
+			qbMetadata.ClientSecret = clientSecret
+		}
+		if realmID, ok := flatMetadata["realm_id"].(string); ok {
+			qbMetadata.RealmID = realmID
+		}
+		if environment, ok := flatMetadata["environment"].(string); ok {
+			qbMetadata.Environment = environment
+		}
+
+		// Required for initial token exchange (captured from OAuth redirect)
+		if authCode, ok := flatMetadata["auth_code"].(string); ok {
+			qbMetadata.AuthCode = authCode
+		}
+		if redirectURI, ok := flatMetadata["redirect_uri"].(string); ok {
+			qbMetadata.RedirectURI = redirectURI
+		}
+
+		if accessToken, ok := flatMetadata["access_token"].(string); ok {
+			qbMetadata.AccessToken = accessToken
+		}
+		if refreshToken, ok := flatMetadata["refresh_token"].(string); ok {
+			qbMetadata.RefreshToken = refreshToken
+		}
+
+		// Optional config
+		if incomeAccountID, ok := flatMetadata["income_account_id"].(string); ok {
+			qbMetadata.IncomeAccountID = incomeAccountID
+		}
+
+		return types.ConnectionMetadata{
+			QuickBooks: qbMetadata,
+		}
+
+	case types.SecretProviderNomod:
+		nomodMetadata := &types.NomodConnectionMetadata{}
+
+		if apiKey, ok := flatMetadata["api_key"].(string); ok {
+			nomodMetadata.APIKey = apiKey
+		}
+		if webhookSecret, ok := flatMetadata["webhook_secret"].(string); ok {
+			nomodMetadata.WebhookSecret = webhookSecret
+		}
+
+		return types.ConnectionMetadata{
+			Nomod: nomodMetadata,
+		}
+
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{
@@ -154,18 +209,20 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 
 // UpdateConnectionRequest represents the request to update a connection
 type UpdateConnectionRequest struct {
-	Name       string                 `json:"name,omitempty" validate:"omitempty,max=255"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty"`
-	SyncConfig *types.SyncConfig      `json:"sync_config,omitempty" validate:"omitempty,dive"`
+	Name                string                    `json:"name,omitempty" validate:"omitempty,max=255"`
+	Metadata            map[string]interface{}    `json:"metadata,omitempty"`
+	SyncConfig          *types.SyncConfig         `json:"sync_config,omitempty" validate:"omitempty,dive"`
+	EncryptedSecretData *types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"` // For updating webhook tokens, etc.
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
 func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	// First, unmarshal to a temporary struct to get the raw data
 	var temp struct {
-		Name       string                 `json:"name"`
-		Metadata   map[string]interface{} `json:"metadata,omitempty"`
-		SyncConfig *types.SyncConfig      `json:"sync_config,omitempty"`
+		Name                string                    `json:"name"`
+		Metadata            map[string]interface{}    `json:"metadata,omitempty"`
+		SyncConfig          *types.SyncConfig         `json:"sync_config,omitempty"`
+		EncryptedSecretData *types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
 	}
 
 	if err := json.Unmarshal(data, &temp); err != nil {
@@ -176,6 +233,7 @@ func (req *UpdateConnectionRequest) UnmarshalJSON(data []byte) error {
 	req.Name = temp.Name
 	req.Metadata = temp.Metadata
 	req.SyncConfig = temp.SyncConfig
+	req.EncryptedSecretData = temp.EncryptedSecretData
 
 	return nil
 }

@@ -3,6 +3,8 @@ package clickhouse
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+
 	"log"
 	"strings"
 	"time"
@@ -1035,47 +1037,122 @@ func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCus
 	return eventNames, nil
 }
 
-// GetTotalEventCount returns the total count of events in a given time range
-func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, endTime time.Time) uint64 {
+// GetTotalEventCount returns the total count of events in a given time range with optional windowed time-series data
+func (r *EventRepository) GetTotalEventCount(ctx context.Context, startTime, endTime time.Time, windowSize types.WindowSize) (*events.EventCountResult, error) {
 	span := StartRepositorySpan(ctx, "event", "get_total_event_count", map[string]interface{}{
-		"start_time": startTime,
-		"end_time":   endTime,
+		"start_time":  startTime,
+		"end_time":    endTime,
+		"window_size": windowSize,
 	})
 	defer FinishSpan(span)
 
-	query := `
-		SELECT COUNT(DISTINCT(id)) as total_count
-		FROM events
-		WHERE tenant_id = ?
-		AND environment_id = ?
-	`
-
-	args := []interface{}{
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
+	result := &events.EventCountResult{
+		TotalCount: 0,
+		Points:     []events.EventCountPoint{},
 	}
 
-	if !startTime.IsZero() {
-		query += " AND timestamp >= ?"
-		args = append(args, startTime)
-	}
+	// Build the time window expression based on window size
+	timeWindowExpr := formatWindowSize(windowSize)
 
-	if !endTime.IsZero() {
-		query += " AND timestamp <= ?"
-		args = append(args, endTime)
-	}
+	// Query for windowed counts if window size is provided
+	if windowSize != "" {
+		windowedQuery := fmt.Sprintf(`
+			SELECT 
+				%s AS window_time,
+				COUNT(DISTINCT(id)) as event_count
+			FROM events
+			WHERE tenant_id = ?
+			AND environment_id = ?
+			AND timestamp >= ?
+			AND timestamp < ?
+			GROUP BY window_time
+			ORDER BY window_time
+		`, timeWindowExpr)
 
-	var totalCount uint64
-	err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&totalCount)
-	if err != nil {
-		r.logger.Errorw("failed to get total event count",
-			"error", err,
-			"start_time", startTime,
-			"end_time", endTime)
-		SetSpanError(span, err)
-		return 0
+		args := []interface{}{
+			types.GetTenantID(ctx),
+			types.GetEnvironmentID(ctx),
+			startTime,
+			endTime,
+		}
+
+		rows, err := r.store.GetConn().Query(ctx, windowedQuery, args...)
+		if err != nil {
+			r.logger.Errorw("failed to get windowed event count",
+				"error", err,
+				"start_time", startTime,
+				"end_time", endTime,
+				"window_size", windowSize)
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to execute windowed event count query").
+				Mark(ierr.ErrDatabase)
+		}
+		defer rows.Close()
+
+		var totalCount uint64
+		for rows.Next() {
+			var point events.EventCountPoint
+			if err := rows.Scan(&point.Timestamp, &point.EventCount); err != nil {
+				r.logger.Errorw("failed to scan windowed event count",
+					"error", err)
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to scan windowed event count row").
+					Mark(ierr.ErrDatabase)
+			}
+			totalCount += point.EventCount
+			result.Points = append(result.Points, point)
+		}
+
+		if err := rows.Err(); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Error iterating windowed event count rows").
+				Mark(ierr.ErrDatabase)
+		}
+
+		result.TotalCount = totalCount
+	} else {
+		// No window size, just get total count
+		query := `
+			SELECT COUNT(DISTINCT(id)) as total_count
+			FROM events
+			WHERE tenant_id = ?
+			AND environment_id = ?
+		`
+
+		args := []interface{}{
+			types.GetTenantID(ctx),
+			types.GetEnvironmentID(ctx),
+		}
+
+		if !startTime.IsZero() {
+			query += " AND timestamp >= ?"
+			args = append(args, startTime)
+		}
+
+		if !endTime.IsZero() {
+			query += " AND timestamp < ?"
+			args = append(args, endTime)
+		}
+
+		var totalCount uint64
+		err := r.store.GetConn().QueryRow(ctx, query, args...).Scan(&totalCount)
+		if err != nil {
+			r.logger.Errorw("failed to get total event count",
+				"error", err,
+				"start_time", startTime,
+				"end_time", endTime)
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).
+				WithHint("Failed to execute total event count query").
+				Mark(ierr.ErrDatabase)
+		}
+
+		result.TotalCount = totalCount
 	}
 
 	SetSpanSuccess(span)
-	return totalCount
+	return result, nil
 }

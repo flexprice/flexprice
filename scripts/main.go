@@ -108,6 +108,11 @@ var commands = []Command{
 		Description: "Process CSV file to create features and prices for serverless plan",
 		Run:         internal.ProcessCSVFeatures,
 	},
+	{
+		Name:        "credit-usage-report",
+		Description: "Generate credit usage report for customers in a tenant/environment",
+		Run:         internal.GenerateCreditUsageReport,
+	},
 }
 
 // runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters

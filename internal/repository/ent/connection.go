@@ -275,6 +275,47 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			}
 			return result
 		}
+	case types.SecretProviderQuickBooks:
+		if encryptedSecretData.QuickBooks != nil {
+			result := map[string]interface{}{
+				"client_id":     encryptedSecretData.QuickBooks.ClientID,
+				"client_secret": encryptedSecretData.QuickBooks.ClientSecret,
+				"realm_id":      encryptedSecretData.QuickBooks.RealmID,
+				"environment":   encryptedSecretData.QuickBooks.Environment,
+			}
+			if encryptedSecretData.QuickBooks.OAuthSessionData != "" {
+				result["oauth_session_data"] = encryptedSecretData.QuickBooks.OAuthSessionData
+			}
+			if encryptedSecretData.QuickBooks.AuthCode != "" {
+				result["auth_code"] = encryptedSecretData.QuickBooks.AuthCode
+			}
+			if encryptedSecretData.QuickBooks.RedirectURI != "" {
+				result["redirect_uri"] = encryptedSecretData.QuickBooks.RedirectURI
+			}
+			if encryptedSecretData.QuickBooks.AccessToken != "" {
+				result["access_token"] = encryptedSecretData.QuickBooks.AccessToken
+			}
+			if encryptedSecretData.QuickBooks.RefreshToken != "" {
+				result["refresh_token"] = encryptedSecretData.QuickBooks.RefreshToken
+			}
+			if encryptedSecretData.QuickBooks.IncomeAccountID != "" {
+				result["income_account_id"] = encryptedSecretData.QuickBooks.IncomeAccountID
+			}
+			if encryptedSecretData.QuickBooks.WebhookVerifierToken != "" {
+				result["webhook_verifier_token"] = encryptedSecretData.QuickBooks.WebhookVerifierToken
+			}
+			return result
+		}
+	case types.SecretProviderNomod:
+		if encryptedSecretData.Nomod != nil {
+			data := map[string]interface{}{
+				"api_key": encryptedSecretData.Nomod.APIKey,
+			}
+			if encryptedSecretData.Nomod.WebhookSecret != "" {
+				data["webhook_secret"] = encryptedSecretData.Nomod.WebhookSecret
+			}
+			return data
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {
@@ -321,12 +362,16 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	})
 	defer FinishSpan(span)
 
+	// Convert structured encrypted secret data to map format for database storage
+	encryptedSecretDataMap := convertConnectionMetadataToMap(c.EncryptedSecretData, c.ProviderType)
+
 	connection, err := client.Connection.UpdateOneID(c.ID).
 		Where(
 			connection.TenantID(c.TenantID),
 			connection.EnvironmentID(c.EnvironmentID),
 		).
 		SetName(c.Name).
+		SetEncryptedSecretData(encryptedSecretDataMap).
 		SetMetadata(c.Metadata).
 		SetSyncConfig(c.SyncConfig).
 		SetUpdatedAt(c.UpdatedAt).
@@ -353,7 +398,9 @@ func (r *connectionRepository) Update(ctx context.Context, c *domainConnection.C
 	SetSpanSuccess(span)
 	*c = *domainConnection.FromEnt(connection)
 
-	// Update cache
+	// Invalidate cache to ensure fresh data on next read
+	r.DeleteCache(ctx, c)
+	// Update cache with new data
 	r.SetCache(ctx, c)
 
 	return nil

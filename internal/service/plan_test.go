@@ -57,6 +57,8 @@ func (s *PlanServiceSuite) SetupTest() {
 		CreditGrantRepo:          s.GetStores().CreditGrantRepo,
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
+		IntegrationFactory:       s.GetIntegrationFactory(),
+		ConnectionRepo:           s.GetStores().ConnectionRepo,
 	}
 	s.service = NewPlanService(s.params)
 }

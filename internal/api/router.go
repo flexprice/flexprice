@@ -52,6 +52,7 @@ type Handlers struct {
 	ScheduledTask            *v1.ScheduledTaskHandler
 	AlertLogsHandler         *v1.AlertLogsHandler
 	RBAC                     *v1.RBACHandler
+	OAuth                    *v1.OAuthHandler
 
 	// Portal handlers
 	Onboarding *v1.OnboardingHandler
@@ -241,6 +242,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("", handlers.Subscription.CreateSubscription)
 			subscription.GET("", handlers.Subscription.GetSubscriptions)
 			subscription.GET("/:id", handlers.Subscription.GetSubscription)
+			subscription.POST("/:id/activate", handlers.Subscription.ActivateDraftSubscription)
 			subscription.POST("/:id/cancel", handlers.Subscription.CancelSubscription)
 			subscription.POST("/usage", handlers.Subscription.GetUsageBySubscription)
 
@@ -498,6 +500,10 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		webhooks.POST("/razorpay/:tenant_id/:environment_id", handlers.Webhook.HandleRazorpayWebhook)
 		// Chargebee webhook endpoint: POST /v1/webhooks/chargebee/{tenant_id}/{environment_id}
 		webhooks.POST("/chargebee/:tenant_id/:environment_id", handlers.Webhook.HandleChargebeeWebhook)
+		// QuickBooks webhook endpoint: POST /v1/webhooks/quickbooks/{tenant_id}/{environment_id}
+		webhooks.POST("/quickbooks/:tenant_id/:environment_id", handlers.Webhook.HandleQuickBooksWebhook)
+		// Nomod webhook endpoint: POST /v1/webhooks/nomod/{tenant_id}/{environment_id}
+		webhooks.POST("/nomod/:tenant_id/:environment_id", handlers.Webhook.HandleNomodWebhook)
 	}
 
 	// Cron routes
@@ -555,6 +561,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	{
 		rbac.GET("/roles", handlers.RBAC.ListRoles)
 		rbac.GET("/roles/:id", handlers.RBAC.GetRole)
+	}
+
+	// OAuth routes
+	oauth := v1Private.Group("/oauth")
+	{
+		oauth.POST("/init", handlers.OAuth.InitiateOAuth)
+		oauth.POST("/complete", handlers.OAuth.CompleteOAuth)
 	}
 
 	return router

@@ -55,6 +55,7 @@ func (s *CustomerServiceSuite) SetupTest() {
 		TaxAssociationRepo: s.GetStores().TaxAssociationRepo,
 		ConnectionRepo:     s.GetStores().ConnectionRepo,
 		AlertLogsRepo:      s.GetStores().AlertLogsRepo,
+		SettingsRepo:       s.GetStores().SettingsRepo,
 	})
 
 }

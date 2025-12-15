@@ -79,6 +79,12 @@ func (Customer) Fields() []ent.Field {
 				"postgres": "varchar(2)",
 			}).
 			Optional(),
+		field.String("parent_customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Nillable().
+			Optional(),
 	}
 }
 

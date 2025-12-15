@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/shopspring/decimal"
 )
@@ -93,6 +94,10 @@ type Subscription struct {
 	CustomerTimezone string `json:"customer_timezone,omitempty"`
 	// ProrationBehavior holds the value of the "proration_behavior" field.
 	ProrationBehavior string `json:"proration_behavior,omitempty"`
+	// Enable Commitment True Up Fee
+	EnableTrueUp bool `json:"enable_true_up,omitempty"`
+	// Customer ID to use for invoicing (can differ from the subscription customer)
+	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -113,9 +118,11 @@ type SubscriptionEdges struct {
 	CouponAssociations []*CouponAssociation `json:"coupon_associations,omitempty"`
 	// Subscription can have multiple coupon applications
 	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
+	// Customer to use for invoicing (can differ from the subscription customer)
+	InvoicingCustomer *Customer `json:"invoicing_customer,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [6]bool
+	loadedTypes [7]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -172,6 +179,17 @@ func (e SubscriptionEdges) CouponApplicationsOrErr() ([]*CouponApplication, erro
 	return nil, &NotLoadedError{edge: "coupon_applications"}
 }
 
+// InvoicingCustomerOrErr returns the InvoicingCustomer value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e SubscriptionEdges) InvoicingCustomerOrErr() (*Customer, error) {
+	if e.InvoicingCustomer != nil {
+		return e.InvoicingCustomer, nil
+	} else if e.loadedTypes[6] {
+		return nil, &NotFoundError{label: customer.Label}
+	}
+	return nil, &NotLoadedError{edge: "invoicing_customer"}
+}
+
 // scanValues returns the types for scanning values from sql.Rows.
 func (*Subscription) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
@@ -181,11 +199,11 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case subscription.FieldMetadata:
 			values[i] = new([]byte)
-		case subscription.FieldCancelAtPeriodEnd:
+		case subscription.FieldCancelAtPeriodEnd, subscription.FieldEnableTrueUp:
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldCustomerTimezone, subscription.FieldProrationBehavior:
+		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldCustomerTimezone, subscription.FieldProrationBehavior, subscription.FieldInvoicingCustomerID:
 			values[i] = new(sql.NullString)
 		case subscription.FieldCreatedAt, subscription.FieldUpdatedAt, subscription.FieldBillingAnchor, subscription.FieldStartDate, subscription.FieldEndDate, subscription.FieldCurrentPeriodStart, subscription.FieldCurrentPeriodEnd, subscription.FieldCancelledAt, subscription.FieldCancelAt, subscription.FieldTrialStart, subscription.FieldTrialEnd:
 			values[i] = new(sql.NullTime)
@@ -442,6 +460,19 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				s.ProrationBehavior = value.String
 			}
+		case subscription.FieldEnableTrueUp:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field enable_true_up", values[i])
+			} else if value.Valid {
+				s.EnableTrueUp = value.Bool
+			}
+		case subscription.FieldInvoicingCustomerID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoicing_customer_id", values[i])
+			} else if value.Valid {
+				s.InvoicingCustomerID = new(string)
+				*s.InvoicingCustomerID = value.String
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -483,6 +514,11 @@ func (s *Subscription) QueryCouponAssociations() *CouponAssociationQuery {
 // QueryCouponApplications queries the "coupon_applications" edge of the Subscription entity.
 func (s *Subscription) QueryCouponApplications() *CouponApplicationQuery {
 	return NewSubscriptionClient(s.config).QueryCouponApplications(s)
+}
+
+// QueryInvoicingCustomer queries the "invoicing_customer" edge of the Subscription entity.
+func (s *Subscription) QueryInvoicingCustomer() *CustomerQuery {
+	return NewSubscriptionClient(s.config).QueryInvoicingCustomer(s)
 }
 
 // Update returns a builder for updating this Subscription.
@@ -634,6 +670,14 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("proration_behavior=")
 	builder.WriteString(s.ProrationBehavior)
+	builder.WriteString(", ")
+	builder.WriteString("enable_true_up=")
+	builder.WriteString(fmt.Sprintf("%v", s.EnableTrueUp))
+	builder.WriteString(", ")
+	if v := s.InvoicingCustomerID; v != nil {
+		builder.WriteString("invoicing_customer_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

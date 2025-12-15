@@ -19,7 +19,7 @@ type Repository interface {
 	GetDistinctEventNames(ctx context.Context, externalCustomerID string, startTime, endTime time.Time) ([]string, error)
 
 	// Monitoring methods
-	GetTotalEventCount(ctx context.Context, startTime, endTime time.Time) uint64
+	GetTotalEventCount(ctx context.Context, startTime, endTime time.Time, windowSize types.WindowSize) (*EventCountResult, error)
 }
 
 // ProcessedEventRepository defines operations for processed events
@@ -160,6 +160,18 @@ type AggregationResult struct {
 type EventIterator struct {
 	Timestamp time.Time
 	ID        string
+}
+
+// EventCountPoint represents a single time-series data point for event counts
+type EventCountPoint struct {
+	Timestamp  time.Time `json:"timestamp"`
+	EventCount uint64    `json:"event_count"`
+}
+
+// EventCountResult represents the result of a windowed event count query
+type EventCountResult struct {
+	TotalCount uint64            `json:"total_count"`
+	Points     []EventCountPoint `json:"points,omitempty"`
 }
 
 // FilterGroup represents a group of filters with priority

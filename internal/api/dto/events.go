@@ -333,19 +333,39 @@ type UsageAnalyticPoint struct {
 }
 
 type GetMonitoringDataRequest struct {
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
+	StartTime  time.Time        `json:"start_time,omitempty" form:"start_time"`
+	EndTime    time.Time        `json:"end_time,omitempty" form:"end_time"`
+	WindowSize types.WindowSize `json:"window_size,omitempty" form:"window_size"`
 }
 
 func (r *GetMonitoringDataRequest) Validate() error {
-	// No validation needed, all fields are optional
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	// Default to last 24 hours if start_time and end_time are not provided
+	if r.StartTime.IsZero() && r.EndTime.IsZero() {
+		r.EndTime = time.Now().UTC()
+		r.StartTime = r.EndTime.Add(-24 * time.Hour)
+	} else if r.StartTime.IsZero() || r.EndTime.IsZero() {
+		return ierr.NewError("both start_time and end_time must be provided, or neither").
+			WithHint("Please provide both start_time and end_time, or leave both empty for default 24 hour window").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
+type EventCountPoint struct {
+	Timestamp  time.Time `json:"timestamp"`
+	EventCount uint64    `json:"event_count"`
+}
+
 type GetMonitoringDataResponse struct {
-	TotalCount        uint64 `json:"total_count"`
-	ConsumptionLag    int64  `json:"consumption_lag"`
-	PostProcessingLag int64  `json:"post_processing_lag"`
+	TotalCount        uint64            `json:"total_count"`
+	ConsumptionLag    int64             `json:"consumption_lag"`
+	PostProcessingLag int64             `json:"post_processing_lag"`
+	Points            []EventCountPoint `json:"points,omitempty"`
 }
 
 type GetHuggingFaceBillingDataRequest struct {

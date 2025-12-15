@@ -3,12 +3,15 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -29,6 +32,31 @@ func NewCustomerService(params ServiceParams) CustomerService {
 func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCustomerRequest) (*dto.CustomerResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Resolve and validate parent customer if provided (by ID or external ID)
+	if req.ParentCustomerExternalID != nil {
+		parent, err := s.CustomerRepo.GetByLookupKey(ctx, *req.ParentCustomerExternalID)
+		if err != nil {
+			return nil, err
+		}
+		if parent.ParentCustomerID != nil {
+			return nil, ierr.NewError("parent customer cannot be a child").
+				WithHint("Choose a parent customer that isn't a child of another").
+				Mark(ierr.ErrInvalidOperation)
+		}
+		// Normalize to internal ID for downstream logic
+		req.ParentCustomerID = lo.ToPtr(parent.ID)
+	} else if req.ParentCustomerID != nil {
+		parentCustomer, err := s.CustomerRepo.Get(ctx, *req.ParentCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		if parentCustomer.ParentCustomerID != nil {
+			return nil, ierr.NewError("parent customer cannot be a child").
+				WithHint("Choose a parent customer that isn't a child of another").
+				Mark(ierr.ErrInvalidOperation)
+		}
 	}
 
 	cust := req.ToCustomer(ctx)
@@ -162,6 +190,10 @@ func (s *customerService) CreateCustomer(ctx context.Context, req dto.CreateCust
 	// Publish webhook event for customer creation
 	s.publishWebhookEvent(ctx, types.WebhookEventCustomerCreated, cust.ID)
 
+	if err := s.handleCustomerOnboarding(ctx, cust); err != nil {
+		s.Logger.Errorw("failed to handle customer onboarding workflow", "customer_id", cust.ID, "error", err)
+	}
+
 	return &dto.CustomerResponse{Customer: cust}, nil
 }
 
@@ -174,11 +206,20 @@ func (s *customerService) GetCustomer(ctx context.Context, id string) (*dto.Cust
 
 	customer, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
 	}
 
-	return &dto.CustomerResponse{Customer: customer}, nil
+	resp := &dto.CustomerResponse{Customer: customer}
+
+	if customer.ParentCustomerID != nil {
+		parentResp, err := s.GetCustomer(ctx, *customer.ParentCustomerID)
+		if err != nil {
+			return nil, err
+		}
+		resp.ParentCustomer = parentResp
+	}
+
+	return resp, nil
 }
 
 func (s *customerService) GetCustomers(ctx context.Context, filter *types.CustomerFilter) (*dto.ListCustomersResponse, error) {
@@ -186,6 +227,11 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 		filter = &types.CustomerFilter{
 			QueryFilter: types.NewDefaultQueryFilter(),
 		}
+	}
+
+	// Validate expand fields
+	if err := filter.GetExpand().Validate(types.CustomerExpandConfig); err != nil {
+		return nil, err
 	}
 
 	if err := filter.Validate(); err != nil {
@@ -209,6 +255,55 @@ func (s *customerService) GetCustomers(ctx context.Context, filter *types.Custom
 	response := make([]*dto.CustomerResponse, 0, len(customers))
 	for _, c := range customers {
 		response = append(response, &dto.CustomerResponse{Customer: c})
+	}
+
+	if len(response) == 0 {
+		return &dto.ListCustomersResponse{
+			Items:      response,
+			Pagination: types.NewPaginationResponse(total, filter.GetLimit(), filter.GetOffset()),
+		}, nil
+	}
+
+	// Expand parent customers if requested
+	var parentCustomersByID map[string]*dto.CustomerResponse
+	if filter.GetExpand().Has(types.ExpandParentCustomer) {
+		// Collect all unique parent customer IDs
+		parentCustomerIDs := make([]string, 0)
+		parentCustomerIDSet := make(map[string]bool)
+		for _, c := range customers {
+			if c.ParentCustomerID != nil && !parentCustomerIDSet[*c.ParentCustomerID] {
+				parentCustomerIDs = append(parentCustomerIDs, *c.ParentCustomerID)
+				parentCustomerIDSet[*c.ParentCustomerID] = true
+			}
+		}
+
+		if len(parentCustomerIDs) > 0 {
+			// Fetch parent customers in bulk
+			parentFilter := types.NewNoLimitCustomerFilter()
+			parentFilter.CustomerIDs = parentCustomerIDs
+
+			parentCustomers, err := s.CustomerRepo.List(ctx, parentFilter)
+			if err != nil {
+				return nil, err
+			}
+
+			// Create a map for quick parent customer lookup
+			parentCustomersByID = make(map[string]*dto.CustomerResponse, len(parentCustomers))
+			for _, pc := range parentCustomers {
+				parentCustomersByID[pc.ID] = &dto.CustomerResponse{Customer: pc}
+			}
+
+			s.Logger.Debugw("fetched parent customers for customers", "count", len(parentCustomers))
+		}
+	}
+
+	// Attach parent customers to response items
+	for _, resp := range response {
+		if resp.Customer.ParentCustomerID != nil {
+			if parentCustomer, ok := parentCustomersByID[*resp.Customer.ParentCustomerID]; ok {
+				resp.ParentCustomer = parentCustomer
+			}
+		}
 	}
 
 	return &dto.ListCustomersResponse{
@@ -247,8 +342,28 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 
 	cust, err := s.CustomerRepo.Get(ctx, id)
 	if err != nil {
-		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
+	}
+
+	if req.ParentCustomerID != nil {
+		newParentID := strings.TrimSpace(*req.ParentCustomerID)
+		currentParentID := ""
+		if cust.ParentCustomerID != nil {
+			currentParentID = strings.TrimSpace(*cust.ParentCustomerID)
+		}
+
+		// Only run validations if the hierarchy is changing
+		if newParentID != currentParentID {
+			if err := s.validateParentCustomerAssignment(ctx, cust, newParentID); err != nil {
+				return nil, err
+			}
+
+			if newParentID == "" {
+				cust.ParentCustomerID = nil
+			} else {
+				cust.ParentCustomerID = lo.ToPtr(newParentID)
+			}
+		}
 	}
 
 	// Update basic fields
@@ -387,9 +502,6 @@ func (s *customerService) UpdateCustomer(ctx context.Context, id string, req dto
 			Mark(ierr.ErrValidation)
 	}
 
-	cust.UpdatedAt = time.Now().UTC()
-	cust.UpdatedBy = types.GetUserID(ctx)
-
 	if err := s.CustomerRepo.Update(ctx, cust); err != nil {
 		// No need to wrap the error as the repository already returns properly formatted errors
 		return nil, err
@@ -467,6 +579,62 @@ func (s *customerService) GetCustomerByLookupKey(ctx context.Context, lookupKey 
 	return &dto.CustomerResponse{Customer: customer}, nil
 }
 
+func (s *customerService) validateParentCustomerAssignment(ctx context.Context, cust *customer.Customer, newParentID string) error {
+	// Do not allow hierarchy changes when customer has non-cancelled subscriptions
+	subFilter := types.NewSubscriptionFilter()
+	subFilter.CustomerID = cust.ID
+	subFilter.SubscriptionStatusNotIn = []types.SubscriptionStatus{types.SubscriptionStatusCancelled}
+	subFilter.Limit = lo.ToPtr(1)
+
+	subs, err := s.SubRepo.List(ctx, subFilter)
+	if err != nil {
+		return err
+	}
+	if len(subs) > 0 {
+		return ierr.NewError("customer hierarchy cannot change with active subscriptions").
+			WithHint("Cancel or transfer subscriptions before updating parent hierarchy").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	if newParentID == "" {
+		// Resetting parent - nothing else to validate
+		return nil
+	}
+
+	if newParentID == cust.ID {
+		return ierr.NewError("customer cannot be its own parent").
+			WithHint("Please provide a different customer as parent").
+			Mark(ierr.ErrValidation)
+	}
+
+	parentCustomer, err := s.CustomerRepo.Get(ctx, newParentID)
+	if err != nil {
+		return err
+	}
+	if parentCustomer.ParentCustomerID != nil {
+		return ierr.NewError("parent customer cannot have its own parent").
+			WithHint("Nested hierarchies are not supported; pick a top-level customer as parent").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	// A customer that already has children cannot become a child itself
+	childFilter := types.NewCustomerFilter()
+	childFilter.ParentCustomerIDs = []string{cust.ID}
+	childFilter.Limit = lo.ToPtr(1)
+
+	children, err := s.CustomerRepo.List(ctx, childFilter)
+	if err != nil {
+		return err
+	}
+	if len(children) > 0 {
+		return ierr.NewError("customer already acts as a parent").
+			WithHint("A customer cannot be both parent and child; detach child customers first").
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	return nil
+}
+
 func (s *customerService) publishWebhookEvent(ctx context.Context, eventName string, customerID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalCustomerEvent{
 		CustomerID: customerID,
@@ -539,4 +707,98 @@ func (s *customerService) GetUpcomingCreditGrantApplications(ctx context.Context
 	}
 
 	return subscriptionService.GetUpcomingCreditGrantApplications(ctx, req)
+}
+
+func (s *customerService) handleCustomerOnboarding(ctx context.Context, customer *customer.Customer) error {
+	s.Logger.Infow("handling customer onboarding", "customer_id", customer.ID)
+
+	// Get customer onboarding workflow config
+	settingsService := &settingsService{
+		ServiceParams: s.ServiceParams,
+	}
+	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](settingsService, ctx, types.SettingKeyCustomerOnboarding)
+	if err != nil {
+		return err
+	}
+
+	if workflowConfig == nil {
+		s.Logger.Infow("workflow config is nil, skipping customer onboarding", "customer_id", customer.ID)
+		return nil
+	}
+
+	// If there are no actions, return
+	if len(workflowConfig.Actions) == 0 {
+		s.Logger.Infow("no actions found for customer onboarding", "customer_id", customer.ID)
+		return nil
+	}
+
+	// Copy necessary context values
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+	userID := types.GetUserID(ctx)
+
+	s.Logger.Infow("executing customer onboarding workflow",
+		"customer_id", customer.ID,
+		"tenant_id", tenantID,
+		"environment_id", envID,
+		"user_id", userID,
+		"action_count", len(workflowConfig.Actions))
+
+	// Prepare workflow input with all necessary IDs
+	input := &workflowModels.CustomerOnboardingWorkflowInput{
+		CustomerID:     customer.ID,
+		TenantID:       tenantID,
+		EnvironmentID:  envID,
+		UserID:         userID,
+		WorkflowConfig: *workflowConfig,
+	}
+
+	// Validate input
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for customer onboarding",
+			"error", err,
+			"customer_id", customer.ID)
+		return ierr.WithError(err).
+			WithHint("Invalid workflow input for customer onboarding").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return ierr.NewError("temporal service not available").
+			WithHint("Customer onboarding workflow requires Temporal service").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	// Execute workflow via Temporal
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalCustomerOnboardingWorkflow,
+		input,
+	)
+	if err != nil {
+		s.Logger.Errorw("failed to start customer onboarding workflow",
+			"error", err,
+			"customer_id", customer.ID)
+		return ierr.WithError(err).
+			WithHint("Failed to start customer onboarding workflow").
+			WithReportableDetails(map[string]interface{}{
+				"customer_id": customer.ID,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.Infow("customer onboarding workflow started successfully",
+		"customer_id", customer.ID,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
+
+	return nil
 }

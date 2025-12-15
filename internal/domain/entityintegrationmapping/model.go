@@ -73,9 +73,10 @@ func ValidateEntityType(entityType types.IntegrationEntityType) bool {
 // ValidateProviderType validates the provider type
 func ValidateProviderType(providerType string) bool {
 	validProviders := map[string]bool{
-		"stripe":   true,
-		"razorpay": true,
-		"paypal":   true,
+		"stripe":     true,
+		"razorpay":   true,
+		"paypal":     true,
+		"quickbooks": true,
 	}
 	return validProviders[providerType]
 }
@@ -106,7 +107,7 @@ func Validate(m *EntityIntegrationMapping) error {
 
 	if !ValidateProviderType(m.ProviderType) {
 		return ierr.NewError("invalid provider_type").
-			WithHint("Provider type must be one of: stripe, razorpay, paypal").
+			WithHint("Provider type must be one of: stripe, razorpay, paypal, quickbooks").
 			Mark(ierr.ErrValidation)
 	}
 

@@ -466,3 +466,181 @@ func (s *WalletPaymentServiceSuite) TestInvoiceWithNoRemainingAmount() {
 	s.NoError(err)
 	s.Empty(payments, "No payment requests should have been made")
 }
+
+// TestProcessInvoicePaymentWithInvoicingCustomerID tests payment processing using invoicing customer's wallets
+func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustomerID() {
+	// Create subscription customer
+	subscriptionCustomer := &customer.Customer{
+		ID:         "cust_subscription",
+		ExternalID: "ext_cust_subscription",
+		Name:       "Subscription Customer",
+		Email:      "subscription@example.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), subscriptionCustomer))
+
+	// Create invoicing customer
+	invoicingCustomer := &customer.Customer{
+		ID:         "cust_invoicing",
+		ExternalID: "ext_cust_invoicing",
+		Name:       "Invoicing Customer",
+		Email:      "invoicing@example.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), invoicingCustomer))
+
+	// Create wallet for invoicing customer (not subscription customer)
+	invoicingWallet := &wallet.Wallet{
+		ID:             "wallet_invoicing",
+		CustomerID:     invoicingCustomer.ID, // Wallet belongs to invoicing customer
+		Name:           "Invoicing Customer Wallet",
+		Currency:       "usd",
+		WalletType:     types.WalletTypePrePaid,
+		Balance:        decimal.NewFromFloat(200),
+		CreditBalance:  decimal.NewFromFloat(200),
+		ConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:   types.WalletStatusActive,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), invoicingWallet))
+	// Create transaction to make credits available
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), &wallet.Transaction{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:         invoicingWallet.ID,
+		Type:             types.TransactionTypeCredit,
+		Amount:           invoicingWallet.Balance,
+		CreditAmount:     invoicingWallet.CreditBalance,
+		CreditsAvailable: invoicingWallet.CreditBalance,
+		TxStatus:         types.TransactionStatusCompleted,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	// Create invoice for invoicing customer (subscription invoice)
+	invoiceForInvoicingCustomer := &invoice.Invoice{
+		ID:              "inv_invoicing_cust",
+		CustomerID:      invoicingCustomer.ID, // Invoice is for invoicing customer
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(150),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(150),
+		Description:     "Invoice for Invoicing Customer",
+		DueDate:         lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		PeriodStart:     lo.ToPtr(s.testData.now.Add(-24 * time.Hour)),
+		PeriodEnd:       lo.ToPtr(s.testData.now.Add(6 * 24 * time.Hour)),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), invoiceForInvoicingCustomer))
+
+	// Process payment - should use invoicing customer's wallet
+	options := WalletPaymentOptions{
+		Strategy:        PromotionalFirstStrategy,
+		MaxWalletsToUse: 0, // No limit
+	}
+	amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(
+		s.GetContext(),
+		invoiceForInvoicingCustomer,
+		options,
+	)
+
+	// Verify payment was successful using invoicing customer's wallet
+	s.NoError(err)
+	s.True(decimal.NewFromFloat(150).Equal(amountPaid), "Should pay full amount from invoicing customer's wallet")
+
+	// Verify payment was created
+	payments, err := s.GetStores().PaymentRepo.List(s.GetContext(), &types.PaymentFilter{
+		DestinationID:   &invoiceForInvoicingCustomer.ID,
+		DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
+	})
+	s.NoError(err)
+	s.Len(payments, 1, "Should have one payment from invoicing customer's wallet")
+	if len(payments) > 0 {
+		s.Equal(invoicingCustomer.ID, invoiceForInvoicingCustomer.CustomerID, "Invoice should be for invoicing customer")
+	}
+
+	// Verify invoice was updated
+	updatedInvoice, err := s.GetStores().InvoiceRepo.Get(s.GetContext(), invoiceForInvoicingCustomer.ID)
+	s.NoError(err)
+	s.True(decimal.NewFromFloat(150).Equal(updatedInvoice.AmountPaid), "Invoice should show amount paid")
+	s.True(decimal.Zero.Equal(updatedInvoice.AmountRemaining), "Invoice should have no remaining amount")
+}
+
+// TestProcessInvoicePaymentWithInvoicingCustomerIDNoWallet tests that payment fails if invoicing customer has no wallet
+func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustomerIDNoWallet() {
+	// Create subscription customer
+	subscriptionCustomer := &customer.Customer{
+		ID:         "cust_sub_no_wallet",
+		ExternalID: "ext_cust_sub_no_wallet",
+		Name:       "Subscription Customer",
+		Email:      "subscription@example.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), subscriptionCustomer))
+
+	// Create invoicing customer (no wallet)
+	invoicingCustomer := &customer.Customer{
+		ID:         "cust_invoicing_no_wallet",
+		ExternalID: "ext_cust_invoicing_no_wallet",
+		Name:       "Invoicing Customer",
+		Email:      "invoicing@example.com",
+		BaseModel:  types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(s.GetContext(), invoicingCustomer))
+
+	// Create wallet for subscription customer (NOT invoicing customer)
+	subscriptionWallet := &wallet.Wallet{
+		ID:             "wallet_subscription",
+		CustomerID:     subscriptionCustomer.ID, // Wallet belongs to subscription customer
+		Name:           "Subscription Customer Wallet",
+		Currency:       "usd",
+		WalletType:     types.WalletTypePrePaid,
+		Balance:        decimal.NewFromFloat(200),
+		ConversionRate: decimal.NewFromInt(1), // Required for wallet operations
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), subscriptionWallet))
+
+	// Create invoice for invoicing customer
+	invoiceForInvoicingCustomer := &invoice.Invoice{
+		ID:              "inv_invoicing_no_wallet",
+		CustomerID:      invoicingCustomer.ID, // Invoice is for invoicing customer
+		InvoiceType:     types.InvoiceTypeSubscription,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(150),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(150),
+		Description:     "Invoice for Invoicing Customer",
+		DueDate:         lo.ToPtr(s.testData.now.Add(30 * 24 * time.Hour)),
+		PeriodStart:     lo.ToPtr(s.testData.now.Add(-24 * time.Hour)),
+		PeriodEnd:       lo.ToPtr(s.testData.now.Add(6 * 24 * time.Hour)),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), invoiceForInvoicingCustomer))
+
+	// Process payment - should NOT use subscription customer's wallet
+	options := WalletPaymentOptions{
+		Strategy:        PromotionalFirstStrategy,
+		MaxWalletsToUse: 0,
+	}
+	amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(
+		s.GetContext(),
+		invoiceForInvoicingCustomer,
+		options,
+	)
+
+	// Verify payment failed (no wallet for invoicing customer)
+	s.NoError(err) // ProcessInvoicePaymentWithWallets doesn't return error, just returns zero
+	s.True(decimal.Zero.Equal(amountPaid), "Should not pay anything - invoicing customer has no wallet")
+
+	// Verify no payment was created
+	payments, err := s.GetStores().PaymentRepo.List(s.GetContext(), &types.PaymentFilter{
+		DestinationID:   &invoiceForInvoicingCustomer.ID,
+		DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
+	})
+	s.NoError(err)
+	s.Empty(payments, "No payment should be created - invoicing customer has no wallet")
+}

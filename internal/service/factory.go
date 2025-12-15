@@ -45,7 +45,9 @@ import (
 	"github.com/flexprice/flexprice/internal/pdf"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/publisher"
+	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/s3"
+	"github.com/flexprice/flexprice/internal/types"
 	webhookPublisher "github.com/flexprice/flexprice/internal/webhook/publisher"
 )
 
@@ -113,6 +115,10 @@ type ServiceParams struct {
 
 	// Integration Factory
 	IntegrationFactory *integration.Factory
+
+	// PubSubs
+	WalletBalanceAlertPubSub types.WalletBalanceAlertPubSub
+	WebhookPubSub            pubsub.PubSub
 }
 
 // Common service params
@@ -168,6 +174,8 @@ func NewServiceParams(
 	scheduledTaskRepo scheduledtask.Repository,
 	prorationCalculator proration.Calculator,
 	integrationFactory *integration.Factory,
+	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
+	webhookPubSub pubsub.PubSub,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -221,5 +229,7 @@ func NewServiceParams(
 		ScheduledTaskRepo:            scheduledTaskRepo,
 		ProrationCalculator:          prorationCalculator,
 		IntegrationFactory:           integrationFactory,
+		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
+		WebhookPubSub:                webhookPubSub,
 	}
 }

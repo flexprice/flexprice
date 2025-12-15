@@ -700,6 +700,11 @@ func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 		query = query.Where(payment.GatewayPaymentID(*f.GatewayPaymentID))
 	}
 
+	// Apply gateway tracking ID filter if specified
+	if f.GatewayTrackingID != nil {
+		query = query.Where(payment.GatewayTrackingID(*f.GatewayTrackingID))
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {

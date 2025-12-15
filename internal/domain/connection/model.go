@@ -146,6 +146,55 @@ func convertMapToConnectionMetadata(metadata map[string]interface{}, providerTyp
 		return types.ConnectionMetadata{
 			Chargebee: chargebeeMetadata,
 		}
+	case types.SecretProviderQuickBooks:
+		qbMetadata := &types.QuickBooksConnectionMetadata{}
+		if clientID, ok := metadata["client_id"].(string); ok {
+			qbMetadata.ClientID = clientID
+		}
+		if clientSecret, ok := metadata["client_secret"].(string); ok {
+			qbMetadata.ClientSecret = clientSecret
+		}
+		if realmID, ok := metadata["realm_id"].(string); ok {
+			qbMetadata.RealmID = realmID
+		}
+		if environment, ok := metadata["environment"].(string); ok {
+			qbMetadata.Environment = environment
+		}
+		if authCode, ok := metadata["auth_code"].(string); ok {
+			qbMetadata.AuthCode = authCode
+		}
+		if redirectURI, ok := metadata["redirect_uri"].(string); ok {
+			qbMetadata.RedirectURI = redirectURI
+		}
+		if oauthSessionData, ok := metadata["oauth_session_data"].(string); ok {
+			qbMetadata.OAuthSessionData = oauthSessionData
+		}
+		if accessToken, ok := metadata["access_token"].(string); ok {
+			qbMetadata.AccessToken = accessToken
+		}
+		if refreshToken, ok := metadata["refresh_token"].(string); ok {
+			qbMetadata.RefreshToken = refreshToken
+		}
+		if incomeAccountID, ok := metadata["income_account_id"].(string); ok {
+			qbMetadata.IncomeAccountID = incomeAccountID
+		}
+		if webhookVerifierToken, ok := metadata["webhook_verifier_token"].(string); ok {
+			qbMetadata.WebhookVerifierToken = webhookVerifierToken
+		}
+		return types.ConnectionMetadata{
+			QuickBooks: qbMetadata,
+		}
+	case types.SecretProviderNomod:
+		nomodMetadata := &types.NomodConnectionMetadata{}
+		if apiKey, ok := metadata["api_key"].(string); ok {
+			nomodMetadata.APIKey = apiKey
+		}
+		if webhookSecret, ok := metadata["webhook_secret"].(string); ok {
+			nomodMetadata.WebhookSecret = webhookSecret
+		}
+		return types.ConnectionMetadata{
+			Nomod: nomodMetadata,
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		return types.ConnectionMetadata{
@@ -237,4 +286,22 @@ func (c *Connection) IsDealInboundEnabled() bool {
 func (c *Connection) IsDealOutboundEnabled() bool {
 	config := c.GetSyncConfig()
 	return config.Deal != nil && config.Deal.Outbound
+}
+
+// IsQuoteOutboundEnabled checks if quote outbound sync is enabled
+func (c *Connection) IsQuoteOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Quote != nil && config.Quote.Outbound
+}
+
+// IsPaymentInboundEnabled checks if payment inbound sync is enabled (e.g., QuickBooks -> Flexprice)
+func (c *Connection) IsPaymentInboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Payment != nil && config.Payment.Inbound
+}
+
+// IsPaymentOutboundEnabled checks if payment outbound sync is enabled (e.g., Flexprice -> QuickBooks)
+func (c *Connection) IsPaymentOutboundEnabled() bool {
+	config := c.GetSyncConfig()
+	return config.Payment != nil && config.Payment.Outbound
 }

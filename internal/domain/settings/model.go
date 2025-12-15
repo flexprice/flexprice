@@ -14,7 +14,7 @@ type Setting struct {
 	ID string `json:"id"`
 
 	// Key is the setting key
-	Key string `json:"key"`
+	Key types.SettingKey `json:"key"`
 
 	// Value is the JSON value of the setting
 	Value map[string]interface{} `json:"value"`
@@ -39,7 +39,7 @@ func FromEnt(s *ent.Settings) *Setting {
 
 	return &Setting{
 		ID:            s.ID,
-		Key:           s.Key,
+		Key:           types.SettingKey(s.Key),
 		Value:         value,
 		EnvironmentID: s.EnvironmentID,
 		BaseModel: types.BaseModel{

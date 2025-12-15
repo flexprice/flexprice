@@ -41,6 +41,16 @@ type HubSpotClient interface {
 	// Deal operations
 	UpdateDeal(ctx context.Context, dealID string, properties map[string]string) (*DealUpdateResponse, error)
 	CreateDealLineItem(ctx context.Context, req *DealLineItemCreateRequest) (*DealLineItemResponse, error)
+
+	// Quote operations
+	CreateQuote(ctx context.Context, req *QuoteCreateRequest) (*QuoteResponse, error)
+	UpdateQuote(ctx context.Context, quoteID string, properties QuoteProperties) error
+	CreateQuoteLineItem(ctx context.Context, req *QuoteLineItemCreateRequest) (*DealLineItemResponse, error)
+	AssociateQuoteToDeal(ctx context.Context, quoteID, dealID string) error
+	AssociateQuoteToContact(ctx context.Context, quoteID, contactID string) error
+	AssociateLineItemToQuote(ctx context.Context, lineItemID, quoteID string) error
+	GetQuoteTemplates(ctx context.Context) ([]QuoteTemplate, error)
+	AssociateQuoteToTemplate(ctx context.Context, quoteID, templateID string) error
 }
 
 // Client handles HubSpot API client setup and configuration
@@ -717,4 +727,420 @@ func (c *Client) CreateDealLineItem(ctx context.Context, req *DealLineItemCreate
 	}
 
 	return &lineItem, nil
+}
+
+// CreateQuote creates a new quote in HubSpot
+func (c *Client) CreateQuote(ctx context.Context, req *QuoteCreateRequest) (*QuoteResponse, error) {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/crm/v3/objects/quotes", HubSpotAPIBaseURL)
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, ierr.NewError("failed to marshal quote request").Mark(ierr.ErrInternal)
+	}
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPost,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+			"Content-Type":  "application/json",
+		},
+		Body: reqBody,
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		if httpErr, ok := httpclient.IsHTTPError(err); ok {
+			// Try to get response body if available
+			responseBody := ""
+			if resp != nil && resp.Body != nil {
+				responseBody = string(resp.Body)
+			}
+			c.logger.Errorw("HubSpot API error creating quote",
+				"url", url,
+				"status_code", httpErr.StatusCode)
+			return nil, ierr.NewError("failed to create quote in HubSpot").
+				WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", httpErr.StatusCode, responseBody)).
+				Mark(ierr.ErrHTTPClient)
+		}
+
+		c.logger.Errorw("http client error creating quote",
+			"error", err,
+			"url", url)
+		return nil, ierr.NewError("failed to create quote in HubSpot").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		responseBody := ""
+		if resp.Body != nil {
+			responseBody = string(resp.Body)
+		}
+		c.logger.Errorw("hubspot create quote error",
+			"status", resp.StatusCode,
+			"url", url)
+		return nil, ierr.NewError("failed to create quote in HubSpot").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, responseBody)).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	var quote QuoteResponse
+	if err := json.Unmarshal(resp.Body, &quote); err != nil {
+		return nil, ierr.NewError("failed to decode quote response").Mark(ierr.ErrInternal)
+	}
+
+	return &quote, nil
+}
+
+// UpdateQuote updates a quote in HubSpot
+func (c *Client) UpdateQuote(ctx context.Context, quoteID string, properties QuoteProperties) error {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/crm/v3/objects/quotes/%s", HubSpotAPIBaseURL, quoteID)
+
+	// Build properties map with only non-empty values
+	// This is necessary because omitempty doesn't work for empty strings in Go
+	// Also, hs_esign_enabled should be a boolean, not a string
+	props := make(map[string]interface{})
+	if properties.Title != "" {
+		props["hs_title"] = properties.Title
+	}
+	if properties.ExpirationDate != "" {
+		props["hs_expiration_date"] = properties.ExpirationDate
+	}
+	if properties.Status != "" {
+		props["hs_status"] = properties.Status
+	}
+	if properties.ESignEnabled != "" {
+		// Per docs: hs_esign_enabled should be string "true" or "false"
+		props["hs_esign_enabled"] = properties.ESignEnabled
+	}
+
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"properties": props,
+	})
+	if err != nil {
+		return ierr.NewError("failed to marshal quote update request").Mark(ierr.ErrInternal)
+	}
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPatch,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+			"Content-Type":  "application/json",
+		},
+		Body: reqBody,
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		if httpErr, ok := httpclient.IsHTTPError(err); ok {
+			responseBody := ""
+			if resp != nil && resp.Body != nil {
+				responseBody = string(resp.Body)
+			}
+			c.logger.Errorw("HubSpot API error updating quote",
+				"status_code", httpErr.StatusCode,
+				"url", url)
+			return ierr.NewError("failed to update quote in HubSpot").
+				WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", httpErr.StatusCode, responseBody)).
+				Mark(ierr.ErrHTTPClient)
+		}
+
+		c.logger.Errorw("http client error updating quote",
+			"error", err,
+			"url", url)
+		return ierr.NewError("failed to update quote in HubSpot").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		responseBody := ""
+		if resp.Body != nil {
+			responseBody = string(resp.Body)
+		}
+		c.logger.Errorw("hubspot update quote error",
+			"status", resp.StatusCode,
+			"url", url)
+		return ierr.NewError("failed to update quote in HubSpot").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, responseBody)).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
+}
+
+// CreateQuoteLineItem creates a new line item in HubSpot and associates it with a quote
+func (c *Client) CreateQuoteLineItem(ctx context.Context, req *QuoteLineItemCreateRequest) (*DealLineItemResponse, error) {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/crm/v3/objects/line_items", HubSpotAPIBaseURL)
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return nil, ierr.NewError("failed to marshal quote line item create request").Mark(ierr.ErrInternal)
+	}
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPost,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+			"Content-Type":  "application/json",
+		},
+		Body: reqBody,
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		if httpErr, ok := httpclient.IsHTTPError(err); ok {
+			c.logger.Errorw("HubSpot API error creating quote line item",
+				"status_code", httpErr.StatusCode,
+				"url", url)
+			return nil, ierr.NewError("failed to create quote line item in HubSpot").
+				WithHint(fmt.Sprintf("HubSpot API returned status %d", httpErr.StatusCode)).
+				Mark(ierr.ErrHTTPClient)
+		}
+
+		c.logger.Errorw("http client error creating quote line item",
+			"error", err,
+			"url", url)
+		return nil, ierr.NewError("failed to create quote line item in HubSpot").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		c.logger.Errorw("hubspot create quote line item error",
+			"status", resp.StatusCode,
+			"url", url)
+		return nil, ierr.NewError("failed to create quote line item in HubSpot").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	var lineItem DealLineItemResponse
+	if err := json.Unmarshal(resp.Body, &lineItem); err != nil {
+		return nil, ierr.NewError("failed to decode quote line item response").Mark(ierr.ErrInternal)
+	}
+
+	return &lineItem, nil
+}
+
+// AssociateQuoteToDeal associates a quote with a deal
+func (c *Client) AssociateQuoteToDeal(ctx context.Context, quoteID, dealID string) error {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Association type 5 is quote to deal (HUBSPOT_DEFINED)
+	url := fmt.Sprintf("%s/crm/v4/objects/quotes/%s/associations/default/deals/%s",
+		HubSpotAPIBaseURL, quoteID, dealID)
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPut,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+		},
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		return ierr.NewError("failed to associate quote to deal").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		c.logger.Errorw("hubspot associate quote error",
+			"status", resp.StatusCode,
+			"body", string(resp.Body),
+			"quote_id", quoteID,
+			"deal_id", dealID)
+		return ierr.NewError("failed to associate quote to deal").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
+}
+
+// AssociateQuoteToContact associates a quote with a contact
+func (c *Client) AssociateQuoteToContact(ctx context.Context, quoteID, contactID string) error {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Association type for quote to contact (HUBSPOT_DEFINED)
+	url := fmt.Sprintf("%s/crm/v4/objects/quotes/%s/associations/default/contacts/%s",
+		HubSpotAPIBaseURL, quoteID, contactID)
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPut,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+		},
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		return ierr.NewError("failed to associate quote to contact").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		c.logger.Errorw("hubspot associate quote to contact error",
+			"status", resp.StatusCode,
+			"body", string(resp.Body),
+			"quote_id", quoteID,
+			"contact_id", contactID)
+		return ierr.NewError("failed to associate quote to contact").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
+}
+
+// AssociateLineItemToQuote associates a line item with a quote
+func (c *Client) AssociateLineItemToQuote(ctx context.Context, lineItemID, quoteID string) error {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Use quote-to-line-item association (standard direction per HubSpot docs)
+	url := fmt.Sprintf("%s/crm/v4/objects/quotes/%s/associations/default/line_items/%s",
+		HubSpotAPIBaseURL, quoteID, lineItemID)
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPut,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+		},
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		return ierr.NewError("failed to associate line item to quote").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		c.logger.Errorw("hubspot associate line item to quote error",
+			"status", resp.StatusCode,
+			"body", string(resp.Body),
+			"line_item_id", lineItemID,
+			"quote_id", quoteID)
+		return ierr.NewError("failed to associate line item to quote").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
+}
+
+// GetQuoteTemplates retrieves all quote templates from HubSpot
+func (c *Client) GetQuoteTemplates(ctx context.Context) ([]QuoteTemplate, error) {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	url := fmt.Sprintf("%s/crm/v3/objects/quote_template?properties=hs_name", HubSpotAPIBaseURL)
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodGet,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+			"Content-Type":  "application/json",
+		},
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		return nil, ierr.NewError("failed to fetch quote templates").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		c.logger.Errorw("hubspot get quote templates error",
+			"status", resp.StatusCode,
+			"body", string(resp.Body))
+		return nil, ierr.NewError("failed to fetch quote templates").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	var response struct {
+		Results []QuoteTemplate `json:"results"`
+	}
+	if err := json.Unmarshal(resp.Body, &response); err != nil {
+		return nil, ierr.NewError("failed to decode quote templates response").Mark(ierr.ErrInternal)
+	}
+
+	return response.Results, nil
+}
+
+// AssociateQuoteToTemplate associates a quote with a quote template
+// Per HubSpot docs: associationTypeId 286 is for quote to quote template
+func (c *Client) AssociateQuoteToTemplate(ctx context.Context, quoteID, templateID string) error {
+	config, err := c.GetHubSpotConfig(ctx)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/crm/v4/objects/quotes/%s/associations/default/quote_template/%s",
+		HubSpotAPIBaseURL, quoteID, templateID)
+
+	httpReq := &httpclient.Request{
+		Method: http.MethodPut,
+		URL:    url,
+		Headers: map[string]string{
+			"Authorization": fmt.Sprintf("Bearer %s", config.AccessToken),
+		},
+	}
+
+	resp, err := c.httpClient.Send(ctx, httpReq)
+	if err != nil {
+		return ierr.NewError("failed to associate quote to template").
+			WithHint("Check HubSpot API connectivity").
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		c.logger.Errorw("hubspot associate quote to template error",
+			"status", resp.StatusCode,
+			"body", string(resp.Body),
+			"quote_id", quoteID,
+			"template_id", templateID)
+		return ierr.NewError("failed to associate quote to template").
+			WithHint(fmt.Sprintf("HubSpot API returned status %d: %s", resp.StatusCode, string(resp.Body))).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return nil
 }

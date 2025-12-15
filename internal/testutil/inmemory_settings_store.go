@@ -61,22 +61,23 @@ func (s *InMemorySettingsStore) GetByKey(ctx context.Context, key types.SettingK
 	for _, setting := range s.items {
 		if setting.TenantID == tenantID &&
 			setting.EnvironmentID == environmentID &&
-			setting.Key == key.String() &&
+			setting.Key == key &&
 			setting.Status == types.StatusPublished {
 			return setting, nil
 		}
 	}
 
 	return nil, ierr.WithError(&ent.NotFoundError{}).
-		WithHintf("Setting with key %s was not found", key.String()).
+		WithHintf("Setting with key %s was not found", key).
 		WithReportableDetails(map[string]any{
-			"key": key.String(),
+			"key": key,
 		}).
 		Mark(ierr.ErrNotFound)
 }
 
-// GetTenantSettingByKey retrieves a tenant-level setting by key (without environment_id)
-func (s *InMemorySettingsStore) GetTenantSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
+// GetTenantLevelSettingByKey retrieves a tenant-level setting by key (without environment_id)
+// This is for settings that apply tenant-wide across all environments
+func (s *InMemorySettingsStore) GetTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) (*domainSettings.Setting, error) {
 	tenantID := types.GetTenantID(ctx)
 
 	s.mu.RLock()
@@ -86,16 +87,16 @@ func (s *InMemorySettingsStore) GetTenantSettingByKey(ctx context.Context, key t
 	for _, setting := range s.items {
 		if setting.TenantID == tenantID &&
 			setting.EnvironmentID == "" &&
-			setting.Key == key.String() &&
+			setting.Key == key &&
 			setting.Status == types.StatusPublished {
 			return setting, nil
 		}
 	}
 
 	return nil, ierr.WithError(&ent.NotFoundError{}).
-		WithHintf("Setting with key %s was not found", key.String()).
+		WithHintf("Setting with key %s was not found", key).
 		WithReportableDetails(map[string]any{
-			"key": key.String(),
+			"key": key,
 		}).
 		Mark(ierr.ErrNotFound)
 }
@@ -112,7 +113,7 @@ func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key types.Setti
 	for id, setting := range s.items {
 		if setting.TenantID == tenantID &&
 			setting.EnvironmentID == environmentID &&
-			setting.Key == key.String() &&
+			setting.Key == key &&
 			setting.Status == types.StatusPublished {
 			delete(s.items, id)
 			return nil
@@ -129,8 +130,8 @@ func (s *InMemorySettingsStore) DeleteByKey(ctx context.Context, key types.Setti
 		Mark(ierr.ErrNotFound)
 }
 
-// DeleteTenantSettingByKey deletes a tenant-level setting by key (without environment_id)
-func (s *InMemorySettingsStore) DeleteTenantSettingByKey(ctx context.Context, key types.SettingKey) error {
+// DeleteTenantLevelSettingByKey deletes a tenant-level setting by key (without environment_id)
+func (s *InMemorySettingsStore) DeleteTenantLevelSettingByKey(ctx context.Context, key types.SettingKey) error {
 	tenantID := types.GetTenantID(ctx)
 
 	s.mu.Lock()
@@ -140,7 +141,7 @@ func (s *InMemorySettingsStore) DeleteTenantSettingByKey(ctx context.Context, ke
 	for id, setting := range s.items {
 		if setting.TenantID == tenantID &&
 			setting.EnvironmentID == "" &&
-			setting.Key == key.String() &&
+			setting.Key == key &&
 			setting.Status == types.StatusPublished {
 			delete(s.items, id)
 			return nil
@@ -171,7 +172,7 @@ func (s *InMemorySettingsStore) ListAllTenantEnvSettingsByKey(ctx context.Contex
 	var configs []*types.TenantEnvConfig
 
 	for _, setting := range s.items {
-		if setting.Key == key.String() && setting.Status == types.StatusPublished {
+		if setting.Key == key && setting.Status == types.StatusPublished {
 			config := &types.TenantEnvConfig{
 				TenantID:      setting.TenantID,
 				EnvironmentID: setting.EnvironmentID,

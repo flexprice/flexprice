@@ -248,6 +248,26 @@ func (cu *CustomerUpdate) ClearAddressCountry() *CustomerUpdate {
 	return cu
 }
 
+// SetParentCustomerID sets the "parent_customer_id" field.
+func (cu *CustomerUpdate) SetParentCustomerID(s string) *CustomerUpdate {
+	cu.mutation.SetParentCustomerID(s)
+	return cu
+}
+
+// SetNillableParentCustomerID sets the "parent_customer_id" field if the given value is not nil.
+func (cu *CustomerUpdate) SetNillableParentCustomerID(s *string) *CustomerUpdate {
+	if s != nil {
+		cu.SetParentCustomerID(*s)
+	}
+	return cu
+}
+
+// ClearParentCustomerID clears the value of the "parent_customer_id" field.
+func (cu *CustomerUpdate) ClearParentCustomerID() *CustomerUpdate {
+	cu.mutation.ClearParentCustomerID()
+	return cu
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cu *CustomerUpdate) Mutation() *CustomerMutation {
 	return cu.mutation
@@ -387,6 +407,12 @@ func (cu *CustomerUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if cu.mutation.AddressCountryCleared() {
 		_spec.ClearField(customer.FieldAddressCountry, field.TypeString)
+	}
+	if value, ok := cu.mutation.ParentCustomerID(); ok {
+		_spec.SetField(customer.FieldParentCustomerID, field.TypeString, value)
+	}
+	if cu.mutation.ParentCustomerIDCleared() {
+		_spec.ClearField(customer.FieldParentCustomerID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, cu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -628,6 +654,26 @@ func (cuo *CustomerUpdateOne) ClearAddressCountry() *CustomerUpdateOne {
 	return cuo
 }
 
+// SetParentCustomerID sets the "parent_customer_id" field.
+func (cuo *CustomerUpdateOne) SetParentCustomerID(s string) *CustomerUpdateOne {
+	cuo.mutation.SetParentCustomerID(s)
+	return cuo
+}
+
+// SetNillableParentCustomerID sets the "parent_customer_id" field if the given value is not nil.
+func (cuo *CustomerUpdateOne) SetNillableParentCustomerID(s *string) *CustomerUpdateOne {
+	if s != nil {
+		cuo.SetParentCustomerID(*s)
+	}
+	return cuo
+}
+
+// ClearParentCustomerID clears the value of the "parent_customer_id" field.
+func (cuo *CustomerUpdateOne) ClearParentCustomerID() *CustomerUpdateOne {
+	cuo.mutation.ClearParentCustomerID()
+	return cuo
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cuo *CustomerUpdateOne) Mutation() *CustomerMutation {
 	return cuo.mutation
@@ -797,6 +843,12 @@ func (cuo *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err
 	}
 	if cuo.mutation.AddressCountryCleared() {
 		_spec.ClearField(customer.FieldAddressCountry, field.TypeString)
+	}
+	if value, ok := cuo.mutation.ParentCustomerID(); ok {
+		_spec.SetField(customer.FieldParentCustomerID, field.TypeString, value)
+	}
+	if cuo.mutation.ParentCustomerIDCleared() {
+		_spec.ClearField(customer.FieldParentCustomerID, field.TypeString)
 	}
 	_node = &Customer{config: cuo.config}
 	_spec.Assign = _node.assignValues

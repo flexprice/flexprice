@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/integration/nomod"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
@@ -243,6 +244,8 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 		return p.handleStripePaymentLinkCreation(ctx, paymentObj, invoice)
 	case types.PaymentGatewayTypeRazorpay:
 		return p.handleRazorpayPaymentLinkCreation(ctx, paymentObj, invoice)
+	case types.PaymentGatewayTypeNomod:
+		return p.handleNomodPaymentLinkCreation(ctx, paymentObj, invoice)
 	default:
 		return ierr.NewError("unsupported payment gateway").
 			WithHint("Payment gateway not supported for payment links").
@@ -443,6 +446,100 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 	p.Logger.Infow("successfully created razorpay payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
 		"payment_link_id", paymentLinkResp.ID,
+		"payment_url", paymentLinkResp.PaymentURL)
+
+	return nil
+}
+
+func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, paymentObj *payment.Payment, invoice *invoice.Invoice) error {
+	// Extract success URL and cancel URL from metadata
+	successURL := ""
+	cancelURL := ""
+
+	if paymentObj.Metadata != nil {
+		if url, exists := paymentObj.Metadata["success_url"]; exists {
+			successURL = url
+		}
+		if url, exists := paymentObj.Metadata["cancel_url"]; exists {
+			cancelURL = url
+		}
+	}
+
+	// Prepare metadata for payment link request
+	linkMetadata := make(map[string]string)
+	if paymentObj.Metadata != nil {
+		// Copy metadata but exclude connection-related fields (internal use only)
+		for k, v := range paymentObj.Metadata {
+			if k != "connection_id" && k != "connection_name" {
+				linkMetadata[k] = v
+			}
+		}
+	}
+
+	// Add FlexPrice payment ID to metadata
+	linkMetadata["flexprice_payment_id"] = paymentObj.ID
+
+	// Convert to Nomod payment link request
+	paymentLinkReq := nomod.CreatePaymentLinkReq{
+		InvoiceID:     paymentObj.DestinationID,
+		CustomerID:    invoice.CustomerID,
+		Amount:        paymentObj.Amount,
+		Currency:      paymentObj.Currency,
+		SuccessURL:    successURL,
+		FailureURL:    cancelURL,
+		Metadata:      linkMetadata,
+		PaymentID:     paymentObj.ID,
+		EnvironmentID: types.GetEnvironmentID(ctx),
+	}
+
+	// Get Nomod integration for creating payment link
+	nomodIntegration, err := p.IntegrationFactory.GetNomodIntegration(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get Nomod integration").
+			Mark(ierr.ErrSystem)
+	}
+
+	customerService := NewCustomerService(p.ServiceParams)
+	invoiceService := NewInvoiceService(p.ServiceParams)
+
+	paymentLinkResp, err := nomodIntegration.PaymentSvc.CreatePaymentLink(ctx, paymentLinkReq, customerService, invoiceService)
+	if err != nil {
+		// If Nomod API fails, keep payment status as INITIATED and return error
+		p.Logger.Errorw("failed to create payment link via Nomod",
+			"error", err,
+			"payment_id", paymentObj.ID,
+			"invoice_id", paymentObj.DestinationID)
+		return err
+	}
+
+	// If Nomod API succeeds, update payment status to PENDING
+	paymentObj.PaymentStatus = types.PaymentStatusPending
+
+	// Update payment with gateway information
+	paymentObj.GatewayTrackingID = &paymentLinkResp.ID // Store invoice_id in gateway_tracking_id
+	if paymentObj.GatewayMetadata == nil {
+		paymentObj.GatewayMetadata = types.Metadata{}
+	}
+	// Merge with existing gateway metadata
+	paymentObj.GatewayMetadata["payment_url"] = paymentLinkResp.PaymentURL
+	paymentObj.GatewayMetadata["gateway"] = string(types.PaymentGatewayTypeNomod)
+	paymentObj.GatewayMetadata["nomod_invoice_id"] = paymentLinkResp.ID
+	paymentObj.GatewayMetadata["nomod_reference_id"] = paymentLinkResp.ReferenceID
+
+	// Update the payment record
+	if err := p.PaymentRepo.Update(ctx, paymentObj); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to update payment with payment link information").
+			WithReportableDetails(map[string]interface{}{
+				"payment_id": paymentObj.ID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	p.Logger.Infow("successfully created nomod payment link and updated status to pending",
+		"payment_id", paymentObj.ID,
+		"nomod_invoice_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
 
 	return nil

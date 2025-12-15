@@ -43,29 +43,8 @@ type PriceUnit struct {
 	// ConversionRate holds the value of the "conversion_rate" field.
 	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
 	// Precision holds the value of the "precision" field.
-	Precision int `json:"precision,omitempty"`
-	// Edges holds the relations/edges for other nodes in the graph.
-	// The values are being populated by the PriceUnitQuery when eager-loading is set.
-	Edges        PriceUnitEdges `json:"edges"`
+	Precision    int `json:"precision,omitempty"`
 	selectValues sql.SelectValues
-}
-
-// PriceUnitEdges holds the relations/edges for other nodes in the graph.
-type PriceUnitEdges struct {
-	// Prices holds the value of the prices edge.
-	Prices []*Price `json:"prices,omitempty"`
-	// loadedTypes holds the information for reporting if a
-	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
-}
-
-// PricesOrErr returns the Prices value or an error if the edge
-// was not loaded in eager-loading.
-func (e PriceUnitEdges) PricesOrErr() ([]*Price, error) {
-	if e.loadedTypes[0] {
-		return e.Prices, nil
-	}
-	return nil, &NotLoadedError{edge: "prices"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -191,11 +170,6 @@ func (pu *PriceUnit) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (pu *PriceUnit) Value(name string) (ent.Value, error) {
 	return pu.selectValues.Get(name)
-}
-
-// QueryPrices queries the "prices" edge of the PriceUnit entity.
-func (pu *PriceUnit) QueryPrices() *PriceQuery {
-	return NewPriceUnitClient(pu.config).QueryPrices(pu)
 }
 
 // Update returns a builder for updating this PriceUnit.

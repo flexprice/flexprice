@@ -687,18 +687,88 @@ func (s *InMemoryEventStore) FindUnprocessedEventsFromFeatureUsage(ctx context.C
 		Mark(ierr.ErrSystem)
 }
 
-// GetTotalEventCount returns the total count of events in the given time range
-func (s *InMemoryEventStore) GetTotalEventCount(ctx context.Context, startTime, endTime time.Time) uint64 {
+// GetTotalEventCount returns the total count of events in the given time range with optional windowed time-series data
+func (s *InMemoryEventStore) GetTotalEventCount(ctx context.Context, startTime, endTime time.Time, windowSize types.WindowSize) (*events.EventCountResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	count := uint64(0)
-	for _, event := range s.events {
-		// Check if event is within time range
-		if !event.Timestamp.Before(startTime) && !event.Timestamp.After(endTime) {
-			count++
+	result := &events.EventCountResult{
+		TotalCount: 0,
+		Points:     []events.EventCountPoint{},
+	}
+
+	// If window size is provided, group events by time windows
+	if windowSize != "" {
+		windowCounts := make(map[time.Time]uint64)
+
+		for _, event := range s.events {
+			// Check if event is within time range
+			if !event.Timestamp.Before(startTime) && event.Timestamp.Before(endTime) {
+				windowStart := s.getWindowStart(event.Timestamp, windowSize)
+				windowCounts[windowStart]++
+				result.TotalCount++
+			}
+		}
+
+		// Convert map to sorted slice of points
+		for windowStart, count := range windowCounts {
+			result.Points = append(result.Points, events.EventCountPoint{
+				Timestamp:  windowStart,
+				EventCount: count,
+			})
+		}
+
+		// Sort points by timestamp
+		sort.Slice(result.Points, func(i, j int) bool {
+			return result.Points[i].Timestamp.Before(result.Points[j].Timestamp)
+		})
+	} else {
+		// No window size, just get total count
+		for _, event := range s.events {
+			// Check if event is within time range
+			if !event.Timestamp.Before(startTime) && event.Timestamp.Before(endTime) {
+				result.TotalCount++
+			}
 		}
 	}
 
-	return count
+	return result, nil
+}
+
+// getWindowStart returns the start of the time window for a given timestamp
+func (s *InMemoryEventStore) getWindowStart(t time.Time, windowSize types.WindowSize) time.Time {
+	switch windowSize {
+	case types.WindowSizeMinute:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, t.Location())
+	case types.WindowSize15Min:
+		minute := (t.Minute() / 15) * 15
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), minute, 0, 0, t.Location())
+	case types.WindowSize30Min:
+		minute := (t.Minute() / 30) * 30
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), minute, 0, 0, t.Location())
+	case types.WindowSizeHour:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
+	case types.WindowSize3Hour:
+		hour := (t.Hour() / 3) * 3
+		return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
+	case types.WindowSize6Hour:
+		hour := (t.Hour() / 6) * 6
+		return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
+	case types.WindowSize12Hour:
+		hour := (t.Hour() / 12) * 12
+		return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
+	case types.WindowSizeDay:
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	case types.WindowSizeWeek:
+		// Get the Monday of the week
+		weekday := int(t.Weekday())
+		if weekday == 0 {
+			weekday = 7 // Sunday is 7
+		}
+		return time.Date(t.Year(), t.Month(), t.Day()-(weekday-1), 0, 0, 0, 0, t.Location())
+	case types.WindowSizeMonth:
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+	default:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
+	}
 }

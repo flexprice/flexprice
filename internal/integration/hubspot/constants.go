@@ -9,6 +9,7 @@ type SubscriptionType string
 
 const (
 	SubscriptionTypeDealPropertyChange SubscriptionType = "deal.propertyChange"
+	SubscriptionTypeDealCreation       SubscriptionType = "deal.creation"
 )
 
 // HubSpot deal properties
@@ -69,4 +70,18 @@ const (
 
 	// AssociationTypeInvoiceToContact - Associates an invoice with a contact
 	AssociationTypeInvoiceToContact = 705
+
+	// Quote associations
+	// AssociationTypeLineItemToQuote - Associates a line item with a quote
+	// This is the primary association for adding products/services to quotes
+	// Per HubSpot docs: associationTypeId 67 is for quote to line item
+	AssociationTypeLineItemToQuote = 67
+
+	// AssociationTypeQuoteToDeal - Associates a quote with a deal
+	// Per HubSpot docs: associationTypeId 64 is for quote to deal
+	AssociationTypeQuoteToDeal = 64
+
+	// AssociationTypeQuoteToQuoteTemplate - Associates a quote with a quote template
+	// Per HubSpot docs: associationTypeId 286 is for quote to quote template
+	AssociationTypeQuoteToQuoteTemplate = 286
 )
