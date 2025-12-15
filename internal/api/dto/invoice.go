@@ -391,10 +391,13 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		}
 	}
 
+	// round off subtotal
+	inv.Subtotal = types.RoundToCurrencyPrecision(inv.Subtotal, inv.Currency)
+
 	// 4) Update invoice preview totals
-	inv.TotalDiscount = totalDiscount
-	inv.TotalTax = totalTax
-	inv.Total = inv.Subtotal.Sub(totalDiscount).Add(totalTax)
+	inv.TotalDiscount = types.RoundToCurrencyPrecision(totalDiscount, inv.Currency)
+	inv.TotalTax = types.RoundToCurrencyPrecision(totalTax, inv.Currency)
+	inv.Total = types.RoundToCurrencyPrecision(inv.Subtotal.Sub(totalDiscount).Add(totalTax), inv.Currency)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
 	}

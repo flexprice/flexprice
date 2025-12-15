@@ -2604,7 +2604,7 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 	}
 
 	// Update the invoice with calculated discount amounts
-	inv.TotalDiscount = couponResult.TotalDiscountAmount
+	inv.TotalDiscount = types.RoundToCurrencyPrecision(couponResult.TotalDiscountAmount, inv.Currency)
 
 	// Calculate new total based on subtotal - discount (discount-first approach)
 	// This ensures consistency with tax calculation which uses subtotal - discount
@@ -2616,7 +2616,7 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 		inv.TotalDiscount = inv.Subtotal
 	}
 
-	inv.Total = newTotal
+	inv.Total = types.RoundToCurrencyPrecision(newTotal, inv.Currency)
 
 	// Update AmountDue and AmountRemaining to reflect new total
 	inv.AmountDue = newTotal
