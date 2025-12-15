@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/shopspring/decimal"
 )
 
 // CurrencyConfig holds configuration for different currencies and their symbols
@@ -94,4 +95,23 @@ func ValidateCurrencyCode(currency string) error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// RoundToCurrencyPrecision rounds a decimal amount to the appropriate currency precision.
+//
+// This function ensures monetary amounts are displayed and processed with the correct
+// number of decimal places for the given currency (e.g., 2 for USD, 0 for JPY).
+//
+// Currency Precision Examples:
+//
+//	USD, EUR, GBP: 2 decimal places ($10.99)
+//	JPY, KRW:      0 decimal places (¥1000)
+//
+// Usage:
+//
+//	amount := decimal.NewFromFloat(10.999)
+//	rounded := types.RoundToCurrencyPrecision(amount, "usd") // Returns 11.00
+func RoundToCurrencyPrecision(amount decimal.Decimal, currency string) decimal.Decimal {
+	precision := GetCurrencyPrecision(currency)
+	return amount.Round(precision)
 }
