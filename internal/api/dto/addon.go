@@ -82,7 +82,6 @@ type ListAddonsResponse = types.ListResponse[*AddonResponse]
 type AddAddonToSubscriptionRequest struct {
 	AddonID   string                 `json:"addon_id" validate:"required"`
 	StartDate *time.Time             `json:"start_date,omitempty"`
-	EndDate   *time.Time             `json:"end_date,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata"`
 
 	// SkipEntityValidation is used to skip the entitlement check for the addon
@@ -106,7 +105,6 @@ func (a *AddAddonToSubscriptionRequest) ToAddonAssociation(ctx context.Context, 
 		AddonID:       a.AddonID,
 		AddonStatus:   types.AddonStatusActive,
 		StartDate:     &startDate,
-		EndDate:       a.EndDate,
 		Metadata:      a.Metadata,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
@@ -126,6 +124,9 @@ func (r *AddAddonToSubscriptionRequest) Validate() error {
 type AddonAssociationResponse struct {
 	*addonassociation.AddonAssociation
 }
+
+// ListAddonAssociationsResponse represents the response for listing addon associations
+type ListAddonAssociationsResponse = []*AddonAssociationResponse
 
 // GetActiveAddonAssociationRequest represents the request to get active addon associations
 type GetActiveAddonAssociationRequest struct {

@@ -3533,16 +3533,26 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 			Mark(ierr.ErrValidation)
 	}
 
-	// If end date is not provided, set it to now
-	if req.EffectiveFrom == nil {
-		now := time.Now().UTC()
-		req.EffectiveFrom = &now
+	// get entity type and entity id from addon association
+	entityType := association.EntityType
+	entityID := association.EntityID
+
+	// get cancel at date from subscription
+	var cancelAt *time.Time
+
+	if entityType == types.AddonAssociationEntityTypeSubscription {
+		sub, err := s.SubRepo.Get(ctx, entityID)
+		if err != nil {
+			return err
+		}
+
+		cancelAt = &sub.CurrentPeriodEnd
 	}
 
 	association.AddonStatus = types.AddonStatusCancelled
-	association.CancellationReason = req.Reason
-	association.CancelledAt = req.EffectiveFrom
-	association.EndDate = req.EffectiveFrom
+	association.CancellationReason = "Cancelled by API"
+	association.CancelledAt = cancelAt
+	association.EndDate = cancelAt
 
 	// Get line items to terminate
 	lineItemFilter := types.NewSubscriptionLineItemFilter()
@@ -3560,7 +3570,7 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 			return err
 		}
 
-		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: req.EffectiveFrom}
+		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: cancelAt}
 		for _, lineItem := range lineItems {
 			if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
 				return err
@@ -5085,4 +5095,16 @@ func (s *subscriptionService) ListByCustomerID(ctx context.Context, customerID s
 	}
 
 	return subscriptions, nil
+}
+
+func (s *subscriptionService) GetActiveAddonAssociations(ctx context.Context, subscriptionID string) (dto.ListAddonAssociationsResponse, error) {
+	addonService := NewAddonService(s.ServiceParams)
+	associations, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
+		EntityID:   subscriptionID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return associations, nil
 }

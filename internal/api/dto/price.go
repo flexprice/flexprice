@@ -510,6 +510,13 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 	}
 
+	// if price type is usage and entity type is addon, throw an error
+	if r.Type == types.PRICE_TYPE_USAGE && r.EntityType == types.PRICE_ENTITY_TYPE_ADDON {
+		return ierr.NewError("usage based addon cannot be added to a subscription").
+			WithHint("Usage based addon cannot be added to a subscription").
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 

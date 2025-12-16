@@ -478,3 +478,33 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 
 	c.JSON(http.StatusOK, resp)
 }
+
+// @Summary Get active addon associations
+// @Description Get active addon associations for a subscription
+// @Tags Subscriptions
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Success 200 {array} dto.AddonAssociationResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id}/addons/active [get]
+func (h *SubscriptionHandler) GetActiveAddonAssociations(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.GetActiveAddonAssociations(c.Request.Context(), id)
+	if err != nil {
+		h.log.Error("Failed to get active addon associations", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
