@@ -1,370 +1,361 @@
-# FlexPrice JavaScript/TypeScript SDK
+# FlexPrice Customer Portal SDK
 
-[![npm version](https://badge.fury.io/js/%40flexprice%2Fsdk.svg)](https://badge.fury.io/js/%40flexprice%2Fsdk)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue.svg)](https://www.typescriptlang.org/)
-
-Official TypeScript/JavaScript SDK for the FlexPrice API with modern ES7 module support and comprehensive type safety.
-
-## Features
-
-- ✅ **Full TypeScript Support** - Complete type definitions for all API endpoints
-- ✅ **Modern ES7 Modules** - Native ES modules with CommonJS fallback
-- ✅ **Fetch API** - Built on modern web standards
-- ✅ **Browser Compatible** - Works in Node.js, Webpack, and Browserify
-- ✅ **Promise & Callback Support** - Flexible async patterns
-- ✅ **Comprehensive Documentation** - Auto-generated from OpenAPI specs
-- ✅ **Error Handling** - Detailed error messages and status codes
-
-## Installation
-
-```bash
-npm install @flexprice/sdk --save
-```
+A comprehensive TypeScript SDK for building customer dashboards with FlexPrice. This SDK provides a clean, type-safe interface for fetching customer data including usage, entitlements, wallet balance, subscriptions, and invoices.
 
 ## Quick Start
 
 ```typescript
-import { Configuration, EventsApi, CustomersApi } from "@flexprice/sdk";
+import { CustomerPortal, Configuration } from "@flexprice/javascript-sdk";
 
-// Configure the API client
-const config = new Configuration({
-  basePath: "https://api.cloud.flexprice.io/v1",
-  apiKey: "your_api_key_here",
-  headers: {
-    "X-Environment-ID": "your_environment_id_here",
-  },
+// Initialize with your API configuration
+const configuration = new Configuration({
+  apiKey: "your-api-key",
+  basePath: "https://api.cloud.flexprice.io",
 });
 
-// Create API instances
-const eventsApi = new EventsApi(config);
-const customersApi = new CustomersApi(config);
+// Create CustomerPortal instance
+const customerPortal = new CustomerPortal(configuration);
 
-// Use APIs directly
-const eventRequest = {
-  eventName: "user_signup",
-  externalCustomerId: "customer-123",
-  properties: {
-    plan: "premium",
-    source: "website",
-  },
-};
-
-await eventsApi.eventsPost({ event: eventRequest });
+// Get complete dashboard data
+const dashboardData = await customerPortal.getDashboardData("customer-123", {
+  subscriptionLimit: 10,
+  invoiceLimit: 5,
+  days: 30,
+});
 ```
 
-## Environment Setup
+## Main Methods
 
-### Environment Variables
+### getDashboardData(customerExternalId, options?)
 
-Create a `.env` file in your project root:
+Fetches complete customer dashboard data in a single optimized call.
 
-```bash
-# FlexPrice Configuration
-FLEXPRICE_API_KEY=sk_your_api_key_here
-FLEXPRICE_BASE_URL=https://api.cloud.flexprice.io/v1
-FLEXPRICE_ENVIRONMENT_ID=env_your_environment_id_here
-```
+**Parameters:**
 
-### Vite/React Applications
+- `customerExternalId: string` - Customer's external ID
+- `options: DashboardOptions` - Optional configuration
 
-For Vite applications, prefix environment variables with `VITE_`:
+**Returns:** `Promise<CustomerDashboardData>`
 
-```bash
-# .env
-VITE_FLEXPRICE_API_KEY=sk_your_api_key_here
-VITE_FLEXPRICE_BASE_URL=https://api.cloud.flexprice.io/v1
-VITE_FLEXPRICE_ENVIRONMENT_ID=env_your_environment_id_here
-```
+### Individual Methods
 
 ```typescript
-// config.ts
-import { Configuration, EventsApi, CustomersApi } from "@flexprice/sdk";
-
-const API_KEY = import.meta.env.VITE_FLEXPRICE_API_KEY;
-const BASE_PATH = import.meta.env.VITE_FLEXPRICE_BASE_URL;
-const ENVIRONMENT_ID = import.meta.env.VITE_FLEXPRICE_ENVIRONMENT_ID;
-
-const config = new Configuration({
-  basePath: BASE_PATH,
-  apiKey: API_KEY,
-  headers: {
-    "X-Environment-ID": ENVIRONMENT_ID,
-  },
-});
-
-// Export configured API instances
-export const eventsApi = new EventsApi(config);
-export const customersApi = new CustomersApi(config);
+// Get specific data types
+const usage = await customerPortal.getUsage("customer-123");
+const entitlements = await customerPortal.getEntitlements("customer-123");
+const wallet = await customerPortal.getWalletBalance("customer-123");
+const subscriptions = await customerPortal.getActiveSubscriptions(
+  "customer-123"
+);
+const invoices = await customerPortal.getRecentInvoices("customer-123");
 ```
 
-## Available APIs
+## Response Format
 
-- **EventsApi** - Event ingestion and analytics
-- **CustomersApi** - Customer management
-- **AuthApi** - Authentication and user management
-- **PlansApi** - Subscription plan management
-- **FeaturesApi** - Feature management
-- **InvoicesApi** - Invoice operations
-- **SubscriptionsApi** - Subscription management
-- **AddonsApi** - Addon management
-- **CouponsApi** - Coupon management
-- **CreditNotesApi** - Credit note management
-- **EntitlementsApi** - Feature access control
-- **UsersApi** - User management
-
-## API Examples
-
-### Events API
+### CustomerDashboardData
 
 ```typescript
-import { EventsApi } from "@flexprice/sdk";
+interface CustomerDashboardData {
+  // Core data
+  customer?: DtoCustomerResponse;
+  usage?: DtoCustomerUsageSummaryResponse;
+  entitlements?: DtoCustomerEntitlementsResponse;
+  walletBalance?: DtoWalletBalanceResponse;
+  activeSubscriptions?: DtoSubscriptionResponse[];
+  invoices?: DtoInvoiceResponse[];
+  summary?: DtoCustomerMultiCurrencyInvoiceSummary;
+  analytics?: DtoGetUsageAnalyticsResponse;
+  features?: DtoFeatureResponse[];
 
-const eventsApi = new EventsApi(config);
-
-// Ingest a single event
-await eventsApi.eventsPost({
-  event: {
-    eventName: "api_call",
-    externalCustomerId: "customer-123",
-    properties: {
-      endpoint: "/api/users",
-      method: "GET",
-      responseTime: 150,
-    },
-  },
-});
-
-// Query events
-const events = await eventsApi.eventsQueryPost({
-  request: {
-    externalCustomerId: "customer-123",
-    eventName: "api_call",
-    startTime: "2024-01-01T00:00:00Z",
-    endTime: "2024-01-31T23:59:59Z",
-    limit: 100,
-  },
-});
-
-// Get usage analytics
-const analytics = await eventsApi.eventsAnalyticsPost({
-  request: {
-    externalCustomerId: "customer-123",
-    startTime: "2024-01-01T00:00:00Z",
-    endTime: "2024-01-31T23:59:59Z",
-    windowSize: "day",
-  },
-});
-```
-
-### Customers API
-
-```typescript
-import { CustomersApi } from "@flexprice/sdk";
-
-const customersApi = new CustomersApi(config);
-
-// Create a customer
-const customer = await customersApi.customersPost({
-  customer: {
-    externalId: "customer-123",
-    email: "user@example.com",
-    name: "John Doe",
-    metadata: {
-      source: "signup_form",
-    },
-  },
-});
-
-// Get customer
-const customerData = await customersApi.customersIdGet({
-  id: "customer-123",
-});
-
-// Update customer
-const updatedCustomer = await customersApi.customersIdPut({
-  id: "customer-123",
-  customer: {
-    name: "John Smith",
-    metadata: { plan: "premium" },
-  },
-});
-
-// List customers
-const customers = await customersApi.customersGet({
-  limit: 50,
-  offset: 0,
-  status: "active",
-});
-```
-
-### Authentication API
-
-```typescript
-import { AuthApi } from "@flexprice/sdk";
-
-const authApi = new AuthApi(config);
-
-// Login user
-const authResponse = await authApi.authLoginPost({
-  login: {
-    email: "user@example.com",
-    password: "password123",
-  },
-});
-
-// Sign up new user
-const signupResponse = await authApi.authSignupPost({
-  signup: {
-    email: "newuser@example.com",
-    password: "password123",
-    name: "New User",
-  },
-});
-```
-
-## React Integration
-
-### With React Query
-
-```typescript
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { eventsApi } from "./config";
-
-// Fetch events
-const { data: events, isLoading } = useQuery({
-  queryKey: ["events"],
-  queryFn: () =>
-    eventsApi.eventsQueryPost({
-      request: {
-        externalCustomerId: "customer-123",
-        limit: 100,
-      },
-    }),
-});
-
-// Fire an event
-const { mutate: fireEvent } = useMutation({
-  mutationFn: (eventData) => eventsApi.eventsPost({ event: eventData }),
-  onSuccess: () => {
-    toast.success("Event fired successfully");
-  },
-  onError: (error) => {
-    toast.error("Failed to fire event");
-  },
-});
-```
-
-### With useEffect
-
-```typescript
-import { useEffect, useState } from "react";
-import { eventsApi } from "./config";
-
-const UsageComponent = () => {
-  const [usage, setUsage] = useState(null);
-
-  useEffect(() => {
-    const fetchUsage = async () => {
-      try {
-        const data = await eventsApi.eventsUsagePost({
-          request: {
-            externalCustomerId: "customer-123",
-            startTime: "2024-01-01",
-            endTime: "2024-01-31",
-          },
-        });
-        setUsage(data);
-      } catch (error) {
-        console.error("Failed to fetch usage:", error);
-      }
-    };
-
-    fetchUsage();
-  }, []);
-
-  return <div>{/* Render usage data */}</div>;
-};
-```
-
-## Error Handling
-
-```typescript
-try {
-  await eventsApi.eventsPost({ event: eventData });
-} catch (error) {
-  if (error.status === 401) {
-    console.error("Authentication failed");
-  } else if (error.status === 400) {
-    console.error("Bad request:", error.response?.body);
-  } else {
-    console.error("API Error:", error.message);
-  }
+  // Metadata
+  metadata: {
+    fetchedAt: string;
+    customerId: string;
+    totalSubscriptions?: number;
+    totalInvoices?: number;
+    totalWallets?: number;
+    totalFeatures?: number;
+    errors?: string[];
+    warnings?: string[];
+  };
 }
 ```
 
-## TypeScript Support
+## Customization Options
 
-The SDK includes comprehensive TypeScript definitions:
+### DashboardOptions
 
 ```typescript
-import type {
-  DtoIngestEventRequest,
-  DtoGetUsageRequest,
-  DtoCreateCustomerRequest,
-  DtoCustomerResponse,
-  // ... many more types
-} from "@flexprice/sdk";
+interface DashboardOptions {
+  // Pagination
+  subscriptionLimit?: number; // Default: 10
+  invoiceLimit?: number; // Default: 5
+  entitlementLimit?: number; // Default: 50
 
-// Type-safe event creation
-const event: DtoIngestEventRequest = {
-  eventName: "llm_usage",
-  externalCustomerId: "user_123",
-  properties: {
-    tokens: 150,
-    model: "gpt-4",
-  },
+  // Status filters
+  subscriptionStatus?: SubscriptionsGetSubscriptionStatusEnum[];
+  invoiceStatus?: InvoicesGetInvoiceStatusEnum[];
+
+  // Time range
+  days?: number; // Last N days
+  startDate?: string; // Start date (ISO string)
+  endDate?: string; // End date (ISO string)
+
+  // What to include
+  includeCustomer?: boolean; // Default: true
+  includeSubscriptions?: boolean; // Default: true
+  includeInvoices?: boolean; // Default: true
+  includeUsage?: boolean; // Default: true
+  includeEntitlements?: boolean; // Default: true
+  includeSummary?: boolean; // Default: true
+  includeAnalytics?: boolean; // Default: false
+  includeFeatures?: boolean; // Default: false
+  includeWalletBalance?: boolean; // Default: true
+
+  // Advanced filtering
+  featureIds?: string[]; // Filter by specific features
+  subscriptionIds?: string[]; // Filter by specific subscriptions
+}
+```
+
+## Examples
+
+### Basic Usage
+
+```typescript
+// Get basic dashboard data
+const data = await customerPortal.getDashboardData("customer-123");
+
+console.log("Customer:", data.customer?.name);
+console.log("Active Subscriptions:", data.activeSubscriptions?.length);
+console.log("Wallet Balance:", data.walletBalance?.realTimeBalance);
+```
+
+### Advanced Filtering
+
+```typescript
+// Get dashboard with custom filters
+const data = await customerPortal.getDashboardData("customer-123", {
+  subscriptionLimit: 20,
+  invoiceLimit: 10,
+  subscriptionStatus: [SubscriptionsGetSubscriptionStatusEnum.ACTIVE],
+  invoiceStatus: [InvoicesGetInvoiceStatusEnum.FINALIZED],
+  days: 90,
+  includeFeatures: true,
+  featureIds: ["feature-1", "feature-2"],
+});
+```
+
+### Error Handling
+
+```typescript
+const dashboardData = await customerPortal.getDashboardData("customer-123");
+
+// Check for errors
+if (dashboardData.metadata.errors) {
+  console.error("Errors occurred:", dashboardData.metadata.errors);
+}
+
+// Check individual method responses
+const usage = await customerPortal.getUsage("customer-123");
+if (usage.error) {
+  console.error("Usage fetch failed:", usage.error);
+}
+```
+
+## Available Enums
+
+### Subscription Status
+
+```typescript
+enum SubscriptionsGetSubscriptionStatusEnum {
+  ACTIVE = "active",
+  PAUSED = "paused",
+  CANCELLED = "cancelled",
+  INCOMPLETE = "incomplete",
+  INCOMPLETE_EXPIRED = "incomplete_expired",
+  PAST_DUE = "past_due",
+  TRIALING = "trialing",
+  UNPAID = "unpaid",
+}
+```
+
+### Invoice Status
+
+```typescript
+enum InvoicesGetInvoiceStatusEnum {
+  DRAFT = "draft",
+  FINALIZED = "finalized",
+  VOID = "void",
+  PAID = "paid",
+  UNPAID = "unpaid",
+  OVERPAID = "overpaid",
+}
+```
+
+## React Example
+
+```typescript
+import React, { useEffect, useState } from "react";
+import {
+  CustomerPortal,
+  Configuration,
+  CustomerDashboardData,
+} from "@flexprice/javascript-sdk";
+
+const CustomerDashboard: React.FC<{ customerId: string }> = ({
+  customerId,
+}) => {
+  const [data, setData] = useState<CustomerDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const configuration = new Configuration({
+        apiKey: process.env.REACT_APP_FLEXPRICE_API_KEY,
+      });
+
+      const customerPortal = new CustomerPortal(configuration);
+
+      try {
+        const dashboardData = await customerPortal.getDashboardData(
+          customerId,
+          {
+            subscriptionLimit: 10,
+            invoiceLimit: 5,
+            includeFeatures: true,
+          }
+        );
+
+        setData(dashboardData);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [customerId]);
+
+  if (loading) return <div>Loading...</div>;
+  if (!data) return <div>Failed to load data</div>;
+
+  return (
+    <div>
+      <h1>Customer Dashboard</h1>
+
+      {/* Customer Info */}
+      {data.customer && (
+        <div>
+          <h2>{data.customer.name}</h2>
+          <p>Email: {data.customer.email}</p>
+        </div>
+      )}
+
+      {/* Wallet Balance */}
+      {data.walletBalance && (
+        <div>
+          <h3>Wallet Balance</h3>
+          <p>${data.walletBalance.realTimeBalance}</p>
+        </div>
+      )}
+
+      {/* Active Subscriptions */}
+      <div>
+        <h3>Active Subscriptions ({data.activeSubscriptions?.length || 0})</h3>
+        {data.activeSubscriptions?.map((sub) => (
+          <div key={sub.id}>
+            <p>
+              {sub.planName} - {sub.status}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent Invoices */}
+      <div>
+        <h3>Recent Invoices ({data.invoices?.length || 0})</h3>
+        {data.invoices?.map((invoice) => (
+          <div key={invoice.id}>
+            <p>
+              Invoice #{invoice.invoiceNumber} - ${invoice.total}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Error Display */}
+      {data.metadata.errors && (
+        <div style={{ color: "red" }}>
+          <h4>Errors:</h4>
+          <ul>
+            {data.metadata.errors.map((error, index) => (
+              <li key={index}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 };
+
+export default CustomerDashboard;
 ```
 
-## Browser Usage
+## Best Practices
 
-```html
-<script src="https://cdn.jsdelivr.net/npm/@flexprice/sdk/dist/flexprice-sdk.min.js"></script>
-<script>
-  // Configure the API client
-  const config = new FlexPrice.Configuration({
-    basePath: "https://api.cloud.flexprice.io/v1",
-    apiKey: "your-api-key-here",
-    headers: {
-      "X-Environment-ID": "your-environment-id-here",
-    },
-  });
-
-  // Create API instance
-  const eventsApi = new FlexPrice.EventsApi(config);
-
-  // Use the SDK
-  eventsApi.eventsPost({
-    event: {
-      eventName: "page_view",
-      externalCustomerId: "user_123",
-      properties: { page: "/home" },
-    },
-  });
-</script>
-```
+1. **Use `getDashboardData()` for most cases** - it's optimized for parallel data fetching
+2. **Handle errors gracefully** - check `metadata.errors` and individual response `error` fields
+3. **Use enums for status filtering** - provides type safety and prevents typos
+4. **Configure options based on your needs** - only fetch data you actually use
+5. **Use TypeScript** - take advantage of the full type system
 
 ## Troubleshooting
 
-### Authentication Issues
+### Common Issues
 
-- Verify the key is active and has required permissions
-- Check that the `x-api-key` header is being sent correctly
-- Verify the `X-Environment-ID` header is included
+1. **API Key Issues**: Ensure your API key is valid and has necessary permissions
+2. **Customer Not Found**: Verify the customer external ID exists
+3. **Rate Limiting**: Implement retry logic with exponential backoff
+4. **Network Issues**: Handle network failures gracefully
+
+### Debug Mode
+
+```typescript
+const configuration = new Configuration({
+  apiKey: "your-api-key",
+  middleware: [
+    {
+      pre: (context) => {
+        console.log("API Request:", context.url);
+        return context;
+      },
+    },
+  ],
+});
+```
+
+## Files in this Directory
+
+- `src/apis/CustomerPortal.ts` - Main CustomerPortal class implementation
+- `CustomerPortal-Usage.md` - Detailed usage guide
+- `API-Reference.md` - Complete API reference
+- `example-usage.ts` - Code examples and patterns
+- `README.md` - This file
+
+## Integration
+
+The CustomerPortal is automatically exported from the main SDK when you import from `@flexprice/javascript-sdk`. No additional setup is required.
+
+```typescript
+import { CustomerPortal, Configuration } from "@flexprice/javascript-sdk";
+```
 
 ## Support
 
-For support and questions:
+For additional support and documentation, visit:
 
-- Check the [API Documentation](https://docs.flexprice.io)
-- Contact support at [support@flexprice.io](mailto:support@flexprice.io)
+- [FlexPrice Documentation](https://docs.flexprice.com)
+- [API Reference](https://api.cloud.flexprice.io/docs)
+- [GitHub Repository](https://github.com/flexprice/javascript-sdk)

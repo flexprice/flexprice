@@ -681,7 +681,8 @@ const docTemplate = `{
                             "hubspot",
                             "razorpay",
                             "chargebee",
-                            "quickbooks"
+                            "quickbooks",
+                            "nomod"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -691,7 +692,8 @@ const docTemplate = `{
                             "SecretProviderHubSpot",
                             "SecretProviderRazorpay",
                             "SecretProviderChargebee",
-                            "SecretProviderQuickBooks"
+                            "SecretProviderQuickBooks",
+                            "SecretProviderNomod"
                         ],
                         "name": "provider_type",
                         "in": "query"
@@ -6214,6 +6216,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "For filtering by gateway tracking ID",
+                        "name": "gateway_tracking_id",
+                        "in": "query"
+                    },
+                    {
                         "maximum": 1000,
                         "minimum": 1,
                         "type": "integer",
@@ -8135,41 +8143,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/secrets/integrations/linked": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a list of unique providers which have a valid linked integration secret",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Integrations"
-                ],
-                "summary": "List linked integrations",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.LinkedIntegrationsResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/secrets/integrations/{id}": {
+        "/secrets/integrations/by-id/{id}": {
             "delete": {
                 "security": [
                     {
@@ -8204,6 +8178,40 @@ const docTemplate = `{
                         "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/secrets/integrations/linked": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a list of unique providers which have a valid linked integration secret",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "List linked integrations",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.LinkedIntegrationsResponse"
                         }
                     },
                     "500": {
@@ -11844,6 +11852,59 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhooks/nomod/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming Nomod webhook events for payment and invoice payments",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle Nomod webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Nomod webhook secret (if configured)",
+                        "name": "X-API-KEY",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook processed successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - invalid or missing X-API-KEY",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/quickbooks/{tenant_id}/{environment_id}": {
             "post": {
                 "description": "Process incoming QuickBooks webhook events for payment sync",
@@ -13999,181 +14060,17 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreatePlanEntitlementRequest": {
-            "type": "object",
-            "required": [
-                "feature_id",
-                "feature_type"
-            ],
-            "properties": {
-                "entity_id": {
-                    "type": "string"
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.EntitlementEntityType"
-                },
-                "feature_id": {
-                    "type": "string"
-                },
-                "feature_type": {
-                    "$ref": "#/definitions/types.FeatureType"
-                },
-                "is_enabled": {
-                    "type": "boolean"
-                },
-                "is_soft_limit": {
-                    "type": "boolean"
-                },
-                "parent_entitlement_id": {
-                    "type": "string"
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "static_value": {
-                    "type": "string"
-                },
-                "usage_limit": {
-                    "type": "integer"
-                },
-                "usage_reset_period": {
-                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
-                }
-            }
-        },
-        "dto.CreatePlanPriceRequest": {
-            "type": "object",
-            "required": [
-                "billing_cadence",
-                "billing_model",
-                "billing_period",
-                "currency",
-                "invoice_cadence",
-                "price_unit_type",
-                "type"
-            ],
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "billing_cadence": {
-                    "$ref": "#/definitions/types.BillingCadence"
-                },
-                "billing_model": {
-                    "$ref": "#/definitions/types.BillingModel"
-                },
-                "billing_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
-                },
-                "billing_period_count": {
-                    "type": "integer",
-                    "default": 1
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity id",
-                    "type": "string"
-                },
-                "entity_type": {
-                    "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity type",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.PriceEntityType"
-                        }
-                    ]
-                },
-                "filter_values": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "group_id": {
-                    "description": "GroupID is the id of the group to add the price to",
-                    "type": "string"
-                },
-                "invoice_cadence": {
-                    "$ref": "#/definitions/types.InvoiceCadence"
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "meter_id": {
-                    "type": "string"
-                },
-                "plan_id": {
-                    "description": "TODO: This is deprecated and will be removed in the future",
-                    "type": "string"
-                },
-                "price_unit_config": {
-                    "$ref": "#/definitions/dto.PriceUnitConfig"
-                },
-                "price_unit_type": {
-                    "$ref": "#/definitions/types.PriceUnitType"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "tier_mode": {
-                    "$ref": "#/definitions/types.BillingTier"
-                },
-                "tiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreatePriceTier"
-                    }
-                },
-                "transform_quantity": {
-                    "$ref": "#/definitions/price.TransformQuantity"
-                },
-                "trial_period": {
-                    "type": "integer"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.PriceType"
-                }
-            }
-        },
         "dto.CreatePlanRequest": {
             "type": "object",
             "required": [
                 "name"
             ],
             "properties": {
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreateCreditGrantRequest"
-                    }
-                },
                 "description": {
                     "type": "string"
                 },
                 "display_order": {
                     "type": "integer"
-                },
-                "entitlements": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreatePlanEntitlementRequest"
-                    }
                 },
                 "lookup_key": {
                     "type": "string"
@@ -14183,12 +14080,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                },
-                "prices": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreatePlanPriceRequest"
-                    }
                 }
             }
         },
@@ -14199,6 +14090,8 @@ const docTemplate = `{
                 "billing_model",
                 "billing_period",
                 "currency",
+                "entity_id",
+                "entity_type",
                 "invoice_cadence",
                 "price_unit_type",
                 "type"
@@ -14226,20 +14119,17 @@ const docTemplate = `{
                 "description": {
                     "type": "string"
                 },
+                "display_name": {
+                    "type": "string"
+                },
                 "end_date": {
                     "type": "string"
                 },
                 "entity_id": {
-                    "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity id",
                     "type": "string"
                 },
                 "entity_type": {
-                    "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity type",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.PriceEntityType"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.PriceEntityType"
                 },
                 "filter_values": {
                     "type": "object",
@@ -14269,9 +14159,9 @@ const docTemplate = `{
                 "meter_id": {
                     "type": "string"
                 },
-                "plan_id": {
-                    "description": "TODO: This is deprecated and will be removed in the future",
-                    "type": "string"
+                "min_quantity": {
+                    "description": "MinQuantity is the minimum quantity of the price",
+                    "type": "integer"
                 },
                 "price_unit_config": {
                     "$ref": "#/definitions/dto.PriceUnitConfig"
@@ -17541,6 +17431,10 @@ const docTemplate = `{
                     "description": "DisplayAmount is the formatted amount with currency symbol\nFor USD: $12.50",
                     "type": "string"
                 },
+                "display_name": {
+                    "description": "DisplayName is the name of the price",
+                    "type": "string"
+                },
                 "display_price_unit_amount": {
                     "description": "DisplayPriceUnitAmount is the formatted amount with price unit symbol\nFor BTC: 0.00000001 BTC",
                     "type": "string"
@@ -17593,16 +17487,16 @@ const docTemplate = `{
                     "description": "MeterID is the id of the meter for usage based pricing",
                     "type": "string"
                 },
+                "min_quantity": {
+                    "description": "MinQuantity is the minimum quantity of the price",
+                    "type": "number"
+                },
                 "parent_price_id": {
                     "description": "ParentPriceID references the root price (always set for price lineage tracking)",
                     "type": "string"
                 },
                 "plan": {
                     "$ref": "#/definitions/dto.PlanResponse"
-                },
-                "plan_id": {
-                    "description": "TODO: Remove this once we have a proper price entity type",
-                    "type": "string"
                 },
                 "price_unit": {
                     "description": "PriceUnit 3 digit ISO currency code in lowercase ex btc\nFor BTC: btc",
@@ -19543,241 +19437,15 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdatePlanCreditGrantRequest": {
-            "type": "object",
-            "required": [
-                "cadence",
-                "credits",
-                "name",
-                "scope"
-            ],
-            "properties": {
-                "cadence": {
-                    "$ref": "#/definitions/types.CreditGrantCadence"
-                },
-                "credits": {
-                    "type": "string"
-                },
-                "expiration_duration": {
-                    "type": "integer"
-                },
-                "expiration_duration_unit": {
-                    "$ref": "#/definitions/types.CreditGrantExpiryDurationUnit"
-                },
-                "expiration_type": {
-                    "$ref": "#/definitions/types.CreditGrantExpiryType"
-                },
-                "id": {
-                    "description": "The ID of the credit grant to update (present if the credit grant is being updated)",
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/types.Metadata"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "period": {
-                    "$ref": "#/definitions/types.CreditGrantPeriod"
-                },
-                "period_count": {
-                    "type": "integer"
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "scope": {
-                    "$ref": "#/definitions/types.CreditGrantScope"
-                },
-                "subscription_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.UpdatePlanEntitlementRequest": {
-            "type": "object",
-            "required": [
-                "feature_id",
-                "feature_type"
-            ],
-            "properties": {
-                "entity_id": {
-                    "type": "string"
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.EntitlementEntityType"
-                },
-                "feature_id": {
-                    "type": "string"
-                },
-                "feature_type": {
-                    "$ref": "#/definitions/types.FeatureType"
-                },
-                "id": {
-                    "description": "The ID of the entitlement to update (present if the entitlement is being updated)",
-                    "type": "string"
-                },
-                "is_enabled": {
-                    "type": "boolean"
-                },
-                "is_soft_limit": {
-                    "type": "boolean"
-                },
-                "parent_entitlement_id": {
-                    "type": "string"
-                },
-                "plan_id": {
-                    "type": "string"
-                },
-                "static_value": {
-                    "type": "string"
-                },
-                "usage_limit": {
-                    "type": "integer"
-                },
-                "usage_reset_period": {
-                    "$ref": "#/definitions/types.EntitlementUsageResetPeriod"
-                }
-            }
-        },
-        "dto.UpdatePlanPriceRequest": {
-            "type": "object",
-            "required": [
-                "billing_cadence",
-                "billing_model",
-                "billing_period",
-                "currency",
-                "invoice_cadence",
-                "price_unit_type",
-                "type"
-            ],
-            "properties": {
-                "amount": {
-                    "type": "string"
-                },
-                "billing_cadence": {
-                    "$ref": "#/definitions/types.BillingCadence"
-                },
-                "billing_model": {
-                    "$ref": "#/definitions/types.BillingModel"
-                },
-                "billing_period": {
-                    "$ref": "#/definitions/types.BillingPeriod"
-                },
-                "billing_period_count": {
-                    "type": "integer",
-                    "default": 1
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity id",
-                    "type": "string"
-                },
-                "entity_type": {
-                    "description": "TODO: this will be required in the future as we will not allow prices to be created without an entity type",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.PriceEntityType"
-                        }
-                    ]
-                },
-                "filter_values": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                },
-                "group_id": {
-                    "description": "GroupID is the id of the group to add the price to",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "The ID of the price to update (present if the price is being updated)",
-                    "type": "string"
-                },
-                "invoice_cadence": {
-                    "$ref": "#/definitions/types.InvoiceCadence"
-                },
-                "lookup_key": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "meter_id": {
-                    "type": "string"
-                },
-                "plan_id": {
-                    "description": "TODO: This is deprecated and will be removed in the future",
-                    "type": "string"
-                },
-                "price_unit_config": {
-                    "$ref": "#/definitions/dto.PriceUnitConfig"
-                },
-                "price_unit_type": {
-                    "$ref": "#/definitions/types.PriceUnitType"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "tier_mode": {
-                    "$ref": "#/definitions/types.BillingTier"
-                },
-                "tiers": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreatePriceTier"
-                    }
-                },
-                "transform_quantity": {
-                    "$ref": "#/definitions/price.TransformQuantity"
-                },
-                "trial_period": {
-                    "type": "integer"
-                },
-                "type": {
-                    "$ref": "#/definitions/types.PriceType"
-                }
-            }
-        },
         "dto.UpdatePlanRequest": {
             "type": "object",
             "properties": {
-                "credit_grants": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.UpdatePlanCreditGrantRequest"
-                    }
-                },
                 "description": {
                     "type": "string"
                 },
                 "display_order": {
                     "type": "integer"
                 },
-                "entitlements": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.UpdatePlanEntitlementRequest"
-                    }
-                },
                 "lookup_key": {
                     "type": "string"
                 },
@@ -19786,12 +19454,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
-                },
-                "prices": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.UpdatePlanPriceRequest"
-                    }
                 }
             }
         },
@@ -20973,6 +20635,10 @@ const docTemplate = `{
                     "description": "DisplayAmount is the formatted amount with currency symbol\nFor USD: $12.50",
                     "type": "string"
                 },
+                "display_name": {
+                    "description": "DisplayName is the name of the price",
+                    "type": "string"
+                },
                 "display_price_unit_amount": {
                     "description": "DisplayPriceUnitAmount is the formatted amount with price unit symbol\nFor BTC: 0.00000001 BTC",
                     "type": "string"
@@ -21018,6 +20684,10 @@ const docTemplate = `{
                 "meter_id": {
                     "description": "MeterID is the id of the meter for usage based pricing",
                     "type": "string"
+                },
+                "min_quantity": {
+                    "description": "MinQuantity is the minimum quantity of the price",
+                    "type": "number"
                 },
                 "parent_price_id": {
                     "description": "ParentPriceID references the root price (always set for price lineage tracking)",
@@ -21896,6 +21566,9 @@ const docTemplate = `{
                 "hubspot": {
                     "$ref": "#/definitions/types.HubSpotConnectionMetadata"
                 },
+                "nomod": {
+                    "$ref": "#/definitions/types.NomodConnectionMetadata"
+                },
                 "quickbooks": {
                     "$ref": "#/definitions/types.QuickBooksConnectionMetadata"
                 },
@@ -22646,6 +22319,19 @@ const docTemplate = `{
                 "type": "string"
             }
         },
+        "types.NomodConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "description": "Nomod API Key (encrypted)",
+                    "type": "string"
+                },
+                "webhook_secret": {
+                    "description": "Basic Auth secret for webhooks (encrypted, optional)",
+                    "type": "string"
+                }
+            }
+        },
         "types.PaginationResponse": {
             "type": "object",
             "properties": {
@@ -22718,11 +22404,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "stripe",
-                "razorpay"
+                "razorpay",
+                "nomod"
             ],
             "x-enum-varnames": [
                 "PaymentGatewayTypeStripe",
-                "PaymentGatewayTypeRazorpay"
+                "PaymentGatewayTypeRazorpay",
+                "PaymentGatewayTypeNomod"
             ]
         },
         "types.PaymentMethodType": {
@@ -23123,7 +22811,8 @@ const docTemplate = `{
                 "hubspot",
                 "razorpay",
                 "chargebee",
-                "quickbooks"
+                "quickbooks",
+                "nomod"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
@@ -23132,7 +22821,8 @@ const docTemplate = `{
                 "SecretProviderHubSpot",
                 "SecretProviderRazorpay",
                 "SecretProviderChargebee",
-                "SecretProviderQuickBooks"
+                "SecretProviderQuickBooks",
+                "SecretProviderNomod"
             ]
         },
         "types.SecretType": {

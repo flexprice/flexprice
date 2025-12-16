@@ -408,7 +408,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				integrations.GET("/linked", handlers.Secret.ListLinkedIntegrations)
 				integrations.POST("/:provider", handlers.Secret.CreateIntegration)
 				integrations.GET("/:provider", handlers.Secret.GetIntegration)
-				integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
+				integrations.DELETE("/by-id/:id", handlers.Secret.DeleteIntegration)
 			}
 		}
 

@@ -4,7 +4,12 @@ This directory contains the generated SDKs for the Flexprice API. The SDKs are g
 
 ## SDK Generation
 
-The SDKs are generated using the OpenAPI Generator. To generate the SDKs, run:
+The SDKs are generated using:
+- **Go SDK**: Speakeasy SDK Generator
+- **Python SDK**: OpenAPI Generator  
+- **JavaScript SDK**: OpenAPI Generator
+
+To generate the SDKs, run:
 
 ```bash
 make generate-sdk
@@ -12,9 +17,9 @@ make generate-sdk
 
 This will generate the following SDKs:
 
-- Go SDK in `api/go/`
-- Python SDK in `api/python/`
-- JavaScript SDK in `api/javascript/`
+- Go SDK in `api/go/` (using Speakeasy)
+- Python SDK in `api/python/` (using OpenAPI Generator)
+- JavaScript SDK in `api/javascript/` (using OpenAPI Generator)
 
 ## Test Files
 
@@ -35,15 +40,23 @@ The SDKs are published to their respective repositories:
 
 ### Publishing Process
 
-1. The SDKs are generated from the OpenAPI specification
+#### Go SDK (Speakeasy)
+1. The Go SDK is generated from the OpenAPI specification using Speakeasy
+2. The SDK is automatically built, tested, and validated
+3. Files are pushed to the dedicated [go-sdk repository](https://github.com/flexprice/go-sdk)
+4. Version tags are created for Go module versioning
+
+#### Python & JavaScript SDKs (OpenAPI Generator)
+1. SDKs are generated from the OpenAPI specification
 2. Test files are preserved during generation
 3. Dependencies are updated and tests are run
-4. The SDKs are published to their respective repositories
+4. SDKs are published to PyPI (Python) and npm (JavaScript)
 
 The publishing process is automated via GitHub Actions and can be triggered by:
 
-- Pushing changes to the OpenAPI specification
-- Manually running the workflow with a version number
+- Manually running the `sdk-publish.yml` workflow with a version number
+- Using the dedicated `sdk_publish.yaml` workflow for Go SDK publishing
+- Using the `sdk_generation.yaml` workflow for automated SDK regeneration
 
 ## Local Development
 
@@ -63,7 +76,10 @@ To avoid committing generated code to the main repository, the SDK directories a
 
 ## Generating SDKs
 
-The SDKs are generated from the OpenAPI 3.0 specification located at `docs/swagger/swagger-3-0.json` using the OpenAPI Generator CLI.
+The SDKs are generated from the OpenAPI 3.0 specification located at `docs/swagger/swagger-3-0.json`.
+
+- **Go SDK**: Generated using Speakeasy SDK Generator for modern, type-safe Go code
+- **Python & JavaScript SDKs**: Generated using OpenAPI Generator CLI
 
 To generate all SDKs, run:
 
@@ -74,9 +90,10 @@ make generate-sdk
 To generate a specific SDK, run one of the following commands:
 
 ```bash
-make generate-go-sdk
-make generate-python-sdk
-make generate-javascript-sdk
+make generate-go-sdk          # Generates Go SDK with Speakeasy
+make generate-go-sdk-legacy   # Legacy OpenAPI Generator version (backup)
+make generate-python-sdk      # Generates Python SDK
+make generate-javascript-sdk  # Generates JavaScript SDK
 ```
 
 ## SDK Usage
@@ -128,15 +145,49 @@ const apiClient = new flexprice.ApiClient("your-api-host");
 
 ## Customization
 
+### Go SDK (Speakeasy)
+The Go SDK generation can be customized by modifying:
+- `.speakeasy/gen.yaml` - SDK generation configuration
+- `.speakeasy/workflow.yaml` - Workflow and target configuration
+
+### Python & JavaScript SDKs (OpenAPI Generator)
 The SDK generation process can be customized by modifying the OpenAPI Generator configuration in the Makefile.
 
 ## CI/CD Integration
 
-These SDKs are intended to be generated as part of the CI/CD pipeline. The Makefile targets can be integrated into your CI/CD workflow to automatically generate and publish the SDKs when the API specification changes.
+The SDKs are automatically generated and published as part of the CI/CD pipeline:
+
+### Workflows
+- **`.github/workflows/sdk-publish.yml`**: Main workflow for generating and publishing all SDKs
+- **`.github/workflows/sdk_generation.yaml`**: Automated SDK regeneration workflow (scheduled/on-demand)
+- **`.github/workflows/sdk_publish.yaml`**: Dedicated Go SDK publishing workflow using Speakeasy
+
+### Go SDK CI/CD
+The Go SDK uses Speakeasy's automated workflow which:
+1. Validates the OpenAPI specification
+2. Generates the SDK with type-safe Go code
+3. Compiles and tests the generated code
+4. Publishes to the go-sdk repository with version tags
+
+### Required Secrets
+- `SPEAKEASY_API_KEY`: API key for Speakeasy SDK generation
+- `SDK_DEPLOY_GIT_TOKEN`: GitHub token for pushing to SDK repositories
+- `NPM_AUTH_TOKEN`: Token for publishing to npm
+- `PYPI_API_TOKEN`: Token for publishing to PyPI
 
 ## Publishing SDKs
 
-The SDKs can be published to their respective package managers using the CI/CD workflow defined in `api/ci-cd-example.yml`. Here's how each SDK is published:
+The SDKs can be published using the automated GitHub Actions workflows or manually.
+
+### Automated Publishing (Recommended)
+
+Use the GitHub Actions workflow:
+```bash
+# Navigate to Actions tab in GitHub
+# Run "Generate and Publish SDK Packages" workflow
+# Provide version number (e.g., 1.0.0)
+# Optionally enable dry_run for testing
+```
 
 ### JavaScript SDK
 
@@ -156,16 +207,16 @@ pip install flexprice
 
 ### Go SDK
 
-The Go SDK is published as a Go module on GitHub. To use it in your Go project:
+The Go SDK is published as a Go module on GitHub using Speakeasy. To use it in your Go project:
 
 ```go
-import "github.com/your-org/flexprice/api/go"
+import "github.com/flexprice/go-sdk"
 ```
 
 And add it to your dependencies:
 
 ```bash
-go get github.com/your-org/flexprice/api/go
+go get github.com/flexprice/go-sdk
 ```
 
 ### Manual Publishing
@@ -189,30 +240,33 @@ python -m build
 python -m twine upload dist/*
 ```
 
-#### Go SDK (GitHub)
+#### Go SDK (GitHub with Speakeasy)
+
+The Go SDK publishing is automated through Speakeasy and GitHub Actions. Manual publishing is not recommended but can be done using:
 
 ```bash
-cd api/go
-# Ensure go.mod exists with correct module path
-go mod init github.com/your-org/flexprice/api/go
-go mod tidy
+# Generate SDK first
+make generate-go-sdk
 
-# Tag a new version
-git tag -a "go-sdk/v1.0.0" -m "Go SDK release v1.0.0"
-git push origin go-sdk/v1.0.0
+# The workflow will automatically:
+# 1. Clone the go-sdk repository
+# 2. Copy generated files
+# 3. Commit and tag the version
+# 4. Push to GitHub
 
-# Update Go module proxy
-GOPROXY=proxy.golang.org go list -m github.com/your-org/flexprice/api/go@v1.0.0
+# For manual override, see .github/workflows/sdk-publish.yml
 ```
 
 ## Required Secrets for CI/CD
 
 To enable automatic publishing in the CI/CD workflow, you need to set up the following secrets in your GitHub repository:
 
-- `NPM_TOKEN`: Access token for publishing to npm
-- `PYPI_USERNAME`: Your PyPI username
-- `PYPI_PASSWORD`: Your PyPI password or API token
+- `SPEAKEASY_API_KEY`: Speakeasy API key for Go SDK generation
+- `SDK_DEPLOY_GIT_TOKEN`: GitHub token with write access to SDK repositories
+- `NPM_AUTH_TOKEN`: Access token for publishing to npm
+- `PYPI_API_TOKEN`: PyPI API token for publishing Python packages
 
 For more information on setting up these secrets, refer to:
+- [Speakeasy: Authentication](https://www.speakeasy.com/docs/authentication)
 - [npm: Creating and viewing access tokens](https://docs.npmjs.com/creating-and-viewing-access-tokens)
 - [PyPI: Creating API tokens](https://pypi.org/help/#apitoken) 

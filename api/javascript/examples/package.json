@@ -1,25 +1,18 @@
 {
   "name": "@flexprice/sdk-examples",
   "version": "1.0.0",
-  "description": "Examples for using the FlexPrice JavaScript/TypeScript SDK",
-  "main": "example.js",
+  "private": true,
   "scripts": {
-    "start": "node example.js",
-    "start:ts": "ts-node example.ts",
-    "build:ts": "tsc example.ts --outDir dist --target ES2020 --module commonjs --moduleResolution node --esModuleInterop --allowSyntheticDefaultImports",
-    "start:built": "node dist/example.js"
-  },
-  "dependencies": {
-    "@flexprice/sdk": "latest",
-    "dotenv": "^16.0.3"
+    "build:parent": "cd .. && npm i && npm run build && cd -",
+    "build:examples": "npm i",
+    "build": "npm run build:parent && npm run build:examples"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0",
-    "ts-node": "^10.9.0"
+    "dotenv": "^16.4.5",
+    "tsx": "^4.19.2"
   },
-  "engines": {
-    "node": ">=16.0.0"
-  },
-  "private": true
+  "dependencies": {
+    "@flexprice/sdk": "file:.."
+  }
 }

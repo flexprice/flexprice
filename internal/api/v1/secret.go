@@ -197,7 +197,7 @@ func (h *SecretHandler) GetIntegration(c *gin.Context) {
 // @Success 204 "No Content"
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /secrets/integrations/{id} [delete]
+// @Router /secrets/integrations/by-id/{id} [delete]
 func (h *SecretHandler) DeleteIntegration(c *gin.Context) {
 	id := c.Param("id")
 

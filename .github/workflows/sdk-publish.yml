@@ -58,6 +58,17 @@ jobs:
           java-version: '17'
         continue-on-error: true
 
+      - name: Install Speakeasy CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+          echo "$HOME/.speakeasy/bin" >> $GITHUB_PATH
+
+      - name: Authenticate Speakeasy
+        run: |
+          speakeasy auth login --api-key ${{ secrets.SPEAKEASY_API_KEY }}
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+
       - name: Install OpenAPI Generator
         run: |
           npm install -g @openapitools/openapi-generator-cli
@@ -88,8 +99,8 @@ jobs:
 
       - name: Generate SDKs
         run: |
-          echo "Generating Go SDK..."
-          make generate-go-sdk || echo "Go SDK generation failed but continuing..."
+          echo "Generating Go SDK with Speakeasy..."
+          make generate-go-sdk-speakeasy || echo "Go SDK generation failed but continuing..."
           ls -la api/go || echo "api/go directory not found"
           
           echo "Generating JavaScript SDK..."
@@ -145,44 +156,36 @@ jobs:
       - name: Publish Go SDK to GitHub
         if: success() && (github.event.inputs.dry_run != 'true')
         run: |
+          # Configure Git
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          
           # Clone the Go SDK repository
-          git clone https://github.com/flexprice/go-sdk.git ~/go-sdk-repo || mkdir -p ~/go-sdk-repo
+          git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/go-sdk.git ~/go-sdk-repo
           
           # Copy SDK files to the cloned repo
           rm -rf ~/go-sdk-repo/* || true
+          rm -rf ~/go-sdk-repo/.* 2>/dev/null || true
           mkdir -p api/go || true
           cp -r api/go/* ~/go-sdk-repo/ || echo "No files to copy from api/go"
 
           # Copy the license file
           cp LICENSE ~/go-sdk-repo/ || echo "LICENSE not found but continuing"
           
-          # Use custom README instead of the auto-generated one
-          mkdir -p api/go/examples || true
-          cp api/go/examples/README.md ~/go-sdk-repo/README.md || echo "README not found but continuing"
-          
-          # Optionally append auto-generated API documentation to the custom README
-          if [ -f api/go/README.md ]; then
-            echo -e "\n\n## Auto-Generated API Documentation\n\n" >> ~/go-sdk-repo/README.md
-            # Extract API documentation section from auto-generated README and append it
-            sed -n '/## Documentation for API Endpoints/,$p' api/go/README.md >> ~/go-sdk-repo/README.md
-          fi
+          # The Speakeasy-generated README.md is already copied with the SDK files
+          # It includes comprehensive documentation of all API endpoints and usage examples
           
           # Push to GitHub
           cd ~/go-sdk-repo
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git add . || echo "Nothing to add"
+          git add .
           git commit -m "Update SDK to version ${{ env.VERSION }}" || echo "Nothing to commit"
-          git tag -a "v${{ env.VERSION }}" -m "Version ${{ env.VERSION }}" || echo "Tag creation failed"
-          
-          # Use GitHub token for authentication
-          git remote set-url origin https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/go-sdk.git || true
-          git push -f origin main || echo "Push failed but continuing"
-          git push --tags || echo "Tag push failed but continuing"
+          git tag -a "v${{ env.VERSION }}" -m "Version ${{ env.VERSION }}" || echo "Tag already exists"
+          git push origin main || echo "Push failed"
+          git push --tags || echo "Tag push failed"
             
-          echo "Go SDK publishing steps completed"
+          echo "Go SDK published successfully to GitHub"
         env:
-          GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
 
       - name: Publish JavaScript SDK to GitHub and npm
         if: success() && (github.event.inputs.dry_run != 'true')

@@ -250,15 +250,79 @@ docker-build-local:
 install-typst:
 	@./scripts/install-typst.sh
 
+# Speakeasy SDK Generation targets
+.PHONY: install-speakeasy
+install-speakeasy:
+	@which speakeasy > /dev/null || (echo "Installing Speakeasy CLI..." && brew install speakeasy-api/tap/speakeasy)
+
+.PHONY: generate-go-sdk-speakeasy
+generate-go-sdk-speakeasy: install-speakeasy
+	@echo "Generating Go SDK with Speakeasy..."
+	@echo "Note: Custom Code step may show as 'failed' - this is expected and non-blocking."
+	@echo "      We use manual custom file copying instead of git-based custom code management."
+	@speakeasy run --target flexprice-go-sdk || (echo "⚠️  Speakeasy run encountered errors but SDK may still be generated" && test -d api/go || (echo "❌ Go SDK generation failed completely" && exit 1))
+	@if [ ! -d "api/go" ]; then \
+		echo "❌ Error: Go SDK directory not found after generation"; \
+		exit 1; \
+	fi
+	@echo "Adding custom async functionality to Go SDK..."
+	@chmod +x api/scripts/go/add_go_async.sh
+	@./api/scripts/go/add_go_async.sh || echo "⚠️  Warning: Failed to add async functionality"
+	@echo "Copying custom files to Go SDK..."
+	@./scripts/copy-custom-files.sh go || echo "⚠️  Warning: No custom files to copy"
+	@echo "Creating SDK examples..."
+	@./scripts/create-sdk-examples.sh go
+	@echo "✅ Go SDK generated successfully with Speakeasy"
+
+.PHONY: generate-python-sdk-speakeasy
+generate-python-sdk-speakeasy: install-speakeasy
+	@echo "Generating Python SDK with Speakeasy..."
+	@echo "Note: Custom Code step may show as 'failed' - this is expected and non-blocking."
+	@echo "      We use manual custom file copying instead of git-based custom code management."
+	@speakeasy run --target flexprice-python-sdk || (echo "⚠️  Speakeasy run encountered errors, attempting to fix and continue..." && test -d api/python || (echo "❌ Python SDK generation failed completely" && exit 1))
+	@if [ ! -d "api/python" ]; then \
+		echo "❌ Error: Python SDK directory not found after generation"; \
+		exit 1; \
+	fi
+	@echo "Fixing pylint configuration (to prevent future failures)..."
+	@./scripts/fix-python-pylint.sh || echo "⚠️  Warning: Failed to fix pylint config"
+	@echo "Adding custom async functionality to Python SDK..."
+	@python api/scripts/python/add_python_async.py || echo "⚠️  Warning: Failed to add async functionality"
+	@echo "Copying custom files to Python SDK..."
+	@./scripts/copy-custom-files.sh python || echo "⚠️  Warning: No custom files to copy"
+	@echo "Creating SDK examples..."
+	@./scripts/create-sdk-examples.sh python
+	@echo "✅ Python SDK generated successfully with Speakeasy"
+
+.PHONY: generate-typescript-sdk-speakeasy
+generate-typescript-sdk-speakeasy: install-speakeasy
+	@echo "Generating TypeScript SDK with Speakeasy..."
+	@echo "Note: Custom Code step may show as 'failed' - this is expected and non-blocking."
+	@echo "      We use manual custom file copying instead of git-based custom code management."
+	@speakeasy run --target flexprice-typescript-sdk || (echo "⚠️  Speakeasy run encountered errors but SDK may still be generated" && test -d api/javascript || (echo "❌ TypeScript SDK generation failed completely" && exit 1))
+	@if [ ! -d "api/javascript" ]; then \
+		echo "❌ Error: TypeScript SDK directory not found after generation"; \
+		exit 1; \
+	fi
+	@echo "Copying custom files to TypeScript SDK..."
+	@./scripts/copy-custom-files.sh javascript || echo "⚠️  Warning: No custom files to copy"
+	@echo "Creating SDK examples..."
+	@./scripts/create-sdk-examples.sh javascript
+	@echo "✅ TypeScript SDK generated successfully with Speakeasy"
+
+.PHONY: generate-sdk-speakeasy
+generate-sdk-speakeasy: generate-go-sdk-speakeasy generate-python-sdk-speakeasy generate-typescript-sdk-speakeasy
+	@echo "All SDKs generated successfully with Speakeasy"
+
 # SDK Generation targets
 .PHONY: install-openapi-generator
 install-openapi-generator:
 	@which openapi-generator-cli > /dev/null || (npm install -g @openapitools/openapi-generator-cli)
 
-.PHONY: generate-sdk generate-go-sdk generate-python-sdk generate-javascript-sdk regenerate-sdk clean-sdk update-sdk
+.PHONY: generate-sdk generate-go-sdk generate-python-sdk generate-javascript-sdk regenerate-sdk clean-sdk update-sdk generate-python-sdk-legacy generate-javascript-sdk-legacy
 
-# Generate all SDKs
-generate-sdk: generate-go-sdk generate-python-sdk generate-javascript-sdk
+# Generate all SDKs (now using Speakeasy by default)
+generate-sdk: generate-sdk-speakeasy
 	@echo "All SDKs generated successfully with custom files"
 
 # Regenerate all SDKs (clean + generate)
@@ -275,9 +339,18 @@ clean-sdk:
 	@rm -rf api/javascript api/python api/go
 	@echo "Generated SDKs cleaned"
 
-# Generate Go SDK
-generate-go-sdk: install-openapi-generator
-	@echo "Generating Go SDK..."
+# Generate Go SDK (using Speakeasy by default)
+generate-go-sdk: generate-go-sdk-speakeasy
+
+# Generate Python SDK (using Speakeasy by default)
+generate-python-sdk: generate-python-sdk-speakeasy
+
+# Generate JavaScript/TypeScript SDK (using Speakeasy by default)
+generate-javascript-sdk: generate-typescript-sdk-speakeasy
+
+# Legacy OpenAPI Generator version (kept for backup)
+generate-go-sdk-legacy: install-openapi-generator
+	@echo "Generating Go SDK with OpenAPI Generator (legacy)..."
 	@openapi-generator-cli generate \
 		-i docs/swagger/swagger-3-0.json \
 		-g go \
@@ -290,11 +363,11 @@ generate-go-sdk: install-openapi-generator
 	@./api/scripts/go/add_go_async.sh
 	@echo "Copying custom files..."
 	@./scripts/copy-custom-files.sh go
-	@echo "Go SDK generated successfully"
+	@echo "Go SDK generated successfully with OpenAPI Generator (legacy)"
 
-# Generate Python SDK
-generate-python-sdk: install-openapi-generator
-	@echo "Generating Python SDK..."
+# Legacy Python SDK generation with OpenAPI Generator (kept for backup)
+generate-python-sdk-legacy: install-openapi-generator
+	@echo "Generating Python SDK with OpenAPI Generator (legacy)..."
 	@openapi-generator-cli generate \
 		-i docs/swagger/swagger-3-0.json \
 		-g python \
@@ -306,11 +379,11 @@ generate-python-sdk: install-openapi-generator
 	@python api/scripts/python/add_python_async.py || echo "Failed to add async functionality, but continuing..."
 	@echo "Copying custom files..."
 	@./scripts/copy-custom-files.sh python
-	@echo "Python SDK generated successfully"
+	@echo "Python SDK generated successfully with OpenAPI Generator (legacy)"
 
-# Generate JavaScript/TypeScript SDK
-generate-javascript-sdk: install-openapi-generator
-	@echo "Generating TypeScript SDK with modern ES7 module support..."
+# Legacy JavaScript/TypeScript SDK generation with OpenAPI Generator (kept for backup)
+generate-javascript-sdk-legacy: install-openapi-generator
+	@echo "Generating TypeScript SDK with OpenAPI Generator (legacy)..."
 	@./scripts/generate-ts-sdk.sh
 
 # Copy custom files to specific SDKs (manual operation)

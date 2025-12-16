@@ -1,0 +1,1787 @@
+overlay: 1.0.0
+x-speakeasy-jsonpath: rfc9535
+info:
+  title: Speakeasy Modifications
+  version: 0.0.2
+  x-speakeasy-metadata:
+    after: ""
+    before: ""
+    type: speakeasy-modifications
+actions:
+  - target: $["paths"]["/payments/{id}/process"]["post"]
+    update:
+      x-speakeasy-name-override: process
+    x-speakeasy-metadata:
+      after: sdk.payments.process()
+      before: sdk.Payments.post_/payments/{id}/process()
+      created_at: 1765793747536
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/taxes/rates"]["get"]
+    update:
+      x-speakeasy-group: taxRates
+      x-speakeasy-name-override: getAll
+    x-speakeasy-metadata:
+      after: sdk.taxRates.getAll()
+      before: sdk.Tax Rates.get_/taxes/rates()
+      created_at: 1765793747536
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/rbac/roles"]["get"]
+    update:
+      x-speakeasy-group: rbac
+      x-speakeasy-name-override: listRoles
+    x-speakeasy-metadata:
+      after: sdk.rbac.listRoles()
+      before: sdk.RBAC.get_/rbac/roles()
+      created_at: 1765793747536
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/costs/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.costs.getById()
+      before: sdk.Costs.get_/costs/{id}()
+      created_at: 1765793747536
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/environments/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.environments.get()
+      before: sdk.Environments.get_/environments/{id}()
+      created_at: 1765793747536
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/groups/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.groups.search()
+      before: sdk.Groups.post_/groups/search()
+      created_at: 1765793747536
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/prices/units/{id}"]["delete"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: archive
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.archive()
+      before: sdk.Price Units.delete_/prices/units/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/creditnotes/{id}/void"]["post"]
+    update:
+      x-speakeasy-group: creditNotes
+      x-speakeasy-name-override: void
+    x-speakeasy-metadata:
+      after: sdk.creditNotes.void()
+      before: sdk.Credit Notes.post_/creditnotes/{id}/void()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/secrets/api/keys"]["post"]
+    update:
+      x-speakeasy-name-override: createApiKey
+    x-speakeasy-metadata:
+      after: sdk.secrets.createApiKey()
+      before: sdk.secrets.post_/secrets/api/keys()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/tasks/scheduled/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.scheduledTasks.get()
+      before: sdk.ScheduledTasks.get_/tasks/scheduled/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/entitlements/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.entitlements.update()
+      before: sdk.Entitlements.put_/entitlements/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/creditnotes/{id}"]["get"]
+    update:
+      x-speakeasy-group: creditnotes
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.creditnotes.get()
+      before: sdk.Credit Notes.get_/creditnotes/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/webhooks/nomod/{tenant_id}/{environment_id}"]["post"]
+    update:
+      x-speakeasy-name-override: processNomod
+    x-speakeasy-metadata:
+      after: sdk.webhooks.processNomod()
+      before: sdk.Webhooks.post_/webhooks/nomod/{tenant_id}/{environment_id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/taxes/associations"]["get"]
+    update:
+      x-speakeasy-group: taxAssociations
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.taxAssociations.list()
+      before: sdk.Tax Associations.get_/taxes/associations()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/prices"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.prices.create()
+      before: sdk.Prices.post_/prices()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/grants/upcoming"]["get"]
+    update:
+      x-speakeasy-name-override: getUpcomingGrants
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.getUpcomingGrants()
+      before: sdk.Subscriptions.get_/subscriptions/{id}/grants/upcoming()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/plans/{id}/creditgrants"]["get"]
+    update:
+      x-speakeasy-name-override: getForPlan
+    x-speakeasy-metadata:
+      after: sdk.creditGrants.getForPlan()
+      before: sdk.CreditGrants.get_/plans/{id}/creditgrants()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/customers"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.customers.list()
+      before: sdk.Customers.get_/customers()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/connections/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.connections.delete()
+      before: sdk.Connections.delete_/connections/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/entity-integration-mappings"]["post"]
+    update:
+      x-speakeasy-group: entityIntegrationMappings
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.entityIntegrationMappings.create()
+      before: sdk.Entity Integration Mappings.post_/entity-integration-mappings()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/entitlements"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.entitlements.create()
+      before: sdk.Entitlements.post_/entitlements()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/resume"]["post"]
+    update:
+      x-speakeasy-name-override: resume
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.resume()
+      before: sdk.Subscriptions.post_/subscriptions/{id}/resume()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/events/usage"]["post"]
+    update:
+      x-speakeasy-name-override: getUsageStats
+    x-speakeasy-metadata:
+      after: sdk.events.getUsageStats()
+      before: sdk.Events.post_/events/usage()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/entitlements"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.entitlements.list()
+      before: sdk.Entitlements.get_/entitlements()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/tasks/scheduled/{id}/run"]["post"]
+    update:
+      x-speakeasy-name-override: triggerRun
+    x-speakeasy-metadata:
+      after: sdk.scheduledTasks.triggerRun()
+      before: sdk.ScheduledTasks.post_/tasks/scheduled/{id}/run()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/secrets/integrations/{provider}"]["post"]
+    update:
+      x-speakeasy-name-override: createOrUpdate
+    x-speakeasy-metadata:
+      after: sdk.integrations.createOrUpdate()
+      before: sdk.Integrations.post_/secrets/integrations/{provider}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/lineitems/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: updateLineItem
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.updateLineItem()
+      before: sdk.Subscriptions.put_/subscriptions/lineitems/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/plans/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.plans.update()
+      before: sdk.Plans.put_/plans/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/addon"]["delete"]
+    update:
+      x-speakeasy-name-override: removeAddon
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.removeAddon()
+      before: sdk.Subscriptions.delete_/subscriptions/addon()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/webhooks/quickbooks/{tenant_id}/{environment_id}"]["post"]
+    update:
+      x-speakeasy-name-override: handleQuickbooks
+    x-speakeasy-metadata:
+      after: sdk.webhooks.handleQuickbooks()
+      before: sdk.Webhooks.post_/webhooks/quickbooks/{tenant_id}/{environment_id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/payments/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.payments.getById()
+      before: sdk.Payments.get_/payments/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/pauses"]["get"]
+    update:
+      x-speakeasy-name-override: listPauses
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.listPauses()
+      before: sdk.Subscriptions.get_/subscriptions/{id}/pauses()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/customers/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.customers.getById()
+      before: sdk.Customers.get_/customers/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/webhooks/hubspot/{tenant_id}/{environment_id}"]["post"]
+    update:
+      x-speakeasy-name-override: handleHubspot
+    x-speakeasy-metadata:
+      after: sdk.webhooks.handleHubspot()
+      before: sdk.Webhooks.post_/webhooks/hubspot/{tenant_id}/{environment_id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/change/execute"]["post"]
+    update:
+      x-speakeasy-name-override: executeChange
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.executeChange()
+      before: sdk.Subscriptions.post_/subscriptions/{id}/change/execute()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/addons/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.addons.search()
+      before: sdk.Addons.post_/addons/search()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/subscriptions/lineitems/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: deleteLineItem
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.deleteLineItem()
+      before: sdk.Subscriptions.delete_/subscriptions/lineitems/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/features/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.features.getById()
+      before: sdk.Features.get_/features/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/invoices/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.invoices.search()
+      before: sdk.Invoices.post_/invoices/search()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/entitlements/bulk"]["post"]
+    update:
+      x-speakeasy-name-override: bulkCreate
+    x-speakeasy-metadata:
+      after: sdk.entitlements.bulkCreate()
+      before: sdk.Entitlements.post_/entitlements/bulk()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/creditnotes"]["post"]
+    update:
+      x-speakeasy-group: creditNotes
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.creditNotes.create()
+      before: sdk.Credit Notes.post_/creditnotes()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/recalculate"]["post"]
+    update:
+      x-speakeasy-name-override: recalculate
+    x-speakeasy-metadata:
+      after: sdk.invoices.recalculate()
+      before: sdk.Invoices.post_/invoices/{id}/recalculate()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/wallets/{id}/terminate"]["post"]
+    update:
+      x-speakeasy-name-override: terminate
+    x-speakeasy-metadata:
+      after: sdk.wallets.terminate()
+      before: sdk.Wallets.post_/wallets/{id}/terminate()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/invoices/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.invoices.update()
+      before: sdk.Invoices.put_/invoices/{id}()
+      created_at: 1765793747537
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/tasks"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.tasks.list()
+      before: sdk.Tasks.get_/tasks()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/plans"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.plans.list()
+      before: sdk.Plans.get_/plans()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/alert/search"]["post"]
+    update:
+      x-speakeasy-group: alertLogs
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.alertLogs.search()
+      before: sdk.Alert Logs.post_/alert/search()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/events/query"]["post"]
+    update:
+      x-speakeasy-name-override: query
+    x-speakeasy-metadata:
+      after: sdk.events.query()
+      before: sdk.Events.post_/events/query()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/tenants/update"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.tenants.update()
+      before: sdk.Tenants.put_/tenants/update()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/tasks/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.tasks.get()
+      before: sdk.Tasks.get_/tasks/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/secrets/api/keys/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: deleteApiKey
+    x-speakeasy-metadata:
+      after: sdk.secrets.deleteApiKey()
+      before: sdk.secrets.delete_/secrets/api/keys/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/taxes/rates/{id}"]["get"]
+    update:
+      x-speakeasy-group: taxRates
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.taxRates.get()
+      before: sdk.Tax Rates.get_/taxes/rates/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/comms/trigger"]["post"]
+    update:
+      x-speakeasy-name-override: triggerComms
+    x-speakeasy-metadata:
+      after: sdk.invoices.triggerComms()
+      before: sdk.Invoices.post_/invoices/{id}/comms/trigger()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/prices"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.prices.list()
+      before: sdk.Prices.get_/prices()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/prices/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.prices.getById()
+      before: sdk.Prices.get_/prices/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/wallets/{id}/transactions"]["get"]
+    update:
+      x-speakeasy-name-override: getTransactions
+    x-speakeasy-metadata:
+      after: sdk.wallets.getTransactions()
+      before: sdk.Wallets.get_/wallets/{id}/transactions()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/tenants/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.tenants.getById()
+      before: sdk.Tenants.get_/tenants/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/features/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.features.delete()
+      before: sdk.Features.delete_/features/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/users"]["post"]
+    update:
+      x-speakeasy-name-override: createServiceAccount
+    x-speakeasy-metadata:
+      after: sdk.users.createServiceAccount()
+      before: sdk.Users.post_/users()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/costs/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.costs.delete()
+      before: sdk.Costs.delete_/costs/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/plans/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.plans.getById()
+      before: sdk.Plans.get_/plans/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/users/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.users.search()
+      before: sdk.Users.post_/users/search()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/groups/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.groups.getById()
+      before: sdk.Groups.get_/groups/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/addons/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.addons.update()
+      before: sdk.Addons.put_/addons/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/connections/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.connections.search()
+      before: sdk.Connections.post_/connections/search()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/costs/active"]["get"]
+    update:
+      x-speakeasy-name-override: getActive
+    x-speakeasy-metadata:
+      after: sdk.costs.getActive()
+      before: sdk.Costs.get_/costs/active()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/plans/{id}/entitlements"]["get"]
+    update:
+      x-speakeasy-group: plans
+      x-speakeasy-name-override: getEntitlements
+    x-speakeasy-metadata:
+      after: sdk.plans.getEntitlements()
+      before: sdk.Entitlements.get_/plans/{id}/entitlements()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/addons/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.addons.get()
+      before: sdk.Addons.get_/addons/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787866
+      type: method-name
+  - target: $["paths"]["/plans/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.plans.search()
+      before: sdk.Plans.post_/plans/search()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.invoices.getById()
+      before: sdk.Invoices.get_/invoices/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/units/search"]["post"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.search()
+      before: sdk.Price Units.post_/prices/units/search()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/coupons"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.coupons.create()
+      before: sdk.Coupons.post_/coupons()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/costs/analytics"]["post"]
+    update:
+      x-speakeasy-name-override: getAnalytics
+    x-speakeasy-metadata:
+      after: sdk.costs.getAnalytics()
+      before: sdk.Costs.post_/costs/analytics()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/events/usage/meter"]["post"]
+    update:
+      x-speakeasy-name-override: getUsageByMeter
+    x-speakeasy-metadata:
+      after: sdk.events.getUsageByMeter()
+      before: sdk.Events.post_/events/usage/meter()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/payments/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.payments.delete()
+      before: sdk.Payments.delete_/payments/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks/scheduled"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.scheduledTasks.create()
+      before: sdk.ScheduledTasks.post_/tasks/scheduled()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/units/{id}"]["put"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.update()
+      before: sdk.Price Units.put_/prices/units/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/associations/{id}"]["put"]
+    update:
+      x-speakeasy-group: taxAssociations
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.taxAssociations.update()
+      before: sdk.Tax Associations.put_/taxes/associations/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/connections"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.connections.list()
+      before: sdk.Connections.get_/connections()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/payments"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.payments.create()
+      before: sdk.Payments.post_/payments()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.prices.delete()
+      before: sdk.Prices.delete_/prices/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks/result"]["get"]
+    update:
+      x-speakeasy-name-override: getResult
+    x-speakeasy-metadata:
+      after: sdk.tasks.getResult()
+      before: sdk.Tasks.get_/tasks/result()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/wallets"]["get"]
+    update:
+      x-speakeasy-name-override: listCustomerWallets
+    x-speakeasy-metadata:
+      after: sdk.wallets.listCustomerWallets()
+      before: sdk.Wallets.get_/customers/wallets()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/groups/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.groups.delete()
+      before: sdk.Groups.delete_/groups/{id}()
+      created_at: 1765793747538
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks/{id}/status"]["put"]
+    update:
+      x-speakeasy-name-override: updateStatus
+    x-speakeasy-metadata:
+      after: sdk.tasks.updateStatus()
+      before: sdk.Tasks.put_/tasks/{id}/status()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/events/bulk"]["post"]
+    update:
+      x-speakeasy-name-override: bulkIngest
+    x-speakeasy-metadata:
+      after: sdk.events.bulkIngest()
+      before: sdk.Events.post_/events/bulk()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/units"]["post"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.create()
+      before: sdk.Price Units.post_/prices/units()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/auth/signup"]["post"]
+    update:
+      x-speakeasy-name-override: signup
+    x-speakeasy-metadata:
+      after: sdk.auth.signup()
+      before: sdk.Auth.post_/auth/signup()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/wallets/{id}/top-up"]["post"]
+    update:
+      x-speakeasy-name-override: topUp
+    x-speakeasy-metadata:
+      after: sdk.wallets.topUp()
+      before: sdk.Wallets.post_/wallets/{id}/top-up()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/units"]["get"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.list()
+      before: sdk.Price Units.get_/prices/units()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/wallets/{id}/balance/real-time"]["get"]
+    update:
+      x-speakeasy-name-override: getBalanceRealTime
+    x-speakeasy-metadata:
+      after: sdk.wallets.getBalanceRealTime()
+      before: sdk.Wallets.get_/wallets/{id}/balance/real-time()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/payments"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.payments.list()
+      before: sdk.Payments.get_/payments()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/rbac/roles/{id}"]["get"]
+    update:
+      x-speakeasy-group: rbac
+      x-speakeasy-name-override: getRole
+    x-speakeasy-metadata:
+      after: sdk.rbac.getRole()
+      before: sdk.RBAC.get_/rbac/roles/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/groups"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.groups.create()
+      before: sdk.Groups.post_/groups()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/events/monitoring"]["get"]
+    update:
+      x-speakeasy-name-override: getMonitoringData
+    x-speakeasy-metadata:
+      after: sdk.events.getMonitoringData()
+      before: sdk.Events.get_/events/monitoring()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/addons/lookup/{lookup_key}"]["get"]
+    update:
+      x-speakeasy-name-override: getByLookupKey
+    x-speakeasy-metadata:
+      after: sdk.addons.getByLookupKey()
+      before: sdk.Addons.get_/addons/lookup/{lookup_key}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/costs/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.costs.update()
+      before: sdk.Costs.put_/costs/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/features/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.features.search()
+      before: sdk.Features.post_/features/search()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/plans/{id}/sync/subscriptions"]["post"]
+    update:
+      x-speakeasy-name-override: syncSubscriptions
+    x-speakeasy-metadata:
+      after: sdk.plans.syncSubscriptions()
+      before: sdk.Plans.post_/plans/{id}/sync/subscriptions()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.customers.delete()
+      before: sdk.Customers.delete_/customers/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditgrants/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.creditGrants.getById()
+      before: sdk.CreditGrants.get_/creditgrants/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.create()
+      before: sdk.Subscriptions.post_/subscriptions()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/features"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.features.create()
+      before: sdk.Features.post_/features()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/features/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.features.update()
+      before: sdk.Features.put_/features/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/plans"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.plans.create()
+      before: sdk.Plans.post_/plans()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.customers.create()
+      before: sdk.Customers.post_/customers()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/secrets/integrations/{provider}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.integrations.get()
+      before: sdk.Integrations.get_/secrets/integrations/{provider}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/environments/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.environments.update()
+      before: sdk.Environments.put_/environments/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/{id}/entitlements"]["get"]
+    update:
+      x-speakeasy-name-override: getEntitlements
+    x-speakeasy-metadata:
+      after: sdk.customers.getEntitlements()
+      before: sdk.Customers.get_/customers/{id}/entitlements()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditgrants"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.creditGrants.create()
+      before: sdk.CreditGrants.post_/creditgrants()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/coupons/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.coupons.delete()
+      before: sdk.Coupons.delete_/coupons/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/entity-integration-mappings"]["get"]
+    update:
+      x-speakeasy-group: entityIntegrationMappings
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.entityIntegrationMappings.list()
+      before: sdk.Entity Integration Mappings.get_/entity-integration-mappings()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks/scheduled/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.scheduledTasks.update()
+      before: sdk.ScheduledTasks.put_/tasks/scheduled/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/entitlements/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.entitlements.get()
+      before: sdk.Entitlements.get_/entitlements/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditgrants"]["get"]
+    update:
+      x-speakeasy-group: creditgrants
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.creditgrants.get()
+      before: sdk.CreditGrants.get_/creditgrants()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditnotes"]["get"]
+    update:
+      x-speakeasy-group: creditNotes
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.creditNotes.list()
+      before: sdk.Credit Notes.get_/creditnotes()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.invoices.list()
+      before: sdk.Invoices.get_/invoices()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/{id}/invoices/summary"]["get"]
+    update:
+      x-speakeasy-name-override: getSummaryByCustomerId
+    x-speakeasy-metadata:
+      after: sdk.invoices.getSummaryByCustomerId()
+      before: sdk.Invoices.get_/customers/{id}/invoices/summary()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/auth/login"]["post"]
+    update:
+      x-speakeasy-name-override: login
+    x-speakeasy-metadata:
+      after: sdk.auth.login()
+      before: sdk.Auth.post_/auth/login()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/addons"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.addons.list()
+      before: sdk.Addons.get_/addons()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/entity-integration-mappings/{id}"]["delete"]
+    update:
+      x-speakeasy-group: entityIntegrationMappings
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.entityIntegrationMappings.delete()
+      before: sdk.Entity Integration Mappings.delete_/entity-integration-mappings/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.get()
+      before: sdk.Subscriptions.get_/subscriptions/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/rates"]["post"]
+    update:
+      x-speakeasy-group: taxRates
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.taxRates.create()
+      before: sdk.Tax Rates.post_/taxes/rates()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/activate"]["post"]
+    update:
+      x-speakeasy-name-override: activate
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.activate()
+      before: sdk.Subscriptions.post_/subscriptions/{id}/activate()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/costs"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.costs.create()
+      before: sdk.Costs.post_/costs()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/addons"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.addons.create()
+      before: sdk.Addons.post_/addons()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditnotes/{id}/finalize"]["post"]
+    update:
+      x-speakeasy-group: creditNotes
+      x-speakeasy-name-override: finalize
+    x-speakeasy-metadata:
+      after: sdk.creditNotes.finalize()
+      before: sdk.Credit Notes.post_/creditnotes/{id}/finalize()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/change/preview"]["post"]
+    update:
+      x-speakeasy-name-override: previewPlanChange
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.previewPlanChange()
+      before: sdk.Subscriptions.post_/subscriptions/{id}/change/preview()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/secrets/integrations/by-id/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: deleteById
+    x-speakeasy-metadata:
+      after: sdk.integrations.deleteById()
+      before: sdk.Integrations.delete_/secrets/integrations/by-id/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/secrets/integrations/linked"]["get"]
+    update:
+      x-speakeasy-name-override: listLinked
+    x-speakeasy-metadata:
+      after: sdk.integrations.listLinked()
+      before: sdk.Integrations.get_/secrets/integrations/linked()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/payments/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.payments.update()
+      before: sdk.Payments.put_/payments/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/events/analytics"]["post"]
+    update:
+      x-speakeasy-name-override: getAnalytics
+    x-speakeasy-metadata:
+      after: sdk.events.getAnalytics()
+      before: sdk.Events.post_/events/analytics()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/coupons"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.coupons.list()
+      before: sdk.Coupons.get_/coupons()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/environments"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.environments.create()
+      before: sdk.Environments.post_/environments()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/entitlements"]["get"]
+    update:
+      x-speakeasy-name-override: getEntitlements
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.getEntitlements()
+      before: sdk.Subscriptions.get_/subscriptions/{id}/entitlements()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/wallets/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.wallets.update()
+      before: sdk.Wallets.put_/wallets/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/users/me"]["get"]
+    update:
+      x-speakeasy-name-override: getWithMe
+    x-speakeasy-metadata:
+      after: sdk.users.getWithMe()
+      before: sdk.Users.get_/users/me()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/void"]["post"]
+    update:
+      x-speakeasy-name-override: void
+    x-speakeasy-metadata:
+      after: sdk.invoices.void()
+      before: sdk.Invoices.post_/invoices/{id}/void()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/cancel"]["post"]
+    update:
+      x-speakeasy-name-override: cancel
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.cancel()
+      before: sdk.Subscriptions.post_/subscriptions/{id}/cancel()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/bulk"]["post"]
+    update:
+      x-speakeasy-name-override: bulkCreate
+    x-speakeasy-metadata:
+      after: sdk.prices.bulkCreate()
+      before: sdk.Prices.post_/prices/bulk()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/wallets/{id}/debit"]["post"]
+    update:
+      x-speakeasy-name-override: debit
+    x-speakeasy-metadata:
+      after: sdk.wallets.debit()
+      before: sdk.Wallets.post_/wallets/{id}/debit()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/costs/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.costs.search()
+      before: sdk.Costs.post_/costs/search()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/wallets/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: get
+    x-speakeasy-metadata:
+      after: sdk.wallets.get()
+      before: sdk.Wallets.get_/wallets/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/{id}/pause"]["post"]
+    update:
+      x-speakeasy-name-override: pause
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.pause()
+      before: sdk.Subscriptions.post_/subscriptions/{id}/pause()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/connections/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.connections.update()
+      before: sdk.Connections.put_/connections/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/lookup/{lookup_key}"]["get"]
+    update:
+      x-speakeasy-name-override: getByLookupKey
+    x-speakeasy-metadata:
+      after: sdk.customers.getByLookupKey()
+      before: sdk.Customers.get_/customers/lookup/{lookup_key}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/usage"]["post"]
+    update:
+      x-speakeasy-name-override: getUsage
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.getUsage()
+      before: sdk.Subscriptions.post_/subscriptions/usage()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.tasks.create()
+      before: sdk.Tasks.post_/tasks()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/associations/{id}"]["get"]
+    update:
+      x-speakeasy-group: taxAssociations
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.taxAssociations.getById()
+      before: sdk.Tax Associations.get_/taxes/associations/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/webhooks/chargebee/{tenant_id}/{environment_id}"]["post"]
+    update:
+      x-speakeasy-name-override: processChargebee
+    x-speakeasy-metadata:
+      after: sdk.webhooks.processChargebee()
+      before: sdk.Webhooks.post_/webhooks/chargebee/{tenant_id}/{environment_id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/payment/attempt"]["post"]
+    update:
+      x-speakeasy-name-override: initiatePayment
+    x-speakeasy-metadata:
+      after: sdk.invoices.initiatePayment()
+      before: sdk.Invoices.post_/invoices/{id}/payment/attempt()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/plans/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.plans.delete()
+      before: sdk.Plans.delete_/plans/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/events"]["post"]
+    update:
+      x-speakeasy-name-override: ingest
+    x-speakeasy-metadata:
+      after: sdk.events.ingest()
+      before: sdk.Events.post_/events()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.list()
+      before: sdk.Subscriptions.get_/subscriptions()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/features"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.features.list()
+      before: sdk.Features.get_/features()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/events/huggingface-inference"]["post"]
+    update:
+      x-speakeasy-name-override: huggingfaceInference
+    x-speakeasy-metadata:
+      after: sdk.events.huggingfaceInference()
+      before: sdk.Events.post_/events/huggingface-inference()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.customers.search()
+      before: sdk.Customers.post_/customers/search()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/associations/{id}"]["delete"]
+    update:
+      x-speakeasy-group: taxAssociations
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.taxAssociations.delete()
+      before: sdk.Tax Associations.delete_/taxes/associations/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/units/code/{code}"]["get"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: getByCode
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.getByCode()
+      before: sdk.Price Units.get_/prices/units/code/{code}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/rates/{id}"]["put"]
+    update:
+      x-speakeasy-group: taxRates
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.taxRates.update()
+      before: sdk.Tax Rates.put_/taxes/rates/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/secrets/api/keys"]["get"]
+    update:
+      x-speakeasy-name-override: listApiKeys
+    x-speakeasy-metadata:
+      after: sdk.secrets.listApiKeys()
+      before: sdk.secrets.get_/secrets/api/keys()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/payment"]["put"]
+    update:
+      x-speakeasy-name-override: updatePaymentStatus
+    x-speakeasy-metadata:
+      after: sdk.invoices.updatePaymentStatus()
+      before: sdk.Invoices.put_/invoices/{id}/payment()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/entitlements/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.entitlements.delete()
+      before: sdk.Entitlements.delete_/entitlements/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/addons/{id}/entitlements"]["get"]
+    update:
+      x-speakeasy-name-override: getForAddon
+    x-speakeasy-metadata:
+      after: sdk.entitlements.getForAddon()
+      before: sdk.Entitlements.get_/addons/{id}/entitlements()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/addons/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.addons.delete()
+      before: sdk.Addons.delete_/addons/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.invoices.create()
+      before: sdk.Invoices.post_/invoices()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/usage"]["get"]
+    update:
+      x-speakeasy-name-override: getUsageSummary
+    x-speakeasy-metadata:
+      after: sdk.customers.getUsageSummary()
+      before: sdk.Customers.get_/customers/usage()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/addon"]["post"]
+    update:
+      x-speakeasy-name-override: addAddon
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.addAddon()
+      before: sdk.Subscriptions.post_/subscriptions/addon()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/{id}/grants/upcoming"]["get"]
+    update:
+      x-speakeasy-name-override: getUpcomingGrants
+    x-speakeasy-metadata:
+      after: sdk.customers.getUpcomingGrants()
+      before: sdk.Customers.get_/customers/{id}/grants/upcoming()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/connections/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.connections.getById()
+      before: sdk.Connections.get_/connections/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/entitlements/search"]["post"]
+    update:
+      x-speakeasy-name-override: filter
+    x-speakeasy-metadata:
+      after: sdk.entitlements.filter()
+      before: sdk.Entitlements.post_/entitlements/search()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/webhooks/stripe/{tenant_id}/{environment_id}"]["post"]
+    update:
+      x-speakeasy-name-override: processStripe
+    x-speakeasy-metadata:
+      after: sdk.webhooks.processStripe()
+      before: sdk.Webhooks.post_/webhooks/stripe/{tenant_id}/{environment_id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/units/{id}"]["get"]
+    update:
+      x-speakeasy-group: priceUnits
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.priceUnits.getById()
+      before: sdk.Price Units.get_/prices/units/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/subscriptions/search"]["post"]
+    update:
+      x-speakeasy-name-override: search
+    x-speakeasy-metadata:
+      after: sdk.subscriptions.search()
+      before: sdk.Subscriptions.post_/subscriptions/search()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks/scheduled/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.scheduledTasks.delete()
+      before: sdk.ScheduledTasks.delete_/tasks/scheduled/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/finalize"]["post"]
+    update:
+      x-speakeasy-name-override: finalize
+    x-speakeasy-metadata:
+      after: sdk.invoices.finalize()
+      before: sdk.Invoices.post_/invoices/{id}/finalize()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tenant/billing"]["get"]
+    update:
+      x-speakeasy-name-override: getBilling
+    x-speakeasy-metadata:
+      after: sdk.tenants.getBilling()
+      before: sdk.Tenants.get_/tenant/billing()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditgrants/{id}"]["delete"]
+    update:
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.creditGrants.delete()
+      before: sdk.CreditGrants.delete_/creditgrants/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/environments"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.environments.list()
+      before: sdk.Environments.get_/environments()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/coupons/{id}"]["get"]
+    update:
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.coupons.getById()
+      before: sdk.Coupons.get_/coupons/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.customers.update()
+      before: sdk.Customers.put_/customers/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tasks/scheduled"]["get"]
+    update:
+      x-speakeasy-name-override: list
+    x-speakeasy-metadata:
+      after: sdk.scheduledTasks.list()
+      before: sdk.ScheduledTasks.get_/tasks/scheduled()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/webhooks/razorpay/{tenant_id}/{environment_id}"]["post"]
+    update:
+      x-speakeasy-name-override: handleRazorpay
+    x-speakeasy-metadata:
+      after: sdk.webhooks.handleRazorpay()
+      before: sdk.Webhooks.post_/webhooks/razorpay/{tenant_id}/{environment_id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/coupons/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.coupons.update()
+      before: sdk.Coupons.put_/coupons/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/creditgrants/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.creditGrants.update()
+      before: sdk.CreditGrants.put_/creditgrants/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/prices/{id}"]["put"]
+    update:
+      x-speakeasy-name-override: update
+    x-speakeasy-metadata:
+      after: sdk.prices.update()
+      before: sdk.Prices.put_/prices/{id}()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/wallets"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.wallets.create()
+      before: sdk.Wallets.post_/wallets()
+      created_at: 1765793747539
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/customers/{id}/wallets"]["get"]
+    update:
+      x-speakeasy-name-override: getByCustomerId
+    x-speakeasy-metadata:
+      after: sdk.wallets.getByCustomerId()
+      before: sdk.Wallets.get_/customers/{id}/wallets()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/rates/{id}"]["delete"]
+    update:
+      x-speakeasy-group: taxRates
+      x-speakeasy-name-override: delete
+    x-speakeasy-metadata:
+      after: sdk.taxRates.delete()
+      before: sdk.Tax Rates.delete_/taxes/rates/{id}()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/taxes/associations"]["post"]
+    update:
+      x-speakeasy-group: taxAssociations
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.taxAssociations.create()
+      before: sdk.Tax Associations.post_/taxes/associations()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/preview"]["post"]
+    update:
+      x-speakeasy-name-override: preview
+    x-speakeasy-metadata:
+      after: sdk.invoices.preview()
+      before: sdk.Invoices.post_/invoices/preview()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/tenants"]["post"]
+    update:
+      x-speakeasy-name-override: create
+    x-speakeasy-metadata:
+      after: sdk.tenants.create()
+      before: sdk.Tenants.post_/tenants()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/entity-integration-mappings/{id}"]["get"]
+    update:
+      x-speakeasy-group: entityIntegrationMappings
+      x-speakeasy-name-override: getById
+    x-speakeasy-metadata:
+      after: sdk.entityIntegrationMappings.getById()
+      before: sdk.Entity Integration Mappings.get_/entity-integration-mappings/{id}()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name
+  - target: $["paths"]["/invoices/{id}/pdf"]["get"]
+    update:
+      x-speakeasy-name-override: getPdf
+    x-speakeasy-metadata:
+      after: sdk.invoices.getPdf()
+      before: sdk.Invoices.get_/invoices/{id}/pdf()
+      created_at: 1765793747540
+      reviewed_at: 1765793787867
+      type: method-name

@@ -1,34 +1,23 @@
 /*
-This file is meant to be copied into the FlexPrice Go SDK.
-It contains types and functions that depend on other SDK types:
+This file provides async event processing functionality for the FlexPrice Go SDK.
+It is designed to be copied into the SDK directory by the add_go_async.sh script.
 
-- APIClient: The main client for the FlexPrice API
-- DtoIngestEventRequest: The request type for creating events
-
-DO NOT attempt to compile this file directly. It is designed to be copied
-to the SDK directory by the add_go_async.sh script, where it will have
-access to all required type definitions.
-
-The linter will show errors when editing this file standalone, which is expected
-and can be ignored. The file will compile correctly when copied to the SDK.
+This file works with the Speakeasy-generated SDK structure.
 */
 
 // nolint
-package flexprice
+package gosdk
 
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/flexprice/go-sdk/models/components"
 )
 
-// Note: This file is meant to be included in the FlexPrice Go SDK
-// The following types are defined in the SDK:
-// - APIClient: The main client for the FlexPrice API
-// - DtoIngestEventRequest: The DTO for creating events
-
-// AsyncConfig provides configuration options for the enhanced FlexPrice client
+// AsyncConfig provides configuration options for the async event processor
 type AsyncConfig struct {
 	// BatchSize defines maximum number of events to batch before sending
 	BatchSize int
@@ -62,10 +51,8 @@ func DefaultAsyncConfig() AsyncConfig {
 }
 
 // AsyncClient provides an enhanced asynchronous client for the FlexPrice API
-// It builds on top of the FlexPrice Go SDK to provide batching and asynchronous
-// event sending capabilities.
 type AsyncClient struct {
-	apiClient     *APIClient
+	client        *Flexprice
 	config        AsyncConfig
 	msgs          chan EventOptions
 	quit          chan struct{}
@@ -91,7 +78,7 @@ type EventOptions struct {
 	EventID string
 
 	// Properties contains event properties
-	Properties map[string]interface{}
+	Properties map[string]string
 
 	// Source identifies the source of the event
 	Source string
@@ -101,12 +88,12 @@ type EventOptions struct {
 }
 
 // NewAsyncClient creates a new asynchronous FlexPrice client with default configuration
-func (c *APIClient) NewAsyncClient() *AsyncClient {
+func (c *Flexprice) NewAsyncClient() *AsyncClient {
 	return c.NewAsyncClientWithConfig(DefaultAsyncConfig())
 }
 
 // NewAsyncClientWithConfig creates a new asynchronous FlexPrice client with the provided config
-func (c *APIClient) NewAsyncClientWithConfig(config AsyncConfig) *AsyncClient {
+func (c *Flexprice) NewAsyncClientWithConfig(config AsyncConfig) *AsyncClient {
 	// Apply defaults for unset values
 	if config.BatchSize <= 0 {
 		config.BatchSize = DefaultAsyncConfig().BatchSize
@@ -125,12 +112,12 @@ func (c *APIClient) NewAsyncClientWithConfig(config AsyncConfig) *AsyncClient {
 	}
 
 	ac := &AsyncClient{
-		apiClient: c,
-		config:    config,
-		msgs:      make(chan EventOptions, config.MaxQueueSize),
-		quit:      make(chan struct{}),
-		shutdown:  make(chan struct{}),
-		ctx:       context.Background(),
+		client:   c,
+		config:   config,
+		msgs:     make(chan EventOptions, config.MaxQueueSize),
+		quit:     make(chan struct{}),
+		shutdown: make(chan struct{}),
+		ctx:      context.Background(),
 		debugf: func(format string, args ...interface{}) {
 			if config.Debug {
 				fmt.Printf("[FlexPrice Debug] "+format+"\n", args...)
@@ -150,7 +137,7 @@ func (c *APIClient) NewAsyncClientWithConfig(config AsyncConfig) *AsyncClient {
 }
 
 // Enqueue adds an event to the processing queue
-func (c *AsyncClient) Enqueue(eventName, externalCustomerID string, properties map[string]interface{}) error {
+func (c *AsyncClient) Enqueue(eventName, externalCustomerID string, properties map[string]string) error {
 	return c.EnqueueWithOptions(EventOptions{
 		EventName:          eventName,
 		ExternalCustomerID: externalCustomerID,
@@ -282,51 +269,40 @@ func (c *AsyncClient) sendBatch(batch []EventOptions) {
 		defer c.wg.Done()
 
 		for _, event := range events {
-			// Create the event request
-			req := DtoIngestEventRequest{
+			// Create the event request using Speakeasy components
+			req := components.DtoIngestEventRequest{
 				EventName:          event.EventName,
-				ExternalCustomerId: event.ExternalCustomerID,
+				ExternalCustomerID: event.ExternalCustomerID,
 			}
 
 			if event.CustomerID != "" {
-				req.SetCustomerId(event.CustomerID)
+				req.CustomerID = &event.CustomerID
 			}
 
 			if event.EventID != "" {
-				req.SetEventId(event.EventID)
+				req.EventID = &event.EventID
 			}
 
 			if event.Source != "" {
-				req.SetSource(event.Source)
+				req.Source = &event.Source
 			}
 
 			if event.Timestamp != "" {
-				req.SetTimestamp(event.Timestamp)
+				req.Timestamp = &event.Timestamp
 			}
 
 			if event.Properties != nil {
-				// Convert map[string]interface{} to map[string]string for the API call
-				strProperties := make(map[string]string)
-				for k, v := range event.Properties {
-					strProperties[k] = fmt.Sprintf("%v", v)
-				}
-				req.SetProperties(strProperties)
+				req.Properties = event.Properties
 			}
 
 			// Debug the request
 			c.debugf("Sending event: %s %s", event.EventName, event.EventID)
 
-			// Send to API
-			_, resp, err := c.apiClient.EventsAPI.EventsPost(c.ctx).Event(req).Execute()
+			// Send to API using Speakeasy SDK
+			_, err := c.client.Events.Ingest(c.ctx, req)
 
 			if err != nil {
 				c.errorCallback(fmt.Errorf("error sending event: %v", err))
-				continue
-			}
-
-			// Check response status code
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				c.errorCallback(fmt.Errorf("unexpected status code: %d", resp.StatusCode))
 				continue
 			}
 

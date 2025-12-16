@@ -1,4 +1,4 @@
-package custom
+package gosdk
 
 import (
 	"fmt"

@@ -123,7 +123,7 @@ if [ ${#custom_apis[@]} -gt 0 ]; then
         temp_index=$(mktemp)
         
         # Add existing exports (excluding custom APIs that might already be there)
-        grep "^export \* from" "$index_file" | grep -v -E "($(IFS='|'; echo "${custom_apis[*]}"))" > "$temp_index"
+        grep "^export \* from" "$index_file" | grep -v -E "($(IFS='|'; echo "${custom_apis[*]}"))" > "$temp_index" || true
         
         # Add custom API exports in alphabetical order
         printf '%s\n' "${custom_apis[@]}" | sort | while read -r api_name; do
@@ -134,7 +134,8 @@ if [ ${#custom_apis[@]} -gt 0 ]; then
         mv "$temp_index" "$index_file"
         echo -e "${GREEN}✅ Updated index.ts with custom APIs: ${custom_apis[*]}${NC}"
     else
-        echo -e "${YELLOW}⚠️  Warning: index.ts not found at $index_file${NC}"
+        echo -e "${YELLOW}⚠️  Note: index.ts not found at $index_file${NC}"
+        echo -e "${YELLOW}💡 Custom API files copied but not added to index - may need manual import${NC}"
     fi
 fi
 

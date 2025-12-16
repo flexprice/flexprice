@@ -1,35 +1,15 @@
-README.md
+**/*
+!/FUNCTIONS.md
+!/RUNTIMES.md
+!/REACT_QUERY.md
+!/**/*.ts
+!/**/*.js
+!/**/*.mjs
+!/**/*.json
+!/**/*.map
 
-# Source files
-src/
-examples/
-node_modules/
-*.ts
-*.tsx
-tsconfig*.json
-jest.config.js
-
-# Build artifacts
-*.tsbuildinfo
-*.log
-
-# Development files
-.git/
-.gitignore
-.eslintrc*
-.prettierrc*
-
-# Test files
-**/*.test.ts
-**/*.spec.ts
-coverage/
-
-# IDE files
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS files
-.DS_Store
-Thumbs.db
+/eslint.config.mjs
+/cjs
+/.tshy
+/.tshy-*
+/__tests__

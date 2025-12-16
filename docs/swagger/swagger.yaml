@@ -1385,135 +1385,18 @@ definitions:
     - destination_type
     - payment_method_type
     type: object
-  dto.CreatePlanEntitlementRequest:
-    properties:
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.EntitlementEntityType'
-      feature_id:
-        type: string
-      feature_type:
-        $ref: '#/definitions/types.FeatureType'
-      is_enabled:
-        type: boolean
-      is_soft_limit:
-        type: boolean
-      parent_entitlement_id:
-        type: string
-      plan_id:
-        type: string
-      static_value:
-        type: string
-      usage_limit:
-        type: integer
-      usage_reset_period:
-        $ref: '#/definitions/types.EntitlementUsageResetPeriod'
-    required:
-    - feature_id
-    - feature_type
-    type: object
-  dto.CreatePlanPriceRequest:
-    properties:
-      amount:
-        type: string
-      billing_cadence:
-        $ref: '#/definitions/types.BillingCadence'
-      billing_model:
-        $ref: '#/definitions/types.BillingModel'
-      billing_period:
-        $ref: '#/definitions/types.BillingPeriod'
-      billing_period_count:
-        default: 1
-        type: integer
-      currency:
-        type: string
-      description:
-        type: string
-      end_date:
-        type: string
-      entity_id:
-        description: 'TODO: this will be required in the future as we will not allow
-          prices to be created without an entity id'
-        type: string
-      entity_type:
-        allOf:
-        - $ref: '#/definitions/types.PriceEntityType'
-        description: 'TODO: this will be required in the future as we will not allow
-          prices to be created without an entity type'
-      filter_values:
-        additionalProperties:
-          items:
-            type: string
-          type: array
-        type: object
-      group_id:
-        description: GroupID is the id of the group to add the price to
-        type: string
-      invoice_cadence:
-        $ref: '#/definitions/types.InvoiceCadence'
-      lookup_key:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      meter_id:
-        type: string
-      plan_id:
-        description: 'TODO: This is deprecated and will be removed in the future'
-        type: string
-      price_unit_config:
-        $ref: '#/definitions/dto.PriceUnitConfig'
-      price_unit_type:
-        $ref: '#/definitions/types.PriceUnitType'
-      start_date:
-        type: string
-      tier_mode:
-        $ref: '#/definitions/types.BillingTier'
-      tiers:
-        items:
-          $ref: '#/definitions/dto.CreatePriceTier'
-        type: array
-      transform_quantity:
-        $ref: '#/definitions/price.TransformQuantity'
-      trial_period:
-        type: integer
-      type:
-        $ref: '#/definitions/types.PriceType'
-    required:
-    - billing_cadence
-    - billing_model
-    - billing_period
-    - currency
-    - invoice_cadence
-    - price_unit_type
-    - type
-    type: object
   dto.CreatePlanRequest:
     properties:
-      credit_grants:
-        items:
-          $ref: '#/definitions/dto.CreateCreditGrantRequest'
-        type: array
       description:
         type: string
       display_order:
         type: integer
-      entitlements:
-        items:
-          $ref: '#/definitions/dto.CreatePlanEntitlementRequest'
-        type: array
       lookup_key:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
-      prices:
-        items:
-          $ref: '#/definitions/dto.CreatePlanPriceRequest'
-        type: array
     required:
     - name
     type: object
@@ -1534,17 +1417,14 @@ definitions:
         type: string
       description:
         type: string
+      display_name:
+        type: string
       end_date:
         type: string
       entity_id:
-        description: 'TODO: this will be required in the future as we will not allow
-          prices to be created without an entity id'
         type: string
       entity_type:
-        allOf:
-        - $ref: '#/definitions/types.PriceEntityType'
-        description: 'TODO: this will be required in the future as we will not allow
-          prices to be created without an entity type'
+        $ref: '#/definitions/types.PriceEntityType'
       filter_values:
         additionalProperties:
           items:
@@ -1564,9 +1444,9 @@ definitions:
         type: object
       meter_id:
         type: string
-      plan_id:
-        description: 'TODO: This is deprecated and will be removed in the future'
-        type: string
+      min_quantity:
+        description: MinQuantity is the minimum quantity of the price
+        type: integer
       price_unit_config:
         $ref: '#/definitions/dto.PriceUnitConfig'
       price_unit_type:
@@ -1590,6 +1470,8 @@ definitions:
     - billing_model
     - billing_period
     - currency
+    - entity_id
+    - entity_type
     - invoice_cadence
     - price_unit_type
     - type
@@ -3987,6 +3869,9 @@ definitions:
           DisplayAmount is the formatted amount with currency symbol
           For USD: $12.50
         type: string
+      display_name:
+        description: DisplayName is the name of the price
+        type: string
       display_price_unit_amount:
         description: |-
           DisplayPriceUnitAmount is the formatted amount with price unit symbol
@@ -4025,15 +3910,15 @@ definitions:
       meter_id:
         description: MeterID is the id of the meter for usage based pricing
         type: string
+      min_quantity:
+        description: MinQuantity is the minimum quantity of the price
+        type: number
       parent_price_id:
         description: ParentPriceID references the root price (always set for price
           lineage tracking)
         type: string
       plan:
         $ref: '#/definitions/dto.PlanResponse'
-      plan_id:
-        description: 'TODO: Remove this once we have a proper price entity type'
-        type: string
       price_unit:
         description: |-
           PriceUnit 3 digit ISO currency code in lowercase ex btc
@@ -5404,181 +5289,18 @@ definitions:
     required:
     - payment_status
     type: object
-  dto.UpdatePlanCreditGrantRequest:
-    properties:
-      cadence:
-        $ref: '#/definitions/types.CreditGrantCadence'
-      credits:
-        type: string
-      expiration_duration:
-        type: integer
-      expiration_duration_unit:
-        $ref: '#/definitions/types.CreditGrantExpiryDurationUnit'
-      expiration_type:
-        $ref: '#/definitions/types.CreditGrantExpiryType'
-      id:
-        description: The ID of the credit grant to update (present if the credit grant
-          is being updated)
-        type: string
-      metadata:
-        $ref: '#/definitions/types.Metadata'
-      name:
-        type: string
-      period:
-        $ref: '#/definitions/types.CreditGrantPeriod'
-      period_count:
-        type: integer
-      plan_id:
-        type: string
-      priority:
-        type: integer
-      scope:
-        $ref: '#/definitions/types.CreditGrantScope'
-      subscription_id:
-        type: string
-    required:
-    - cadence
-    - credits
-    - name
-    - scope
-    type: object
-  dto.UpdatePlanEntitlementRequest:
-    properties:
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.EntitlementEntityType'
-      feature_id:
-        type: string
-      feature_type:
-        $ref: '#/definitions/types.FeatureType'
-      id:
-        description: The ID of the entitlement to update (present if the entitlement
-          is being updated)
-        type: string
-      is_enabled:
-        type: boolean
-      is_soft_limit:
-        type: boolean
-      parent_entitlement_id:
-        type: string
-      plan_id:
-        type: string
-      static_value:
-        type: string
-      usage_limit:
-        type: integer
-      usage_reset_period:
-        $ref: '#/definitions/types.EntitlementUsageResetPeriod'
-    required:
-    - feature_id
-    - feature_type
-    type: object
-  dto.UpdatePlanPriceRequest:
-    properties:
-      amount:
-        type: string
-      billing_cadence:
-        $ref: '#/definitions/types.BillingCadence'
-      billing_model:
-        $ref: '#/definitions/types.BillingModel'
-      billing_period:
-        $ref: '#/definitions/types.BillingPeriod'
-      billing_period_count:
-        default: 1
-        type: integer
-      currency:
-        type: string
-      description:
-        type: string
-      end_date:
-        type: string
-      entity_id:
-        description: 'TODO: this will be required in the future as we will not allow
-          prices to be created without an entity id'
-        type: string
-      entity_type:
-        allOf:
-        - $ref: '#/definitions/types.PriceEntityType'
-        description: 'TODO: this will be required in the future as we will not allow
-          prices to be created without an entity type'
-      filter_values:
-        additionalProperties:
-          items:
-            type: string
-          type: array
-        type: object
-      group_id:
-        description: GroupID is the id of the group to add the price to
-        type: string
-      id:
-        description: The ID of the price to update (present if the price is being
-          updated)
-        type: string
-      invoice_cadence:
-        $ref: '#/definitions/types.InvoiceCadence'
-      lookup_key:
-        type: string
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      meter_id:
-        type: string
-      plan_id:
-        description: 'TODO: This is deprecated and will be removed in the future'
-        type: string
-      price_unit_config:
-        $ref: '#/definitions/dto.PriceUnitConfig'
-      price_unit_type:
-        $ref: '#/definitions/types.PriceUnitType'
-      start_date:
-        type: string
-      tier_mode:
-        $ref: '#/definitions/types.BillingTier'
-      tiers:
-        items:
-          $ref: '#/definitions/dto.CreatePriceTier'
-        type: array
-      transform_quantity:
-        $ref: '#/definitions/price.TransformQuantity'
-      trial_period:
-        type: integer
-      type:
-        $ref: '#/definitions/types.PriceType'
-    required:
-    - billing_cadence
-    - billing_model
-    - billing_period
-    - currency
-    - invoice_cadence
-    - price_unit_type
-    - type
-    type: object
   dto.UpdatePlanRequest:
     properties:
-      credit_grants:
-        items:
-          $ref: '#/definitions/dto.UpdatePlanCreditGrantRequest'
-        type: array
       description:
         type: string
       display_order:
         type: integer
-      entitlements:
-        items:
-          $ref: '#/definitions/dto.UpdatePlanEntitlementRequest'
-        type: array
       lookup_key:
         type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
-      prices:
-        items:
-          $ref: '#/definitions/dto.UpdatePlanPriceRequest'
-        type: array
     type: object
   dto.UpdatePriceRequest:
     properties:
@@ -6401,6 +6123,9 @@ definitions:
           DisplayAmount is the formatted amount with currency symbol
           For USD: $12.50
         type: string
+      display_name:
+        description: DisplayName is the name of the price
+        type: string
       display_price_unit_amount:
         description: |-
           DisplayPriceUnitAmount is the formatted amount with price unit symbol
@@ -6435,6 +6160,9 @@ definitions:
       meter_id:
         description: MeterID is the id of the meter for usage based pricing
         type: string
+      min_quantity:
+        description: MinQuantity is the minimum quantity of the price
+        type: number
       parent_price_id:
         description: ParentPriceID references the root price (always set for price
           lineage tracking)
@@ -7066,6 +6794,8 @@ definitions:
         $ref: '#/definitions/types.GenericConnectionMetadata'
       hubspot:
         $ref: '#/definitions/types.HubSpotConnectionMetadata'
+      nomod:
+        $ref: '#/definitions/types.NomodConnectionMetadata'
       quickbooks:
         $ref: '#/definitions/types.QuickBooksConnectionMetadata'
       razorpay:
@@ -7636,6 +7366,15 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.NomodConnectionMetadata:
+    properties:
+      api_key:
+        description: Nomod API Key (encrypted)
+        type: string
+      webhook_secret:
+        description: Basic Auth secret for webhooks (encrypted, optional)
+        type: string
+    type: object
   types.PaginationResponse:
     properties:
       limit:
@@ -7691,10 +7430,12 @@ definitions:
     enum:
     - stripe
     - razorpay
+    - nomod
     type: string
     x-enum-varnames:
     - PaymentGatewayTypeStripe
     - PaymentGatewayTypeRazorpay
+    - PaymentGatewayTypeNomod
   types.PaymentMethodType:
     enum:
     - CARD
@@ -7993,6 +7734,7 @@ definitions:
     - razorpay
     - chargebee
     - quickbooks
+    - nomod
     type: string
     x-enum-varnames:
     - SecretProviderFlexPrice
@@ -8002,6 +7744,7 @@ definitions:
     - SecretProviderRazorpay
     - SecretProviderChargebee
     - SecretProviderQuickBooks
+    - SecretProviderNomod
   types.SecretType:
     enum:
     - private_key
@@ -8891,6 +8634,7 @@ paths:
         - razorpay
         - chargebee
         - quickbooks
+        - nomod
         in: query
         name: provider_type
         type: string
@@ -8902,6 +8646,7 @@ paths:
         - SecretProviderRazorpay
         - SecretProviderChargebee
         - SecretProviderQuickBooks
+        - SecretProviderNomod
       - in: query
         name: start_time
         type: string
@@ -12457,6 +12202,10 @@ paths:
       - in: query
         name: gateway_payment_id
         type: string
+      - description: For filtering by gateway tracking ID
+        in: query
+        name: gateway_tracking_id
+        type: string
       - in: query
         maximum: 1000
         minimum: 1
@@ -13700,35 +13449,6 @@ paths:
       summary: Delete an API key
       tags:
       - secrets
-  /secrets/integrations/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete integration credentials
-      parameters:
-      - description: Integration ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: No Content
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Delete an integration
-      tags:
-      - Integrations
   /secrets/integrations/{provider}:
     get:
       consumes:
@@ -13794,6 +13514,35 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Create or update an integration
+      tags:
+      - Integrations
+  /secrets/integrations/by-id/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete integration credentials
+      parameters:
+      - description: Integration ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete an integration
       tags:
       - Integrations
   /secrets/integrations/linked:
@@ -16100,6 +15849,42 @@ paths:
             additionalProperties: true
             type: object
       summary: Handle HubSpot webhook events
+      tags:
+      - Webhooks
+  /webhooks/nomod/{tenant_id}/{environment_id}:
+    post:
+      consumes:
+      - application/json
+      description: Process incoming Nomod webhook events for payment and invoice payments
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tenant_id
+        required: true
+        type: string
+      - description: Environment ID
+        in: path
+        name: environment_id
+        required: true
+        type: string
+      - description: Nomod webhook secret (if configured)
+        in: header
+        name: X-API-KEY
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook processed successfully
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized - invalid or missing X-API-KEY
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Handle Nomod webhook events
       tags:
       - Webhooks
   /webhooks/quickbooks/{tenant_id}/{environment_id}:

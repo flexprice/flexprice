@@ -67,8 +67,10 @@ api/*/*
 !api/go/go.mod
 !api/go/go.sum
 !api/go/README.md
-!api/go/helpers.go
-!api/go/custom/
+# Note: helpers.go is now in api/custom/go/ and gets copied during generation
+# !api/go/helpers.go  # Removed - use api/custom/go/helpers.go instead
+!api/go/examples/
+!api/go/examples/**
 
 !api/javascript/package.json
 !api/javascript/package-lock.json
@@ -77,16 +79,41 @@ api/*/*
 !api/javascript/tsconfig.node.json
 !api/javascript/tsconfig.app.json
 !api/javascript/jest.config.js
-!api/javascript/.eslintrc.js
 !api/javascript/.gitignore
 !api/javascript/.npmignore
-!api/javascript/.openapi-generator-ignore
 !api/javascript/README.md
+!api/javascript/examples/
+!api/javascript/examples/**
 
 !api/python/pyproject.toml
-!api/python/setup.py
-!api/python/requirements.txt
 !api/python/README.md
+!api/python/examples/
+!api/python/examples/**
+
+# OpenAPI Generator artifacts (no longer used with Speakeasy)
+api/*/.openapi-generator-ignore
+api/*/.travis.yml
+api/*/git_push.sh
+# Note: helpers.go in generated SDKs is copied from api/custom/go/helpers.go
+# We ignore the generated version but track the source in api/custom/
+api/*/helpers.go
+api/*/custom/helpers.go
+api/*/examples/.env.sample
+api/*/examples/.gitignore
+api/*/examples/go.sum
+# Note: example.js in generated SDKs is copied from api/custom/javascript/examples/example.js
+# We ignore the generated version but track the source in api/custom/
+api/*/examples/example.js
+api/*/examples/tsconfig.json
+api/*/examples/async_event_example.py
+api/*/examples/requirements.txt
+api/*/requirements.txt
+api/*/setup.py
+api/*/.eslintrc.js
+api/*/jest.config.js
+api/*/tsconfig.esm.json
+api/*/API-Reference.md
+api/*/CustomerPortal-Usage.md
 
 # Custom code directory - always track
 !api/custom/
