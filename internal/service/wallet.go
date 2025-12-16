@@ -289,35 +289,38 @@ func (s *walletService) GetWalletTransactions(ctx context.Context, walletID stri
 }
 
 func (s *walletService) ListWalletTransactionsByFilter(ctx context.Context, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error) {
-	// Ensure filter is initialized
+	// Initialize filter if nil
 	if filter == nil {
 		filter = types.NewWalletTransactionFilter()
 	}
 
-	// Validate expand fields
+	// Validate expand fields if any are requested
 	if !filter.GetExpand().IsEmpty() {
 		if err := filter.GetExpand().Validate(types.WalletTransactionExpandConfig); err != nil {
 			return nil, err
 		}
 	}
 
+	// Validate filter
 	if err := filter.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid filter").
 			Mark(ierr.ErrValidation)
 	}
 
+	// Fetch transactions
 	transactions, err := s.WalletRepo.ListWalletTransactions(ctx, filter)
 	if err != nil {
-		return nil, err // Repository already using ierr
+		return nil, err
 	}
 
-	// Get total count
+	// Get total count for pagination
 	count, err := s.WalletRepo.CountWalletTransactions(ctx, filter)
 	if err != nil {
-		return nil, err // Repository already using ierr
+		return nil, err
 	}
 
+	// Build base response
 	response := &dto.ListWalletTransactionsResponse{
 		Items: make([]*dto.WalletTransactionResponse, len(transactions)),
 		Pagination: types.NewPaginationResponse(
@@ -327,106 +330,171 @@ func (s *walletService) ListWalletTransactionsByFilter(ctx context.Context, filt
 		),
 	}
 
-	// Initialize service instances for expansion
-	var customerService CustomerService
-	var userService UserService
-	if filter.GetExpand().Has(types.ExpandCustomer) || filter.GetExpand().Has(types.ExpandCreatedByUser) {
-		customerService = NewCustomerService(s.ServiceParams)
-		userService = NewUserService(s.UserRepo, s.TenantRepo, nil)
+	// Early return if no transactions to avoid unnecessary expansion work
+	if len(transactions) == 0 {
+		return response, nil
 	}
 
-	// Load customers in bulk if customer expansion is requested
-	var customersByID map[string]*dto.CustomerResponse
-	if filter.GetExpand().Has(types.ExpandCustomer) && len(transactions) > 0 {
-		// Extract unique customer IDs
-		customerIDs := make([]string, 0)
-		customerIDMap := make(map[string]bool)
-		for _, txn := range transactions {
-			if txn.CustomerID != "" && !customerIDMap[txn.CustomerID] {
-				customerIDs = append(customerIDs, txn.CustomerID)
-				customerIDMap[txn.CustomerID] = true
-			}
+	expand := filter.GetExpand()
+	if expand.IsEmpty() {
+		// No expansion requested, just convert transactions to DTOs
+		for i, txn := range transactions {
+			response.Items[i] = dto.FromWalletTransaction(txn)
 		}
-
-		if len(customerIDs) > 0 {
-			// Fetch all customers in one query
-			customerFilter := &types.CustomerFilter{
-				QueryFilter: types.NewNoLimitQueryFilter(),
-				CustomerIDs: customerIDs,
-			}
-			customersResponse, err := customerService.GetCustomers(ctx, customerFilter)
-			if err != nil {
-				s.Logger.Errorw("failed to get customers for wallet transactions",
-					"error", err,
-					"customer_ids", customerIDs)
-				// Don't fail the request if customer expansion fails
-			} else {
-				// Create a map for quick customer lookup
-				customersByID = make(map[string]*dto.CustomerResponse, len(customersResponse.Items))
-				for _, cust := range customersResponse.Items {
-					customersByID[cust.Customer.ID] = cust
-				}
-				s.Logger.Debugw("fetched customers for wallet transactions", "count", len(customersResponse.Items))
-			}
-		}
+		return response, nil
 	}
 
-	// Load users in bulk if created_by_user expansion is requested
-	var usersByID map[string]*dto.UserResponse
-	if filter.GetExpand().Has(types.ExpandCreatedByUser) && len(transactions) > 0 {
-		// Extract unique user IDs (created_by)
-		userIDs := make([]string, 0)
-		userIDMap := make(map[string]bool)
-		for _, txn := range transactions {
-			if txn.CreatedBy != "" && !userIDMap[txn.CreatedBy] {
-				userIDs = append(userIDs, txn.CreatedBy)
-				userIDMap[txn.CreatedBy] = true
-			}
-		}
-
-		if len(userIDs) > 0 {
-			// Fetch all users in one query
-			userFilter := &types.UserFilter{
-				QueryFilter: types.NewNoLimitQueryFilter(),
-				UserIDs:     userIDs,
-			}
-			usersResponse, err := userService.ListUsersByFilter(ctx, userFilter)
-			if err != nil {
-				s.Logger.Errorw("failed to get users for wallet transactions",
-					"error", err,
-					"user_ids", userIDs)
-				// Don't fail the request if user expansion fails
-			} else {
-				// Create a map for quick user lookup
-				usersByID = make(map[string]*dto.UserResponse, len(usersResponse.Items))
-				for _, user := range usersResponse.Items {
-					usersByID[user.ID] = user
-				}
-				s.Logger.Debugw("fetched users for wallet transactions", "count", len(usersResponse.Items))
-			}
-		}
-	}
+	// Load expanded entities in bulk
+	customersByID := s.loadCustomersForExpansion(ctx, expand, transactions)
+	usersByID := s.loadUsersForExpansion(ctx, expand, transactions)
+	walletsByID := s.loadWalletsForExpansion(ctx, expand, transactions)
 
 	// Build response with expanded fields
 	for i, txn := range transactions {
 		response.Items[i] = dto.FromWalletTransaction(txn)
 
-		// Add customer if requested and available
-		if filter.GetExpand().Has(types.ExpandCustomer) && txn.CustomerID != "" {
+		// Attach expanded customer if requested and available
+		if expand.Has(types.ExpandCustomer) && txn.CustomerID != "" {
 			if cust, ok := customersByID[txn.CustomerID]; ok {
 				response.Items[i].Customer = cust
 			}
 		}
 
-		// Add created_by_user if requested and available
-		if filter.GetExpand().Has(types.ExpandCreatedByUser) && txn.CreatedBy != "" {
+		// Attach expanded user if requested and available
+		if expand.Has(types.ExpandCreatedByUser) && txn.CreatedBy != "" {
 			if user, ok := usersByID[txn.CreatedBy]; ok {
 				response.Items[i].CreatedByUser = user
+			}
+		}
+
+		// Attach expanded wallet if requested and available
+		if expand.Has(types.ExpandWallet) && txn.WalletID != "" {
+			if wallet, ok := walletsByID[txn.WalletID]; ok {
+				response.Items[i].Wallet = wallet
 			}
 		}
 	}
 
 	return response, nil
+}
+
+// loadCustomersForExpansion loads customers in bulk for transaction expansion
+func (s *walletService) loadCustomersForExpansion(ctx context.Context, expand types.Expand, transactions []*wallet.Transaction) map[string]*dto.CustomerResponse {
+	if !expand.Has(types.ExpandCustomer) {
+		return nil
+	}
+
+	// Extract unique customer IDs
+	customerIDs := lo.Uniq(lo.FilterMap(transactions, func(txn *wallet.Transaction, _ int) (string, bool) {
+		return txn.CustomerID, txn.CustomerID != ""
+	}))
+
+	if len(customerIDs) == 0 {
+		return nil
+	}
+
+	// Fetch customers in bulk
+	customerService := NewCustomerService(s.ServiceParams)
+	customerFilter := &types.CustomerFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerIDs: customerIDs,
+	}
+
+	customersResponse, err := customerService.GetCustomers(ctx, customerFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get customers for wallet transactions",
+			"error", err,
+			"customer_ids", customerIDs)
+		return nil
+	}
+
+	// Create map for quick lookup
+	customersByID := make(map[string]*dto.CustomerResponse, len(customersResponse.Items))
+	for _, cust := range customersResponse.Items {
+		customersByID[cust.Customer.ID] = cust
+	}
+
+	s.Logger.Debugw("fetched customers for wallet transactions", "count", len(customersResponse.Items))
+	return customersByID
+}
+
+// loadUsersForExpansion loads users in bulk for transaction expansion
+func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.Expand, transactions []*wallet.Transaction) map[string]*dto.UserResponse {
+	if !expand.Has(types.ExpandCreatedByUser) {
+		return nil
+	}
+
+	// Extract unique user IDs (created_by)
+	userIDs := lo.Uniq(lo.FilterMap(transactions, func(txn *wallet.Transaction, _ int) (string, bool) {
+		return txn.CreatedBy, txn.CreatedBy != ""
+	}))
+
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Fetch users in bulk
+	userService := NewUserService(s.UserRepo, s.TenantRepo, nil)
+	userFilter := &types.UserFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		UserIDs:     userIDs,
+	}
+
+	usersResponse, err := userService.ListUsersByFilter(ctx, userFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get users for wallet transactions",
+			"error", err,
+			"user_ids", userIDs)
+		return nil
+	}
+
+	// Create map for quick lookup
+	usersByID := make(map[string]*dto.UserResponse, len(usersResponse.Items))
+	for _, user := range usersResponse.Items {
+		usersByID[user.ID] = user
+	}
+
+	s.Logger.Debugw("fetched users for wallet transactions", "count", len(usersResponse.Items))
+	return usersByID
+}
+
+// loadWalletsForExpansion loads wallets in bulk for transaction expansion
+func (s *walletService) loadWalletsForExpansion(ctx context.Context, expand types.Expand, transactions []*wallet.Transaction) map[string]*dto.WalletResponse {
+	if !expand.Has(types.ExpandWallet) {
+		return nil
+	}
+
+	// Extract unique wallet IDs
+	walletIDs := lo.Uniq(lo.FilterMap(transactions, func(txn *wallet.Transaction, _ int) (string, bool) {
+		return txn.WalletID, txn.WalletID != ""
+	}))
+
+	if len(walletIDs) == 0 {
+		return nil
+	}
+
+	// Fetch wallets in bulk
+	walletFilter := &types.WalletFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		WalletIDs:   walletIDs,
+	}
+
+	walletsResponse, err := s.GetWallets(ctx, walletFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get wallets for wallet transactions",
+			"error", err,
+			"wallet_ids", walletIDs)
+		return nil
+	}
+
+	// Create map for quick lookup
+	walletsByID := make(map[string]*dto.WalletResponse, len(walletsResponse.Items))
+	for _, w := range walletsResponse.Items {
+		walletsByID[w.ID] = dto.FromWallet(w)
+	}
+
+	s.Logger.Debugw("fetched wallets for wallet transactions", "count", len(walletsResponse.Items))
+	return walletsByID
 }
 
 // Update the TopUpWallet method to use the new processWalletOperation

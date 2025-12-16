@@ -340,6 +340,7 @@ type WalletTransactionResponse struct {
 	// Expanded fields (optional, populated when expand parameter is used)
 	Customer      *CustomerResponse `json:"customer,omitempty"`
 	CreatedByUser *UserResponse     `json:"created_by_user,omitempty"`
+	Wallet        *WalletResponse   `json:"wallet,omitempty"`
 }
 
 // FromWalletTransaction converts a wallet transaction to a WalletTransactionResponse

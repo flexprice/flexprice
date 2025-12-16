@@ -414,7 +414,7 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.WalletTransactionFilter false "Filter"
-// @Param expand query string false "Expand fields (e.g., customer,created_by_user)"
+// @Param expand query string false "Expand fields (e.g., customer,created_by_user,wallet)"
 // @Success 200 {object} dto.ListWalletTransactionsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
@@ -447,4 +447,95 @@ func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// @Summary List wallets
+// @Description List wallets with optional filtering
+// @Tags Wallets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter query types.WalletFilter false "Filter"
+// @Success 200 {object} types.ListResponse[dto.WalletResponse]
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /wallets [get]
+func (h *WalletHandler) ListWallets(c *gin.Context) {
+	var filter types.WalletFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.walletService.GetWallets(c.Request.Context(), &filter)
+	if err != nil {
+		h.logger.Error("Failed to list wallets", "error", err)
+		c.Error(err)
+		return
+	}
+
+	// Convert domain models to DTOs
+	items := make([]*dto.WalletResponse, len(resp.Items))
+	for i, w := range resp.Items {
+		items[i] = dto.FromWallet(w)
+	}
+
+	response := &types.ListResponse[*dto.WalletResponse]{
+		Items:      items,
+		Pagination: resp.Pagination,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ListWalletsByFilter godoc
+// @Summary List wallets by filter
+// @Description List wallets by filter
+// @Tags Wallets
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.WalletFilter false "Filter"
+// @Success 200 {object} types.ListResponse[dto.WalletResponse]
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /wallets/search [post]
+func (h *WalletHandler) ListWalletsByFilter(c *gin.Context) {
+	var filter types.WalletFilter
+	if err := c.ShouldBindJSON(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid filter parameters").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	resp, err := h.walletService.GetWallets(c.Request.Context(), &filter)
+	if err != nil {
+		h.logger.Error("Failed to list wallets", "error", err)
+		c.Error(err)
+		return
+	}
+
+	// Convert domain models to DTOs
+	items := make([]*dto.WalletResponse, len(resp.Items))
+	for i, w := range resp.Items {
+		items[i] = dto.FromWallet(w)
+	}
+
+	response := &types.ListResponse[*dto.WalletResponse]{
+		Items:      items,
+		Pagination: resp.Pagination,
+	}
+
+	c.JSON(http.StatusOK, response)
 }

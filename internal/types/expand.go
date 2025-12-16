@@ -145,10 +145,11 @@ var (
 
 	// WalletTransactionExpandConfig defines what can be expanded on a wallet transaction
 	WalletTransactionExpandConfig = ExpandConfig{
-		AllowedFields: []ExpandableField{ExpandCustomer, ExpandCreatedByUser},
+		AllowedFields: []ExpandableField{ExpandCustomer, ExpandCreatedByUser, ExpandWallet},
 		NestedExpands: map[ExpandableField][]ExpandableField{
 			ExpandCustomer:      {},
 			ExpandCreatedByUser: {},
+			ExpandWallet:        {},
 		},
 	}
 )

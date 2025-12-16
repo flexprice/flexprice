@@ -269,6 +269,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		wallet := v1Private.Group("/wallets")
 		{
 			wallet.POST("", handlers.Wallet.CreateWallet)
+			wallet.GET("", handlers.Wallet.ListWallets)
 			wallet.GET("/:id", handlers.Wallet.GetWalletByID)
 			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
 			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
@@ -278,6 +279,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
 			wallet.POST("/:id/debit", handlers.Wallet.ManualBalanceDebit)
 			wallet.POST("/transactions/search", handlers.Wallet.ListWalletTransactionsByFilter)
+			wallet.POST("/search", handlers.Wallet.ListWalletsByFilter)
 		}
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")
