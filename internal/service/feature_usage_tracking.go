@@ -56,6 +56,9 @@ type FeatureUsageTrackingService interface {
 
 	// Get HuggingFace Inference
 	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
+
+	// Get Revenue
+	GetRevenue(ctx context.Context, req *dto.GetRevenueRequest) (*dto.GetRevenueResponse, error)
 }
 
 type featureUsageTrackingService struct {
@@ -2434,5 +2437,143 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 
 	return &dto.GetHuggingFaceBillingDataResponse{
 		Data: responseData,
+	}, nil
+}
+func (s *featureUsageTrackingService) GetRevenue(ctx context.Context, req *dto.GetRevenueRequest) (*dto.GetRevenueResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid daily revenue request").
+			Mark(ierr.ErrValidation)
+	}
+
+	featureUsageRecords, err := s.featureUsageRepo.GetUsageByWindow(ctx, req.StartTime, req.EndTime, req.ExternalCustomerIDs, req.Window)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get daily usage").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(featureUsageRecords) == 0 {
+		return &dto.GetRevenueResponse{
+			Data: []dto.RevenueInfo{},
+		}, nil
+	}
+
+	// Collect unique price IDs using empty struct
+	priceIDSet := make(map[string]struct{}, len(featureUsageRecords)/2)
+	for _, record := range featureUsageRecords {
+		if record.PriceID != "" {
+			priceIDSet[record.PriceID] = struct{}{}
+		}
+	}
+
+	// Fetch all prices in bulk
+	priceMap := make(map[string]*price.Price, len(priceIDSet))
+	if len(priceIDSet) == 0 {
+		return &dto.GetRevenueResponse{
+			Data: []dto.RevenueInfo{},
+		}, nil
+	}
+
+	priceIDs := make([]string, 0, len(priceIDSet))
+	for id := range priceIDSet {
+		priceIDs = append(priceIDs, id)
+	}
+
+	priceService := NewPriceService(s.ServiceParams)
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithPriceIDs(priceIDs).
+		WithStatus(types.StatusPublished).
+		WithAllowExpiredPrices(true)
+	pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch prices for cost calculation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, priceResp := range pricesResponse.Items {
+		priceMap[priceResp.ID] = priceResp.Price
+	}
+
+	// Calculate expected number of days for window capacity estimation
+	daysCount := int(req.EndTime.Sub(req.StartTime).Hours()/24) + 1
+	if daysCount < 1 {
+		daysCount = 1
+	}
+
+	// Group by customer and aggregate costs per day
+	type windowKey struct {
+		customerID string
+		timestamp  time.Time
+	}
+	windowCostMap := make(map[windowKey]decimal.Decimal, len(featureUsageRecords))
+
+	for _, record := range featureUsageRecords {
+		// Get price for this record
+		p, ok := priceMap[record.PriceID]
+		if !ok {
+			s.Logger.Warnw("price not found for feature_usage record",
+				"external_customer_id", record.ExternalCustomerID,
+				"price_id", record.PriceID,
+				"window_time", record.Timestamp,
+			)
+			continue
+		}
+
+		// Calculate and round cost
+		cost := priceService.CalculateCost(ctx, p, record.QtyTotal).Round(types.GetCurrencyPrecision(p.Currency))
+
+		// Create window key with customer and timestamp
+		key := windowKey{
+			customerID: record.ExternalCustomerID,
+			timestamp:  record.Timestamp,
+		}
+
+		// Aggregate costs for same customer and day
+		windowCostMap[key] = windowCostMap[key].Add(cost)
+	}
+
+	// Build customer map from aggregated window costs
+	customerMap := make(map[string]*dto.RevenueInfo, len(featureUsageRecords)/daysCount)
+
+	for key, cost := range windowCostMap {
+		customerInfo, exists := customerMap[key.customerID]
+		if !exists {
+			customerInfo = &dto.RevenueInfo{
+				ExternalCustomerID: key.customerID,
+				TotalCost:          decimal.Zero,
+				Windows:            make([]dto.RevenueWindow, 0, daysCount),
+			}
+			customerMap[key.customerID] = customerInfo
+		}
+
+		// Add to total cost
+		customerInfo.TotalCost = customerInfo.TotalCost.Add(cost)
+
+		// Add window
+		customerInfo.Windows = append(customerInfo.Windows, dto.RevenueWindow{
+			Cost:      cost,
+			Timestamp: key.timestamp,
+		})
+	}
+
+	// Convert map to slice with pre-allocated capacity
+	finalRecords := make([]dto.RevenueInfo, 0, len(customerMap))
+	for _, customerInfo := range customerMap {
+		// Sort windows by timestamp
+		sort.Slice(customerInfo.Windows, func(i, j int) bool {
+			return customerInfo.Windows[i].Timestamp.Before(customerInfo.Windows[j].Timestamp)
+		})
+		finalRecords = append(finalRecords, *customerInfo)
+	}
+
+	// Sort final records by external_customer_id
+	sort.Slice(finalRecords, func(i, j int) bool {
+		return finalRecords[i].ExternalCustomerID < finalRecords[j].ExternalCustomerID
+	})
+
+	return &dto.GetRevenueResponse{
+		Data: finalRecords,
 	}, nil
 }

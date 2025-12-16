@@ -138,6 +138,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/analytics-v2", handlers.Events.GetUsageAnalyticsV2)
 			events.POST("/huggingface-billing", handlers.Events.GetHuggingFaceBillingData)
 			events.GET("/monitoring", handlers.Events.GetMonitoringData)
+			events.POST("/revenue", handlers.Events.GetDailyRevenue)
 		}
 
 		meters := v1Private.Group("/meters")
