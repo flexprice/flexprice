@@ -60,8 +60,9 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 	}
 	_ = s.planRepo.Create(s.ctx, plan)
 
+	amount := decimal.RequireFromString("100")
 	req := dto.CreatePriceRequest{
-		Amount:             "100",
+		Amount:             &amount,
 		Currency:           "usd",
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           "plan-1",
@@ -78,13 +79,13 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 		Tiers: []dto.CreatePriceTier{
 			{
 				UpTo:       lo.ToPtr(uint64(10)),
-				UnitAmount: "50",
-				FlatAmount: lo.ToPtr("10"),
+				UnitAmount: decimal.RequireFromString("50"),
+				FlatAmount: lo.ToPtr(decimal.RequireFromString("10")),
 			},
 			{
 				UpTo:       lo.ToPtr(uint64(20)),
-				UnitAmount: "40",
-				FlatAmount: lo.ToPtr("5"),
+				UnitAmount: decimal.RequireFromString("40"),
+				FlatAmount: lo.ToPtr(decimal.RequireFromString("5")),
 			},
 		},
 	}
@@ -93,9 +94,8 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 	s.NoError(err)
 	s.NotNil(resp)
 
-	// Convert expected amount to decimal.Decimal for comparison
-	expectedAmount, _ := decimal.NewFromString(req.Amount)
-	s.Equal(expectedAmount, resp.Price.Amount) // Compare decimal.Decimal
+	s.NotNil(req.Amount)
+	s.Equal(*req.Amount, resp.Price.Amount) // Compare decimal.Decimal
 
 	// Normalize currency to lowercase for comparison
 	s.Equal(strings.ToLower(req.Currency), resp.Price.Currency)

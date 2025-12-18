@@ -1143,60 +1143,26 @@ func (r *OverrideLineItemRequest) Validate(
 			// Validate tiers if provided
 			if len(r.Tiers) > 0 {
 				for i, tier := range r.Tiers {
-					if tier.UnitAmount == "" {
-						return ierr.NewError("unit_amount is required when tiers are provided").
-							WithHint("Please provide a valid unit amount for each tier").
-							WithReportableDetails(map[string]interface{}{
-								"tier_index": i,
-							}).
-							Mark(ierr.ErrValidation)
-					}
-
-					// Validate tier unit amount is a valid decimal
-					tierUnitAmount, err := decimal.NewFromString(tier.UnitAmount)
-					if err != nil {
-						return ierr.NewError("invalid tier unit amount format").
-							WithHint("Tier unit amount must be a valid decimal number").
-							WithReportableDetails(map[string]interface{}{
-								"tier_index":  i,
-								"unit_amount": tier.UnitAmount,
-							}).
-							Mark(ierr.ErrValidation)
-					}
-
 					// Validate tier unit amount is not negative (allows zero)
-					if tierUnitAmount.IsNegative() {
+					if tier.UnitAmount.IsNegative() {
 						return ierr.NewError("tier unit amount cannot be negative").
 							WithHint("Tier unit amount cannot be negative").
 							WithReportableDetails(map[string]interface{}{
 								"tier_index":  i,
-								"unit_amount": tier.UnitAmount,
+								"unit_amount": tier.UnitAmount.String(),
 							}).
 							Mark(ierr.ErrValidation)
 					}
 
 					// Validate flat amount if provided
-					if tier.FlatAmount != nil {
-						flatAmount, err := decimal.NewFromString(*tier.FlatAmount)
-						if err != nil {
-							return ierr.NewError("invalid tier flat amount format").
-								WithHint("Tier flat amount must be a valid decimal number").
-								WithReportableDetails(map[string]interface{}{
-									"tier_index":  i,
-									"flat_amount": tier.FlatAmount,
-								}).
-								Mark(ierr.ErrValidation)
-						}
-
-						if flatAmount.IsNegative() {
-							return ierr.NewError("tier flat amount cannot be negative").
-								WithHint("Tier flat amount cannot be negative").
-								WithReportableDetails(map[string]interface{}{
-									"tier_index":  i,
-									"flat_amount": tier.FlatAmount,
-								}).
-								Mark(ierr.ErrValidation)
-						}
+					if tier.FlatAmount != nil && tier.FlatAmount.IsNegative() {
+						return ierr.NewError("tier flat amount cannot be negative").
+							WithHint("Tier flat amount cannot be negative").
+							WithReportableDetails(map[string]interface{}{
+								"tier_index":  i,
+								"flat_amount": tier.FlatAmount.String(),
+							}).
+							Mark(ierr.ErrValidation)
 					}
 				}
 			}

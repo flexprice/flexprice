@@ -89,8 +89,8 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetEntityType(p.EntityType).
 		SetEntityID(p.EntityID).
 		SetNillableMinQuantity(p.MinQuantity).
-		SetNillablePriceUnitID(lo.Ternary(p.PriceUnitID != "", &p.PriceUnitID, nil)).
-		SetNillablePriceUnit(lo.Ternary(p.PriceUnit != "", &p.PriceUnit, nil)).
+		SetNillablePriceUnitID(p.PriceUnitID).
+		SetNillablePriceUnit(p.PriceUnit).
 		SetNillablePriceUnitAmount(p.PriceUnitAmount).
 		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
 		SetNillableConversionRate(p.ConversionRate).
@@ -289,8 +289,6 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableGroupID(lo.ToPtr(p.GroupID)).
 		SetPriceUnitType(string(p.PriceUnitType)).
-		SetNillablePriceUnitID(lo.Ternary(p.PriceUnitID != "", &p.PriceUnitID, nil)).
-		SetNillablePriceUnit(lo.Ternary(p.PriceUnit != "", &p.PriceUnit, nil)).
 		SetNillablePriceUnitAmount(p.PriceUnitAmount).
 		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
 		SetNillableConversionRate(p.ConversionRate).
@@ -425,8 +423,8 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetUpdatedBy(p.UpdatedBy).
 			SetNillableGroupID(lo.ToPtr(p.GroupID)).
 			SetPriceUnitType(string(p.PriceUnitType)).
-			SetNillablePriceUnitID(lo.Ternary(p.PriceUnitID != "", &p.PriceUnitID, nil)).
-			SetNillablePriceUnit(lo.Ternary(p.PriceUnit != "", &p.PriceUnit, nil)).
+			SetNillablePriceUnitID(p.PriceUnitID).
+			SetNillablePriceUnit(p.PriceUnit).
 			SetNillablePriceUnitAmount(p.PriceUnitAmount).
 			SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
 			SetNillableConversionRate(p.ConversionRate).

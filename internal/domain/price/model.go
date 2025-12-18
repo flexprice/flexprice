@@ -47,10 +47,10 @@ type Price struct {
 	PriceUnitType types.PriceUnitType `db:"price_unit_type" json:"price_unit_type"`
 
 	// PriceUnitID is the id of the price unit (for CUSTOM type)
-	PriceUnitID string `db:"price_unit_id" json:"price_unit_id,omitempty"`
+	PriceUnitID *string `db:"price_unit_id" json:"price_unit_id,omitempty"`
 
 	// PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
-	PriceUnit string `db:"price_unit" json:"price_unit,omitempty"`
+	PriceUnit *string `db:"price_unit" json:"price_unit,omitempty"`
 
 	// PriceUnitAmount is the amount of the price unit
 	PriceUnitAmount *decimal.Decimal `db:"price_unit_amount" json:"price_unit_amount,omitempty"`

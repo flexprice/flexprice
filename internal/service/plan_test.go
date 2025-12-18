@@ -87,14 +87,8 @@ func ConvertToCreatePriceTier(tiers []price.PriceTier) []dto.CreatePriceTier {
 	for _, tier := range tiers {
 		converted = append(converted, dto.CreatePriceTier{
 			UpTo:       tier.UpTo,
-			UnitAmount: tier.UnitAmount.String(), // Convert decimal.Decimal to string
-			FlatAmount: func(flatAmount *decimal.Decimal) *string {
-				if flatAmount != nil {
-					str := flatAmount.String()
-					return &str
-				}
-				return nil
-			}(tier.FlatAmount), // Convert *decimal.Decimal to *string
+			UnitAmount: tier.UnitAmount,
+			FlatAmount: tier.FlatAmount,
 		})
 	}
 	return converted

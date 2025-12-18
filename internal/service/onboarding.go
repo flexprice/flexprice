@@ -17,6 +17,7 @@ import (
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -676,7 +677,7 @@ func (s *onboardingService) createDefaultPrices(ctx context.Context, planRespons
 
 	// Starter Plan - Free tier
 	starterPriceReq := dto.CreatePriceRequest{
-		Amount:             "0",
+		Amount:             lo.ToPtr(decimal.Zero),
 		Currency:           "USD",
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           starterPlan.ID,
@@ -699,7 +700,7 @@ func (s *onboardingService) createDefaultPrices(ctx context.Context, planRespons
 
 	// Basic Plan - $10/month
 	basicPriceReq := dto.CreatePriceRequest{
-		Amount:             "10",
+		Amount:             lo.ToPtr(decimal.NewFromInt(10)),
 		Currency:           "USD",
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           basicPlan.ID,
@@ -722,7 +723,7 @@ func (s *onboardingService) createDefaultPrices(ctx context.Context, planRespons
 
 	// Pro Plan - $50/month
 	proPriceReq := dto.CreatePriceRequest{
-		Amount:             "50",
+		Amount:             lo.ToPtr(decimal.NewFromInt(50)),
 		Currency:           "USD",
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           proPlan.ID,

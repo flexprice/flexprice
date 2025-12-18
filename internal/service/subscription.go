@@ -1023,7 +1023,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		// Create subscription-scoped price using price service
 		// Always preserve the original price's display name
 		createPriceReq := dto.CreatePriceRequest{
-			Amount:               originalPrice.Amount.String(),
+			Amount:               lo.ToPtr(originalPrice.Amount),
 			Currency:             originalPrice.Currency,
 			EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
 			EntityID:             sub.ID,
@@ -1049,12 +1049,9 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			for i, tier := range originalPrice.Tiers {
 				createPriceReq.Tiers[i] = dto.CreatePriceTier{
 					UpTo:       tier.UpTo,
-					UnitAmount: tier.UnitAmount.String(),
+					UnitAmount: tier.UnitAmount,
 				}
-				if tier.FlatAmount != nil {
-					flatAmountStr := tier.FlatAmount.String()
-					createPriceReq.Tiers[i].FlatAmount = &flatAmountStr
-				}
+				createPriceReq.Tiers[i].FlatAmount = tier.FlatAmount
 			}
 		}
 
@@ -1066,7 +1063,7 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 
 		// Amount override
 		if override.Amount != nil {
-			createPriceReq.Amount = override.Amount.String()
+			createPriceReq.Amount = override.Amount
 		}
 
 		// Billing model override

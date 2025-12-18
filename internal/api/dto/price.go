@@ -16,7 +16,8 @@ import (
 )
 
 type CreatePriceRequest struct {
-	Amount             string                   `json:"amount,omitempty"`
+	// Amount is represented as a decimal for accuracy. Use a pointer so omitempty works.
+	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
 	EntityType         types.PriceEntityType    `json:"entity_type" validate:"required"`
 	EntityID           string                   `json:"entity_id" validate:"required"`
@@ -56,6 +57,12 @@ type CreatePriceRequest struct {
 	GroupID string `json:"group_id,omitempty"`
 }
 
+type PriceUnitConfig struct {
+	Amount         string            `json:"amount,omitempty"`
+	PriceUnit      string            `json:"price_unit" validate:"required,len=3"`
+	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
+}
+
 type CreatePriceTier struct {
 	// up_to is the quantity up to which this tier applies. It is null for the last tier.
 	// IMPORTANT: Tier boundaries are INCLUSIVE.
@@ -64,17 +71,11 @@ type CreatePriceTier struct {
 	UpTo *uint64 `json:"up_to"`
 
 	// unit_amount is the amount per unit for the given tier
-	UnitAmount string `json:"unit_amount" validate:"required"`
+	UnitAmount decimal.Decimal `json:"unit_amount" swaggertype:"string"`
 
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
-	FlatAmount *string `json:"flat_amount" validate:"omitempty"`
-}
-
-type PriceUnitConfig struct {
-	Amount         string            `json:"amount,omitempty"`
-	PriceUnit      string            `json:"price_unit" validate:"required,len=3"`
-	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
+	FlatAmount *decimal.Decimal `json:"flat_amount,omitempty" swaggertype:"string"`
 }
 
 type UpdatePriceRequest struct {
@@ -143,52 +144,24 @@ type DeletePriceRequest struct {
 
 // Validate validates the tier structure
 func (t *CreatePriceTier) Validate() error {
-	// Validate unit amount
-	if t.UnitAmount == "" {
-		return ierr.NewError("unit_amount is required").
-			WithHint("Unit amount is required for each tier").
-			Mark(ierr.ErrValidation)
-	}
-
-	unitAmount, err := decimal.NewFromString(t.UnitAmount)
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Unit amount must be a valid decimal number").
-			WithReportableDetails(map[string]interface{}{
-				"unit_amount": t.UnitAmount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if unitAmount.LessThan(decimal.Zero) {
+	// Validate unit amount (allows zero)
+	if t.UnitAmount.LessThan(decimal.Zero) {
 		return ierr.NewError("unit amount cannot be negative").
 			WithHint("Unit amount cannot be negative").
 			WithReportableDetails(map[string]interface{}{
-				"unit_amount": t.UnitAmount,
+				"unit_amount": t.UnitAmount.String(),
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
 	// Validate flat amount if provided
-	if t.FlatAmount != nil {
-		flatAmount, err := decimal.NewFromString(*t.FlatAmount)
-		if err != nil {
-			return ierr.WithError(err).
-				WithHint("Flat amount must be a valid decimal number").
-				WithReportableDetails(map[string]interface{}{
-					"flat_amount": *t.FlatAmount,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
-		if flatAmount.LessThan(decimal.Zero) {
-			return ierr.NewError("flat amount cannot be negative").
-				WithHint("Flat amount cannot be negative").
-				WithReportableDetails(map[string]interface{}{
-					"flat_amount": *t.FlatAmount,
-				}).
-				Mark(ierr.ErrValidation)
-		}
+	if t.FlatAmount != nil && t.FlatAmount.LessThan(decimal.Zero) {
+		return ierr.NewError("flat amount cannot be negative").
+			WithHint("Flat amount cannot be negative").
+			WithReportableDetails(map[string]interface{}{
+				"flat_amount": t.FlatAmount.String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil
@@ -258,12 +231,8 @@ func (r *CreatePriceRequest) Validate() error {
 	}
 
 	// 5. Validate amount
-	if r.Amount != "" {
-		amount, err := r.parseAmount()
-		if err != nil {
-			return err
-		}
-		if amount.LessThan(decimal.Zero) {
+	if r.Amount != nil {
+		if r.Amount.LessThan(decimal.Zero) {
 			return ierr.NewError("amount cannot be negative").
 				WithHint("Amount cannot be negative").
 				Mark(ierr.ErrValidation)
@@ -377,7 +346,7 @@ func (r *CreatePriceRequest) Validate() error {
 
 	// 10. Validate amount requirements for non-TIERED models with custom pricing
 	if priceUnitType == types.PRICE_UNIT_TYPE_CUSTOM && r.BillingModel != types.BILLING_MODEL_TIERED {
-		if r.Amount == "" && r.PriceUnitConfig.Amount == "" {
+		if r.Amount == nil && r.PriceUnitConfig.Amount == "" {
 			return ierr.NewError("amount is required when using price unit config").
 				WithHint("Provide either amount or price_unit_config.amount").
 				Mark(ierr.ErrValidation)
@@ -428,9 +397,9 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 	}
 
 	// Parse common fields
-	amount, err := r.parseAmount()
-	if err != nil {
-		return nil, err
+	amount := decimal.Zero
+	if r.Amount != nil {
+		amount = *r.Amount
 	}
 
 	startDate := r.StartDate
@@ -528,23 +497,6 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 	return price, nil
 }
 
-// parseAmount parses the amount string with optimized error handling
-func (r *CreatePriceRequest) parseAmount() (decimal.Decimal, error) {
-	if r.Amount == "" {
-		return decimal.Zero, nil
-	}
-	amount, err := decimal.NewFromString(r.Amount)
-	if err != nil {
-		return decimal.Zero, ierr.WithError(err).
-			WithHint("Amount must be a valid decimal number").
-			WithReportableDetails(map[string]interface{}{
-				"amount": r.Amount,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return amount, nil
-}
-
 // convertTiers converts CreatePriceTier slice to priceDomain.JSONBTiers with optimized error handling
 func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.JSONBTiers, error) {
 	if len(tiers) == 0 {
@@ -553,24 +505,10 @@ func (r *CreatePriceRequest) convertTiers(tiers []CreatePriceTier) (priceDomain.
 
 	priceTiers := make([]priceDomain.PriceTier, len(tiers))
 	for i, tier := range tiers {
-		unitAmount, err := decimal.NewFromString(tier.UnitAmount)
-		if err != nil {
-			return nil, r.createDecimalError("Unit amount must be a valid decimal number", "unit_amount", tier.UnitAmount)
-		}
-
-		var flatAmount *decimal.Decimal
-		if tier.FlatAmount != nil {
-			parsed, err := decimal.NewFromString(*tier.FlatAmount)
-			if err != nil {
-				return nil, r.createDecimalError("Flat amount must be a valid decimal number", "flat_amount", *tier.FlatAmount)
-			}
-			flatAmount = &parsed
-		}
-
 		priceTiers[i] = priceDomain.PriceTier{
 			UpTo:       tier.UpTo,
-			UnitAmount: unitAmount,
-			FlatAmount: flatAmount,
+			UnitAmount: tier.UnitAmount,
+			FlatAmount: tier.FlatAmount,
 		}
 	}
 
@@ -657,17 +595,19 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	case types.BILLING_MODEL_FLAT_FEE:
 		// For FLAT_FEE, only amount is relevant
 		if r.Amount != nil {
-			createReq.Amount = r.Amount.String()
+			createReq.Amount = r.Amount
 		} else {
-			createReq.Amount = existingPrice.Amount.String()
+			existingAmount := existingPrice.Amount
+			createReq.Amount = &existingAmount
 		}
 
 	case types.BILLING_MODEL_PACKAGE:
 		// For PACKAGE, amount and transform_quantity are relevant
 		if r.Amount != nil {
-			createReq.Amount = r.Amount.String()
+			createReq.Amount = r.Amount
 		} else {
-			createReq.Amount = existingPrice.Amount.String()
+			existingAmount := existingPrice.Amount
+			createReq.Amount = &existingAmount
 		}
 
 		if r.TransformQuantity != nil {
@@ -692,12 +632,9 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 			for i, tier := range existingPrice.Tiers {
 				createReq.Tiers[i] = CreatePriceTier{
 					UpTo:       tier.UpTo,
-					UnitAmount: tier.UnitAmount.String(),
+					UnitAmount: tier.UnitAmount,
 				}
-				if tier.FlatAmount != nil {
-					flatAmountStr := tier.FlatAmount.String()
-					createReq.Tiers[i].FlatAmount = &flatAmountStr
-				}
+				createReq.Tiers[i].FlatAmount = tier.FlatAmount
 			}
 		}
 	}

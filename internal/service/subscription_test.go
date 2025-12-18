@@ -3994,9 +3994,9 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 				{
 					PriceID: s.testData.prices.apiCalls.ID,
 					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(5000)), UnitAmount: "0.015"},
-						{UpTo: lo.ToPtr(uint64(50000)), UnitAmount: "0.012"},
-						{UpTo: nil, UnitAmount: "0.008"},
+						{UpTo: lo.ToPtr(uint64(5000)), UnitAmount: decimal.RequireFromString("0.015")},
+						{UpTo: lo.ToPtr(uint64(50000)), UnitAmount: decimal.RequireFromString("0.012")},
+						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.008")},
 					},
 				},
 			},
@@ -4027,9 +4027,9 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 					BillingModel: types.BILLING_MODEL_TIERED,
 					TierMode:     types.BILLING_TIER_SLAB,
 					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(100)), UnitAmount: "0.80"},
-						{UpTo: lo.ToPtr(uint64(500)), UnitAmount: "0.60"},
-						{UpTo: nil, UnitAmount: "0.40"},
+						{UpTo: lo.ToPtr(uint64(100)), UnitAmount: decimal.RequireFromString("0.80")},
+						{UpTo: lo.ToPtr(uint64(500)), UnitAmount: decimal.RequireFromString("0.60")},
+						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.40")},
 					},
 				},
 			},
@@ -4059,9 +4059,9 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 					BillingModel: types.BILLING_MODEL_TIERED,
 					TierMode:     types.BILLING_TIER_VOLUME,
 					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(50)), UnitAmount: "0.90"},
-						{UpTo: lo.ToPtr(uint64(200)), UnitAmount: "0.75"},
-						{UpTo: nil, UnitAmount: "0.60"},
+						{UpTo: lo.ToPtr(uint64(50)), UnitAmount: decimal.RequireFromString("0.90")},
+						{UpTo: lo.ToPtr(uint64(200)), UnitAmount: decimal.RequireFromString("0.75")},
+						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.60")},
 					},
 					TransformQuantity: &price.TransformQuantity{
 						DivideBy: 5,
@@ -4081,8 +4081,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 					PriceID:  s.testData.prices.apiCalls.ID,
 					TierMode: types.BILLING_TIER_SLAB,
 					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(2000)), UnitAmount: "0.012"},
-						{UpTo: nil, UnitAmount: "0.008"},
+						{UpTo: lo.ToPtr(uint64(2000)), UnitAmount: decimal.RequireFromString("0.012")},
+						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.008")},
 					},
 				},
 			},
@@ -4101,8 +4101,8 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 					PriceID:  s.testData.prices.apiCalls.ID,
 					TierMode: types.BILLING_TIER_SLAB,
 					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(2000)), UnitAmount: "0.012"},
-						{UpTo: nil, UnitAmount: "0.008"},
+						{UpTo: lo.ToPtr(uint64(2000)), UnitAmount: decimal.RequireFromString("0.012")},
+						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.008")},
 					},
 				},
 			},
@@ -4554,8 +4554,8 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideIntegration() {
 					BillingModel: types.BILLING_MODEL_TIERED,
 					TierMode:     types.BILLING_TIER_VOLUME,
 					Tiers: []dto.CreatePriceTier{
-						{UpTo: lo.ToPtr(uint64(100)), UnitAmount: "0.50"},
-						{UpTo: nil, UnitAmount: "0.25"},
+						{UpTo: lo.ToPtr(uint64(100)), UnitAmount: decimal.RequireFromString("0.50")},
+						{UpTo: nil, UnitAmount: decimal.RequireFromString("0.25")},
 					},
 					Quantity: lo.ToPtr(decimal.NewFromInt(2)),
 				},

@@ -90,8 +90,9 @@ func (s *SubscriptionChangeServiceTestSuite) createTestPlan(name string, amount 
 	require.NoError(s.T(), err)
 
 	// Create a price for the plan
+	amt := amount
 	priceReq := dto.CreatePriceRequest{
-		Amount:             amount.String(),
+		Amount:             &amt,
 		Currency:           "usd",
 		Type:               types.PRICE_TYPE_FIXED,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -175,8 +176,9 @@ func (s *SubscriptionChangeServiceTestSuite) createTestPlanWithBilling(name stri
 	require.NoError(s.T(), err)
 
 	// Create a price for the plan
+	amt := amount
 	priceReq := dto.CreatePriceRequest{
-		Amount:             amount.String(),
+		Amount:             &amt,
 		Currency:           "usd",
 		Type:               types.PRICE_TYPE_FIXED,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -246,8 +248,9 @@ func (s *SubscriptionChangeServiceTestSuite) createUsageBasedPlan(name string, f
 
 	// Create fixed price
 	if !fixedAmount.IsZero() {
+		amt := fixedAmount
 		fixedPriceReq := dto.CreatePriceRequest{
-			Amount:             fixedAmount.String(),
+			Amount:             &amt,
 			Currency:           "usd",
 			Type:               types.PRICE_TYPE_FIXED,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -264,8 +267,9 @@ func (s *SubscriptionChangeServiceTestSuite) createUsageBasedPlan(name string, f
 	}
 
 	// Create usage price
+	usageAmt := usageAmount
 	usagePriceReq := dto.CreatePriceRequest{
-		Amount:             usageAmount.String(),
+		Amount:             &usageAmt,
 		Currency:           "usd",
 		Type:               types.PRICE_TYPE_USAGE,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -321,8 +325,9 @@ func (s *SubscriptionChangeServiceTestSuite) createMultiMeterUsagePlan(name stri
 
 	// Create fixed price component if specified
 	if !fixedAmount.IsZero() {
+		amt := fixedAmount
 		fixedPriceReq := dto.CreatePriceRequest{
-			Amount:             fixedAmount.String(),
+			Amount:             &amt,
 			Currency:           "usd",
 			Type:               types.PRICE_TYPE_FIXED,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -340,8 +345,9 @@ func (s *SubscriptionChangeServiceTestSuite) createMultiMeterUsagePlan(name stri
 
 	// Create usage prices for each meter
 	for i, meterSpec := range meters {
+		usageAmt := meterSpec.amount
 		usagePriceReq := dto.CreatePriceRequest{
-			Amount:             meterSpec.amount.String(),
+			Amount:             &usageAmt,
 			Currency:           "usd",
 			Type:               types.PRICE_TYPE_USAGE,
 			BillingModel:       types.BILLING_MODEL_FLAT_FEE,

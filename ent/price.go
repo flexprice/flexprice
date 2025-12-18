@@ -48,7 +48,7 @@ type Price struct {
 	// PriceUnitID holds the value of the "price_unit_id" field.
 	PriceUnitID *string `json:"price_unit_id,omitempty"`
 	// PriceUnit holds the value of the "price_unit" field.
-	PriceUnit string `json:"price_unit,omitempty"`
+	PriceUnit *string `json:"price_unit,omitempty"`
 	// PriceUnitAmount holds the value of the "price_unit_amount" field.
 	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty"`
 	// DisplayPriceUnitAmount holds the value of the "display_price_unit_amount" field.
@@ -259,7 +259,8 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit", values[i])
 			} else if value.Valid {
-				pr.PriceUnit = value.String
+				pr.PriceUnit = new(string)
+				*pr.PriceUnit = value.String
 			}
 		case price.FieldPriceUnitAmount:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
@@ -525,8 +526,10 @@ func (pr *Price) String() string {
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
-	builder.WriteString("price_unit=")
-	builder.WriteString(pr.PriceUnit)
+	if v := pr.PriceUnit; v != nil {
+		builder.WriteString("price_unit=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	if v := pr.PriceUnitAmount; v != nil {
 		builder.WriteString("price_unit_amount=")

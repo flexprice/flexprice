@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -298,7 +299,7 @@ func (p *CSVFeatureProcessor) createPrice(ctx context.Context, record CSVFeature
 
 	// Create price request
 	priceReq := dto.CreatePriceRequest{
-		Amount:             amount.String(),
+		Amount:             lo.ToPtr(amount),
 		Currency:           record.Currency,
 		EntityType:         entityType,
 		EntityID:           entityID,

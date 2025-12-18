@@ -73,6 +73,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
+			Immutable().
 			Optional().
 			Nillable(),
 		// price_unit is the code of the price unit
@@ -80,7 +81,9 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(3)",
 			}).
-			Optional(),
+			Immutable().
+			Optional().
+			Nillable(),
 
 		// price_unit_amount is the amount of the price unit
 		field.Other("price_unit_amount", decimal.Decimal{}).
@@ -247,6 +250,7 @@ func (Price) Edges() []ent.Edge {
 		edge.To("costsheet", Costsheet.Type),
 		edge.To("price_unit_edge", PriceUnit.Type).
 			Field("price_unit_id").
+			Immutable().
 			Unique(),
 	}
 }

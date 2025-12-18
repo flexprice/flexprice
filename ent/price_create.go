@@ -798,7 +798,7 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := pc.mutation.PriceUnit(); ok {
 		_spec.SetField(price.FieldPriceUnit, field.TypeString, value)
-		_node.PriceUnit = value
+		_node.PriceUnit = &value
 	}
 	if value, ok := pc.mutation.PriceUnitAmount(); ok {
 		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)

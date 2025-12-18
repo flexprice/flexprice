@@ -1311,7 +1311,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 	}
 
 	// 6. Set price unit metadata
-	p.PriceUnitID = priceUnit.ID
+	p.PriceUnitID = lo.ToPtr(priceUnit.ID)
 	p.ConversionRate = &priceUnit.ConversionRate
 
 	// 7. Update display amounts after conversion
