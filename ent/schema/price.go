@@ -60,15 +60,6 @@ func (Price) Fields() []ent.Field {
 			}).
 			NotEmpty(),
 
-		// min_quantity is the minimum quantity of the price
-		field.Other("min_quantity", decimal.Decimal{}).
-			SchemaType(map[string]string{
-				"postgres": "numeric(20,8)",
-			}).
-			Optional().
-			Nillable().
-			Immutable(),
-
 		// price_unit_type is the type of the price unit- Fiat, Custom
 		field.String("price_unit_type").
 			SchemaType(map[string]string{
@@ -82,8 +73,8 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Optional(),
-
+			Optional().
+			Nillable(),
 		// price_unit is the code of the price unit
 		field.String("price_unit").
 			SchemaType(map[string]string{
@@ -97,7 +88,8 @@ func (Price) Fields() []ent.Field {
 				"postgres": "numeric(25,15)",
 			}).
 			Optional().
-			Nillable(),
+			Nillable().
+			Default(decimal.Zero),
 
 		// display_price_unit_amount is the amount of the price unit in the display currency
 		field.String("display_price_unit_amount").
@@ -112,7 +104,18 @@ func (Price) Fields() []ent.Field {
 				"postgres": "numeric(25,15)",
 			}).
 			Optional().
+			Nillable().
+			Default(decimal.Zero),
+
+		// min_quantity is the minimum quantity of the price
+		field.Other("min_quantity", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			Immutable().
+			Optional().
 			Nillable(),
+
 		field.String("type").
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",

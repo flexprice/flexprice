@@ -79,6 +79,5 @@ func (PriceUnit) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "code").
 			Unique().
 			Annotations(entsql.IndexWhere("status = 'published'")),
-		index.Fields("tenant_id", "environment_id", "code"),
 	}
 }
