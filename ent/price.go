@@ -43,12 +43,10 @@ type Price struct {
 	Currency string `json:"currency,omitempty"`
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
-	// MinQuantity holds the value of the "min_quantity" field.
-	MinQuantity *decimal.Decimal `json:"min_quantity,omitempty"`
 	// PriceUnitType holds the value of the "price_unit_type" field.
 	PriceUnitType string `json:"price_unit_type,omitempty"`
 	// PriceUnitID holds the value of the "price_unit_id" field.
-	PriceUnitID string `json:"price_unit_id,omitempty"`
+	PriceUnitID *string `json:"price_unit_id,omitempty"`
 	// PriceUnit holds the value of the "price_unit" field.
 	PriceUnit string `json:"price_unit,omitempty"`
 	// PriceUnitAmount holds the value of the "price_unit_amount" field.
@@ -57,6 +55,8 @@ type Price struct {
 	DisplayPriceUnitAmount string `json:"display_price_unit_amount,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
 	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty"`
+	// MinQuantity holds the value of the "min_quantity" field.
+	MinQuantity *decimal.Decimal `json:"min_quantity,omitempty"`
 	// Type holds the value of the "type" field.
 	Type types.PriceType `json:"type,omitempty"`
 	// BillingPeriod holds the value of the "billing_period" field.
@@ -143,7 +143,7 @@ func (*Price) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case price.FieldMinQuantity, price.FieldPriceUnitAmount, price.FieldConversionRate:
+		case price.FieldPriceUnitAmount, price.FieldConversionRate, price.FieldMinQuantity:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case price.FieldFilterValues, price.FieldTiers, price.FieldPriceUnitTiers, price.FieldTransformQuantity, price.FieldMetadata:
 			values[i] = new([]byte)
@@ -242,13 +242,6 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.DisplayAmount = value.String
 			}
-		case price.FieldMinQuantity:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field min_quantity", values[i])
-			} else if value.Valid {
-				pr.MinQuantity = new(decimal.Decimal)
-				*pr.MinQuantity = *value.S.(*decimal.Decimal)
-			}
 		case price.FieldPriceUnitType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_type", values[i])
@@ -259,7 +252,8 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_id", values[i])
 			} else if value.Valid {
-				pr.PriceUnitID = value.String
+				pr.PriceUnitID = new(string)
+				*pr.PriceUnitID = value.String
 			}
 		case price.FieldPriceUnit:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -286,6 +280,13 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pr.ConversionRate = new(decimal.Decimal)
 				*pr.ConversionRate = *value.S.(*decimal.Decimal)
+			}
+		case price.FieldMinQuantity:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field min_quantity", values[i])
+			} else if value.Valid {
+				pr.MinQuantity = new(decimal.Decimal)
+				*pr.MinQuantity = *value.S.(*decimal.Decimal)
 			}
 		case price.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -516,16 +517,13 @@ func (pr *Price) String() string {
 	builder.WriteString("display_amount=")
 	builder.WriteString(pr.DisplayAmount)
 	builder.WriteString(", ")
-	if v := pr.MinQuantity; v != nil {
-		builder.WriteString("min_quantity=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
 	builder.WriteString("price_unit_type=")
 	builder.WriteString(pr.PriceUnitType)
 	builder.WriteString(", ")
-	builder.WriteString("price_unit_id=")
-	builder.WriteString(pr.PriceUnitID)
+	if v := pr.PriceUnitID; v != nil {
+		builder.WriteString("price_unit_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("price_unit=")
 	builder.WriteString(pr.PriceUnit)
@@ -540,6 +538,11 @@ func (pr *Price) String() string {
 	builder.WriteString(", ")
 	if v := pr.ConversionRate; v != nil {
 		builder.WriteString("conversion_rate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := pr.MinQuantity; v != nil {
+		builder.WriteString("min_quantity=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

@@ -36903,12 +36903,12 @@ type PriceMutation struct {
 	amount                    *decimal.Decimal
 	currency                  *string
 	display_amount            *string
-	min_quantity              *decimal.Decimal
 	price_unit_type           *string
 	price_unit                *string
 	price_unit_amount         *decimal.Decimal
 	display_price_unit_amount *string
 	conversion_rate           *decimal.Decimal
+	min_quantity              *decimal.Decimal
 	_type                     *types.PriceType
 	billing_period            *types.BillingPeriod
 	billing_period_count      *int
@@ -37498,55 +37498,6 @@ func (m *PriceMutation) ResetDisplayAmount() {
 	m.display_amount = nil
 }
 
-// SetMinQuantity sets the "min_quantity" field.
-func (m *PriceMutation) SetMinQuantity(d decimal.Decimal) {
-	m.min_quantity = &d
-}
-
-// MinQuantity returns the value of the "min_quantity" field in the mutation.
-func (m *PriceMutation) MinQuantity() (r decimal.Decimal, exists bool) {
-	v := m.min_quantity
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldMinQuantity returns the old "min_quantity" field's value of the Price entity.
-// If the Price object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldMinQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldMinQuantity is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldMinQuantity requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldMinQuantity: %w", err)
-	}
-	return oldValue.MinQuantity, nil
-}
-
-// ClearMinQuantity clears the value of the "min_quantity" field.
-func (m *PriceMutation) ClearMinQuantity() {
-	m.min_quantity = nil
-	m.clearedFields[price.FieldMinQuantity] = struct{}{}
-}
-
-// MinQuantityCleared returns if the "min_quantity" field was cleared in this mutation.
-func (m *PriceMutation) MinQuantityCleared() bool {
-	_, ok := m.clearedFields[price.FieldMinQuantity]
-	return ok
-}
-
-// ResetMinQuantity resets all changes to the "min_quantity" field.
-func (m *PriceMutation) ResetMinQuantity() {
-	m.min_quantity = nil
-	delete(m.clearedFields, price.FieldMinQuantity)
-}
-
 // SetPriceUnitType sets the "price_unit_type" field.
 func (m *PriceMutation) SetPriceUnitType(s string) {
 	m.price_unit_type = &s
@@ -37600,7 +37551,7 @@ func (m *PriceMutation) PriceUnitID() (r string, exists bool) {
 // OldPriceUnitID returns the old "price_unit_id" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldPriceUnitID(ctx context.Context) (v *string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceUnitID is only allowed on UpdateOne operations")
 	}
@@ -37826,6 +37777,55 @@ func (m *PriceMutation) ConversionRateCleared() bool {
 func (m *PriceMutation) ResetConversionRate() {
 	m.conversion_rate = nil
 	delete(m.clearedFields, price.FieldConversionRate)
+}
+
+// SetMinQuantity sets the "min_quantity" field.
+func (m *PriceMutation) SetMinQuantity(d decimal.Decimal) {
+	m.min_quantity = &d
+}
+
+// MinQuantity returns the value of the "min_quantity" field in the mutation.
+func (m *PriceMutation) MinQuantity() (r decimal.Decimal, exists bool) {
+	v := m.min_quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMinQuantity returns the old "min_quantity" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldMinQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMinQuantity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMinQuantity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMinQuantity: %w", err)
+	}
+	return oldValue.MinQuantity, nil
+}
+
+// ClearMinQuantity clears the value of the "min_quantity" field.
+func (m *PriceMutation) ClearMinQuantity() {
+	m.min_quantity = nil
+	m.clearedFields[price.FieldMinQuantity] = struct{}{}
+}
+
+// MinQuantityCleared returns if the "min_quantity" field was cleared in this mutation.
+func (m *PriceMutation) MinQuantityCleared() bool {
+	_, ok := m.clearedFields[price.FieldMinQuantity]
+	return ok
+}
+
+// ResetMinQuantity resets all changes to the "min_quantity" field.
+func (m *PriceMutation) ResetMinQuantity() {
+	m.min_quantity = nil
+	delete(m.clearedFields, price.FieldMinQuantity)
 }
 
 // SetType sets the "type" field.
@@ -39062,9 +39062,6 @@ func (m *PriceMutation) Fields() []string {
 	if m.display_amount != nil {
 		fields = append(fields, price.FieldDisplayAmount)
 	}
-	if m.min_quantity != nil {
-		fields = append(fields, price.FieldMinQuantity)
-	}
 	if m.price_unit_type != nil {
 		fields = append(fields, price.FieldPriceUnitType)
 	}
@@ -39082,6 +39079,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.conversion_rate != nil {
 		fields = append(fields, price.FieldConversionRate)
+	}
+	if m.min_quantity != nil {
+		fields = append(fields, price.FieldMinQuantity)
 	}
 	if m._type != nil {
 		fields = append(fields, price.FieldType)
@@ -39179,8 +39179,6 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case price.FieldDisplayAmount:
 		return m.DisplayAmount()
-	case price.FieldMinQuantity:
-		return m.MinQuantity()
 	case price.FieldPriceUnitType:
 		return m.PriceUnitType()
 	case price.FieldPriceUnitID:
@@ -39193,6 +39191,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.DisplayPriceUnitAmount()
 	case price.FieldConversionRate:
 		return m.ConversionRate()
+	case price.FieldMinQuantity:
+		return m.MinQuantity()
 	case price.FieldType:
 		return m.GetType()
 	case price.FieldBillingPeriod:
@@ -39268,8 +39268,6 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCurrency(ctx)
 	case price.FieldDisplayAmount:
 		return m.OldDisplayAmount(ctx)
-	case price.FieldMinQuantity:
-		return m.OldMinQuantity(ctx)
 	case price.FieldPriceUnitType:
 		return m.OldPriceUnitType(ctx)
 	case price.FieldPriceUnitID:
@@ -39282,6 +39280,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDisplayPriceUnitAmount(ctx)
 	case price.FieldConversionRate:
 		return m.OldConversionRate(ctx)
+	case price.FieldMinQuantity:
+		return m.OldMinQuantity(ctx)
 	case price.FieldType:
 		return m.OldType(ctx)
 	case price.FieldBillingPeriod:
@@ -39412,13 +39412,6 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDisplayAmount(v)
 		return nil
-	case price.FieldMinQuantity:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetMinQuantity(v)
-		return nil
 	case price.FieldPriceUnitType:
 		v, ok := value.(string)
 		if !ok {
@@ -39460,6 +39453,13 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetConversionRate(v)
+		return nil
+	case price.FieldMinQuantity:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMinQuantity(v)
 		return nil
 	case price.FieldType:
 		v, ok := value.(types.PriceType)
@@ -39684,9 +39684,6 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldDisplayName) {
 		fields = append(fields, price.FieldDisplayName)
 	}
-	if m.FieldCleared(price.FieldMinQuantity) {
-		fields = append(fields, price.FieldMinQuantity)
-	}
 	if m.FieldCleared(price.FieldPriceUnitID) {
 		fields = append(fields, price.FieldPriceUnitID)
 	}
@@ -39701,6 +39698,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(price.FieldConversionRate) {
 		fields = append(fields, price.FieldConversionRate)
+	}
+	if m.FieldCleared(price.FieldMinQuantity) {
+		fields = append(fields, price.FieldMinQuantity)
 	}
 	if m.FieldCleared(price.FieldInvoiceCadence) {
 		fields = append(fields, price.FieldInvoiceCadence)
@@ -39776,9 +39776,6 @@ func (m *PriceMutation) ClearField(name string) error {
 	case price.FieldDisplayName:
 		m.ClearDisplayName()
 		return nil
-	case price.FieldMinQuantity:
-		m.ClearMinQuantity()
-		return nil
 	case price.FieldPriceUnitID:
 		m.ClearPriceUnitID()
 		return nil
@@ -39793,6 +39790,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldConversionRate:
 		m.ClearConversionRate()
+		return nil
+	case price.FieldMinQuantity:
+		m.ClearMinQuantity()
 		return nil
 	case price.FieldInvoiceCadence:
 		m.ClearInvoiceCadence()
@@ -39883,9 +39883,6 @@ func (m *PriceMutation) ResetField(name string) error {
 	case price.FieldDisplayAmount:
 		m.ResetDisplayAmount()
 		return nil
-	case price.FieldMinQuantity:
-		m.ResetMinQuantity()
-		return nil
 	case price.FieldPriceUnitType:
 		m.ResetPriceUnitType()
 		return nil
@@ -39903,6 +39900,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldConversionRate:
 		m.ResetConversionRate()
+		return nil
+	case price.FieldMinQuantity:
+		m.ResetMinQuantity()
 		return nil
 	case price.FieldType:
 		m.ResetType()

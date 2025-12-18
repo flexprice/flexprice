@@ -1331,12 +1331,12 @@ var (
 		{Name: "amount", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "display_amount", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
-		{Name: "min_quantity", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "price_unit_type", Type: field.TypeString, Default: "FIAT", SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "price_unit", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "price_unit_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
 		{Name: "display_price_unit_amount", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "conversion_rate", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(25,15)"}},
+		{Name: "min_quantity", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "billing_period", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "billing_period_count", Type: field.TypeInt},
@@ -1428,11 +1428,9 @@ var (
 				Name:    "priceunit_tenant_id_environment_id_code",
 				Unique:  true,
 				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7], PriceUnitsColumns[10]},
-			},
-			{
-				Name:    "priceunit_tenant_id_environment_id_code",
-				Unique:  false,
-				Columns: []*schema.Column{PriceUnitsColumns[1], PriceUnitsColumns[7], PriceUnitsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 		},
 	}

@@ -743,9 +743,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := pu.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
-	if pu.mutation.MinQuantityCleared() {
-		_spec.ClearField(price.FieldMinQuantity, field.TypeOther)
-	}
 	if value, ok := pu.mutation.PriceUnitType(); ok {
 		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
 	}
@@ -772,6 +769,9 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.ConversionRateCleared() {
 		_spec.ClearField(price.FieldConversionRate, field.TypeOther)
+	}
+	if pu.mutation.MinQuantityCleared() {
+		_spec.ClearField(price.FieldMinQuantity, field.TypeOther)
 	}
 	if value, ok := pu.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -1719,9 +1719,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if value, ok := puo.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
-	if puo.mutation.MinQuantityCleared() {
-		_spec.ClearField(price.FieldMinQuantity, field.TypeOther)
-	}
 	if value, ok := puo.mutation.PriceUnitType(); ok {
 		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
 	}
@@ -1748,6 +1745,9 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.ConversionRateCleared() {
 		_spec.ClearField(price.FieldConversionRate, field.TypeOther)
+	}
+	if puo.mutation.MinQuantityCleared() {
+		_spec.ClearField(price.FieldMinQuantity, field.TypeOther)
 	}
 	if value, ok := puo.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)

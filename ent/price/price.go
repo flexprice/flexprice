@@ -38,8 +38,6 @@ const (
 	FieldCurrency = "currency"
 	// FieldDisplayAmount holds the string denoting the display_amount field in the database.
 	FieldDisplayAmount = "display_amount"
-	// FieldMinQuantity holds the string denoting the min_quantity field in the database.
-	FieldMinQuantity = "min_quantity"
 	// FieldPriceUnitType holds the string denoting the price_unit_type field in the database.
 	FieldPriceUnitType = "price_unit_type"
 	// FieldPriceUnitID holds the string denoting the price_unit_id field in the database.
@@ -52,6 +50,8 @@ const (
 	FieldDisplayPriceUnitAmount = "display_price_unit_amount"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
 	FieldConversionRate = "conversion_rate"
+	// FieldMinQuantity holds the string denoting the min_quantity field in the database.
+	FieldMinQuantity = "min_quantity"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
@@ -132,13 +132,13 @@ var Columns = []string{
 	FieldAmount,
 	FieldCurrency,
 	FieldDisplayAmount,
-	FieldMinQuantity,
 	FieldPriceUnitType,
 	FieldPriceUnitID,
 	FieldPriceUnit,
 	FieldPriceUnitAmount,
 	FieldDisplayPriceUnitAmount,
 	FieldConversionRate,
+	FieldMinQuantity,
 	FieldType,
 	FieldBillingPeriod,
 	FieldBillingPeriodCount,
@@ -196,6 +196,10 @@ var (
 	DefaultPriceUnitType string
 	// PriceUnitTypeValidator is a validator for the "price_unit_type" field. It is called by the builders before save.
 	PriceUnitTypeValidator func(string) error
+	// DefaultPriceUnitAmount holds the default value on creation for the "price_unit_amount" field.
+	DefaultPriceUnitAmount decimal.Decimal
+	// DefaultConversionRate holds the default value on creation for the "conversion_rate" field.
+	DefaultConversionRate decimal.Decimal
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
@@ -277,11 +281,6 @@ func ByDisplayAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisplayAmount, opts...).ToFunc()
 }
 
-// ByMinQuantity orders the results by the min_quantity field.
-func ByMinQuantity(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldMinQuantity, opts...).ToFunc()
-}
-
 // ByPriceUnitType orders the results by the price_unit_type field.
 func ByPriceUnitType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPriceUnitType, opts...).ToFunc()
@@ -310,6 +309,11 @@ func ByDisplayPriceUnitAmount(opts ...sql.OrderTermOption) OrderOption {
 // ByConversionRate orders the results by the conversion_rate field.
 func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
+}
+
+// ByMinQuantity orders the results by the min_quantity field.
+func ByMinQuantity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMinQuantity, opts...).ToFunc()
 }
 
 // ByType orders the results by the type field.

@@ -481,7 +481,10 @@ func (pq *PriceQuery) loadPriceUnitEdge(ctx context.Context, query *PriceUnitQue
 	ids := make([]string, 0, len(nodes))
 	nodeids := make(map[string][]*Price)
 	for i := range nodes {
-		fk := nodes[i].PriceUnitID
+		if nodes[i].PriceUnitID == nil {
+			continue
+		}
+		fk := *nodes[i].PriceUnitID
 		if _, ok := nodeids[fk]; !ok {
 			ids = append(ids, fk)
 		}
