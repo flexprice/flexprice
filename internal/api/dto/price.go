@@ -16,7 +16,6 @@ import (
 )
 
 type CreatePriceRequest struct {
-	// Amount is represented as a decimal for accuracy. Use a pointer so omitempty works.
 	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
 	Currency           string                   `json:"currency" validate:"required,len=3"`
 	EntityType         types.PriceEntityType    `json:"entity_type" validate:"required"`
@@ -71,7 +70,7 @@ type CreatePriceTier struct {
 	UpTo *uint64 `json:"up_to"`
 
 	// unit_amount is the amount per unit for the given tier
-	UnitAmount decimal.Decimal `json:"unit_amount" swaggertype:"string"`
+	UnitAmount decimal.Decimal `json:"unit_amount" validate:"required" swaggertype:"string"`
 
 	// flat_amount is the flat amount for the given tier (optional)
 	// Applied on top of unit_amount*quantity. Useful for cases like "2.7$ + 5c"
