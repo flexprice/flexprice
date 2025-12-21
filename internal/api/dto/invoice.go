@@ -391,10 +391,13 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 		}
 	}
 
+	// round off subtotal
+	inv.Subtotal = types.RoundToCurrencyPrecision(inv.Subtotal, inv.Currency)
+
 	// 4) Update invoice preview totals
-	inv.TotalDiscount = totalDiscount
-	inv.TotalTax = totalTax
-	inv.Total = inv.Subtotal.Sub(totalDiscount).Add(totalTax)
+	inv.TotalDiscount = types.RoundToCurrencyPrecision(totalDiscount, inv.Currency)
+	inv.TotalTax = types.RoundToCurrencyPrecision(totalTax, inv.Currency)
+	inv.Total = types.RoundToCurrencyPrecision(inv.Subtotal.Sub(totalDiscount).Add(totalTax), inv.Currency)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
 	}
@@ -534,6 +537,9 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 }
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
+
+	amount := types.RoundToCurrencyPrecision(r.Amount, inv.Currency)
+
 	return &invoice.InvoiceLineItem{
 		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
 		InvoiceID:        inv.ID,
@@ -549,7 +555,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		PriceUnit:        r.PriceUnit,
 		PriceUnitAmount:  r.PriceUnitAmount,
 		DisplayName:      r.DisplayName,
-		Amount:           r.Amount,
+		Amount:           amount,
 		Quantity:         r.Quantity,
 		Currency:         inv.Currency,
 		PeriodStart:      r.PeriodStart,
