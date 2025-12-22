@@ -108,8 +108,7 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(255)",
 			}).
 			Immutable().
-			Optional().
-			Nillable(),
+			Optional(),
 
 		// conversion_rate is the conversion rate of the price unit to the fiat currency
 		// amount in the fiat currency =  number of price units * conversion_rate (e.g. 1 BTC = 10000 USD)

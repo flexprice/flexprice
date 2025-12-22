@@ -705,6 +705,11 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
+	if v, ok := pc.mutation.TransformQuantity(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "transform_quantity", err: fmt.Errorf(`ent: validator failed for field "Price.transform_quantity": %w`, err)}
+		}
+	}
 	if _, ok := pc.mutation.EntityType(); !ok {
 		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "Price.entity_type"`)}
 	}
