@@ -70,8 +70,8 @@ func (Price) Fields() []ent.Field {
 			}).
 			Immutable().
 			NotEmpty().
-			GoType(types.PriceUnitType("")).
-			Default(string(types.PRICE_UNIT_TYPE_FIAT)),
+			Default(string(types.PRICE_UNIT_TYPE_FIAT)).
+			GoType(types.PriceUnitType("")),
 
 		// price_unit_id is the id of the price unit
 		field.String("price_unit_id").
