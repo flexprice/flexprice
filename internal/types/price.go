@@ -113,7 +113,10 @@ type TransformQuantity struct {
 	Round    RoundType `json:"round,omitempty"`
 }
 
-func (t TransformQuantity) Validate() error {
+func (t *TransformQuantity) Validate() error {
+	if t == nil {
+		return nil
+	}
 
 	if t.DivideBy < 1 {
 		return ierr.NewError("transform_quantity.divide_by must be greater than or equal to 1").
