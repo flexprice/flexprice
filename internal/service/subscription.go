@@ -3586,6 +3586,10 @@ func (s *subscriptionService) createLineItemFromPrice(ctx context.Context, price
 		lineItem.Quantity = decimal.NewFromInt(1)
 	}
 
+	// Copy price unit fields from price to line item
+	lineItem.PriceUnitID = price.PriceUnitID
+	lineItem.PriceUnit = price.PriceUnit
+
 	return lineItem
 }
 

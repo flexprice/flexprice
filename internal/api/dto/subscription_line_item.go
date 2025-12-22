@@ -322,6 +322,10 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 				lineItem.Quantity = params.Price.GetDefaultQuantity()
 			}
 		}
+
+		// Copy price unit fields from price to line item
+		lineItem.PriceUnitID = params.Price.PriceUnitID
+		lineItem.PriceUnit = params.Price.PriceUnit
 	} else {
 		lineItem.Quantity = decimal.NewFromInt(1)
 	}
