@@ -62,7 +62,6 @@ func (r *priceUnitRepository) Create(ctx context.Context, priceUnit *domainPrice
 		SetSymbol(priceUnit.Symbol).
 		SetBaseCurrency(priceUnit.BaseCurrency).
 		SetConversionRate(priceUnit.ConversionRate).
-		SetPrecision(priceUnit.Precision).
 		SetTenantID(priceUnit.TenantID).
 		SetStatus(string(priceUnit.Status)).
 		SetCreatedAt(priceUnit.CreatedAt).
@@ -441,8 +440,6 @@ func (o PriceUnitQueryOptions) GetFieldName(field string) string {
 		return priceunit.FieldBaseCurrency
 	case "conversion_rate":
 		return priceunit.FieldConversionRate
-	case "precision":
-		return priceunit.FieldPrecision
 	case "status":
 		return priceunit.FieldStatus
 	default:

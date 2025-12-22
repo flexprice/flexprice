@@ -41,8 +41,6 @@ const (
 	FieldBaseCurrency = "base_currency"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
 	FieldConversionRate = "conversion_rate"
-	// FieldPrecision holds the string denoting the precision field in the database.
-	FieldPrecision = "precision"
 	// EdgePrices holds the string denoting the prices edge name in mutations.
 	EdgePrices = "prices"
 	// Table holds the table name of the priceunit in the database.
@@ -72,7 +70,6 @@ var Columns = []string{
 	FieldSymbol,
 	FieldBaseCurrency,
 	FieldConversionRate,
-	FieldPrecision,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -108,10 +105,6 @@ var (
 	BaseCurrencyValidator func(string) error
 	// DefaultConversionRate holds the default value on creation for the "conversion_rate" field.
 	DefaultConversionRate decimal.Decimal
-	// DefaultPrecision holds the default value on creation for the "precision" field.
-	DefaultPrecision int
-	// PrecisionValidator is a validator for the "precision" field. It is called by the builders before save.
-	PrecisionValidator func(int) error
 )
 
 // OrderOption defines the ordering options for the PriceUnit queries.
@@ -180,11 +173,6 @@ func ByBaseCurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByConversionRate orders the results by the conversion_rate field.
 func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
-}
-
-// ByPrecision orders the results by the precision field.
-func ByPrecision(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPrecision, opts...).ToFunc()
 }
 
 // ByPricesCount orders the results by prices count.

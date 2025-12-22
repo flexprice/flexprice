@@ -1416,7 +1416,6 @@ var (
 		{Name: "symbol", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(10)"}},
 		{Name: "base_currency", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(3)"}},
 		{Name: "conversion_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
-		{Name: "precision", Type: field.TypeInt, Default: 0},
 	}
 	// PriceUnitsTable holds the schema information for the "price_units" table.
 	PriceUnitsTable = &schema.Table{

@@ -28,11 +28,10 @@ type CreatePriceUnitRequest struct {
 	// Example:
 	//   If conversion_rate = "0.01" and base_currency = "usd":
 	//   100 price_unit tokens * 0.01 = 1.00 USD
-	ConversionRate string `json:"conversion_rate" validate:"required"`
-
-	// Precision is the number of decimal places to round the price unit to
-	Precision int            `json:"precision" validate:"min=0,max=8"`
-	Metadata  types.Metadata `json:"metadata,omitempty"`
+	//
+	// Note: Rounding precision is determined by the base currency (e.g., USD uses 2 decimal places, JPY uses 0).
+	ConversionRate string         `json:"conversion_rate" validate:"required"`
+	Metadata       types.Metadata `json:"metadata,omitempty"`
 }
 
 func (r *CreatePriceUnitRequest) Validate() error {
@@ -65,16 +64,6 @@ func (r *CreatePriceUnitRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate precision
-	if r.Precision < 0 || r.Precision > 8 {
-		return ierr.NewError("precision must be between 0 and 8").
-			WithHint("Precision must be between 0 and 8").
-			WithReportableDetails(map[string]interface{}{
-				"precision": r.Precision,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	return nil
 }
 
@@ -96,7 +85,6 @@ func (r *CreatePriceUnitRequest) ToPriceUnit(ctx context.Context) (*priceunit.Pr
 		Symbol:         r.Symbol,
 		BaseCurrency:   r.BaseCurrency,
 		ConversionRate: conversionRate,
-		Precision:      r.Precision,
 		EnvironmentID:  types.GetEnvironmentID(ctx),
 		Metadata:       r.Metadata,
 		BaseModel:      types.GetDefaultBaseModel(ctx),

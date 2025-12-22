@@ -126,11 +126,6 @@ func ConversionRate(v decimal.Decimal) predicate.PriceUnit {
 	return predicate.PriceUnit(sql.FieldEQ(FieldConversionRate, v))
 }
 
-// Precision applies equality check predicate on the "precision" field. It's identical to PrecisionEQ.
-func Precision(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldEQ(FieldPrecision, v))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.PriceUnit {
 	return predicate.PriceUnit(sql.FieldEQ(FieldTenantID, v))
@@ -874,46 +869,6 @@ func ConversionRateLT(v decimal.Decimal) predicate.PriceUnit {
 // ConversionRateLTE applies the LTE predicate on the "conversion_rate" field.
 func ConversionRateLTE(v decimal.Decimal) predicate.PriceUnit {
 	return predicate.PriceUnit(sql.FieldLTE(FieldConversionRate, v))
-}
-
-// PrecisionEQ applies the EQ predicate on the "precision" field.
-func PrecisionEQ(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldEQ(FieldPrecision, v))
-}
-
-// PrecisionNEQ applies the NEQ predicate on the "precision" field.
-func PrecisionNEQ(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldNEQ(FieldPrecision, v))
-}
-
-// PrecisionIn applies the In predicate on the "precision" field.
-func PrecisionIn(vs ...int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldIn(FieldPrecision, vs...))
-}
-
-// PrecisionNotIn applies the NotIn predicate on the "precision" field.
-func PrecisionNotIn(vs ...int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldNotIn(FieldPrecision, vs...))
-}
-
-// PrecisionGT applies the GT predicate on the "precision" field.
-func PrecisionGT(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldGT(FieldPrecision, v))
-}
-
-// PrecisionGTE applies the GTE predicate on the "precision" field.
-func PrecisionGTE(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldGTE(FieldPrecision, v))
-}
-
-// PrecisionLT applies the LT predicate on the "precision" field.
-func PrecisionLT(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldLT(FieldPrecision, v))
-}
-
-// PrecisionLTE applies the LTE predicate on the "precision" field.
-func PrecisionLTE(v int) predicate.PriceUnit {
-	return predicate.PriceUnit(sql.FieldLTE(FieldPrecision, v))
 }
 
 // HasPrices applies the HasEdge predicate on the "prices" edge.

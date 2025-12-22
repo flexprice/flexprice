@@ -18,7 +18,6 @@ type PriceUnit struct {
 	Symbol         string          `json:"symbol,omitempty"`
 	BaseCurrency   string          `json:"base_currency,omitempty"`
 	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
-	Precision      int             `json:"precision,omitempty"`
 	EnvironmentID  string          `json:"environment_id,omitempty"`
 	Metadata       types.Metadata  `json:"metadata,omitempty"`
 	types.BaseModel
@@ -36,7 +35,6 @@ func FromEnt(ent *ent.PriceUnit) *PriceUnit {
 		Symbol:         ent.Symbol,
 		BaseCurrency:   ent.BaseCurrency,
 		ConversionRate: ent.ConversionRate,
-		Precision:      ent.Precision,
 		EnvironmentID:  ent.EnvironmentID,
 		Metadata:       ent.Metadata,
 		BaseModel: types.BaseModel{
@@ -56,58 +54,56 @@ func FromEntList(ents []*ent.PriceUnit) []*PriceUnit {
 	})
 }
 
-// ConvertToFiatCurrencyAmount converts pricing unit amount to fiat currency
-// Formula: fiat_amount = price_unit_amount * conversion_rate
-// Example: 100 FP tokens * 0.01 USD/token = 1.00 USD
-func ConvertToFiatCurrencyAmount(ctx context.Context, priceUnitAmount decimal.Decimal, conversionRate decimal.Decimal, precision int) (decimal.Decimal, error) {
-	// Validate inputs
+// validateConversionRate validates that the conversion rate is positive and non-zero.
+// Returns an error if validation fails, nil otherwise.
+func validateConversionRate(conversionRate decimal.Decimal) error {
 	if conversionRate.IsZero() || !conversionRate.IsPositive() {
-		return decimal.Zero, ierr.NewError("conversion rate must be positive and non-zero").
+		return ierr.NewError("conversion rate must be positive and non-zero").
 			WithHint("Conversion rate must be positive and non-zero").
 			WithReportableDetails(map[string]interface{}{
 				"conversion_rate": conversionRate.String(),
 			}).
 			Mark(ierr.ErrValidation)
 	}
-
-	if precision < 0 || precision > 8 {
-		return decimal.Zero, ierr.NewError("precision must be between 0 and 8").
-			WithHint("Precision must be between 0 and 8").
-			WithReportableDetails(map[string]interface{}{
-				"precision": precision,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Convert and round to specified precision
-	result := priceUnitAmount.Mul(conversionRate)
-	return result.Round(int32(precision)), nil
+	return nil
 }
 
-// ConvertToPriceUnitAmount converts fiat currency amount to pricing unit
+// ConvertToFiatCurrencyAmount converts pricing unit amount to fiat currency.
+// The result is rounded to the precision of the base currency (e.g., 2 decimal places for USD, 0 for JPY).
+//
+// Formula: fiat_amount = price_unit_amount * conversion_rate
+//
+// Example: 100 FP tokens * 0.01 USD/token = 1.00 USD
+//
+// Rounding strategy: Uses base currency precision to ensure consistent precision in stored values
+// and match industry standards (Stripe, Lago use currency precision).
+func ConvertToFiatCurrencyAmount(ctx context.Context, priceUnitAmount decimal.Decimal, conversionRate decimal.Decimal, baseCurrency string) (decimal.Decimal, error) {
+	// Validate conversion rate
+	if err := validateConversionRate(conversionRate); err != nil {
+		return decimal.Zero, err
+	}
+
+	// Convert and round to base currency precision
+	result := priceUnitAmount.Mul(conversionRate)
+	return result.Round(int32(types.GetCurrencyPrecision(baseCurrency))), nil
+}
+
+// ConvertToPriceUnitAmount converts fiat currency amount to pricing unit.
+// The result is rounded to the precision of the base currency (e.g., 2 decimal places for USD, 0 for JPY).
+//
 // Formula: price_unit_amount = fiat_amount / conversion_rate
+//
 // Example: 1.00 USD / 0.01 USD/FP = 100 FP tokens
-func ConvertToPriceUnitAmount(ctx context.Context, fiatAmount decimal.Decimal, conversionRate decimal.Decimal, precision int) (decimal.Decimal, error) {
-
-	if conversionRate.IsZero() || !conversionRate.IsPositive() {
-		return decimal.Zero, ierr.NewError("conversion rate must be positive and non-zero").
-			WithHint("Conversion rate must be positive and non-zero").
-			WithReportableDetails(map[string]interface{}{
-				"conversion_rate": conversionRate.String(),
-			}).
-			Mark(ierr.ErrValidation)
+//
+// Rounding strategy: Uses base currency precision to ensure consistent precision in stored values.
+// Price units inherit precision from their base currency, simplifying the model.
+func ConvertToPriceUnitAmount(ctx context.Context, fiatAmount decimal.Decimal, conversionRate decimal.Decimal, baseCurrency string) (decimal.Decimal, error) {
+	// Validate conversion rate
+	if err := validateConversionRate(conversionRate); err != nil {
+		return decimal.Zero, err
 	}
 
-	if precision < 0 || precision > 8 {
-		return decimal.Zero, ierr.NewError("precision must be between 0 and 8").
-			WithHint("Precision must be between 0 and 8").
-			WithReportableDetails(map[string]interface{}{
-				"precision": precision,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	// Convert and round to specified precision
+	// Convert and round to base currency precision
 	result := fiatAmount.Div(conversionRate)
-	return result.Round(int32(precision)), nil
+	return result.Round(int32(types.GetCurrencyPrecision(baseCurrency))), nil
 }

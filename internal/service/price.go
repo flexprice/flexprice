@@ -1258,7 +1258,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 			ctx,
 			*p.PriceUnitAmount,
 			priceUnit.ConversionRate,
-			priceUnit.Precision,
+				priceUnit.BaseCurrency,
 		)
 		if err != nil {
 			return err
@@ -1278,7 +1278,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 				ctx,
 				tier.UnitAmount,
 				priceUnit.ConversionRate,
-				priceUnit.Precision,
+				priceUnit.BaseCurrency,
 			)
 			if err != nil {
 				return err
@@ -1295,7 +1295,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 					ctx,
 					*tier.FlatAmount,
 					priceUnit.ConversionRate,
-					priceUnit.Precision,
+					priceUnit.BaseCurrency,
 				)
 				if err != nil {
 					return err

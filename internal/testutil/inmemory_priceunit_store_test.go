@@ -26,7 +26,6 @@ func TestInMemoryPriceUnitStore_Create(t *testing.T) {
 			Symbol:         "T",
 			BaseCurrency:   "USD",
 			ConversionRate: decimal.NewFromFloat(0.01),
-			Precision:      2,
 			EnvironmentID:  "test-env",
 			Metadata:       map[string]string{"key": "value"},
 			BaseModel: types.BaseModel{
@@ -45,7 +44,6 @@ func TestInMemoryPriceUnitStore_Create(t *testing.T) {
 		assert.Equal(t, pu.Symbol, created.Symbol)
 		assert.Equal(t, pu.BaseCurrency, created.BaseCurrency)
 		assert.Equal(t, pu.ConversionRate, created.ConversionRate)
-		assert.Equal(t, pu.Precision, created.Precision)
 		assert.Equal(t, pu.EnvironmentID, created.EnvironmentID)
 		assert.Equal(t, pu.Metadata, created.Metadata)
 	})
@@ -169,7 +167,6 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 		Symbol:         "A",
 		BaseCurrency:   "USD",
 		ConversionRate: decimal.NewFromFloat(0.01),
-		Precision:      2,
 		EnvironmentID:  "test-env",
 		BaseModel: types.BaseModel{
 			TenantID: "test-tenant",
@@ -184,7 +181,6 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 		Symbol:         "B",
 		BaseCurrency:   "EUR",
 		ConversionRate: decimal.NewFromFloat(0.02),
-		Precision:      3,
 		EnvironmentID:  "test-env",
 		BaseModel: types.BaseModel{
 			TenantID: "test-tenant",
@@ -199,7 +195,6 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 		Symbol:         "C",
 		BaseCurrency:   "USD",
 		ConversionRate: decimal.NewFromFloat(0.03),
-		Precision:      4,
 		EnvironmentID:  "test-env",
 		BaseModel: types.BaseModel{
 			TenantID: "test-tenant",
@@ -305,26 +300,6 @@ func TestInMemoryPriceUnitStore_List(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, priceUnits, 1)
 		assert.Equal(t, "Token A", priceUnits[0].Name)
-	})
-
-	t.Run("filter by precision", func(t *testing.T) {
-		filter := &types.PriceUnitFilter{
-			QueryFilter: types.NewNoLimitQueryFilter(),
-			Filters: []*types.FilterCondition{
-				{
-					Field:    lo.ToPtr("precision"),
-					Operator: lo.ToPtr(types.EQUAL),
-					DataType: lo.ToPtr(types.DataTypeNumber),
-					Value: &types.Value{
-						Number: lo.ToPtr(3.0),
-					},
-				},
-			},
-		}
-		priceUnits, err := store.List(ctx, filter)
-		require.NoError(t, err)
-		assert.Len(t, priceUnits, 1)
-		assert.Equal(t, 3, priceUnits[0].Precision)
 	})
 
 	t.Run("filter by status", func(t *testing.T) {
@@ -508,7 +483,6 @@ func TestInMemoryPriceUnitStore_DeepCopy(t *testing.T) {
 		Symbol:         "C",
 		BaseCurrency:   "USD",
 		ConversionRate: decimal.NewFromFloat(0.01),
-		Precision:      2,
 		EnvironmentID:  "test-env",
 		Metadata:       map[string]string{"key1": "value1", "key2": "value2"},
 		BaseModel: types.BaseModel{

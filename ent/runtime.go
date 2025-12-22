@@ -1402,26 +1402,6 @@ func init() {
 	priceunitDescConversionRate := priceunitFields[5].Descriptor()
 	// priceunit.DefaultConversionRate holds the default value on creation for the conversion_rate field.
 	priceunit.DefaultConversionRate = priceunitDescConversionRate.Default.(decimal.Decimal)
-	// priceunitDescPrecision is the schema descriptor for precision field.
-	priceunitDescPrecision := priceunitFields[6].Descriptor()
-	// priceunit.DefaultPrecision holds the default value on creation for the precision field.
-	priceunit.DefaultPrecision = priceunitDescPrecision.Default.(int)
-	// priceunit.PrecisionValidator is a validator for the "precision" field. It is called by the builders before save.
-	priceunit.PrecisionValidator = func() func(int) error {
-		validators := priceunitDescPrecision.Validators
-		fns := [...]func(int) error{
-			validators[0].(func(int) error),
-			validators[1].(func(int) error),
-		}
-		return func(precision int) error {
-			for _, fn := range fns {
-				if err := fn(precision); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-	}()
 	scheduledtaskMixin := schema.ScheduledTask{}.Mixin()
 	scheduledtaskMixinFields0 := scheduledtaskMixin[0].Fields()
 	_ = scheduledtaskMixinFields0

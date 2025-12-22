@@ -40076,8 +40076,6 @@ type PriceUnitMutation struct {
 	symbol          *string
 	base_currency   *string
 	conversion_rate *decimal.Decimal
-	precision       *int
-	addprecision    *int
 	clearedFields   map[string]struct{}
 	prices          map[string]struct{}
 	removedprices   map[string]struct{}
@@ -40711,62 +40709,6 @@ func (m *PriceUnitMutation) ResetConversionRate() {
 	m.conversion_rate = nil
 }
 
-// SetPrecision sets the "precision" field.
-func (m *PriceUnitMutation) SetPrecision(i int) {
-	m.precision = &i
-	m.addprecision = nil
-}
-
-// Precision returns the value of the "precision" field in the mutation.
-func (m *PriceUnitMutation) Precision() (r int, exists bool) {
-	v := m.precision
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPrecision returns the old "precision" field's value of the PriceUnit entity.
-// If the PriceUnit object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceUnitMutation) OldPrecision(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPrecision is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPrecision requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPrecision: %w", err)
-	}
-	return oldValue.Precision, nil
-}
-
-// AddPrecision adds i to the "precision" field.
-func (m *PriceUnitMutation) AddPrecision(i int) {
-	if m.addprecision != nil {
-		*m.addprecision += i
-	} else {
-		m.addprecision = &i
-	}
-}
-
-// AddedPrecision returns the value that was added to the "precision" field in this mutation.
-func (m *PriceUnitMutation) AddedPrecision() (r int, exists bool) {
-	v := m.addprecision
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetPrecision resets all changes to the "precision" field.
-func (m *PriceUnitMutation) ResetPrecision() {
-	m.precision = nil
-	m.addprecision = nil
-}
-
 // AddPriceIDs adds the "prices" edge to the Price entity by ids.
 func (m *PriceUnitMutation) AddPriceIDs(ids ...string) {
 	if m.prices == nil {
@@ -40855,7 +40797,7 @@ func (m *PriceUnitMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceUnitMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, priceunit.FieldTenantID)
 	}
@@ -40895,9 +40837,6 @@ func (m *PriceUnitMutation) Fields() []string {
 	if m.conversion_rate != nil {
 		fields = append(fields, priceunit.FieldConversionRate)
 	}
-	if m.precision != nil {
-		fields = append(fields, priceunit.FieldPrecision)
-	}
 	return fields
 }
 
@@ -40932,8 +40871,6 @@ func (m *PriceUnitMutation) Field(name string) (ent.Value, bool) {
 		return m.BaseCurrency()
 	case priceunit.FieldConversionRate:
 		return m.ConversionRate()
-	case priceunit.FieldPrecision:
-		return m.Precision()
 	}
 	return nil, false
 }
@@ -40969,8 +40906,6 @@ func (m *PriceUnitMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldBaseCurrency(ctx)
 	case priceunit.FieldConversionRate:
 		return m.OldConversionRate(ctx)
-	case priceunit.FieldPrecision:
-		return m.OldPrecision(ctx)
 	}
 	return nil, fmt.Errorf("unknown PriceUnit field %s", name)
 }
@@ -41071,13 +41006,6 @@ func (m *PriceUnitMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConversionRate(v)
 		return nil
-	case priceunit.FieldPrecision:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPrecision(v)
-		return nil
 	}
 	return fmt.Errorf("unknown PriceUnit field %s", name)
 }
@@ -41085,21 +41013,13 @@ func (m *PriceUnitMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *PriceUnitMutation) AddedFields() []string {
-	var fields []string
-	if m.addprecision != nil {
-		fields = append(fields, priceunit.FieldPrecision)
-	}
-	return fields
+	return nil
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *PriceUnitMutation) AddedField(name string) (ent.Value, bool) {
-	switch name {
-	case priceunit.FieldPrecision:
-		return m.AddedPrecision()
-	}
 	return nil, false
 }
 
@@ -41108,13 +41028,6 @@ func (m *PriceUnitMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *PriceUnitMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case priceunit.FieldPrecision:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddPrecision(v)
-		return nil
 	}
 	return fmt.Errorf("unknown PriceUnit numeric field %s", name)
 }
@@ -41207,9 +41120,6 @@ func (m *PriceUnitMutation) ResetField(name string) error {
 		return nil
 	case priceunit.FieldConversionRate:
 		m.ResetConversionRate()
-		return nil
-	case priceunit.FieldPrecision:
-		m.ResetPrecision()
 		return nil
 	}
 	return fmt.Errorf("unknown PriceUnit field %s", name)

@@ -156,20 +156,6 @@ func (puc *PriceUnitCreate) SetNillableConversionRate(d *decimal.Decimal) *Price
 	return puc
 }
 
-// SetPrecision sets the "precision" field.
-func (puc *PriceUnitCreate) SetPrecision(i int) *PriceUnitCreate {
-	puc.mutation.SetPrecision(i)
-	return puc
-}
-
-// SetNillablePrecision sets the "precision" field if the given value is not nil.
-func (puc *PriceUnitCreate) SetNillablePrecision(i *int) *PriceUnitCreate {
-	if i != nil {
-		puc.SetPrecision(*i)
-	}
-	return puc
-}
-
 // SetID sets the "id" field.
 func (puc *PriceUnitCreate) SetID(s string) *PriceUnitCreate {
 	puc.mutation.SetID(s)
@@ -246,10 +232,6 @@ func (puc *PriceUnitCreate) defaults() {
 		v := priceunit.DefaultConversionRate
 		puc.mutation.SetConversionRate(v)
 	}
-	if _, ok := puc.mutation.Precision(); !ok {
-		v := priceunit.DefaultPrecision
-		puc.mutation.SetPrecision(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -305,14 +287,6 @@ func (puc *PriceUnitCreate) check() error {
 	}
 	if _, ok := puc.mutation.ConversionRate(); !ok {
 		return &ValidationError{Name: "conversion_rate", err: errors.New(`ent: missing required field "PriceUnit.conversion_rate"`)}
-	}
-	if _, ok := puc.mutation.Precision(); !ok {
-		return &ValidationError{Name: "precision", err: errors.New(`ent: missing required field "PriceUnit.precision"`)}
-	}
-	if v, ok := puc.mutation.Precision(); ok {
-		if err := priceunit.PrecisionValidator(v); err != nil {
-			return &ValidationError{Name: "precision", err: fmt.Errorf(`ent: validator failed for field "PriceUnit.precision": %w`, err)}
-		}
 	}
 	return nil
 }
@@ -400,10 +374,6 @@ func (puc *PriceUnitCreate) createSpec() (*PriceUnit, *sqlgraph.CreateSpec) {
 	if value, ok := puc.mutation.ConversionRate(); ok {
 		_spec.SetField(priceunit.FieldConversionRate, field.TypeOther, value)
 		_node.ConversionRate = value
-	}
-	if value, ok := puc.mutation.Precision(); ok {
-		_spec.SetField(priceunit.FieldPrecision, field.TypeInt, value)
-		_node.Precision = value
 	}
 	if nodes := puc.mutation.PricesIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

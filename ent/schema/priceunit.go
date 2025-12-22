@@ -66,12 +66,6 @@ func (PriceUnit) Fields() []ent.Field {
 			}).
 			Default(decimal.NewFromInt(1)).
 			Immutable(),
-
-		field.Int("precision").
-			Default(0).
-			Min(0).
-			Max(8).
-			Immutable(),
 	}
 }
 

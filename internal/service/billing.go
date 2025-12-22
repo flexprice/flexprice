@@ -1167,7 +1167,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 						"price_unit", item.PriceUnit)
 				} else {
 					// Convert fiat currency amount to price unit amount
-					convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.Precision)
+					convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 					if err != nil {
 						s.Logger.Warnw("failed to convert amount to price unit",
 							"error", err,

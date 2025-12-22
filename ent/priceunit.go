@@ -45,8 +45,6 @@ type PriceUnit struct {
 	BaseCurrency string `json:"base_currency,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
 	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
-	// Precision holds the value of the "precision" field.
-	Precision int `json:"precision,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the PriceUnitQuery when eager-loading is set.
 	Edges        PriceUnitEdges `json:"edges"`
@@ -80,8 +78,6 @@ func (*PriceUnit) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case priceunit.FieldConversionRate:
 			values[i] = new(decimal.Decimal)
-		case priceunit.FieldPrecision:
-			values[i] = new(sql.NullInt64)
 		case priceunit.FieldID, priceunit.FieldTenantID, priceunit.FieldStatus, priceunit.FieldCreatedBy, priceunit.FieldUpdatedBy, priceunit.FieldEnvironmentID, priceunit.FieldName, priceunit.FieldCode, priceunit.FieldSymbol, priceunit.FieldBaseCurrency:
 			values[i] = new(sql.NullString)
 		case priceunit.FieldCreatedAt, priceunit.FieldUpdatedAt:
@@ -187,12 +183,6 @@ func (pu *PriceUnit) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				pu.ConversionRate = *value
 			}
-		case priceunit.FieldPrecision:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field precision", values[i])
-			} else if value.Valid {
-				pu.Precision = int(value.Int64)
-			}
 		default:
 			pu.selectValues.Set(columns[i], values[i])
 		}
@@ -272,9 +262,6 @@ func (pu *PriceUnit) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("conversion_rate=")
 	builder.WriteString(fmt.Sprintf("%v", pu.ConversionRate))
-	builder.WriteString(", ")
-	builder.WriteString("precision=")
-	builder.WriteString(fmt.Sprintf("%v", pu.Precision))
 	builder.WriteByte(')')
 	return builder.String()
 }

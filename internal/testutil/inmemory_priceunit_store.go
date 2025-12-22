@@ -36,7 +36,6 @@ func copyPriceUnit(pu *priceunit.PriceUnit) *priceunit.PriceUnit {
 		Symbol:         pu.Symbol,
 		BaseCurrency:   pu.BaseCurrency,
 		ConversionRate: pu.ConversionRate,
-		Precision:      pu.Precision,
 		EnvironmentID:  pu.EnvironmentID,
 		Metadata:       lo.Assign(map[string]string{}, pu.Metadata),
 		BaseModel: types.BaseModel{
@@ -281,10 +280,6 @@ func applyPriceUnitFilterCondition(pu *priceunit.PriceUnit, condition *types.Fil
 	case "base_currency":
 		if condition.Value != nil && condition.Value.String != nil {
 			return pu.BaseCurrency == *condition.Value.String
-		}
-	case "precision":
-		if condition.Value != nil && condition.Value.Number != nil {
-			return pu.Precision == int(*condition.Value.Number)
 		}
 	case "environment_id":
 		if condition.Value != nil && condition.Value.String != nil {
