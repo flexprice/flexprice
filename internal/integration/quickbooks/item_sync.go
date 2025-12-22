@@ -130,7 +130,6 @@ func (s *ItemSyncService) SyncPriceToQuickBooks(ctx context.Context, plan *plan.
 	if priceToSync.Type == types.PRICE_TYPE_USAGE {
 		// Usage-based: use per-unit price (stored in Amount)
 		unitPrice = priceToSync.Amount
-		s.Logger.Infow("using Amount for usage-based price", "unit_price", unitPrice)
 	} else if priceToSync.BillingModel == types.BILLING_MODEL_TIERED && len(priceToSync.Tiers) > 0 {
 		// Tiered pricing: use first tier's unit amount as default
 		unitPrice = priceToSync.Tiers[0].UnitAmount

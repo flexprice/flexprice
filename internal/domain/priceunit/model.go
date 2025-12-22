@@ -12,14 +12,14 @@ import (
 
 // PriceUnit is the model entity for the PriceUnit schema.
 type PriceUnit struct {
-	ID             string          `json:"id,omitempty"`
-	Name           string          `json:"name,omitempty"`
-	Code           string          `json:"code,omitempty"`
-	Symbol         string          `json:"symbol,omitempty"`
-	BaseCurrency   string          `json:"base_currency,omitempty"`
-	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
-	EnvironmentID  string          `json:"environment_id,omitempty"`
-	Metadata       types.Metadata  `json:"metadata,omitempty"`
+	ID             string          `json:"id"`
+	Name           string          `json:"name"`
+	Code           string          `json:"code"`
+	Symbol         string          `json:"symbol"`
+	BaseCurrency   string          `json:"base_currency"`
+	ConversionRate decimal.Decimal `json:"conversion_rate" swaggertype:"string"`
+	Metadata       types.Metadata  `json:"metadata"`
+	EnvironmentID  string          `json:"environment_id"`
 	types.BaseModel
 }
 

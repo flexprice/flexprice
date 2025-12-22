@@ -159,13 +159,16 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 
-			// Price unit routes
-			price.POST("/units", handlers.PriceUnit.CreatePriceUnit)
-			price.GET("/units", handlers.PriceUnit.ListPriceUnits)
-			price.GET("/units/:id", handlers.PriceUnit.GetPriceUnit)
-			price.GET("/units/code/:code", handlers.PriceUnit.GetPriceUnitByCode)
-			price.PUT("/units/:id", handlers.PriceUnit.UpdatePriceUnit)
-			price.DELETE("/units/:id", handlers.PriceUnit.DeletePriceUnit)
+			priceUnit := price.Group("/units")
+			{
+				priceUnit.POST("", handlers.PriceUnit.CreatePriceUnit)
+				priceUnit.GET("", handlers.PriceUnit.ListPriceUnits)
+				priceUnit.GET("/:id", handlers.PriceUnit.GetPriceUnit)
+				priceUnit.GET("/code/:code", handlers.PriceUnit.GetPriceUnitByCode)
+				priceUnit.PUT("/:id", handlers.PriceUnit.UpdatePriceUnit)
+				priceUnit.DELETE("/:id", handlers.PriceUnit.DeletePriceUnit)
+				priceUnit.POST("/search", handlers.PriceUnit.ListPriceUnitsByFilter)
+			}
 		}
 
 		customer := v1Private.Group("/customers")

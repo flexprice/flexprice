@@ -442,7 +442,7 @@ func (s *subscriptionChangeService) calculatePeriodEnd(
 // generateWarnings generates warnings about the subscription change
 func (s *subscriptionChangeService) generateWarnings(
 	currentSub *subscription.Subscription,
-	targetPlan *plan.Plan,
+	_ *plan.Plan,
 	changeType types.SubscriptionChangeType,
 	prorationBehavior types.ProrationBehavior,
 ) []string {

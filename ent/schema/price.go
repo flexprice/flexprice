@@ -47,6 +47,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
+			Immutable().
 			Default(decimal.Zero),
 
 		field.String("currency").
@@ -60,6 +61,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
+			Immutable().
 			Optional().
 			NotEmpty(),
 
@@ -95,6 +97,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
+			Immutable().
 			Optional().
 			Nillable().
 			Default(decimal.Zero),
@@ -104,7 +107,9 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(255)",
 			}).
-			Optional(),
+			Immutable().
+			Optional().
+			Nillable(),
 
 		// conversion_rate is the conversion rate of the price unit to the fiat currency
 		// amount in the fiat currency =  number of price units * conversion_rate (e.g. 1 BTC = 10000 USD)
@@ -115,6 +120,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(25,15)",
 			}).
+			Immutable().
 			Optional().
 			Nillable().
 			Default(decimal.NewFromInt(1)), // 1 USD = 1 BTC
@@ -132,6 +138,7 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
 			}).
+			Immutable().
 			NotEmpty().
 			GoType(types.PriceType("")),
 
@@ -139,10 +146,12 @@ func (Price) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
 			}).
+			Immutable().
 			NotEmpty().
 			GoType(types.BillingPeriod("")),
 
 		field.Int("billing_period_count").
+			Immutable().
 			NonNegative(),
 
 		field.String("billing_model").
@@ -150,12 +159,14 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			NotEmpty().
+			Immutable().
 			GoType(types.BillingModel("")),
 
 		field.String("billing_cadence").
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
 			}).
+			Immutable().
 			NotEmpty().
 			GoType(types.BillingCadence("")),
 
@@ -190,7 +201,9 @@ func (Price) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			GoType(types.BillingTier("")),
+
 		field.JSON("tiers", []*types.PriceTier{}).
+			Immutable().
 			Optional(),
 
 		field.JSON("price_unit_tiers", []*types.PriceTier{}).
