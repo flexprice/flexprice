@@ -269,14 +269,6 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 			price.TenantID(p.TenantID),
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetAmount(p.Amount).
-		SetDisplayAmount(p.DisplayAmount).
-		SetType(p.Type).
-		SetBillingPeriod((p.BillingPeriod)).
-		SetBillingPeriodCount(p.BillingPeriodCount).
-		SetBillingModel(p.BillingModel).
-		SetBillingCadence(p.BillingCadence).
-		SetTiers(p.ToEntTiers()).
 		SetDisplayName(p.DisplayName).
 		SetLookupKey(p.LookupKey).
 		SetNillableEndDate(p.EndDate).
@@ -285,9 +277,6 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableGroupID(lo.ToPtr(p.GroupID)).
-		SetNillablePriceUnitAmount(p.PriceUnitAmount).
-		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
-		SetNillableConversionRate(p.ConversionRate).
 		Save(ctx)
 
 	if err != nil {

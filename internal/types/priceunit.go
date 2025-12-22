@@ -44,8 +44,8 @@ func (f *PriceUnitFilter) Validate() error {
 
 	for _, priceUnitID := range f.PriceUnitIDs {
 		if priceUnitID == "" {
-			return ierr.NewError("price unit id can not be empty").
-				WithHint("Price unit info can not be empty").
+			return ierr.NewError("price unit ID cannot be empty").
+				WithHint("Price unit ID cannot be empty").
 				Mark(ierr.ErrValidation)
 		}
 	}
