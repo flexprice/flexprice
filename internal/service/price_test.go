@@ -512,7 +512,7 @@ func (s *PriceServiceSuite) TestCalculateCostWithBreakup_PackageRoundingModes() 
 
 	testCases := []struct {
 		name         string
-		roundingMode string
+		roundingMode types.RoundType
 		quantity     decimal.Decimal
 		expectedCost decimal.Decimal
 	}{

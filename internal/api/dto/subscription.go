@@ -1174,23 +1174,8 @@ func (r *OverrideLineItemRequest) Validate(
 					Mark(ierr.ErrValidation)
 			}
 
-			if r.TransformQuantity.DivideBy <= 0 {
-				return ierr.NewError("transform_quantity.divide_by must be greater than 0 when billing model is PACKAGE").
-					WithHint("Please provide a valid number of units to set up package pricing override").
-					Mark(ierr.ErrValidation)
-			}
-
-			// Validate round type
-			if r.TransformQuantity.Round == "" {
-				r.TransformQuantity.Round = types.ROUND_UP // Default to rounding up
-			} else if r.TransformQuantity.Round != types.ROUND_UP && r.TransformQuantity.Round != types.ROUND_DOWN {
-				return ierr.NewError("invalid rounding type- allowed values are up and down").
-					WithHint("Please provide a valid rounding type for package pricing override").
-					WithReportableDetails(map[string]interface{}{
-						"round":   r.TransformQuantity.Round,
-						"allowed": []string{types.ROUND_UP, types.ROUND_DOWN},
-					}).
-					Mark(ierr.ErrValidation)
+			if err := r.TransformQuantity.Validate(); err != nil {
+				return err
 			}
 
 		case types.BILLING_MODEL_FLAT_FEE:
@@ -1212,20 +1197,8 @@ func (r *OverrideLineItemRequest) Validate(
 
 	// Validate transform quantity if provided (independent of billing model)
 	if r.TransformQuantity != nil {
-		if r.TransformQuantity.DivideBy <= 0 {
-			return ierr.NewError("transform_quantity.divide_by must be greater than 0").
-				WithHint("Transform quantity divide_by must be greater than 0").
-				Mark(ierr.ErrValidation)
-		}
-
-		if r.TransformQuantity.Round != "" && r.TransformQuantity.Round != types.ROUND_UP && r.TransformQuantity.Round != types.ROUND_DOWN {
-			return ierr.NewError("invalid rounding type- allowed values are up and down").
-				WithHint("Please provide a valid rounding type").
-				WithReportableDetails(map[string]interface{}{
-					"round":   r.TransformQuantity.Round,
-					"allowed": []string{types.ROUND_UP, types.ROUND_DOWN},
-				}).
-				Mark(ierr.ErrValidation)
+		if err := r.TransformQuantity.Validate(); err != nil {
+			return err
 		}
 	}
 

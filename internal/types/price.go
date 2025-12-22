@@ -109,8 +109,50 @@ type PriceTier struct {
 }
 
 type TransformQuantity struct {
-	DivideBy int    `json:"divide_by,omitempty"`
-	Round    string `json:"round,omitempty"`
+	DivideBy int       `json:"divide_by,omitempty"`
+	Round    RoundType `json:"round,omitempty"`
+}
+
+func (t TransformQuantity) Validate() error {
+
+	if t.DivideBy < 1 {
+		return ierr.NewError("transform_quantity.divide_by must be greater than or equal to 1").
+			WithHint("Transform quantity divide by must be greater than or equal to 1").
+			WithReportableDetails(map[string]interface{}{
+				"divide_by": t.DivideBy,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if err := t.Round.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+type RoundType string
+
+const (
+	// ROUND_UP rounds to the ceiling value ex 1.99 -> 2.00
+	ROUND_UP RoundType = "up"
+	// ROUND_DOWN rounds to the floor value ex 1.99 -> 1.00
+	ROUND_DOWN RoundType = "down"
+)
+
+func (r RoundType) Validate() error {
+	allowed := []RoundType{
+		ROUND_UP,
+		ROUND_DOWN,
+	}
+	if r != "" && !lo.Contains(allowed, r) {
+		return ierr.NewError("invalid rounding type").
+			WithHint("Invalid rounding type").
+			WithReportableDetails(map[string]interface{}{
+				"round_type": r,
+				"allowed":    allowed,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 const (
@@ -152,11 +194,6 @@ const (
 
 	// MAX_BILLING_AMOUNT is the maximum allowed billing amount (as a safeguard)
 	MAX_BILLING_AMOUNT = 1000000000000 // 1 trillion
-
-	// ROUND_UP rounds to the ceiling value ex 1.99 -> 2.00
-	ROUND_UP = "up"
-	// ROUND_DOWN rounds to the floor value ex 1.99 -> 1.00
-	ROUND_DOWN = "down"
 
 	// DEFAULT_FLOATING_PRECISION is the default floating point precision
 	DEFAULT_FLOATING_PRECISION = 2

@@ -3,7 +3,6 @@ package dto
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -21,7 +20,7 @@ type CreatePriceRequest struct {
 	EntityType         types.PriceEntityType    `json:"entity_type" validate:"required"`
 	EntityID           string                   `json:"entity_id" validate:"required"`
 	Type               types.PriceType          `json:"type" validate:"required"`
-	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"omitempty"`
+	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
 	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
 	BillingPeriodCount int                      `json:"billing_period_count" default:"1"`
 	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
@@ -57,7 +56,7 @@ type CreatePriceRequest struct {
 }
 
 type PriceUnitConfig struct {
-	Amount         string            `json:"amount,omitempty"`
+	Amount         *decimal.Decimal  `json:"amount,omitempty" swaggertype:"string"`
 	PriceUnit      string            `json:"price_unit" validate:"required,len=3"`
 	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
 }
@@ -181,10 +180,8 @@ func (p *PriceUnitConfig) Validate() error {
 
 // Validate validates the create price request
 func (r *CreatePriceRequest) Validate() error {
-	// 1. Determine price unit type
-	priceUnitType := types.PRICE_UNIT_TYPE_FIAT
-	if r.PriceUnitConfig != nil {
-		priceUnitType = types.PRICE_UNIT_TYPE_CUSTOM
+	if r.PriceUnitType == "" {
+		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
 	}
 
 	// 2. Basic field validations
@@ -193,19 +190,14 @@ func (r *CreatePriceRequest) Validate() error {
 	}
 
 	// Set default billing period count
-	if r.BillingPeriodCount == 0 {
-		r.BillingPeriodCount = 1
-	} else if r.BillingPeriodCount < 0 {
-		return ierr.NewError("invalid billing period count").
-			WithHint("Billing Period must be a valid positive number").
+	if r.BillingPeriodCount < 1 {
+		return ierr.NewError("billing period count must be greater than 0").
+			WithHint("Billing period count must be greater than 0").
 			WithReportableDetails(map[string]interface{}{
 				"billing_period_count": r.BillingPeriodCount,
 			}).
 			Mark(ierr.ErrValidation)
 	}
-
-	// Normalize currency to lowercase
-	r.Currency = strings.ToLower(r.Currency)
 
 	// 3. Validate enum types
 	if err := r.Type.Validate(); err != nil {
@@ -229,17 +221,8 @@ func (r *CreatePriceRequest) Validate() error {
 		return err
 	}
 
-	// 5. Validate amount
-	if r.Amount != nil {
-		if r.Amount.LessThan(decimal.Zero) {
-			return ierr.NewError("amount cannot be negative").
-				WithHint("Amount cannot be negative").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// 6. Validate price unit config (if CUSTOM)
-	if priceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+	// 5. Validate price unit config (if CUSTOM)
+	if r.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
 		if r.PriceUnitConfig == nil {
 			return ierr.NewError("price_unit_config is required when using custom pricing unit").
 				WithHint("Price unit config must be provided when using custom pricing units").
@@ -251,9 +234,12 @@ func (r *CreatePriceRequest) Validate() error {
 		}
 
 		// Ensure PriceUnitType is set to CUSTOM when PriceUnitConfig is provided
-		if r.PriceUnitType != "" && r.PriceUnitType != types.PRICE_UNIT_TYPE_CUSTOM {
+		if r.PriceUnitType != types.PRICE_UNIT_TYPE_CUSTOM {
 			return ierr.NewError("price_unit_type must be CUSTOM when price_unit_config is provided").
-				WithHint("Set price_unit_type to CUSTOM or leave it empty when using price_unit_config").
+				WithHint("Set price_unit_type to CUSTOM when using price_unit_config").
+				WithReportableDetails(map[string]interface{}{
+					"price_unit_type": r.PriceUnitType,
+				}).
 				Mark(ierr.ErrValidation)
 		}
 
@@ -261,15 +247,19 @@ func (r *CreatePriceRequest) Validate() error {
 		if len(r.Tiers) > 0 && len(r.PriceUnitConfig.PriceUnitTiers) > 0 {
 			return ierr.NewError("cannot provide both regular tiers and price unit tiers").
 				WithHint("For custom pricing units, use price_unit_config.price_unit_tiers only, not regular tiers").
+				WithReportableDetails(map[string]interface{}{
+					"tiers":            len(r.Tiers),
+					"price_unit_tiers": len(r.PriceUnitConfig.PriceUnitTiers),
+				}).
 				Mark(ierr.ErrValidation)
 		}
 	}
 
-	// 7. Validate billing model specific requirements
+	// 6. Validate billing model specific requirements
 	switch r.BillingModel {
 	case types.BILLING_MODEL_TIERED:
 		// Validate tiers based on price type
-		if priceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+		if r.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
 			// CUSTOM: require price unit tiers
 			if len(r.PriceUnitConfig.PriceUnitTiers) == 0 {
 				return ierr.NewError("price_unit_tiers are required when billing model is TIERED and using custom pricing unit").
@@ -299,23 +289,39 @@ func (r *CreatePriceRequest) Validate() error {
 				WithHint("Please provide the number of units to set up package pricing").
 				Mark(ierr.ErrValidation)
 		}
-		if r.TransformQuantity.DivideBy <= 0 {
-			return ierr.NewError("transform_quantity.divide_by must be greater than 0 when billing model is PACKAGE").
-				WithHint("Please provide a valid number of units to set up package pricing").
-				Mark(ierr.ErrValidation)
+		if err := r.TransformQuantity.Validate(); err != nil {
+			return err
 		}
-		// Set default round type
-		if r.TransformQuantity.Round == "" {
-			r.TransformQuantity.Round = types.ROUND_UP
-		} else if r.TransformQuantity.Round != types.ROUND_UP && r.TransformQuantity.Round != types.ROUND_DOWN {
-			return ierr.NewError("invalid rounding type- allowed values are up and down").
-				WithHint("Please provide a valid rounding type for package pricing").
-				WithReportableDetails(map[string]interface{}{
-					"round":   r.TransformQuantity.Round,
-					"allowed": []string{types.ROUND_UP, types.ROUND_DOWN},
-				}).
-				Mark(ierr.ErrValidation)
+
+		if r.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+			if r.PriceUnitConfig.Amount == nil {
+				return ierr.NewError("price_unit_config.amount is required when billing model is PACKAGE and using custom pricing unit").
+					WithHint("Price unit amount is required to set up package pricing with custom pricing units").
+					Mark(ierr.ErrValidation)
+			}
+		} else {
+			if r.Amount == nil {
+				return ierr.NewError("amount is required when billing model is PACKAGE and using fiat pricing unit").
+					WithHint("Amount is required to set up package pricing with fiat pricing units").
+					Mark(ierr.ErrValidation)
+			}
 		}
+	case types.BILLING_MODEL_FLAT_FEE:
+
+		if r.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+			if r.PriceUnitConfig.Amount == nil {
+				return ierr.NewError("price_unit_config.amount is required when billing model is FLAT_FEE and using custom pricing unit").
+					WithHint("Price unit amount is required to set up flat fee pricing with custom pricing units").
+					Mark(ierr.ErrValidation)
+			}
+		} else {
+			if r.Amount == nil {
+				return ierr.NewError("amount is required when billing model is FLAT_FEE and using fiat pricing unit").
+					WithHint("Amount is required to set up flat fee pricing with fiat pricing units").
+					Mark(ierr.ErrValidation)
+			}
+		}
+
 	}
 
 	// 8. Validate price type specific requirements
@@ -339,15 +345,6 @@ func (r *CreatePriceRequest) Validate() error {
 		if r.BillingPeriod == "" {
 			return ierr.NewError("billing_period is required when billing_cadence is RECURRING").
 				WithHint("Please select a billing period to set up recurring pricing").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// 10. Validate amount requirements for non-TIERED models with custom pricing
-	if priceUnitType == types.PRICE_UNIT_TYPE_CUSTOM && r.BillingModel != types.BILLING_MODEL_TIERED {
-		if r.Amount == nil && r.PriceUnitConfig.Amount == "" {
-			return ierr.NewError("amount is required when using price unit config").
-				WithHint("Provide either amount or price_unit_config.amount").
 				Mark(ierr.ErrValidation)
 		}
 	}
@@ -388,17 +385,9 @@ func (r *CreatePriceRequest) Validate() error {
 // ToPrice converts the request to a Price domain object
 // Service layer should handle price unit conversion BEFORE calling this method
 func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, error) {
-	// Determine price unit type based on config
-	if r.PriceUnitConfig != nil {
-		r.PriceUnitType = types.PRICE_UNIT_TYPE_CUSTOM
-	} else if r.PriceUnitType == "" {
-		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
-	}
 
-	// Parse common fields
-	amount := decimal.Zero
-	if r.Amount != nil {
-		amount = *r.Amount
+	if r.PriceUnitType == "" {
+		r.PriceUnitType = types.PRICE_UNIT_TYPE_FIAT
 	}
 
 	startDate := r.StartDate
@@ -426,7 +415,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 	// Create price struct with common fields
 	price := &priceDomain.Price{
 		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-		Amount:             amount,
+		Amount:             lo.FromPtrOr(r.Amount, decimal.Zero),
 		Currency:           r.Currency,
 		PriceUnitType:      r.PriceUnitType,
 		Type:               r.Type,
@@ -456,14 +445,8 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 
 	// Set type-specific fields
 	if r.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
-		// CUSTOM-specific fields
-		if r.PriceUnitConfig == nil {
-			return nil, ierr.NewError("price_unit_config is required for CUSTOM price unit type").
-				WithHint("Price unit config must be provided when using custom pricing units").
-				Mark(ierr.ErrValidation)
-		}
 
-		price.PriceUnit = r.PriceUnitConfig.PriceUnit
+		price.PriceUnit = lo.ToPtr(r.PriceUnitConfig.PriceUnit)
 
 		// Convert and set price unit tiers (original tiers for display)
 		if r.PriceUnitConfig.PriceUnitTiers != nil {
@@ -475,12 +458,8 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		}
 
 		// Set price unit amount
-		if r.PriceUnitConfig.Amount != "" {
-			priceUnitAmount, err := decimal.NewFromString(r.PriceUnitConfig.Amount)
-			if err != nil {
-				return nil, r.createDecimalError("Price unit amount must be a valid decimal number", "amount", r.PriceUnitConfig.Amount)
-			}
-			price.PriceUnitAmount = &priceUnitAmount
+		if r.PriceUnitConfig.Amount != nil {
+			price.PriceUnitAmount = r.PriceUnitConfig.Amount
 		}
 	} else {
 		// FIAT-specific fields
@@ -493,6 +472,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 	}
 
 	price.DisplayAmount = price.GetDisplayAmount()
+
 	return price, nil
 }
 

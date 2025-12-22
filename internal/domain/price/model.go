@@ -234,8 +234,23 @@ func FormatAmountToFloat64WithPrecision(amount decimal.Decimal, currency string)
 // PriceTransform is the quantity transformation in case of PACKAGE billing model
 // NOTE: We need to apply this to the quantity before calculating the effective price
 type TransformQuantity struct {
-	DivideBy int    `json:"divide_by,omitempty"` // Divide quantity by this number
-	Round    string `json:"round,omitempty"`     // up or down
+	DivideBy int             `json:"divide_by,omitempty"` // Divide quantity by this number
+	Round    types.RoundType `json:"round,omitempty"`     // up or down
+}
+
+func (t *TransformQuantity) Validate() error {
+	if t.DivideBy < 1 {
+		return ierr.NewError("transform_quantity.divide_by must be greater than or equal to 1").
+			WithHint("Transform quantity divide by must be greater than or equal to 1").
+			WithReportableDetails(map[string]interface{}{
+				"divide_by": t.DivideBy,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if err := t.Round.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // Additional types needed for JSON fields
@@ -412,15 +427,18 @@ func FromEnt(e *ent.Price) *Price {
 		MeterID:                lo.FromPtr(e.MeterID),
 		LookupKey:              e.LookupKey,
 		Description:            e.Description,
-		TransformQuantity:      JSONBTransformQuantity(e.TransformQuantity),
-		Metadata:               JSONBMetadata(e.Metadata),
-		EnvironmentID:          e.EnvironmentID,
-		EntityType:             types.PriceEntityType(e.EntityType),
-		EntityID:               e.EntityID,
-		ParentPriceID:          lo.FromPtr(e.ParentPriceID),
-		GroupID:                lo.FromPtr(e.GroupID),
-		StartDate:              e.StartDate,
-		EndDate:                e.EndDate,
+		TransformQuantity: JSONBTransformQuantity(TransformQuantity{
+			DivideBy: e.TransformQuantity.DivideBy,
+			Round:    types.RoundType(e.TransformQuantity.Round),
+		}),
+		Metadata:      JSONBMetadata(e.Metadata),
+		EnvironmentID: e.EnvironmentID,
+		EntityType:    types.PriceEntityType(e.EntityType),
+		EntityID:      e.EntityID,
+		ParentPriceID: lo.FromPtr(e.ParentPriceID),
+		GroupID:       lo.FromPtr(e.GroupID),
+		StartDate:     e.StartDate,
+		EndDate:       e.EndDate,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
