@@ -413,7 +413,13 @@ func (o PriceUnitQueryOptions) ApplySortFilter(query PriceUnitQuery, field strin
 }
 
 func (o PriceUnitQueryOptions) ApplyPaginationFilter(query PriceUnitQuery, limit int, offset int) PriceUnitQuery {
-	return query.Offset(offset).Limit(limit)
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+	return query
 }
 
 func (o PriceUnitQueryOptions) GetFieldName(field string) string {

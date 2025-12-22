@@ -354,14 +354,16 @@ func TestInMemoryPriceUnitStore_Update(t *testing.T) {
 
 		pu.Name = "Updated Name"
 		pu.Symbol = "U"
-		updated, err := store.Update(ctx, pu)
+		err = store.Update(ctx, pu)
+		require.NoError(t, err)
+		updated, err := store.Get(ctx, pu.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Name", updated.Name)
 		assert.Equal(t, "U", updated.Symbol)
 	})
 
 	t.Run("nil price unit", func(t *testing.T) {
-		_, err := store.Update(ctx, nil)
+		err := store.Update(ctx, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "price unit cannot be nil")
 	})
@@ -376,7 +378,7 @@ func TestInMemoryPriceUnitStore_Update(t *testing.T) {
 			},
 		}
 
-		_, err := store.Update(ctx, pu)
+		err := store.Update(ctx, pu)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "not found")
 	})
@@ -482,7 +484,7 @@ func TestInMemoryPriceUnitStore_DeepCopy(t *testing.T) {
 		Code:           "COPY_TEST",
 		Symbol:         "C",
 		BaseCurrency:   "USD",
-		ConversionRate: decimal.NewFromFloat(0.01),
+		ConversionRate: decimal.NewFromFloat(0.01),		
 		EnvironmentID:  "test-env",
 		Metadata:       map[string]string{"key1": "value1", "key2": "value2"},
 		BaseModel: types.BaseModel{
