@@ -61,7 +61,7 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	}
 
 	// Get display name if needed (before price creation)
-	s.getDisplayName(ctx, &req)
+	s.setDisplayName(ctx, &req)
 
 	// Convert request to Price domain object
 	p, err := req.ToPrice(ctx)
@@ -102,11 +102,11 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 	return response, nil
 }
 
-// getDisplayName extracts the display name from the entity (plan/addon) or meter
+// setDisplayName extracts the display name from the entity (plan/addon) or meter
 // if SkipEntityValidation is false and DisplayName is empty.
 // If SkipEntityValidation is true, it sets default names: "Recurring" for FIXED and "Usage" for USAGE.
 // This should be called before price creation repository operations.
-func (s *priceService) getDisplayName(ctx context.Context, req *dto.CreatePriceRequest) {
+func (s *priceService) setDisplayName(ctx context.Context, req *dto.CreatePriceRequest) {
 	// If display name is already set, don't override it
 	if req.DisplayName != "" {
 		return
@@ -222,7 +222,7 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 
 		for _, priceReq := range req.Items {
 			// Get display name if needed (before price creation)
-			s.getDisplayName(txCtx, &priceReq)
+			s.setDisplayName(txCtx, &priceReq)
 			// Convert request to Price domain object
 			p, err := priceReq.ToPrice(txCtx)
 			if err != nil {
@@ -1217,14 +1217,8 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 // 3. Converting price unit tiers to base currency tiers and updating p.Tiers
 // 4. Setting price unit metadata (PriceUnitID, ConversionRate) on the Price object
 func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *price.Price, req dto.CreatePriceRequest) error {
-	if req.PriceUnitConfig == nil {
-		return ierr.NewError("price_unit_config is required for CUSTOM price unit type").
-			WithHint("Price unit config must be provided when using custom pricing units").
-			Mark(ierr.ErrValidation)
-	}
-
 	// 1. Fetch the price unit by code
-	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, req.PriceUnitConfig.PriceUnit)
+	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(p.PriceUnit))
 	if err != nil {
 		return err
 	}
@@ -1234,7 +1228,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 		return ierr.NewError("price unit must be published").
 			WithHint("The specified price unit is not published").
 			WithReportableDetails(map[string]interface{}{
-				"price_unit_code": req.PriceUnitConfig.PriceUnit,
+				"price_unit_code": p.PriceUnit,
 				"status":          priceUnit.Status,
 			}).
 			Mark(ierr.ErrValidation)
@@ -1256,9 +1250,9 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 		// Convert price unit amount to fiat currency
 		fiatAmount, err := priceunit.ConvertToFiatCurrencyAmount(
 			ctx,
-			*p.PriceUnitAmount,
+			lo.FromPtrOr(p.PriceUnitAmount, decimal.Zero),
 			priceUnit.ConversionRate,
-				priceUnit.BaseCurrency,
+			priceUnit.BaseCurrency,
 		)
 		if err != nil {
 			return err
@@ -1293,14 +1287,14 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 			if tier.FlatAmount != nil {
 				convertedFlatAmount, err := priceunit.ConvertToFiatCurrencyAmount(
 					ctx,
-					*tier.FlatAmount,
+					lo.FromPtrOr(tier.FlatAmount, decimal.Zero),
 					priceUnit.ConversionRate,
 					priceUnit.BaseCurrency,
 				)
 				if err != nil {
 					return err
 				}
-				convertedTier.FlatAmount = &convertedFlatAmount
+				convertedTier.FlatAmount = lo.ToPtr(convertedFlatAmount)
 			}
 
 			convertedTiers[i] = convertedTier
