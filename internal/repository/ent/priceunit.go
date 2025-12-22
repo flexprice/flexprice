@@ -50,11 +50,6 @@ func (r *priceUnitRepository) Create(ctx context.Context, priceUnit *domainPrice
 	})
 	defer FinishSpan(span)
 
-	// Set environment ID from context if not already set
-	if priceUnit.EnvironmentID == "" {
-		priceUnit.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
-
 	entPriceUnit, err := client.PriceUnit.Create().
 		SetID(priceUnit.ID).
 		SetName(priceUnit.Name).
@@ -220,7 +215,7 @@ func (r *priceUnitRepository) Count(ctx context.Context, filter *types.PriceUnit
 	return count, nil
 }
 
-func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) (*domainPriceUnit.PriceUnit, error) {
+func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) error {
 	client := r.client.Writer(ctx)
 
 	r.log.Debugw("updating price unit",
@@ -254,7 +249,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 		SetSpanError(span, err)
 
 		if ent.IsNotFound(err) {
-			return nil, ierr.WithError(err).
+			return ierr.WithError(err).
 				WithHintf("Price unit with ID %s was not found", priceUnit.ID).
 				WithReportableDetails(map[string]any{
 					"price_unit_id": priceUnit.ID,
@@ -262,7 +257,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 				Mark(ierr.ErrNotFound)
 		}
 		if ent.IsConstraintError(err) {
-			return nil, ierr.WithError(err).
+			return ierr.WithError(err).
 				WithHint("Price unit with this code already exists").
 				WithReportableDetails(map[string]any{
 					"price_unit_id": priceUnit.ID,
@@ -270,7 +265,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 				}).
 				Mark(ierr.ErrAlreadyExists)
 		}
-		return nil, ierr.WithError(err).
+		return ierr.WithError(err).
 			WithHint("Failed to update price unit").
 			WithReportableDetails(map[string]any{
 				"price_unit_id": priceUnit.ID,
@@ -279,11 +274,8 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 	}
 
 	SetSpanSuccess(span)
-	// Update the input priceUnit with the new timestamp
-	priceUnit.UpdatedAt = time.Now().UTC()
-	priceUnit.UpdatedBy = types.GetUserID(ctx)
 	r.DeleteCache(ctx, priceUnit)
-	return priceUnit, nil
+	return nil
 }
 
 func (r *priceUnitRepository) Delete(ctx context.Context, priceUnit *domainPriceUnit.PriceUnit) error {

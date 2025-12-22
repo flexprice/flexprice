@@ -20,7 +20,7 @@ type Repository interface {
 	Count(ctx context.Context, filter *types.PriceUnitFilter) (int, error)
 
 	// Update updates an existing pricing unit and returns the updated price unit
-	Update(ctx context.Context, priceUnit *PriceUnit) (*PriceUnit, error)
+	Update(ctx context.Context, priceUnit *PriceUnit) error
 
 	// Delete deletes a pricing unit
 	Delete(ctx context.Context, priceUnit *PriceUnit) error

@@ -86,6 +86,14 @@ func (s *priceUnitService) ListPriceUnits(ctx context.Context, filter *types.Pri
 		return nil, err
 	}
 
+	if filter.GetLimit() == 0 {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
 	// Get price units from repository
 	priceUnits, err := s.PriceUnitRepo.List(ctx, filter)
 	if err != nil {
@@ -142,13 +150,13 @@ func (s *priceUnitService) UpdatePriceUnit(ctx context.Context, id string, req d
 	}
 
 	// Update price unit
-	updatedPriceUnit, err := s.PriceUnitRepo.Update(ctx, existingPriceUnit)
+	err = s.PriceUnitRepo.Update(ctx, existingPriceUnit)
 	if err != nil {
 		return nil, err
 	}
 
 	return &dto.PriceUnitResponse{
-		PriceUnit: updatedPriceUnit,
+		PriceUnit: existingPriceUnit,
 	}, nil
 }
 

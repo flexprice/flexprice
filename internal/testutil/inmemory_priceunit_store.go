@@ -123,23 +123,23 @@ func (s *InMemoryPriceUnitStore) Count(ctx context.Context, filter *types.PriceU
 	return count, nil
 }
 
-func (s *InMemoryPriceUnitStore) Update(ctx context.Context, pu *priceunit.PriceUnit) (*priceunit.PriceUnit, error) {
+func (s *InMemoryPriceUnitStore) Update(ctx context.Context, pu *priceunit.PriceUnit) error {
 	if pu == nil {
-		return nil, ierr.NewError("price unit cannot be nil").
+		return ierr.NewError("price unit cannot be nil").
 			WithHint("Price unit cannot be nil").
 			Mark(ierr.ErrValidation)
 	}
 
 	err := s.InMemoryStore.Update(ctx, pu.ID, copyPriceUnit(pu))
 	if err != nil {
-		return nil, ierr.WithError(err).
+		return ierr.WithError(err).
 			WithHint("Failed to update price unit").
 			WithReportableDetails(map[string]interface{}{
 				"id": pu.ID,
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	return copyPriceUnit(pu), nil
+	return nil
 }
 
 func (s *InMemoryPriceUnitStore) Delete(ctx context.Context, pu *priceunit.PriceUnit) error {
