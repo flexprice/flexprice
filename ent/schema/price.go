@@ -218,8 +218,7 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(20)",
 			}).
 			Immutable().
-			Nillable().
-			Optional().
+			NotEmpty().
 			Default(string(types.PRICE_ENTITY_TYPE_PLAN)).
 			GoType(types.PriceEntityType("")),
 
@@ -228,8 +227,7 @@ func (Price) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Immutable().
-			Nillable().
-			Optional(),
+			NotEmpty(),
 
 		field.String("parent_price_id").
 			SchemaType(map[string]string{

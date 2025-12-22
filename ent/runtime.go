@@ -1343,6 +1343,12 @@ func init() {
 	priceDescEntityType := priceFields[28].Descriptor()
 	// price.DefaultEntityType holds the default value on creation for the entity_type field.
 	price.DefaultEntityType = types.PriceEntityType(priceDescEntityType.Default.(string))
+	// price.EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	price.EntityTypeValidator = priceDescEntityType.Validators[0].(func(string) error)
+	// priceDescEntityID is the schema descriptor for entity_id field.
+	priceDescEntityID := priceFields[29].Descriptor()
+	// price.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	price.EntityIDValidator = priceDescEntityID.Validators[0].(func(string) error)
 	// priceDescStartDate is the schema descriptor for start_date field.
 	priceDescStartDate := priceFields[31].Descriptor()
 	// price.DefaultStartDate holds the default value on creation for the start_date field.

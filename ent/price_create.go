@@ -432,14 +432,6 @@ func (pc *PriceCreate) SetEntityID(s string) *PriceCreate {
 	return pc
 }
 
-// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableEntityID(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetEntityID(*s)
-	}
-	return pc
-}
-
 // SetParentPriceID sets the "parent_price_id" field.
 func (pc *PriceCreate) SetParentPriceID(s string) *PriceCreate {
 	pc.mutation.SetParentPriceID(s)
@@ -713,9 +705,20 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
+	if _, ok := pc.mutation.EntityType(); !ok {
+		return &ValidationError{Name: "entity_type", err: errors.New(`ent: missing required field "Price.entity_type"`)}
+	}
 	if v, ok := pc.mutation.EntityType(); ok {
-		if err := v.Validate(); err != nil {
+		if err := price.EntityTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Price.entity_type": %w`, err)}
+		}
+	}
+	if _, ok := pc.mutation.EntityID(); !ok {
+		return &ValidationError{Name: "entity_id", err: errors.New(`ent: missing required field "Price.entity_id"`)}
+	}
+	if v, ok := pc.mutation.EntityID(); ok {
+		if err := price.EntityIDValidator(v); err != nil {
+			return &ValidationError{Name: "entity_id", err: fmt.Errorf(`ent: validator failed for field "Price.entity_id": %w`, err)}
 		}
 	}
 	return nil
@@ -887,11 +890,11 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := pc.mutation.EntityType(); ok {
 		_spec.SetField(price.FieldEntityType, field.TypeString, value)
-		_node.EntityType = &value
+		_node.EntityType = value
 	}
 	if value, ok := pc.mutation.EntityID(); ok {
 		_spec.SetField(price.FieldEntityID, field.TypeString, value)
-		_node.EntityID = &value
+		_node.EntityID = value
 	}
 	if value, ok := pc.mutation.ParentPriceID(); ok {
 		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)

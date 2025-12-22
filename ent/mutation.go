@@ -38636,7 +38636,7 @@ func (m *PriceMutation) EntityType() (r types.PriceEntityType, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldEntityType(ctx context.Context) (v *types.PriceEntityType, err error) {
+func (m *PriceMutation) OldEntityType(ctx context.Context) (v types.PriceEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -38650,22 +38650,9 @@ func (m *PriceMutation) OldEntityType(ctx context.Context) (v *types.PriceEntity
 	return oldValue.EntityType, nil
 }
 
-// ClearEntityType clears the value of the "entity_type" field.
-func (m *PriceMutation) ClearEntityType() {
-	m.entity_type = nil
-	m.clearedFields[price.FieldEntityType] = struct{}{}
-}
-
-// EntityTypeCleared returns if the "entity_type" field was cleared in this mutation.
-func (m *PriceMutation) EntityTypeCleared() bool {
-	_, ok := m.clearedFields[price.FieldEntityType]
-	return ok
-}
-
 // ResetEntityType resets all changes to the "entity_type" field.
 func (m *PriceMutation) ResetEntityType() {
 	m.entity_type = nil
-	delete(m.clearedFields, price.FieldEntityType)
 }
 
 // SetEntityID sets the "entity_id" field.
@@ -38685,7 +38672,7 @@ func (m *PriceMutation) EntityID() (r string, exists bool) {
 // OldEntityID returns the old "entity_id" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldEntityID(ctx context.Context) (v *string, err error) {
+func (m *PriceMutation) OldEntityID(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
 	}
@@ -38699,22 +38686,9 @@ func (m *PriceMutation) OldEntityID(ctx context.Context) (v *string, err error) 
 	return oldValue.EntityID, nil
 }
 
-// ClearEntityID clears the value of the "entity_id" field.
-func (m *PriceMutation) ClearEntityID() {
-	m.entity_id = nil
-	m.clearedFields[price.FieldEntityID] = struct{}{}
-}
-
-// EntityIDCleared returns if the "entity_id" field was cleared in this mutation.
-func (m *PriceMutation) EntityIDCleared() bool {
-	_, ok := m.clearedFields[price.FieldEntityID]
-	return ok
-}
-
 // ResetEntityID resets all changes to the "entity_id" field.
 func (m *PriceMutation) ResetEntityID() {
 	m.entity_id = nil
-	delete(m.clearedFields, price.FieldEntityID)
 }
 
 // SetParentPriceID sets the "parent_price_id" field.
@@ -39748,12 +39722,6 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldMetadata) {
 		fields = append(fields, price.FieldMetadata)
 	}
-	if m.FieldCleared(price.FieldEntityType) {
-		fields = append(fields, price.FieldEntityType)
-	}
-	if m.FieldCleared(price.FieldEntityID) {
-		fields = append(fields, price.FieldEntityID)
-	}
 	if m.FieldCleared(price.FieldParentPriceID) {
 		fields = append(fields, price.FieldParentPriceID)
 	}
@@ -39842,12 +39810,6 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldMetadata:
 		m.ClearMetadata()
-		return nil
-	case price.FieldEntityType:
-		m.ClearEntityType()
-		return nil
-	case price.FieldEntityID:
-		m.ClearEntityID()
 		return nil
 	case price.FieldParentPriceID:
 		m.ClearParentPriceID()

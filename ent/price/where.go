@@ -2350,16 +2350,6 @@ func EntityTypeHasSuffix(v types.PriceEntityType) predicate.Price {
 	return predicate.Price(sql.FieldHasSuffix(FieldEntityType, vc))
 }
 
-// EntityTypeIsNil applies the IsNil predicate on the "entity_type" field.
-func EntityTypeIsNil() predicate.Price {
-	return predicate.Price(sql.FieldIsNull(FieldEntityType))
-}
-
-// EntityTypeNotNil applies the NotNil predicate on the "entity_type" field.
-func EntityTypeNotNil() predicate.Price {
-	return predicate.Price(sql.FieldNotNull(FieldEntityType))
-}
-
 // EntityTypeEqualFold applies the EqualFold predicate on the "entity_type" field.
 func EntityTypeEqualFold(v types.PriceEntityType) predicate.Price {
 	vc := string(v)
@@ -2425,16 +2415,6 @@ func EntityIDHasPrefix(v string) predicate.Price {
 // EntityIDHasSuffix applies the HasSuffix predicate on the "entity_id" field.
 func EntityIDHasSuffix(v string) predicate.Price {
 	return predicate.Price(sql.FieldHasSuffix(FieldEntityID, v))
-}
-
-// EntityIDIsNil applies the IsNil predicate on the "entity_id" field.
-func EntityIDIsNil() predicate.Price {
-	return predicate.Price(sql.FieldIsNull(FieldEntityID))
-}
-
-// EntityIDNotNil applies the NotNil predicate on the "entity_id" field.
-func EntityIDNotNil() predicate.Price {
-	return predicate.Price(sql.FieldNotNull(FieldEntityID))
 }
 
 // EntityIDEqualFold applies the EqualFold predicate on the "entity_id" field.

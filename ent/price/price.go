@@ -214,6 +214,10 @@ var (
 	DefaultTrialPeriod int
 	// DefaultEntityType holds the default value on creation for the "entity_type" field.
 	DefaultEntityType types.PriceEntityType
+	// EntityTypeValidator is a validator for the "entity_type" field. It is called by the builders before save.
+	EntityTypeValidator func(string) error
+	// EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
+	EntityIDValidator func(string) error
 	// DefaultStartDate holds the default value on creation for the "start_date" field.
 	DefaultStartDate func() time.Time
 )

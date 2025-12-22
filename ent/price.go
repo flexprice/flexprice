@@ -90,9 +90,9 @@ type Price struct {
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// EntityType holds the value of the "entity_type" field.
-	EntityType *types.PriceEntityType `json:"entity_type,omitempty"`
+	EntityType types.PriceEntityType `json:"entity_type,omitempty"`
 	// EntityID holds the value of the "entity_id" field.
-	EntityID *string `json:"entity_id,omitempty"`
+	EntityID string `json:"entity_id,omitempty"`
 	// ParentPriceID holds the value of the "parent_price_id" field.
 	ParentPriceID *string `json:"parent_price_id,omitempty"`
 	// StartDate holds the value of the "start_date" field.
@@ -401,15 +401,13 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				pr.EntityType = new(types.PriceEntityType)
-				*pr.EntityType = types.PriceEntityType(value.String)
+				pr.EntityType = types.PriceEntityType(value.String)
 			}
 		case price.FieldEntityID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_id", values[i])
 			} else if value.Valid {
-				pr.EntityID = new(string)
-				*pr.EntityID = value.String
+				pr.EntityID = value.String
 			}
 		case price.FieldParentPriceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -601,15 +599,11 @@ func (pr *Price) String() string {
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", pr.Metadata))
 	builder.WriteString(", ")
-	if v := pr.EntityType; v != nil {
-		builder.WriteString("entity_type=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("entity_type=")
+	builder.WriteString(fmt.Sprintf("%v", pr.EntityType))
 	builder.WriteString(", ")
-	if v := pr.EntityID; v != nil {
-		builder.WriteString("entity_id=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("entity_id=")
+	builder.WriteString(pr.EntityID)
 	builder.WriteString(", ")
 	if v := pr.ParentPriceID; v != nil {
 		builder.WriteString("parent_price_id=")

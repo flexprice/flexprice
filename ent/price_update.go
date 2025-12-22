@@ -654,12 +654,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
 	}
-	if pu.mutation.EntityTypeCleared() {
-		_spec.ClearField(price.FieldEntityType, field.TypeString)
-	}
-	if pu.mutation.EntityIDCleared() {
-		_spec.ClearField(price.FieldEntityID, field.TypeString)
-	}
 	if value, ok := pu.mutation.ParentPriceID(); ok {
 		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
 	}
@@ -1397,12 +1391,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.MetadataCleared() {
 		_spec.ClearField(price.FieldMetadata, field.TypeJSON)
-	}
-	if puo.mutation.EntityTypeCleared() {
-		_spec.ClearField(price.FieldEntityType, field.TypeString)
-	}
-	if puo.mutation.EntityIDCleared() {
-		_spec.ClearField(price.FieldEntityID, field.TypeString)
 	}
 	if value, ok := puo.mutation.ParentPriceID(); ok {
 		_spec.SetField(price.FieldParentPriceID, field.TypeString, value)
