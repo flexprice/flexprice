@@ -76,7 +76,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
 		SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers)).
-		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
+		SetNillableTransformQuantity(lo.ToPtr(types.TransformQuantity(p.TransformQuantity))).
 		SetLookupKey(p.LookupKey).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
