@@ -402,11 +402,9 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 	}
 
 	// Initialize transformQuantity with default divide_by=1 if not provided
-	// This ensures validation always passes (divide_by >= 1)
-	// For non-PACKAGE billing models, TransformQuantity is not used anyway
 	var transformQuantity priceDomain.JSONBTransformQuantity
 	if r.TransformQuantity != nil {
-		transformQuantity = priceDomain.JSONBTransformQuantity(*r.TransformQuantity)	
+		transformQuantity = priceDomain.JSONBTransformQuantity(*r.TransformQuantity)
 	} else {
 		// Default to divide_by=1 when TransformQuantity is not provided
 		transformQuantity = priceDomain.JSONBTransformQuantity{
