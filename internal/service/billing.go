@@ -633,6 +633,28 @@ func (s *billingService) CalculateUsageCharges(
 				"line_item_id", item.ID,
 				"price_id", item.PriceID)
 
+			// Calculate price unit amount if price unit is available
+			var priceUnitAmount decimal.Decimal
+			if item.PriceUnit != nil {
+				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
+				if err != nil {
+					s.Logger.Warnw("failed to get price unit",
+						"error", err,
+						"price_unit", lo.FromPtr(item.PriceUnit),
+						"amount", lineItemAmount)
+					continue
+				}
+				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
+				if err != nil {
+					s.Logger.Warnw("failed to convert amount to price unit",
+						"error", err,
+						"price_unit", lo.FromPtr(item.PriceUnit),
+						"amount", lineItemAmount)
+					continue
+				}
+				priceUnitAmount = convertedAmount
+			}
+
 			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
 				EntityID:         lo.ToPtr(item.EntityID),
 				EntityType:       lo.ToPtr(string(item.EntityType)),
@@ -641,6 +663,8 @@ func (s *billingService) CalculateUsageCharges(
 				PriceID:          lo.ToPtr(item.PriceID),
 				MeterID:          lo.ToPtr(item.MeterID),
 				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
+				PriceUnit:        item.PriceUnit,
+				PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,
 				Quantity:         quantityForCalculation,

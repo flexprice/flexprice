@@ -60,21 +60,10 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 	}
 
-	// Get display name if needed (before price creation)
-	s.setDisplayName(ctx, &req)
-
-	// Convert request to Price domain object
-	p, err := req.ToPrice(ctx)
+	// Prepare price for creation (sets display name, converts to Price, applies custom price unit conversion)
+	p, err := s.preparePriceForCreation(ctx, &req)
 	if err != nil {
 		return nil, err
-	}
-
-	// Apply price unit conversion if price type is CUSTOM
-	// This converts amounts/tiers and updates the Price object
-	if p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
-		if err := s.applyPriceUnitConversionToPrice(ctx, p, req); err != nil {
-			return nil, err
-		}
 	}
 
 	// Validate group if provided
@@ -100,6 +89,30 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		s.syncPriceToQuickBooksIfEnabled(ctx, p.ID, p.EntityID)
 	}
 	return response, nil
+}
+
+// preparePriceForCreation prepares a price for creation by setting display name,
+// converting the request to a Price domain object, and applying custom price unit conversion if needed.
+// This encapsulates the common price preparation logic used by both CreatePrice and CreateBulkPrice.
+func (s *priceService) preparePriceForCreation(ctx context.Context, req *dto.CreatePriceRequest) (*price.Price, error) {
+	// Get display name if needed (before price creation)
+	s.setDisplayName(ctx, req)
+
+	// Convert request to Price domain object
+	p, err := req.ToPrice(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply price unit conversion if price type is CUSTOM
+	// This converts amounts/tiers and updates the Price object
+	if p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+		if err := s.applyPriceUnitConversionToPrice(ctx, p); err != nil {
+			return nil, err
+		}
+	}
+
+	return p, nil
 }
 
 // setDisplayName extracts the display name from the entity (plan/addon) or meter
@@ -209,61 +222,42 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		return nil, err
 	}
 
-	var response *dto.CreateBulkPriceResponse
+	response := &dto.CreateBulkPriceResponse{
+		Items: make([]*dto.PriceResponse, 0),
+	}
 
-	// Use transaction to ensure all prices are created or none
-	err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
-		response = &dto.CreateBulkPriceResponse{
-			Items: make([]*dto.PriceResponse, 0),
-		}
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
 
-		// Process all prices
-		var regularPrices []*price.Price
+		prices := make([]*price.Price, 0, len(req.Items))
 
 		for _, priceReq := range req.Items {
-			// Get display name if needed (before price creation)
-			s.setDisplayName(txCtx, &priceReq)
-			// Convert request to Price domain object
-			p, err := priceReq.ToPrice(txCtx)
+			// Prepare price for creation (sets display name, converts to Price, applies custom price unit conversion)
+			p, err := s.preparePriceForCreation(txCtx, &priceReq)
 			if err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to create price").
-					Mark(ierr.ErrValidation)
-			}
-
-			// Apply price unit conversion if price type is CUSTOM
-			if p.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
-				if err := s.applyPriceUnitConversionToPrice(txCtx, p, priceReq); err != nil {
-					return err
-				}
-			}
-
-			regularPrices = append(regularPrices, p)
-		}
-
-		// Create regular prices in bulk if any exist
-		if len(regularPrices) > 0 {
-			// Validate groups if provided
-			if err := s.validateGroup(txCtx, regularPrices); err != nil {
 				return err
 			}
-			if err := s.PriceRepo.CreateBulk(txCtx, regularPrices); err != nil {
-				return ierr.WithError(err).
-					WithHint("Failed to create prices in bulk").
-					Mark(ierr.ErrDatabase)
-			}
 
-			// Add successful regular prices to response
-			for _, p := range regularPrices {
-				priceResp := &dto.PriceResponse{Price: p}
-				response.Items = append(response.Items, priceResp)
-			}
+			prices = append(prices, p)
+		}
+
+		// Validate groups if provided
+		if err := s.validateGroup(txCtx, prices); err != nil {
+			return err
+		}
+
+		// Create prices in bulk
+		if err := s.PriceRepo.CreateBulk(txCtx, prices); err != nil {
+			return err
+		}
+
+		// Add successful prices to response
+		for _, p := range prices {
+			priceResp := &dto.PriceResponse{Price: p}
+			response.Items = append(response.Items, priceResp)
 		}
 
 		return nil
-	})
-
-	if err != nil {
+	}); err != nil {
 		return nil, err
 	}
 
@@ -1216,7 +1210,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 // 2. Converting price unit amounts to base currency amounts and updating p.Amount
 // 3. Converting price unit tiers to base currency tiers and updating p.Tiers
 // 4. Setting price unit metadata (PriceUnitID, ConversionRate) on the Price object
-func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *price.Price, req dto.CreatePriceRequest) error {
+func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *price.Price) error {
 	// 1. Fetch the price unit by code
 	priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(p.PriceUnit))
 	if err != nil {
@@ -1228,7 +1222,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 		return ierr.NewError("price unit must be published").
 			WithHint("The specified price unit is not published").
 			WithReportableDetails(map[string]interface{}{
-				"price_unit_code": p.PriceUnit,
+				"price_unit_code": lo.FromPtr(p.PriceUnit),
 				"status":          priceUnit.Status,
 			}).
 			Mark(ierr.ErrValidation)
