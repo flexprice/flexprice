@@ -44,7 +44,7 @@ type Price struct {
 	// DisplayAmount holds the value of the "display_amount" field.
 	DisplayAmount string `json:"display_amount,omitempty"`
 	// PriceUnitType holds the value of the "price_unit_type" field.
-	PriceUnitType string `json:"price_unit_type,omitempty"`
+	PriceUnitType types.PriceUnitType `json:"price_unit_type,omitempty"`
 	// PriceUnitID holds the value of the "price_unit_id" field.
 	PriceUnitID *string `json:"price_unit_id,omitempty"`
 	// PriceUnit holds the value of the "price_unit" field.
@@ -246,7 +246,7 @@ func (pr *Price) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_unit_type", values[i])
 			} else if value.Valid {
-				pr.PriceUnitType = value.String
+				pr.PriceUnitType = types.PriceUnitType(value.String)
 			}
 		case price.FieldPriceUnitID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -519,7 +519,7 @@ func (pr *Price) String() string {
 	builder.WriteString(pr.DisplayAmount)
 	builder.WriteString(", ")
 	builder.WriteString("price_unit_type=")
-	builder.WriteString(pr.PriceUnitType)
+	builder.WriteString(fmt.Sprintf("%v", pr.PriceUnitType))
 	builder.WriteString(", ")
 	if v := pr.PriceUnitID; v != nil {
 		builder.WriteString("price_unit_id=")

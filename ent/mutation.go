@@ -36903,7 +36903,7 @@ type PriceMutation struct {
 	amount                    *decimal.Decimal
 	currency                  *string
 	display_amount            *string
-	price_unit_type           *string
+	price_unit_type           *types.PriceUnitType
 	price_unit                *string
 	price_unit_amount         *decimal.Decimal
 	display_price_unit_amount *string
@@ -37493,18 +37493,31 @@ func (m *PriceMutation) OldDisplayAmount(ctx context.Context) (v string, err err
 	return oldValue.DisplayAmount, nil
 }
 
+// ClearDisplayAmount clears the value of the "display_amount" field.
+func (m *PriceMutation) ClearDisplayAmount() {
+	m.display_amount = nil
+	m.clearedFields[price.FieldDisplayAmount] = struct{}{}
+}
+
+// DisplayAmountCleared returns if the "display_amount" field was cleared in this mutation.
+func (m *PriceMutation) DisplayAmountCleared() bool {
+	_, ok := m.clearedFields[price.FieldDisplayAmount]
+	return ok
+}
+
 // ResetDisplayAmount resets all changes to the "display_amount" field.
 func (m *PriceMutation) ResetDisplayAmount() {
 	m.display_amount = nil
+	delete(m.clearedFields, price.FieldDisplayAmount)
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
-func (m *PriceMutation) SetPriceUnitType(s string) {
-	m.price_unit_type = &s
+func (m *PriceMutation) SetPriceUnitType(tut types.PriceUnitType) {
+	m.price_unit_type = &tut
 }
 
 // PriceUnitType returns the value of the "price_unit_type" field in the mutation.
-func (m *PriceMutation) PriceUnitType() (r string, exists bool) {
+func (m *PriceMutation) PriceUnitType() (r types.PriceUnitType, exists bool) {
 	v := m.price_unit_type
 	if v == nil {
 		return
@@ -37515,7 +37528,7 @@ func (m *PriceMutation) PriceUnitType() (r string, exists bool) {
 // OldPriceUnitType returns the old "price_unit_type" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPriceUnitType(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldPriceUnitType(ctx context.Context) (v types.PriceUnitType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceUnitType is only allowed on UpdateOne operations")
 	}
@@ -39413,7 +39426,7 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetDisplayAmount(v)
 		return nil
 	case price.FieldPriceUnitType:
-		v, ok := value.(string)
+		v, ok := value.(types.PriceUnitType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39684,6 +39697,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldDisplayName) {
 		fields = append(fields, price.FieldDisplayName)
 	}
+	if m.FieldCleared(price.FieldDisplayAmount) {
+		fields = append(fields, price.FieldDisplayAmount)
+	}
 	if m.FieldCleared(price.FieldPriceUnitID) {
 		fields = append(fields, price.FieldPriceUnitID)
 	}
@@ -39775,6 +39791,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldDisplayName:
 		m.ClearDisplayName()
+		return nil
+	case price.FieldDisplayAmount:
+		m.ClearDisplayAmount()
 		return nil
 	case price.FieldPriceUnitID:
 		m.ClearPriceUnitID()

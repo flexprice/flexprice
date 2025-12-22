@@ -106,20 +106,6 @@ func (pu *PriceUpdate) SetNillableAmount(d *decimal.Decimal) *PriceUpdate {
 	return pu
 }
 
-// SetCurrency sets the "currency" field.
-func (pu *PriceUpdate) SetCurrency(s string) *PriceUpdate {
-	pu.mutation.SetCurrency(s)
-	return pu
-}
-
-// SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableCurrency(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetCurrency(*s)
-	}
-	return pu
-}
-
 // SetDisplayAmount sets the "display_amount" field.
 func (pu *PriceUpdate) SetDisplayAmount(s string) *PriceUpdate {
 	pu.mutation.SetDisplayAmount(s)
@@ -134,17 +120,9 @@ func (pu *PriceUpdate) SetNillableDisplayAmount(s *string) *PriceUpdate {
 	return pu
 }
 
-// SetPriceUnitType sets the "price_unit_type" field.
-func (pu *PriceUpdate) SetPriceUnitType(s string) *PriceUpdate {
-	pu.mutation.SetPriceUnitType(s)
-	return pu
-}
-
-// SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePriceUnitType(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetPriceUnitType(*s)
-	}
+// ClearDisplayAmount clears the value of the "display_amount" field.
+func (pu *PriceUpdate) ClearDisplayAmount() *PriceUpdate {
+	pu.mutation.ClearDisplayAmount()
 	return pu
 }
 
@@ -285,26 +263,6 @@ func (pu *PriceUpdate) SetNillableBillingCadence(tc *types.BillingCadence) *Pric
 	return pu
 }
 
-// SetMeterID sets the "meter_id" field.
-func (pu *PriceUpdate) SetMeterID(s string) *PriceUpdate {
-	pu.mutation.SetMeterID(s)
-	return pu
-}
-
-// SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableMeterID(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetMeterID(*s)
-	}
-	return pu
-}
-
-// ClearMeterID clears the value of the "meter_id" field.
-func (pu *PriceUpdate) ClearMeterID() *PriceUpdate {
-	pu.mutation.ClearMeterID()
-	return pu
-}
-
 // SetFilterValues sets the "filter_values" field.
 func (pu *PriceUpdate) SetFilterValues(m map[string][]string) *PriceUpdate {
 	pu.mutation.SetFilterValues(m)
@@ -314,26 +272,6 @@ func (pu *PriceUpdate) SetFilterValues(m map[string][]string) *PriceUpdate {
 // ClearFilterValues clears the value of the "filter_values" field.
 func (pu *PriceUpdate) ClearFilterValues() *PriceUpdate {
 	pu.mutation.ClearFilterValues()
-	return pu
-}
-
-// SetTierMode sets the "tier_mode" field.
-func (pu *PriceUpdate) SetTierMode(tt types.BillingTier) *PriceUpdate {
-	pu.mutation.SetTierMode(tt)
-	return pu
-}
-
-// SetNillableTierMode sets the "tier_mode" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableTierMode(tt *types.BillingTier) *PriceUpdate {
-	if tt != nil {
-		pu.SetTierMode(*tt)
-	}
-	return pu
-}
-
-// ClearTierMode clears the value of the "tier_mode" field.
-func (pu *PriceUpdate) ClearTierMode() *PriceUpdate {
-	pu.mutation.ClearTierMode()
 	return pu
 }
 
@@ -352,44 +290,6 @@ func (pu *PriceUpdate) AppendTiers(tt []*types.PriceTier) *PriceUpdate {
 // ClearTiers clears the value of the "tiers" field.
 func (pu *PriceUpdate) ClearTiers() *PriceUpdate {
 	pu.mutation.ClearTiers()
-	return pu
-}
-
-// SetPriceUnitTiers sets the "price_unit_tiers" field.
-func (pu *PriceUpdate) SetPriceUnitTiers(tt []*types.PriceTier) *PriceUpdate {
-	pu.mutation.SetPriceUnitTiers(tt)
-	return pu
-}
-
-// AppendPriceUnitTiers appends tt to the "price_unit_tiers" field.
-func (pu *PriceUpdate) AppendPriceUnitTiers(tt []*types.PriceTier) *PriceUpdate {
-	pu.mutation.AppendPriceUnitTiers(tt)
-	return pu
-}
-
-// ClearPriceUnitTiers clears the value of the "price_unit_tiers" field.
-func (pu *PriceUpdate) ClearPriceUnitTiers() *PriceUpdate {
-	pu.mutation.ClearPriceUnitTiers()
-	return pu
-}
-
-// SetTransformQuantity sets the "transform_quantity" field.
-func (pu *PriceUpdate) SetTransformQuantity(tq types.TransformQuantity) *PriceUpdate {
-	pu.mutation.SetTransformQuantity(tq)
-	return pu
-}
-
-// SetNillableTransformQuantity sets the "transform_quantity" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableTransformQuantity(tq *types.TransformQuantity) *PriceUpdate {
-	if tq != nil {
-		pu.SetTransformQuantity(*tq)
-	}
-	return pu
-}
-
-// ClearTransformQuantity clears the value of the "transform_quantity" field.
-func (pu *PriceUpdate) ClearTransformQuantity() *PriceUpdate {
-	pu.mutation.ClearTransformQuantity()
 	return pu
 }
 
@@ -584,19 +484,9 @@ func (pu *PriceUpdate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (pu *PriceUpdate) check() error {
-	if v, ok := pu.mutation.Currency(); ok {
-		if err := price.CurrencyValidator(v); err != nil {
-			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Price.currency": %w`, err)}
-		}
-	}
 	if v, ok := pu.mutation.DisplayAmount(); ok {
 		if err := price.DisplayAmountValidator(v); err != nil {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
-		}
-	}
-	if v, ok := pu.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(v); err != nil {
-			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
 	if v, ok := pu.mutation.GetType(); ok {
@@ -622,11 +512,6 @@ func (pu *PriceUpdate) check() error {
 	if v, ok := pu.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
-		}
-	}
-	if v, ok := pu.mutation.TierMode(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -671,14 +556,11 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := pu.mutation.Amount(); ok {
 		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := pu.mutation.Currency(); ok {
-		_spec.SetField(price.FieldCurrency, field.TypeString, value)
-	}
 	if value, ok := pu.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
-	if value, ok := pu.mutation.PriceUnitType(); ok {
-		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
+	if pu.mutation.DisplayAmountCleared() {
+		_spec.ClearField(price.FieldDisplayAmount, field.TypeString)
 	}
 	if pu.mutation.PriceUnitCleared() {
 		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
@@ -725,9 +607,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.InvoiceCadenceCleared() {
 		_spec.ClearField(price.FieldInvoiceCadence, field.TypeString)
 	}
-	if value, ok := pu.mutation.MeterID(); ok {
-		_spec.SetField(price.FieldMeterID, field.TypeString, value)
-	}
 	if pu.mutation.MeterIDCleared() {
 		_spec.ClearField(price.FieldMeterID, field.TypeString)
 	}
@@ -736,9 +615,6 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if pu.mutation.FilterValuesCleared() {
 		_spec.ClearField(price.FieldFilterValues, field.TypeJSON)
-	}
-	if value, ok := pu.mutation.TierMode(); ok {
-		_spec.SetField(price.FieldTierMode, field.TypeString, value)
 	}
 	if pu.mutation.TierModeCleared() {
 		_spec.ClearField(price.FieldTierMode, field.TypeString)
@@ -754,19 +630,8 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.TiersCleared() {
 		_spec.ClearField(price.FieldTiers, field.TypeJSON)
 	}
-	if value, ok := pu.mutation.PriceUnitTiers(); ok {
-		_spec.SetField(price.FieldPriceUnitTiers, field.TypeJSON, value)
-	}
-	if value, ok := pu.mutation.AppendedPriceUnitTiers(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, price.FieldPriceUnitTiers, value)
-		})
-	}
 	if pu.mutation.PriceUnitTiersCleared() {
 		_spec.ClearField(price.FieldPriceUnitTiers, field.TypeJSON)
-	}
-	if value, ok := pu.mutation.TransformQuantity(); ok {
-		_spec.SetField(price.FieldTransformQuantity, field.TypeJSON, value)
 	}
 	if pu.mutation.TransformQuantityCleared() {
 		_spec.ClearField(price.FieldTransformQuantity, field.TypeJSON)
@@ -955,20 +820,6 @@ func (puo *PriceUpdateOne) SetNillableAmount(d *decimal.Decimal) *PriceUpdateOne
 	return puo
 }
 
-// SetCurrency sets the "currency" field.
-func (puo *PriceUpdateOne) SetCurrency(s string) *PriceUpdateOne {
-	puo.mutation.SetCurrency(s)
-	return puo
-}
-
-// SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableCurrency(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetCurrency(*s)
-	}
-	return puo
-}
-
 // SetDisplayAmount sets the "display_amount" field.
 func (puo *PriceUpdateOne) SetDisplayAmount(s string) *PriceUpdateOne {
 	puo.mutation.SetDisplayAmount(s)
@@ -983,17 +834,9 @@ func (puo *PriceUpdateOne) SetNillableDisplayAmount(s *string) *PriceUpdateOne {
 	return puo
 }
 
-// SetPriceUnitType sets the "price_unit_type" field.
-func (puo *PriceUpdateOne) SetPriceUnitType(s string) *PriceUpdateOne {
-	puo.mutation.SetPriceUnitType(s)
-	return puo
-}
-
-// SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePriceUnitType(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetPriceUnitType(*s)
-	}
+// ClearDisplayAmount clears the value of the "display_amount" field.
+func (puo *PriceUpdateOne) ClearDisplayAmount() *PriceUpdateOne {
+	puo.mutation.ClearDisplayAmount()
 	return puo
 }
 
@@ -1134,26 +977,6 @@ func (puo *PriceUpdateOne) SetNillableBillingCadence(tc *types.BillingCadence) *
 	return puo
 }
 
-// SetMeterID sets the "meter_id" field.
-func (puo *PriceUpdateOne) SetMeterID(s string) *PriceUpdateOne {
-	puo.mutation.SetMeterID(s)
-	return puo
-}
-
-// SetNillableMeterID sets the "meter_id" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableMeterID(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetMeterID(*s)
-	}
-	return puo
-}
-
-// ClearMeterID clears the value of the "meter_id" field.
-func (puo *PriceUpdateOne) ClearMeterID() *PriceUpdateOne {
-	puo.mutation.ClearMeterID()
-	return puo
-}
-
 // SetFilterValues sets the "filter_values" field.
 func (puo *PriceUpdateOne) SetFilterValues(m map[string][]string) *PriceUpdateOne {
 	puo.mutation.SetFilterValues(m)
@@ -1163,26 +986,6 @@ func (puo *PriceUpdateOne) SetFilterValues(m map[string][]string) *PriceUpdateOn
 // ClearFilterValues clears the value of the "filter_values" field.
 func (puo *PriceUpdateOne) ClearFilterValues() *PriceUpdateOne {
 	puo.mutation.ClearFilterValues()
-	return puo
-}
-
-// SetTierMode sets the "tier_mode" field.
-func (puo *PriceUpdateOne) SetTierMode(tt types.BillingTier) *PriceUpdateOne {
-	puo.mutation.SetTierMode(tt)
-	return puo
-}
-
-// SetNillableTierMode sets the "tier_mode" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableTierMode(tt *types.BillingTier) *PriceUpdateOne {
-	if tt != nil {
-		puo.SetTierMode(*tt)
-	}
-	return puo
-}
-
-// ClearTierMode clears the value of the "tier_mode" field.
-func (puo *PriceUpdateOne) ClearTierMode() *PriceUpdateOne {
-	puo.mutation.ClearTierMode()
 	return puo
 }
 
@@ -1201,44 +1004,6 @@ func (puo *PriceUpdateOne) AppendTiers(tt []*types.PriceTier) *PriceUpdateOne {
 // ClearTiers clears the value of the "tiers" field.
 func (puo *PriceUpdateOne) ClearTiers() *PriceUpdateOne {
 	puo.mutation.ClearTiers()
-	return puo
-}
-
-// SetPriceUnitTiers sets the "price_unit_tiers" field.
-func (puo *PriceUpdateOne) SetPriceUnitTiers(tt []*types.PriceTier) *PriceUpdateOne {
-	puo.mutation.SetPriceUnitTiers(tt)
-	return puo
-}
-
-// AppendPriceUnitTiers appends tt to the "price_unit_tiers" field.
-func (puo *PriceUpdateOne) AppendPriceUnitTiers(tt []*types.PriceTier) *PriceUpdateOne {
-	puo.mutation.AppendPriceUnitTiers(tt)
-	return puo
-}
-
-// ClearPriceUnitTiers clears the value of the "price_unit_tiers" field.
-func (puo *PriceUpdateOne) ClearPriceUnitTiers() *PriceUpdateOne {
-	puo.mutation.ClearPriceUnitTiers()
-	return puo
-}
-
-// SetTransformQuantity sets the "transform_quantity" field.
-func (puo *PriceUpdateOne) SetTransformQuantity(tq types.TransformQuantity) *PriceUpdateOne {
-	puo.mutation.SetTransformQuantity(tq)
-	return puo
-}
-
-// SetNillableTransformQuantity sets the "transform_quantity" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableTransformQuantity(tq *types.TransformQuantity) *PriceUpdateOne {
-	if tq != nil {
-		puo.SetTransformQuantity(*tq)
-	}
-	return puo
-}
-
-// ClearTransformQuantity clears the value of the "transform_quantity" field.
-func (puo *PriceUpdateOne) ClearTransformQuantity() *PriceUpdateOne {
-	puo.mutation.ClearTransformQuantity()
 	return puo
 }
 
@@ -1446,19 +1211,9 @@ func (puo *PriceUpdateOne) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (puo *PriceUpdateOne) check() error {
-	if v, ok := puo.mutation.Currency(); ok {
-		if err := price.CurrencyValidator(v); err != nil {
-			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Price.currency": %w`, err)}
-		}
-	}
 	if v, ok := puo.mutation.DisplayAmount(); ok {
 		if err := price.DisplayAmountValidator(v); err != nil {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
-		}
-	}
-	if v, ok := puo.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(v); err != nil {
-			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
 	if v, ok := puo.mutation.GetType(); ok {
@@ -1484,11 +1239,6 @@ func (puo *PriceUpdateOne) check() error {
 	if v, ok := puo.mutation.BillingCadence(); ok {
 		if err := price.BillingCadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
-		}
-	}
-	if v, ok := puo.mutation.TierMode(); ok {
-		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -1550,14 +1300,11 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if value, ok := puo.mutation.Amount(); ok {
 		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 	}
-	if value, ok := puo.mutation.Currency(); ok {
-		_spec.SetField(price.FieldCurrency, field.TypeString, value)
-	}
 	if value, ok := puo.mutation.DisplayAmount(); ok {
 		_spec.SetField(price.FieldDisplayAmount, field.TypeString, value)
 	}
-	if value, ok := puo.mutation.PriceUnitType(); ok {
-		_spec.SetField(price.FieldPriceUnitType, field.TypeString, value)
+	if puo.mutation.DisplayAmountCleared() {
+		_spec.ClearField(price.FieldDisplayAmount, field.TypeString)
 	}
 	if puo.mutation.PriceUnitCleared() {
 		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
@@ -1604,9 +1351,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if puo.mutation.InvoiceCadenceCleared() {
 		_spec.ClearField(price.FieldInvoiceCadence, field.TypeString)
 	}
-	if value, ok := puo.mutation.MeterID(); ok {
-		_spec.SetField(price.FieldMeterID, field.TypeString, value)
-	}
 	if puo.mutation.MeterIDCleared() {
 		_spec.ClearField(price.FieldMeterID, field.TypeString)
 	}
@@ -1615,9 +1359,6 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	}
 	if puo.mutation.FilterValuesCleared() {
 		_spec.ClearField(price.FieldFilterValues, field.TypeJSON)
-	}
-	if value, ok := puo.mutation.TierMode(); ok {
-		_spec.SetField(price.FieldTierMode, field.TypeString, value)
 	}
 	if puo.mutation.TierModeCleared() {
 		_spec.ClearField(price.FieldTierMode, field.TypeString)
@@ -1633,19 +1374,8 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if puo.mutation.TiersCleared() {
 		_spec.ClearField(price.FieldTiers, field.TypeJSON)
 	}
-	if value, ok := puo.mutation.PriceUnitTiers(); ok {
-		_spec.SetField(price.FieldPriceUnitTiers, field.TypeJSON, value)
-	}
-	if value, ok := puo.mutation.AppendedPriceUnitTiers(); ok {
-		_spec.AddModifier(func(u *sql.UpdateBuilder) {
-			sqljson.Append(u, price.FieldPriceUnitTiers, value)
-		})
-	}
 	if puo.mutation.PriceUnitTiersCleared() {
 		_spec.ClearField(price.FieldPriceUnitTiers, field.TypeJSON)
-	}
-	if value, ok := puo.mutation.TransformQuantity(); ok {
-		_spec.SetField(price.FieldTransformQuantity, field.TypeJSON, value)
 	}
 	if puo.mutation.TransformQuantityCleared() {
 		_spec.ClearField(price.FieldTransformQuantity, field.TypeJSON)

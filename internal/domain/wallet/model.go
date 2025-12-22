@@ -12,18 +12,23 @@ import (
 
 // Wallet represents a credit wallet for a customer
 type Wallet struct {
-	ID             string             `db:"id" json:"id"`
-	CustomerID     string             `db:"customer_id" json:"customer_id"`
-	Currency       string             `db:"currency" json:"currency"`
-	Balance        decimal.Decimal    `db:"balance" json:"balance" swaggertype:"string"`
-	CreditBalance  decimal.Decimal    `db:"credit_balance" json:"credit_balance" swaggertype:"string"`
-	WalletStatus   types.WalletStatus `db:"wallet_status" json:"wallet_status"`
-	Name           string             `db:"name" json:"name,omitempty"`
-	Description    string             `db:"description" json:"description"`
-	Metadata       types.Metadata     `db:"metadata" json:"metadata"`
-	AutoTopup      *types.AutoTopup   `db:"auto_topup" json:"auto_topup,omitempty"`
-	WalletType     types.WalletType   `db:"wallet_type" json:"wallet_type"`
-	Config         types.WalletConfig `db:"config" json:"config"`
+	ID            string             `db:"id" json:"id"`
+	CustomerID    string             `db:"customer_id" json:"customer_id"`
+	Currency      string             `db:"currency" json:"currency"`
+	Balance       decimal.Decimal    `db:"balance" json:"balance" swaggertype:"string"`
+	CreditBalance decimal.Decimal    `db:"credit_balance" json:"credit_balance" swaggertype:"string"`
+	WalletStatus  types.WalletStatus `db:"wallet_status" json:"wallet_status"`
+	Name          string             `db:"name" json:"name,omitempty"`
+	Description   string             `db:"description" json:"description"`
+	Metadata      types.Metadata     `db:"metadata" json:"metadata"`
+	AutoTopup     *types.AutoTopup   `db:"auto_topup" json:"auto_topup,omitempty"`
+	WalletType    types.WalletType   `db:"wallet_type" json:"wallet_type"`
+	Config        types.WalletConfig `db:"config" json:"config"`
+
+	// amount in the currency =  number of credits * conversion_rate
+	// ex if conversion_rate is 1, then 1 USD = 1 credit
+	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if conversion_rate is 0.5, then 1 USD = 2 credits
 	ConversionRate decimal.Decimal    `db:"conversion_rate" json:"conversion_rate" swaggertype:"string"`
 	EnvironmentID  string             `db:"environment_id" json:"environment_id"`
 	AlertEnabled   bool               `db:"alert_enabled" json:"alert_enabled"`

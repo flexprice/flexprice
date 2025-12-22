@@ -62,7 +62,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
 		SetType(p.Type).
-		SetPriceUnitType(string(p.PriceUnitType)).
+		SetPriceUnitType(p.PriceUnitType).
 		SetBillingPeriod(p.BillingPeriod).
 		SetBillingPeriodCount(p.BillingPeriodCount).
 		SetBillingModel(p.BillingModel).
@@ -276,11 +276,8 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetBillingPeriodCount(p.BillingPeriodCount).
 		SetBillingModel(p.BillingModel).
 		SetBillingCadence(p.BillingCadence).
-		SetNillableMeterID(lo.ToPtr(p.MeterID)).
-		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
 		SetDisplayName(p.DisplayName).
-		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetNillableEndDate(p.EndDate).
 		SetDescription(p.Description).
@@ -288,11 +285,9 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetNillableGroupID(lo.ToPtr(p.GroupID)).
-		SetPriceUnitType(string(p.PriceUnitType)).
 		SetNillablePriceUnitAmount(p.PriceUnitAmount).
 		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
 		SetNillableConversionRate(p.ConversionRate).
-		SetPriceUnitTiers(domainPrice.ToEntTiersFromJSONB(p.PriceUnitTiers)).
 		Save(ctx)
 
 	if err != nil {
@@ -422,7 +417,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetCreatedBy(p.CreatedBy).
 			SetUpdatedBy(p.UpdatedBy).
 			SetNillableGroupID(lo.ToPtr(p.GroupID)).
-			SetPriceUnitType(string(p.PriceUnitType)).
+			SetPriceUnitType(p.PriceUnitType).
 			SetNillablePriceUnitID(p.PriceUnitID).
 			SetNillablePriceUnit(p.PriceUnit).
 			SetNillablePriceUnitAmount(p.PriceUnitAmount).

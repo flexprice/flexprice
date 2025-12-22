@@ -154,16 +154,24 @@ func (pc *PriceCreate) SetDisplayAmount(s string) *PriceCreate {
 	return pc
 }
 
+// SetNillableDisplayAmount sets the "display_amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableDisplayAmount(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetDisplayAmount(*s)
+	}
+	return pc
+}
+
 // SetPriceUnitType sets the "price_unit_type" field.
-func (pc *PriceCreate) SetPriceUnitType(s string) *PriceCreate {
-	pc.mutation.SetPriceUnitType(s)
+func (pc *PriceCreate) SetPriceUnitType(tut types.PriceUnitType) *PriceCreate {
+	pc.mutation.SetPriceUnitType(tut)
 	return pc
 }
 
 // SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitType(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetPriceUnitType(*s)
+func (pc *PriceCreate) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceCreate {
+	if tut != nil {
+		pc.SetPriceUnitType(*tut)
 	}
 	return pc
 }
@@ -639,9 +647,6 @@ func (pc *PriceCreate) check() error {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Price.currency": %w`, err)}
 		}
 	}
-	if _, ok := pc.mutation.DisplayAmount(); !ok {
-		return &ValidationError{Name: "display_amount", err: errors.New(`ent: missing required field "Price.display_amount"`)}
-	}
 	if v, ok := pc.mutation.DisplayAmount(); ok {
 		if err := price.DisplayAmountValidator(v); err != nil {
 			return &ValidationError{Name: "display_amount", err: fmt.Errorf(`ent: validator failed for field "Price.display_amount": %w`, err)}
@@ -651,7 +656,7 @@ func (pc *PriceCreate) check() error {
 		return &ValidationError{Name: "price_unit_type", err: errors.New(`ent: missing required field "Price.price_unit_type"`)}
 	}
 	if v, ok := pc.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(v); err != nil {
+		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
