@@ -22,8 +22,8 @@ type SubscriptionLineItem struct {
 	PriceType           types.PriceType                      `db:"price_type" json:"price_type,omitempty"`
 	MeterID             string                               `db:"meter_id" json:"meter_id,omitempty"`
 	MeterDisplayName    string                               `db:"meter_display_name" json:"meter_display_name,omitempty"`
-	PriceUnitID         string                               `db:"price_unit_id" json:"price_unit_id"`
-	PriceUnit           string                               `db:"price_unit" json:"price_unit"`
+	PriceUnitID         *string                              `db:"price_unit_id" json:"price_unit_id"`
+	PriceUnit           *string                              `db:"price_unit" json:"price_unit"`
 	DisplayName         string                               `db:"display_name" json:"display_name,omitempty"`
 	Quantity            decimal.Decimal                      `db:"quantity" json:"quantity" swaggertype:"string"`
 	Currency            string                               `db:"currency" json:"currency"`
@@ -105,7 +105,6 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 	}
 
 	var meterID, meterDisplayName, displayName string
-	var priceUnitID, priceUnit string
 	var startDate, endDate time.Time
 	var subscriptionPhaseID *string
 
@@ -116,12 +115,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 	if e.MeterDisplayName != nil {
 		meterDisplayName = *e.MeterDisplayName
 	}
-	if e.PriceUnitID != nil {
-		priceUnitID = *e.PriceUnitID
-	}
-	if e.PriceUnit != nil {
-		priceUnit = *e.PriceUnit
-	}
+
 	if e.DisplayName != nil {
 		displayName = *e.DisplayName
 	}
@@ -152,8 +146,8 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		PriceType:               priceType,
 		MeterID:                 meterID,
 		MeterDisplayName:        meterDisplayName,
-		PriceUnitID:             priceUnitID,
-		PriceUnit:               priceUnit,
+		PriceUnitID:             e.PriceUnitID,
+		PriceUnit:               e.PriceUnit,
 		DisplayName:             displayName,
 		Quantity:                e.Quantity,
 		Currency:                e.Currency,

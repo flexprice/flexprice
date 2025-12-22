@@ -96,6 +96,7 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 		field.String("display_name").
 			Optional().
 			Nillable(),
+
 		field.Other("quantity", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",

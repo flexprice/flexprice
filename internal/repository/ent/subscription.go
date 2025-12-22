@@ -710,8 +710,8 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				}()).
 				SetNillableMeterID(types.ToNillableString(item.MeterID)).
 				SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
-				SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
-				SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+				SetNillablePriceUnitID(item.PriceUnitID).
+				SetNillablePriceUnit(item.PriceUnit).
 				SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 				SetQuantity(item.Quantity).
 				SetCurrency(item.Currency).

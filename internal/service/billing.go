@@ -135,21 +135,22 @@ func (s *billingService) CalculateFixedCharges(
 
 		// Calculate price unit amount if price unit is available
 		var priceUnitAmount decimal.Decimal
-		if item.PriceUnit != "" {
-			priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit)
+		if item.PriceUnit != nil {
+			priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
 			if err != nil {
 				s.Logger.Warnw("failed to get price unit",
 					"error", err,
-					"price_unit", item.PriceUnit,
+					"price_unit", lo.FromPtr(item.PriceUnit),
 					"subscription_id", sub.ID,
 					"line_item_id", item.ID)
 				continue
 			}
+
 			priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 			if err != nil {
 				s.Logger.Warnw("failed to convert amount to price unit",
 					"error", err,
-					"price_unit", item.PriceUnit,
+					"price_unit", lo.FromPtr(item.PriceUnit),
 					"subscription_id", sub.ID,
 					"line_item_id", item.ID)
 				continue
@@ -162,7 +163,7 @@ func (s *billingService) CalculateFixedCharges(
 			PlanDisplayName: lo.ToPtr(item.PlanDisplayName),
 			PriceID:         lo.ToPtr(item.PriceID),
 			PriceType:       lo.ToPtr(string(item.PriceType)),
-			PriceUnit:       lo.ToPtr(item.PriceUnit),
+			PriceUnit:       item.PriceUnit,
 			PriceUnitAmount: lo.ToPtr(priceUnitAmount),
 			DisplayName:     lo.ToPtr(item.DisplayName),
 			Amount:          amount,
@@ -1184,22 +1185,22 @@ func (s *billingService) CalculateUsageChargesForPreview(
 
 			// Calculate price unit amount if price unit is available
 			var priceUnitAmount decimal.Decimal
-			if item.PriceUnit != "" {
+			if item.PriceUnit != nil {
 				// Get the price unit by code
-				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, item.PriceUnit)
+				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
 				if err != nil {
 					s.Logger.Warnw("failed to get price unit",
 						"error", err,
-						"price_unit", item.PriceUnit)
+						"price_unit", lo.FromPtr(item.PriceUnit))
 					return nil, decimal.Zero, err
 				}
-				
+
 				// Convert fiat currency amount to price unit amount
 				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 				if err != nil {
 					s.Logger.Warnw("failed to convert amount to price unit",
 						"error", err,
-						"price_unit", item.PriceUnit,
+						"price_unit", lo.FromPtr(item.PriceUnit),
 						"amount", lineItemAmount)
 					return nil, decimal.Zero, err
 				}
@@ -1214,7 +1215,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 				PriceID:          lo.ToPtr(item.PriceID),
 				MeterID:          lo.ToPtr(item.MeterID),
 				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-				PriceUnit:        lo.ToPtr(item.PriceUnit),
+				PriceUnit:        item.PriceUnit,
 				PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
 				DisplayName:      displayName,
 				Amount:           lineItemAmount,

@@ -94,8 +94,8 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		}()).
 		SetNillableMeterID(types.ToNillableString(item.MeterID)).
 		SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
-		SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
-		SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+		SetNillablePriceUnitID(item.PriceUnitID).
+		SetNillablePriceUnit(item.PriceUnit).
 		SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 		SetQuantity(item.Quantity).
 		SetCurrency(item.Currency).
@@ -225,7 +225,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 			t := types.PriceType(item.PriceType)
 			return &t
 		}()).
-		SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+		SetNillablePriceUnit(item.PriceUnit).
 		SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 		SetQuantity(item.Quantity).
 		SetCurrency(item.Currency).
@@ -343,9 +343,17 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			}()).
 			SetNillableMeterID(types.ToNillableString(item.MeterID)).
 			SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
-			SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
-			SetNillablePriceUnit(types.ToNillableString(item.PriceUnit)).
+			SetNillablePriceUnitID(item.PriceUnitID).
+			SetNillablePriceUnit(item.PriceUnit).
 			SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
+			SetQuantity(item.Quantity).
+			SetCurrency(item.Currency).
+			SetBillingPeriod(item.BillingPeriod).
+			SetInvoiceCadence(item.InvoiceCadence).
+			SetTrialPeriod(item.TrialPeriod).
+			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
+			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
+			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
 			SetQuantity(item.Quantity).
 			SetCurrency(item.Currency).
 			SetBillingPeriod(item.BillingPeriod).
