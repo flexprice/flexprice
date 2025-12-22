@@ -244,11 +244,7 @@ func (r *priceUnitRepository) Update(ctx context.Context, priceUnit *domainPrice
 			priceunit.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
 		SetName(priceUnit.Name).
-		SetCode(priceUnit.Code).
 		SetSymbol(priceUnit.Symbol).
-		SetBaseCurrency(priceUnit.BaseCurrency).
-		SetConversionRate(priceUnit.ConversionRate).
-		SetPrecision(priceUnit.Precision).
 		SetStatus(string(priceUnit.Status)).
 		SetUpdatedAt(time.Now().UTC()).
 		SetUpdatedBy(types.GetUserID(ctx)).
