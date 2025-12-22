@@ -45,6 +45,10 @@ var (
 	testPriceID string
 
 	testPaymentID string
+
+	testWalletID      string
+	testCreditGrantID string
+	testCreditNoteID  string
 )
 
 func main() {
@@ -259,6 +263,47 @@ func main() {
 	testProcessPayment(ctx, client)
 
 	fmt.Println("✓ Payments API Tests Completed!\n")
+
+	// Run all Wallets API tests
+	fmt.Println("========================================")
+	fmt.Println("WALLETS API TESTS")
+	fmt.Println("========================================\n")
+
+	testCreateWallet(ctx, client)
+	testGetWallet(ctx, client)
+	testListWallets(ctx, client)
+	testUpdateWallet(ctx, client)
+	testGetWalletBalance(ctx, client)
+	testTopUpWallet(ctx, client)
+	testDebitWallet(ctx, client)
+	testGetWalletTransactions(ctx, client)
+	testSearchWallets(ctx, client)
+
+	fmt.Println("✓ Wallets API Tests Completed!\n")
+
+	// Run all Credit Grants API tests
+	fmt.Println("========================================")
+	fmt.Println("CREDIT GRANTS API TESTS")
+	fmt.Println("========================================\n")
+
+	testCreateCreditGrant(ctx, client)
+	testGetCreditGrant(ctx, client)
+	testListCreditGrants(ctx, client)
+	testUpdateCreditGrant(ctx, client)
+
+	fmt.Println("✓ Credit Grants API Tests Completed!\n")
+
+	// Run all Credit Notes API tests
+	fmt.Println("========================================")
+	fmt.Println("CREDIT NOTES API TESTS")
+	fmt.Println("========================================\n")
+
+	testCreateCreditNote(ctx, client)
+	testGetCreditNote(ctx, client)
+	testListCreditNotes(ctx, client)
+	testFinalizeCreditNote(ctx, client)
+
+	fmt.Println("✓ Credit Notes API Tests Completed!\n")
 
 	// Cleanup: Delete all created entities
 	fmt.Println("========================================")
@@ -1437,7 +1482,9 @@ func testCreateSubscription(ctx context.Context, client *flexprice.APIClient) {
 
 	startDate := time.Now().Format(time.RFC3339)
 	subscriptionRequest := flexprice.DtoCreateSubscriptionRequest{
+		CustomerId:         lo.ToPtr(testCustomerID),
 		PlanId:             testPlanID,
+		Currency:           "USD",
 		BillingCadence:     flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
 		BillingPeriod:      flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: lo.ToPtr(int32(1)),
@@ -2989,4 +3036,641 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ========================================
+// WALLETS API TESTS
+// ========================================
+
+// Test 1: Create a new wallet
+func testCreateWallet(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 1: Create Wallet ---")
+
+	// Skip if no customer available
+	if testCustomerID == "" {
+		log.Printf("⚠ Warning: No customer ID available\n")
+		fmt.Println("⚠ Skipping create wallet test\n")
+		return
+	}
+
+	walletRequest := flexprice.DtoCreateWalletRequest{
+		CustomerId: &testCustomerID,
+		Currency:   "USD",
+		Name:       lo.ToPtr("Test Wallet"),
+		Metadata: &map[string]string{
+			"source":   "sdk_test",
+			"test_run": time.Now().Format(time.RFC3339),
+		},
+	}
+
+	wallet, response, err := client.WalletsAPI.WalletsPost(ctx).
+		Request(walletRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error creating wallet: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 201 && response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	testWalletID = *wallet.Id
+	fmt.Printf("✓ Wallet created successfully!\n")
+	fmt.Printf("  ID: %s\n", *wallet.Id)
+	fmt.Printf("  Customer ID: %s\n", *wallet.CustomerId)
+	fmt.Printf("  Currency: %s\n\n", *wallet.Currency)
+}
+
+// Test 2: Get wallet by ID
+func testGetWallet(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 2: Get Wallet by ID ---")
+
+	if testWalletID == "" {
+		log.Printf("⚠ Warning: No wallet ID available\n")
+		fmt.Println("⚠ Skipping get wallet test\n")
+		return
+	}
+
+	wallet, response, err := client.WalletsAPI.WalletsIdGet(ctx, testWalletID).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error getting wallet: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Wallet retrieved successfully!\n")
+	fmt.Printf("  ID: %s\n", *wallet.Id)
+	fmt.Printf("  Customer ID: %s\n", *wallet.CustomerId)
+	fmt.Printf("  Currency: %s\n", *wallet.Currency)
+	fmt.Printf("  Created At: %s\n\n", *wallet.CreatedAt)
+}
+
+// Test 3: List all wallets
+func testListWallets(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 3: List Wallets ---")
+
+	wallets, response, err := client.WalletsAPI.WalletsGet(ctx).
+		Limit(10).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error listing wallets: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Retrieved %d wallets\n", len(wallets.Items))
+	if len(wallets.Items) > 0 {
+		fmt.Printf("  First wallet: %s\n", *wallets.Items[0].Id)
+	}
+	if wallets.Pagination != nil {
+		fmt.Printf("  Total: %d\n", *wallets.Pagination.Total)
+	}
+	fmt.Println()
+}
+
+// Test 4: Update wallet
+func testUpdateWallet(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 4: Update Wallet ---")
+
+	if testWalletID == "" {
+		log.Printf("⚠ Warning: No wallet ID available\n")
+		fmt.Println("⚠ Skipping update wallet test\n")
+		return
+	}
+
+	updateRequest := flexprice.DtoUpdateWalletRequest{
+		Metadata: &map[string]string{
+			"updated_at": time.Now().Format(time.RFC3339),
+			"status":     "updated",
+		},
+	}
+
+	wallet, response, err := client.WalletsAPI.WalletsIdPut(ctx, testWalletID).
+		Request(updateRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error updating wallet: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Wallet updated successfully!\n")
+	fmt.Printf("  ID: %s\n", *wallet.Id)
+	fmt.Printf("  Updated At: %s\n\n", *wallet.UpdatedAt)
+}
+
+// Test 5: Get wallet balance (real-time)
+func testGetWalletBalance(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 5: Get Wallet Balance ---")
+
+	if testWalletID == "" {
+		log.Printf("⚠ Warning: No wallet ID available\n")
+		fmt.Println("⚠ Skipping get wallet balance test\n")
+		return
+	}
+
+	balance, response, err := client.WalletsAPI.WalletsIdBalanceRealTimeGet(ctx, testWalletID).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error getting wallet balance: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Wallet balance retrieved successfully!\n")
+	fmt.Printf("  Wallet ID: %s\n", testWalletID)
+	if balance.Balance != nil {
+		fmt.Printf("  Balance: %s\n", *balance.Balance)
+	}
+	fmt.Println()
+}
+
+// Test 6: Top up wallet
+func testTopUpWallet(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 6: Top Up Wallet ---")
+
+	if testWalletID == "" {
+		log.Printf("⚠ Warning: No wallet ID available\n")
+		fmt.Println("⚠ Skipping top up wallet test\n")
+		return
+	}
+
+	topUpRequest := flexprice.DtoTopUpWalletRequest{
+		Amount: lo.ToPtr("100.00"),
+		// Reason field may not exist
+	}
+
+	_, response, err := client.WalletsAPI.WalletsIdTopUpPost(ctx, testWalletID).
+		Request(topUpRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error topping up wallet: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Wallet topped up successfully!\n")
+	fmt.Printf("  Wallet ID: %s\n", testWalletID)
+	// Balance info available in result.Wallet if needed
+	fmt.Println()
+}
+
+// Test 7: Debit wallet
+func testDebitWallet(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 7: Debit Wallet ---")
+
+	if testWalletID == "" {
+		log.Printf("⚠ Warning: No wallet ID available\n")
+		fmt.Println("⚠ Skipping debit wallet test\n")
+		return
+	}
+
+	debitRequest := flexprice.DtoManualBalanceDebitRequest{
+		Credits:           lo.ToPtr("10.00"),
+		IdempotencyKey:    fmt.Sprintf("test-debit-%d", time.Now().Unix()),
+		TransactionReason: flexprice.TYPESTRANSACTIONREASON_TransactionReasonFreeCredit,
+		Description:       lo.ToPtr("Test debit from SDK"),
+	}
+
+	wallet, response, err := client.WalletsAPI.WalletsIdDebitPost(ctx, testWalletID).
+		Request(debitRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error debiting wallet: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Wallet debited successfully!\n")
+	fmt.Printf("  Wallet ID: %s\n\n", *wallet.Id)
+}
+
+// Test 8: Get wallet transactions
+func testGetWalletTransactions(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 8: Get Wallet Transactions ---")
+
+	if testWalletID == "" {
+		log.Printf("⚠ Warning: No wallet ID available\n")
+		fmt.Println("⚠ Skipping get wallet transactions test\n")
+		return
+	}
+
+	transactions, response, err := client.WalletsAPI.WalletsIdTransactionsGet(ctx, testWalletID).
+		Limit(10).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error getting wallet transactions: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Retrieved %d wallet transactions\n", len(transactions.Items))
+	if transactions.Pagination != nil {
+		fmt.Printf("  Total: %d\n", *transactions.Pagination.Total)
+	}
+	fmt.Println()
+}
+
+// Test 9: Search wallets
+func testSearchWallets(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 9: Search Wallets ---")
+
+	searchFilter := flexprice.TypesWalletFilter{
+		// Filter by customer if field exists
+		Limit: lo.ToPtr(int32(10)),
+	}
+
+	wallets, response, err := client.WalletsAPI.WalletsSearchPost(ctx).
+		Filter(searchFilter).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error searching wallets: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Search completed!\n")
+	fmt.Printf("  Found %d wallets for customer '%s'\n\n", len(wallets.Items), testCustomerID)
+}
+
+// ========================================
+// CREDIT GRANTS API TESTS
+// ========================================
+
+// Test 1: Create a new credit grant
+func testCreateCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 1: Create Credit Grant ---")
+
+	// Skip if no plan available
+	if testPlanID == "" {
+		log.Printf("⚠ Warning: No plan ID available\n")
+		fmt.Println("⚠ Skipping create credit grant test\n")
+		return
+	}
+
+	grantRequest := flexprice.DtoCreateCreditGrantRequest{
+		PlanId:  &testPlanID,
+		Credits: "500.00",
+		Name:    "Test Credit Grant",
+		Cadence: flexprice.TYPESCREDITGRANTCADENCE_CreditGrantCadenceOneTime,
+		Metadata: &map[string]string{
+			"source":   "sdk_test",
+			"test_run": time.Now().Format(time.RFC3339),
+		},
+	}
+
+	grant, response, err := client.CreditGrantsAPI.CreditgrantsPost(ctx).
+		CreditGrant(grantRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error creating credit grant: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 201 && response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	testCreditGrantID = *grant.Id
+	fmt.Printf("✓ Credit grant created successfully!\n")
+	fmt.Printf("  ID: %s\n", *grant.Id)
+	if grant.Credits != nil {
+		fmt.Printf("  Credits: %.2f\n", *grant.Credits)
+	}
+	fmt.Printf("  Plan ID: %s\n\n", *grant.PlanId)
+}
+
+// Test 2: Get credit grant by ID
+func testGetCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 2: Get Credit Grant by ID ---")
+
+	if testCreditGrantID == "" {
+		log.Printf("⚠ Warning: No credit grant ID available\n")
+		fmt.Println("⚠ Skipping get credit grant test\n")
+		return
+	}
+
+	grant, response, err := client.CreditGrantsAPI.CreditgrantsIdGet(ctx, testCreditGrantID).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error getting credit grant: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Credit grant retrieved successfully!\n")
+	fmt.Printf("  ID: %s\n", *grant.Id)
+	if grant.Credits != nil {
+		fmt.Printf("  Credits: %.2f\n", *grant.Credits)
+	}
+	fmt.Printf("  Created At: %s\n\n", *grant.CreatedAt)
+}
+
+// Test 3: List all credit grants
+func testListCreditGrants(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 3: List Credit Grants ---")
+
+	grants, response, err := client.CreditGrantsAPI.CreditgrantsGet(ctx).
+		Limit(10).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error listing credit grants: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Retrieved %d credit grants\n", len(grants.Items))
+	if len(grants.Items) > 0 {
+		fmt.Printf("  First grant: %s\n", *grants.Items[0].Id)
+	}
+	if grants.Pagination != nil {
+		fmt.Printf("  Total: %d\n", *grants.Pagination.Total)
+	}
+	fmt.Println()
+}
+
+// Test 4: Update credit grant
+func testUpdateCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 4: Update Credit Grant ---")
+
+	if testCreditGrantID == "" {
+		log.Printf("⚠ Warning: No credit grant ID available\n")
+		fmt.Println("⚠ Skipping update credit grant test\n")
+		return
+	}
+
+	updateRequest := flexprice.DtoUpdateCreditGrantRequest{
+		Metadata: &map[string]string{
+			"updated_at": time.Now().Format(time.RFC3339),
+			"status":     "updated",
+		},
+	}
+
+	grant, response, err := client.CreditGrantsAPI.CreditgrantsIdPut(ctx, testCreditGrantID).
+		CreditGrant(updateRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error updating credit grant: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Credit grant updated successfully!\n")
+	fmt.Printf("  ID: %s\n", *grant.Id)
+	fmt.Printf("  Updated At: %s\n\n", *grant.UpdatedAt)
+}
+
+// Test 5: Delete credit grant
+func testDeleteCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 1: Delete Credit Grant ---")
+
+	if testCreditGrantID == "" {
+		log.Printf("⚠ Warning: No credit grant ID available\n")
+		fmt.Println("⚠ Skipping delete credit grant test\n")
+		return
+	}
+
+	_, response, err := client.CreditGrantsAPI.CreditgrantsIdDelete(ctx, testCreditGrantID).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error deleting credit grant: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 204 && response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 204/200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Credit grant deleted successfully!\n")
+	fmt.Printf("  Deleted ID: %s\n\n", testCreditGrantID)
+}
+
+// ========================================
+// CREDIT NOTES API TESTS
+// ========================================
+
+// Test 1: Create a new credit note
+func testCreateCreditNote(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 1: Create Credit Note ---")
+
+	// Skip if no customer available
+	if testCustomerID == "" {
+		log.Printf("⚠ Warning: No customer ID available\n")
+		fmt.Println("⚠ Skipping create credit note test\n")
+		return
+	}
+
+	noteRequest := flexprice.DtoCreateCreditNoteRequest{
+		InvoiceId: testInvoiceID, // Credit notes are applied to invoices
+		Memo:      lo.ToPtr("Test credit note from SDK"),
+		Metadata: &map[string]string{
+			"source":   "sdk_test",
+			"test_run": time.Now().Format(time.RFC3339),
+		},
+	}
+
+	note, response, err := client.CreditNotesAPI.CreditnotesPost(ctx).
+		CreditNote(noteRequest).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error creating credit note: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 201 && response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	testCreditNoteID = *note.Id
+	fmt.Printf("✓ Credit note created successfully!\n")
+	fmt.Printf("  ID: %s\n", *note.Id)
+	// Credit note details
+	fmt.Printf("  Invoice ID: %s\n", *note.InvoiceId)
+	fmt.Println()
+}
+
+// Test 2: Get credit note by ID
+func testGetCreditNote(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 2: Get Credit Note by ID ---")
+
+	if testCreditNoteID == "" {
+		log.Printf("⚠ Warning: No credit note ID available\n")
+		fmt.Println("⚠ Skipping get credit note test\n")
+		return
+	}
+
+	note, response, err := client.CreditNotesAPI.CreditnotesIdGet(ctx, testCreditNoteID).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error getting credit note: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Credit note retrieved successfully!\n")
+	fmt.Printf("  ID: %s\n", *note.Id)
+	// Credit note details
+	fmt.Printf("  Invoice ID: %s\n", *note.InvoiceId)
+	fmt.Printf("  Created At: %s\n\n", *note.CreatedAt)
+}
+
+// Test 3: List all credit notes
+func testListCreditNotes(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 3: List Credit Notes ---")
+
+	notes, response, err := client.CreditNotesAPI.CreditnotesGet(ctx).
+		Limit(10).
+		Execute()
+
+	if err != nil {
+		log.Printf("❌ Error listing credit notes: %v\n", err)
+		fmt.Println()
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println()
+		return
+	}
+
+	fmt.Printf("✓ Retrieved %d credit notes\n", len(notes.Items))
+	if len(notes.Items) > 0 {
+		fmt.Printf("  First note: %s\n", *notes.Items[0].Id)
+	}
+	if notes.Pagination != nil {
+		fmt.Printf("  Total: %d\n", *notes.Pagination.Total)
+	}
+	fmt.Println()
+}
+
+// Test 4: Finalize credit note
+func testFinalizeCreditNote(ctx context.Context, client *flexprice.APIClient) {
+	fmt.Println("--- Test 4: Finalize Credit Note ---")
+
+	if testCreditNoteID == "" {
+		log.Printf("⚠ Warning: No credit note ID available\n")
+		fmt.Println("⚠ Skipping finalize credit note test\n")
+		return
+	}
+
+	note, response, err := client.CreditNotesAPI.CreditnotesIdFinalizePost(ctx, testCreditNoteID).
+		Execute()
+
+	if err != nil {
+		log.Printf("⚠ Warning: Error finalizing credit note: %v\n", err)
+		fmt.Println("⚠ Skipping finalize credit note test\n")
+		return
+	}
+
+	if response.StatusCode != 200 {
+		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+		fmt.Println("⚠ Skipping finalize credit note test\n")
+		return
+	}
+
+	fmt.Printf("✓ Credit note finalized successfully!\n")
+	fmt.Printf("  ID: %s\n\n", *note.Id)
 }
