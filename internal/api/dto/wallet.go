@@ -54,6 +54,10 @@ type CreateWalletRequest struct {
 	// auto top-up object
 	AutoTopup *types.AutoTopup `json:"auto_topup,omitempty"`
 
+	// price_unit is the code of the price unit to use for wallet creation
+	// If provided, the price unit will be used to set the currency and conversion rate of the wallet:
+	// - currency: set to price unit's base_currency
+	// - conversion_rate: set to price unit's conversion_rate
 	PriceUnit *string `json:"price_unit,omitempty"`
 }
 
