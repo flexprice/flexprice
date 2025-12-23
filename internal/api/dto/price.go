@@ -457,6 +457,7 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		// Convert and set price unit tiers (original tiers for display)
 		if r.PriceUnitConfig.PriceUnitTiers != nil {
 			priceUnitTiers, err := r.convertTiers(r.PriceUnitConfig.PriceUnitTiers)
+			
 			if err != nil {
 				return nil, err
 			}

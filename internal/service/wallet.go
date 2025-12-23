@@ -112,6 +112,28 @@ func NewWalletService(params ServiceParams) WalletService {
 func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletRequest) (*dto.WalletResponse, error) {
 	response := &dto.WalletResponse{}
 
+	if req.PriceUnit != nil {
+		pu, err := s.PriceUnitRepo.GetByCode(ctx, *req.PriceUnit)
+		if err != nil {
+			return nil, err
+		}
+
+		// Validate price unit is published
+		if pu.Status != types.StatusPublished {
+			return nil, ierr.NewError("price unit must be active").
+				WithHint("The specified price unit is inactive").
+				WithReportableDetails(map[string]interface{}{
+					"price_unit": *req.PriceUnit,
+					"status":     pu.Status,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Set currency and conversion rate from price unit
+		req.Currency = pu.BaseCurrency
+		req.ConversionRate = pu.ConversionRate
+	}
+
 	if err := req.Validate(); err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Invalid wallet request").

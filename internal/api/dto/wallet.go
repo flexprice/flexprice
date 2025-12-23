@@ -53,6 +53,8 @@ type CreateWalletRequest struct {
 
 	// auto top-up object
 	AutoTopup *types.AutoTopup `json:"auto_topup,omitempty"`
+
+	PriceUnit *string `json:"price_unit,omitempty"`
 }
 
 type AlertConfig struct {
