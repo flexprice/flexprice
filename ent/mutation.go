@@ -59764,37 +59764,35 @@ func (m *UserMutation) ResetEdge(name string) error {
 // WalletMutation represents an operation that mutates the Wallet nodes in the graph.
 type WalletMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *string
-	tenant_id              *string
-	status                 *string
-	created_at             *time.Time
-	updated_at             *time.Time
-	created_by             *string
-	updated_by             *string
-	environment_id         *string
-	name                   *string
-	customer_id            *string
-	currency               *string
-	description            *string
-	metadata               *map[string]string
-	balance                *decimal.Decimal
-	credit_balance         *decimal.Decimal
-	wallet_status          *types.WalletStatus
-	auto_topup_trigger     *types.AutoTopupTrigger
-	auto_topup_min_balance *decimal.Decimal
-	auto_topup_amount      *decimal.Decimal
-	wallet_type            *types.WalletType
-	conversion_rate        *decimal.Decimal
-	_config                *types.WalletConfig
-	alert_config           *types.AlertConfig
-	alert_enabled          *bool
-	alert_state            *types.AlertState
-	clearedFields          map[string]struct{}
-	done                   bool
-	oldValue               func(context.Context) (*Wallet, error)
-	predicates             []predicate.Wallet
+	op              Op
+	typ             string
+	id              *string
+	tenant_id       *string
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	created_by      *string
+	updated_by      *string
+	environment_id  *string
+	name            *string
+	customer_id     *string
+	currency        *string
+	description     *string
+	metadata        *map[string]string
+	balance         *decimal.Decimal
+	credit_balance  *decimal.Decimal
+	wallet_status   *types.WalletStatus
+	auto_topup      **types.AutoTopup
+	wallet_type     *types.WalletType
+	conversion_rate *decimal.Decimal
+	_config         *types.WalletConfig
+	alert_config    *types.AlertConfig
+	alert_enabled   *bool
+	alert_state     *types.AlertState
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*Wallet, error)
+	predicates      []predicate.Wallet
 }
 
 var _ ent.Mutation = (*WalletMutation)(nil)
@@ -60519,151 +60517,53 @@ func (m *WalletMutation) ResetWalletStatus() {
 	m.wallet_status = nil
 }
 
-// SetAutoTopupTrigger sets the "auto_topup_trigger" field.
-func (m *WalletMutation) SetAutoTopupTrigger(ttt types.AutoTopupTrigger) {
-	m.auto_topup_trigger = &ttt
+// SetAutoTopup sets the "auto_topup" field.
+func (m *WalletMutation) SetAutoTopup(tt *types.AutoTopup) {
+	m.auto_topup = &tt
 }
 
-// AutoTopupTrigger returns the value of the "auto_topup_trigger" field in the mutation.
-func (m *WalletMutation) AutoTopupTrigger() (r types.AutoTopupTrigger, exists bool) {
-	v := m.auto_topup_trigger
+// AutoTopup returns the value of the "auto_topup" field in the mutation.
+func (m *WalletMutation) AutoTopup() (r *types.AutoTopup, exists bool) {
+	v := m.auto_topup
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAutoTopupTrigger returns the old "auto_topup_trigger" field's value of the Wallet entity.
+// OldAutoTopup returns the old "auto_topup" field's value of the Wallet entity.
 // If the Wallet object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAutoTopupTrigger(ctx context.Context) (v *types.AutoTopupTrigger, err error) {
+func (m *WalletMutation) OldAutoTopup(ctx context.Context) (v *types.AutoTopup, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoTopupTrigger is only allowed on UpdateOne operations")
+		return v, errors.New("OldAutoTopup is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoTopupTrigger requires an ID field in the mutation")
+		return v, errors.New("OldAutoTopup requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoTopupTrigger: %w", err)
+		return v, fmt.Errorf("querying old value for OldAutoTopup: %w", err)
 	}
-	return oldValue.AutoTopupTrigger, nil
+	return oldValue.AutoTopup, nil
 }
 
-// ClearAutoTopupTrigger clears the value of the "auto_topup_trigger" field.
-func (m *WalletMutation) ClearAutoTopupTrigger() {
-	m.auto_topup_trigger = nil
-	m.clearedFields[wallet.FieldAutoTopupTrigger] = struct{}{}
+// ClearAutoTopup clears the value of the "auto_topup" field.
+func (m *WalletMutation) ClearAutoTopup() {
+	m.auto_topup = nil
+	m.clearedFields[wallet.FieldAutoTopup] = struct{}{}
 }
 
-// AutoTopupTriggerCleared returns if the "auto_topup_trigger" field was cleared in this mutation.
-func (m *WalletMutation) AutoTopupTriggerCleared() bool {
-	_, ok := m.clearedFields[wallet.FieldAutoTopupTrigger]
+// AutoTopupCleared returns if the "auto_topup" field was cleared in this mutation.
+func (m *WalletMutation) AutoTopupCleared() bool {
+	_, ok := m.clearedFields[wallet.FieldAutoTopup]
 	return ok
 }
 
-// ResetAutoTopupTrigger resets all changes to the "auto_topup_trigger" field.
-func (m *WalletMutation) ResetAutoTopupTrigger() {
-	m.auto_topup_trigger = nil
-	delete(m.clearedFields, wallet.FieldAutoTopupTrigger)
-}
-
-// SetAutoTopupMinBalance sets the "auto_topup_min_balance" field.
-func (m *WalletMutation) SetAutoTopupMinBalance(d decimal.Decimal) {
-	m.auto_topup_min_balance = &d
-}
-
-// AutoTopupMinBalance returns the value of the "auto_topup_min_balance" field in the mutation.
-func (m *WalletMutation) AutoTopupMinBalance() (r decimal.Decimal, exists bool) {
-	v := m.auto_topup_min_balance
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAutoTopupMinBalance returns the old "auto_topup_min_balance" field's value of the Wallet entity.
-// If the Wallet object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAutoTopupMinBalance(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoTopupMinBalance is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoTopupMinBalance requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoTopupMinBalance: %w", err)
-	}
-	return oldValue.AutoTopupMinBalance, nil
-}
-
-// ClearAutoTopupMinBalance clears the value of the "auto_topup_min_balance" field.
-func (m *WalletMutation) ClearAutoTopupMinBalance() {
-	m.auto_topup_min_balance = nil
-	m.clearedFields[wallet.FieldAutoTopupMinBalance] = struct{}{}
-}
-
-// AutoTopupMinBalanceCleared returns if the "auto_topup_min_balance" field was cleared in this mutation.
-func (m *WalletMutation) AutoTopupMinBalanceCleared() bool {
-	_, ok := m.clearedFields[wallet.FieldAutoTopupMinBalance]
-	return ok
-}
-
-// ResetAutoTopupMinBalance resets all changes to the "auto_topup_min_balance" field.
-func (m *WalletMutation) ResetAutoTopupMinBalance() {
-	m.auto_topup_min_balance = nil
-	delete(m.clearedFields, wallet.FieldAutoTopupMinBalance)
-}
-
-// SetAutoTopupAmount sets the "auto_topup_amount" field.
-func (m *WalletMutation) SetAutoTopupAmount(d decimal.Decimal) {
-	m.auto_topup_amount = &d
-}
-
-// AutoTopupAmount returns the value of the "auto_topup_amount" field in the mutation.
-func (m *WalletMutation) AutoTopupAmount() (r decimal.Decimal, exists bool) {
-	v := m.auto_topup_amount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAutoTopupAmount returns the old "auto_topup_amount" field's value of the Wallet entity.
-// If the Wallet object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAutoTopupAmount(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoTopupAmount is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoTopupAmount requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoTopupAmount: %w", err)
-	}
-	return oldValue.AutoTopupAmount, nil
-}
-
-// ClearAutoTopupAmount clears the value of the "auto_topup_amount" field.
-func (m *WalletMutation) ClearAutoTopupAmount() {
-	m.auto_topup_amount = nil
-	m.clearedFields[wallet.FieldAutoTopupAmount] = struct{}{}
-}
-
-// AutoTopupAmountCleared returns if the "auto_topup_amount" field was cleared in this mutation.
-func (m *WalletMutation) AutoTopupAmountCleared() bool {
-	_, ok := m.clearedFields[wallet.FieldAutoTopupAmount]
-	return ok
-}
-
-// ResetAutoTopupAmount resets all changes to the "auto_topup_amount" field.
-func (m *WalletMutation) ResetAutoTopupAmount() {
-	m.auto_topup_amount = nil
-	delete(m.clearedFields, wallet.FieldAutoTopupAmount)
+// ResetAutoTopup resets all changes to the "auto_topup" field.
+func (m *WalletMutation) ResetAutoTopup() {
+	m.auto_topup = nil
+	delete(m.clearedFields, wallet.FieldAutoTopup)
 }
 
 // SetWalletType sets the "wallet_type" field.
@@ -60968,7 +60868,7 @@ func (m *WalletMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, wallet.FieldTenantID)
 	}
@@ -61014,14 +60914,8 @@ func (m *WalletMutation) Fields() []string {
 	if m.wallet_status != nil {
 		fields = append(fields, wallet.FieldWalletStatus)
 	}
-	if m.auto_topup_trigger != nil {
-		fields = append(fields, wallet.FieldAutoTopupTrigger)
-	}
-	if m.auto_topup_min_balance != nil {
-		fields = append(fields, wallet.FieldAutoTopupMinBalance)
-	}
-	if m.auto_topup_amount != nil {
-		fields = append(fields, wallet.FieldAutoTopupAmount)
+	if m.auto_topup != nil {
+		fields = append(fields, wallet.FieldAutoTopup)
 	}
 	if m.wallet_type != nil {
 		fields = append(fields, wallet.FieldWalletType)
@@ -61079,12 +60973,8 @@ func (m *WalletMutation) Field(name string) (ent.Value, bool) {
 		return m.CreditBalance()
 	case wallet.FieldWalletStatus:
 		return m.WalletStatus()
-	case wallet.FieldAutoTopupTrigger:
-		return m.AutoTopupTrigger()
-	case wallet.FieldAutoTopupMinBalance:
-		return m.AutoTopupMinBalance()
-	case wallet.FieldAutoTopupAmount:
-		return m.AutoTopupAmount()
+	case wallet.FieldAutoTopup:
+		return m.AutoTopup()
 	case wallet.FieldWalletType:
 		return m.WalletType()
 	case wallet.FieldConversionRate:
@@ -61136,12 +61026,8 @@ func (m *WalletMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldCreditBalance(ctx)
 	case wallet.FieldWalletStatus:
 		return m.OldWalletStatus(ctx)
-	case wallet.FieldAutoTopupTrigger:
-		return m.OldAutoTopupTrigger(ctx)
-	case wallet.FieldAutoTopupMinBalance:
-		return m.OldAutoTopupMinBalance(ctx)
-	case wallet.FieldAutoTopupAmount:
-		return m.OldAutoTopupAmount(ctx)
+	case wallet.FieldAutoTopup:
+		return m.OldAutoTopup(ctx)
 	case wallet.FieldWalletType:
 		return m.OldWalletType(ctx)
 	case wallet.FieldConversionRate:
@@ -61268,26 +61154,12 @@ func (m *WalletMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetWalletStatus(v)
 		return nil
-	case wallet.FieldAutoTopupTrigger:
-		v, ok := value.(types.AutoTopupTrigger)
+	case wallet.FieldAutoTopup:
+		v, ok := value.(*types.AutoTopup)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAutoTopupTrigger(v)
-		return nil
-	case wallet.FieldAutoTopupMinBalance:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAutoTopupMinBalance(v)
-		return nil
-	case wallet.FieldAutoTopupAmount:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAutoTopupAmount(v)
+		m.SetAutoTopup(v)
 		return nil
 	case wallet.FieldWalletType:
 		v, ok := value.(types.WalletType)
@@ -61379,14 +61251,8 @@ func (m *WalletMutation) ClearedFields() []string {
 	if m.FieldCleared(wallet.FieldMetadata) {
 		fields = append(fields, wallet.FieldMetadata)
 	}
-	if m.FieldCleared(wallet.FieldAutoTopupTrigger) {
-		fields = append(fields, wallet.FieldAutoTopupTrigger)
-	}
-	if m.FieldCleared(wallet.FieldAutoTopupMinBalance) {
-		fields = append(fields, wallet.FieldAutoTopupMinBalance)
-	}
-	if m.FieldCleared(wallet.FieldAutoTopupAmount) {
-		fields = append(fields, wallet.FieldAutoTopupAmount)
+	if m.FieldCleared(wallet.FieldAutoTopup) {
+		fields = append(fields, wallet.FieldAutoTopup)
 	}
 	if m.FieldCleared(wallet.FieldConfig) {
 		fields = append(fields, wallet.FieldConfig)
@@ -61432,14 +61298,8 @@ func (m *WalletMutation) ClearField(name string) error {
 	case wallet.FieldMetadata:
 		m.ClearMetadata()
 		return nil
-	case wallet.FieldAutoTopupTrigger:
-		m.ClearAutoTopupTrigger()
-		return nil
-	case wallet.FieldAutoTopupMinBalance:
-		m.ClearAutoTopupMinBalance()
-		return nil
-	case wallet.FieldAutoTopupAmount:
-		m.ClearAutoTopupAmount()
+	case wallet.FieldAutoTopup:
+		m.ClearAutoTopup()
 		return nil
 	case wallet.FieldConfig:
 		m.ClearConfig()
@@ -61506,14 +61366,8 @@ func (m *WalletMutation) ResetField(name string) error {
 	case wallet.FieldWalletStatus:
 		m.ResetWalletStatus()
 		return nil
-	case wallet.FieldAutoTopupTrigger:
-		m.ResetAutoTopupTrigger()
-		return nil
-	case wallet.FieldAutoTopupMinBalance:
-		m.ResetAutoTopupMinBalance()
-		return nil
-	case wallet.FieldAutoTopupAmount:
-		m.ResetAutoTopupAmount()
+	case wallet.FieldAutoTopup:
+		m.ResetAutoTopup()
 		return nil
 	case wallet.FieldWalletType:
 		m.ResetWalletType()

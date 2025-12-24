@@ -2149,20 +2149,16 @@ func init() {
 	walletDescWalletStatus := walletFields[8].Descriptor()
 	// wallet.DefaultWalletStatus holds the default value on creation for the wallet_status field.
 	wallet.DefaultWalletStatus = types.WalletStatus(walletDescWalletStatus.Default.(string))
-	// walletDescAutoTopupTrigger is the schema descriptor for auto_topup_trigger field.
-	walletDescAutoTopupTrigger := walletFields[9].Descriptor()
-	// wallet.DefaultAutoTopupTrigger holds the default value on creation for the auto_topup_trigger field.
-	wallet.DefaultAutoTopupTrigger = types.AutoTopupTrigger(walletDescAutoTopupTrigger.Default.(string))
 	// walletDescWalletType is the schema descriptor for wallet_type field.
-	walletDescWalletType := walletFields[12].Descriptor()
+	walletDescWalletType := walletFields[10].Descriptor()
 	// wallet.DefaultWalletType holds the default value on creation for the wallet_type field.
 	wallet.DefaultWalletType = types.WalletType(walletDescWalletType.Default.(string))
 	// walletDescAlertEnabled is the schema descriptor for alert_enabled field.
-	walletDescAlertEnabled := walletFields[16].Descriptor()
+	walletDescAlertEnabled := walletFields[14].Descriptor()
 	// wallet.DefaultAlertEnabled holds the default value on creation for the alert_enabled field.
 	wallet.DefaultAlertEnabled = walletDescAlertEnabled.Default.(bool)
 	// walletDescAlertState is the schema descriptor for alert_state field.
-	walletDescAlertState := walletFields[17].Descriptor()
+	walletDescAlertState := walletFields[15].Descriptor()
 	// wallet.DefaultAlertState holds the default value on creation for the alert_state field.
 	wallet.DefaultAlertState = types.AlertState(walletDescAlertState.Default.(string))
 	wallettransactionMixin := schema.WalletTransaction{}.Mixin()

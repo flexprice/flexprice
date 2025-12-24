@@ -122,42 +122,6 @@ func (t WalletTxReferenceType) Validate() error {
 	return nil
 }
 
-// AutoTopupTrigger represents the type of trigger for auto top-up
-type AutoTopupTrigger string
-
-const (
-	// AutoTopupTriggerDisabled represents disabled auto top-up
-	AutoTopupTriggerDisabled AutoTopupTrigger = "disabled"
-	// AutoTopupTriggerBalanceBelowThreshold represents auto top-up when balance goes below threshold
-	AutoTopupTriggerBalanceBelowThreshold AutoTopupTrigger = "balance_below_threshold"
-)
-
-func (t AutoTopupTrigger) Validate() error {
-	allowedValues := []string{
-		string(AutoTopupTriggerDisabled),
-		string(AutoTopupTriggerBalanceBelowThreshold),
-	}
-	if t == "" {
-		return nil
-	}
-
-	if !lo.Contains(allowedValues, string(t)) {
-		return ierr.NewError("invalid auto top-up trigger").
-			WithHint("Invalid auto top-up trigger").
-			WithReportableDetails(map[string]any{
-				"allowed": allowedValues,
-				"type":    t,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
-// String returns the string representation of AutoTopupTrigger
-func (t AutoTopupTrigger) String() string {
-	return string(t)
-}
-
 // WalletTransactionFilter represents the filter options for wallet transactions
 type WalletTransactionFilter struct {
 	*QueryFilter
@@ -359,4 +323,31 @@ func (f *WalletFilter) Validate() error {
 		f.QueryFilter = NewDefaultQueryFilter()
 	}
 	return f.QueryFilter.Validate()
+}
+
+// AutoTopup represents the auto top-up configuration for a wallet
+type AutoTopup struct {
+	Enabled   *bool            `json:"enabled"`
+	Threshold *decimal.Decimal `json:"threshold"`
+	Amount    *decimal.Decimal `json:"amount"`
+	Invoicing *bool            `json:"invoicing"`
+}
+
+func (a *AutoTopup) Validate() error {
+	if a.Threshold == nil {
+		return ierr.NewError("threshold is required").
+			WithHint("Threshold is required").
+			Mark(ierr.ErrValidation)
+	}
+	if a.Amount == nil {
+		return ierr.NewError("amount is required").
+			WithHint("Amount is required").
+			Mark(ierr.ErrValidation)
+	}
+	if a.Invoicing == nil {
+		return ierr.NewError("invoicing boolean is required").
+			WithHint("Invoicing boolean is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }

@@ -178,63 +178,15 @@ func (wu *WalletUpdate) SetNillableWalletStatus(ts *types.WalletStatus) *WalletU
 	return wu
 }
 
-// SetAutoTopupTrigger sets the "auto_topup_trigger" field.
-func (wu *WalletUpdate) SetAutoTopupTrigger(ttt types.AutoTopupTrigger) *WalletUpdate {
-	wu.mutation.SetAutoTopupTrigger(ttt)
+// SetAutoTopup sets the "auto_topup" field.
+func (wu *WalletUpdate) SetAutoTopup(tt *types.AutoTopup) *WalletUpdate {
+	wu.mutation.SetAutoTopup(tt)
 	return wu
 }
 
-// SetNillableAutoTopupTrigger sets the "auto_topup_trigger" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableAutoTopupTrigger(ttt *types.AutoTopupTrigger) *WalletUpdate {
-	if ttt != nil {
-		wu.SetAutoTopupTrigger(*ttt)
-	}
-	return wu
-}
-
-// ClearAutoTopupTrigger clears the value of the "auto_topup_trigger" field.
-func (wu *WalletUpdate) ClearAutoTopupTrigger() *WalletUpdate {
-	wu.mutation.ClearAutoTopupTrigger()
-	return wu
-}
-
-// SetAutoTopupMinBalance sets the "auto_topup_min_balance" field.
-func (wu *WalletUpdate) SetAutoTopupMinBalance(d decimal.Decimal) *WalletUpdate {
-	wu.mutation.SetAutoTopupMinBalance(d)
-	return wu
-}
-
-// SetNillableAutoTopupMinBalance sets the "auto_topup_min_balance" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableAutoTopupMinBalance(d *decimal.Decimal) *WalletUpdate {
-	if d != nil {
-		wu.SetAutoTopupMinBalance(*d)
-	}
-	return wu
-}
-
-// ClearAutoTopupMinBalance clears the value of the "auto_topup_min_balance" field.
-func (wu *WalletUpdate) ClearAutoTopupMinBalance() *WalletUpdate {
-	wu.mutation.ClearAutoTopupMinBalance()
-	return wu
-}
-
-// SetAutoTopupAmount sets the "auto_topup_amount" field.
-func (wu *WalletUpdate) SetAutoTopupAmount(d decimal.Decimal) *WalletUpdate {
-	wu.mutation.SetAutoTopupAmount(d)
-	return wu
-}
-
-// SetNillableAutoTopupAmount sets the "auto_topup_amount" field if the given value is not nil.
-func (wu *WalletUpdate) SetNillableAutoTopupAmount(d *decimal.Decimal) *WalletUpdate {
-	if d != nil {
-		wu.SetAutoTopupAmount(*d)
-	}
-	return wu
-}
-
-// ClearAutoTopupAmount clears the value of the "auto_topup_amount" field.
-func (wu *WalletUpdate) ClearAutoTopupAmount() *WalletUpdate {
-	wu.mutation.ClearAutoTopupAmount()
+// ClearAutoTopup clears the value of the "auto_topup" field.
+func (wu *WalletUpdate) ClearAutoTopup() *WalletUpdate {
+	wu.mutation.ClearAutoTopup()
 	return wu
 }
 
@@ -366,9 +318,9 @@ func (wu *WalletUpdate) check() error {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Wallet.currency": %w`, err)}
 		}
 	}
-	if v, ok := wu.mutation.AutoTopupTrigger(); ok {
+	if v, ok := wu.mutation.AutoTopup(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "auto_topup_trigger", err: fmt.Errorf(`ent: validator failed for field "Wallet.auto_topup_trigger": %w`, err)}
+			return &ValidationError{Name: "auto_topup", err: fmt.Errorf(`ent: validator failed for field "Wallet.auto_topup": %w`, err)}
 		}
 	}
 	if v, ok := wu.mutation.Config(); ok {
@@ -444,23 +396,11 @@ func (wu *WalletUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := wu.mutation.WalletStatus(); ok {
 		_spec.SetField(wallet.FieldWalletStatus, field.TypeString, value)
 	}
-	if value, ok := wu.mutation.AutoTopupTrigger(); ok {
-		_spec.SetField(wallet.FieldAutoTopupTrigger, field.TypeString, value)
+	if value, ok := wu.mutation.AutoTopup(); ok {
+		_spec.SetField(wallet.FieldAutoTopup, field.TypeJSON, value)
 	}
-	if wu.mutation.AutoTopupTriggerCleared() {
-		_spec.ClearField(wallet.FieldAutoTopupTrigger, field.TypeString)
-	}
-	if value, ok := wu.mutation.AutoTopupMinBalance(); ok {
-		_spec.SetField(wallet.FieldAutoTopupMinBalance, field.TypeOther, value)
-	}
-	if wu.mutation.AutoTopupMinBalanceCleared() {
-		_spec.ClearField(wallet.FieldAutoTopupMinBalance, field.TypeOther)
-	}
-	if value, ok := wu.mutation.AutoTopupAmount(); ok {
-		_spec.SetField(wallet.FieldAutoTopupAmount, field.TypeOther, value)
-	}
-	if wu.mutation.AutoTopupAmountCleared() {
-		_spec.ClearField(wallet.FieldAutoTopupAmount, field.TypeOther)
+	if wu.mutation.AutoTopupCleared() {
+		_spec.ClearField(wallet.FieldAutoTopup, field.TypeJSON)
 	}
 	if value, ok := wu.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)
@@ -654,63 +594,15 @@ func (wuo *WalletUpdateOne) SetNillableWalletStatus(ts *types.WalletStatus) *Wal
 	return wuo
 }
 
-// SetAutoTopupTrigger sets the "auto_topup_trigger" field.
-func (wuo *WalletUpdateOne) SetAutoTopupTrigger(ttt types.AutoTopupTrigger) *WalletUpdateOne {
-	wuo.mutation.SetAutoTopupTrigger(ttt)
+// SetAutoTopup sets the "auto_topup" field.
+func (wuo *WalletUpdateOne) SetAutoTopup(tt *types.AutoTopup) *WalletUpdateOne {
+	wuo.mutation.SetAutoTopup(tt)
 	return wuo
 }
 
-// SetNillableAutoTopupTrigger sets the "auto_topup_trigger" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableAutoTopupTrigger(ttt *types.AutoTopupTrigger) *WalletUpdateOne {
-	if ttt != nil {
-		wuo.SetAutoTopupTrigger(*ttt)
-	}
-	return wuo
-}
-
-// ClearAutoTopupTrigger clears the value of the "auto_topup_trigger" field.
-func (wuo *WalletUpdateOne) ClearAutoTopupTrigger() *WalletUpdateOne {
-	wuo.mutation.ClearAutoTopupTrigger()
-	return wuo
-}
-
-// SetAutoTopupMinBalance sets the "auto_topup_min_balance" field.
-func (wuo *WalletUpdateOne) SetAutoTopupMinBalance(d decimal.Decimal) *WalletUpdateOne {
-	wuo.mutation.SetAutoTopupMinBalance(d)
-	return wuo
-}
-
-// SetNillableAutoTopupMinBalance sets the "auto_topup_min_balance" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableAutoTopupMinBalance(d *decimal.Decimal) *WalletUpdateOne {
-	if d != nil {
-		wuo.SetAutoTopupMinBalance(*d)
-	}
-	return wuo
-}
-
-// ClearAutoTopupMinBalance clears the value of the "auto_topup_min_balance" field.
-func (wuo *WalletUpdateOne) ClearAutoTopupMinBalance() *WalletUpdateOne {
-	wuo.mutation.ClearAutoTopupMinBalance()
-	return wuo
-}
-
-// SetAutoTopupAmount sets the "auto_topup_amount" field.
-func (wuo *WalletUpdateOne) SetAutoTopupAmount(d decimal.Decimal) *WalletUpdateOne {
-	wuo.mutation.SetAutoTopupAmount(d)
-	return wuo
-}
-
-// SetNillableAutoTopupAmount sets the "auto_topup_amount" field if the given value is not nil.
-func (wuo *WalletUpdateOne) SetNillableAutoTopupAmount(d *decimal.Decimal) *WalletUpdateOne {
-	if d != nil {
-		wuo.SetAutoTopupAmount(*d)
-	}
-	return wuo
-}
-
-// ClearAutoTopupAmount clears the value of the "auto_topup_amount" field.
-func (wuo *WalletUpdateOne) ClearAutoTopupAmount() *WalletUpdateOne {
-	wuo.mutation.ClearAutoTopupAmount()
+// ClearAutoTopup clears the value of the "auto_topup" field.
+func (wuo *WalletUpdateOne) ClearAutoTopup() *WalletUpdateOne {
+	wuo.mutation.ClearAutoTopup()
 	return wuo
 }
 
@@ -855,9 +747,9 @@ func (wuo *WalletUpdateOne) check() error {
 			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "Wallet.currency": %w`, err)}
 		}
 	}
-	if v, ok := wuo.mutation.AutoTopupTrigger(); ok {
+	if v, ok := wuo.mutation.AutoTopup(); ok {
 		if err := v.Validate(); err != nil {
-			return &ValidationError{Name: "auto_topup_trigger", err: fmt.Errorf(`ent: validator failed for field "Wallet.auto_topup_trigger": %w`, err)}
+			return &ValidationError{Name: "auto_topup", err: fmt.Errorf(`ent: validator failed for field "Wallet.auto_topup": %w`, err)}
 		}
 	}
 	if v, ok := wuo.mutation.Config(); ok {
@@ -950,23 +842,11 @@ func (wuo *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err err
 	if value, ok := wuo.mutation.WalletStatus(); ok {
 		_spec.SetField(wallet.FieldWalletStatus, field.TypeString, value)
 	}
-	if value, ok := wuo.mutation.AutoTopupTrigger(); ok {
-		_spec.SetField(wallet.FieldAutoTopupTrigger, field.TypeString, value)
+	if value, ok := wuo.mutation.AutoTopup(); ok {
+		_spec.SetField(wallet.FieldAutoTopup, field.TypeJSON, value)
 	}
-	if wuo.mutation.AutoTopupTriggerCleared() {
-		_spec.ClearField(wallet.FieldAutoTopupTrigger, field.TypeString)
-	}
-	if value, ok := wuo.mutation.AutoTopupMinBalance(); ok {
-		_spec.SetField(wallet.FieldAutoTopupMinBalance, field.TypeOther, value)
-	}
-	if wuo.mutation.AutoTopupMinBalanceCleared() {
-		_spec.ClearField(wallet.FieldAutoTopupMinBalance, field.TypeOther)
-	}
-	if value, ok := wuo.mutation.AutoTopupAmount(); ok {
-		_spec.SetField(wallet.FieldAutoTopupAmount, field.TypeOther, value)
-	}
-	if wuo.mutation.AutoTopupAmountCleared() {
-		_spec.ClearField(wallet.FieldAutoTopupAmount, field.TypeOther)
+	if wuo.mutation.AutoTopupCleared() {
+		_spec.ClearField(wallet.FieldAutoTopup, field.TypeJSON)
 	}
 	if value, ok := wuo.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)

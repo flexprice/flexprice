@@ -50,12 +50,8 @@ type Wallet struct {
 	CreditBalance decimal.Decimal `json:"credit_balance,omitempty"`
 	// WalletStatus holds the value of the "wallet_status" field.
 	WalletStatus types.WalletStatus `json:"wallet_status,omitempty"`
-	// AutoTopupTrigger holds the value of the "auto_topup_trigger" field.
-	AutoTopupTrigger *types.AutoTopupTrigger `json:"auto_topup_trigger,omitempty"`
-	// AutoTopupMinBalance holds the value of the "auto_topup_min_balance" field.
-	AutoTopupMinBalance *decimal.Decimal `json:"auto_topup_min_balance,omitempty"`
-	// AutoTopupAmount holds the value of the "auto_topup_amount" field.
-	AutoTopupAmount *decimal.Decimal `json:"auto_topup_amount,omitempty"`
+	// AutoTopup holds the value of the "auto_topup" field.
+	AutoTopup *types.AutoTopup `json:"auto_topup,omitempty"`
 	// WalletType holds the value of the "wallet_type" field.
 	WalletType types.WalletType `json:"wallet_type,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
@@ -76,15 +72,13 @@ func (*Wallet) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case wallet.FieldAutoTopupMinBalance, wallet.FieldAutoTopupAmount:
-			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case wallet.FieldMetadata, wallet.FieldConfig, wallet.FieldAlertConfig:
+		case wallet.FieldMetadata, wallet.FieldAutoTopup, wallet.FieldConfig, wallet.FieldAlertConfig:
 			values[i] = new([]byte)
 		case wallet.FieldBalance, wallet.FieldCreditBalance, wallet.FieldConversionRate:
 			values[i] = new(decimal.Decimal)
 		case wallet.FieldAlertEnabled:
 			values[i] = new(sql.NullBool)
-		case wallet.FieldID, wallet.FieldTenantID, wallet.FieldStatus, wallet.FieldCreatedBy, wallet.FieldUpdatedBy, wallet.FieldEnvironmentID, wallet.FieldName, wallet.FieldCustomerID, wallet.FieldCurrency, wallet.FieldDescription, wallet.FieldWalletStatus, wallet.FieldAutoTopupTrigger, wallet.FieldWalletType, wallet.FieldAlertState:
+		case wallet.FieldID, wallet.FieldTenantID, wallet.FieldStatus, wallet.FieldCreatedBy, wallet.FieldUpdatedBy, wallet.FieldEnvironmentID, wallet.FieldName, wallet.FieldCustomerID, wallet.FieldCurrency, wallet.FieldDescription, wallet.FieldWalletStatus, wallet.FieldWalletType, wallet.FieldAlertState:
 			values[i] = new(sql.NullString)
 		case wallet.FieldCreatedAt, wallet.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -201,26 +195,13 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				w.WalletStatus = types.WalletStatus(value.String)
 			}
-		case wallet.FieldAutoTopupTrigger:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field auto_topup_trigger", values[i])
-			} else if value.Valid {
-				w.AutoTopupTrigger = new(types.AutoTopupTrigger)
-				*w.AutoTopupTrigger = types.AutoTopupTrigger(value.String)
-			}
-		case wallet.FieldAutoTopupMinBalance:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field auto_topup_min_balance", values[i])
-			} else if value.Valid {
-				w.AutoTopupMinBalance = new(decimal.Decimal)
-				*w.AutoTopupMinBalance = *value.S.(*decimal.Decimal)
-			}
-		case wallet.FieldAutoTopupAmount:
-			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field auto_topup_amount", values[i])
-			} else if value.Valid {
-				w.AutoTopupAmount = new(decimal.Decimal)
-				*w.AutoTopupAmount = *value.S.(*decimal.Decimal)
+		case wallet.FieldAutoTopup:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field auto_topup", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &w.AutoTopup); err != nil {
+					return fmt.Errorf("unmarshal field auto_topup: %w", err)
+				}
 			}
 		case wallet.FieldWalletType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -343,20 +324,8 @@ func (w *Wallet) String() string {
 	builder.WriteString("wallet_status=")
 	builder.WriteString(fmt.Sprintf("%v", w.WalletStatus))
 	builder.WriteString(", ")
-	if v := w.AutoTopupTrigger; v != nil {
-		builder.WriteString("auto_topup_trigger=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := w.AutoTopupMinBalance; v != nil {
-		builder.WriteString("auto_topup_min_balance=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
-	builder.WriteString(", ")
-	if v := w.AutoTopupAmount; v != nil {
-		builder.WriteString("auto_topup_amount=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("auto_topup=")
+	builder.WriteString(fmt.Sprintf("%v", w.AutoTopup))
 	builder.WriteString(", ")
 	builder.WriteString("wallet_type=")
 	builder.WriteString(fmt.Sprintf("%v", w.WalletType))

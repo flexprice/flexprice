@@ -45,12 +45,8 @@ const (
 	FieldCreditBalance = "credit_balance"
 	// FieldWalletStatus holds the string denoting the wallet_status field in the database.
 	FieldWalletStatus = "wallet_status"
-	// FieldAutoTopupTrigger holds the string denoting the auto_topup_trigger field in the database.
-	FieldAutoTopupTrigger = "auto_topup_trigger"
-	// FieldAutoTopupMinBalance holds the string denoting the auto_topup_min_balance field in the database.
-	FieldAutoTopupMinBalance = "auto_topup_min_balance"
-	// FieldAutoTopupAmount holds the string denoting the auto_topup_amount field in the database.
-	FieldAutoTopupAmount = "auto_topup_amount"
+	// FieldAutoTopup holds the string denoting the auto_topup field in the database.
+	FieldAutoTopup = "auto_topup"
 	// FieldWalletType holds the string denoting the wallet_type field in the database.
 	FieldWalletType = "wallet_type"
 	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
@@ -85,9 +81,7 @@ var Columns = []string{
 	FieldBalance,
 	FieldCreditBalance,
 	FieldWalletStatus,
-	FieldAutoTopupTrigger,
-	FieldAutoTopupMinBalance,
-	FieldAutoTopupAmount,
+	FieldAutoTopup,
 	FieldWalletType,
 	FieldConversionRate,
 	FieldConfig,
@@ -127,8 +121,6 @@ var (
 	DefaultBalance decimal.Decimal
 	// DefaultWalletStatus holds the default value on creation for the "wallet_status" field.
 	DefaultWalletStatus types.WalletStatus
-	// DefaultAutoTopupTrigger holds the default value on creation for the "auto_topup_trigger" field.
-	DefaultAutoTopupTrigger types.AutoTopupTrigger
 	// DefaultWalletType holds the default value on creation for the "wallet_type" field.
 	DefaultWalletType types.WalletType
 	// DefaultAlertEnabled holds the default value on creation for the "alert_enabled" field.
@@ -213,21 +205,6 @@ func ByCreditBalance(opts ...sql.OrderTermOption) OrderOption {
 // ByWalletStatus orders the results by the wallet_status field.
 func ByWalletStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWalletStatus, opts...).ToFunc()
-}
-
-// ByAutoTopupTrigger orders the results by the auto_topup_trigger field.
-func ByAutoTopupTrigger(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAutoTopupTrigger, opts...).ToFunc()
-}
-
-// ByAutoTopupMinBalance orders the results by the auto_topup_min_balance field.
-func ByAutoTopupMinBalance(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAutoTopupMinBalance, opts...).ToFunc()
-}
-
-// ByAutoTopupAmount orders the results by the auto_topup_amount field.
-func ByAutoTopupAmount(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldAutoTopupAmount, opts...).ToFunc()
 }
 
 // ByWalletType orders the results by the wallet_type field.

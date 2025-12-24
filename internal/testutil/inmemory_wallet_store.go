@@ -585,14 +585,8 @@ func (s *InMemoryWalletStore) UpdateWallet(ctx context.Context, id string, w *wa
 	if w.Metadata != nil {
 		existing.Metadata = w.Metadata
 	}
-	if w.AutoTopupTrigger != "" {
-		existing.AutoTopupTrigger = w.AutoTopupTrigger
-	}
-	if !w.AutoTopupMinBalance.IsZero() {
-		existing.AutoTopupMinBalance = w.AutoTopupMinBalance
-	}
-	if !w.AutoTopupAmount.IsZero() {
-		existing.AutoTopupAmount = w.AutoTopupAmount
+	if w.AutoTopup != nil {
+		existing.AutoTopup = w.AutoTopup
 	}
 	// Update config if provided (WalletConfig is a struct type, so we always update it)
 	existing.Config = w.Config

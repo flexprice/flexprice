@@ -683,6 +683,11 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			description = lo.Ternary(req.Description != "", req.Description, "Purchased credits - pending payment")
 		}
 
+		txMetadata := req.Metadata
+		if txMetadata == nil {
+			txMetadata = types.Metadata{}
+		}
+
 		tx := &wallet.Transaction{
 			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
 			WalletID:            walletID,
@@ -694,7 +699,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			ReferenceType:       types.WalletTxReferenceTypeExternal,
 			ReferenceID:         lo.FromPtr(idempotencyKey),
 			Description:         description,
-			Metadata:            req.Metadata,
+			Metadata:            txMetadata,
 			TransactionReason:   types.TransactionReasonPurchasedCreditInvoiced,
 			Priority:            req.Priority,
 			IdempotencyKey:      lo.FromPtr(idempotencyKey),
@@ -743,6 +748,9 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				invoiceMetadata[key] = value
 			}
 		}
+
+		// Ensure auto_topup flag is present on invoice metadata as well
+		invoiceMetadata["auto_topup"] = lo.Ternary(req.Metadata != nil && req.Metadata["auto_topup"] == "true", "true", invoiceMetadata["auto_topup"])
 
 		// Add required fields
 		invoiceMetadata["wallet_transaction_id"] = walletTransactionID
@@ -1269,14 +1277,25 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 	if req.Metadata != nil {
 		existing.Metadata = *req.Metadata
 	}
-	if req.AutoTopupTrigger != nil {
-		existing.AutoTopupTrigger = *req.AutoTopupTrigger
-	}
-	if req.AutoTopupMinBalance != nil {
-		existing.AutoTopupMinBalance = *req.AutoTopupMinBalance
-	}
-	if req.AutoTopupAmount != nil {
-		existing.AutoTopupAmount = *req.AutoTopupAmount
+	if req.AutoTopup != nil {
+		// Preserve existing fields so ent validator still gets required values
+		current := existing.AutoTopup
+		if current == nil {
+			current = &types.AutoTopup{}
+		}
+		if req.AutoTopup.Enabled != nil {
+			current.Enabled = req.AutoTopup.Enabled
+		}
+		if req.AutoTopup.Threshold != nil {
+			current.Threshold = req.AutoTopup.Threshold
+		}
+		if req.AutoTopup.Amount != nil {
+			current.Amount = req.AutoTopup.Amount
+		}
+		if req.AutoTopup.Invoicing != nil {
+			current.Invoicing = req.AutoTopup.Invoicing
+		}
+		existing.AutoTopup = current
 	}
 	if req.Config != nil {
 		existing.Config = *req.Config
@@ -2341,6 +2360,15 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"has_wallet_alert_config", w.AlertConfig != nil,
 			"event_id", req.ID,
 		)
+		balance, err := s.GetWalletBalanceV2(ctx, w.ID)
+		if err != nil {
+			s.Logger.Errorw("failed to get wallet balance, skipping wallet",
+				"error", err,
+				"wallet_id", w.ID,
+				"event_id", req.ID,
+			)
+			continue
+		}
 
 		// Skip if alerts are disabled for this wallet
 		if !w.AlertEnabled {
@@ -2349,6 +2377,14 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				"alert_enabled", w.AlertEnabled,
 				"event_id", req.ID,
 			)
+			// Trigger auto top-up if enabled
+			err := s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+			if err != nil {
+				s.Logger.Errorw("failed to trigger auto top-up",
+					"error", err,
+					"wallet_id", w.ID,
+				)
+			}
 			continue
 		}
 
@@ -2370,16 +2406,6 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			}
 
 			threshold = walletAlertConfig.Threshold.Value
-		}
-
-		balance, err := s.GetWalletBalanceV2(ctx, w.ID)
-		if err != nil {
-			s.Logger.Errorw("failed to get wallet balance, skipping wallet",
-				"error", err,
-				"wallet_id", w.ID,
-				"event_id", req.ID,
-			)
-			continue
 		}
 
 		// GetWalletBalanceV2 returns:
@@ -2587,8 +2613,17 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"alert_status", alertStatus,
 			"event_id", req.ID,
 		)
-	}
 
+		// Check auto top-up
+		err = s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+		if err != nil {
+			s.Logger.Errorw("failed to trigger auto top-up",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+			continue
+		}
+	}
 	s.Logger.Infow("completed wallet balance alert check for customer",
 		"customer_id", req.CustomerID,
 		"wallets_processed", len(wallets),
@@ -2621,4 +2656,51 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 			"force_calculate_balance", forceCalculateBalance,
 		)
 	}
+}
+
+// checkAutoTopup checks if auto top-up is enabled and triggers it if needed
+func (s *walletService) checkAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
+
+	if w.AutoTopup == nil || w.AutoTopup.Enabled == nil || !*w.AutoTopup.Enabled {
+		return ierr.NewError("auto top-up is not enabled").
+			WithHint("Auto top-up is not enabled").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": w.ID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	// Check if ongoing balance is below threshold
+	if ongoingBalance.LessThanOrEqual(*w.AutoTopup.Threshold) {
+		// Top up wallet
+		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+			CreditsToAdd:      *w.AutoTopup.Amount, // treat auto-topup amount as credits
+			Amount:            *w.AutoTopup.Amount,
+			TransactionReason: lo.Ternary(w.AutoTopup.Invoicing != nil && *w.AutoTopup.Invoicing, types.TransactionReasonPurchasedCreditInvoiced, types.TransactionReasonPurchasedCreditDirect),
+			IdempotencyKey:    lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)),
+			Description:       "Auto top-up triggered for low ongoing balance",
+			Metadata:          types.Metadata{"auto_topup": "true"},
+		})
+		if err != nil {
+			s.Logger.Errorw("failed to top up wallet for auto top-up",
+				"error", err,
+				"wallet_id", w.ID,
+				"auto_topup_threshold", *w.AutoTopup.Threshold,
+				"auto_topup_amount", *w.AutoTopup.Amount,
+			)
+		}
+		s.Logger.Debugw("auto top-up triggered",
+			"wallet_id", w.ID,
+			"auto_topup_threshold", *w.AutoTopup.Threshold,
+			"auto_topup_amount", *w.AutoTopup.Amount,
+		)
+	}
+
+	s.Logger.Infow("auto top-up completed",
+		"wallet_id", w.ID,
+		"auto_topup_threshold", *w.AutoTopup.Threshold,
+		"auto_topup_amount", *w.AutoTopup.Amount,
+	)
+
+	return nil
 }

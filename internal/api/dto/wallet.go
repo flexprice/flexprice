@@ -19,16 +19,13 @@ type CreateWalletRequest struct {
 	CustomerID string `json:"customer_id,omitempty"`
 
 	// external_customer_id is the customer id in the external system
-	ExternalCustomerID  string                 `json:"external_customer_id,omitempty"`
-	Name                string                 `json:"name,omitempty"`
-	Currency            string                 `json:"currency" binding:"required"`
-	Description         string                 `json:"description,omitempty"`
-	Metadata            types.Metadata         `json:"metadata,omitempty"`
-	AutoTopupTrigger    types.AutoTopupTrigger `json:"auto_topup_trigger,omitempty"`
-	AutoTopupMinBalance decimal.Decimal        `json:"auto_topup_min_balance,omitempty" swaggertype:"string"`
-	AutoTopupAmount     decimal.Decimal        `json:"auto_topup_amount,omitempty" swaggertype:"string"`
-	WalletType          types.WalletType       `json:"wallet_type"`
-	Config              *types.WalletConfig    `json:"config,omitempty"`
+	ExternalCustomerID string              `json:"external_customer_id,omitempty"`
+	Name               string              `json:"name,omitempty"`
+	Currency           string              `json:"currency" binding:"required"`
+	Description        string              `json:"description,omitempty"`
+	Metadata           types.Metadata      `json:"metadata,omitempty"`
+	WalletType         types.WalletType    `json:"wallet_type"`
+	Config             *types.WalletConfig `json:"config,omitempty"`
 	// amount in the currency =  number of credits * conversion_rate
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
 	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
@@ -53,6 +50,9 @@ type CreateWalletRequest struct {
 
 	// alert_config is the alert configuration for the wallet (optional)
 	AlertConfig *AlertConfig `json:"alert_config,omitempty"`
+
+	// auto top-up object
+	AutoTopup *types.AutoTopup `json:"auto_topup,omitempty"`
 }
 
 type AlertConfig struct {
@@ -66,50 +66,16 @@ type Threshold struct {
 
 // UpdateWalletRequest represents the request to update a wallet
 type UpdateWalletRequest struct {
-	Name                *string                 `json:"name,omitempty"`
-	Description         *string                 `json:"description,omitempty"`
-	Metadata            *types.Metadata         `json:"metadata,omitempty"`
-	AutoTopupTrigger    *types.AutoTopupTrigger `json:"auto_topup_trigger,omitempty"`
-	AutoTopupMinBalance *decimal.Decimal        `json:"auto_topup_min_balance,omitempty" swaggertype:"string"`
-	AutoTopupAmount     *decimal.Decimal        `json:"auto_topup_amount,omitempty" swaggertype:"string"`
-	Config              *types.WalletConfig     `json:"config,omitempty"`
-	AlertEnabled        *bool                   `json:"alert_enabled,omitempty"`
-	AlertConfig         *AlertConfig            `json:"alert_config,omitempty"`
+	Name         *string             `json:"name,omitempty"`
+	Description  *string             `json:"description,omitempty"`
+	Metadata     *types.Metadata     `json:"metadata,omitempty"`
+	AutoTopup    *types.AutoTopup    `json:"auto_topup,omitempty"`
+	Config       *types.WalletConfig `json:"config,omitempty"`
+	AlertEnabled *bool               `json:"alert_enabled,omitempty"`
+	AlertConfig  *AlertConfig        `json:"alert_config,omitempty"`
 }
 
 func (r *UpdateWalletRequest) Validate() error {
-	if r.AutoTopupTrigger != nil {
-		if err := r.AutoTopupTrigger.Validate(); err != nil {
-			return ierr.WithError(err).
-				WithHint("Invalid auto-topup trigger").
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	if r.AutoTopupTrigger != nil && *r.AutoTopupTrigger == types.AutoTopupTriggerBalanceBelowThreshold {
-		if r.AutoTopupMinBalance == nil || r.AutoTopupAmount == nil {
-			return ierr.NewError("auto_topup_min_balance and auto_topup_amount are required when auto_topup_trigger is balance_below_threshold").
-				WithHint("Both minimum balance and topup amount must be provided for threshold-based auto-topup").
-				Mark(ierr.ErrValidation)
-		}
-		if r.AutoTopupMinBalance.LessThanOrEqual(decimal.Zero) {
-			return ierr.NewError("auto_topup_min_balance must be greater than 0").
-				WithHint("Minimum balance threshold must be a positive value").
-				WithReportableDetails(map[string]interface{}{
-					"min_balance": r.AutoTopupMinBalance,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-		if r.AutoTopupAmount.LessThanOrEqual(decimal.Zero) {
-			return ierr.NewError("auto_topup_amount must be greater than 0").
-				WithHint("Auto-topup amount must be a positive value").
-				WithReportableDetails(map[string]interface{}{
-					"topup_amount": r.AutoTopupAmount,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
 	if r.Config != nil {
 		if err := r.Config.Validate(); err != nil {
 			return err
@@ -142,10 +108,6 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		r.ConversionRate = decimal.NewFromInt(1)
 	}
 
-	if r.AutoTopupTrigger == "" {
-		r.AutoTopupTrigger = types.AutoTopupTriggerDisabled
-	}
-
 	if r.Name == "" {
 		if r.WalletType == types.WalletTypePrePaid {
 			r.Name = fmt.Sprintf("Prepaid Wallet - %s", r.Currency)
@@ -166,26 +128,24 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	}
 
 	return &wallet.Wallet{
-		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
-		CustomerID:          r.CustomerID,
-		Name:                r.Name,
-		Currency:            strings.ToLower(r.Currency),
-		Description:         r.Description,
-		Metadata:            r.Metadata,
-		AutoTopupTrigger:    r.AutoTopupTrigger,
-		AutoTopupMinBalance: r.AutoTopupMinBalance,
-		AutoTopupAmount:     r.AutoTopupAmount,
-		Balance:             decimal.Zero,
-		CreditBalance:       decimal.Zero,
-		WalletStatus:        types.WalletStatusActive,
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		BaseModel:           types.GetDefaultBaseModel(ctx),
-		WalletType:          r.WalletType,
-		Config:              lo.FromPtr(r.Config),
-		ConversionRate:      r.ConversionRate,
-		AlertEnabled:        true, // Always enabled by default
-		AlertConfig:         alertConfig,
-		AlertState:          string(types.AlertStateOk), // Always starts in "ok" state
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
+		CustomerID:     r.CustomerID,
+		Name:           r.Name,
+		Currency:       strings.ToLower(r.Currency),
+		Description:    r.Description,
+		Metadata:       r.Metadata,
+		AutoTopup:      r.AutoTopup,
+		Balance:        decimal.Zero,
+		CreditBalance:  decimal.Zero,
+		WalletStatus:   types.WalletStatusActive,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+		WalletType:     r.WalletType,
+		Config:         lo.FromPtr(r.Config),
+		ConversionRate: r.ConversionRate,
+		AlertEnabled:   true, // Always enabled by default
+		AlertConfig:    alertConfig,
+		AlertState:     string(types.AlertStateOk), // Always starts in "ok" state
 	}
 }
 
@@ -193,8 +153,10 @@ func (r *CreateWalletRequest) Validate() error {
 	if err := types.ValidateCurrencyCode(r.Currency); err != nil {
 		return err
 	}
-	if err := types.AutoTopupTrigger(r.AutoTopupTrigger).Validate(); err != nil {
-		return err
+	if r.AutoTopup != nil {
+		if err := r.AutoTopup.Validate(); err != nil {
+			return err
+		}
 	}
 	if err := r.WalletType.Validate(); err != nil {
 		return err
@@ -258,26 +220,24 @@ func (r *CreateWalletRequest) Validate() error {
 
 // WalletResponse represents a wallet in API responses
 type WalletResponse struct {
-	ID                  string                 `json:"id"`
-	CustomerID          string                 `json:"customer_id"`
-	Name                string                 `json:"name,omitempty"`
-	Currency            string                 `json:"currency"`
-	Description         string                 `json:"description,omitempty"`
-	Balance             decimal.Decimal        `json:"balance" swaggertype:"string"`
-	CreditBalance       decimal.Decimal        `json:"credit_balance" swaggertype:"string"`
-	WalletStatus        types.WalletStatus     `json:"wallet_status"`
-	Metadata            types.Metadata         `json:"metadata,omitempty"`
-	AutoTopupTrigger    types.AutoTopupTrigger `json:"auto_topup_trigger"`
-	AutoTopupMinBalance decimal.Decimal        `json:"auto_topup_min_balance" swaggertype:"string"`
-	AutoTopupAmount     decimal.Decimal        `json:"auto_topup_amount" swaggertype:"string"`
-	WalletType          types.WalletType       `json:"wallet_type"`
-	Config              types.WalletConfig     `json:"config,omitempty"`
-	ConversionRate      decimal.Decimal        `json:"conversion_rate" swaggertype:"string"`
-	AlertEnabled        bool                   `json:"alert_enabled"`
-	AlertConfig         *types.AlertConfig     `json:"alert_config,omitempty"`
-	AlertState          string                 `json:"alert_state,omitempty"`
-	CreatedAt           time.Time              `json:"created_at"`
-	UpdatedAt           time.Time              `json:"updated_at"`
+	ID             string             `json:"id"`
+	CustomerID     string             `json:"customer_id"`
+	Name           string             `json:"name,omitempty"`
+	Currency       string             `json:"currency"`
+	Description    string             `json:"description,omitempty"`
+	Balance        decimal.Decimal    `json:"balance" swaggertype:"string"`
+	CreditBalance  decimal.Decimal    `json:"credit_balance" swaggertype:"string"`
+	WalletStatus   types.WalletStatus `json:"wallet_status"`
+	Metadata       types.Metadata     `json:"metadata,omitempty"`
+	AutoTopup      *types.AutoTopup   `json:"auto_topup,omitempty"`
+	WalletType     types.WalletType   `json:"wallet_type"`
+	Config         types.WalletConfig `json:"config,omitempty"`
+	ConversionRate decimal.Decimal    `json:"conversion_rate" swaggertype:"string"`
+	AlertEnabled   bool               `json:"alert_enabled"`
+	AlertConfig    *types.AlertConfig `json:"alert_config,omitempty"`
+	AlertState     string             `json:"alert_state,omitempty"`
+	CreatedAt      time.Time          `json:"created_at"`
+	UpdatedAt      time.Time          `json:"updated_at"`
 }
 
 // ToWalletResponse converts domain Wallet to WalletResponse
@@ -290,26 +250,24 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 		alertConfig = nil
 	}
 	return &WalletResponse{
-		ID:                  w.ID,
-		CustomerID:          w.CustomerID,
-		Currency:            w.Currency,
-		Balance:             w.Balance,
-		CreditBalance:       w.CreditBalance,
-		Name:                w.Name,
-		Description:         w.Description,
-		WalletStatus:        w.WalletStatus,
-		Metadata:            w.Metadata,
-		AutoTopupTrigger:    w.AutoTopupTrigger,
-		AutoTopupMinBalance: w.AutoTopupMinBalance,
-		AutoTopupAmount:     w.AutoTopupAmount,
-		WalletType:          w.WalletType,
-		Config:              w.Config,
-		ConversionRate:      w.ConversionRate,
-		AlertEnabled:        w.AlertEnabled,
-		AlertConfig:         alertConfig,
-		AlertState:          w.AlertState,
-		CreatedAt:           w.CreatedAt,
-		UpdatedAt:           w.UpdatedAt,
+		ID:             w.ID,
+		CustomerID:     w.CustomerID,
+		Currency:       w.Currency,
+		Balance:        w.Balance,
+		CreditBalance:  w.CreditBalance,
+		Name:           w.Name,
+		Description:    w.Description,
+		WalletStatus:   w.WalletStatus,
+		Metadata:       w.Metadata,
+		AutoTopup:      w.AutoTopup,
+		WalletType:     w.WalletType,
+		Config:         w.Config,
+		ConversionRate: w.ConversionRate,
+		AlertEnabled:   w.AlertEnabled,
+		AlertConfig:    alertConfig,
+		AlertState:     w.AlertState,
+		CreatedAt:      w.CreatedAt,
+		UpdatedAt:      w.UpdatedAt,
 	}
 }
 
