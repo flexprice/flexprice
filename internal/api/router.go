@@ -255,6 +255,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// Addon management for subscriptions - moved under subscription handler
 			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
 			subscription.DELETE("/addon", handlers.Subscription.RemoveAddonToSubscription)
+			subscription.GET("/:id/addons/active", handlers.Subscription.GetActiveAddonAssociations)
 
 			// Subscription plan changes (upgrade/downgrade)
 			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)

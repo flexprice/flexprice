@@ -325,23 +325,13 @@ type AddAddonRequest struct {
 
 // RemoveAddonRequest is used by body-based endpoint /subscriptions/addon (DELETE)
 type RemoveAddonRequest struct {
-	AddonAssociationID string     `json:"addon_association_id" validate:"required"`
-	Reason             string     `json:"reason"`
-	EffectiveFrom      *time.Time `json:"effective_from,omitempty"`
+	AddonAssociationID string `json:"addon_association_id" validate:"required"`
 }
 
 func (r *RemoveAddonRequest) Validate() error {
-
-	if r.EffectiveFrom != nil && r.EffectiveFrom.Before(time.Now()) {
-		return ierr.NewError("effective_from date is invalid").
-			WithHint("end date cannot be in the past").
-			WithReportableDetails(map[string]interface{}{
-				"addon_association_id": r.AddonAssociationID,
-				"effective_from":       r.EffectiveFrom,
-			}).
-			Mark(ierr.ErrValidation)
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
 	}
-
 	return nil
 }
 
