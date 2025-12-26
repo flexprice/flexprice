@@ -178,6 +178,16 @@ feature_usage_tracking_lazy:
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_lazy"
 
+costsheet_usage_tracking:
+  topic: "events"
+  rate_limit: 1
+  consumer_group: "v1_costsheet_usage_tracking_service"
+
+costsheet_usage_tracking_lazy:
+  topic: "events_lazy"
+  rate_limit: 1
+  consumer_group: "v1_costsheet_usage_tracking_service_lazy"
+  
 wallet_balance_alert:
   topic: "wallet_alert"
   rate_limit: 1

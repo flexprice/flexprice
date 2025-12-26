@@ -165,7 +165,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		PaidAt:             e.PaidAt,
 		VoidedAt:           e.VoidedAt,
 		FinalizedAt:        e.FinalizedAt,
-		BillingPeriod:      e.BillingPeriod,
+		BillingPeriod:      lo.ToPtr(string(lo.FromPtr(e.BillingPeriod))),
 		PeriodStart:        e.PeriodStart,
 		PeriodEnd:          e.PeriodEnd,
 		InvoicePDFURL:      e.InvoicePdfURL,

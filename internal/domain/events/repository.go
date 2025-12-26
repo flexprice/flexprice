@@ -57,17 +57,17 @@ type ProcessedEventRepository interface {
 // PeriodFeatureTotal represents aggregated usage for a feature in a period
 type PeriodFeatureTotal struct {
 	FeatureID string          `json:"feature_id"`
-	Quantity  decimal.Decimal `json:"quantity"`
-	FreeUnits decimal.Decimal `json:"free_units"`
-	Cost      decimal.Decimal `json:"cost"`
+	Quantity  decimal.Decimal `json:"quantity" swaggertype:"string"`
+	FreeUnits decimal.Decimal `json:"free_units" swaggertype:"string"`
+	Cost      decimal.Decimal `json:"cost" swaggertype:"string"`
 }
 
 // UsageAnalytic represents usage analytics data grouped by source and feature
 type UsageAnalytic struct {
 	Source    string          `json:"source"`
 	FeatureID string          `json:"feature_id"`
-	Cost      decimal.Decimal `json:"cost"`
-	Usage     decimal.Decimal `json:"usage"`
+	Cost      decimal.Decimal `json:"cost" swaggertype:"string"`
+	Usage     decimal.Decimal `json:"usage" swaggertype:"string"`
 }
 
 type UsageParams struct {
@@ -199,4 +199,19 @@ type FeatureUsageParams struct {
 	PriceID       string `json:"price_id"`
 	MeterID       string `json:"meter_id"`
 	SubLineItemID string `json:"sub_line_item_id"`
+}
+
+// Cost Usage Params
+
+type GetCostUsageEventsParams struct {
+	StartTime   time.Time `json:"start_time" validate:"required"`
+	EndTime     time.Time `json:"end_time" validate:"required"`
+	CustomerID  string    `json:"customer_id"`
+	CostSheetID string    `json:"costsheet_id"`
+	MeterID     string    `json:"meter_id"`
+	FeatureID   string    `json:"feature_id"`
+	PriceID     string    `json:"price_id"`
+	Offset      int       `json:"offset"`
+	Limit       int       `json:"limit"`
+	CountTotal  bool      `json:"count_total"`
 }

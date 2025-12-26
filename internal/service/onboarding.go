@@ -625,13 +625,7 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 		},
 	}
 
-	// Create prices for the plans
-	err := s.setDefaultPriceRequests(ctx, plans, meters)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create each plan and collect responses
+	// Create each plan first
 	planResponses := make([]*dto.CreatePlanResponse, 0, len(plans))
 	for i := range plans {
 		resp, err := planService.CreatePlan(ctx, lo.FromPtr(plans[i]))
@@ -646,15 +640,23 @@ func (s *onboardingService) createDefaultPlans(ctx context.Context, features []*
 		planResponses = append(planResponses, resp)
 	}
 
+	// Create prices for each plan using the new flow
+	priceService := NewPriceService(s.ServiceParams)
+	err := s.createDefaultPrices(ctx, planResponses, priceService)
+	if err != nil {
+		return nil, err
+	}
+
 	return planResponses, nil
 }
 
-func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*dto.CreatePlanRequest, meters []*meter.Meter) error {
+// createDefaultPrices creates prices for plans using the new flow (separate from plan creation)
+func (s *onboardingService) createDefaultPrices(ctx context.Context, planResponses []*dto.CreatePlanResponse, priceService PriceService) error {
 	s.Logger.Infow("creating AI-focused prices for hackathon environment")
 
 	// Find plans by name
-	var starterPlan, basicPlan, proPlan *dto.CreatePlanRequest
-	for _, p := range plans {
+	var starterPlan, basicPlan, proPlan *dto.CreatePlanResponse
+	for _, p := range planResponses {
 		switch p.Name {
 		case "Starter":
 			starterPlan = p
@@ -673,62 +675,75 @@ func (s *onboardingService) setDefaultPriceRequests(_ context.Context, plans []*
 	}
 
 	// Starter Plan - Free tier
-	starterPlan.Prices = []dto.CreatePlanPriceRequest{
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "0",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "starter_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
-				Description:        "Free tier with usage limits",
-			},
-		},
+	starterPriceReq := dto.CreatePriceRequest{
+		Amount:             "0",
+		Currency:           "USD",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           starterPlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Description:        "Free tier with usage limits",
+		// DisplayName will be automatically extracted by getDisplayName helper
+	}
+	_, err := priceService.CreatePrice(ctx, starterPriceReq)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to create price for Starter plan").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Basic Plan - $10/month
-	basicPlan.Prices = []dto.CreatePlanPriceRequest{
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "10",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "basic_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
-				Description:        "Basic tier with moderate usage",
-			},
-		},
+	basicPriceReq := dto.CreatePriceRequest{
+		Amount:             "10",
+		Currency:           "USD",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           basicPlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Description:        "Basic tier with moderate usage",
+		// DisplayName will be automatically extracted by getDisplayName helper
+	}
+	_, err = priceService.CreatePrice(ctx, basicPriceReq)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to create price for Basic plan").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Pro Plan - $50/month
-	proPlan.Prices = []dto.CreatePlanPriceRequest{
-		{
-			CreatePriceRequest: &dto.CreatePriceRequest{
-				Amount:             "50",
-				Currency:           "USD",
-				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:           "pro_plan", // Will be updated during plan creation
-				Type:               types.PRICE_TYPE_FIXED,
-				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
-				BillingPeriodCount: 1,
-				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
-				BillingCadence:     types.BILLING_CADENCE_RECURRING,
-				InvoiceCadence:     types.InvoiceCadenceAdvance,
-				Description:        "Pro tier with high usage limits",
-			},
-		},
+	proPriceReq := dto.CreatePriceRequest{
+		Amount:             "50",
+		Currency:           "USD",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           proPlan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Description:        "Pro tier with high usage limits",
+		// DisplayName will be automatically extracted by getDisplayName helper
+	}
+	_, err = priceService.CreatePrice(ctx, proPriceReq)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to create price for Pro plan").
+			Mark(ierr.ErrDatabase)
 	}
 
+	s.Logger.Infow("created prices for all plans")
 	return nil
 }
 

@@ -3,7 +3,6 @@ package testutil
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -160,6 +159,38 @@ func addonAssociationFilterFn(ctx context.Context, aa *addonassociation.AddonAss
 		}
 	}
 
+	if f.StartDate != nil || f.EndDate != nil {
+		// Ensure association is published and active for the given time window
+		if aa.Status != types.StatusPublished {
+			return false
+		}
+		if aa.AddonStatus != types.AddonStatusActive {
+			return false
+		}
+
+		start := f.StartDate
+		end := f.EndDate
+
+		// Derive bounds similar to repository logic
+		if start == nil && end != nil {
+			start = end
+		}
+		if end == nil && start != nil {
+			end = start
+		}
+
+		// If still nil (shouldn't happen), allow
+		if start != nil && end != nil {
+			// Overlap: starts on/before end AND (no end date or end after start)
+			if aa.StartDate != nil && aa.StartDate.After(*end) {
+				return false
+			}
+			if aa.EndDate != nil && !aa.EndDate.After(*start) {
+				return false
+			}
+		}
+	}
+
 	return true
 }
 
@@ -203,61 +234,4 @@ func applyAddonAssociationFilterCondition(aa *addonassociation.AddonAssociation,
 func addonAssociationSortFn(i, j *addonassociation.AddonAssociation) bool {
 	// Default sort by created_at desc
 	return i.CreatedAt.After(j.CreatedAt)
-}
-
-// GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
-func (s *InMemoryAddonAssociationStore) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time, addonIds []string) ([]*addonassociation.AddonAssociation, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var result []*addonassociation.AddonAssociation
-	for _, aa := range s.items {
-		// Check tenant and environment
-		if aa.TenantID != types.GetTenantID(ctx) {
-			continue
-		}
-		if !CheckEnvironmentFilter(ctx, aa.EnvironmentID) {
-			continue
-		}
-
-		// Filter by entity
-		if aa.EntityID != entityID || aa.EntityType != entityType {
-			continue
-		}
-
-		// Filter by addon IDs if provided
-		if len(addonIds) > 0 {
-			found := false
-			for _, id := range addonIds {
-				if aa.AddonID == id {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-
-		// Filter by active status
-		if aa.AddonStatus != types.AddonStatusActive {
-			continue
-		}
-
-		// Filter by published status
-		if aa.Status != types.StatusPublished {
-			continue
-		}
-
-		// Apply active filter: EndDate > periodStart or EndDate is nil
-		if periodStart != nil {
-			if aa.EndDate != nil && !aa.EndDate.After(*periodStart) {
-				continue
-			}
-		}
-
-		result = append(result, copyAddonAssociation(aa))
-	}
-
-	return result, nil
 }

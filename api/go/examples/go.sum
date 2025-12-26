@@ -1,11 +1,11 @@
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/flexprice/go-sdk v0.0.0-20250329074619-d9c429902d5d h1:un0cxhDFzYJhuSkDLoAa29VCZsAuM9ttvLWcYOSyJn0=
-github.com/flexprice/go-sdk v0.0.0-20250329074619-d9c429902d5d/go.mod h1:bfDOr/VXPXWZVVbNnF6bO0jHqUu1cDa0Hfge0xHDEBU=
-github.com/flexprice/go-sdk v1.0.1 h1:k2FN+3z6hUc9OnxgaMro9QlDai0YDBM6f0ENTpfdhzk=
-github.com/flexprice/go-sdk v1.0.1/go.mod h1:ba0SiRO4N5iIQenGMIyvk/0lOuzhf1vji3M3D0SxBKg=
 github.com/flexprice/go-sdk v1.0.10 h1:swBtC0r2mgUGY2Le0OTpjB8xGDWPQBAeIeuRWZpxZGQ=
 github.com/flexprice/go-sdk v1.0.10/go.mod h1:ba0SiRO4N5iIQenGMIyvk/0lOuzhf1vji3M3D0SxBKg=
+github.com/flexprice/go-sdk v1.0.41 h1:iCODizAJuaH/Oqa0IIXT1MrsGsJW8saTE14lO/wfJxA=
+github.com/flexprice/go-sdk v1.0.41/go.mod h1:ba0SiRO4N5iIQenGMIyvk/0lOuzhf1vji3M3D0SxBKg=
+github.com/flexprice/go-sdk v1.0.42 h1:7XyHBur47MYjvgUcI+u9XNaR7zwaydbkw4cGCCVG1ls=
+github.com/flexprice/go-sdk v1.0.42/go.mod h1:ba0SiRO4N5iIQenGMIyvk/0lOuzhf1vji3M3D0SxBKg=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

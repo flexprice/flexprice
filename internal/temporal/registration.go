@@ -58,7 +58,9 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.Logger,
 		scheduledTaskService,
 	)
-	exportActivity := exportActivities.NewExportActivity(params.FeatureUsageRepo, params.InvoiceRepo, params.WalletRepo, params.ConnectionRepo, params.IntegrationFactory, params.Logger)
+	// Create wallet service for credit usage export
+	walletService := service.NewWalletService(params)
+	exportActivity := exportActivities.NewExportActivity(params.FeatureUsageRepo, params.InvoiceRepo, params.WalletRepo, walletService, params.CustomerRepo, params.ConnectionRepo, params.IntegrationFactory, params.Logger)
 
 	// HubSpot activities - clean and simple, delegates to existing services
 	hubspotDealSyncActivities := hubspotActivities.NewDealSyncActivities(

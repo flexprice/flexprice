@@ -76,10 +76,22 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetSubscriptionID(item.SubscriptionID).
 		SetCustomerID(item.CustomerID).
 		SetNillableEntityID(types.ToNillableString(item.EntityID)).
-		SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
+		SetNillableEntityType(func() *types.InvoiceLineItemEntityType {
+			if item.EntityType == "" {
+				return nil
+			}
+			t := types.InvoiceLineItemEntityType(item.EntityType)
+			return &t
+		}()).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
-		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
+		SetNillablePriceType(func() *types.PriceType {
+			if item.PriceType == "" {
+				return nil
+			}
+			t := types.PriceType(item.PriceType)
+			return &t
+		}()).
 		SetNillableMeterID(types.ToNillableString(item.MeterID)).
 		SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
 		SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
@@ -87,11 +99,11 @@ func (r *subscriptionLineItemRepository) Create(ctx context.Context, item *subsc
 		SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 		SetQuantity(item.Quantity).
 		SetCurrency(item.Currency).
-		SetBillingPeriod(string(item.BillingPeriod)).
+		SetBillingPeriod(item.BillingPeriod).
 		SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 		SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 		SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
-		SetInvoiceCadence(string(item.InvoiceCadence)).
+		SetInvoiceCadence(item.InvoiceCadence).
 		SetTrialPeriod(item.TrialPeriod).
 		SetMetadata(item.Metadata).
 		SetTenantID(item.TenantID).
@@ -207,7 +219,13 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetNillableEntityID(types.ToNillableString(item.EntityID)).
 		SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 		SetPriceID(item.PriceID).
-		SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
+		SetNillablePriceType(func() *types.PriceType {
+			if item.PriceType == "" {
+				return nil
+			}
+			t := types.PriceType(item.PriceType)
+			return &t
+		}()).
 		SetNillableMeterID(types.ToNillableString(item.MeterID)).
 		SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
 		SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
@@ -215,7 +233,7 @@ func (r *subscriptionLineItemRepository) Update(ctx context.Context, item *subsc
 		SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 		SetQuantity(item.Quantity).
 		SetCurrency(item.Currency).
-		SetBillingPeriod(string(item.BillingPeriod)).
+		SetBillingPeriod(item.BillingPeriod).
 		SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 		SetNillableEndDate(types.ToNillableTime(item.EndDate)).
 		SetMetadata(item.Metadata).
@@ -317,10 +335,22 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetSubscriptionID(item.SubscriptionID).
 			SetCustomerID(item.CustomerID).
 			SetNillableEntityID(types.ToNillableString(item.EntityID)).
-			SetNillableEntityType(types.ToNillableString(string(item.EntityType))).
+			SetNillableEntityType(func() *types.InvoiceLineItemEntityType {
+				if item.EntityType == "" {
+					return nil
+				}
+				t := types.InvoiceLineItemEntityType(item.EntityType)
+				return &t
+			}()).
 			SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
 			SetPriceID(item.PriceID).
-			SetNillablePriceType(types.ToNillableString(string(item.PriceType))).
+			SetNillablePriceType(func() *types.PriceType {
+				if item.PriceType == "" {
+					return nil
+				}
+				t := types.PriceType(item.PriceType)
+				return &t
+			}()).
 			SetNillableMeterID(types.ToNillableString(item.MeterID)).
 			SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
 			SetNillablePriceUnitID(types.ToNillableString(item.PriceUnitID)).
@@ -328,8 +358,8 @@ func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items [
 			SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
 			SetQuantity(item.Quantity).
 			SetCurrency(item.Currency).
-			SetBillingPeriod(string(item.BillingPeriod)).
-			SetInvoiceCadence(string(item.InvoiceCadence)).
+			SetBillingPeriod(item.BillingPeriod).
+			SetInvoiceCadence(item.InvoiceCadence).
 			SetTrialPeriod(item.TrialPeriod).
 			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
 			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
@@ -596,7 +626,7 @@ func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Con
 		query = query.Where(subscriptionlineitem.EntityIDIn(f.EntityIDs...))
 	}
 	if f.EntityType != nil {
-		query = query.Where(subscriptionlineitem.EntityType(string(*f.EntityType)))
+		query = query.Where(subscriptionlineitem.EntityType(types.InvoiceLineItemEntityType(*f.EntityType)))
 	}
 
 	// Apply price IDs filter if specified
@@ -610,7 +640,11 @@ func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Con
 		query = query.Where(subscriptionlineitem.CurrencyIn(f.Currencies...))
 	}
 	if len(f.BillingPeriods) > 0 {
-		query = query.Where(subscriptionlineitem.BillingPeriodIn(f.BillingPeriods...))
+		periods := make([]types.BillingPeriod, len(f.BillingPeriods))
+		for i, p := range f.BillingPeriods {
+			periods[i] = types.BillingPeriod(p)
+		}
+		query = query.Where(subscriptionlineitem.BillingPeriodIn(periods...))
 	}
 
 	if f.ActiveFilter {

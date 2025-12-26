@@ -12,7 +12,7 @@ type CreditNoteLineItem struct {
 	CreditNoteID      string          `json:"credit_note_id"`
 	InvoiceLineItemID string          `json:"invoice_line_item_id"`
 	DisplayName       string          `json:"display_name"`
-	Amount            decimal.Decimal `json:"amount"`
+	Amount            decimal.Decimal `json:"amount" swaggertype:"string"`
 	Currency          string          `json:"currency"`
 	Metadata          types.Metadata  `json:"metadata"`
 	EnvironmentID     string          `json:"environment_id"`

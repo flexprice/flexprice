@@ -72,8 +72,8 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
-// @Summary List service accounts with filters
-// @Description Search and filter service accounts by type, roles, etc.
+// @Summary List users with filters
+// @Description Search and filter users by type (user/service_account), roles, etc.
 // @Tags Users
 // @Accept json
 // @Produce json
@@ -97,8 +97,11 @@ func (h *UserHandler) ListUsersByFilter(c *gin.Context) {
 		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
 	}
 
-	// Force type to service_account using enum
-	filter.Type = lo.ToPtr(types.UserTypeServiceAccount)
+	// If no type is specified, default to service_account for backward compatibility
+	// But allow users to explicitly filter by type="user" or type="service_account"
+	if filter.Type == nil {
+		filter.Type = lo.ToPtr(types.UserTypeServiceAccount)
+	}
 
 	users, err := h.userService.ListUsersByFilter(c.Request.Context(), &filter)
 	if err != nil {

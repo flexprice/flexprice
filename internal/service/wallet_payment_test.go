@@ -383,6 +383,8 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInsufficientBal
 		CustomerID:      s.testData.customer.ID,
 		InvoiceType:     types.InvoiceTypeOneOff,
 		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PeriodStart:     lo.ToPtr(s.testData.now.Add(-24 * time.Hour)),
+		PeriodEnd:       lo.ToPtr(s.testData.now.Add(6 * 24 * time.Hour)),
 		PaymentStatus:   types.PaymentStatusPending,
 		Currency:        "usd",
 		AmountDue:       decimal.NewFromFloat(1000),

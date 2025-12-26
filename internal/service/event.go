@@ -146,6 +146,11 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		getUsageRequest.BucketSize = m.Aggregation.BucketSize
 	}
 
+	// Pass the bucket_size from meter configuration if it's a SUM aggregation with bucket_size set
+	if m.IsBucketedSumMeter() {
+		getUsageRequest.BucketSize = m.Aggregation.BucketSize
+	}
+
 	usage, err := s.GetUsage(ctx, &getUsageRequest)
 	if err != nil {
 		return nil, err

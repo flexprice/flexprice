@@ -1,6 +1,8 @@
 package creditgrant
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -14,7 +16,7 @@ type CreditGrant struct {
 	Scope                  types.CreditGrantScope               `json:"scope"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
-	Credits                decimal.Decimal                      `json:"credits"`
+	Credits                decimal.Decimal                      `json:"credits" swaggertype:"string"`
 	Cadence                types.CreditGrantCadence             `json:"cadence"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
 	PeriodCount            *int                                 `json:"period_count,omitempty"`
@@ -23,6 +25,9 @@ type CreditGrant struct {
 	ExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 	Priority               *int                                 `json:"priority,omitempty"`
 	Metadata               types.Metadata                       `json:"metadata,omitempty"`
+	StartDate              *time.Time                           `json:"start_date,omitempty"`
+	EndDate                *time.Time                           `json:"end_date,omitempty"`
+	CreditGrantAnchor      *time.Time                           `json:"credit_grant_anchor,omitempty"`
 	EnvironmentID          string                               `json:"environment_id"`
 	types.BaseModel
 }
@@ -98,6 +103,24 @@ func (c *CreditGrant) Validate() error {
 		}
 	}
 
+	if c.Scope == types.CreditGrantScopeSubscription && c.StartDate == nil {
+		return ierr.NewError("start_date is required for subscription-scoped grants").
+			WithHint("Please provide a start date for the credit grant").
+			Mark(ierr.ErrValidation)
+	}
+
+	if c.CreditGrantAnchor != nil && c.StartDate != nil {
+		if c.CreditGrantAnchor.Before(*c.StartDate) {
+			return ierr.NewError("credit_grant_anchor cannot be before start_date").
+				WithHint("The anchor date must be on or after the start date").
+				WithReportableDetails(map[string]interface{}{
+					"start_date":          c.StartDate,
+					"credit_grant_anchor": c.CreditGrantAnchor,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -128,6 +151,9 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		ExpirationDuration:     c.ExpirationDuration,
 		ExpirationDurationUnit: c.ExpirationDurationUnit,
 		Metadata:               c.Metadata,
+		StartDate:              c.StartDate,
+		EndDate:                c.EndDate,
+		CreditGrantAnchor:      c.CreditGrantAnchor,
 		EnvironmentID:          c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,

@@ -57,6 +57,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			PeriodStart:      item.PeriodStart,
 			PeriodEnd:        item.PeriodEnd,
 			Metadata:         item.Metadata,
+			CommitmentInfo:   item.CommitmentInfo,
 			EnvironmentID:    item.EnvironmentID,
 			BaseModel:        item.BaseModel,
 		})

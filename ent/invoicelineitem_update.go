@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // InvoiceLineItemUpdate is the builder for updating InvoiceLineItem entities.
@@ -118,6 +119,18 @@ func (iliu *InvoiceLineItemUpdate) SetMetadata(m map[string]string) *InvoiceLine
 // ClearMetadata clears the value of the "metadata" field.
 func (iliu *InvoiceLineItemUpdate) ClearMetadata() *InvoiceLineItemUpdate {
 	iliu.mutation.ClearMetadata()
+	return iliu
+}
+
+// SetCommitmentInfo sets the "commitment_info" field.
+func (iliu *InvoiceLineItemUpdate) SetCommitmentInfo(ti *types.CommitmentInfo) *InvoiceLineItemUpdate {
+	iliu.mutation.SetCommitmentInfo(ti)
+	return iliu
+}
+
+// ClearCommitmentInfo clears the value of the "commitment_info" field.
+func (iliu *InvoiceLineItemUpdate) ClearCommitmentInfo() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearCommitmentInfo()
 	return iliu
 }
 
@@ -290,6 +303,12 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.MetadataCleared() {
 		_spec.ClearField(invoicelineitem.FieldMetadata, field.TypeJSON)
 	}
+	if value, ok := iliu.mutation.CommitmentInfo(); ok {
+		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
+	}
+	if iliu.mutation.CommitmentInfoCleared() {
+		_spec.ClearField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON)
+	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -444,6 +463,18 @@ func (iliuo *InvoiceLineItemUpdateOne) SetMetadata(m map[string]string) *Invoice
 // ClearMetadata clears the value of the "metadata" field.
 func (iliuo *InvoiceLineItemUpdateOne) ClearMetadata() *InvoiceLineItemUpdateOne {
 	iliuo.mutation.ClearMetadata()
+	return iliuo
+}
+
+// SetCommitmentInfo sets the "commitment_info" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetCommitmentInfo(ti *types.CommitmentInfo) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetCommitmentInfo(ti)
+	return iliuo
+}
+
+// ClearCommitmentInfo clears the value of the "commitment_info" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearCommitmentInfo() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearCommitmentInfo()
 	return iliuo
 }
 
@@ -645,6 +676,12 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.MetadataCleared() {
 		_spec.ClearField(invoicelineitem.FieldMetadata, field.TypeJSON)
+	}
+	if value, ok := iliuo.mutation.CommitmentInfo(); ok {
+		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
+	}
+	if iliuo.mutation.CommitmentInfoCleared() {
+		_spec.ClearField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

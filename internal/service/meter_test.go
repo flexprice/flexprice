@@ -95,7 +95,7 @@ func (s *MeterServiceSuite) TestCreateMeter() {
 				Name:      "Invalid Bucket Usage",
 				EventName: "usage",
 				Aggregation: meter.Aggregation{
-					Type:       types.AggregationSum,
+					Type:       types.AggregationCount,
 					Field:      "value",
 					BucketSize: types.WindowSizeHour,
 				},

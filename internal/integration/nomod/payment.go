@@ -246,6 +246,14 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req CreatePaymen
 		flexpriceCustomer.Name)
 	paymentLinkReq.Note = &note
 
+	// Add success and failure URLs if provided
+	if req.SuccessURL != "" {
+		paymentLinkReq.SuccessURL = &req.SuccessURL
+	}
+	if req.FailureURL != "" {
+		paymentLinkReq.FailureURL = &req.FailureURL
+	}
+
 	s.logger.Infow("creating standalone payment link in Nomod",
 		"invoice_id", req.InvoiceID,
 		"nomod_customer_id", nomodCustomerID,

@@ -62,8 +62,7 @@ func (s *PriceServiceSuite) TestCreatePrice() {
 
 	req := dto.CreatePriceRequest{
 		Amount:             "100",
-		Currency:           "usd",
-		PlanID:             "plan-1",
+		Currency:           "usd",	
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           "plan-1",
 		Type:               types.PRICE_TYPE_USAGE,
@@ -524,7 +523,6 @@ func (s *PriceServiceSuite) TestCreatePriceWithCustomUnitTiered() {
 
 	req := dto.CreatePriceRequest{
 		Currency:           "usd",
-		PlanID:             "plan-tiered-1",
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           "plan-tiered-1",
 		Type:               types.PRICE_TYPE_USAGE,

@@ -239,7 +239,7 @@ func (s *InMemoryWalletStore) UpdateWalletStatus(ctx context.Context, id string,
 }
 
 // FindEligibleCredits finds eligible credits for a wallet
-func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID string, requiredAmount decimal.Decimal, pageSize int) ([]*wallet.Transaction, error) {
+func (s *InMemoryWalletStore) FindEligibleCredits(ctx context.Context, walletID string, requiredAmount decimal.Decimal, pageSize int, timeReference time.Time) ([]*wallet.Transaction, error) {
 	var allCredits []*wallet.Transaction
 
 	// Get all eligible credits first
@@ -585,14 +585,8 @@ func (s *InMemoryWalletStore) UpdateWallet(ctx context.Context, id string, w *wa
 	if w.Metadata != nil {
 		existing.Metadata = w.Metadata
 	}
-	if w.AutoTopupTrigger != "" {
-		existing.AutoTopupTrigger = w.AutoTopupTrigger
-	}
-	if !w.AutoTopupMinBalance.IsZero() {
-		existing.AutoTopupMinBalance = w.AutoTopupMinBalance
-	}
-	if !w.AutoTopupAmount.IsZero() {
-		existing.AutoTopupAmount = w.AutoTopupAmount
+	if w.AutoTopup != nil {
+		existing.AutoTopup = w.AutoTopup
 	}
 	// Update config if provided (WalletConfig is a struct type, so we always update it)
 	existing.Config = w.Config

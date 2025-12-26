@@ -3,11 +3,11 @@
 package subscription
 
 import (
-	"fmt"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -233,7 +233,7 @@ var (
 	// PlanIDValidator is a validator for the "plan_id" field. It is called by the builders before save.
 	PlanIDValidator func(string) error
 	// DefaultSubscriptionStatus holds the default value on creation for the "subscription_status" field.
-	DefaultSubscriptionStatus string
+	DefaultSubscriptionStatus types.SubscriptionStatus
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// DefaultBillingAnchor holds the default value on creation for the "billing_anchor" field.
@@ -255,76 +255,26 @@ var (
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
 	// DefaultPauseStatus holds the default value on creation for the "pause_status" field.
-	DefaultPauseStatus string
+	DefaultPauseStatus types.PauseStatus
 	// DefaultBillingCycle holds the default value on creation for the "billing_cycle" field.
-	DefaultBillingCycle string
+	DefaultBillingCycle types.BillingCycle
 	// BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
 	BillingCycleValidator func(string) error
 	// DefaultOverageFactor holds the default value on creation for the "overage_factor" field.
 	DefaultOverageFactor decimal.Decimal
+	// DefaultPaymentBehavior holds the default value on creation for the "payment_behavior" field.
+	DefaultPaymentBehavior types.PaymentBehavior
+	// DefaultCollectionMethod holds the default value on creation for the "collection_method" field.
+	DefaultCollectionMethod types.CollectionMethod
 	// DefaultCustomerTimezone holds the default value on creation for the "customer_timezone" field.
 	DefaultCustomerTimezone string
 	// DefaultProrationBehavior holds the default value on creation for the "proration_behavior" field.
-	DefaultProrationBehavior string
+	DefaultProrationBehavior types.ProrationBehavior
 	// ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	ProrationBehaviorValidator func(string) error
 	// DefaultEnableTrueUp holds the default value on creation for the "enable_true_up" field.
 	DefaultEnableTrueUp bool
 )
-
-// PaymentBehavior defines the type for the "payment_behavior" enum field.
-type PaymentBehavior string
-
-// PaymentBehaviorDefaultActive is the default value of the PaymentBehavior enum.
-const DefaultPaymentBehavior = PaymentBehaviorDefaultActive
-
-// PaymentBehavior values.
-const (
-	PaymentBehaviorAllowIncomplete   PaymentBehavior = "allow_incomplete"
-	PaymentBehaviorDefaultIncomplete PaymentBehavior = "default_incomplete"
-	PaymentBehaviorErrorIfIncomplete PaymentBehavior = "error_if_incomplete"
-	PaymentBehaviorDefaultActive     PaymentBehavior = "default_active"
-)
-
-func (pb PaymentBehavior) String() string {
-	return string(pb)
-}
-
-// PaymentBehaviorValidator is a validator for the "payment_behavior" field enum values. It is called by the builders before save.
-func PaymentBehaviorValidator(pb PaymentBehavior) error {
-	switch pb {
-	case PaymentBehaviorAllowIncomplete, PaymentBehaviorDefaultIncomplete, PaymentBehaviorErrorIfIncomplete, PaymentBehaviorDefaultActive:
-		return nil
-	default:
-		return fmt.Errorf("subscription: invalid enum value for payment_behavior field: %q", pb)
-	}
-}
-
-// CollectionMethod defines the type for the "collection_method" enum field.
-type CollectionMethod string
-
-// CollectionMethodChargeAutomatically is the default value of the CollectionMethod enum.
-const DefaultCollectionMethod = CollectionMethodChargeAutomatically
-
-// CollectionMethod values.
-const (
-	CollectionMethodChargeAutomatically CollectionMethod = "charge_automatically"
-	CollectionMethodSendInvoice         CollectionMethod = "send_invoice"
-)
-
-func (cm CollectionMethod) String() string {
-	return string(cm)
-}
-
-// CollectionMethodValidator is a validator for the "collection_method" field enum values. It is called by the builders before save.
-func CollectionMethodValidator(cm CollectionMethod) error {
-	switch cm {
-	case CollectionMethodChargeAutomatically, CollectionMethodSendInvoice:
-		return nil
-	default:
-		return fmt.Errorf("subscription: invalid enum value for collection_method field: %q", cm)
-	}
-}
 
 // OrderOption defines the ordering options for the Subscription queries.
 type OrderOption func(*sql.Selector)

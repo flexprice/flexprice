@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -100,8 +101,9 @@ func EnvironmentID(v string) predicate.Entitlement {
 }
 
 // EntityType applies equality check predicate on the "entity_type" field. It's identical to EntityTypeEQ.
-func EntityType(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldEntityType, v))
+func EntityType(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldEntityType, vc))
 }
 
 // EntityID applies equality check predicate on the "entity_id" field. It's identical to EntityIDEQ.
@@ -115,8 +117,9 @@ func FeatureID(v string) predicate.Entitlement {
 }
 
 // FeatureType applies equality check predicate on the "feature_type" field. It's identical to FeatureTypeEQ.
-func FeatureType(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldFeatureType, v))
+func FeatureType(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldFeatureType, vc))
 }
 
 // IsEnabled applies equality check predicate on the "is_enabled" field. It's identical to IsEnabledEQ.
@@ -130,8 +133,9 @@ func UsageLimit(v int64) predicate.Entitlement {
 }
 
 // UsageResetPeriod applies equality check predicate on the "usage_reset_period" field. It's identical to UsageResetPeriodEQ.
-func UsageResetPeriod(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldUsageResetPeriod, v))
+func UsageResetPeriod(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldUsageResetPeriod, vc))
 }
 
 // IsSoftLimit applies equality check predicate on the "is_soft_limit" field. It's identical to IsSoftLimitEQ.
@@ -590,58 +594,75 @@ func EnvironmentIDContainsFold(v string) predicate.Entitlement {
 }
 
 // EntityTypeEQ applies the EQ predicate on the "entity_type" field.
-func EntityTypeEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldEntityType, v))
+func EntityTypeEQ(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldEntityType, vc))
 }
 
 // EntityTypeNEQ applies the NEQ predicate on the "entity_type" field.
-func EntityTypeNEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNEQ(FieldEntityType, v))
+func EntityTypeNEQ(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldEntityType, vc))
 }
 
 // EntityTypeIn applies the In predicate on the "entity_type" field.
-func EntityTypeIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldIn(FieldEntityType, vs...))
+func EntityTypeIn(vs ...types.EntitlementEntityType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldEntityType, v...))
 }
 
 // EntityTypeNotIn applies the NotIn predicate on the "entity_type" field.
-func EntityTypeNotIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNotIn(FieldEntityType, vs...))
+func EntityTypeNotIn(vs ...types.EntitlementEntityType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldEntityType, v...))
 }
 
 // EntityTypeGT applies the GT predicate on the "entity_type" field.
-func EntityTypeGT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGT(FieldEntityType, v))
+func EntityTypeGT(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldEntityType, vc))
 }
 
 // EntityTypeGTE applies the GTE predicate on the "entity_type" field.
-func EntityTypeGTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGTE(FieldEntityType, v))
+func EntityTypeGTE(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldEntityType, vc))
 }
 
 // EntityTypeLT applies the LT predicate on the "entity_type" field.
-func EntityTypeLT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLT(FieldEntityType, v))
+func EntityTypeLT(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldEntityType, vc))
 }
 
 // EntityTypeLTE applies the LTE predicate on the "entity_type" field.
-func EntityTypeLTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLTE(FieldEntityType, v))
+func EntityTypeLTE(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldEntityType, vc))
 }
 
 // EntityTypeContains applies the Contains predicate on the "entity_type" field.
-func EntityTypeContains(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContains(FieldEntityType, v))
+func EntityTypeContains(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldEntityType, vc))
 }
 
 // EntityTypeHasPrefix applies the HasPrefix predicate on the "entity_type" field.
-func EntityTypeHasPrefix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasPrefix(FieldEntityType, v))
+func EntityTypeHasPrefix(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldEntityType, vc))
 }
 
 // EntityTypeHasSuffix applies the HasSuffix predicate on the "entity_type" field.
-func EntityTypeHasSuffix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasSuffix(FieldEntityType, v))
+func EntityTypeHasSuffix(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldEntityType, vc))
 }
 
 // EntityTypeIsNil applies the IsNil predicate on the "entity_type" field.
@@ -655,13 +676,15 @@ func EntityTypeNotNil() predicate.Entitlement {
 }
 
 // EntityTypeEqualFold applies the EqualFold predicate on the "entity_type" field.
-func EntityTypeEqualFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEqualFold(FieldEntityType, v))
+func EntityTypeEqualFold(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldEntityType, vc))
 }
 
 // EntityTypeContainsFold applies the ContainsFold predicate on the "entity_type" field.
-func EntityTypeContainsFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContainsFold(FieldEntityType, v))
+func EntityTypeContainsFold(v types.EntitlementEntityType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldEntityType, vc))
 }
 
 // EntityIDEQ applies the EQ predicate on the "entity_id" field.
@@ -805,68 +828,87 @@ func FeatureIDContainsFold(v string) predicate.Entitlement {
 }
 
 // FeatureTypeEQ applies the EQ predicate on the "feature_type" field.
-func FeatureTypeEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldFeatureType, v))
+func FeatureTypeEQ(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldFeatureType, vc))
 }
 
 // FeatureTypeNEQ applies the NEQ predicate on the "feature_type" field.
-func FeatureTypeNEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNEQ(FieldFeatureType, v))
+func FeatureTypeNEQ(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldFeatureType, vc))
 }
 
 // FeatureTypeIn applies the In predicate on the "feature_type" field.
-func FeatureTypeIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldIn(FieldFeatureType, vs...))
+func FeatureTypeIn(vs ...types.FeatureType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldFeatureType, v...))
 }
 
 // FeatureTypeNotIn applies the NotIn predicate on the "feature_type" field.
-func FeatureTypeNotIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNotIn(FieldFeatureType, vs...))
+func FeatureTypeNotIn(vs ...types.FeatureType) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldFeatureType, v...))
 }
 
 // FeatureTypeGT applies the GT predicate on the "feature_type" field.
-func FeatureTypeGT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGT(FieldFeatureType, v))
+func FeatureTypeGT(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldFeatureType, vc))
 }
 
 // FeatureTypeGTE applies the GTE predicate on the "feature_type" field.
-func FeatureTypeGTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGTE(FieldFeatureType, v))
+func FeatureTypeGTE(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldFeatureType, vc))
 }
 
 // FeatureTypeLT applies the LT predicate on the "feature_type" field.
-func FeatureTypeLT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLT(FieldFeatureType, v))
+func FeatureTypeLT(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldFeatureType, vc))
 }
 
 // FeatureTypeLTE applies the LTE predicate on the "feature_type" field.
-func FeatureTypeLTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLTE(FieldFeatureType, v))
+func FeatureTypeLTE(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldFeatureType, vc))
 }
 
 // FeatureTypeContains applies the Contains predicate on the "feature_type" field.
-func FeatureTypeContains(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContains(FieldFeatureType, v))
+func FeatureTypeContains(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldFeatureType, vc))
 }
 
 // FeatureTypeHasPrefix applies the HasPrefix predicate on the "feature_type" field.
-func FeatureTypeHasPrefix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasPrefix(FieldFeatureType, v))
+func FeatureTypeHasPrefix(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldFeatureType, vc))
 }
 
 // FeatureTypeHasSuffix applies the HasSuffix predicate on the "feature_type" field.
-func FeatureTypeHasSuffix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasSuffix(FieldFeatureType, v))
+func FeatureTypeHasSuffix(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldFeatureType, vc))
 }
 
 // FeatureTypeEqualFold applies the EqualFold predicate on the "feature_type" field.
-func FeatureTypeEqualFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEqualFold(FieldFeatureType, v))
+func FeatureTypeEqualFold(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldFeatureType, vc))
 }
 
 // FeatureTypeContainsFold applies the ContainsFold predicate on the "feature_type" field.
-func FeatureTypeContainsFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContainsFold(FieldFeatureType, v))
+func FeatureTypeContainsFold(v types.FeatureType) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldFeatureType, vc))
 }
 
 // IsEnabledEQ applies the EQ predicate on the "is_enabled" field.
@@ -930,58 +972,75 @@ func UsageLimitNotNil() predicate.Entitlement {
 }
 
 // UsageResetPeriodEQ applies the EQ predicate on the "usage_reset_period" field.
-func UsageResetPeriodEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEQ(FieldUsageResetPeriod, v))
+func UsageResetPeriodEQ(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEQ(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodNEQ applies the NEQ predicate on the "usage_reset_period" field.
-func UsageResetPeriodNEQ(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNEQ(FieldUsageResetPeriod, v))
+func UsageResetPeriodNEQ(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldNEQ(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodIn applies the In predicate on the "usage_reset_period" field.
-func UsageResetPeriodIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldIn(FieldUsageResetPeriod, vs...))
+func UsageResetPeriodIn(vs ...types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldIn(FieldUsageResetPeriod, v...))
 }
 
 // UsageResetPeriodNotIn applies the NotIn predicate on the "usage_reset_period" field.
-func UsageResetPeriodNotIn(vs ...string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldNotIn(FieldUsageResetPeriod, vs...))
+func UsageResetPeriodNotIn(vs ...types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Entitlement(sql.FieldNotIn(FieldUsageResetPeriod, v...))
 }
 
 // UsageResetPeriodGT applies the GT predicate on the "usage_reset_period" field.
-func UsageResetPeriodGT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGT(FieldUsageResetPeriod, v))
+func UsageResetPeriodGT(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGT(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodGTE applies the GTE predicate on the "usage_reset_period" field.
-func UsageResetPeriodGTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldGTE(FieldUsageResetPeriod, v))
+func UsageResetPeriodGTE(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldGTE(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodLT applies the LT predicate on the "usage_reset_period" field.
-func UsageResetPeriodLT(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLT(FieldUsageResetPeriod, v))
+func UsageResetPeriodLT(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLT(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodLTE applies the LTE predicate on the "usage_reset_period" field.
-func UsageResetPeriodLTE(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldLTE(FieldUsageResetPeriod, v))
+func UsageResetPeriodLTE(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldLTE(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodContains applies the Contains predicate on the "usage_reset_period" field.
-func UsageResetPeriodContains(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContains(FieldUsageResetPeriod, v))
+func UsageResetPeriodContains(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContains(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodHasPrefix applies the HasPrefix predicate on the "usage_reset_period" field.
-func UsageResetPeriodHasPrefix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasPrefix(FieldUsageResetPeriod, v))
+func UsageResetPeriodHasPrefix(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasPrefix(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodHasSuffix applies the HasSuffix predicate on the "usage_reset_period" field.
-func UsageResetPeriodHasSuffix(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldHasSuffix(FieldUsageResetPeriod, v))
+func UsageResetPeriodHasSuffix(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldHasSuffix(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodIsNil applies the IsNil predicate on the "usage_reset_period" field.
@@ -995,13 +1054,15 @@ func UsageResetPeriodNotNil() predicate.Entitlement {
 }
 
 // UsageResetPeriodEqualFold applies the EqualFold predicate on the "usage_reset_period" field.
-func UsageResetPeriodEqualFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldEqualFold(FieldUsageResetPeriod, v))
+func UsageResetPeriodEqualFold(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldEqualFold(FieldUsageResetPeriod, vc))
 }
 
 // UsageResetPeriodContainsFold applies the ContainsFold predicate on the "usage_reset_period" field.
-func UsageResetPeriodContainsFold(v string) predicate.Entitlement {
-	return predicate.Entitlement(sql.FieldContainsFold(FieldUsageResetPeriod, v))
+func UsageResetPeriodContainsFold(v types.EntitlementUsageResetPeriod) predicate.Entitlement {
+	vc := string(v)
+	return predicate.Entitlement(sql.FieldContainsFold(FieldUsageResetPeriod, vc))
 }
 
 // IsSoftLimitEQ applies the EQ predicate on the "is_soft_limit" field.

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -59,6 +60,11 @@ func (s *InvoiceServiceSuite) SetupTest() {
 	s.setupTestData()
 }
 
+// GetContext returns context with environment ID set for settings lookup
+func (s *InvoiceServiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *InvoiceServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
 	s.eventRepo.Clear()
@@ -83,6 +89,7 @@ func (s *InvoiceServiceSuite) setupService() {
 		EntitlementRepo:              s.GetStores().EntitlementRepo,
 		EnvironmentRepo:              s.GetStores().EnvironmentRepo,
 		FeatureRepo:                  s.GetStores().FeatureRepo,
+		AddonAssociationRepo:         s.GetStores().AddonAssociationRepo,
 		TenantRepo:                   s.GetStores().TenantRepo,
 		UserRepo:                     s.GetStores().UserRepo,
 		AuthRepo:                     s.GetStores().AuthRepo,
@@ -106,6 +113,7 @@ func (s *InvoiceServiceSuite) setupService() {
 		EntityIntegrationMappingRepo: s.GetStores().EntityIntegrationMappingRepo,
 		AlertLogsRepo:                s.GetStores().AlertLogsRepo,
 		FeatureUsageRepo:             s.GetStores().FeatureUsageRepo,
+		WalletBalanceAlertPubSub:     types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 }
 
@@ -1134,27 +1142,30 @@ func (s *InvoiceServiceSuite) setupWallets() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	// Create wallet service
 	walletService := NewWalletService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		SubRepo:          s.GetStores().SubscriptionRepo,
-		PlanRepo:         s.GetStores().PlanRepo,
-		PriceRepo:        s.GetStores().PriceRepo,
-		EventRepo:        s.eventRepo,
-		MeterRepo:        s.GetStores().MeterRepo,
-		CustomerRepo:     s.GetStores().CustomerRepo,
-		InvoiceRepo:      s.invoiceRepo,
-		EntitlementRepo:  s.GetStores().EntitlementRepo,
-		EnvironmentRepo:  s.GetStores().EnvironmentRepo,
-		FeatureRepo:      s.GetStores().FeatureRepo,
-		TenantRepo:       s.GetStores().TenantRepo,
-		UserRepo:         s.GetStores().UserRepo,
-		AuthRepo:         s.GetStores().AuthRepo,
-		WalletRepo:       s.GetStores().WalletRepo,
-		PaymentRepo:      s.GetStores().PaymentRepo,
-		AlertLogsRepo:    s.GetStores().AlertLogsRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		SubRepo:                  s.GetStores().SubscriptionRepo,
+		PlanRepo:                 s.GetStores().PlanRepo,
+		PriceRepo:                s.GetStores().PriceRepo,
+		EventRepo:                s.eventRepo,
+		MeterRepo:                s.GetStores().MeterRepo,
+		CustomerRepo:             s.GetStores().CustomerRepo,
+		InvoiceRepo:              s.invoiceRepo,
+		EntitlementRepo:          s.GetStores().EntitlementRepo,
+		EnvironmentRepo:          s.GetStores().EnvironmentRepo,
+		FeatureRepo:              s.GetStores().FeatureRepo,
+		TenantRepo:               s.GetStores().TenantRepo,
+		UserRepo:                 s.GetStores().UserRepo,
+		AuthRepo:                 s.GetStores().AuthRepo,
+		WalletRepo:               s.GetStores().WalletRepo,
+		PaymentRepo:              s.GetStores().PaymentRepo,
+		SettingsRepo:             s.GetStores().SettingsRepo,
+		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
+		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 
 	// Create test wallets for the test customer
@@ -1219,6 +1230,8 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 					InvoiceType:     types.InvoiceTypeOneOff,
 					InvoiceStatus:   types.InvoiceStatusFinalized,
 					PaymentStatus:   types.PaymentStatusPending,
+					PeriodStart:     lo.ToPtr(s.testData.now.Add(-24 * time.Hour)),
+					PeriodEnd:       lo.ToPtr(s.testData.now.Add(6 * 24 * time.Hour)),
 					Currency:        "usd",
 					AmountDue:       decimal.NewFromInt(100),
 					AmountPaid:      decimal.Zero,
@@ -1245,6 +1258,8 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 					InvoiceType:     types.InvoiceTypeOneOff,
 					InvoiceStatus:   types.InvoiceStatusFinalized,
 					PaymentStatus:   types.PaymentStatusPending,
+					PeriodStart:     lo.ToPtr(s.testData.now.Add(-24 * time.Hour)),
+					PeriodEnd:       lo.ToPtr(s.testData.now.Add(6 * 24 * time.Hour)),
 					Currency:        "usd",
 					AmountDue:       decimal.NewFromInt(200),
 					AmountPaid:      decimal.Zero,

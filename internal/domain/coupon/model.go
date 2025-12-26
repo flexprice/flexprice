@@ -17,8 +17,8 @@ type Coupon struct {
 	MaxRedemptions    *int                    `json:"max_redemptions" db:"max_redemptions"`
 	TotalRedemptions  int                     `json:"total_redemptions" db:"total_redemptions"`
 	Rules             *map[string]interface{} `json:"rules" db:"rules"`
-	AmountOff         *decimal.Decimal        `json:"amount_off" db:"amount_off"`
-	PercentageOff     *decimal.Decimal        `json:"percentage_off" db:"percentage_off"`
+	AmountOff         *decimal.Decimal        `json:"amount_off" db:"amount_off" swaggertype:"string"`
+	PercentageOff     *decimal.Decimal        `json:"percentage_off" db:"percentage_off" swaggertype:"string"`
 	Type              types.CouponType        `json:"type" db:"type"`
 	Cadence           types.CouponCadence     `json:"cadence" db:"cadence"`
 	DurationInPeriods *int                    `json:"duration_in_periods" db:"duration_in_periods"`

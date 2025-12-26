@@ -128,8 +128,8 @@ type FeatureUsageSummary struct {
 	Feature          *FeatureResponse     `json:"feature"`
 	TotalLimit       *int64               `json:"total_limit"`
 	IsUnlimited      bool                 `json:"is_unlimited"`
-	CurrentUsage     decimal.Decimal      `json:"current_usage"`
-	UsagePercent     decimal.Decimal      `json:"usage_percent"`
+	CurrentUsage     decimal.Decimal      `json:"current_usage" swaggertype:"string"`
+	UsagePercent     decimal.Decimal      `json:"usage_percent" swaggertype:"string"`
 	IsEnabled        bool                 `json:"is_enabled"`
 	IsSoftLimit      bool                 `json:"is_soft_limit"`
 	NextUsageResetAt *time.Time           `json:"next_usage_reset_at"`

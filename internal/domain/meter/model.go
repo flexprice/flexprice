@@ -62,7 +62,7 @@ type Aggregation struct {
 	// Multiplier is the multiplier for the aggregation
 	// For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
 	// to scale up by a factor of 1000. If not provided, it will be null.
-	Multiplier *decimal.Decimal `json:"multiplier,omitempty"`
+	Multiplier *decimal.Decimal `json:"multiplier,omitempty" swaggertype:"string"`
 
 	// BucketSize is used only for MAX aggregation when windowed aggregation is needed
 	// It defines the size of time windows to calculate max values within
@@ -193,18 +193,18 @@ func (m *Meter) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	}
-	// Validate bucket_size is only used with MAX aggregation
-	if m.Aggregation.BucketSize != "" && m.Aggregation.Type != types.AggregationMax {
-		return ierr.NewError("bucket_size can only be used with MAX aggregation").
-			WithHint("BucketSize is only valid for MAX aggregation type").
+	// Validate bucket_size is only used with MAX or SUM aggregation
+	if m.Aggregation.BucketSize != "" && m.Aggregation.Type != types.AggregationMax && m.Aggregation.Type != types.AggregationSum {
+		return ierr.NewError("bucket_size can only be used with MAX or SUM aggregation").
+			WithHint("BucketSize is only valid for MAX or SUM aggregation type").
 			WithReportableDetails(map[string]interface{}{
 				"aggregation_type": m.Aggregation.Type,
 				"bucket_size":      m.Aggregation.BucketSize,
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	// If bucket_size is provided for MAX aggregation, validate it's a valid window size
-	if m.IsBucketedMaxMeter() {
+	// If bucket_size is provided for MAX or SUM aggregation, validate it's a valid window size
+	if m.IsBucketedMaxMeter() || m.IsBucketedSumMeter() {
 		if err := m.Aggregation.BucketSize.Validate(); err != nil {
 			return ierr.NewError("invalid bucket_size").
 				WithHint("Please provide a valid window size for bucket_size").
@@ -236,6 +236,11 @@ func (m *Meter) Validate() error {
 // IsBucketedMaxMeter returns true if this is a max aggregation meter with bucket size
 func (m *Meter) IsBucketedMaxMeter() bool {
 	return m.Aggregation.Type == types.AggregationMax && m.Aggregation.BucketSize != ""
+}
+
+// IsBucketedSumMeter returns true if this is a sum aggregation meter with bucket size
+func (m *Meter) IsBucketedSumMeter() bool {
+	return m.Aggregation.Type == types.AggregationSum && m.Aggregation.BucketSize != ""
 }
 
 // HasBucketSize returns true if this meter has a bucket size configured

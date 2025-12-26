@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -43,13 +44,13 @@ type InvoiceLineItem struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID *string `json:"entity_id,omitempty"`
 	// EntityType holds the value of the "entity_type" field.
-	EntityType *string `json:"entity_type,omitempty"`
+	EntityType *types.InvoiceLineItemEntityType `json:"entity_type,omitempty"`
 	// PlanDisplayName holds the value of the "plan_display_name" field.
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 	// PriceID holds the value of the "price_id" field.
 	PriceID *string `json:"price_id,omitempty"`
 	// PriceType holds the value of the "price_type" field.
-	PriceType *string `json:"price_type,omitempty"`
+	PriceType *types.PriceType `json:"price_type,omitempty"`
 	// MeterID holds the value of the "meter_id" field.
 	MeterID *string `json:"meter_id,omitempty"`
 	// MeterDisplayName holds the value of the "meter_display_name" field.
@@ -74,6 +75,8 @@ type InvoiceLineItem struct {
 	PeriodEnd *time.Time `json:"period_end,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// CommitmentInfo holds the value of the "commitment_info" field.
+	CommitmentInfo *types.CommitmentInfo `json:"commitment_info,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -118,7 +121,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoicelineitem.FieldPriceUnitAmount:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
-		case invoicelineitem.FieldMetadata:
+		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo:
 			values[i] = new([]byte)
 		case invoicelineitem.FieldAmount, invoicelineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
@@ -219,8 +222,8 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				ili.EntityType = new(string)
-				*ili.EntityType = value.String
+				ili.EntityType = new(types.InvoiceLineItemEntityType)
+				*ili.EntityType = types.InvoiceLineItemEntityType(value.String)
 			}
 		case invoicelineitem.FieldPlanDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -240,8 +243,8 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_type", values[i])
 			} else if value.Valid {
-				ili.PriceType = new(string)
-				*ili.PriceType = value.String
+				ili.PriceType = new(types.PriceType)
+				*ili.PriceType = types.PriceType(value.String)
 			}
 		case invoicelineitem.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -323,6 +326,14 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 			} else if value != nil && len(*value) > 0 {
 				if err := json.Unmarshal(*value, &ili.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
+				}
+			}
+		case invoicelineitem.FieldCommitmentInfo:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_info", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &ili.CommitmentInfo); err != nil {
+					return fmt.Errorf("unmarshal field commitment_info: %w", err)
 				}
 			}
 		default:
@@ -410,7 +421,7 @@ func (ili *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	if v := ili.EntityType; v != nil {
 		builder.WriteString("entity_type=")
-		builder.WriteString(*v)
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := ili.PlanDisplayName; v != nil {
@@ -425,7 +436,7 @@ func (ili *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	if v := ili.PriceType; v != nil {
 		builder.WriteString("price_type=")
-		builder.WriteString(*v)
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := ili.MeterID; v != nil {
@@ -479,6 +490,9 @@ func (ili *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", ili.Metadata))
+	builder.WriteString(", ")
+	builder.WriteString("commitment_info=")
+	builder.WriteString(fmt.Sprintf("%v", ili.CommitmentInfo))
 	builder.WriteByte(')')
 	return builder.String()
 }

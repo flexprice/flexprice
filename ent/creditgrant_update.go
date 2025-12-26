@@ -286,6 +286,15 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if cgu.mutation.MetadataCleared() {
 		_spec.ClearField(creditgrant.FieldMetadata, field.TypeJSON)
 	}
+	if cgu.mutation.StartDateCleared() {
+		_spec.ClearField(creditgrant.FieldStartDate, field.TypeTime)
+	}
+	if cgu.mutation.EndDateCleared() {
+		_spec.ClearField(creditgrant.FieldEndDate, field.TypeTime)
+	}
+	if cgu.mutation.CreditGrantAnchorCleared() {
+		_spec.ClearField(creditgrant.FieldCreditGrantAnchor, field.TypeTime)
+	}
 	if cgu.mutation.PlanCleared() {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.M2O,
@@ -648,6 +657,15 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 	}
 	if cguo.mutation.MetadataCleared() {
 		_spec.ClearField(creditgrant.FieldMetadata, field.TypeJSON)
+	}
+	if cguo.mutation.StartDateCleared() {
+		_spec.ClearField(creditgrant.FieldStartDate, field.TypeTime)
+	}
+	if cguo.mutation.EndDateCleared() {
+		_spec.ClearField(creditgrant.FieldEndDate, field.TypeTime)
+	}
+	if cguo.mutation.CreditGrantAnchorCleared() {
+		_spec.ClearField(creditgrant.FieldCreditGrantAnchor, field.TypeTime)
 	}
 	if cguo.mutation.PlanCleared() {
 		edge := &sqlgraph.EdgeSpec{

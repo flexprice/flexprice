@@ -113,6 +113,16 @@ var commands = []Command{
 		Description: "Generate credit usage report for customers in a tenant/environment",
 		Run:         internal.GenerateCreditUsageReport,
 	},
+	{
+		Name:        "import-features",
+		Description: "Import features from a CSV file",
+		Run:         internal.ImportFeatures,
+	},
+	{
+		Name:        "migrate-cga",
+		Description: "Migrate existing Credit Grant Applications to new structure (ensure environment_id is set)",
+		Run:         internal.MigrateCGA,
+	},
 }
 
 // runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters
@@ -121,6 +131,7 @@ func runBulkReprocessEventsCommand() error {
 	environmentID := os.Getenv("ENVIRONMENT_ID")
 	eventName := os.Getenv("EVENT_NAME")
 	batchSizeStr := os.Getenv("BATCH_SIZE")
+	externalCustomerID := os.Getenv("EXTERNAL_CUSTOMER_ID")
 
 	if tenantID == "" || environmentID == "" {
 		return fmt.Errorf("TENANT_ID and ENVIRONMENT_ID are required")
@@ -134,10 +145,11 @@ func runBulkReprocessEventsCommand() error {
 	}
 
 	params := internal.BulkReprocessEventsParams{
-		TenantID:      tenantID,
-		EnvironmentID: environmentID,
-		EventName:     eventName,
-		BatchSize:     batchSize,
+		TenantID:           tenantID,
+		EnvironmentID:      environmentID,
+		EventName:          eventName,
+		BatchSize:          batchSize,
+		ExternalCustomerID: externalCustomerID,
 	}
 
 	return internal.BulkReprocessEvents(params)

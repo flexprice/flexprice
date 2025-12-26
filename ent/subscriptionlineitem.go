@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -41,13 +42,13 @@ type SubscriptionLineItem struct {
 	// EntityID holds the value of the "entity_id" field.
 	EntityID *string `json:"entity_id,omitempty"`
 	// EntityType holds the value of the "entity_type" field.
-	EntityType string `json:"entity_type,omitempty"`
+	EntityType types.InvoiceLineItemEntityType `json:"entity_type,omitempty"`
 	// PlanDisplayName holds the value of the "plan_display_name" field.
 	PlanDisplayName *string `json:"plan_display_name,omitempty"`
 	// PriceID holds the value of the "price_id" field.
 	PriceID string `json:"price_id,omitempty"`
 	// PriceType holds the value of the "price_type" field.
-	PriceType *string `json:"price_type,omitempty"`
+	PriceType *types.PriceType `json:"price_type,omitempty"`
 	// MeterID holds the value of the "meter_id" field.
 	MeterID *string `json:"meter_id,omitempty"`
 	// MeterDisplayName holds the value of the "meter_display_name" field.
@@ -63,9 +64,9 @@ type SubscriptionLineItem struct {
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// BillingPeriod holds the value of the "billing_period" field.
-	BillingPeriod string `json:"billing_period,omitempty"`
+	BillingPeriod types.BillingPeriod `json:"billing_period,omitempty"`
 	// InvoiceCadence holds the value of the "invoice_cadence" field.
-	InvoiceCadence string `json:"invoice_cadence,omitempty"`
+	InvoiceCadence types.InvoiceCadence `json:"invoice_cadence,omitempty"`
 	// TrialPeriod holds the value of the "trial_period" field.
 	TrialPeriod int `json:"trial_period,omitempty"`
 	// StartDate holds the value of the "start_date" field.
@@ -76,6 +77,18 @@ type SubscriptionLineItem struct {
 	SubscriptionPhaseID *string `json:"subscription_phase_id,omitempty"`
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
+	// CommitmentAmount holds the value of the "commitment_amount" field.
+	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
+	// CommitmentQuantity holds the value of the "commitment_quantity" field.
+	CommitmentQuantity *decimal.Decimal `json:"commitment_quantity,omitempty"`
+	// CommitmentType holds the value of the "commitment_type" field.
+	CommitmentType *string `json:"commitment_type,omitempty"`
+	// CommitmentOverageFactor holds the value of the "commitment_overage_factor" field.
+	CommitmentOverageFactor *decimal.Decimal `json:"commitment_overage_factor,omitempty"`
+	// CommitmentTrueUpEnabled holds the value of the "commitment_true_up_enabled" field.
+	CommitmentTrueUpEnabled bool `json:"commitment_true_up_enabled,omitempty"`
+	// CommitmentWindowed holds the value of the "commitment_windowed" field.
+	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionLineItemQuery when eager-loading is set.
 	Edges        SubscriptionLineItemEdges `json:"edges"`
@@ -118,13 +131,17 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case subscriptionlineitem.FieldCommitmentAmount, subscriptionlineitem.FieldCommitmentQuantity, subscriptionlineitem.FieldCommitmentOverageFactor:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case subscriptionlineitem.FieldMetadata:
 			values[i] = new([]byte)
 		case subscriptionlineitem.FieldQuantity:
 			values[i] = new(decimal.Decimal)
+		case subscriptionlineitem.FieldCommitmentTrueUpEnabled, subscriptionlineitem.FieldCommitmentWindowed:
+			values[i] = new(sql.NullBool)
 		case subscriptionlineitem.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldSubscriptionPhaseID:
+		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldSubscriptionPhaseID, subscriptionlineitem.FieldCommitmentType:
 			values[i] = new(sql.NullString)
 		case subscriptionlineitem.FieldCreatedAt, subscriptionlineitem.FieldUpdatedAt, subscriptionlineitem.FieldStartDate, subscriptionlineitem.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -214,7 +231,7 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field entity_type", values[i])
 			} else if value.Valid {
-				sli.EntityType = value.String
+				sli.EntityType = types.InvoiceLineItemEntityType(value.String)
 			}
 		case subscriptionlineitem.FieldPlanDisplayName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -233,8 +250,8 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field price_type", values[i])
 			} else if value.Valid {
-				sli.PriceType = new(string)
-				*sli.PriceType = value.String
+				sli.PriceType = new(types.PriceType)
+				*sli.PriceType = types.PriceType(value.String)
 			}
 		case subscriptionlineitem.FieldMeterID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -287,13 +304,13 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_period", values[i])
 			} else if value.Valid {
-				sli.BillingPeriod = value.String
+				sli.BillingPeriod = types.BillingPeriod(value.String)
 			}
 		case subscriptionlineitem.FieldInvoiceCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_cadence", values[i])
 			} else if value.Valid {
-				sli.InvoiceCadence = value.String
+				sli.InvoiceCadence = types.InvoiceCadence(value.String)
 			}
 		case subscriptionlineitem.FieldTrialPeriod:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -329,6 +346,46 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 				if err := json.Unmarshal(*value, &sli.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
+			}
+		case subscriptionlineitem.FieldCommitmentAmount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_amount", values[i])
+			} else if value.Valid {
+				sli.CommitmentAmount = new(decimal.Decimal)
+				*sli.CommitmentAmount = *value.S.(*decimal.Decimal)
+			}
+		case subscriptionlineitem.FieldCommitmentQuantity:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_quantity", values[i])
+			} else if value.Valid {
+				sli.CommitmentQuantity = new(decimal.Decimal)
+				*sli.CommitmentQuantity = *value.S.(*decimal.Decimal)
+			}
+		case subscriptionlineitem.FieldCommitmentType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_type", values[i])
+			} else if value.Valid {
+				sli.CommitmentType = new(string)
+				*sli.CommitmentType = value.String
+			}
+		case subscriptionlineitem.FieldCommitmentOverageFactor:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_overage_factor", values[i])
+			} else if value.Valid {
+				sli.CommitmentOverageFactor = new(decimal.Decimal)
+				*sli.CommitmentOverageFactor = *value.S.(*decimal.Decimal)
+			}
+		case subscriptionlineitem.FieldCommitmentTrueUpEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_true_up_enabled", values[i])
+			} else if value.Valid {
+				sli.CommitmentTrueUpEnabled = value.Bool
+			}
+		case subscriptionlineitem.FieldCommitmentWindowed:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field commitment_windowed", values[i])
+			} else if value.Valid {
+				sli.CommitmentWindowed = value.Bool
 			}
 		default:
 			sli.selectValues.Set(columns[i], values[i])
@@ -409,7 +466,7 @@ func (sli *SubscriptionLineItem) String() string {
 	}
 	builder.WriteString(", ")
 	builder.WriteString("entity_type=")
-	builder.WriteString(sli.EntityType)
+	builder.WriteString(fmt.Sprintf("%v", sli.EntityType))
 	builder.WriteString(", ")
 	if v := sli.PlanDisplayName; v != nil {
 		builder.WriteString("plan_display_name=")
@@ -421,7 +478,7 @@ func (sli *SubscriptionLineItem) String() string {
 	builder.WriteString(", ")
 	if v := sli.PriceType; v != nil {
 		builder.WriteString("price_type=")
-		builder.WriteString(*v)
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := sli.MeterID; v != nil {
@@ -456,10 +513,10 @@ func (sli *SubscriptionLineItem) String() string {
 	builder.WriteString(sli.Currency)
 	builder.WriteString(", ")
 	builder.WriteString("billing_period=")
-	builder.WriteString(sli.BillingPeriod)
+	builder.WriteString(fmt.Sprintf("%v", sli.BillingPeriod))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_cadence=")
-	builder.WriteString(sli.InvoiceCadence)
+	builder.WriteString(fmt.Sprintf("%v", sli.InvoiceCadence))
 	builder.WriteString(", ")
 	builder.WriteString("trial_period=")
 	builder.WriteString(fmt.Sprintf("%v", sli.TrialPeriod))
@@ -481,6 +538,32 @@ func (sli *SubscriptionLineItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", sli.Metadata))
+	builder.WriteString(", ")
+	if v := sli.CommitmentAmount; v != nil {
+		builder.WriteString("commitment_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := sli.CommitmentQuantity; v != nil {
+		builder.WriteString("commitment_quantity=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := sli.CommitmentType; v != nil {
+		builder.WriteString("commitment_type=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := sli.CommitmentOverageFactor; v != nil {
+		builder.WriteString("commitment_overage_factor=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("commitment_true_up_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", sli.CommitmentTrueUpEnabled))
+	builder.WriteString(", ")
+	builder.WriteString("commitment_windowed=")
+	builder.WriteString(fmt.Sprintf("%v", sli.CommitmentWindowed))
 	builder.WriteByte(')')
 	return builder.String()
 }

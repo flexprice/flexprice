@@ -12120,6 +12120,9 @@ type CreditGrantMutation struct {
 	priority                 *int
 	addpriority              *int
 	metadata                 *map[string]string
+	start_date               *time.Time
+	end_date                 *time.Time
+	credit_grant_anchor      *time.Time
 	clearedFields            map[string]struct{}
 	plan                     *string
 	clearedplan              bool
@@ -13160,6 +13163,153 @@ func (m *CreditGrantMutation) ResetMetadata() {
 	delete(m.clearedFields, creditgrant.FieldMetadata)
 }
 
+// SetStartDate sets the "start_date" field.
+func (m *CreditGrantMutation) SetStartDate(t time.Time) {
+	m.start_date = &t
+}
+
+// StartDate returns the value of the "start_date" field in the mutation.
+func (m *CreditGrantMutation) StartDate() (r time.Time, exists bool) {
+	v := m.start_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartDate returns the old "start_date" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldStartDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartDate: %w", err)
+	}
+	return oldValue.StartDate, nil
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (m *CreditGrantMutation) ClearStartDate() {
+	m.start_date = nil
+	m.clearedFields[creditgrant.FieldStartDate] = struct{}{}
+}
+
+// StartDateCleared returns if the "start_date" field was cleared in this mutation.
+func (m *CreditGrantMutation) StartDateCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldStartDate]
+	return ok
+}
+
+// ResetStartDate resets all changes to the "start_date" field.
+func (m *CreditGrantMutation) ResetStartDate() {
+	m.start_date = nil
+	delete(m.clearedFields, creditgrant.FieldStartDate)
+}
+
+// SetEndDate sets the "end_date" field.
+func (m *CreditGrantMutation) SetEndDate(t time.Time) {
+	m.end_date = &t
+}
+
+// EndDate returns the value of the "end_date" field in the mutation.
+func (m *CreditGrantMutation) EndDate() (r time.Time, exists bool) {
+	v := m.end_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndDate returns the old "end_date" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldEndDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndDate: %w", err)
+	}
+	return oldValue.EndDate, nil
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (m *CreditGrantMutation) ClearEndDate() {
+	m.end_date = nil
+	m.clearedFields[creditgrant.FieldEndDate] = struct{}{}
+}
+
+// EndDateCleared returns if the "end_date" field was cleared in this mutation.
+func (m *CreditGrantMutation) EndDateCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldEndDate]
+	return ok
+}
+
+// ResetEndDate resets all changes to the "end_date" field.
+func (m *CreditGrantMutation) ResetEndDate() {
+	m.end_date = nil
+	delete(m.clearedFields, creditgrant.FieldEndDate)
+}
+
+// SetCreditGrantAnchor sets the "credit_grant_anchor" field.
+func (m *CreditGrantMutation) SetCreditGrantAnchor(t time.Time) {
+	m.credit_grant_anchor = &t
+}
+
+// CreditGrantAnchor returns the value of the "credit_grant_anchor" field in the mutation.
+func (m *CreditGrantMutation) CreditGrantAnchor() (r time.Time, exists bool) {
+	v := m.credit_grant_anchor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreditGrantAnchor returns the old "credit_grant_anchor" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldCreditGrantAnchor(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreditGrantAnchor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreditGrantAnchor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreditGrantAnchor: %w", err)
+	}
+	return oldValue.CreditGrantAnchor, nil
+}
+
+// ClearCreditGrantAnchor clears the value of the "credit_grant_anchor" field.
+func (m *CreditGrantMutation) ClearCreditGrantAnchor() {
+	m.credit_grant_anchor = nil
+	m.clearedFields[creditgrant.FieldCreditGrantAnchor] = struct{}{}
+}
+
+// CreditGrantAnchorCleared returns if the "credit_grant_anchor" field was cleared in this mutation.
+func (m *CreditGrantMutation) CreditGrantAnchorCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldCreditGrantAnchor]
+	return ok
+}
+
+// ResetCreditGrantAnchor resets all changes to the "credit_grant_anchor" field.
+func (m *CreditGrantMutation) ResetCreditGrantAnchor() {
+	m.credit_grant_anchor = nil
+	delete(m.clearedFields, creditgrant.FieldCreditGrantAnchor)
+}
+
 // ClearPlan clears the "plan" edge to the Plan entity.
 func (m *CreditGrantMutation) ClearPlan() {
 	m.clearedplan = true
@@ -13248,7 +13398,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 23)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -13309,6 +13459,15 @@ func (m *CreditGrantMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, creditgrant.FieldMetadata)
 	}
+	if m.start_date != nil {
+		fields = append(fields, creditgrant.FieldStartDate)
+	}
+	if m.end_date != nil {
+		fields = append(fields, creditgrant.FieldEndDate)
+	}
+	if m.credit_grant_anchor != nil {
+		fields = append(fields, creditgrant.FieldCreditGrantAnchor)
+	}
 	return fields
 }
 
@@ -13357,6 +13516,12 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.Priority()
 	case creditgrant.FieldMetadata:
 		return m.Metadata()
+	case creditgrant.FieldStartDate:
+		return m.StartDate()
+	case creditgrant.FieldEndDate:
+		return m.EndDate()
+	case creditgrant.FieldCreditGrantAnchor:
+		return m.CreditGrantAnchor()
 	}
 	return nil, false
 }
@@ -13406,6 +13571,12 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldPriority(ctx)
 	case creditgrant.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case creditgrant.FieldStartDate:
+		return m.OldStartDate(ctx)
+	case creditgrant.FieldEndDate:
+		return m.OldEndDate(ctx)
+	case creditgrant.FieldCreditGrantAnchor:
+		return m.OldCreditGrantAnchor(ctx)
 	}
 	return nil, fmt.Errorf("unknown CreditGrant field %s", name)
 }
@@ -13555,6 +13726,27 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
+	case creditgrant.FieldStartDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartDate(v)
+		return nil
+	case creditgrant.FieldEndDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndDate(v)
+		return nil
+	case creditgrant.FieldCreditGrantAnchor:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreditGrantAnchor(v)
+		return nil
 	}
 	return fmt.Errorf("unknown CreditGrant field %s", name)
 }
@@ -13657,6 +13849,15 @@ func (m *CreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrant.FieldMetadata) {
 		fields = append(fields, creditgrant.FieldMetadata)
 	}
+	if m.FieldCleared(creditgrant.FieldStartDate) {
+		fields = append(fields, creditgrant.FieldStartDate)
+	}
+	if m.FieldCleared(creditgrant.FieldEndDate) {
+		fields = append(fields, creditgrant.FieldEndDate)
+	}
+	if m.FieldCleared(creditgrant.FieldCreditGrantAnchor) {
+		fields = append(fields, creditgrant.FieldCreditGrantAnchor)
+	}
 	return fields
 }
 
@@ -13703,6 +13904,15 @@ func (m *CreditGrantMutation) ClearField(name string) error {
 		return nil
 	case creditgrant.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case creditgrant.FieldStartDate:
+		m.ClearStartDate()
+		return nil
+	case creditgrant.FieldEndDate:
+		m.ClearEndDate()
+		return nil
+	case creditgrant.FieldCreditGrantAnchor:
+		m.ClearCreditGrantAnchor()
 		return nil
 	}
 	return fmt.Errorf("unknown CreditGrant nullable field %s", name)
@@ -13771,6 +13981,15 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 		return nil
 	case creditgrant.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case creditgrant.FieldStartDate:
+		m.ResetStartDate()
+		return nil
+	case creditgrant.FieldEndDate:
+		m.ResetEndDate()
+		return nil
+	case creditgrant.FieldCreditGrantAnchor:
+		m.ResetCreditGrantAnchor()
 		return nil
 	}
 	return fmt.Errorf("unknown CreditGrant field %s", name)
@@ -19811,14 +20030,14 @@ type EntitlementMutation struct {
 	created_by            *string
 	updated_by            *string
 	environment_id        *string
-	entity_type           *string
+	entity_type           *types.EntitlementEntityType
 	entity_id             *string
 	feature_id            *string
-	feature_type          *string
+	feature_type          *types.FeatureType
 	is_enabled            *bool
 	usage_limit           *int64
 	addusage_limit        *int64
-	usage_reset_period    *string
+	usage_reset_period    *types.EntitlementUsageResetPeriod
 	is_soft_limit         *bool
 	static_value          *string
 	display_order         *int
@@ -20226,12 +20445,12 @@ func (m *EntitlementMutation) ResetEnvironmentID() {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (m *EntitlementMutation) SetEntityType(s string) {
-	m.entity_type = &s
+func (m *EntitlementMutation) SetEntityType(tet types.EntitlementEntityType) {
+	m.entity_type = &tet
 }
 
 // EntityType returns the value of the "entity_type" field in the mutation.
-func (m *EntitlementMutation) EntityType() (r string, exists bool) {
+func (m *EntitlementMutation) EntityType() (r types.EntitlementEntityType, exists bool) {
 	v := m.entity_type
 	if v == nil {
 		return
@@ -20242,7 +20461,7 @@ func (m *EntitlementMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldEntityType(ctx context.Context) (v string, err error) {
+func (m *EntitlementMutation) OldEntityType(ctx context.Context) (v types.EntitlementEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -20360,12 +20579,12 @@ func (m *EntitlementMutation) ResetFeatureID() {
 }
 
 // SetFeatureType sets the "feature_type" field.
-func (m *EntitlementMutation) SetFeatureType(s string) {
-	m.feature_type = &s
+func (m *EntitlementMutation) SetFeatureType(tt types.FeatureType) {
+	m.feature_type = &tt
 }
 
 // FeatureType returns the value of the "feature_type" field in the mutation.
-func (m *EntitlementMutation) FeatureType() (r string, exists bool) {
+func (m *EntitlementMutation) FeatureType() (r types.FeatureType, exists bool) {
 	v := m.feature_type
 	if v == nil {
 		return
@@ -20376,7 +20595,7 @@ func (m *EntitlementMutation) FeatureType() (r string, exists bool) {
 // OldFeatureType returns the old "feature_type" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldFeatureType(ctx context.Context) (v string, err error) {
+func (m *EntitlementMutation) OldFeatureType(ctx context.Context) (v types.FeatureType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldFeatureType is only allowed on UpdateOne operations")
 	}
@@ -20502,12 +20721,12 @@ func (m *EntitlementMutation) ResetUsageLimit() {
 }
 
 // SetUsageResetPeriod sets the "usage_reset_period" field.
-func (m *EntitlementMutation) SetUsageResetPeriod(s string) {
-	m.usage_reset_period = &s
+func (m *EntitlementMutation) SetUsageResetPeriod(turp types.EntitlementUsageResetPeriod) {
+	m.usage_reset_period = &turp
 }
 
 // UsageResetPeriod returns the value of the "usage_reset_period" field in the mutation.
-func (m *EntitlementMutation) UsageResetPeriod() (r string, exists bool) {
+func (m *EntitlementMutation) UsageResetPeriod() (r types.EntitlementUsageResetPeriod, exists bool) {
 	v := m.usage_reset_period
 	if v == nil {
 		return
@@ -20518,7 +20737,7 @@ func (m *EntitlementMutation) UsageResetPeriod() (r string, exists bool) {
 // OldUsageResetPeriod returns the old "usage_reset_period" field's value of the Entitlement entity.
 // If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *EntitlementMutation) OldUsageResetPeriod(ctx context.Context) (v string, err error) {
+func (m *EntitlementMutation) OldUsageResetPeriod(ctx context.Context) (v types.EntitlementUsageResetPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldUsageResetPeriod is only allowed on UpdateOne operations")
 	}
@@ -20977,7 +21196,7 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		m.SetEnvironmentID(v)
 		return nil
 	case entitlement.FieldEntityType:
-		v, ok := value.(string)
+		v, ok := value.(types.EntitlementEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -20998,7 +21217,7 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		m.SetFeatureID(v)
 		return nil
 	case entitlement.FieldFeatureType:
-		v, ok := value.(string)
+		v, ok := value.(types.FeatureType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -21019,7 +21238,7 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		m.SetUsageLimit(v)
 		return nil
 	case entitlement.FieldUsageResetPeriod:
-		v, ok := value.(string)
+		v, ok := value.(types.EntitlementUsageResetPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -25349,9 +25568,9 @@ type InvoiceMutation struct {
 	environment_id             *string
 	customer_id                *string
 	subscription_id            *string
-	invoice_type               *string
-	invoice_status             *string
-	payment_status             *string
+	invoice_type               *types.InvoiceType
+	invoice_status             *types.InvoiceStatus
+	payment_status             *types.PaymentStatus
 	currency                   *string
 	amount_due                 *decimal.Decimal
 	amount_paid                *decimal.Decimal
@@ -25367,7 +25586,7 @@ type InvoiceMutation struct {
 	paid_at                    *time.Time
 	voided_at                  *time.Time
 	finalized_at               *time.Time
-	billing_period             *string
+	billing_period             *types.BillingPeriod
 	period_start               *time.Time
 	period_end                 *time.Time
 	invoice_pdf_url            *string
@@ -25872,12 +26091,12 @@ func (m *InvoiceMutation) ResetSubscriptionID() {
 }
 
 // SetInvoiceType sets the "invoice_type" field.
-func (m *InvoiceMutation) SetInvoiceType(s string) {
-	m.invoice_type = &s
+func (m *InvoiceMutation) SetInvoiceType(tt types.InvoiceType) {
+	m.invoice_type = &tt
 }
 
 // InvoiceType returns the value of the "invoice_type" field in the mutation.
-func (m *InvoiceMutation) InvoiceType() (r string, exists bool) {
+func (m *InvoiceMutation) InvoiceType() (r types.InvoiceType, exists bool) {
 	v := m.invoice_type
 	if v == nil {
 		return
@@ -25888,7 +26107,7 @@ func (m *InvoiceMutation) InvoiceType() (r string, exists bool) {
 // OldInvoiceType returns the old "invoice_type" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldInvoiceType(ctx context.Context) (v string, err error) {
+func (m *InvoiceMutation) OldInvoiceType(ctx context.Context) (v types.InvoiceType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInvoiceType is only allowed on UpdateOne operations")
 	}
@@ -25908,12 +26127,12 @@ func (m *InvoiceMutation) ResetInvoiceType() {
 }
 
 // SetInvoiceStatus sets the "invoice_status" field.
-func (m *InvoiceMutation) SetInvoiceStatus(s string) {
-	m.invoice_status = &s
+func (m *InvoiceMutation) SetInvoiceStatus(ts types.InvoiceStatus) {
+	m.invoice_status = &ts
 }
 
 // InvoiceStatus returns the value of the "invoice_status" field in the mutation.
-func (m *InvoiceMutation) InvoiceStatus() (r string, exists bool) {
+func (m *InvoiceMutation) InvoiceStatus() (r types.InvoiceStatus, exists bool) {
 	v := m.invoice_status
 	if v == nil {
 		return
@@ -25924,7 +26143,7 @@ func (m *InvoiceMutation) InvoiceStatus() (r string, exists bool) {
 // OldInvoiceStatus returns the old "invoice_status" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldInvoiceStatus(ctx context.Context) (v string, err error) {
+func (m *InvoiceMutation) OldInvoiceStatus(ctx context.Context) (v types.InvoiceStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInvoiceStatus is only allowed on UpdateOne operations")
 	}
@@ -25944,12 +26163,12 @@ func (m *InvoiceMutation) ResetInvoiceStatus() {
 }
 
 // SetPaymentStatus sets the "payment_status" field.
-func (m *InvoiceMutation) SetPaymentStatus(s string) {
-	m.payment_status = &s
+func (m *InvoiceMutation) SetPaymentStatus(ts types.PaymentStatus) {
+	m.payment_status = &ts
 }
 
 // PaymentStatus returns the value of the "payment_status" field in the mutation.
-func (m *InvoiceMutation) PaymentStatus() (r string, exists bool) {
+func (m *InvoiceMutation) PaymentStatus() (r types.PaymentStatus, exists bool) {
 	v := m.payment_status
 	if v == nil {
 		return
@@ -25960,7 +26179,7 @@ func (m *InvoiceMutation) PaymentStatus() (r string, exists bool) {
 // OldPaymentStatus returns the old "payment_status" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldPaymentStatus(ctx context.Context) (v string, err error) {
+func (m *InvoiceMutation) OldPaymentStatus(ctx context.Context) (v types.PaymentStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPaymentStatus is only allowed on UpdateOne operations")
 	}
@@ -26663,12 +26882,12 @@ func (m *InvoiceMutation) ResetFinalizedAt() {
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (m *InvoiceMutation) SetBillingPeriod(s string) {
-	m.billing_period = &s
+func (m *InvoiceMutation) SetBillingPeriod(tp types.BillingPeriod) {
+	m.billing_period = &tp
 }
 
 // BillingPeriod returns the value of the "billing_period" field in the mutation.
-func (m *InvoiceMutation) BillingPeriod() (r string, exists bool) {
+func (m *InvoiceMutation) BillingPeriod() (r types.BillingPeriod, exists bool) {
 	v := m.billing_period
 	if v == nil {
 		return
@@ -26679,7 +26898,7 @@ func (m *InvoiceMutation) BillingPeriod() (r string, exists bool) {
 // OldBillingPeriod returns the old "billing_period" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldBillingPeriod(ctx context.Context) (v *string, err error) {
+func (m *InvoiceMutation) OldBillingPeriod(ctx context.Context) (v *types.BillingPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingPeriod is only allowed on UpdateOne operations")
 	}
@@ -27672,21 +27891,21 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		m.SetSubscriptionID(v)
 		return nil
 	case invoice.FieldInvoiceType:
-		v, ok := value.(string)
+		v, ok := value.(types.InvoiceType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInvoiceType(v)
 		return nil
 	case invoice.FieldInvoiceStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.InvoiceStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInvoiceStatus(v)
 		return nil
 	case invoice.FieldPaymentStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.PaymentStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -27798,7 +28017,7 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		m.SetFinalizedAt(v)
 		return nil
 	case invoice.FieldBillingPeriod:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -28331,10 +28550,10 @@ type InvoiceLineItemMutation struct {
 	customer_id                *string
 	subscription_id            *string
 	entity_id                  *string
-	entity_type                *string
+	entity_type                *types.InvoiceLineItemEntityType
 	plan_display_name          *string
 	price_id                   *string
-	price_type                 *string
+	price_type                 *types.PriceType
 	meter_id                   *string
 	meter_display_name         *string
 	price_unit_id              *string
@@ -28347,6 +28566,7 @@ type InvoiceLineItemMutation struct {
 	period_start               *time.Time
 	period_end                 *time.Time
 	metadata                   *map[string]string
+	commitment_info            **types.CommitmentInfo
 	clearedFields              map[string]struct{}
 	invoice                    *string
 	clearedinvoice             bool
@@ -28924,12 +29144,12 @@ func (m *InvoiceLineItemMutation) ResetEntityID() {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (m *InvoiceLineItemMutation) SetEntityType(s string) {
-	m.entity_type = &s
+func (m *InvoiceLineItemMutation) SetEntityType(tliet types.InvoiceLineItemEntityType) {
+	m.entity_type = &tliet
 }
 
 // EntityType returns the value of the "entity_type" field in the mutation.
-func (m *InvoiceLineItemMutation) EntityType() (r string, exists bool) {
+func (m *InvoiceLineItemMutation) EntityType() (r types.InvoiceLineItemEntityType, exists bool) {
 	v := m.entity_type
 	if v == nil {
 		return
@@ -28940,7 +29160,7 @@ func (m *InvoiceLineItemMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v *string, err error) {
+func (m *InvoiceLineItemMutation) OldEntityType(ctx context.Context) (v *types.InvoiceLineItemEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -29071,12 +29291,12 @@ func (m *InvoiceLineItemMutation) ResetPriceID() {
 }
 
 // SetPriceType sets the "price_type" field.
-func (m *InvoiceLineItemMutation) SetPriceType(s string) {
-	m.price_type = &s
+func (m *InvoiceLineItemMutation) SetPriceType(tt types.PriceType) {
+	m.price_type = &tt
 }
 
 // PriceType returns the value of the "price_type" field in the mutation.
-func (m *InvoiceLineItemMutation) PriceType() (r string, exists bool) {
+func (m *InvoiceLineItemMutation) PriceType() (r types.PriceType, exists bool) {
 	v := m.price_type
 	if v == nil {
 		return
@@ -29087,7 +29307,7 @@ func (m *InvoiceLineItemMutation) PriceType() (r string, exists bool) {
 // OldPriceType returns the old "price_type" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldPriceType(ctx context.Context) (v *string, err error) {
+func (m *InvoiceLineItemMutation) OldPriceType(ctx context.Context) (v *types.PriceType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceType is only allowed on UpdateOne operations")
 	}
@@ -29668,6 +29888,55 @@ func (m *InvoiceLineItemMutation) ResetMetadata() {
 	delete(m.clearedFields, invoicelineitem.FieldMetadata)
 }
 
+// SetCommitmentInfo sets the "commitment_info" field.
+func (m *InvoiceLineItemMutation) SetCommitmentInfo(ti *types.CommitmentInfo) {
+	m.commitment_info = &ti
+}
+
+// CommitmentInfo returns the value of the "commitment_info" field in the mutation.
+func (m *InvoiceLineItemMutation) CommitmentInfo() (r *types.CommitmentInfo, exists bool) {
+	v := m.commitment_info
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentInfo returns the old "commitment_info" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldCommitmentInfo(ctx context.Context) (v *types.CommitmentInfo, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentInfo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentInfo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentInfo: %w", err)
+	}
+	return oldValue.CommitmentInfo, nil
+}
+
+// ClearCommitmentInfo clears the value of the "commitment_info" field.
+func (m *InvoiceLineItemMutation) ClearCommitmentInfo() {
+	m.commitment_info = nil
+	m.clearedFields[invoicelineitem.FieldCommitmentInfo] = struct{}{}
+}
+
+// CommitmentInfoCleared returns if the "commitment_info" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) CommitmentInfoCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldCommitmentInfo]
+	return ok
+}
+
+// ResetCommitmentInfo resets all changes to the "commitment_info" field.
+func (m *InvoiceLineItemMutation) ResetCommitmentInfo() {
+	m.commitment_info = nil
+	delete(m.clearedFields, invoicelineitem.FieldCommitmentInfo)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -29783,7 +30052,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -29865,6 +30134,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, invoicelineitem.FieldMetadata)
 	}
+	if m.commitment_info != nil {
+		fields = append(fields, invoicelineitem.FieldCommitmentInfo)
+	}
 	return fields
 }
 
@@ -29927,6 +30199,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.PeriodEnd()
 	case invoicelineitem.FieldMetadata:
 		return m.Metadata()
+	case invoicelineitem.FieldCommitmentInfo:
+		return m.CommitmentInfo()
 	}
 	return nil, false
 }
@@ -29990,6 +30264,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldPeriodEnd(ctx)
 	case invoicelineitem.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case invoicelineitem.FieldCommitmentInfo:
+		return m.OldCommitmentInfo(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -30077,7 +30353,7 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		m.SetEntityID(v)
 		return nil
 	case invoicelineitem.FieldEntityType:
-		v, ok := value.(string)
+		v, ok := value.(types.InvoiceLineItemEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -30098,7 +30374,7 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		m.SetPriceID(v)
 		return nil
 	case invoicelineitem.FieldPriceType:
-		v, ok := value.(string)
+		v, ok := value.(types.PriceType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -30188,6 +30464,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetMetadata(v)
 		return nil
+	case invoicelineitem.FieldCommitmentInfo:
+		v, ok := value.(*types.CommitmentInfo)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentInfo(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -30272,6 +30555,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldMetadata) {
 		fields = append(fields, invoicelineitem.FieldMetadata)
 	}
+	if m.FieldCleared(invoicelineitem.FieldCommitmentInfo) {
+		fields = append(fields, invoicelineitem.FieldCommitmentInfo)
+	}
 	return fields
 }
 
@@ -30339,6 +30625,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case invoicelineitem.FieldCommitmentInfo:
+		m.ClearCommitmentInfo()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -30428,6 +30717,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case invoicelineitem.FieldCommitmentInfo:
+		m.ResetCommitmentInfo()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
@@ -36607,30 +36899,29 @@ type PriceMutation struct {
 	created_by                *string
 	updated_by                *string
 	environment_id            *string
-	amount                    *float64
-	addamount                 *float64
+	display_name              *string
+	amount                    *decimal.Decimal
 	currency                  *string
 	display_amount            *string
-	price_unit_type           *string
+	price_unit_type           *types.PriceUnitType
 	price_unit_id             *string
 	price_unit                *string
-	price_unit_amount         *float64
-	addprice_unit_amount      *float64
+	price_unit_amount         *decimal.Decimal
 	display_price_unit_amount *string
-	conversion_rate           *float64
-	addconversion_rate        *float64
-	_type                     *string
-	billing_period            *string
+	conversion_rate           *decimal.Decimal
+	min_quantity              *decimal.Decimal
+	_type                     *types.PriceType
+	billing_period            *types.BillingPeriod
 	billing_period_count      *int
 	addbilling_period_count   *int
-	billing_model             *string
-	billing_cadence           *string
-	invoice_cadence           *string
+	billing_model             *types.BillingModel
+	billing_cadence           *types.BillingCadence
+	invoice_cadence           *types.InvoiceCadence
 	trial_period              *int
 	addtrial_period           *int
 	meter_id                  *string
 	filter_values             *map[string][]string
-	tier_mode                 *string
+	tier_mode                 *types.BillingTier
 	tiers                     *[]*types.PriceTier
 	appendtiers               []*types.PriceTier
 	price_unit_tiers          *[]*types.PriceTier
@@ -36639,7 +36930,7 @@ type PriceMutation struct {
 	lookup_key                *string
 	description               *string
 	metadata                  *map[string]string
-	entity_type               *string
+	entity_type               *types.PriceEntityType
 	entity_id                 *string
 	parent_price_id           *string
 	start_date                *time.Time
@@ -37046,14 +37337,62 @@ func (m *PriceMutation) ResetEnvironmentID() {
 	delete(m.clearedFields, price.FieldEnvironmentID)
 }
 
+// SetDisplayName sets the "display_name" field.
+func (m *PriceMutation) SetDisplayName(s string) {
+	m.display_name = &s
+}
+
+// DisplayName returns the value of the "display_name" field in the mutation.
+func (m *PriceMutation) DisplayName() (r string, exists bool) {
+	v := m.display_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayName returns the old "display_name" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldDisplayName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayName: %w", err)
+	}
+	return oldValue.DisplayName, nil
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (m *PriceMutation) ClearDisplayName() {
+	m.display_name = nil
+	m.clearedFields[price.FieldDisplayName] = struct{}{}
+}
+
+// DisplayNameCleared returns if the "display_name" field was cleared in this mutation.
+func (m *PriceMutation) DisplayNameCleared() bool {
+	_, ok := m.clearedFields[price.FieldDisplayName]
+	return ok
+}
+
+// ResetDisplayName resets all changes to the "display_name" field.
+func (m *PriceMutation) ResetDisplayName() {
+	m.display_name = nil
+	delete(m.clearedFields, price.FieldDisplayName)
+}
+
 // SetAmount sets the "amount" field.
-func (m *PriceMutation) SetAmount(f float64) {
-	m.amount = &f
-	m.addamount = nil
+func (m *PriceMutation) SetAmount(d decimal.Decimal) {
+	m.amount = &d
 }
 
 // Amount returns the value of the "amount" field in the mutation.
-func (m *PriceMutation) Amount() (r float64, exists bool) {
+func (m *PriceMutation) Amount() (r decimal.Decimal, exists bool) {
 	v := m.amount
 	if v == nil {
 		return
@@ -37064,7 +37403,7 @@ func (m *PriceMutation) Amount() (r float64, exists bool) {
 // OldAmount returns the old "amount" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldAmount(ctx context.Context) (v float64, err error) {
+func (m *PriceMutation) OldAmount(ctx context.Context) (v decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldAmount is only allowed on UpdateOne operations")
 	}
@@ -37078,28 +37417,9 @@ func (m *PriceMutation) OldAmount(ctx context.Context) (v float64, err error) {
 	return oldValue.Amount, nil
 }
 
-// AddAmount adds f to the "amount" field.
-func (m *PriceMutation) AddAmount(f float64) {
-	if m.addamount != nil {
-		*m.addamount += f
-	} else {
-		m.addamount = &f
-	}
-}
-
-// AddedAmount returns the value that was added to the "amount" field in this mutation.
-func (m *PriceMutation) AddedAmount() (r float64, exists bool) {
-	v := m.addamount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetAmount resets all changes to the "amount" field.
 func (m *PriceMutation) ResetAmount() {
 	m.amount = nil
-	m.addamount = nil
 }
 
 // SetCurrency sets the "currency" field.
@@ -37175,12 +37495,12 @@ func (m *PriceMutation) ResetDisplayAmount() {
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
-func (m *PriceMutation) SetPriceUnitType(s string) {
-	m.price_unit_type = &s
+func (m *PriceMutation) SetPriceUnitType(tut types.PriceUnitType) {
+	m.price_unit_type = &tut
 }
 
 // PriceUnitType returns the value of the "price_unit_type" field in the mutation.
-func (m *PriceMutation) PriceUnitType() (r string, exists bool) {
+func (m *PriceMutation) PriceUnitType() (r types.PriceUnitType, exists bool) {
 	v := m.price_unit_type
 	if v == nil {
 		return
@@ -37191,7 +37511,7 @@ func (m *PriceMutation) PriceUnitType() (r string, exists bool) {
 // OldPriceUnitType returns the old "price_unit_type" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPriceUnitType(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldPriceUnitType(ctx context.Context) (v types.PriceUnitType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceUnitType is only allowed on UpdateOne operations")
 	}
@@ -37309,13 +37629,12 @@ func (m *PriceMutation) ResetPriceUnit() {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (m *PriceMutation) SetPriceUnitAmount(f float64) {
-	m.price_unit_amount = &f
-	m.addprice_unit_amount = nil
+func (m *PriceMutation) SetPriceUnitAmount(d decimal.Decimal) {
+	m.price_unit_amount = &d
 }
 
 // PriceUnitAmount returns the value of the "price_unit_amount" field in the mutation.
-func (m *PriceMutation) PriceUnitAmount() (r float64, exists bool) {
+func (m *PriceMutation) PriceUnitAmount() (r decimal.Decimal, exists bool) {
 	v := m.price_unit_amount
 	if v == nil {
 		return
@@ -37326,7 +37645,7 @@ func (m *PriceMutation) PriceUnitAmount() (r float64, exists bool) {
 // OldPriceUnitAmount returns the old "price_unit_amount" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldPriceUnitAmount(ctx context.Context) (v float64, err error) {
+func (m *PriceMutation) OldPriceUnitAmount(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceUnitAmount is only allowed on UpdateOne operations")
 	}
@@ -37340,28 +37659,9 @@ func (m *PriceMutation) OldPriceUnitAmount(ctx context.Context) (v float64, err 
 	return oldValue.PriceUnitAmount, nil
 }
 
-// AddPriceUnitAmount adds f to the "price_unit_amount" field.
-func (m *PriceMutation) AddPriceUnitAmount(f float64) {
-	if m.addprice_unit_amount != nil {
-		*m.addprice_unit_amount += f
-	} else {
-		m.addprice_unit_amount = &f
-	}
-}
-
-// AddedPriceUnitAmount returns the value that was added to the "price_unit_amount" field in this mutation.
-func (m *PriceMutation) AddedPriceUnitAmount() (r float64, exists bool) {
-	v := m.addprice_unit_amount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ClearPriceUnitAmount clears the value of the "price_unit_amount" field.
 func (m *PriceMutation) ClearPriceUnitAmount() {
 	m.price_unit_amount = nil
-	m.addprice_unit_amount = nil
 	m.clearedFields[price.FieldPriceUnitAmount] = struct{}{}
 }
 
@@ -37374,7 +37674,6 @@ func (m *PriceMutation) PriceUnitAmountCleared() bool {
 // ResetPriceUnitAmount resets all changes to the "price_unit_amount" field.
 func (m *PriceMutation) ResetPriceUnitAmount() {
 	m.price_unit_amount = nil
-	m.addprice_unit_amount = nil
 	delete(m.clearedFields, price.FieldPriceUnitAmount)
 }
 
@@ -37428,13 +37727,12 @@ func (m *PriceMutation) ResetDisplayPriceUnitAmount() {
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (m *PriceMutation) SetConversionRate(f float64) {
-	m.conversion_rate = &f
-	m.addconversion_rate = nil
+func (m *PriceMutation) SetConversionRate(d decimal.Decimal) {
+	m.conversion_rate = &d
 }
 
 // ConversionRate returns the value of the "conversion_rate" field in the mutation.
-func (m *PriceMutation) ConversionRate() (r float64, exists bool) {
+func (m *PriceMutation) ConversionRate() (r decimal.Decimal, exists bool) {
 	v := m.conversion_rate
 	if v == nil {
 		return
@@ -37445,7 +37743,7 @@ func (m *PriceMutation) ConversionRate() (r float64, exists bool) {
 // OldConversionRate returns the old "conversion_rate" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldConversionRate(ctx context.Context) (v float64, err error) {
+func (m *PriceMutation) OldConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldConversionRate is only allowed on UpdateOne operations")
 	}
@@ -37459,28 +37757,9 @@ func (m *PriceMutation) OldConversionRate(ctx context.Context) (v float64, err e
 	return oldValue.ConversionRate, nil
 }
 
-// AddConversionRate adds f to the "conversion_rate" field.
-func (m *PriceMutation) AddConversionRate(f float64) {
-	if m.addconversion_rate != nil {
-		*m.addconversion_rate += f
-	} else {
-		m.addconversion_rate = &f
-	}
-}
-
-// AddedConversionRate returns the value that was added to the "conversion_rate" field in this mutation.
-func (m *PriceMutation) AddedConversionRate() (r float64, exists bool) {
-	v := m.addconversion_rate
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ClearConversionRate clears the value of the "conversion_rate" field.
 func (m *PriceMutation) ClearConversionRate() {
 	m.conversion_rate = nil
-	m.addconversion_rate = nil
 	m.clearedFields[price.FieldConversionRate] = struct{}{}
 }
 
@@ -37493,17 +37772,65 @@ func (m *PriceMutation) ConversionRateCleared() bool {
 // ResetConversionRate resets all changes to the "conversion_rate" field.
 func (m *PriceMutation) ResetConversionRate() {
 	m.conversion_rate = nil
-	m.addconversion_rate = nil
 	delete(m.clearedFields, price.FieldConversionRate)
 }
 
+// SetMinQuantity sets the "min_quantity" field.
+func (m *PriceMutation) SetMinQuantity(d decimal.Decimal) {
+	m.min_quantity = &d
+}
+
+// MinQuantity returns the value of the "min_quantity" field in the mutation.
+func (m *PriceMutation) MinQuantity() (r decimal.Decimal, exists bool) {
+	v := m.min_quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMinQuantity returns the old "min_quantity" field's value of the Price entity.
+// If the Price object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PriceMutation) OldMinQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMinQuantity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMinQuantity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMinQuantity: %w", err)
+	}
+	return oldValue.MinQuantity, nil
+}
+
+// ClearMinQuantity clears the value of the "min_quantity" field.
+func (m *PriceMutation) ClearMinQuantity() {
+	m.min_quantity = nil
+	m.clearedFields[price.FieldMinQuantity] = struct{}{}
+}
+
+// MinQuantityCleared returns if the "min_quantity" field was cleared in this mutation.
+func (m *PriceMutation) MinQuantityCleared() bool {
+	_, ok := m.clearedFields[price.FieldMinQuantity]
+	return ok
+}
+
+// ResetMinQuantity resets all changes to the "min_quantity" field.
+func (m *PriceMutation) ResetMinQuantity() {
+	m.min_quantity = nil
+	delete(m.clearedFields, price.FieldMinQuantity)
+}
+
 // SetType sets the "type" field.
-func (m *PriceMutation) SetType(s string) {
-	m._type = &s
+func (m *PriceMutation) SetType(tt types.PriceType) {
+	m._type = &tt
 }
 
 // GetType returns the value of the "type" field in the mutation.
-func (m *PriceMutation) GetType() (r string, exists bool) {
+func (m *PriceMutation) GetType() (r types.PriceType, exists bool) {
 	v := m._type
 	if v == nil {
 		return
@@ -37514,7 +37841,7 @@ func (m *PriceMutation) GetType() (r string, exists bool) {
 // OldType returns the old "type" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldType(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldType(ctx context.Context) (v types.PriceType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldType is only allowed on UpdateOne operations")
 	}
@@ -37534,12 +37861,12 @@ func (m *PriceMutation) ResetType() {
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (m *PriceMutation) SetBillingPeriod(s string) {
-	m.billing_period = &s
+func (m *PriceMutation) SetBillingPeriod(tp types.BillingPeriod) {
+	m.billing_period = &tp
 }
 
 // BillingPeriod returns the value of the "billing_period" field in the mutation.
-func (m *PriceMutation) BillingPeriod() (r string, exists bool) {
+func (m *PriceMutation) BillingPeriod() (r types.BillingPeriod, exists bool) {
 	v := m.billing_period
 	if v == nil {
 		return
@@ -37550,7 +37877,7 @@ func (m *PriceMutation) BillingPeriod() (r string, exists bool) {
 // OldBillingPeriod returns the old "billing_period" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldBillingPeriod(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldBillingPeriod(ctx context.Context) (v types.BillingPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingPeriod is only allowed on UpdateOne operations")
 	}
@@ -37626,12 +37953,12 @@ func (m *PriceMutation) ResetBillingPeriodCount() {
 }
 
 // SetBillingModel sets the "billing_model" field.
-func (m *PriceMutation) SetBillingModel(s string) {
-	m.billing_model = &s
+func (m *PriceMutation) SetBillingModel(tm types.BillingModel) {
+	m.billing_model = &tm
 }
 
 // BillingModel returns the value of the "billing_model" field in the mutation.
-func (m *PriceMutation) BillingModel() (r string, exists bool) {
+func (m *PriceMutation) BillingModel() (r types.BillingModel, exists bool) {
 	v := m.billing_model
 	if v == nil {
 		return
@@ -37642,7 +37969,7 @@ func (m *PriceMutation) BillingModel() (r string, exists bool) {
 // OldBillingModel returns the old "billing_model" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldBillingModel(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldBillingModel(ctx context.Context) (v types.BillingModel, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingModel is only allowed on UpdateOne operations")
 	}
@@ -37662,12 +37989,12 @@ func (m *PriceMutation) ResetBillingModel() {
 }
 
 // SetBillingCadence sets the "billing_cadence" field.
-func (m *PriceMutation) SetBillingCadence(s string) {
-	m.billing_cadence = &s
+func (m *PriceMutation) SetBillingCadence(tc types.BillingCadence) {
+	m.billing_cadence = &tc
 }
 
 // BillingCadence returns the value of the "billing_cadence" field in the mutation.
-func (m *PriceMutation) BillingCadence() (r string, exists bool) {
+func (m *PriceMutation) BillingCadence() (r types.BillingCadence, exists bool) {
 	v := m.billing_cadence
 	if v == nil {
 		return
@@ -37678,7 +38005,7 @@ func (m *PriceMutation) BillingCadence() (r string, exists bool) {
 // OldBillingCadence returns the old "billing_cadence" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldBillingCadence(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldBillingCadence(ctx context.Context) (v types.BillingCadence, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingCadence is only allowed on UpdateOne operations")
 	}
@@ -37698,12 +38025,12 @@ func (m *PriceMutation) ResetBillingCadence() {
 }
 
 // SetInvoiceCadence sets the "invoice_cadence" field.
-func (m *PriceMutation) SetInvoiceCadence(s string) {
-	m.invoice_cadence = &s
+func (m *PriceMutation) SetInvoiceCadence(tc types.InvoiceCadence) {
+	m.invoice_cadence = &tc
 }
 
 // InvoiceCadence returns the value of the "invoice_cadence" field in the mutation.
-func (m *PriceMutation) InvoiceCadence() (r string, exists bool) {
+func (m *PriceMutation) InvoiceCadence() (r types.InvoiceCadence, exists bool) {
 	v := m.invoice_cadence
 	if v == nil {
 		return
@@ -37714,7 +38041,7 @@ func (m *PriceMutation) InvoiceCadence() (r string, exists bool) {
 // OldInvoiceCadence returns the old "invoice_cadence" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldInvoiceCadence(ctx context.Context) (v string, err error) {
+func (m *PriceMutation) OldInvoiceCadence(ctx context.Context) (v types.InvoiceCadence, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInvoiceCadence is only allowed on UpdateOne operations")
 	}
@@ -37901,12 +38228,12 @@ func (m *PriceMutation) ResetFilterValues() {
 }
 
 // SetTierMode sets the "tier_mode" field.
-func (m *PriceMutation) SetTierMode(s string) {
-	m.tier_mode = &s
+func (m *PriceMutation) SetTierMode(tt types.BillingTier) {
+	m.tier_mode = &tt
 }
 
 // TierMode returns the value of the "tier_mode" field in the mutation.
-func (m *PriceMutation) TierMode() (r string, exists bool) {
+func (m *PriceMutation) TierMode() (r types.BillingTier, exists bool) {
 	v := m.tier_mode
 	if v == nil {
 		return
@@ -37917,7 +38244,7 @@ func (m *PriceMutation) TierMode() (r string, exists bool) {
 // OldTierMode returns the old "tier_mode" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldTierMode(ctx context.Context) (v *string, err error) {
+func (m *PriceMutation) OldTierMode(ctx context.Context) (v *types.BillingTier, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTierMode is only allowed on UpdateOne operations")
 	}
@@ -38276,12 +38603,12 @@ func (m *PriceMutation) ResetMetadata() {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (m *PriceMutation) SetEntityType(s string) {
-	m.entity_type = &s
+func (m *PriceMutation) SetEntityType(tet types.PriceEntityType) {
+	m.entity_type = &tet
 }
 
 // EntityType returns the value of the "entity_type" field in the mutation.
-func (m *PriceMutation) EntityType() (r string, exists bool) {
+func (m *PriceMutation) EntityType() (r types.PriceEntityType, exists bool) {
 	v := m.entity_type
 	if v == nil {
 		return
@@ -38292,7 +38619,7 @@ func (m *PriceMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the Price entity.
 // If the Price object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *PriceMutation) OldEntityType(ctx context.Context) (v *string, err error) {
+func (m *PriceMutation) OldEntityType(ctx context.Context) (v *types.PriceEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -38603,7 +38930,7 @@ func (m *PriceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PriceMutation) Fields() []string {
-	fields := make([]string, 0, 38)
+	fields := make([]string, 0, 40)
 	if m.tenant_id != nil {
 		fields = append(fields, price.FieldTenantID)
 	}
@@ -38624,6 +38951,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.environment_id != nil {
 		fields = append(fields, price.FieldEnvironmentID)
+	}
+	if m.display_name != nil {
+		fields = append(fields, price.FieldDisplayName)
 	}
 	if m.amount != nil {
 		fields = append(fields, price.FieldAmount)
@@ -38651,6 +38981,9 @@ func (m *PriceMutation) Fields() []string {
 	}
 	if m.conversion_rate != nil {
 		fields = append(fields, price.FieldConversionRate)
+	}
+	if m.min_quantity != nil {
+		fields = append(fields, price.FieldMinQuantity)
 	}
 	if m._type != nil {
 		fields = append(fields, price.FieldType)
@@ -38740,6 +39073,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.UpdatedBy()
 	case price.FieldEnvironmentID:
 		return m.EnvironmentID()
+	case price.FieldDisplayName:
+		return m.DisplayName()
 	case price.FieldAmount:
 		return m.Amount()
 	case price.FieldCurrency:
@@ -38758,6 +39093,8 @@ func (m *PriceMutation) Field(name string) (ent.Value, bool) {
 		return m.DisplayPriceUnitAmount()
 	case price.FieldConversionRate:
 		return m.ConversionRate()
+	case price.FieldMinQuantity:
+		return m.MinQuantity()
 	case price.FieldType:
 		return m.GetType()
 	case price.FieldBillingPeriod:
@@ -38825,6 +39162,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldUpdatedBy(ctx)
 	case price.FieldEnvironmentID:
 		return m.OldEnvironmentID(ctx)
+	case price.FieldDisplayName:
+		return m.OldDisplayName(ctx)
 	case price.FieldAmount:
 		return m.OldAmount(ctx)
 	case price.FieldCurrency:
@@ -38843,6 +39182,8 @@ func (m *PriceMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldDisplayPriceUnitAmount(ctx)
 	case price.FieldConversionRate:
 		return m.OldConversionRate(ctx)
+	case price.FieldMinQuantity:
+		return m.OldMinQuantity(ctx)
 	case price.FieldType:
 		return m.OldType(ctx)
 	case price.FieldBillingPeriod:
@@ -38945,8 +39286,15 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetEnvironmentID(v)
 		return nil
+	case price.FieldDisplayName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayName(v)
+		return nil
 	case price.FieldAmount:
-		v, ok := value.(float64)
+		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -38967,7 +39315,7 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetDisplayAmount(v)
 		return nil
 	case price.FieldPriceUnitType:
-		v, ok := value.(string)
+		v, ok := value.(types.PriceUnitType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -38988,7 +39336,7 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetPriceUnit(v)
 		return nil
 	case price.FieldPriceUnitAmount:
-		v, ok := value.(float64)
+		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39002,21 +39350,28 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetDisplayPriceUnitAmount(v)
 		return nil
 	case price.FieldConversionRate:
-		v, ok := value.(float64)
+		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetConversionRate(v)
 		return nil
+	case price.FieldMinQuantity:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMinQuantity(v)
+		return nil
 	case price.FieldType:
-		v, ok := value.(string)
+		v, ok := value.(types.PriceType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
 		return nil
 	case price.FieldBillingPeriod:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39030,21 +39385,21 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetBillingPeriodCount(v)
 		return nil
 	case price.FieldBillingModel:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingModel)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingModel(v)
 		return nil
 	case price.FieldBillingCadence:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingCadence)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingCadence(v)
 		return nil
 	case price.FieldInvoiceCadence:
-		v, ok := value.(string)
+		v, ok := value.(types.InvoiceCadence)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39072,7 +39427,7 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetFilterValues(v)
 		return nil
 	case price.FieldTierMode:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingTier)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39121,7 +39476,7 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 		m.SetMetadata(v)
 		return nil
 	case price.FieldEntityType:
-		v, ok := value.(string)
+		v, ok := value.(types.PriceEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -39170,15 +39525,6 @@ func (m *PriceMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *PriceMutation) AddedFields() []string {
 	var fields []string
-	if m.addamount != nil {
-		fields = append(fields, price.FieldAmount)
-	}
-	if m.addprice_unit_amount != nil {
-		fields = append(fields, price.FieldPriceUnitAmount)
-	}
-	if m.addconversion_rate != nil {
-		fields = append(fields, price.FieldConversionRate)
-	}
 	if m.addbilling_period_count != nil {
 		fields = append(fields, price.FieldBillingPeriodCount)
 	}
@@ -39193,12 +39539,6 @@ func (m *PriceMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *PriceMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case price.FieldAmount:
-		return m.AddedAmount()
-	case price.FieldPriceUnitAmount:
-		return m.AddedPriceUnitAmount()
-	case price.FieldConversionRate:
-		return m.AddedConversionRate()
 	case price.FieldBillingPeriodCount:
 		return m.AddedBillingPeriodCount()
 	case price.FieldTrialPeriod:
@@ -39212,27 +39552,6 @@ func (m *PriceMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *PriceMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case price.FieldAmount:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddAmount(v)
-		return nil
-	case price.FieldPriceUnitAmount:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddPriceUnitAmount(v)
-		return nil
-	case price.FieldConversionRate:
-		v, ok := value.(float64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddConversionRate(v)
-		return nil
 	case price.FieldBillingPeriodCount:
 		v, ok := value.(int)
 		if !ok {
@@ -39264,6 +39583,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	if m.FieldCleared(price.FieldEnvironmentID) {
 		fields = append(fields, price.FieldEnvironmentID)
 	}
+	if m.FieldCleared(price.FieldDisplayName) {
+		fields = append(fields, price.FieldDisplayName)
+	}
 	if m.FieldCleared(price.FieldPriceUnitID) {
 		fields = append(fields, price.FieldPriceUnitID)
 	}
@@ -39278,6 +39600,9 @@ func (m *PriceMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(price.FieldConversionRate) {
 		fields = append(fields, price.FieldConversionRate)
+	}
+	if m.FieldCleared(price.FieldMinQuantity) {
+		fields = append(fields, price.FieldMinQuantity)
 	}
 	if m.FieldCleared(price.FieldInvoiceCadence) {
 		fields = append(fields, price.FieldInvoiceCadence)
@@ -39350,6 +39675,9 @@ func (m *PriceMutation) ClearField(name string) error {
 	case price.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
+	case price.FieldDisplayName:
+		m.ClearDisplayName()
+		return nil
 	case price.FieldPriceUnitID:
 		m.ClearPriceUnitID()
 		return nil
@@ -39364,6 +39692,9 @@ func (m *PriceMutation) ClearField(name string) error {
 		return nil
 	case price.FieldConversionRate:
 		m.ClearConversionRate()
+		return nil
+	case price.FieldMinQuantity:
+		m.ClearMinQuantity()
 		return nil
 	case price.FieldInvoiceCadence:
 		m.ClearInvoiceCadence()
@@ -39442,6 +39773,9 @@ func (m *PriceMutation) ResetField(name string) error {
 	case price.FieldEnvironmentID:
 		m.ResetEnvironmentID()
 		return nil
+	case price.FieldDisplayName:
+		m.ResetDisplayName()
+		return nil
 	case price.FieldAmount:
 		m.ResetAmount()
 		return nil
@@ -39468,6 +39802,9 @@ func (m *PriceMutation) ResetField(name string) error {
 		return nil
 	case price.FieldConversionRate:
 		m.ResetConversionRate()
+		return nil
+	case price.FieldMinQuantity:
+		m.ResetMinQuantity()
 		return nil
 	case price.FieldType:
 		m.ResetType()
@@ -44006,7 +44343,7 @@ type SubscriptionMutation struct {
 	lookup_key                 *string
 	customer_id                *string
 	plan_id                    *string
-	subscription_status        *string
+	subscription_status        *types.SubscriptionStatus
 	currency                   *string
 	billing_anchor             *time.Time
 	start_date                 *time.Time
@@ -44018,23 +44355,23 @@ type SubscriptionMutation struct {
 	cancel_at_period_end       *bool
 	trial_start                *time.Time
 	trial_end                  *time.Time
-	billing_cadence            *string
-	billing_period             *string
+	billing_cadence            *types.BillingCadence
+	billing_period             *types.BillingPeriod
 	billing_period_count       *int
 	addbilling_period_count    *int
 	version                    *int
 	addversion                 *int
 	metadata                   *map[string]string
-	pause_status               *string
+	pause_status               *types.PauseStatus
 	active_pause_id            *string
-	billing_cycle              *string
+	billing_cycle              *types.BillingCycle
 	commitment_amount          *decimal.Decimal
 	overage_factor             *decimal.Decimal
-	payment_behavior           *subscription.PaymentBehavior
-	collection_method          *subscription.CollectionMethod
+	payment_behavior           *types.PaymentBehavior
+	collection_method          *types.CollectionMethod
 	gateway_payment_method_id  *string
 	customer_timezone          *string
-	proration_behavior         *string
+	proration_behavior         *types.ProrationBehavior
 	enable_true_up             *bool
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
@@ -44579,12 +44916,12 @@ func (m *SubscriptionMutation) ResetPlanID() {
 }
 
 // SetSubscriptionStatus sets the "subscription_status" field.
-func (m *SubscriptionMutation) SetSubscriptionStatus(s string) {
-	m.subscription_status = &s
+func (m *SubscriptionMutation) SetSubscriptionStatus(ts types.SubscriptionStatus) {
+	m.subscription_status = &ts
 }
 
 // SubscriptionStatus returns the value of the "subscription_status" field in the mutation.
-func (m *SubscriptionMutation) SubscriptionStatus() (r string, exists bool) {
+func (m *SubscriptionMutation) SubscriptionStatus() (r types.SubscriptionStatus, exists bool) {
 	v := m.subscription_status
 	if v == nil {
 		return
@@ -44595,7 +44932,7 @@ func (m *SubscriptionMutation) SubscriptionStatus() (r string, exists bool) {
 // OldSubscriptionStatus returns the old "subscription_status" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldSubscriptionStatus(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldSubscriptionStatus(ctx context.Context) (v types.SubscriptionStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldSubscriptionStatus is only allowed on UpdateOne operations")
 	}
@@ -45076,12 +45413,12 @@ func (m *SubscriptionMutation) ResetTrialEnd() {
 }
 
 // SetBillingCadence sets the "billing_cadence" field.
-func (m *SubscriptionMutation) SetBillingCadence(s string) {
-	m.billing_cadence = &s
+func (m *SubscriptionMutation) SetBillingCadence(tc types.BillingCadence) {
+	m.billing_cadence = &tc
 }
 
 // BillingCadence returns the value of the "billing_cadence" field in the mutation.
-func (m *SubscriptionMutation) BillingCadence() (r string, exists bool) {
+func (m *SubscriptionMutation) BillingCadence() (r types.BillingCadence, exists bool) {
 	v := m.billing_cadence
 	if v == nil {
 		return
@@ -45092,7 +45429,7 @@ func (m *SubscriptionMutation) BillingCadence() (r string, exists bool) {
 // OldBillingCadence returns the old "billing_cadence" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldBillingCadence(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldBillingCadence(ctx context.Context) (v types.BillingCadence, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingCadence is only allowed on UpdateOne operations")
 	}
@@ -45112,12 +45449,12 @@ func (m *SubscriptionMutation) ResetBillingCadence() {
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (m *SubscriptionMutation) SetBillingPeriod(s string) {
-	m.billing_period = &s
+func (m *SubscriptionMutation) SetBillingPeriod(tp types.BillingPeriod) {
+	m.billing_period = &tp
 }
 
 // BillingPeriod returns the value of the "billing_period" field in the mutation.
-func (m *SubscriptionMutation) BillingPeriod() (r string, exists bool) {
+func (m *SubscriptionMutation) BillingPeriod() (r types.BillingPeriod, exists bool) {
 	v := m.billing_period
 	if v == nil {
 		return
@@ -45128,7 +45465,7 @@ func (m *SubscriptionMutation) BillingPeriod() (r string, exists bool) {
 // OldBillingPeriod returns the old "billing_period" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldBillingPeriod(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldBillingPeriod(ctx context.Context) (v types.BillingPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingPeriod is only allowed on UpdateOne operations")
 	}
@@ -45309,12 +45646,12 @@ func (m *SubscriptionMutation) ResetMetadata() {
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (m *SubscriptionMutation) SetPauseStatus(s string) {
-	m.pause_status = &s
+func (m *SubscriptionMutation) SetPauseStatus(ts types.PauseStatus) {
+	m.pause_status = &ts
 }
 
 // PauseStatus returns the value of the "pause_status" field in the mutation.
-func (m *SubscriptionMutation) PauseStatus() (r string, exists bool) {
+func (m *SubscriptionMutation) PauseStatus() (r types.PauseStatus, exists bool) {
 	v := m.pause_status
 	if v == nil {
 		return
@@ -45325,7 +45662,7 @@ func (m *SubscriptionMutation) PauseStatus() (r string, exists bool) {
 // OldPauseStatus returns the old "pause_status" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldPauseStatus(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldPauseStatus(ctx context.Context) (v types.PauseStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPauseStatus is only allowed on UpdateOne operations")
 	}
@@ -45394,12 +45731,12 @@ func (m *SubscriptionMutation) ResetActivePauseID() {
 }
 
 // SetBillingCycle sets the "billing_cycle" field.
-func (m *SubscriptionMutation) SetBillingCycle(s string) {
-	m.billing_cycle = &s
+func (m *SubscriptionMutation) SetBillingCycle(tc types.BillingCycle) {
+	m.billing_cycle = &tc
 }
 
 // BillingCycle returns the value of the "billing_cycle" field in the mutation.
-func (m *SubscriptionMutation) BillingCycle() (r string, exists bool) {
+func (m *SubscriptionMutation) BillingCycle() (r types.BillingCycle, exists bool) {
 	v := m.billing_cycle
 	if v == nil {
 		return
@@ -45410,7 +45747,7 @@ func (m *SubscriptionMutation) BillingCycle() (r string, exists bool) {
 // OldBillingCycle returns the old "billing_cycle" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldBillingCycle(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldBillingCycle(ctx context.Context) (v types.BillingCycle, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingCycle is only allowed on UpdateOne operations")
 	}
@@ -45528,12 +45865,12 @@ func (m *SubscriptionMutation) ResetOverageFactor() {
 }
 
 // SetPaymentBehavior sets the "payment_behavior" field.
-func (m *SubscriptionMutation) SetPaymentBehavior(sb subscription.PaymentBehavior) {
-	m.payment_behavior = &sb
+func (m *SubscriptionMutation) SetPaymentBehavior(tb types.PaymentBehavior) {
+	m.payment_behavior = &tb
 }
 
 // PaymentBehavior returns the value of the "payment_behavior" field in the mutation.
-func (m *SubscriptionMutation) PaymentBehavior() (r subscription.PaymentBehavior, exists bool) {
+func (m *SubscriptionMutation) PaymentBehavior() (r types.PaymentBehavior, exists bool) {
 	v := m.payment_behavior
 	if v == nil {
 		return
@@ -45544,7 +45881,7 @@ func (m *SubscriptionMutation) PaymentBehavior() (r subscription.PaymentBehavior
 // OldPaymentBehavior returns the old "payment_behavior" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldPaymentBehavior(ctx context.Context) (v subscription.PaymentBehavior, err error) {
+func (m *SubscriptionMutation) OldPaymentBehavior(ctx context.Context) (v types.PaymentBehavior, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPaymentBehavior is only allowed on UpdateOne operations")
 	}
@@ -45564,12 +45901,12 @@ func (m *SubscriptionMutation) ResetPaymentBehavior() {
 }
 
 // SetCollectionMethod sets the "collection_method" field.
-func (m *SubscriptionMutation) SetCollectionMethod(sm subscription.CollectionMethod) {
-	m.collection_method = &sm
+func (m *SubscriptionMutation) SetCollectionMethod(tm types.CollectionMethod) {
+	m.collection_method = &tm
 }
 
 // CollectionMethod returns the value of the "collection_method" field in the mutation.
-func (m *SubscriptionMutation) CollectionMethod() (r subscription.CollectionMethod, exists bool) {
+func (m *SubscriptionMutation) CollectionMethod() (r types.CollectionMethod, exists bool) {
 	v := m.collection_method
 	if v == nil {
 		return
@@ -45580,7 +45917,7 @@ func (m *SubscriptionMutation) CollectionMethod() (r subscription.CollectionMeth
 // OldCollectionMethod returns the old "collection_method" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldCollectionMethod(ctx context.Context) (v subscription.CollectionMethod, err error) {
+func (m *SubscriptionMutation) OldCollectionMethod(ctx context.Context) (v types.CollectionMethod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCollectionMethod is only allowed on UpdateOne operations")
 	}
@@ -45685,12 +46022,12 @@ func (m *SubscriptionMutation) ResetCustomerTimezone() {
 }
 
 // SetProrationBehavior sets the "proration_behavior" field.
-func (m *SubscriptionMutation) SetProrationBehavior(s string) {
-	m.proration_behavior = &s
+func (m *SubscriptionMutation) SetProrationBehavior(tb types.ProrationBehavior) {
+	m.proration_behavior = &tb
 }
 
 // ProrationBehavior returns the value of the "proration_behavior" field in the mutation.
-func (m *SubscriptionMutation) ProrationBehavior() (r string, exists bool) {
+func (m *SubscriptionMutation) ProrationBehavior() (r types.ProrationBehavior, exists bool) {
 	v := m.proration_behavior
 	if v == nil {
 		return
@@ -45701,7 +46038,7 @@ func (m *SubscriptionMutation) ProrationBehavior() (r string, exists bool) {
 // OldProrationBehavior returns the old "proration_behavior" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldProrationBehavior(ctx context.Context) (v string, err error) {
+func (m *SubscriptionMutation) OldProrationBehavior(ctx context.Context) (v types.ProrationBehavior, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldProrationBehavior is only allowed on UpdateOne operations")
 	}
@@ -46561,7 +46898,7 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetPlanID(v)
 		return nil
 	case subscription.FieldSubscriptionStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.SubscriptionStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -46645,14 +46982,14 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetTrialEnd(v)
 		return nil
 	case subscription.FieldBillingCadence:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingCadence)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingCadence(v)
 		return nil
 	case subscription.FieldBillingPeriod:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -46680,7 +47017,7 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetMetadata(v)
 		return nil
 	case subscription.FieldPauseStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.PauseStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -46694,7 +47031,7 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetActivePauseID(v)
 		return nil
 	case subscription.FieldBillingCycle:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingCycle)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -46715,14 +47052,14 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetOverageFactor(v)
 		return nil
 	case subscription.FieldPaymentBehavior:
-		v, ok := value.(subscription.PaymentBehavior)
+		v, ok := value.(types.PaymentBehavior)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPaymentBehavior(v)
 		return nil
 	case subscription.FieldCollectionMethod:
-		v, ok := value.(subscription.CollectionMethod)
+		v, ok := value.(types.CollectionMethod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -46743,7 +47080,7 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetCustomerTimezone(v)
 		return nil
 	case subscription.FieldProrationBehavior:
-		v, ok := value.(string)
+		v, ok := value.(types.ProrationBehavior)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -47300,10 +47637,10 @@ type SubscriptionLineItemMutation struct {
 	environment_id             *string
 	customer_id                *string
 	entity_id                  *string
-	entity_type                *string
+	entity_type                *types.InvoiceLineItemEntityType
 	plan_display_name          *string
 	price_id                   *string
-	price_type                 *string
+	price_type                 *types.PriceType
 	meter_id                   *string
 	meter_display_name         *string
 	price_unit_id              *string
@@ -47311,14 +47648,20 @@ type SubscriptionLineItemMutation struct {
 	display_name               *string
 	quantity                   *decimal.Decimal
 	currency                   *string
-	billing_period             *string
-	invoice_cadence            *string
+	billing_period             *types.BillingPeriod
+	invoice_cadence            *types.InvoiceCadence
 	trial_period               *int
 	addtrial_period            *int
 	start_date                 *time.Time
 	end_date                   *time.Time
 	subscription_phase_id      *string
 	metadata                   *map[string]string
+	commitment_amount          *decimal.Decimal
+	commitment_quantity        *decimal.Decimal
+	commitment_type            *string
+	commitment_overage_factor  *decimal.Decimal
+	commitment_true_up_enabled *bool
+	commitment_windowed        *bool
 	clearedFields              map[string]struct{}
 	subscription               *string
 	clearedsubscription        bool
@@ -47847,12 +48190,12 @@ func (m *SubscriptionLineItemMutation) ResetEntityID() {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (m *SubscriptionLineItemMutation) SetEntityType(s string) {
-	m.entity_type = &s
+func (m *SubscriptionLineItemMutation) SetEntityType(tliet types.InvoiceLineItemEntityType) {
+	m.entity_type = &tliet
 }
 
 // EntityType returns the value of the "entity_type" field in the mutation.
-func (m *SubscriptionLineItemMutation) EntityType() (r string, exists bool) {
+func (m *SubscriptionLineItemMutation) EntityType() (r types.InvoiceLineItemEntityType, exists bool) {
 	v := m.entity_type
 	if v == nil {
 		return
@@ -47863,7 +48206,7 @@ func (m *SubscriptionLineItemMutation) EntityType() (r string, exists bool) {
 // OldEntityType returns the old "entity_type" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldEntityType(ctx context.Context) (v string, err error) {
+func (m *SubscriptionLineItemMutation) OldEntityType(ctx context.Context) (v types.InvoiceLineItemEntityType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEntityType is only allowed on UpdateOne operations")
 	}
@@ -47968,12 +48311,12 @@ func (m *SubscriptionLineItemMutation) ResetPriceID() {
 }
 
 // SetPriceType sets the "price_type" field.
-func (m *SubscriptionLineItemMutation) SetPriceType(s string) {
-	m.price_type = &s
+func (m *SubscriptionLineItemMutation) SetPriceType(tt types.PriceType) {
+	m.price_type = &tt
 }
 
 // PriceType returns the value of the "price_type" field in the mutation.
-func (m *SubscriptionLineItemMutation) PriceType() (r string, exists bool) {
+func (m *SubscriptionLineItemMutation) PriceType() (r types.PriceType, exists bool) {
 	v := m.price_type
 	if v == nil {
 		return
@@ -47984,7 +48327,7 @@ func (m *SubscriptionLineItemMutation) PriceType() (r string, exists bool) {
 // OldPriceType returns the old "price_type" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldPriceType(ctx context.Context) (v *string, err error) {
+func (m *SubscriptionLineItemMutation) OldPriceType(ctx context.Context) (v *types.PriceType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldPriceType is only allowed on UpdateOne operations")
 	}
@@ -48334,12 +48677,12 @@ func (m *SubscriptionLineItemMutation) ResetCurrency() {
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (m *SubscriptionLineItemMutation) SetBillingPeriod(s string) {
-	m.billing_period = &s
+func (m *SubscriptionLineItemMutation) SetBillingPeriod(tp types.BillingPeriod) {
+	m.billing_period = &tp
 }
 
 // BillingPeriod returns the value of the "billing_period" field in the mutation.
-func (m *SubscriptionLineItemMutation) BillingPeriod() (r string, exists bool) {
+func (m *SubscriptionLineItemMutation) BillingPeriod() (r types.BillingPeriod, exists bool) {
 	v := m.billing_period
 	if v == nil {
 		return
@@ -48350,7 +48693,7 @@ func (m *SubscriptionLineItemMutation) BillingPeriod() (r string, exists bool) {
 // OldBillingPeriod returns the old "billing_period" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldBillingPeriod(ctx context.Context) (v string, err error) {
+func (m *SubscriptionLineItemMutation) OldBillingPeriod(ctx context.Context) (v types.BillingPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBillingPeriod is only allowed on UpdateOne operations")
 	}
@@ -48370,12 +48713,12 @@ func (m *SubscriptionLineItemMutation) ResetBillingPeriod() {
 }
 
 // SetInvoiceCadence sets the "invoice_cadence" field.
-func (m *SubscriptionLineItemMutation) SetInvoiceCadence(s string) {
-	m.invoice_cadence = &s
+func (m *SubscriptionLineItemMutation) SetInvoiceCadence(tc types.InvoiceCadence) {
+	m.invoice_cadence = &tc
 }
 
 // InvoiceCadence returns the value of the "invoice_cadence" field in the mutation.
-func (m *SubscriptionLineItemMutation) InvoiceCadence() (r string, exists bool) {
+func (m *SubscriptionLineItemMutation) InvoiceCadence() (r types.InvoiceCadence, exists bool) {
 	v := m.invoice_cadence
 	if v == nil {
 		return
@@ -48386,7 +48729,7 @@ func (m *SubscriptionLineItemMutation) InvoiceCadence() (r string, exists bool) 
 // OldInvoiceCadence returns the old "invoice_cadence" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldInvoiceCadence(ctx context.Context) (v string, err error) {
+func (m *SubscriptionLineItemMutation) OldInvoiceCadence(ctx context.Context) (v types.InvoiceCadence, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldInvoiceCadence is only allowed on UpdateOne operations")
 	}
@@ -48670,6 +49013,274 @@ func (m *SubscriptionLineItemMutation) ResetMetadata() {
 	delete(m.clearedFields, subscriptionlineitem.FieldMetadata)
 }
 
+// SetCommitmentAmount sets the "commitment_amount" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentAmount(d decimal.Decimal) {
+	m.commitment_amount = &d
+}
+
+// CommitmentAmount returns the value of the "commitment_amount" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentAmount() (r decimal.Decimal, exists bool) {
+	v := m.commitment_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentAmount returns the old "commitment_amount" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentAmount(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentAmount: %w", err)
+	}
+	return oldValue.CommitmentAmount, nil
+}
+
+// ClearCommitmentAmount clears the value of the "commitment_amount" field.
+func (m *SubscriptionLineItemMutation) ClearCommitmentAmount() {
+	m.commitment_amount = nil
+	m.clearedFields[subscriptionlineitem.FieldCommitmentAmount] = struct{}{}
+}
+
+// CommitmentAmountCleared returns if the "commitment_amount" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) CommitmentAmountCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldCommitmentAmount]
+	return ok
+}
+
+// ResetCommitmentAmount resets all changes to the "commitment_amount" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentAmount() {
+	m.commitment_amount = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentAmount)
+}
+
+// SetCommitmentQuantity sets the "commitment_quantity" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentQuantity(d decimal.Decimal) {
+	m.commitment_quantity = &d
+}
+
+// CommitmentQuantity returns the value of the "commitment_quantity" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentQuantity() (r decimal.Decimal, exists bool) {
+	v := m.commitment_quantity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentQuantity returns the old "commitment_quantity" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentQuantity(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentQuantity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentQuantity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentQuantity: %w", err)
+	}
+	return oldValue.CommitmentQuantity, nil
+}
+
+// ClearCommitmentQuantity clears the value of the "commitment_quantity" field.
+func (m *SubscriptionLineItemMutation) ClearCommitmentQuantity() {
+	m.commitment_quantity = nil
+	m.clearedFields[subscriptionlineitem.FieldCommitmentQuantity] = struct{}{}
+}
+
+// CommitmentQuantityCleared returns if the "commitment_quantity" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) CommitmentQuantityCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldCommitmentQuantity]
+	return ok
+}
+
+// ResetCommitmentQuantity resets all changes to the "commitment_quantity" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentQuantity() {
+	m.commitment_quantity = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentQuantity)
+}
+
+// SetCommitmentType sets the "commitment_type" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentType(s string) {
+	m.commitment_type = &s
+}
+
+// CommitmentType returns the value of the "commitment_type" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentType() (r string, exists bool) {
+	v := m.commitment_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentType returns the old "commitment_type" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentType: %w", err)
+	}
+	return oldValue.CommitmentType, nil
+}
+
+// ClearCommitmentType clears the value of the "commitment_type" field.
+func (m *SubscriptionLineItemMutation) ClearCommitmentType() {
+	m.commitment_type = nil
+	m.clearedFields[subscriptionlineitem.FieldCommitmentType] = struct{}{}
+}
+
+// CommitmentTypeCleared returns if the "commitment_type" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) CommitmentTypeCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldCommitmentType]
+	return ok
+}
+
+// ResetCommitmentType resets all changes to the "commitment_type" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentType() {
+	m.commitment_type = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentType)
+}
+
+// SetCommitmentOverageFactor sets the "commitment_overage_factor" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentOverageFactor(d decimal.Decimal) {
+	m.commitment_overage_factor = &d
+}
+
+// CommitmentOverageFactor returns the value of the "commitment_overage_factor" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentOverageFactor() (r decimal.Decimal, exists bool) {
+	v := m.commitment_overage_factor
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentOverageFactor returns the old "commitment_overage_factor" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentOverageFactor(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentOverageFactor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentOverageFactor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentOverageFactor: %w", err)
+	}
+	return oldValue.CommitmentOverageFactor, nil
+}
+
+// ClearCommitmentOverageFactor clears the value of the "commitment_overage_factor" field.
+func (m *SubscriptionLineItemMutation) ClearCommitmentOverageFactor() {
+	m.commitment_overage_factor = nil
+	m.clearedFields[subscriptionlineitem.FieldCommitmentOverageFactor] = struct{}{}
+}
+
+// CommitmentOverageFactorCleared returns if the "commitment_overage_factor" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) CommitmentOverageFactorCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldCommitmentOverageFactor]
+	return ok
+}
+
+// ResetCommitmentOverageFactor resets all changes to the "commitment_overage_factor" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentOverageFactor() {
+	m.commitment_overage_factor = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentOverageFactor)
+}
+
+// SetCommitmentTrueUpEnabled sets the "commitment_true_up_enabled" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentTrueUpEnabled(b bool) {
+	m.commitment_true_up_enabled = &b
+}
+
+// CommitmentTrueUpEnabled returns the value of the "commitment_true_up_enabled" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentTrueUpEnabled() (r bool, exists bool) {
+	v := m.commitment_true_up_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentTrueUpEnabled returns the old "commitment_true_up_enabled" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentTrueUpEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentTrueUpEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentTrueUpEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentTrueUpEnabled: %w", err)
+	}
+	return oldValue.CommitmentTrueUpEnabled, nil
+}
+
+// ResetCommitmentTrueUpEnabled resets all changes to the "commitment_true_up_enabled" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentTrueUpEnabled() {
+	m.commitment_true_up_enabled = nil
+}
+
+// SetCommitmentWindowed sets the "commitment_windowed" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentWindowed(b bool) {
+	m.commitment_windowed = &b
+}
+
+// CommitmentWindowed returns the value of the "commitment_windowed" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentWindowed() (r bool, exists bool) {
+	v := m.commitment_windowed
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentWindowed returns the old "commitment_windowed" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentWindowed(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentWindowed is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentWindowed requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentWindowed: %w", err)
+	}
+	return oldValue.CommitmentWindowed, nil
+}
+
+// ResetCommitmentWindowed resets all changes to the "commitment_windowed" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentWindowed() {
+	m.commitment_windowed = nil
+}
+
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
 func (m *SubscriptionLineItemMutation) ClearSubscription() {
 	m.clearedsubscription = true
@@ -48785,7 +49396,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 34)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -48870,6 +49481,24 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	if m.metadata != nil {
 		fields = append(fields, subscriptionlineitem.FieldMetadata)
 	}
+	if m.commitment_amount != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentAmount)
+	}
+	if m.commitment_quantity != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentQuantity)
+	}
+	if m.commitment_type != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentType)
+	}
+	if m.commitment_overage_factor != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentOverageFactor)
+	}
+	if m.commitment_true_up_enabled != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentTrueUpEnabled)
+	}
+	if m.commitment_windowed != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentWindowed)
+	}
 	return fields
 }
 
@@ -48934,6 +49563,18 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionPhaseID()
 	case subscriptionlineitem.FieldMetadata:
 		return m.Metadata()
+	case subscriptionlineitem.FieldCommitmentAmount:
+		return m.CommitmentAmount()
+	case subscriptionlineitem.FieldCommitmentQuantity:
+		return m.CommitmentQuantity()
+	case subscriptionlineitem.FieldCommitmentType:
+		return m.CommitmentType()
+	case subscriptionlineitem.FieldCommitmentOverageFactor:
+		return m.CommitmentOverageFactor()
+	case subscriptionlineitem.FieldCommitmentTrueUpEnabled:
+		return m.CommitmentTrueUpEnabled()
+	case subscriptionlineitem.FieldCommitmentWindowed:
+		return m.CommitmentWindowed()
 	}
 	return nil, false
 }
@@ -48999,6 +49640,18 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldSubscriptionPhaseID(ctx)
 	case subscriptionlineitem.FieldMetadata:
 		return m.OldMetadata(ctx)
+	case subscriptionlineitem.FieldCommitmentAmount:
+		return m.OldCommitmentAmount(ctx)
+	case subscriptionlineitem.FieldCommitmentQuantity:
+		return m.OldCommitmentQuantity(ctx)
+	case subscriptionlineitem.FieldCommitmentType:
+		return m.OldCommitmentType(ctx)
+	case subscriptionlineitem.FieldCommitmentOverageFactor:
+		return m.OldCommitmentOverageFactor(ctx)
+	case subscriptionlineitem.FieldCommitmentTrueUpEnabled:
+		return m.OldCommitmentTrueUpEnabled(ctx)
+	case subscriptionlineitem.FieldCommitmentWindowed:
+		return m.OldCommitmentWindowed(ctx)
 	}
 	return nil, fmt.Errorf("unknown SubscriptionLineItem field %s", name)
 }
@@ -49079,7 +49732,7 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		m.SetEntityID(v)
 		return nil
 	case subscriptionlineitem.FieldEntityType:
-		v, ok := value.(string)
+		v, ok := value.(types.InvoiceLineItemEntityType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -49100,7 +49753,7 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		m.SetPriceID(v)
 		return nil
 	case subscriptionlineitem.FieldPriceType:
-		v, ok := value.(string)
+		v, ok := value.(types.PriceType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -49156,14 +49809,14 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		m.SetCurrency(v)
 		return nil
 	case subscriptionlineitem.FieldBillingPeriod:
-		v, ok := value.(string)
+		v, ok := value.(types.BillingPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingPeriod(v)
 		return nil
 	case subscriptionlineitem.FieldInvoiceCadence:
-		v, ok := value.(string)
+		v, ok := value.(types.InvoiceCadence)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -49203,6 +49856,48 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMetadata(v)
+		return nil
+	case subscriptionlineitem.FieldCommitmentAmount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentAmount(v)
+		return nil
+	case subscriptionlineitem.FieldCommitmentQuantity:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentQuantity(v)
+		return nil
+	case subscriptionlineitem.FieldCommitmentType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentType(v)
+		return nil
+	case subscriptionlineitem.FieldCommitmentOverageFactor:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentOverageFactor(v)
+		return nil
+	case subscriptionlineitem.FieldCommitmentTrueUpEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentTrueUpEnabled(v)
+		return nil
+	case subscriptionlineitem.FieldCommitmentWindowed:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentWindowed(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)
@@ -49297,6 +49992,18 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldMetadata) {
 		fields = append(fields, subscriptionlineitem.FieldMetadata)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldCommitmentAmount) {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentAmount)
+	}
+	if m.FieldCleared(subscriptionlineitem.FieldCommitmentQuantity) {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentQuantity)
+	}
+	if m.FieldCleared(subscriptionlineitem.FieldCommitmentType) {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentType)
+	}
+	if m.FieldCleared(subscriptionlineitem.FieldCommitmentOverageFactor) {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentOverageFactor)
+	}
 	return fields
 }
 
@@ -49358,6 +50065,18 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldMetadata:
 		m.ClearMetadata()
+		return nil
+	case subscriptionlineitem.FieldCommitmentAmount:
+		m.ClearCommitmentAmount()
+		return nil
+	case subscriptionlineitem.FieldCommitmentQuantity:
+		m.ClearCommitmentQuantity()
+		return nil
+	case subscriptionlineitem.FieldCommitmentType:
+		m.ClearCommitmentType()
+		return nil
+	case subscriptionlineitem.FieldCommitmentOverageFactor:
+		m.ClearCommitmentOverageFactor()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem nullable field %s", name)
@@ -49450,6 +50169,24 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldMetadata:
 		m.ResetMetadata()
+		return nil
+	case subscriptionlineitem.FieldCommitmentAmount:
+		m.ResetCommitmentAmount()
+		return nil
+	case subscriptionlineitem.FieldCommitmentQuantity:
+		m.ResetCommitmentQuantity()
+		return nil
+	case subscriptionlineitem.FieldCommitmentType:
+		m.ResetCommitmentType()
+		return nil
+	case subscriptionlineitem.FieldCommitmentOverageFactor:
+		m.ResetCommitmentOverageFactor()
+		return nil
+	case subscriptionlineitem.FieldCommitmentTrueUpEnabled:
+		m.ResetCommitmentTrueUpEnabled()
+		return nil
+	case subscriptionlineitem.FieldCommitmentWindowed:
+		m.ResetCommitmentWindowed()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)
@@ -59246,37 +59983,35 @@ func (m *UserMutation) ResetEdge(name string) error {
 // WalletMutation represents an operation that mutates the Wallet nodes in the graph.
 type WalletMutation struct {
 	config
-	op                     Op
-	typ                    string
-	id                     *string
-	tenant_id              *string
-	status                 *string
-	created_at             *time.Time
-	updated_at             *time.Time
-	created_by             *string
-	updated_by             *string
-	environment_id         *string
-	name                   *string
-	customer_id            *string
-	currency               *string
-	description            *string
-	metadata               *map[string]string
-	balance                *decimal.Decimal
-	credit_balance         *decimal.Decimal
-	wallet_status          *string
-	auto_topup_trigger     *string
-	auto_topup_min_balance *decimal.Decimal
-	auto_topup_amount      *decimal.Decimal
-	wallet_type            *string
-	conversion_rate        *decimal.Decimal
-	_config                *types.WalletConfig
-	alert_config           **types.AlertConfig
-	alert_enabled          *bool
-	alert_state            *string
-	clearedFields          map[string]struct{}
-	done                   bool
-	oldValue               func(context.Context) (*Wallet, error)
-	predicates             []predicate.Wallet
+	op              Op
+	typ             string
+	id              *string
+	tenant_id       *string
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	created_by      *string
+	updated_by      *string
+	environment_id  *string
+	name            *string
+	customer_id     *string
+	currency        *string
+	description     *string
+	metadata        *map[string]string
+	balance         *decimal.Decimal
+	credit_balance  *decimal.Decimal
+	wallet_status   *types.WalletStatus
+	auto_topup      **types.AutoTopup
+	wallet_type     *types.WalletType
+	conversion_rate *decimal.Decimal
+	_config         *types.WalletConfig
+	alert_config    *types.AlertConfig
+	alert_enabled   *bool
+	alert_state     *types.AlertState
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*Wallet, error)
+	predicates      []predicate.Wallet
 }
 
 var _ ent.Mutation = (*WalletMutation)(nil)
@@ -59966,12 +60701,12 @@ func (m *WalletMutation) ResetCreditBalance() {
 }
 
 // SetWalletStatus sets the "wallet_status" field.
-func (m *WalletMutation) SetWalletStatus(s string) {
-	m.wallet_status = &s
+func (m *WalletMutation) SetWalletStatus(ts types.WalletStatus) {
+	m.wallet_status = &ts
 }
 
 // WalletStatus returns the value of the "wallet_status" field in the mutation.
-func (m *WalletMutation) WalletStatus() (r string, exists bool) {
+func (m *WalletMutation) WalletStatus() (r types.WalletStatus, exists bool) {
 	v := m.wallet_status
 	if v == nil {
 		return
@@ -59982,7 +60717,7 @@ func (m *WalletMutation) WalletStatus() (r string, exists bool) {
 // OldWalletStatus returns the old "wallet_status" field's value of the Wallet entity.
 // If the Wallet object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldWalletStatus(ctx context.Context) (v string, err error) {
+func (m *WalletMutation) OldWalletStatus(ctx context.Context) (v types.WalletStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldWalletStatus is only allowed on UpdateOne operations")
 	}
@@ -60001,160 +60736,62 @@ func (m *WalletMutation) ResetWalletStatus() {
 	m.wallet_status = nil
 }
 
-// SetAutoTopupTrigger sets the "auto_topup_trigger" field.
-func (m *WalletMutation) SetAutoTopupTrigger(s string) {
-	m.auto_topup_trigger = &s
+// SetAutoTopup sets the "auto_topup" field.
+func (m *WalletMutation) SetAutoTopup(tt *types.AutoTopup) {
+	m.auto_topup = &tt
 }
 
-// AutoTopupTrigger returns the value of the "auto_topup_trigger" field in the mutation.
-func (m *WalletMutation) AutoTopupTrigger() (r string, exists bool) {
-	v := m.auto_topup_trigger
+// AutoTopup returns the value of the "auto_topup" field in the mutation.
+func (m *WalletMutation) AutoTopup() (r *types.AutoTopup, exists bool) {
+	v := m.auto_topup
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldAutoTopupTrigger returns the old "auto_topup_trigger" field's value of the Wallet entity.
+// OldAutoTopup returns the old "auto_topup" field's value of the Wallet entity.
 // If the Wallet object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAutoTopupTrigger(ctx context.Context) (v *string, err error) {
+func (m *WalletMutation) OldAutoTopup(ctx context.Context) (v *types.AutoTopup, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoTopupTrigger is only allowed on UpdateOne operations")
+		return v, errors.New("OldAutoTopup is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoTopupTrigger requires an ID field in the mutation")
+		return v, errors.New("OldAutoTopup requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoTopupTrigger: %w", err)
+		return v, fmt.Errorf("querying old value for OldAutoTopup: %w", err)
 	}
-	return oldValue.AutoTopupTrigger, nil
+	return oldValue.AutoTopup, nil
 }
 
-// ClearAutoTopupTrigger clears the value of the "auto_topup_trigger" field.
-func (m *WalletMutation) ClearAutoTopupTrigger() {
-	m.auto_topup_trigger = nil
-	m.clearedFields[wallet.FieldAutoTopupTrigger] = struct{}{}
+// ClearAutoTopup clears the value of the "auto_topup" field.
+func (m *WalletMutation) ClearAutoTopup() {
+	m.auto_topup = nil
+	m.clearedFields[wallet.FieldAutoTopup] = struct{}{}
 }
 
-// AutoTopupTriggerCleared returns if the "auto_topup_trigger" field was cleared in this mutation.
-func (m *WalletMutation) AutoTopupTriggerCleared() bool {
-	_, ok := m.clearedFields[wallet.FieldAutoTopupTrigger]
+// AutoTopupCleared returns if the "auto_topup" field was cleared in this mutation.
+func (m *WalletMutation) AutoTopupCleared() bool {
+	_, ok := m.clearedFields[wallet.FieldAutoTopup]
 	return ok
 }
 
-// ResetAutoTopupTrigger resets all changes to the "auto_topup_trigger" field.
-func (m *WalletMutation) ResetAutoTopupTrigger() {
-	m.auto_topup_trigger = nil
-	delete(m.clearedFields, wallet.FieldAutoTopupTrigger)
-}
-
-// SetAutoTopupMinBalance sets the "auto_topup_min_balance" field.
-func (m *WalletMutation) SetAutoTopupMinBalance(d decimal.Decimal) {
-	m.auto_topup_min_balance = &d
-}
-
-// AutoTopupMinBalance returns the value of the "auto_topup_min_balance" field in the mutation.
-func (m *WalletMutation) AutoTopupMinBalance() (r decimal.Decimal, exists bool) {
-	v := m.auto_topup_min_balance
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAutoTopupMinBalance returns the old "auto_topup_min_balance" field's value of the Wallet entity.
-// If the Wallet object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAutoTopupMinBalance(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoTopupMinBalance is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoTopupMinBalance requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoTopupMinBalance: %w", err)
-	}
-	return oldValue.AutoTopupMinBalance, nil
-}
-
-// ClearAutoTopupMinBalance clears the value of the "auto_topup_min_balance" field.
-func (m *WalletMutation) ClearAutoTopupMinBalance() {
-	m.auto_topup_min_balance = nil
-	m.clearedFields[wallet.FieldAutoTopupMinBalance] = struct{}{}
-}
-
-// AutoTopupMinBalanceCleared returns if the "auto_topup_min_balance" field was cleared in this mutation.
-func (m *WalletMutation) AutoTopupMinBalanceCleared() bool {
-	_, ok := m.clearedFields[wallet.FieldAutoTopupMinBalance]
-	return ok
-}
-
-// ResetAutoTopupMinBalance resets all changes to the "auto_topup_min_balance" field.
-func (m *WalletMutation) ResetAutoTopupMinBalance() {
-	m.auto_topup_min_balance = nil
-	delete(m.clearedFields, wallet.FieldAutoTopupMinBalance)
-}
-
-// SetAutoTopupAmount sets the "auto_topup_amount" field.
-func (m *WalletMutation) SetAutoTopupAmount(d decimal.Decimal) {
-	m.auto_topup_amount = &d
-}
-
-// AutoTopupAmount returns the value of the "auto_topup_amount" field in the mutation.
-func (m *WalletMutation) AutoTopupAmount() (r decimal.Decimal, exists bool) {
-	v := m.auto_topup_amount
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldAutoTopupAmount returns the old "auto_topup_amount" field's value of the Wallet entity.
-// If the Wallet object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAutoTopupAmount(ctx context.Context) (v *decimal.Decimal, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldAutoTopupAmount is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldAutoTopupAmount requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldAutoTopupAmount: %w", err)
-	}
-	return oldValue.AutoTopupAmount, nil
-}
-
-// ClearAutoTopupAmount clears the value of the "auto_topup_amount" field.
-func (m *WalletMutation) ClearAutoTopupAmount() {
-	m.auto_topup_amount = nil
-	m.clearedFields[wallet.FieldAutoTopupAmount] = struct{}{}
-}
-
-// AutoTopupAmountCleared returns if the "auto_topup_amount" field was cleared in this mutation.
-func (m *WalletMutation) AutoTopupAmountCleared() bool {
-	_, ok := m.clearedFields[wallet.FieldAutoTopupAmount]
-	return ok
-}
-
-// ResetAutoTopupAmount resets all changes to the "auto_topup_amount" field.
-func (m *WalletMutation) ResetAutoTopupAmount() {
-	m.auto_topup_amount = nil
-	delete(m.clearedFields, wallet.FieldAutoTopupAmount)
+// ResetAutoTopup resets all changes to the "auto_topup" field.
+func (m *WalletMutation) ResetAutoTopup() {
+	m.auto_topup = nil
+	delete(m.clearedFields, wallet.FieldAutoTopup)
 }
 
 // SetWalletType sets the "wallet_type" field.
-func (m *WalletMutation) SetWalletType(s string) {
-	m.wallet_type = &s
+func (m *WalletMutation) SetWalletType(tt types.WalletType) {
+	m.wallet_type = &tt
 }
 
 // WalletType returns the value of the "wallet_type" field in the mutation.
-func (m *WalletMutation) WalletType() (r string, exists bool) {
+func (m *WalletMutation) WalletType() (r types.WalletType, exists bool) {
 	v := m.wallet_type
 	if v == nil {
 		return
@@ -60165,7 +60802,7 @@ func (m *WalletMutation) WalletType() (r string, exists bool) {
 // OldWalletType returns the old "wallet_type" field's value of the Wallet entity.
 // If the Wallet object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldWalletType(ctx context.Context) (v string, err error) {
+func (m *WalletMutation) OldWalletType(ctx context.Context) (v types.WalletType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldWalletType is only allowed on UpdateOne operations")
 	}
@@ -60270,12 +60907,12 @@ func (m *WalletMutation) ResetConfig() {
 }
 
 // SetAlertConfig sets the "alert_config" field.
-func (m *WalletMutation) SetAlertConfig(tc *types.AlertConfig) {
+func (m *WalletMutation) SetAlertConfig(tc types.AlertConfig) {
 	m.alert_config = &tc
 }
 
 // AlertConfig returns the value of the "alert_config" field in the mutation.
-func (m *WalletMutation) AlertConfig() (r *types.AlertConfig, exists bool) {
+func (m *WalletMutation) AlertConfig() (r types.AlertConfig, exists bool) {
 	v := m.alert_config
 	if v == nil {
 		return
@@ -60286,7 +60923,7 @@ func (m *WalletMutation) AlertConfig() (r *types.AlertConfig, exists bool) {
 // OldAlertConfig returns the old "alert_config" field's value of the Wallet entity.
 // If the Wallet object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAlertConfig(ctx context.Context) (v *types.AlertConfig, err error) {
+func (m *WalletMutation) OldAlertConfig(ctx context.Context) (v types.AlertConfig, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldAlertConfig is only allowed on UpdateOne operations")
 	}
@@ -60368,12 +61005,12 @@ func (m *WalletMutation) ResetAlertEnabled() {
 }
 
 // SetAlertState sets the "alert_state" field.
-func (m *WalletMutation) SetAlertState(s string) {
-	m.alert_state = &s
+func (m *WalletMutation) SetAlertState(ts types.AlertState) {
+	m.alert_state = &ts
 }
 
 // AlertState returns the value of the "alert_state" field in the mutation.
-func (m *WalletMutation) AlertState() (r string, exists bool) {
+func (m *WalletMutation) AlertState() (r types.AlertState, exists bool) {
 	v := m.alert_state
 	if v == nil {
 		return
@@ -60384,7 +61021,7 @@ func (m *WalletMutation) AlertState() (r string, exists bool) {
 // OldAlertState returns the old "alert_state" field's value of the Wallet entity.
 // If the Wallet object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletMutation) OldAlertState(ctx context.Context) (v string, err error) {
+func (m *WalletMutation) OldAlertState(ctx context.Context) (v types.AlertState, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldAlertState is only allowed on UpdateOne operations")
 	}
@@ -60450,7 +61087,7 @@ func (m *WalletMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletMutation) Fields() []string {
-	fields := make([]string, 0, 24)
+	fields := make([]string, 0, 22)
 	if m.tenant_id != nil {
 		fields = append(fields, wallet.FieldTenantID)
 	}
@@ -60496,14 +61133,8 @@ func (m *WalletMutation) Fields() []string {
 	if m.wallet_status != nil {
 		fields = append(fields, wallet.FieldWalletStatus)
 	}
-	if m.auto_topup_trigger != nil {
-		fields = append(fields, wallet.FieldAutoTopupTrigger)
-	}
-	if m.auto_topup_min_balance != nil {
-		fields = append(fields, wallet.FieldAutoTopupMinBalance)
-	}
-	if m.auto_topup_amount != nil {
-		fields = append(fields, wallet.FieldAutoTopupAmount)
+	if m.auto_topup != nil {
+		fields = append(fields, wallet.FieldAutoTopup)
 	}
 	if m.wallet_type != nil {
 		fields = append(fields, wallet.FieldWalletType)
@@ -60561,12 +61192,8 @@ func (m *WalletMutation) Field(name string) (ent.Value, bool) {
 		return m.CreditBalance()
 	case wallet.FieldWalletStatus:
 		return m.WalletStatus()
-	case wallet.FieldAutoTopupTrigger:
-		return m.AutoTopupTrigger()
-	case wallet.FieldAutoTopupMinBalance:
-		return m.AutoTopupMinBalance()
-	case wallet.FieldAutoTopupAmount:
-		return m.AutoTopupAmount()
+	case wallet.FieldAutoTopup:
+		return m.AutoTopup()
 	case wallet.FieldWalletType:
 		return m.WalletType()
 	case wallet.FieldConversionRate:
@@ -60618,12 +61245,8 @@ func (m *WalletMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldCreditBalance(ctx)
 	case wallet.FieldWalletStatus:
 		return m.OldWalletStatus(ctx)
-	case wallet.FieldAutoTopupTrigger:
-		return m.OldAutoTopupTrigger(ctx)
-	case wallet.FieldAutoTopupMinBalance:
-		return m.OldAutoTopupMinBalance(ctx)
-	case wallet.FieldAutoTopupAmount:
-		return m.OldAutoTopupAmount(ctx)
+	case wallet.FieldAutoTopup:
+		return m.OldAutoTopup(ctx)
 	case wallet.FieldWalletType:
 		return m.OldWalletType(ctx)
 	case wallet.FieldConversionRate:
@@ -60744,35 +61367,21 @@ func (m *WalletMutation) SetField(name string, value ent.Value) error {
 		m.SetCreditBalance(v)
 		return nil
 	case wallet.FieldWalletStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.WalletStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWalletStatus(v)
 		return nil
-	case wallet.FieldAutoTopupTrigger:
-		v, ok := value.(string)
+	case wallet.FieldAutoTopup:
+		v, ok := value.(*types.AutoTopup)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetAutoTopupTrigger(v)
-		return nil
-	case wallet.FieldAutoTopupMinBalance:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAutoTopupMinBalance(v)
-		return nil
-	case wallet.FieldAutoTopupAmount:
-		v, ok := value.(decimal.Decimal)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetAutoTopupAmount(v)
+		m.SetAutoTopup(v)
 		return nil
 	case wallet.FieldWalletType:
-		v, ok := value.(string)
+		v, ok := value.(types.WalletType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -60793,7 +61402,7 @@ func (m *WalletMutation) SetField(name string, value ent.Value) error {
 		m.SetConfig(v)
 		return nil
 	case wallet.FieldAlertConfig:
-		v, ok := value.(*types.AlertConfig)
+		v, ok := value.(types.AlertConfig)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -60807,7 +61416,7 @@ func (m *WalletMutation) SetField(name string, value ent.Value) error {
 		m.SetAlertEnabled(v)
 		return nil
 	case wallet.FieldAlertState:
-		v, ok := value.(string)
+		v, ok := value.(types.AlertState)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -60861,14 +61470,8 @@ func (m *WalletMutation) ClearedFields() []string {
 	if m.FieldCleared(wallet.FieldMetadata) {
 		fields = append(fields, wallet.FieldMetadata)
 	}
-	if m.FieldCleared(wallet.FieldAutoTopupTrigger) {
-		fields = append(fields, wallet.FieldAutoTopupTrigger)
-	}
-	if m.FieldCleared(wallet.FieldAutoTopupMinBalance) {
-		fields = append(fields, wallet.FieldAutoTopupMinBalance)
-	}
-	if m.FieldCleared(wallet.FieldAutoTopupAmount) {
-		fields = append(fields, wallet.FieldAutoTopupAmount)
+	if m.FieldCleared(wallet.FieldAutoTopup) {
+		fields = append(fields, wallet.FieldAutoTopup)
 	}
 	if m.FieldCleared(wallet.FieldConfig) {
 		fields = append(fields, wallet.FieldConfig)
@@ -60914,14 +61517,8 @@ func (m *WalletMutation) ClearField(name string) error {
 	case wallet.FieldMetadata:
 		m.ClearMetadata()
 		return nil
-	case wallet.FieldAutoTopupTrigger:
-		m.ClearAutoTopupTrigger()
-		return nil
-	case wallet.FieldAutoTopupMinBalance:
-		m.ClearAutoTopupMinBalance()
-		return nil
-	case wallet.FieldAutoTopupAmount:
-		m.ClearAutoTopupAmount()
+	case wallet.FieldAutoTopup:
+		m.ClearAutoTopup()
 		return nil
 	case wallet.FieldConfig:
 		m.ClearConfig()
@@ -60988,14 +61585,8 @@ func (m *WalletMutation) ResetField(name string) error {
 	case wallet.FieldWalletStatus:
 		m.ResetWalletStatus()
 		return nil
-	case wallet.FieldAutoTopupTrigger:
-		m.ResetAutoTopupTrigger()
-		return nil
-	case wallet.FieldAutoTopupMinBalance:
-		m.ResetAutoTopupMinBalance()
-		return nil
-	case wallet.FieldAutoTopupAmount:
-		m.ResetAutoTopupAmount()
+	case wallet.FieldAutoTopup:
+		m.ResetAutoTopup()
 		return nil
 	case wallet.FieldWalletType:
 		m.ResetWalletType()
@@ -61081,20 +61672,22 @@ type WalletTransactionMutation struct {
 	updated_by            *string
 	environment_id        *string
 	wallet_id             *string
-	_type                 *string
+	customer_id           *string
+	_type                 *types.TransactionType
 	amount                *decimal.Decimal
 	credit_amount         *decimal.Decimal
 	credit_balance_before *decimal.Decimal
 	credit_balance_after  *decimal.Decimal
-	reference_type        *string
+	reference_type        *types.WalletTxReferenceType
 	reference_id          *string
 	description           *string
 	metadata              *map[string]string
-	transaction_status    *string
+	transaction_status    *types.TransactionStatus
 	expiry_date           *time.Time
 	credits_available     *decimal.Decimal
+	currency              *string
 	idempotency_key       *string
-	transaction_reason    *string
+	transaction_reason    *types.TransactionReason
 	priority              *int
 	addpriority           *int
 	clearedFields         map[string]struct{}
@@ -61534,13 +62127,62 @@ func (m *WalletTransactionMutation) ResetWalletID() {
 	m.wallet_id = nil
 }
 
+// SetCustomerID sets the "customer_id" field.
+func (m *WalletTransactionMutation) SetCustomerID(s string) {
+	m.customer_id = &s
+}
+
+// CustomerID returns the value of the "customer_id" field in the mutation.
+func (m *WalletTransactionMutation) CustomerID() (r string, exists bool) {
+	v := m.customer_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomerID returns the old "customer_id" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldCustomerID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomerID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomerID: %w", err)
+	}
+	return oldValue.CustomerID, nil
+}
+
+// ClearCustomerID clears the value of the "customer_id" field.
+func (m *WalletTransactionMutation) ClearCustomerID() {
+	m.customer_id = nil
+	m.clearedFields[wallettransaction.FieldCustomerID] = struct{}{}
+}
+
+// CustomerIDCleared returns if the "customer_id" field was cleared in this mutation.
+func (m *WalletTransactionMutation) CustomerIDCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldCustomerID]
+	return ok
+}
+
+// ResetCustomerID resets all changes to the "customer_id" field.
+func (m *WalletTransactionMutation) ResetCustomerID() {
+	m.customer_id = nil
+	delete(m.clearedFields, wallettransaction.FieldCustomerID)
+}
+
 // SetType sets the "type" field.
-func (m *WalletTransactionMutation) SetType(s string) {
-	m._type = &s
+func (m *WalletTransactionMutation) SetType(tt types.TransactionType) {
+	m._type = &tt
 }
 
 // GetType returns the value of the "type" field in the mutation.
-func (m *WalletTransactionMutation) GetType() (r string, exists bool) {
+func (m *WalletTransactionMutation) GetType() (r types.TransactionType, exists bool) {
 	v := m._type
 	if v == nil {
 		return
@@ -61551,7 +62193,7 @@ func (m *WalletTransactionMutation) GetType() (r string, exists bool) {
 // OldType returns the old "type" field's value of the WalletTransaction entity.
 // If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletTransactionMutation) OldType(ctx context.Context) (v string, err error) {
+func (m *WalletTransactionMutation) OldType(ctx context.Context) (v types.TransactionType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldType is only allowed on UpdateOne operations")
 	}
@@ -61715,12 +62357,12 @@ func (m *WalletTransactionMutation) ResetCreditBalanceAfter() {
 }
 
 // SetReferenceType sets the "reference_type" field.
-func (m *WalletTransactionMutation) SetReferenceType(s string) {
-	m.reference_type = &s
+func (m *WalletTransactionMutation) SetReferenceType(ttrt types.WalletTxReferenceType) {
+	m.reference_type = &ttrt
 }
 
 // ReferenceType returns the value of the "reference_type" field in the mutation.
-func (m *WalletTransactionMutation) ReferenceType() (r string, exists bool) {
+func (m *WalletTransactionMutation) ReferenceType() (r types.WalletTxReferenceType, exists bool) {
 	v := m.reference_type
 	if v == nil {
 		return
@@ -61731,7 +62373,7 @@ func (m *WalletTransactionMutation) ReferenceType() (r string, exists bool) {
 // OldReferenceType returns the old "reference_type" field's value of the WalletTransaction entity.
 // If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletTransactionMutation) OldReferenceType(ctx context.Context) (v string, err error) {
+func (m *WalletTransactionMutation) OldReferenceType(ctx context.Context) (v types.WalletTxReferenceType, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldReferenceType is only allowed on UpdateOne operations")
 	}
@@ -61911,12 +62553,12 @@ func (m *WalletTransactionMutation) ResetMetadata() {
 }
 
 // SetTransactionStatus sets the "transaction_status" field.
-func (m *WalletTransactionMutation) SetTransactionStatus(s string) {
-	m.transaction_status = &s
+func (m *WalletTransactionMutation) SetTransactionStatus(ts types.TransactionStatus) {
+	m.transaction_status = &ts
 }
 
 // TransactionStatus returns the value of the "transaction_status" field in the mutation.
-func (m *WalletTransactionMutation) TransactionStatus() (r string, exists bool) {
+func (m *WalletTransactionMutation) TransactionStatus() (r types.TransactionStatus, exists bool) {
 	v := m.transaction_status
 	if v == nil {
 		return
@@ -61927,7 +62569,7 @@ func (m *WalletTransactionMutation) TransactionStatus() (r string, exists bool) 
 // OldTransactionStatus returns the old "transaction_status" field's value of the WalletTransaction entity.
 // If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletTransactionMutation) OldTransactionStatus(ctx context.Context) (v string, err error) {
+func (m *WalletTransactionMutation) OldTransactionStatus(ctx context.Context) (v types.TransactionStatus, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTransactionStatus is only allowed on UpdateOne operations")
 	}
@@ -62031,6 +62673,55 @@ func (m *WalletTransactionMutation) ResetCreditsAvailable() {
 	m.credits_available = nil
 }
 
+// SetCurrency sets the "currency" field.
+func (m *WalletTransactionMutation) SetCurrency(s string) {
+	m.currency = &s
+}
+
+// Currency returns the value of the "currency" field in the mutation.
+func (m *WalletTransactionMutation) Currency() (r string, exists bool) {
+	v := m.currency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCurrency returns the old "currency" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldCurrency(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCurrency: %w", err)
+	}
+	return oldValue.Currency, nil
+}
+
+// ClearCurrency clears the value of the "currency" field.
+func (m *WalletTransactionMutation) ClearCurrency() {
+	m.currency = nil
+	m.clearedFields[wallettransaction.FieldCurrency] = struct{}{}
+}
+
+// CurrencyCleared returns if the "currency" field was cleared in this mutation.
+func (m *WalletTransactionMutation) CurrencyCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldCurrency]
+	return ok
+}
+
+// ResetCurrency resets all changes to the "currency" field.
+func (m *WalletTransactionMutation) ResetCurrency() {
+	m.currency = nil
+	delete(m.clearedFields, wallettransaction.FieldCurrency)
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (m *WalletTransactionMutation) SetIdempotencyKey(s string) {
 	m.idempotency_key = &s
@@ -62081,12 +62772,12 @@ func (m *WalletTransactionMutation) ResetIdempotencyKey() {
 }
 
 // SetTransactionReason sets the "transaction_reason" field.
-func (m *WalletTransactionMutation) SetTransactionReason(s string) {
-	m.transaction_reason = &s
+func (m *WalletTransactionMutation) SetTransactionReason(tr types.TransactionReason) {
+	m.transaction_reason = &tr
 }
 
 // TransactionReason returns the value of the "transaction_reason" field in the mutation.
-func (m *WalletTransactionMutation) TransactionReason() (r string, exists bool) {
+func (m *WalletTransactionMutation) TransactionReason() (r types.TransactionReason, exists bool) {
 	v := m.transaction_reason
 	if v == nil {
 		return
@@ -62097,7 +62788,7 @@ func (m *WalletTransactionMutation) TransactionReason() (r string, exists bool) 
 // OldTransactionReason returns the old "transaction_reason" field's value of the WalletTransaction entity.
 // If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletTransactionMutation) OldTransactionReason(ctx context.Context) (v string, err error) {
+func (m *WalletTransactionMutation) OldTransactionReason(ctx context.Context) (v types.TransactionReason, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTransactionReason is only allowed on UpdateOne operations")
 	}
@@ -62220,7 +62911,7 @@ func (m *WalletTransactionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletTransactionMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, wallettransaction.FieldTenantID)
 	}
@@ -62244,6 +62935,9 @@ func (m *WalletTransactionMutation) Fields() []string {
 	}
 	if m.wallet_id != nil {
 		fields = append(fields, wallettransaction.FieldWalletID)
+	}
+	if m.customer_id != nil {
+		fields = append(fields, wallettransaction.FieldCustomerID)
 	}
 	if m._type != nil {
 		fields = append(fields, wallettransaction.FieldType)
@@ -62281,6 +62975,9 @@ func (m *WalletTransactionMutation) Fields() []string {
 	if m.credits_available != nil {
 		fields = append(fields, wallettransaction.FieldCreditsAvailable)
 	}
+	if m.currency != nil {
+		fields = append(fields, wallettransaction.FieldCurrency)
+	}
 	if m.idempotency_key != nil {
 		fields = append(fields, wallettransaction.FieldIdempotencyKey)
 	}
@@ -62314,6 +63011,8 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.EnvironmentID()
 	case wallettransaction.FieldWalletID:
 		return m.WalletID()
+	case wallettransaction.FieldCustomerID:
+		return m.CustomerID()
 	case wallettransaction.FieldType:
 		return m.GetType()
 	case wallettransaction.FieldAmount:
@@ -62338,6 +63037,8 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpiryDate()
 	case wallettransaction.FieldCreditsAvailable:
 		return m.CreditsAvailable()
+	case wallettransaction.FieldCurrency:
+		return m.Currency()
 	case wallettransaction.FieldIdempotencyKey:
 		return m.IdempotencyKey()
 	case wallettransaction.FieldTransactionReason:
@@ -62369,6 +63070,8 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldEnvironmentID(ctx)
 	case wallettransaction.FieldWalletID:
 		return m.OldWalletID(ctx)
+	case wallettransaction.FieldCustomerID:
+		return m.OldCustomerID(ctx)
 	case wallettransaction.FieldType:
 		return m.OldType(ctx)
 	case wallettransaction.FieldAmount:
@@ -62393,6 +63096,8 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldExpiryDate(ctx)
 	case wallettransaction.FieldCreditsAvailable:
 		return m.OldCreditsAvailable(ctx)
+	case wallettransaction.FieldCurrency:
+		return m.OldCurrency(ctx)
 	case wallettransaction.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
 	case wallettransaction.FieldTransactionReason:
@@ -62464,8 +63169,15 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetWalletID(v)
 		return nil
-	case wallettransaction.FieldType:
+	case wallettransaction.FieldCustomerID:
 		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomerID(v)
+		return nil
+	case wallettransaction.FieldType:
+		v, ok := value.(types.TransactionType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -62500,7 +63212,7 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		m.SetCreditBalanceAfter(v)
 		return nil
 	case wallettransaction.FieldReferenceType:
-		v, ok := value.(string)
+		v, ok := value.(types.WalletTxReferenceType)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -62528,7 +63240,7 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		m.SetMetadata(v)
 		return nil
 	case wallettransaction.FieldTransactionStatus:
-		v, ok := value.(string)
+		v, ok := value.(types.TransactionStatus)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -62548,6 +63260,13 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetCreditsAvailable(v)
 		return nil
+	case wallettransaction.FieldCurrency:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCurrency(v)
+		return nil
 	case wallettransaction.FieldIdempotencyKey:
 		v, ok := value.(string)
 		if !ok {
@@ -62556,7 +63275,7 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		m.SetIdempotencyKey(v)
 		return nil
 	case wallettransaction.FieldTransactionReason:
-		v, ok := value.(string)
+		v, ok := value.(types.TransactionReason)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -62623,6 +63342,9 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	if m.FieldCleared(wallettransaction.FieldEnvironmentID) {
 		fields = append(fields, wallettransaction.FieldEnvironmentID)
 	}
+	if m.FieldCleared(wallettransaction.FieldCustomerID) {
+		fields = append(fields, wallettransaction.FieldCustomerID)
+	}
 	if m.FieldCleared(wallettransaction.FieldReferenceType) {
 		fields = append(fields, wallettransaction.FieldReferenceType)
 	}
@@ -62637,6 +63359,9 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(wallettransaction.FieldExpiryDate) {
 		fields = append(fields, wallettransaction.FieldExpiryDate)
+	}
+	if m.FieldCleared(wallettransaction.FieldCurrency) {
+		fields = append(fields, wallettransaction.FieldCurrency)
 	}
 	if m.FieldCleared(wallettransaction.FieldIdempotencyKey) {
 		fields = append(fields, wallettransaction.FieldIdempotencyKey)
@@ -62667,6 +63392,9 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 	case wallettransaction.FieldEnvironmentID:
 		m.ClearEnvironmentID()
 		return nil
+	case wallettransaction.FieldCustomerID:
+		m.ClearCustomerID()
+		return nil
 	case wallettransaction.FieldReferenceType:
 		m.ClearReferenceType()
 		return nil
@@ -62681,6 +63409,9 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 		return nil
 	case wallettransaction.FieldExpiryDate:
 		m.ClearExpiryDate()
+		return nil
+	case wallettransaction.FieldCurrency:
+		m.ClearCurrency()
 		return nil
 	case wallettransaction.FieldIdempotencyKey:
 		m.ClearIdempotencyKey()
@@ -62720,6 +63451,9 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 	case wallettransaction.FieldWalletID:
 		m.ResetWalletID()
 		return nil
+	case wallettransaction.FieldCustomerID:
+		m.ResetCustomerID()
+		return nil
 	case wallettransaction.FieldType:
 		m.ResetType()
 		return nil
@@ -62755,6 +63489,9 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 		return nil
 	case wallettransaction.FieldCreditsAvailable:
 		m.ResetCreditsAvailable()
+		return nil
+	case wallettransaction.FieldCurrency:
+		m.ResetCurrency()
 		return nil
 	case wallettransaction.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()

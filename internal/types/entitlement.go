@@ -19,6 +19,9 @@ const (
 )
 
 func (e EntitlementUsageResetPeriod) Validate() error {
+	if e == "" {
+		return nil
+	}
 
 	allowed := []EntitlementUsageResetPeriod{
 		ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY,
@@ -51,6 +54,9 @@ const (
 )
 
 func (e EntitlementEntityType) Validate() error {
+	if e == "" {
+		return nil
+	}
 	allowed := []EntitlementEntityType{
 		ENTITLEMENT_ENTITY_TYPE_PLAN,
 		ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,

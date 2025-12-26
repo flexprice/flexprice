@@ -15,21 +15,31 @@ type WalletOperation struct {
 	// Amount is the amount of the transaction in the wallet's currency (e.g., USD, EUR)
 	// Priority: If Amount is provided along with CreditAmount, Amount takes precedence
 	// The Type field (CREDIT or DEBIT) determines the operation direction
-	Amount decimal.Decimal `json:"amount"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 
 	// CreditAmount is the amount of credits to add/remove from the wallet
 	// Used when you want to specify credits directly instead of currency amount
 	// Priority: Only used if Amount is not provided
-	CreditAmount decimal.Decimal `json:"credit_amount,omitempty"`
+	CreditAmount decimal.Decimal `json:"credit_amount,omitempty" swaggertype:"string"`
 
-	ReferenceType     types.WalletTxReferenceType `json:"reference_type,omitempty"`
-	ReferenceID       string                      `json:"reference_id,omitempty"`
-	Description       string                      `json:"description,omitempty"`
-	Metadata          types.Metadata              `json:"metadata,omitempty"`
-	IdempotencyKey    string                      `json:"idempotency_key,omitempty"`
-	ExpiryDate        *int                        `json:"expiry_date,omitempty"` // YYYYMMDD format
-	Priority          *int                        `json:"priority,omitempty"`    // lower number means higher priority
-	TransactionReason types.TransactionReason     `json:"transaction_reason,omitempty"`
+	ReferenceType types.WalletTxReferenceType `json:"reference_type,omitempty"`
+	ReferenceID   string                      `json:"reference_id,omitempty"`
+	Description   string                      `json:"description,omitempty"`
+
+	// InvoiceID is optional. When provided for debit operations, the invoice's period_end
+	// is used as the time reference for finding eligible credits instead of the current time.
+	// This ensures credits are selected based on their eligibility at the invoice period end,
+	// which is important for accurate billing and credit consumption.
+	InvoiceID *string `json:"invoice_id,omitempty"`
+
+	Metadata          types.Metadata          `json:"metadata,omitempty"`
+	IdempotencyKey    string                  `json:"idempotency_key,omitempty"`
+	ExpiryDate        *int                    `json:"expiry_date,omitempty"` // YYYYMMDD format
+	Priority          *int                    `json:"priority,omitempty"`    // lower number means higher priority
+	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty"`
+	// For Expiry Credits, this is the ID of the parent credit transaction
+	// so that we can use the same credits for the expiry debit transaction
+	ParentCreditTxID string `json:"-"`
 }
 
 func (w *WalletOperation) Validate() error {

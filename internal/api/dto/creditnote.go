@@ -101,7 +101,7 @@ type CreateCreditNoteLineItemRequest struct {
 	DisplayName string `json:"display_name" validate:"omitempty"`
 
 	// amount is the monetary amount to be credited for this line item
-	Amount decimal.Decimal `json:"amount" validate:"required"`
+	Amount decimal.Decimal `json:"amount" validate:"required" swaggertype:"string"`
 
 	// metadata contains additional custom key-value pairs for storing extra information about this line item
 	Metadata types.Metadata `json:"metadata" validate:"omitempty"`

@@ -122,6 +122,8 @@ type SubscriptionService interface {
 
 	// ActivateDraftSubscription activates a draft subscription with a new start date
 	ActivateDraftSubscription(ctx context.Context, subID string, req dto.ActivateDraftSubscriptionRequest) (*dto.SubscriptionResponse, error)
+
+	GetActiveAddonAssociations(ctx context.Context, subscriptionID string) (*dto.ListAddonAssociationsResponse, error)
 }
 
 type ServiceDependencies struct {

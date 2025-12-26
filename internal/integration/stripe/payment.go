@@ -149,7 +149,7 @@ func (s *PaymentService) CreatePaymentLink(ctx context.Context, req *dto.CreateS
 	amountCents := req.Amount.Mul(decimal.NewFromInt(100)).IntPart()
 
 	// Build comprehensive product name with all information
-	productName := fmt.Sprintf(customerResp.Customer.Name)
+	productName := fmt.Sprintf("%s", customerResp.Customer.Name)
 
 	// Build detailed description with all invoice information
 	var descriptionParts []string

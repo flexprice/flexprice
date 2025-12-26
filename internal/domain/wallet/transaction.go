@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -12,22 +13,25 @@ import (
 type Transaction struct {
 	ID                  string                      `db:"id" json:"id"`
 	WalletID            string                      `db:"wallet_id" json:"wallet_id"`
+	CustomerID          string                      `db:"customer_id" json:"customer_id"`
 	Type                types.TransactionType       `db:"type" json:"type"`
-	Amount              decimal.Decimal             `db:"amount" json:"amount"`
-	CreditAmount        decimal.Decimal             `db:"credit_amount" json:"credit_amount"`
-	CreditBalanceBefore decimal.Decimal             `db:"credit_balance_before" json:"credit_balance_before"`
-	CreditBalanceAfter  decimal.Decimal             `db:"credit_balance_after" json:"credit_balance_after"`
+	Amount              decimal.Decimal             `db:"amount" json:"amount" swaggertype:"string"`
+	CreditAmount        decimal.Decimal             `db:"credit_amount" json:"credit_amount" swaggertype:"string"`
+	CreditBalanceBefore decimal.Decimal             `db:"credit_balance_before" json:"credit_balance_before" swaggertype:"string"`
+	CreditBalanceAfter  decimal.Decimal             `db:"credit_balance_after" json:"credit_balance_after" swaggertype:"string"`
 	TxStatus            types.TransactionStatus     `db:"transaction_status" json:"transaction_status"`
 	ReferenceType       types.WalletTxReferenceType `db:"reference_type" json:"reference_type"`
 	ReferenceID         string                      `db:"reference_id" json:"reference_id"`
 	Description         string                      `db:"description" json:"description"`
 	Metadata            types.Metadata              `db:"metadata" json:"metadata"`
 	ExpiryDate          *time.Time                  `db:"expiry_date" json:"expiry_date"`
-	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available"`
+	CreditsAvailable    decimal.Decimal             `db:"credits_available" json:"credits_available" swaggertype:"string"`
 	TransactionReason   types.TransactionReason     `db:"transaction_reason" json:"transaction_reason"`
 	Priority            *int                        `db:"priority" json:"priority"`
-	IdempotencyKey      string                      `db:"idempotency_key" json:"idempotency_key"`
-	EnvironmentID       string                      `db:"environment_id" json:"environment_id"`
+	Currency            string                      `db:"currency" json:"currency"`
+
+	IdempotencyKey string `db:"idempotency_key" json:"idempotency_key"`
+	EnvironmentID  string `db:"environment_id" json:"environment_id"`
 	types.BaseModel
 }
 
@@ -52,20 +56,22 @@ func (t *Transaction) ToEnt() *ent.WalletTransaction {
 	return &ent.WalletTransaction{
 		ID:                  t.ID,
 		WalletID:            t.WalletID,
-		Type:                string(t.Type),
+		CustomerID:          t.CustomerID,
+		Type:                t.Type,
 		Amount:              t.Amount,
 		CreditAmount:        t.CreditAmount,
 		CreditBalanceBefore: t.CreditBalanceBefore,
 		CreditBalanceAfter:  t.CreditBalanceAfter,
-		TransactionStatus:   string(t.TxStatus),
-		ReferenceType:       string(t.ReferenceType),
+		TransactionStatus:   t.TxStatus,
+		ReferenceType:       t.ReferenceType,
 		ReferenceID:         t.ReferenceID,
 		Description:         t.Description,
 		Metadata:            t.Metadata,
 		ExpiryDate:          t.ExpiryDate,
 		CreditsAvailable:    t.CreditsAvailable,
-		TransactionReason:   string(t.TransactionReason),
+		TransactionReason:   t.TransactionReason,
 		Priority:            t.Priority,
+		Currency:            lo.ToPtr(t.Currency),
 		EnvironmentID:       t.EnvironmentID,
 		TenantID:            t.TenantID,
 		Status:              string(t.Status),
@@ -85,11 +91,12 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 	return &Transaction{
 		ID:                  e.ID,
 		WalletID:            e.WalletID,
-		Type:                types.TransactionType(e.Type),
+		CustomerID:          e.CustomerID,
+		Type:                e.Type,
 		Amount:              e.Amount,
 		CreditAmount:        e.CreditAmount,
-		TxStatus:            types.TransactionStatus(e.TransactionStatus),
-		ReferenceType:       types.WalletTxReferenceType(e.ReferenceType),
+		TxStatus:            e.TransactionStatus,
+		ReferenceType:       e.ReferenceType,
 		ReferenceID:         e.ReferenceID,
 		Description:         e.Description,
 		Metadata:            types.Metadata(e.Metadata),
@@ -97,7 +104,8 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 		CreditsAvailable:    e.CreditsAvailable,
 		CreditBalanceBefore: e.CreditBalanceBefore,
 		CreditBalanceAfter:  e.CreditBalanceAfter,
-		TransactionReason:   types.TransactionReason(e.TransactionReason),
+		Currency:            lo.FromPtrOr(e.Currency, ""),
+		TransactionReason:   e.TransactionReason,
 		Priority:            e.Priority,
 		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{
@@ -136,4 +144,14 @@ type CreditTopupsExportData struct {
 	ReferenceID         string
 	TransactionReason   types.TransactionReason
 	CreatedAt           time.Time
+}
+
+// CreditUsageExportData represents the joined data for credit usage export
+type CreditUsageExportData struct {
+	CustomerID         string
+	CustomerName       string
+	CustomerExternalID string
+	CurrentBalance     decimal.Decimal
+	RealtimeBalance    decimal.Decimal
+	NumberOfWallets    int
 }

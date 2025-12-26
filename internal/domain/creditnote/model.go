@@ -53,7 +53,7 @@ type CreditNote struct {
 	EnvironmentID string `json:"environment_id"`
 
 	// total_amount is the total including creditable invoice-level discounts or minimums, and tax
-	TotalAmount decimal.Decimal `json:"total_amount"`
+	TotalAmount decimal.Decimal `json:"total_amount" swaggertype:"string"`
 
 	// voided_at is the timestamp when the credit note was voided
 	VoidedAt *time.Time `json:"voided_at,omitempty"`

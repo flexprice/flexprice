@@ -40,6 +40,7 @@ type BaseSubscriptionData struct {
 			apiCallsAnnual       *price.Price
 			storageAnnual        *price.Price
 			storageArchiveAnnual *price.Price
+			fixedMonthly         *price.Price // Fixed price for testing quantity overrides
 		}
 		subscription *subscription.Subscription
 		now          time.Time
@@ -149,6 +150,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
+		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
@@ -358,6 +360,23 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchiveAnnual))
+
+	// Create a fixed price for testing quantity overrides
+	s.testData.prices.fixedMonthly = &price.Price{
+		ID:                 "price_fixed_monthly",
+		Amount:             decimal.NewFromFloat(10.00),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.fixedMonthly))
 
 	s.testData.now = time.Now().UTC()
 	s.testData.subscription = &subscription.Subscription{
@@ -1054,6 +1073,7 @@ func (s *SubscriptionServiceSuite) createInvoiceService() InvoiceService {
 		CouponAssociationRepo:      s.GetStores().CouponAssociationRepo,
 		CouponApplicationRepo:      s.GetStores().CouponApplicationRepo,
 		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
+		ConnectionRepo:             s.GetStores().ConnectionRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
 		EventPublisher:             s.GetPublisher(),
 		WebhookPublisher:           s.GetWebhookPublisher(),
@@ -4021,20 +4041,20 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 			name: "override_quantity_and_amount",
 			overrideLineItems: []dto.OverrideLineItemRequest{
 				{
-					PriceID:  s.testData.prices.storage.ID,
+					PriceID:  s.testData.prices.fixedMonthly.ID,
 					Amount:   lo.ToPtr(decimal.NewFromFloat(50.00)),
 					Quantity: lo.ToPtr(decimal.NewFromInt(3)),
 				},
 			},
 			expectedPriceOverrides: 1,
-			description:            "Should override both quantity (to 3) and amount (to $50.00)",
+			description:            "Should override both quantity (to 3) and amount (to $50.00) on fixed price",
 			shouldSucceed:          true,
 		},
 		{
 			name: "complex_combination_override",
 			overrideLineItems: []dto.OverrideLineItemRequest{
 				{
-					PriceID:      s.testData.prices.storage.ID,
+					PriceID:      s.testData.prices.fixedMonthly.ID,
 					Amount:       lo.ToPtr(decimal.NewFromFloat(45.00)),
 					BillingModel: types.BILLING_MODEL_TIERED,
 					TierMode:     types.BILLING_TIER_VOLUME,
@@ -4051,7 +4071,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithPriceOverrides() {
 				},
 			},
 			expectedPriceOverrides: 1,
-			description:            "Should override amount, billing model, tier mode, tiers, transform quantity, and quantity",
+			description:            "Should override amount, billing model, tier mode, tiers, transform quantity, and quantity on fixed price",
 			shouldSucceed:          true,
 		},
 		{
@@ -4529,7 +4549,7 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideIntegration() {
 			BillingCycle:       types.BillingCycleAnniversary,
 			OverrideLineItems: []dto.OverrideLineItemRequest{
 				{
-					PriceID:      s.testData.prices.storage.ID,
+					PriceID:      s.testData.prices.fixedMonthly.ID,
 					Amount:       lo.ToPtr(decimal.NewFromFloat(75.00)),
 					BillingModel: types.BILLING_MODEL_TIERED,
 					TierMode:     types.BILLING_TIER_VOLUME,

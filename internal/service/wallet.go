@@ -38,6 +38,9 @@ type WalletService interface {
 	// GetWalletTransactionByID retrieves a transaction by its ID
 	GetWalletTransactionByID(ctx context.Context, transactionID string) (*dto.WalletTransactionResponse, error)
 
+	// ListWalletTransactionsByFilter lists wallet transactions by filter
+	ListWalletTransactionsByFilter(ctx context.Context, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error)
+
 	// GetWalletBalance retrieves the real-time balance of a wallet
 	GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
 
@@ -285,6 +288,215 @@ func (s *walletService) GetWalletTransactions(ctx context.Context, walletID stri
 	return response, nil
 }
 
+func (s *walletService) ListWalletTransactionsByFilter(ctx context.Context, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error) {
+	// Initialize filter if nil
+	if filter == nil {
+		filter = types.NewWalletTransactionFilter()
+	}
+
+	// Validate expand fields if any are requested
+	if !filter.GetExpand().IsEmpty() {
+		if err := filter.GetExpand().Validate(types.WalletTransactionExpandConfig); err != nil {
+			return nil, err
+		}
+	}
+
+	// Validate filter
+	if err := filter.Validate(); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Invalid filter").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Fetch transactions
+	transactions, err := s.WalletRepo.ListWalletTransactions(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get total count for pagination
+	count, err := s.WalletRepo.CountWalletTransactions(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build base response
+	response := &dto.ListWalletTransactionsResponse{
+		Items: make([]*dto.WalletTransactionResponse, len(transactions)),
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}
+
+	// Early return if no transactions to avoid unnecessary expansion work
+	if len(transactions) == 0 {
+		return response, nil
+	}
+
+	expand := filter.GetExpand()
+	if expand.IsEmpty() {
+		// No expansion requested, just convert transactions to DTOs
+		for i, txn := range transactions {
+			response.Items[i] = dto.FromWalletTransaction(txn)
+		}
+		return response, nil
+	}
+
+	// Load expanded entities in bulk
+	customersByID := s.loadCustomersForExpansion(ctx, expand, transactions)
+	usersByID := s.loadUsersForExpansion(ctx, expand, transactions)
+	walletsByID := s.loadWalletsForExpansion(ctx, expand, transactions)
+
+	// Build response with expanded fields
+	for i, txn := range transactions {
+		response.Items[i] = dto.FromWalletTransaction(txn)
+
+		// Attach expanded customer if requested and available
+		if expand.Has(types.ExpandCustomer) && txn.CustomerID != "" {
+			if cust, ok := customersByID[txn.CustomerID]; ok {
+				response.Items[i].Customer = cust
+			}
+		}
+
+		// Attach expanded user if requested and available
+		if expand.Has(types.ExpandCreatedByUser) && txn.CreatedBy != "" {
+			if user, ok := usersByID[txn.CreatedBy]; ok {
+				response.Items[i].CreatedByUser = user
+			}
+		}
+
+		// Attach expanded wallet if requested and available
+		if expand.Has(types.ExpandWallet) && txn.WalletID != "" {
+			if wallet, ok := walletsByID[txn.WalletID]; ok {
+				response.Items[i].Wallet = wallet
+			}
+		}
+	}
+
+	return response, nil
+}
+
+// loadCustomersForExpansion loads customers in bulk for transaction expansion
+func (s *walletService) loadCustomersForExpansion(ctx context.Context, expand types.Expand, transactions []*wallet.Transaction) map[string]*dto.CustomerResponse {
+	if !expand.Has(types.ExpandCustomer) {
+		return nil
+	}
+
+	// Extract unique customer IDs
+	customerIDs := lo.Uniq(lo.FilterMap(transactions, func(txn *wallet.Transaction, _ int) (string, bool) {
+		return txn.CustomerID, txn.CustomerID != ""
+	}))
+
+	if len(customerIDs) == 0 {
+		return nil
+	}
+
+	// Fetch customers in bulk
+	customerService := NewCustomerService(s.ServiceParams)
+	customerFilter := &types.CustomerFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		CustomerIDs: customerIDs,
+	}
+
+	customersResponse, err := customerService.GetCustomers(ctx, customerFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get customers for wallet transactions",
+			"error", err,
+			"customer_ids", customerIDs)
+		return nil
+	}
+
+	// Create map for quick lookup
+	customersByID := make(map[string]*dto.CustomerResponse, len(customersResponse.Items))
+	for _, cust := range customersResponse.Items {
+		customersByID[cust.Customer.ID] = cust
+	}
+
+	s.Logger.Debugw("fetched customers for wallet transactions", "count", len(customersResponse.Items))
+	return customersByID
+}
+
+// loadUsersForExpansion loads users in bulk for transaction expansion
+func (s *walletService) loadUsersForExpansion(ctx context.Context, expand types.Expand, transactions []*wallet.Transaction) map[string]*dto.UserResponse {
+	if !expand.Has(types.ExpandCreatedByUser) {
+		return nil
+	}
+
+	// Extract unique user IDs (created_by)
+	userIDs := lo.Uniq(lo.FilterMap(transactions, func(txn *wallet.Transaction, _ int) (string, bool) {
+		return txn.CreatedBy, txn.CreatedBy != ""
+	}))
+
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	// Fetch users in bulk
+	userService := NewUserService(s.UserRepo, s.TenantRepo, nil)
+	userFilter := &types.UserFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		UserIDs:     userIDs,
+	}
+
+	usersResponse, err := userService.ListUsersByFilter(ctx, userFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get users for wallet transactions",
+			"error", err,
+			"user_ids", userIDs)
+		return nil
+	}
+
+	// Create map for quick lookup
+	usersByID := make(map[string]*dto.UserResponse, len(usersResponse.Items))
+	for _, user := range usersResponse.Items {
+		usersByID[user.ID] = user
+	}
+
+	s.Logger.Debugw("fetched users for wallet transactions", "count", len(usersResponse.Items))
+	return usersByID
+}
+
+// loadWalletsForExpansion loads wallets in bulk for transaction expansion
+func (s *walletService) loadWalletsForExpansion(ctx context.Context, expand types.Expand, transactions []*wallet.Transaction) map[string]*dto.WalletResponse {
+	if !expand.Has(types.ExpandWallet) {
+		return nil
+	}
+
+	// Extract unique wallet IDs
+	walletIDs := lo.Uniq(lo.FilterMap(transactions, func(txn *wallet.Transaction, _ int) (string, bool) {
+		return txn.WalletID, txn.WalletID != ""
+	}))
+
+	if len(walletIDs) == 0 {
+		return nil
+	}
+
+	// Fetch wallets in bulk
+	walletFilter := &types.WalletFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		WalletIDs:   walletIDs,
+	}
+
+	walletsResponse, err := s.GetWallets(ctx, walletFilter)
+	if err != nil {
+		s.Logger.Errorw("failed to get wallets for wallet transactions",
+			"error", err,
+			"wallet_ids", walletIDs)
+		return nil
+	}
+
+	// Create map for quick lookup
+	walletsByID := make(map[string]*dto.WalletResponse, len(walletsResponse.Items))
+	for _, w := range walletsResponse.Items {
+		walletsByID[w.ID] = dto.FromWallet(w)
+	}
+
+	s.Logger.Debugw("fetched wallets for wallet transactions", "count", len(walletsResponse.Items))
+	return walletsByID
+}
+
 // Update the TopUpWallet method to use the new processWalletOperation
 func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *dto.TopUpWalletRequest) (*dto.TopUpWalletResponse, error) {
 	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
@@ -471,9 +683,15 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			description = lo.Ternary(req.Description != "", req.Description, "Purchased credits - pending payment")
 		}
 
+		txMetadata := req.Metadata
+		if txMetadata == nil {
+			txMetadata = types.Metadata{}
+		}
+
 		tx := &wallet.Transaction{
 			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
 			WalletID:            walletID,
+			CustomerID:          w.CustomerID,
 			Type:                types.TransactionTypeCredit,
 			CreditAmount:        req.CreditsToAdd,
 			Amount:              s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
@@ -481,7 +699,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			ReferenceType:       types.WalletTxReferenceTypeExternal,
 			ReferenceID:         lo.FromPtr(idempotencyKey),
 			Description:         description,
-			Metadata:            req.Metadata,
+			Metadata:            txMetadata,
 			TransactionReason:   types.TransactionReasonPurchasedCreditInvoiced,
 			Priority:            req.Priority,
 			IdempotencyKey:      lo.FromPtr(idempotencyKey),
@@ -489,6 +707,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			CreditBalanceBefore: w.CreditBalance,
 			CreditBalanceAfter:  balanceAfter,
 			CreditsAvailable:    creditsAvailable,
+			Currency:            w.Currency,
 			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
@@ -529,6 +748,9 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 				invoiceMetadata[key] = value
 			}
 		}
+
+		// Ensure auto_topup flag is present on invoice metadata as well
+		invoiceMetadata["auto_topup"] = lo.Ternary(req.Metadata != nil && req.Metadata["auto_topup"] == "true", "true", invoiceMetadata["auto_topup"])
 
 		// Add required fields
 		invoiceMetadata["wallet_transaction_id"] = walletTransactionID
@@ -771,15 +993,25 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 	var thresholdValue decimal.Decimal
 	var alertStatus types.AlertState
 
-	// Get wallet threshold or use default (0)
+	// Get wallet threshold or fall back to tenant-level settings
 	if w.AlertConfig != nil && w.AlertConfig.Threshold != nil {
 		thresholdValue = w.AlertConfig.Threshold.Value
 	} else {
-		thresholdValue = decimal.Zero
+		// Fall back to tenant-level settings (GetSetting handles defaults automatically)
+		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
+		walletAlertConfig, err := GetSetting[types.AlertConfig](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
+		if err != nil {
+			s.Logger.Errorw("failed to get wallet alert config from tenant settings",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+		}
+		thresholdValue = walletAlertConfig.Threshold.Value
 	}
 
-	// Determine alert status based on balance vs threshold
-	if newCreditBalance.LessThan(thresholdValue) {
+	// Threshold is stored in credits, credit balance is in credits - direct comparison
+	// Determine alert status based on balance vs threshold (<= threshold triggers alert)
+	if newCreditBalance.LessThanOrEqual(thresholdValue) {
 		alertStatus = types.AlertStateInAlarm
 	} else {
 		alertStatus = types.AlertStateOk
@@ -1045,14 +1277,25 @@ func (s *walletService) UpdateWallet(ctx context.Context, id string, req *dto.Up
 	if req.Metadata != nil {
 		existing.Metadata = *req.Metadata
 	}
-	if req.AutoTopupTrigger != nil {
-		existing.AutoTopupTrigger = *req.AutoTopupTrigger
-	}
-	if req.AutoTopupMinBalance != nil {
-		existing.AutoTopupMinBalance = *req.AutoTopupMinBalance
-	}
-	if req.AutoTopupAmount != nil {
-		existing.AutoTopupAmount = *req.AutoTopupAmount
+	if req.AutoTopup != nil {
+		// Preserve existing fields so ent validator still gets required values
+		current := existing.AutoTopup
+		if current == nil {
+			current = &types.AutoTopup{}
+		}
+		if req.AutoTopup.Enabled != nil {
+			current.Enabled = req.AutoTopup.Enabled
+		}
+		if req.AutoTopup.Threshold != nil {
+			current.Threshold = req.AutoTopup.Threshold
+		}
+		if req.AutoTopup.Amount != nil {
+			current.Amount = req.AutoTopup.Amount
+		}
+		if req.AutoTopup.Invoicing != nil {
+			current.Invoicing = req.AutoTopup.Invoicing
+		}
+		existing.AutoTopup = current
 	}
 	if req.Config != nil {
 		existing.Config = *req.Config
@@ -1173,9 +1416,31 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 // processDebitOperation handles the debit operation with credit selection and consumption
 func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.WalletOperation) error {
 	// Find eligible credits with pagination
-	credits, err := s.WalletRepo.FindEligibleCredits(ctx, req.WalletID, req.CreditAmount, 100)
-	if err != nil {
-		return err
+	credits := []*wallet.Transaction{}
+	var err error
+	if req.ParentCreditTxID != "" {
+		// Get the parent debit transaction
+		parentCreditTx, err := s.WalletRepo.GetTransactionByID(ctx, req.ParentCreditTxID)
+		if err != nil {
+			return err
+		}
+		credits = append(credits, parentCreditTx)
+
+	} else {
+		// Determine the time reference for finding eligible credits
+		timeReference := time.Now().UTC()
+		if req.InvoiceID != nil && *req.InvoiceID != "" {
+			// Use invoice's period end as the time reference
+			invoice, err := s.InvoiceRepo.Get(ctx, *req.InvoiceID)
+			if err != nil {
+				return err
+			}
+			timeReference = *invoice.PeriodEnd
+		}
+		credits, err = s.WalletRepo.FindEligibleCredits(ctx, req.WalletID, req.CreditAmount, 100, timeReference)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Calculate total available balance
@@ -1188,13 +1453,16 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 	}
 
 	if totalAvailable.LessThan(req.CreditAmount) {
-		return ierr.NewError("insufficient balance").
-			WithHint("Insufficient balance to process debit operation").
-			WithReportableDetails(map[string]interface{}{
-				"wallet_id": req.WalletID,
-				"amount":    req.CreditAmount,
-			}).
-			Mark(ierr.ErrInvalidOperation)
+		// if not manual debit, return error
+		if req.TransactionReason != types.TransactionReasonManualBalanceDebit {
+			return ierr.NewError("insufficient balance").
+				WithHint("Insufficient balance to process debit operation").
+				WithReportableDetails(map[string]interface{}{
+					"wallet_id": req.WalletID,
+					"amount":    req.CreditAmount,
+				}).
+				Mark(ierr.ErrInvalidOperation)
+		}
 	}
 
 	// Process debit across credits
@@ -1241,6 +1509,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	tx := &wallet.Transaction{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
 		WalletID:            req.WalletID,
+		CustomerID:          w.CustomerID,
 		Type:                req.Type,
 		Amount:              req.Amount,
 		CreditAmount:        req.CreditAmount,
@@ -1254,6 +1523,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		Priority:            req.Priority,
 		CreditBalanceBefore: w.CreditBalance,
 		CreditBalanceAfter:  newCreditBalance,
+		Currency:            w.Currency,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		IdempotencyKey:      req.IdempotencyKey,
 		BaseModel:           types.GetDefaultBaseModel(ctx),
@@ -1261,7 +1531,7 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 
 	// Set credits available based on transaction type
 	if req.Type == types.TransactionTypeCredit {
-		tx.CreditsAvailable = req.CreditAmount
+		tx.CreditsAvailable = decimal.Max(decimal.Zero, tx.CreditBalanceAfter)
 	} else {
 		tx.CreditsAvailable = decimal.Zero
 	}
@@ -1353,6 +1623,7 @@ func (s *walletService) ExpireCredits(ctx context.Context, transactionID string)
 	// Create a debit operation for the expired credits
 	debitReq := &wallet.WalletOperation{
 		WalletID:          tx.WalletID,
+		ParentCreditTxID:  tx.ID,
 		Type:              types.TransactionTypeDebit,
 		CreditAmount:      tx.CreditsAvailable,
 		Description:       fmt.Sprintf("Credit expiry for transaction %s", tx.ID),
@@ -2079,25 +2350,22 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 	}
 
 	alertLogsService := NewAlertLogsService(s.ServiceParams)
+	settingsSvc := &settingsService{
+		ServiceParams: s.ServiceParams,
+	}
 
 	// Process each wallet
 	for _, w := range wallets {
-
-		// Skip if alert config is not set
-		if w.AlertConfig == nil || w.AlertConfig.Threshold == nil {
-			// // assume default threshold
-			w.AlertConfig = &types.AlertConfig{
-				Threshold: &types.WalletAlertThreshold{
-					Type:  types.AlertThresholdTypeAmount,
-					Value: decimal.NewFromFloat(types.WalletBalanceAlertThreshold),
-				},
-			}
-		}
-
-		// Get real-time balance
+		s.Logger.Debugw("processing wallet for alert check",
+			"wallet_id", w.ID,
+			"customer_id", w.CustomerID,
+			"alert_enabled", w.AlertEnabled,
+			"has_wallet_alert_config", w.AlertConfig != nil,
+			"event_id", req.ID,
+		)
 		balance, err := s.GetWalletBalanceV2(ctx, w.ID)
 		if err != nil {
-			s.Logger.Errorw("failed to get wallet balance",
+			s.Logger.Errorw("failed to get wallet balance, skipping wallet",
 				"error", err,
 				"wallet_id", w.ID,
 				"event_id", req.ID,
@@ -2105,18 +2373,69 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			continue
 		}
 
-		// Get threshold and balances
-		threshold := w.AlertConfig.Threshold.Value
-		currentBalance := w.Balance // Current balance is just the credits
-		ongoingBalance := balance.RealTimeBalance
-		if ongoingBalance == nil {
-			ongoingBalance = &currentBalance
+		// Skip if alerts are disabled for this wallet
+		if !w.AlertEnabled {
+			s.Logger.Debugw("skipping wallet - alerts disabled",
+				"wallet_id", w.ID,
+				"alert_enabled", w.AlertEnabled,
+				"event_id", req.ID,
+			)
+			// Trigger auto top-up if enabled
+			err := s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+			if err != nil {
+				s.Logger.Errorw("failed to trigger auto top-up",
+					"error", err,
+					"wallet_id", w.ID,
+				)
+			}
+			continue
 		}
+
+		// Determine threshold: wallet-level config takes precedence over tenant-level settings
+		var threshold decimal.Decimal
+		if w.AlertConfig != nil && w.AlertConfig.Threshold != nil {
+			// Use wallet-level threshold
+			threshold = w.AlertConfig.Threshold.Value
+		} else {
+			// Fall back to tenant-level settings (GetSetting handles defaults automatically)
+			walletAlertConfig, err := GetSetting[types.AlertConfig](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
+			if err != nil {
+				s.Logger.Errorw("failed to get wallet alert config from tenant settings, skipping wallet",
+					"error", err,
+					"wallet_id", w.ID,
+					"event_id", req.ID,
+				)
+				continue
+			}
+
+			threshold = walletAlertConfig.Threshold.Value
+		}
+
+		// GetWalletBalanceV2 returns:
+		// - RealTimeBalance: currency balance minus pending charges (in currency)
+		// - RealTimeCreditBalance: credit balance converted from RealTimeBalance (in credits) - THIS IS THE ONGOING BALANCE
+		// - Wallet.CreditBalance: stored credit balance (in credits)
+		// - Wallet.Balance: stored currency balance (in currency)
+		// - CurrentPeriodUsage: pending charges in currency
+
+		// For ongoing balance alert: threshold is in credits, so use RealTimeCreditBalance directly
+		// RealTimeCreditBalance is already calculated as: (currency balance - pending charges) / conversion_rate
+		ongoingBalance := lo.FromPtr(balance.RealTimeCreditBalance)
+
+		s.Logger.Infow("wallet balance details for alert check",
+			"wallet_id", w.ID,
+			"real_time_balance", balance.RealTimeBalance,
+			"wallet_current_balance", balance.Wallet.Balance,
+			"threshold", threshold,
+			"pending_charges_currency", balance.CurrentPeriodUsage,
+			"conversion_rate", w.ConversionRate,
+			"event_id", req.ID,
+		)
 
 		// Check feature alerts
 		for _, feature := range featuresWithAlerts {
 			// Determine alert status based on ongoing balance vs alert settings
-			alertStatus, err := feature.AlertSettings.AlertState(*ongoingBalance)
+			alertStatus, err := feature.AlertSettings.AlertState(ongoingBalance)
 			if err != nil {
 				s.Logger.Errorw("failed to determine alert status",
 					"feature_id", feature.ID,
@@ -2156,7 +2475,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				AlertStatus:      alertStatus,
 				AlertInfo: types.AlertInfo{
 					AlertSettings: feature.AlertSettings, // Include full alert settings
-					ValueAtTime:   *ongoingBalance,       // Ongoing balance at time of check
+					ValueAtTime:   ongoingBalance,        // Ongoing balance at time of check
 					Timestamp:     time.Now().UTC(),
 				},
 			})
@@ -2176,79 +2495,138 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 				"alert_status", alertStatus,
 			)
 		}
-		// Check ongoing balance
-		isOngoingBalanceBelowThreshold := ongoingBalance.LessThanOrEqual(threshold)
+
+		// Ongoing balance alert check
+		// Check if ongoing balance is <= threshold (below or equal triggers alert)
+		isOngoingBalanceBelowOrEqualThreshold := ongoingBalance.LessThanOrEqual(threshold)
 
 		// Determine alert status based on balance check
 		var alertStatus types.AlertState
-		if isOngoingBalanceBelowThreshold {
+		if isOngoingBalanceBelowOrEqualThreshold {
 			alertStatus = types.AlertStateInAlarm
 		} else {
 			alertStatus = types.AlertStateOk
 		}
 
-		s.Logger.Infow("determined alert status",
+		s.Logger.Infow("ongoing balance alert check - determined status",
 			"wallet_id", w.ID,
+			"ongoing_balance", ongoingBalance,
+			"threshold", threshold,
+			"is_below_or_equal_threshold", isOngoingBalanceBelowOrEqualThreshold,
 			"alert_status", alertStatus,
-			"is_below_threshold", isOngoingBalanceBelowThreshold,
 			"event_id", req.ID,
 		)
 
-		// Use AlertLogsService to handle alert logging and webhook publishing
-		// For wallet alerts, we store the threshold info in AlertSettings format for consistency
 		// Get customer ID from wallet if available
 		var customerID *string
 		if w.CustomerID != "" {
 			customerID = lo.ToPtr(w.CustomerID)
 		}
 
-		err = alertLogsService.LogAlert(ctx, &LogAlertRequest{
+		// Prepare alert log request
+		logAlertReq := &LogAlertRequest{
 			EntityType:  types.AlertEntityTypeWallet,
 			EntityID:    w.ID,
-			CustomerID:  customerID, // Customer ID from wallet
+			CustomerID:  customerID,
 			AlertType:   types.AlertTypeLowOngoingBalance,
 			AlertStatus: alertStatus,
 			AlertInfo: types.AlertInfo{
 				AlertSettings: &types.AlertSettings{
 					Critical: &types.AlertThreshold{
-						Threshold: w.AlertConfig.Threshold.Value,
-						Condition: types.AlertConditionBelow, // Wallet alerts are "below" threshold
+						Threshold: threshold,
+						Condition: types.AlertConditionBelow,
 					},
 					AlertEnabled: lo.ToPtr(true),
 				},
-				ValueAtTime: *ongoingBalance,
+				ValueAtTime: ongoingBalance,
 				Timestamp:   time.Now().UTC(),
 			},
-		})
+		}
+
+		// Log the alert (AlertLogsService handles state transitions and webhook publishing)
+		err = alertLogsService.LogAlert(ctx, logAlertReq)
 		if err != nil {
-			s.Logger.Errorw("failed to log alert",
+			s.Logger.Errorw("failed to log ongoing balance alert",
 				"error", err,
 				"wallet_id", w.ID,
+				"alert_type", types.AlertTypeLowOngoingBalance,
 				"alert_status", alertStatus,
+				"ongoing_balance", ongoingBalance,
+				"threshold", threshold,
 				"event_id", req.ID,
 			)
 			continue
 		}
 
+		s.Logger.Infow("successfully logged ongoing balance alert",
+			"wallet_id", w.ID,
+			"alert_status", alertStatus,
+			"ongoing_balance", ongoingBalance,
+			"threshold", threshold,
+			"event_id", req.ID,
+		)
+
 		// Update wallet alert state to match the logged status (if it changed)
-		if w.AlertState != string(alertStatus) {
+		// Need to refetch wallet to get current AlertState
+		currentWallet, err := s.WalletRepo.GetWalletByID(ctx, w.ID)
+		if err != nil {
+			s.Logger.Errorw("failed to get wallet for alert state update",
+				"error", err,
+				"wallet_id", w.ID,
+				"event_id", req.ID,
+			)
+			continue
+		}
+
+		if currentWallet.AlertState != string(alertStatus) {
+			s.Logger.Debugw("updating wallet alert state",
+				"wallet_id", w.ID,
+				"old_state", currentWallet.AlertState,
+				"new_state", alertStatus,
+				"event_id", req.ID,
+			)
+
 			if err := s.UpdateWalletAlertState(ctx, w.ID, alertStatus); err != nil {
 				s.Logger.Errorw("failed to update wallet alert state",
 					"error", err,
 					"wallet_id", w.ID,
+					"old_state", currentWallet.AlertState,
+					"new_state", alertStatus,
 					"event_id", req.ID,
 				)
 				continue
 			}
+
+			s.Logger.Infow("wallet alert state updated successfully",
+				"wallet_id", w.ID,
+				"old_state", currentWallet.AlertState,
+				"new_state", alertStatus,
+				"event_id", req.ID,
+			)
+		} else {
+			s.Logger.Debugw("wallet alert state unchanged, skipping update",
+				"wallet_id", w.ID,
+				"current_state", currentWallet.AlertState,
+				"event_id", req.ID,
+			)
 		}
 
-		s.Logger.Infow("wallet alert check completed",
+		s.Logger.Infow("wallet ongoing balance alert check completed",
 			"wallet_id", w.ID,
 			"alert_status", alertStatus,
 			"event_id", req.ID,
 		)
-	}
 
+		// Check auto top-up
+		err = s.checkAutoTopup(ctx, w, lo.FromPtr(balance.RealTimeCreditBalance))
+		if err != nil {
+			s.Logger.Errorw("failed to trigger auto top-up",
+				"error", err,
+				"wallet_id", w.ID,
+			)
+			continue
+		}
+	}
 	s.Logger.Infow("completed wallet balance alert check for customer",
 		"customer_id", req.CustomerID,
 		"wallets_processed", len(wallets),
@@ -2281,4 +2659,51 @@ func (s *walletService) PublishWalletBalanceAlertEvent(ctx context.Context, cust
 			"force_calculate_balance", forceCalculateBalance,
 		)
 	}
+}
+
+// checkAutoTopup checks if auto top-up is enabled and triggers it if needed
+func (s *walletService) checkAutoTopup(ctx context.Context, w *wallet.Wallet, ongoingBalance decimal.Decimal) error {
+
+	if w.AutoTopup == nil || w.AutoTopup.Enabled == nil || !*w.AutoTopup.Enabled {
+		return ierr.NewError("auto top-up is not enabled").
+			WithHint("Auto top-up is not enabled").
+			WithReportableDetails(map[string]interface{}{
+				"wallet_id": w.ID,
+			}).
+			Mark(ierr.ErrInvalidOperation)
+	}
+
+	// Check if ongoing balance is below threshold
+	if ongoingBalance.LessThanOrEqual(*w.AutoTopup.Threshold) {
+		// Top up wallet
+		_, err := s.TopUpWallet(ctx, w.ID, &dto.TopUpWalletRequest{
+			CreditsToAdd:      *w.AutoTopup.Amount, // treat auto-topup amount as credits
+			Amount:            *w.AutoTopup.Amount,
+			TransactionReason: lo.Ternary(w.AutoTopup.Invoicing != nil && *w.AutoTopup.Invoicing, types.TransactionReasonPurchasedCreditInvoiced, types.TransactionReasonPurchasedCreditDirect),
+			IdempotencyKey:    lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION)),
+			Description:       "Auto top-up triggered for low ongoing balance",
+			Metadata:          types.Metadata{"auto_topup": "true"},
+		})
+		if err != nil {
+			s.Logger.Errorw("failed to top up wallet for auto top-up",
+				"error", err,
+				"wallet_id", w.ID,
+				"auto_topup_threshold", *w.AutoTopup.Threshold,
+				"auto_topup_amount", *w.AutoTopup.Amount,
+			)
+		}
+		s.Logger.Debugw("auto top-up triggered",
+			"wallet_id", w.ID,
+			"auto_topup_threshold", *w.AutoTopup.Threshold,
+			"auto_topup_amount", *w.AutoTopup.Amount,
+		)
+	}
+
+	s.Logger.Infow("auto top-up completed",
+		"wallet_id", w.ID,
+		"auto_topup_threshold", *w.AutoTopup.Threshold,
+		"auto_topup_amount", *w.AutoTopup.Amount,
+	)
+
+	return nil
 }

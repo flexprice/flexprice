@@ -255,6 +255,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// Addon management for subscriptions - moved under subscription handler
 			subscription.POST("/addon", handlers.Subscription.AddAddonToSubscription)
 			subscription.DELETE("/addon", handlers.Subscription.RemoveAddonToSubscription)
+			subscription.GET("/:id/addons/associations", handlers.Subscription.GetActiveAddonAssociations)
 
 			// Subscription plan changes (upgrade/downgrade)
 			subscription.POST("/:id/change/preview", handlers.SubscriptionChange.PreviewSubscriptionChange)
@@ -269,6 +270,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		wallet := v1Private.Group("/wallets")
 		{
 			wallet.POST("", handlers.Wallet.CreateWallet)
+			wallet.GET("", handlers.Wallet.ListWallets)
 			wallet.GET("/:id", handlers.Wallet.GetWalletByID)
 			wallet.GET("/:id/transactions", handlers.Wallet.GetWalletTransactions)
 			wallet.POST("/:id/top-up", handlers.Wallet.TopUpWallet)
@@ -277,6 +279,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.GET("/:id/balance/real-time-v2", handlers.Wallet.GetWalletBalanceV2)
 			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
 			wallet.POST("/:id/debit", handlers.Wallet.ManualBalanceDebit)
+			wallet.POST("/transactions/search", handlers.Wallet.ListWalletTransactionsByFilter)
+			wallet.POST("/search", handlers.Wallet.ListWalletsByFilter)
 		}
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")
@@ -433,6 +437,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			costsheets.DELETE("/:id", handlers.Costsheet.DeleteCostsheet)
 			costsheets.GET("/active", handlers.Costsheet.GetActiveCostsheetForTenant)
 			costsheets.POST("/analytics", handlers.RevenueAnalytics.GetDetailedCostAnalytics)
+			costsheets.POST("/analytics-v2", handlers.RevenueAnalytics.GetDetailedCostAnalyticsV2)
 		}
 
 		// Credit note routes

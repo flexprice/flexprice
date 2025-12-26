@@ -563,6 +563,15 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 	groupByColumnAliases := []string{}             // for SELECT clause
 	groupByFieldMapping := make(map[string]string) // maps original field to column alias
 
+	// Check if source is in group_by
+	sourceInGroupBy := false
+	for _, groupBy := range params.GroupBy {
+		if groupBy == "source" {
+			sourceInGroupBy = true
+			break
+		}
+	}
+
 	for _, groupBy := range params.GroupBy {
 		switch {
 		case groupBy == "feature_id":
@@ -597,6 +606,10 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		"SUM(cost * sign) AS total_cost",
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
 	)
+	// Add sources array when source is not in group_by
+	if !sourceInGroupBy {
+		selectColumns = append(selectColumns, "groupUniqArray(source) AS sources")
+	}
 
 	aggregateQuery := fmt.Sprintf(`
 		SELECT 
@@ -696,6 +709,9 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 
 		// Scan the row based on group by columns
 		expectedColumns := len(params.GroupBy) + 3 // +3 for total_usage, total_cost, event_count
+		if !sourceInGroupBy {
+			expectedColumns++ // +1 for sources array
+		}
 		scanArgs := make([]interface{}, expectedColumns)
 
 		// Prepare scan targets for each group by field
@@ -708,6 +724,11 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 		scanArgs[len(params.GroupBy)] = &analytics.TotalUsage
 		scanArgs[len(params.GroupBy)+1] = &analytics.TotalCost
 		scanArgs[len(params.GroupBy)+2] = &analytics.EventCount
+		// Add sources array scan target when source is not in group_by
+		if !sourceInGroupBy {
+			analytics.Sources = []string{}
+			scanArgs[len(params.GroupBy)+3] = &analytics.Sources
+		}
 
 		if err := rows.Scan(scanArgs...); err != nil {
 			SetSpanError(span, err)

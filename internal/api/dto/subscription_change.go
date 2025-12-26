@@ -129,19 +129,19 @@ type SubscriptionChangeExecuteResponse struct {
 // ProrationDetails contains detailed proration calculations
 type ProrationDetails struct {
 	// credit_amount is the credit amount from the old subscription
-	CreditAmount decimal.Decimal `json:"credit_amount"`
+	CreditAmount decimal.Decimal `json:"credit_amount" swaggertype:"string"`
 
 	// credit_description describes what the credit is for
 	CreditDescription string `json:"credit_description"`
 
 	// charge_amount is the charge amount for the new subscription
-	ChargeAmount decimal.Decimal `json:"charge_amount"`
+	ChargeAmount decimal.Decimal `json:"charge_amount" swaggertype:"string"`
 
 	// charge_description describes what the charge is for
 	ChargeDescription string `json:"charge_description"`
 
 	// net_amount is the net amount (charge - credit)
-	NetAmount decimal.Decimal `json:"net_amount"`
+	NetAmount decimal.Decimal `json:"net_amount" swaggertype:"string"`
 
 	// proration_date is the date used for proration calculations
 	ProrationDate time.Time `json:"proration_date"`
@@ -165,13 +165,13 @@ type ProrationDetails struct {
 // InvoicePreview contains preview information for an invoice
 type InvoicePreview struct {
 	// subtotal is the subtotal amount before taxes
-	Subtotal decimal.Decimal `json:"subtotal"`
+	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
 	// tax_amount is the total tax amount
-	TaxAmount decimal.Decimal `json:"tax_amount"`
+	TaxAmount decimal.Decimal `json:"tax_amount" swaggertype:"string"`
 
 	// total is the total amount including taxes
-	Total decimal.Decimal `json:"total"`
+	Total decimal.Decimal `json:"total" swaggertype:"string"`
 
 	// currency is the currency for all amounts
 	Currency string `json:"currency"`
@@ -189,13 +189,13 @@ type InvoiceLineItemPreview struct {
 	Description string `json:"description"`
 
 	// amount for this line item
-	Amount decimal.Decimal `json:"amount"`
+	Amount decimal.Decimal `json:"amount" swaggertype:"string"`
 
 	// quantity for this line item
-	Quantity decimal.Decimal `json:"quantity"`
+	Quantity decimal.Decimal `json:"quantity" swaggertype:"string"`
 
 	// unit_price for this line item
-	UnitPrice decimal.Decimal `json:"unit_price"`
+	UnitPrice decimal.Decimal `json:"unit_price" swaggertype:"string"`
 
 	// period_start for this line item (if applicable)
 	PeriodStart *time.Time `json:"period_start,omitempty"`

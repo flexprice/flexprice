@@ -167,6 +167,21 @@ func Priority(v int) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldPriority, v))
 }
 
+// StartDate applies equality check predicate on the "start_date" field. It's identical to StartDateEQ.
+func StartDate(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldStartDate, v))
+}
+
+// EndDate applies equality check predicate on the "end_date" field. It's identical to EndDateEQ.
+func EndDate(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldEndDate, v))
+}
+
+// CreditGrantAnchor applies equality check predicate on the "credit_grant_anchor" field. It's identical to CreditGrantAnchorEQ.
+func CreditGrantAnchor(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldCreditGrantAnchor, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldTenantID, v))
@@ -1455,6 +1470,156 @@ func MetadataIsNil() predicate.CreditGrant {
 // MetadataNotNil applies the NotNil predicate on the "metadata" field.
 func MetadataNotNil() predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldNotNull(FieldMetadata))
+}
+
+// StartDateEQ applies the EQ predicate on the "start_date" field.
+func StartDateEQ(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldStartDate, v))
+}
+
+// StartDateNEQ applies the NEQ predicate on the "start_date" field.
+func StartDateNEQ(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldStartDate, v))
+}
+
+// StartDateIn applies the In predicate on the "start_date" field.
+func StartDateIn(vs ...time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldStartDate, vs...))
+}
+
+// StartDateNotIn applies the NotIn predicate on the "start_date" field.
+func StartDateNotIn(vs ...time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldStartDate, vs...))
+}
+
+// StartDateGT applies the GT predicate on the "start_date" field.
+func StartDateGT(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldStartDate, v))
+}
+
+// StartDateGTE applies the GTE predicate on the "start_date" field.
+func StartDateGTE(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldStartDate, v))
+}
+
+// StartDateLT applies the LT predicate on the "start_date" field.
+func StartDateLT(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldStartDate, v))
+}
+
+// StartDateLTE applies the LTE predicate on the "start_date" field.
+func StartDateLTE(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldStartDate, v))
+}
+
+// StartDateIsNil applies the IsNil predicate on the "start_date" field.
+func StartDateIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldStartDate))
+}
+
+// StartDateNotNil applies the NotNil predicate on the "start_date" field.
+func StartDateNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldStartDate))
+}
+
+// EndDateEQ applies the EQ predicate on the "end_date" field.
+func EndDateEQ(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldEndDate, v))
+}
+
+// EndDateNEQ applies the NEQ predicate on the "end_date" field.
+func EndDateNEQ(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldEndDate, v))
+}
+
+// EndDateIn applies the In predicate on the "end_date" field.
+func EndDateIn(vs ...time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldEndDate, vs...))
+}
+
+// EndDateNotIn applies the NotIn predicate on the "end_date" field.
+func EndDateNotIn(vs ...time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldEndDate, vs...))
+}
+
+// EndDateGT applies the GT predicate on the "end_date" field.
+func EndDateGT(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldEndDate, v))
+}
+
+// EndDateGTE applies the GTE predicate on the "end_date" field.
+func EndDateGTE(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldEndDate, v))
+}
+
+// EndDateLT applies the LT predicate on the "end_date" field.
+func EndDateLT(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldEndDate, v))
+}
+
+// EndDateLTE applies the LTE predicate on the "end_date" field.
+func EndDateLTE(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldEndDate, v))
+}
+
+// EndDateIsNil applies the IsNil predicate on the "end_date" field.
+func EndDateIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldEndDate))
+}
+
+// EndDateNotNil applies the NotNil predicate on the "end_date" field.
+func EndDateNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldEndDate))
+}
+
+// CreditGrantAnchorEQ applies the EQ predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorEQ(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldCreditGrantAnchor, v))
+}
+
+// CreditGrantAnchorNEQ applies the NEQ predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorNEQ(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldCreditGrantAnchor, v))
+}
+
+// CreditGrantAnchorIn applies the In predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorIn(vs ...time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldCreditGrantAnchor, vs...))
+}
+
+// CreditGrantAnchorNotIn applies the NotIn predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorNotIn(vs ...time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldCreditGrantAnchor, vs...))
+}
+
+// CreditGrantAnchorGT applies the GT predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorGT(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldCreditGrantAnchor, v))
+}
+
+// CreditGrantAnchorGTE applies the GTE predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorGTE(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldCreditGrantAnchor, v))
+}
+
+// CreditGrantAnchorLT applies the LT predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorLT(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldCreditGrantAnchor, v))
+}
+
+// CreditGrantAnchorLTE applies the LTE predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorLTE(v time.Time) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldCreditGrantAnchor, v))
+}
+
+// CreditGrantAnchorIsNil applies the IsNil predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldCreditGrantAnchor))
+}
+
+// CreditGrantAnchorNotNil applies the NotNil predicate on the "credit_grant_anchor" field.
+func CreditGrantAnchorNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldCreditGrantAnchor))
 }
 
 // HasPlan applies the HasEdge predicate on the "plan" edge.

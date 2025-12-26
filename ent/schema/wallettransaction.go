@@ -38,9 +38,15 @@ func (WalletTransaction) Fields() []ent.Field {
 			}).
 			NotEmpty().
 			Immutable(),
+		field.String("customer_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional(),
 		field.String("type").
 			Default(string(types.TransactionTypeCredit)).
-			NotEmpty(),
+			NotEmpty().
+			GoType(types.TransactionType("")),
 		field.Other("amount", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,9)",
@@ -70,7 +76,8 @@ func (WalletTransaction) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Optional(),
+			Optional().
+			GoType(types.WalletTxReferenceType("")),
 		field.String("reference_id").
 			Optional(),
 		field.String("description").
@@ -84,7 +91,8 @@ func (WalletTransaction) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Default(string(types.TransactionStatusPending)),
+			Default(string(types.TransactionStatusPending)).
+			GoType(types.TransactionStatus("")),
 		field.Time("expiry_date").
 			SchemaType(map[string]string{
 				"postgres": "timestamp",
@@ -99,6 +107,15 @@ func (WalletTransaction) Fields() []ent.Field {
 			Annotations(
 				entsql.Default("0"),
 			),
+
+		// TODO: Add Immutable and NotEmpty constraints
+		field.String("currency").
+			SchemaType(map[string]string{
+				"postgres": "varchar(10)",
+			}).
+			Optional().
+			Nillable(),
+
 		field.String("idempotency_key").
 			Nillable().
 			Immutable().
@@ -108,7 +125,8 @@ func (WalletTransaction) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Immutable().
-			Default(string(types.TransactionReasonFreeCredit)),
+			Default(string(types.TransactionReasonFreeCredit)).
+			GoType(types.TransactionReason("")),
 		field.Int("priority").
 			Optional().
 			Nillable().
@@ -125,6 +143,7 @@ func (WalletTransaction) Edges() []ent.Edge {
 func (WalletTransaction) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("tenant_id", "environment_id", "wallet_id"),
+		index.Fields("tenant_id", "environment_id", "customer_id"),
 		index.Fields("tenant_id", "environment_id", "reference_type", "reference_id", "status"),
 		index.Fields("tenant_id", "environment_id", "created_at"),
 		index.Fields("tenant_id", "environment_id", "wallet_id", "type", "credits_available", "expiry_date").

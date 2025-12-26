@@ -37,7 +37,8 @@ func (Entitlement) Fields() []ent.Field {
 				"postgres": "varchar(50)",
 			}).
 			Default(string(types.ENTITLEMENT_ENTITY_TYPE_PLAN)).
-			Optional(),
+			Optional().
+			GoType(types.EntitlementEntityType("")),
 
 		field.String("entity_id").
 			SchemaType(map[string]string{
@@ -53,7 +54,8 @@ func (Entitlement) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty(),
+			NotEmpty().
+			GoType(types.FeatureType("")),
 		field.Bool("is_enabled").
 			Default(false),
 		field.Int64("usage_limit").
@@ -63,7 +65,8 @@ func (Entitlement) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",
 			}).
-			Optional(),
+			Optional().
+			GoType(types.EntitlementUsageResetPeriod("")),
 		field.Bool("is_soft_limit").
 			Default(false),
 		field.String("static_value").

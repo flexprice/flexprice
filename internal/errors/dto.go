@@ -10,5 +10,5 @@ type ErrorResponse struct {
 type ErrorDetail struct {
 	Display       string         `json:"message"`
 	InternalError string         `json:"internal_error,omitempty"`
-	Details       map[string]any `json:"details,omitempty"`
+	Details       map[string]any `json:"details,omitempty" swaggerignore:"true"`
 }

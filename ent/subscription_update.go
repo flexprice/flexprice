@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -97,15 +98,15 @@ func (su *SubscriptionUpdate) ClearLookupKey() *SubscriptionUpdate {
 }
 
 // SetSubscriptionStatus sets the "subscription_status" field.
-func (su *SubscriptionUpdate) SetSubscriptionStatus(s string) *SubscriptionUpdate {
-	su.mutation.SetSubscriptionStatus(s)
+func (su *SubscriptionUpdate) SetSubscriptionStatus(ts types.SubscriptionStatus) *SubscriptionUpdate {
+	su.mutation.SetSubscriptionStatus(ts)
 	return su
 }
 
 // SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableSubscriptionStatus(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetSubscriptionStatus(*s)
+func (su *SubscriptionUpdate) SetNillableSubscriptionStatus(ts *types.SubscriptionStatus) *SubscriptionUpdate {
+	if ts != nil {
+		su.SetSubscriptionStatus(*ts)
 	}
 	return su
 }
@@ -314,15 +315,15 @@ func (su *SubscriptionUpdate) ClearMetadata() *SubscriptionUpdate {
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (su *SubscriptionUpdate) SetPauseStatus(s string) *SubscriptionUpdate {
-	su.mutation.SetPauseStatus(s)
+func (su *SubscriptionUpdate) SetPauseStatus(ts types.PauseStatus) *SubscriptionUpdate {
+	su.mutation.SetPauseStatus(ts)
 	return su
 }
 
 // SetNillablePauseStatus sets the "pause_status" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillablePauseStatus(s *string) *SubscriptionUpdate {
-	if s != nil {
-		su.SetPauseStatus(*s)
+func (su *SubscriptionUpdate) SetNillablePauseStatus(ts *types.PauseStatus) *SubscriptionUpdate {
+	if ts != nil {
+		su.SetPauseStatus(*ts)
 	}
 	return su
 }
@@ -388,29 +389,29 @@ func (su *SubscriptionUpdate) ClearOverageFactor() *SubscriptionUpdate {
 }
 
 // SetPaymentBehavior sets the "payment_behavior" field.
-func (su *SubscriptionUpdate) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionUpdate {
-	su.mutation.SetPaymentBehavior(sb)
+func (su *SubscriptionUpdate) SetPaymentBehavior(tb types.PaymentBehavior) *SubscriptionUpdate {
+	su.mutation.SetPaymentBehavior(tb)
 	return su
 }
 
 // SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionUpdate {
-	if sb != nil {
-		su.SetPaymentBehavior(*sb)
+func (su *SubscriptionUpdate) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *SubscriptionUpdate {
+	if tb != nil {
+		su.SetPaymentBehavior(*tb)
 	}
 	return su
 }
 
 // SetCollectionMethod sets the "collection_method" field.
-func (su *SubscriptionUpdate) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionUpdate {
-	su.mutation.SetCollectionMethod(sm)
+func (su *SubscriptionUpdate) SetCollectionMethod(tm types.CollectionMethod) *SubscriptionUpdate {
+	su.mutation.SetCollectionMethod(tm)
 	return su
 }
 
 // SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionUpdate {
-	if sm != nil {
-		su.SetCollectionMethod(*sm)
+func (su *SubscriptionUpdate) SetNillableCollectionMethod(tm *types.CollectionMethod) *SubscriptionUpdate {
+	if tm != nil {
+		su.SetCollectionMethod(*tm)
 	}
 	return su
 }
@@ -751,25 +752,7 @@ func (su *SubscriptionUpdate) defaults() {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (su *SubscriptionUpdate) check() error {
-	if v, ok := su.mutation.PaymentBehavior(); ok {
-		if err := subscription.PaymentBehaviorValidator(v); err != nil {
-			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
-		}
-	}
-	if v, ok := su.mutation.CollectionMethod(); ok {
-		if err := subscription.CollectionMethodValidator(v); err != nil {
-			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
-		}
-	}
-	return nil
-}
-
 func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
-	if err := su.check(); err != nil {
-		return n, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	if ps := su.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
@@ -884,10 +867,10 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
 	}
 	if value, ok := su.mutation.PaymentBehavior(); ok {
-		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeString, value)
 	}
 	if value, ok := su.mutation.CollectionMethod(); ok {
-		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeString, value)
 	}
 	if value, ok := su.mutation.GatewayPaymentMethodID(); ok {
 		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)
@@ -1281,15 +1264,15 @@ func (suo *SubscriptionUpdateOne) ClearLookupKey() *SubscriptionUpdateOne {
 }
 
 // SetSubscriptionStatus sets the "subscription_status" field.
-func (suo *SubscriptionUpdateOne) SetSubscriptionStatus(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetSubscriptionStatus(s)
+func (suo *SubscriptionUpdateOne) SetSubscriptionStatus(ts types.SubscriptionStatus) *SubscriptionUpdateOne {
+	suo.mutation.SetSubscriptionStatus(ts)
 	return suo
 }
 
 // SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableSubscriptionStatus(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetSubscriptionStatus(*s)
+func (suo *SubscriptionUpdateOne) SetNillableSubscriptionStatus(ts *types.SubscriptionStatus) *SubscriptionUpdateOne {
+	if ts != nil {
+		suo.SetSubscriptionStatus(*ts)
 	}
 	return suo
 }
@@ -1498,15 +1481,15 @@ func (suo *SubscriptionUpdateOne) ClearMetadata() *SubscriptionUpdateOne {
 }
 
 // SetPauseStatus sets the "pause_status" field.
-func (suo *SubscriptionUpdateOne) SetPauseStatus(s string) *SubscriptionUpdateOne {
-	suo.mutation.SetPauseStatus(s)
+func (suo *SubscriptionUpdateOne) SetPauseStatus(ts types.PauseStatus) *SubscriptionUpdateOne {
+	suo.mutation.SetPauseStatus(ts)
 	return suo
 }
 
 // SetNillablePauseStatus sets the "pause_status" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillablePauseStatus(s *string) *SubscriptionUpdateOne {
-	if s != nil {
-		suo.SetPauseStatus(*s)
+func (suo *SubscriptionUpdateOne) SetNillablePauseStatus(ts *types.PauseStatus) *SubscriptionUpdateOne {
+	if ts != nil {
+		suo.SetPauseStatus(*ts)
 	}
 	return suo
 }
@@ -1572,29 +1555,29 @@ func (suo *SubscriptionUpdateOne) ClearOverageFactor() *SubscriptionUpdateOne {
 }
 
 // SetPaymentBehavior sets the "payment_behavior" field.
-func (suo *SubscriptionUpdateOne) SetPaymentBehavior(sb subscription.PaymentBehavior) *SubscriptionUpdateOne {
-	suo.mutation.SetPaymentBehavior(sb)
+func (suo *SubscriptionUpdateOne) SetPaymentBehavior(tb types.PaymentBehavior) *SubscriptionUpdateOne {
+	suo.mutation.SetPaymentBehavior(tb)
 	return suo
 }
 
 // SetNillablePaymentBehavior sets the "payment_behavior" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillablePaymentBehavior(sb *subscription.PaymentBehavior) *SubscriptionUpdateOne {
-	if sb != nil {
-		suo.SetPaymentBehavior(*sb)
+func (suo *SubscriptionUpdateOne) SetNillablePaymentBehavior(tb *types.PaymentBehavior) *SubscriptionUpdateOne {
+	if tb != nil {
+		suo.SetPaymentBehavior(*tb)
 	}
 	return suo
 }
 
 // SetCollectionMethod sets the "collection_method" field.
-func (suo *SubscriptionUpdateOne) SetCollectionMethod(sm subscription.CollectionMethod) *SubscriptionUpdateOne {
-	suo.mutation.SetCollectionMethod(sm)
+func (suo *SubscriptionUpdateOne) SetCollectionMethod(tm types.CollectionMethod) *SubscriptionUpdateOne {
+	suo.mutation.SetCollectionMethod(tm)
 	return suo
 }
 
 // SetNillableCollectionMethod sets the "collection_method" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCollectionMethod(sm *subscription.CollectionMethod) *SubscriptionUpdateOne {
-	if sm != nil {
-		suo.SetCollectionMethod(*sm)
+func (suo *SubscriptionUpdateOne) SetNillableCollectionMethod(tm *types.CollectionMethod) *SubscriptionUpdateOne {
+	if tm != nil {
+		suo.SetCollectionMethod(*tm)
 	}
 	return suo
 }
@@ -1948,25 +1931,7 @@ func (suo *SubscriptionUpdateOne) defaults() {
 	}
 }
 
-// check runs all checks and user-defined validators on the builder.
-func (suo *SubscriptionUpdateOne) check() error {
-	if v, ok := suo.mutation.PaymentBehavior(); ok {
-		if err := subscription.PaymentBehaviorValidator(v); err != nil {
-			return &ValidationError{Name: "payment_behavior", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_behavior": %w`, err)}
-		}
-	}
-	if v, ok := suo.mutation.CollectionMethod(); ok {
-		if err := subscription.CollectionMethodValidator(v); err != nil {
-			return &ValidationError{Name: "collection_method", err: fmt.Errorf(`ent: validator failed for field "Subscription.collection_method": %w`, err)}
-		}
-	}
-	return nil
-}
-
 func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscription, err error) {
-	if err := suo.check(); err != nil {
-		return _node, err
-	}
 	_spec := sqlgraph.NewUpdateSpec(subscription.Table, subscription.Columns, sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString))
 	id, ok := suo.mutation.ID()
 	if !ok {
@@ -2098,10 +2063,10 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 		_spec.ClearField(subscription.FieldOverageFactor, field.TypeOther)
 	}
 	if value, ok := suo.mutation.PaymentBehavior(); ok {
-		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeEnum, value)
+		_spec.SetField(subscription.FieldPaymentBehavior, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.CollectionMethod(); ok {
-		_spec.SetField(subscription.FieldCollectionMethod, field.TypeEnum, value)
+		_spec.SetField(subscription.FieldCollectionMethod, field.TypeString, value)
 	}
 	if value, ok := suo.mutation.GatewayPaymentMethodID(); ok {
 		_spec.SetField(subscription.FieldGatewayPaymentMethodID, field.TypeString, value)

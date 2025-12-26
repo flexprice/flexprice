@@ -145,7 +145,7 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path string true "Task ID"
 // @Param status body dto.UpdateTaskStatusRequest true "Status update"
-// @Success 200 {object} gin.H
+// @Success 200 {object} dto.SuccessResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse

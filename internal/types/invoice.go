@@ -37,7 +37,8 @@ func (c InvoiceCadence) Validate() error {
 		InvoiceCadenceArrear,
 		InvoiceCadenceAdvance,
 	}
-	if !lo.Contains(allowed, c) {
+
+	if c != "" && !lo.Contains(allowed, c) {
 		return ierr.NewError("invalid invoice cadence").
 			WithHint("Please provide a valid invoice cadence").
 			WithReportableDetails(map[string]any{
@@ -73,7 +74,8 @@ func (f InvoiceFlowType) Validate() error {
 		InvoiceFlowManual,
 		InvoiceFlowCancel,
 	}
-	if !lo.Contains(allowed, f) {
+
+	if f != "" && !lo.Contains(allowed, f) {
 		return ierr.NewError("invalid invoice flow type").
 			WithHint("Please provide a valid invoice flow type").
 			WithReportableDetails(map[string]any{
@@ -106,7 +108,8 @@ func (t InvoiceType) Validate() error {
 		InvoiceTypeOneOff,
 		InvoiceTypeCredit,
 	}
-	if !lo.Contains(allowed, t) {
+
+	if t != "" && !lo.Contains(allowed, t) {
 		return ierr.NewError("invalid invoice type").
 			WithHint("Please provide a valid invoice type").
 			WithReportableDetails(map[string]any{
@@ -139,7 +142,8 @@ func (s InvoiceStatus) Validate() error {
 		InvoiceStatusFinalized,
 		InvoiceStatusVoided,
 	}
-	if !lo.Contains(allowed, s) {
+
+	if s != "" && !lo.Contains(allowed, s) {
 		return ierr.NewError("invalid invoice status").
 			WithHint("Please provide a valid invoice status").
 			WithReportableDetails(map[string]any{
@@ -178,7 +182,8 @@ func (r InvoiceBillingReason) Validate() error {
 		InvoiceBillingReasonProration,
 		InvoiceBillingReasonManual,
 	}
-	if !lo.Contains(allowed, r) {
+
+	if r != "" && !lo.Contains(allowed, r) {
 		return ierr.NewError("invalid invoice billing reason").
 			WithHint("Please provide a valid invoice billing reason").
 			WithReportableDetails(map[string]any{

@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -181,9 +182,9 @@ var (
 	// InvoiceTypeValidator is a validator for the "invoice_type" field. It is called by the builders before save.
 	InvoiceTypeValidator func(string) error
 	// DefaultInvoiceStatus holds the default value on creation for the "invoice_status" field.
-	DefaultInvoiceStatus string
+	DefaultInvoiceStatus types.InvoiceStatus
 	// DefaultPaymentStatus holds the default value on creation for the "payment_status" field.
-	DefaultPaymentStatus string
+	DefaultPaymentStatus types.PaymentStatus
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
 	// DefaultAmountDue holds the default value on creation for the "amount_due" field.

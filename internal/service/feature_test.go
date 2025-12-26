@@ -58,6 +58,7 @@ func (s *FeatureServiceSuite) setupService() {
 
 	s.service = NewFeatureService(ServiceParams{
 		Logger:           s.GetLogger(),
+		DB:               s.GetDB(),
 		FeatureRepo:      s.featureRepo,
 		MeterRepo:        s.meterRepo,
 		EntitlementRepo:  s.entitlementRepo,

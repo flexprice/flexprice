@@ -58,27 +58,29 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 	priceBuilder := client.Price.Create().
 		SetID(p.ID).
 		SetTenantID(p.TenantID).
-		SetAmount(p.Amount.InexactFloat64()).
+		SetAmount(p.Amount).
 		SetCurrency(p.Currency).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPriceUnitType(string(p.PriceUnitType)).
-		SetType(string(p.Type)).
-		SetBillingPeriod(string(p.BillingPeriod)).
+		SetPriceUnitType(p.PriceUnitType).
+		SetType(p.Type).
+		SetBillingPeriod(p.BillingPeriod).
 		SetBillingPeriodCount(p.BillingPeriodCount).
-		SetBillingModel(string(p.BillingModel)).
-		SetBillingCadence(string(p.BillingCadence)).
+		SetBillingModel(p.BillingModel).
+		SetDisplayName(p.DisplayName).
+		SetBillingCadence(p.BillingCadence).
 		SetNillableStartDate(p.StartDate).
 		SetNillableEndDate(p.EndDate).
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
-		SetInvoiceCadence(string(p.InvoiceCadence)).
+		SetInvoiceCadence(p.InvoiceCadence).
 		SetTrialPeriod(p.TrialPeriod).
-		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
+		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
 		SetPriceUnitTiers(p.ToPriceUnitTiers()).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
+		SetNillableMinQuantity(p.MinQuantity).
 		SetStatus(string(p.Status)).
 		SetCreatedAt(p.CreatedAt).
 		SetUpdatedAt(p.UpdatedAt).
@@ -86,7 +88,7 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
 		SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
-		SetEntityType(string(p.EntityType)).
+		SetEntityType(p.EntityType).
 		SetEntityID(p.EntityID)
 
 	if p.PriceUnitID != "" {
@@ -96,13 +98,13 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		priceBuilder.SetPriceUnit(p.PriceUnit)
 	}
 	if !p.PriceUnitAmount.IsZero() {
-		priceBuilder.SetPriceUnitAmount(p.PriceUnitAmount.InexactFloat64())
+		priceBuilder.SetPriceUnitAmount(p.PriceUnitAmount)
 	}
 	if p.DisplayPriceUnitAmount != "" {
 		priceBuilder.SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount)
 	}
 	if !p.ConversionRate.IsZero() {
-		priceBuilder.SetConversionRate(p.ConversionRate.InexactFloat64())
+		priceBuilder.SetConversionRate(p.ConversionRate)
 	}
 
 	price, err := priceBuilder.Save(ctx)
@@ -278,18 +280,19 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 			price.TenantID(p.TenantID),
 			price.EnvironmentID(types.GetEnvironmentID(ctx)),
 		).
-		SetAmount(p.Amount.InexactFloat64()).
+		SetAmount(p.Amount).
 		SetDisplayAmount(p.DisplayAmount).
-		SetPriceUnitType(string(p.PriceUnitType)).
-		SetType(string(p.Type)).
-		SetBillingPeriod(string(p.BillingPeriod)).
+		SetPriceUnitType(p.PriceUnitType).
+		SetType(p.Type).
+		SetBillingPeriod(p.BillingPeriod).
 		SetBillingPeriodCount(p.BillingPeriodCount).
-		SetBillingModel(string(p.BillingModel)).
-		SetBillingCadence(string(p.BillingCadence)).
+		SetBillingModel(p.BillingModel).
+		SetBillingCadence(p.BillingCadence).
 		SetNillableMeterID(lo.ToPtr(p.MeterID)).
-		SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
+		SetNillableTierMode(lo.ToPtr(p.TierMode)).
 		SetTiers(p.ToEntTiers()).
 		SetPriceUnitTiers(p.ToPriceUnitTiers()).
+		SetDisplayName(p.DisplayName).
 		SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 		SetLookupKey(p.LookupKey).
 		SetNillableEndDate(p.EndDate).
@@ -394,27 +397,29 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 		builders[i] = client.Price.Create().
 			SetID(p.ID).
 			SetTenantID(p.TenantID).
-			SetAmount(p.Amount.InexactFloat64()).
+			SetAmount(p.Amount).
 			SetCurrency(p.Currency).
 			SetDisplayAmount(p.DisplayAmount).
 			SetEntityID(p.EntityID).
-			SetEntityType(string(p.EntityType)).
-			SetType(string(p.Type)).
-			SetBillingPeriod(string(p.BillingPeriod)).
+			SetEntityType(p.EntityType).
+			SetType(p.Type).
+			SetBillingPeriod(p.BillingPeriod).
 			SetBillingPeriodCount(p.BillingPeriodCount).
-			SetBillingModel(string(p.BillingModel)).
-			SetBillingCadence(string(p.BillingCadence)).
-			SetInvoiceCadence(string(p.InvoiceCadence)).
+			SetBillingModel(p.BillingModel).
+			SetDisplayName(p.DisplayName).
+			SetBillingCadence(p.BillingCadence).
+			SetInvoiceCadence(p.InvoiceCadence).
 			SetNillableStartDate(p.StartDate).
 			SetNillableEndDate(p.EndDate).
 			SetTrialPeriod(p.TrialPeriod).
 			SetNillableMeterID(lo.ToPtr(p.MeterID)).
-			SetNillableTierMode(lo.ToPtr(string(p.TierMode))).
+			SetNillableTierMode(lo.ToPtr(p.TierMode)).
 			SetTiers(p.ToEntTiers()).
 			SetPriceUnitTiers(p.ToPriceUnitTiers()).
 			SetTransformQuantity(types.TransformQuantity(p.TransformQuantity)).
 			SetLookupKey(p.LookupKey).
 			SetDescription(p.Description).
+			SetNillableMinQuantity(p.MinQuantity).
 			SetMetadata(map[string]string(p.Metadata)).
 			SetEnvironmentID(p.EnvironmentID).
 			SetStatus(string(p.Status)).
@@ -543,7 +548,7 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 
 	// entity type filter
 	if f.EntityType != nil {
-		query = query.Where(price.EntityType(string(*f.EntityType)))
+		query = query.Where(price.EntityType(*f.EntityType))
 	}
 
 	// entity id filter

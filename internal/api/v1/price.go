@@ -189,7 +189,8 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Price ID"
-// @Success 200 {object} gin.H
+// @Param request body dto.DeletePriceRequest true "Delete Price Request"
+// @Success 200 {object} dto.SuccessResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /prices/{id} [delete]

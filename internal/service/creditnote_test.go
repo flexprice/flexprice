@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -50,6 +51,11 @@ func (s *CreditNoteServiceSuite) SetupTest() {
 	s.setupTestData()
 }
 
+// GetContext returns context with environment ID set for settings lookup
+func (s *CreditNoteServiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *CreditNoteServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
 }
@@ -82,7 +88,9 @@ func (s *CreditNoteServiceSuite) setupService() {
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		TaxAppliedRepo:             s.GetStores().TaxAppliedRepo,
 		SettingsRepo:               s.GetStores().SettingsRepo,
+		FeatureUsageRepo:           s.GetStores().FeatureUsageRepo,
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
+		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 }
 
@@ -414,13 +422,16 @@ func (s *CreditNoteServiceSuite) createTestInvoices() {
 func (s *CreditNoteServiceSuite) createTestWallets() {
 	// Create test wallets using the wallet service
 	walletService := NewWalletService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		WalletRepo:       s.GetStores().WalletRepo,
-		AlertLogsRepo:    s.GetStores().AlertLogsRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               s.GetStores().WalletRepo,
+		SettingsRepo:             s.GetStores().SettingsRepo,
+		FeatureUsageRepo:         s.GetStores().FeatureUsageRepo,
+		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
 	})
 
 	// Create USD wallet

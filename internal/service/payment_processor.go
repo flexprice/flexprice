@@ -601,6 +601,10 @@ func (p *paymentProcessor) handleCreditsPayment(ctx context.Context, paymentObj 
 		},
 	}
 
+	if paymentObj.DestinationType == types.PaymentDestinationTypeInvoice {
+		operation.InvoiceID = &paymentObj.DestinationID
+	}
+
 	// Create wallet service
 	walletService := NewWalletService(p.ServiceParams)
 

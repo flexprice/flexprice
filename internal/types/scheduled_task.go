@@ -42,6 +42,7 @@ const (
 	ScheduledTaskEntityTypeEvents       ScheduledTaskEntityType = "events"
 	ScheduledTaskEntityTypeInvoice      ScheduledTaskEntityType = "invoice"
 	ScheduledTaskEntityTypeCreditTopups ScheduledTaskEntityType = "credit_topups"
+	ScheduledTaskEntityTypeCreditUsage  ScheduledTaskEntityType = "credit_usage"
 )
 
 // Validate validates the entity type
@@ -50,6 +51,7 @@ func (e ScheduledTaskEntityType) Validate() error {
 		ScheduledTaskEntityTypeEvents,
 		ScheduledTaskEntityTypeInvoice,
 		ScheduledTaskEntityTypeCreditTopups,
+		ScheduledTaskEntityTypeCreditUsage,
 	}
 	if e == "" {
 		return ierr.NewError("entity type is required").

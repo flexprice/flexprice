@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // PriceUpdate is the builder for updating Price entities.
@@ -70,24 +71,37 @@ func (pu *PriceUpdate) ClearUpdatedBy() *PriceUpdate {
 	return pu
 }
 
-// SetAmount sets the "amount" field.
-func (pu *PriceUpdate) SetAmount(f float64) *PriceUpdate {
-	pu.mutation.ResetAmount()
-	pu.mutation.SetAmount(f)
+// SetDisplayName sets the "display_name" field.
+func (pu *PriceUpdate) SetDisplayName(s string) *PriceUpdate {
+	pu.mutation.SetDisplayName(s)
 	return pu
 }
 
-// SetNillableAmount sets the "amount" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableAmount(f *float64) *PriceUpdate {
-	if f != nil {
-		pu.SetAmount(*f)
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableDisplayName(s *string) *PriceUpdate {
+	if s != nil {
+		pu.SetDisplayName(*s)
 	}
 	return pu
 }
 
-// AddAmount adds f to the "amount" field.
-func (pu *PriceUpdate) AddAmount(f float64) *PriceUpdate {
-	pu.mutation.AddAmount(f)
+// ClearDisplayName clears the value of the "display_name" field.
+func (pu *PriceUpdate) ClearDisplayName() *PriceUpdate {
+	pu.mutation.ClearDisplayName()
+	return pu
+}
+
+// SetAmount sets the "amount" field.
+func (pu *PriceUpdate) SetAmount(d decimal.Decimal) *PriceUpdate {
+	pu.mutation.SetAmount(d)
+	return pu
+}
+
+// SetNillableAmount sets the "amount" field if the given value is not nil.
+func (pu *PriceUpdate) SetNillableAmount(d *decimal.Decimal) *PriceUpdate {
+	if d != nil {
+		pu.SetAmount(*d)
+	}
 	return pu
 }
 
@@ -120,15 +134,15 @@ func (pu *PriceUpdate) SetNillableDisplayAmount(s *string) *PriceUpdate {
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
-func (pu *PriceUpdate) SetPriceUnitType(s string) *PriceUpdate {
-	pu.mutation.SetPriceUnitType(s)
+func (pu *PriceUpdate) SetPriceUnitType(tut types.PriceUnitType) *PriceUpdate {
+	pu.mutation.SetPriceUnitType(tut)
 	return pu
 }
 
 // SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePriceUnitType(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetPriceUnitType(*s)
+func (pu *PriceUpdate) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceUpdate {
+	if tut != nil {
+		pu.SetPriceUnitType(*tut)
 	}
 	return pu
 }
@@ -174,23 +188,16 @@ func (pu *PriceUpdate) ClearPriceUnit() *PriceUpdate {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (pu *PriceUpdate) SetPriceUnitAmount(f float64) *PriceUpdate {
-	pu.mutation.ResetPriceUnitAmount()
-	pu.mutation.SetPriceUnitAmount(f)
+func (pu *PriceUpdate) SetPriceUnitAmount(d decimal.Decimal) *PriceUpdate {
+	pu.mutation.SetPriceUnitAmount(d)
 	return pu
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillablePriceUnitAmount(f *float64) *PriceUpdate {
-	if f != nil {
-		pu.SetPriceUnitAmount(*f)
+func (pu *PriceUpdate) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceUpdate {
+	if d != nil {
+		pu.SetPriceUnitAmount(*d)
 	}
-	return pu
-}
-
-// AddPriceUnitAmount adds f to the "price_unit_amount" field.
-func (pu *PriceUpdate) AddPriceUnitAmount(f float64) *PriceUpdate {
-	pu.mutation.AddPriceUnitAmount(f)
 	return pu
 }
 
@@ -221,23 +228,16 @@ func (pu *PriceUpdate) ClearDisplayPriceUnitAmount() *PriceUpdate {
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (pu *PriceUpdate) SetConversionRate(f float64) *PriceUpdate {
-	pu.mutation.ResetConversionRate()
-	pu.mutation.SetConversionRate(f)
+func (pu *PriceUpdate) SetConversionRate(d decimal.Decimal) *PriceUpdate {
+	pu.mutation.SetConversionRate(d)
 	return pu
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableConversionRate(f *float64) *PriceUpdate {
-	if f != nil {
-		pu.SetConversionRate(*f)
+func (pu *PriceUpdate) SetNillableConversionRate(d *decimal.Decimal) *PriceUpdate {
+	if d != nil {
+		pu.SetConversionRate(*d)
 	}
-	return pu
-}
-
-// AddConversionRate adds f to the "conversion_rate" field.
-func (pu *PriceUpdate) AddConversionRate(f float64) *PriceUpdate {
-	pu.mutation.AddConversionRate(f)
 	return pu
 }
 
@@ -248,29 +248,29 @@ func (pu *PriceUpdate) ClearConversionRate() *PriceUpdate {
 }
 
 // SetType sets the "type" field.
-func (pu *PriceUpdate) SetType(s string) *PriceUpdate {
-	pu.mutation.SetType(s)
+func (pu *PriceUpdate) SetType(tt types.PriceType) *PriceUpdate {
+	pu.mutation.SetType(tt)
 	return pu
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableType(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetType(*s)
+func (pu *PriceUpdate) SetNillableType(tt *types.PriceType) *PriceUpdate {
+	if tt != nil {
+		pu.SetType(*tt)
 	}
 	return pu
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (pu *PriceUpdate) SetBillingPeriod(s string) *PriceUpdate {
-	pu.mutation.SetBillingPeriod(s)
+func (pu *PriceUpdate) SetBillingPeriod(tp types.BillingPeriod) *PriceUpdate {
+	pu.mutation.SetBillingPeriod(tp)
 	return pu
 }
 
 // SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableBillingPeriod(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetBillingPeriod(*s)
+func (pu *PriceUpdate) SetNillableBillingPeriod(tp *types.BillingPeriod) *PriceUpdate {
+	if tp != nil {
+		pu.SetBillingPeriod(*tp)
 	}
 	return pu
 }
@@ -297,29 +297,29 @@ func (pu *PriceUpdate) AddBillingPeriodCount(i int) *PriceUpdate {
 }
 
 // SetBillingModel sets the "billing_model" field.
-func (pu *PriceUpdate) SetBillingModel(s string) *PriceUpdate {
-	pu.mutation.SetBillingModel(s)
+func (pu *PriceUpdate) SetBillingModel(tm types.BillingModel) *PriceUpdate {
+	pu.mutation.SetBillingModel(tm)
 	return pu
 }
 
 // SetNillableBillingModel sets the "billing_model" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableBillingModel(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetBillingModel(*s)
+func (pu *PriceUpdate) SetNillableBillingModel(tm *types.BillingModel) *PriceUpdate {
+	if tm != nil {
+		pu.SetBillingModel(*tm)
 	}
 	return pu
 }
 
 // SetBillingCadence sets the "billing_cadence" field.
-func (pu *PriceUpdate) SetBillingCadence(s string) *PriceUpdate {
-	pu.mutation.SetBillingCadence(s)
+func (pu *PriceUpdate) SetBillingCadence(tc types.BillingCadence) *PriceUpdate {
+	pu.mutation.SetBillingCadence(tc)
 	return pu
 }
 
 // SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableBillingCadence(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetBillingCadence(*s)
+func (pu *PriceUpdate) SetNillableBillingCadence(tc *types.BillingCadence) *PriceUpdate {
+	if tc != nil {
+		pu.SetBillingCadence(*tc)
 	}
 	return pu
 }
@@ -357,15 +357,15 @@ func (pu *PriceUpdate) ClearFilterValues() *PriceUpdate {
 }
 
 // SetTierMode sets the "tier_mode" field.
-func (pu *PriceUpdate) SetTierMode(s string) *PriceUpdate {
-	pu.mutation.SetTierMode(s)
+func (pu *PriceUpdate) SetTierMode(tt types.BillingTier) *PriceUpdate {
+	pu.mutation.SetTierMode(tt)
 	return pu
 }
 
 // SetNillableTierMode sets the "tier_mode" field if the given value is not nil.
-func (pu *PriceUpdate) SetNillableTierMode(s *string) *PriceUpdate {
-	if s != nil {
-		pu.SetTierMode(*s)
+func (pu *PriceUpdate) SetNillableTierMode(tt *types.BillingTier) *PriceUpdate {
+	if tt != nil {
+		pu.SetTierMode(*tt)
 	}
 	return pu
 }
@@ -598,17 +598,17 @@ func (pu *PriceUpdate) check() error {
 		}
 	}
 	if v, ok := pu.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(v); err != nil {
+		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
 	if v, ok := pu.mutation.GetType(); ok {
-		if err := price.TypeValidator(v); err != nil {
+		if err := price.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
 		}
 	}
 	if v, ok := pu.mutation.BillingPeriod(); ok {
-		if err := price.BillingPeriodValidator(v); err != nil {
+		if err := price.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "Price.billing_period": %w`, err)}
 		}
 	}
@@ -618,13 +618,18 @@ func (pu *PriceUpdate) check() error {
 		}
 	}
 	if v, ok := pu.mutation.BillingModel(); ok {
-		if err := price.BillingModelValidator(v); err != nil {
+		if err := price.BillingModelValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_model", err: fmt.Errorf(`ent: validator failed for field "Price.billing_model": %w`, err)}
 		}
 	}
 	if v, ok := pu.mutation.BillingCadence(); ok {
-		if err := price.BillingCadenceValidator(v); err != nil {
+		if err := price.BillingCadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
+		}
+	}
+	if v, ok := pu.mutation.TierMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -660,11 +665,14 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if pu.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(price.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := pu.mutation.Amount(); ok {
-		_spec.SetField(price.FieldAmount, field.TypeFloat64, value)
+	if value, ok := pu.mutation.DisplayName(); ok {
+		_spec.SetField(price.FieldDisplayName, field.TypeString, value)
 	}
-	if value, ok := pu.mutation.AddedAmount(); ok {
-		_spec.AddField(price.FieldAmount, field.TypeFloat64, value)
+	if pu.mutation.DisplayNameCleared() {
+		_spec.ClearField(price.FieldDisplayName, field.TypeString)
+	}
+	if value, ok := pu.mutation.Amount(); ok {
+		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 	}
 	if value, ok := pu.mutation.Currency(); ok {
 		_spec.SetField(price.FieldCurrency, field.TypeString, value)
@@ -688,13 +696,10 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
 	}
 	if value, ok := pu.mutation.PriceUnitAmount(); ok {
-		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
-	}
-	if value, ok := pu.mutation.AddedPriceUnitAmount(); ok {
-		_spec.AddField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
 	}
 	if pu.mutation.PriceUnitAmountCleared() {
-		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeFloat64)
+		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeOther)
 	}
 	if value, ok := pu.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
@@ -703,13 +708,13 @@ func (pu *PriceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		_spec.ClearField(price.FieldDisplayPriceUnitAmount, field.TypeString)
 	}
 	if value, ok := pu.mutation.ConversionRate(); ok {
-		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
-	}
-	if value, ok := pu.mutation.AddedConversionRate(); ok {
-		_spec.AddField(price.FieldConversionRate, field.TypeFloat64, value)
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
 	}
 	if pu.mutation.ConversionRateCleared() {
-		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
+		_spec.ClearField(price.FieldConversionRate, field.TypeOther)
+	}
+	if pu.mutation.MinQuantityCleared() {
+		_spec.ClearField(price.FieldMinQuantity, field.TypeOther)
 	}
 	if value, ok := pu.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)
@@ -883,24 +888,37 @@ func (puo *PriceUpdateOne) ClearUpdatedBy() *PriceUpdateOne {
 	return puo
 }
 
-// SetAmount sets the "amount" field.
-func (puo *PriceUpdateOne) SetAmount(f float64) *PriceUpdateOne {
-	puo.mutation.ResetAmount()
-	puo.mutation.SetAmount(f)
+// SetDisplayName sets the "display_name" field.
+func (puo *PriceUpdateOne) SetDisplayName(s string) *PriceUpdateOne {
+	puo.mutation.SetDisplayName(s)
 	return puo
 }
 
-// SetNillableAmount sets the "amount" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableAmount(f *float64) *PriceUpdateOne {
-	if f != nil {
-		puo.SetAmount(*f)
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableDisplayName(s *string) *PriceUpdateOne {
+	if s != nil {
+		puo.SetDisplayName(*s)
 	}
 	return puo
 }
 
-// AddAmount adds f to the "amount" field.
-func (puo *PriceUpdateOne) AddAmount(f float64) *PriceUpdateOne {
-	puo.mutation.AddAmount(f)
+// ClearDisplayName clears the value of the "display_name" field.
+func (puo *PriceUpdateOne) ClearDisplayName() *PriceUpdateOne {
+	puo.mutation.ClearDisplayName()
+	return puo
+}
+
+// SetAmount sets the "amount" field.
+func (puo *PriceUpdateOne) SetAmount(d decimal.Decimal) *PriceUpdateOne {
+	puo.mutation.SetAmount(d)
+	return puo
+}
+
+// SetNillableAmount sets the "amount" field if the given value is not nil.
+func (puo *PriceUpdateOne) SetNillableAmount(d *decimal.Decimal) *PriceUpdateOne {
+	if d != nil {
+		puo.SetAmount(*d)
+	}
 	return puo
 }
 
@@ -933,15 +951,15 @@ func (puo *PriceUpdateOne) SetNillableDisplayAmount(s *string) *PriceUpdateOne {
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
-func (puo *PriceUpdateOne) SetPriceUnitType(s string) *PriceUpdateOne {
-	puo.mutation.SetPriceUnitType(s)
+func (puo *PriceUpdateOne) SetPriceUnitType(tut types.PriceUnitType) *PriceUpdateOne {
+	puo.mutation.SetPriceUnitType(tut)
 	return puo
 }
 
 // SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePriceUnitType(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetPriceUnitType(*s)
+func (puo *PriceUpdateOne) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceUpdateOne {
+	if tut != nil {
+		puo.SetPriceUnitType(*tut)
 	}
 	return puo
 }
@@ -987,23 +1005,16 @@ func (puo *PriceUpdateOne) ClearPriceUnit() *PriceUpdateOne {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (puo *PriceUpdateOne) SetPriceUnitAmount(f float64) *PriceUpdateOne {
-	puo.mutation.ResetPriceUnitAmount()
-	puo.mutation.SetPriceUnitAmount(f)
+func (puo *PriceUpdateOne) SetPriceUnitAmount(d decimal.Decimal) *PriceUpdateOne {
+	puo.mutation.SetPriceUnitAmount(d)
 	return puo
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillablePriceUnitAmount(f *float64) *PriceUpdateOne {
-	if f != nil {
-		puo.SetPriceUnitAmount(*f)
+func (puo *PriceUpdateOne) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceUpdateOne {
+	if d != nil {
+		puo.SetPriceUnitAmount(*d)
 	}
-	return puo
-}
-
-// AddPriceUnitAmount adds f to the "price_unit_amount" field.
-func (puo *PriceUpdateOne) AddPriceUnitAmount(f float64) *PriceUpdateOne {
-	puo.mutation.AddPriceUnitAmount(f)
 	return puo
 }
 
@@ -1034,23 +1045,16 @@ func (puo *PriceUpdateOne) ClearDisplayPriceUnitAmount() *PriceUpdateOne {
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (puo *PriceUpdateOne) SetConversionRate(f float64) *PriceUpdateOne {
-	puo.mutation.ResetConversionRate()
-	puo.mutation.SetConversionRate(f)
+func (puo *PriceUpdateOne) SetConversionRate(d decimal.Decimal) *PriceUpdateOne {
+	puo.mutation.SetConversionRate(d)
 	return puo
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableConversionRate(f *float64) *PriceUpdateOne {
-	if f != nil {
-		puo.SetConversionRate(*f)
+func (puo *PriceUpdateOne) SetNillableConversionRate(d *decimal.Decimal) *PriceUpdateOne {
+	if d != nil {
+		puo.SetConversionRate(*d)
 	}
-	return puo
-}
-
-// AddConversionRate adds f to the "conversion_rate" field.
-func (puo *PriceUpdateOne) AddConversionRate(f float64) *PriceUpdateOne {
-	puo.mutation.AddConversionRate(f)
 	return puo
 }
 
@@ -1061,29 +1065,29 @@ func (puo *PriceUpdateOne) ClearConversionRate() *PriceUpdateOne {
 }
 
 // SetType sets the "type" field.
-func (puo *PriceUpdateOne) SetType(s string) *PriceUpdateOne {
-	puo.mutation.SetType(s)
+func (puo *PriceUpdateOne) SetType(tt types.PriceType) *PriceUpdateOne {
+	puo.mutation.SetType(tt)
 	return puo
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableType(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetType(*s)
+func (puo *PriceUpdateOne) SetNillableType(tt *types.PriceType) *PriceUpdateOne {
+	if tt != nil {
+		puo.SetType(*tt)
 	}
 	return puo
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (puo *PriceUpdateOne) SetBillingPeriod(s string) *PriceUpdateOne {
-	puo.mutation.SetBillingPeriod(s)
+func (puo *PriceUpdateOne) SetBillingPeriod(tp types.BillingPeriod) *PriceUpdateOne {
+	puo.mutation.SetBillingPeriod(tp)
 	return puo
 }
 
 // SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableBillingPeriod(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetBillingPeriod(*s)
+func (puo *PriceUpdateOne) SetNillableBillingPeriod(tp *types.BillingPeriod) *PriceUpdateOne {
+	if tp != nil {
+		puo.SetBillingPeriod(*tp)
 	}
 	return puo
 }
@@ -1110,29 +1114,29 @@ func (puo *PriceUpdateOne) AddBillingPeriodCount(i int) *PriceUpdateOne {
 }
 
 // SetBillingModel sets the "billing_model" field.
-func (puo *PriceUpdateOne) SetBillingModel(s string) *PriceUpdateOne {
-	puo.mutation.SetBillingModel(s)
+func (puo *PriceUpdateOne) SetBillingModel(tm types.BillingModel) *PriceUpdateOne {
+	puo.mutation.SetBillingModel(tm)
 	return puo
 }
 
 // SetNillableBillingModel sets the "billing_model" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableBillingModel(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetBillingModel(*s)
+func (puo *PriceUpdateOne) SetNillableBillingModel(tm *types.BillingModel) *PriceUpdateOne {
+	if tm != nil {
+		puo.SetBillingModel(*tm)
 	}
 	return puo
 }
 
 // SetBillingCadence sets the "billing_cadence" field.
-func (puo *PriceUpdateOne) SetBillingCadence(s string) *PriceUpdateOne {
-	puo.mutation.SetBillingCadence(s)
+func (puo *PriceUpdateOne) SetBillingCadence(tc types.BillingCadence) *PriceUpdateOne {
+	puo.mutation.SetBillingCadence(tc)
 	return puo
 }
 
 // SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableBillingCadence(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetBillingCadence(*s)
+func (puo *PriceUpdateOne) SetNillableBillingCadence(tc *types.BillingCadence) *PriceUpdateOne {
+	if tc != nil {
+		puo.SetBillingCadence(*tc)
 	}
 	return puo
 }
@@ -1170,15 +1174,15 @@ func (puo *PriceUpdateOne) ClearFilterValues() *PriceUpdateOne {
 }
 
 // SetTierMode sets the "tier_mode" field.
-func (puo *PriceUpdateOne) SetTierMode(s string) *PriceUpdateOne {
-	puo.mutation.SetTierMode(s)
+func (puo *PriceUpdateOne) SetTierMode(tt types.BillingTier) *PriceUpdateOne {
+	puo.mutation.SetTierMode(tt)
 	return puo
 }
 
 // SetNillableTierMode sets the "tier_mode" field if the given value is not nil.
-func (puo *PriceUpdateOne) SetNillableTierMode(s *string) *PriceUpdateOne {
-	if s != nil {
-		puo.SetTierMode(*s)
+func (puo *PriceUpdateOne) SetNillableTierMode(tt *types.BillingTier) *PriceUpdateOne {
+	if tt != nil {
+		puo.SetTierMode(*tt)
 	}
 	return puo
 }
@@ -1424,17 +1428,17 @@ func (puo *PriceUpdateOne) check() error {
 		}
 	}
 	if v, ok := puo.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(v); err != nil {
+		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
 	if v, ok := puo.mutation.GetType(); ok {
-		if err := price.TypeValidator(v); err != nil {
+		if err := price.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
 		}
 	}
 	if v, ok := puo.mutation.BillingPeriod(); ok {
-		if err := price.BillingPeriodValidator(v); err != nil {
+		if err := price.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "Price.billing_period": %w`, err)}
 		}
 	}
@@ -1444,13 +1448,18 @@ func (puo *PriceUpdateOne) check() error {
 		}
 	}
 	if v, ok := puo.mutation.BillingModel(); ok {
-		if err := price.BillingModelValidator(v); err != nil {
+		if err := price.BillingModelValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_model", err: fmt.Errorf(`ent: validator failed for field "Price.billing_model": %w`, err)}
 		}
 	}
 	if v, ok := puo.mutation.BillingCadence(); ok {
-		if err := price.BillingCadenceValidator(v); err != nil {
+		if err := price.BillingCadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
+		}
+	}
+	if v, ok := puo.mutation.TierMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
 		}
 	}
 	return nil
@@ -1503,11 +1512,14 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 	if puo.mutation.EnvironmentIDCleared() {
 		_spec.ClearField(price.FieldEnvironmentID, field.TypeString)
 	}
-	if value, ok := puo.mutation.Amount(); ok {
-		_spec.SetField(price.FieldAmount, field.TypeFloat64, value)
+	if value, ok := puo.mutation.DisplayName(); ok {
+		_spec.SetField(price.FieldDisplayName, field.TypeString, value)
 	}
-	if value, ok := puo.mutation.AddedAmount(); ok {
-		_spec.AddField(price.FieldAmount, field.TypeFloat64, value)
+	if puo.mutation.DisplayNameCleared() {
+		_spec.ClearField(price.FieldDisplayName, field.TypeString)
+	}
+	if value, ok := puo.mutation.Amount(); ok {
+		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 	}
 	if value, ok := puo.mutation.Currency(); ok {
 		_spec.SetField(price.FieldCurrency, field.TypeString, value)
@@ -1531,13 +1543,10 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		_spec.ClearField(price.FieldPriceUnit, field.TypeString)
 	}
 	if value, ok := puo.mutation.PriceUnitAmount(); ok {
-		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
-	}
-	if value, ok := puo.mutation.AddedPriceUnitAmount(); ok {
-		_spec.AddField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
 	}
 	if puo.mutation.PriceUnitAmountCleared() {
-		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeFloat64)
+		_spec.ClearField(price.FieldPriceUnitAmount, field.TypeOther)
 	}
 	if value, ok := puo.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
@@ -1546,13 +1555,13 @@ func (puo *PriceUpdateOne) sqlSave(ctx context.Context) (_node *Price, err error
 		_spec.ClearField(price.FieldDisplayPriceUnitAmount, field.TypeString)
 	}
 	if value, ok := puo.mutation.ConversionRate(); ok {
-		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
-	}
-	if value, ok := puo.mutation.AddedConversionRate(); ok {
-		_spec.AddField(price.FieldConversionRate, field.TypeFloat64, value)
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
 	}
 	if puo.mutation.ConversionRateCleared() {
-		_spec.ClearField(price.FieldConversionRate, field.TypeFloat64)
+		_spec.ClearField(price.FieldConversionRate, field.TypeOther)
+	}
+	if puo.mutation.MinQuantityCleared() {
+		_spec.ClearField(price.FieldMinQuantity, field.TypeOther)
 	}
 	if value, ok := puo.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)

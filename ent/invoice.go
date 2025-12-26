@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/invoice"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -38,11 +39,11 @@ type Invoice struct {
 	// SubscriptionID holds the value of the "subscription_id" field.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// InvoiceType holds the value of the "invoice_type" field.
-	InvoiceType string `json:"invoice_type,omitempty"`
+	InvoiceType types.InvoiceType `json:"invoice_type,omitempty"`
 	// InvoiceStatus holds the value of the "invoice_status" field.
-	InvoiceStatus string `json:"invoice_status,omitempty"`
+	InvoiceStatus types.InvoiceStatus `json:"invoice_status,omitempty"`
 	// PaymentStatus holds the value of the "payment_status" field.
-	PaymentStatus string `json:"payment_status,omitempty"`
+	PaymentStatus types.PaymentStatus `json:"payment_status,omitempty"`
 	// Currency holds the value of the "currency" field.
 	Currency string `json:"currency,omitempty"`
 	// AmountDue holds the value of the "amount_due" field.
@@ -74,7 +75,7 @@ type Invoice struct {
 	// FinalizedAt holds the value of the "finalized_at" field.
 	FinalizedAt *time.Time `json:"finalized_at,omitempty"`
 	// BillingPeriod holds the value of the "billing_period" field.
-	BillingPeriod *string `json:"billing_period,omitempty"`
+	BillingPeriod *types.BillingPeriod `json:"billing_period,omitempty"`
 	// PeriodStart holds the value of the "period_start" field.
 	PeriodStart *time.Time `json:"period_start,omitempty"`
 	// PeriodEnd holds the value of the "period_end" field.
@@ -225,19 +226,19 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			if value, ok := values[j].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_type", values[j])
 			} else if value.Valid {
-				i.InvoiceType = value.String
+				i.InvoiceType = types.InvoiceType(value.String)
 			}
 		case invoice.FieldInvoiceStatus:
 			if value, ok := values[j].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field invoice_status", values[j])
 			} else if value.Valid {
-				i.InvoiceStatus = value.String
+				i.InvoiceStatus = types.InvoiceStatus(value.String)
 			}
 		case invoice.FieldPaymentStatus:
 			if value, ok := values[j].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field payment_status", values[j])
 			} else if value.Valid {
-				i.PaymentStatus = value.String
+				i.PaymentStatus = types.PaymentStatus(value.String)
 			}
 		case invoice.FieldCurrency:
 			if value, ok := values[j].(*sql.NullString); !ok {
@@ -339,8 +340,8 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 			if value, ok := values[j].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field billing_period", values[j])
 			} else if value.Valid {
-				i.BillingPeriod = new(string)
-				*i.BillingPeriod = value.String
+				i.BillingPeriod = new(types.BillingPeriod)
+				*i.BillingPeriod = types.BillingPeriod(value.String)
 			}
 		case invoice.FieldPeriodStart:
 			if value, ok := values[j].(*sql.NullTime); !ok {
@@ -480,13 +481,13 @@ func (i *Invoice) String() string {
 	}
 	builder.WriteString(", ")
 	builder.WriteString("invoice_type=")
-	builder.WriteString(i.InvoiceType)
+	builder.WriteString(fmt.Sprintf("%v", i.InvoiceType))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_status=")
-	builder.WriteString(i.InvoiceStatus)
+	builder.WriteString(fmt.Sprintf("%v", i.InvoiceStatus))
 	builder.WriteString(", ")
 	builder.WriteString("payment_status=")
-	builder.WriteString(i.PaymentStatus)
+	builder.WriteString(fmt.Sprintf("%v", i.PaymentStatus))
 	builder.WriteString(", ")
 	builder.WriteString("currency=")
 	builder.WriteString(i.Currency)
@@ -547,7 +548,7 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	if v := i.BillingPeriod; v != nil {
 		builder.WriteString("billing_period=")
-		builder.WriteString(*v)
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
 	if v := i.PeriodStart; v != nil {

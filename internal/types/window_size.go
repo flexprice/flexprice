@@ -68,3 +68,56 @@ func (w WindowSize) Validate() error {
 
 	return nil
 }
+
+// ToMinutes converts a WindowSize to its duration in minutes
+// This is used for comparing window sizes. For MONTH, we use 30 days as approximation.
+func (w WindowSize) ToMinutes() int {
+	switch w {
+	case WindowSizeMinute:
+		return 1
+	case WindowSize15Min:
+		return 15
+	case WindowSize30Min:
+		return 30
+	case WindowSizeHour:
+		return 60
+	case WindowSize3Hour:
+		return 180
+	case WindowSize6Hour:
+		return 360
+	case WindowSize12Hour:
+		return 720
+	case WindowSizeDay:
+		return 1440
+	case WindowSizeWeek:
+		return 10080
+	case WindowSizeMonth:
+		return 43200 // 30 days
+	default:
+		return 0
+	}
+}
+
+// IsLargerThan returns true if the current window size is larger than the other window size
+func (w WindowSize) IsLargerThan(other WindowSize) bool {
+	if w == "" || other == "" {
+		return false
+	}
+	return w.ToMinutes() > other.ToMinutes()
+}
+
+// Max returns the larger of two window sizes
+// If either is empty, returns the non-empty one
+// If both are empty, returns empty
+func (w WindowSize) Max(other WindowSize) WindowSize {
+	if w == "" {
+		return other
+	}
+	if other == "" {
+		return w
+	}
+	if w.ToMinutes() > other.ToMinutes() {
+		return w
+	}
+	return other
+}

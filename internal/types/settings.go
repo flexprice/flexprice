@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // SettingConfig defines the interface for setting configuration validation
@@ -18,11 +19,12 @@ type SettingConfig interface {
 type SettingKey string
 
 const (
-	SettingKeyInvoiceConfig      SettingKey = "invoice_config"
-	SettingKeySubscriptionConfig SettingKey = "subscription_config"
-	SettingKeyInvoicePDFConfig   SettingKey = "invoice_pdf_config"
-	SettingKeyEnvConfig          SettingKey = "env_config"
-	SettingKeyCustomerOnboarding SettingKey = "customer_onboarding"
+	SettingKeyInvoiceConfig            SettingKey = "invoice_config"
+	SettingKeySubscriptionConfig       SettingKey = "subscription_config"
+	SettingKeyInvoicePDFConfig         SettingKey = "invoice_pdf_config"
+	SettingKeyEnvConfig                SettingKey = "env_config"
+	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
+	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -33,6 +35,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyInvoicePDFConfig,
 		SettingKeyEnvConfig,
 		SettingKeyCustomerOnboarding,
+		SettingKeyWalletBalanceAlertConfig,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -141,6 +144,13 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		"actions":       []interface{}{},
 	}
 
+	defaultWalletBalanceAlertConfig := AlertConfig{
+		Threshold: &WalletAlertThreshold{
+			Type:  AlertThresholdTypeAmount,
+			Value: decimal.NewFromFloat(0.0),
+		},
+	}
+
 	// Convert typed structs to maps using centralized utility
 	invoiceConfigMap, err := utils.ToMap(defaultInvoiceConfig)
 	if err != nil {
@@ -160,6 +170,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 	// Already a map, no conversion needed
 	customerOnboardingConfigMap := defaultCustomerOnboardingConfig
+
+	defaultWalletBalanceAlertConfigMap, err := utils.ToMap(defaultWalletBalanceAlertConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
@@ -186,6 +201,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyCustomerOnboarding,
 			DefaultValue: customerOnboardingConfigMap,
 			Description:  "Default configuration for customer onboarding workflow",
+		},
+		SettingKeyWalletBalanceAlertConfig: {
+			Key:          SettingKeyWalletBalanceAlertConfig,
+			DefaultValue: defaultWalletBalanceAlertConfigMap,
+			Description:  "Default configuration for wallet balance alert configuration",
 		},
 	}, nil
 }
@@ -257,6 +277,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 				Mark(ierr.ErrValidation)
 		}
 		return nil
+
+	case SettingKeyWalletBalanceAlertConfig:
+		config, err := utils.ToStruct[AlertConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
 
 	default:
 		return ierr.NewErrorf("unknown setting key: %s", key).

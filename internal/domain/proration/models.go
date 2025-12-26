@@ -23,10 +23,10 @@ type ProrationParams struct {
 	Action          types.ProrationAction // Type of change
 	OldPriceID      string                // Old price ID (empty for add_item)
 	NewPriceID      string                // New price ID (empty for cancellation/remove_item)
-	OldQuantity     decimal.Decimal       // Old quantity (zero for add_item)
-	NewQuantity     decimal.Decimal       // New quantity (zero for remove_item/cancellation)
-	OldPricePerUnit decimal.Decimal       // Price per unit for the old item
-	NewPricePerUnit decimal.Decimal       // Price per unit for the new item
+	OldQuantity     decimal.Decimal       `swaggertype:"string"` // Old quantity (zero for add_item)
+	NewQuantity     decimal.Decimal       `swaggertype:"string"` // New quantity (zero for remove_item/cancellation)
+	OldPricePerUnit decimal.Decimal       `swaggertype:"string"` // Price per unit for the old item
+	NewPricePerUnit decimal.Decimal       `swaggertype:"string"` // Price per unit for the new item
 	ProrationDate   time.Time             // Effective date/time of the change
 
 	// Configuration & Context
@@ -38,8 +38,8 @@ type ProrationParams struct {
 	CustomerTimezone  string                  // Timezone of the customer
 
 	// Handling Multiple Changes / Credits
-	OriginalAmountPaid    decimal.Decimal         // Amount originally paid for the item(s) being changed in this period
-	PreviousCreditsIssued decimal.Decimal         // Sum of credits already issued against OriginalAmountPaid in this period
+	OriginalAmountPaid    decimal.Decimal         `swaggertype:"string"` // Amount originally paid for the item(s) being changed in this period
+	PreviousCreditsIssued decimal.Decimal         `swaggertype:"string"` // Sum of credits already issued against OriginalAmountPaid in this period
 	ProrationStrategy     types.ProrationStrategy // Strategy to use for proration
 	Currency              string                  // Currency of the proration
 
@@ -52,10 +52,10 @@ type ProrationParams struct {
 // ProrationLineItem represents a single credit or charge line item.
 type ProrationLineItem struct {
 	Description string          `json:"description"`
-	Amount      decimal.Decimal `json:"amount"`     // Positive for charge, negative for credit
-	StartDate   time.Time       `json:"start_date"` // Period this line item covers
-	EndDate     time.Time       `json:"end_date"`   // Period this line item covers
-	Quantity    decimal.Decimal `json:"quantity"`
+	Amount      decimal.Decimal `json:"amount" swaggertype:"string"` // Positive for charge, negative for credit
+	StartDate   time.Time       `json:"start_date"`                  // Period this line item covers
+	EndDate     time.Time       `json:"end_date"`                    // Period this line item covers
+	Quantity    decimal.Decimal `json:"quantity" swaggertype:"string"`
 	PriceID     string          `json:"price_id"` // Associated price ID if applicable
 	IsCredit    bool            `json:"is_credit"`
 }
@@ -64,7 +64,7 @@ type ProrationLineItem struct {
 type ProrationResult struct {
 	CreditItems        []ProrationLineItem   // Items representing credits back to the customer
 	ChargeItems        []ProrationLineItem   // Items representing new charges to the customer
-	NetAmount          decimal.Decimal       // Net amount (Sum of charges - sum of credits)
+	NetAmount          decimal.Decimal       `swaggertype:"string"` // Net amount (Sum of charges - sum of credits)
 	Currency           string                // Currency code
 	Action             types.ProrationAction // The action that generated this result
 	ProrationDate      time.Time             // Effective date used for calculation
@@ -85,7 +85,7 @@ type SubscriptionProrationParams struct {
 
 // SubscriptionProrationResult contains the results of subscription-level proration
 type SubscriptionProrationResult struct {
-	TotalProrationAmount decimal.Decimal
+	TotalProrationAmount decimal.Decimal             `swaggertype:"string"`
 	LineItemResults      map[string]*ProrationResult // Map of lineItemID to its proration result
 	InvoiceID            string                      // ID of the invoice created/updated with proration items
 	Currency             string                      // Currency of the proration

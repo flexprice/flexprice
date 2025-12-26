@@ -61,9 +61,9 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetTenantID(inv.TenantID).
 		SetCustomerID(inv.CustomerID).
 		SetNillableSubscriptionID(inv.SubscriptionID).
-		SetInvoiceType(string(inv.InvoiceType)).
-		SetInvoiceStatus(string(inv.InvoiceStatus)).
-		SetPaymentStatus(string(inv.PaymentStatus)).
+		SetInvoiceType(inv.InvoiceType).
+		SetInvoiceStatus(inv.InvoiceStatus).
+		SetPaymentStatus(inv.PaymentStatus).
 		SetCurrency(inv.Currency).
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
@@ -76,7 +76,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetNillablePaidAt(inv.PaidAt).
 		SetNillableVoidedAt(inv.VoidedAt).
 		SetNillableFinalizedAt(inv.FinalizedAt).
-		SetNillableBillingPeriod(inv.BillingPeriod).
+		SetBillingPeriod(types.BillingPeriod(lo.FromPtr(inv.BillingPeriod))).
 		SetNillableInvoicePdfURL(inv.InvoicePDFURL).
 		SetBillingReason(inv.BillingReason).
 		SetMetadata(inv.Metadata).
@@ -163,9 +163,9 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetTenantID(inv.TenantID).
 			SetCustomerID(inv.CustomerID).
 			SetNillableSubscriptionID(inv.SubscriptionID).
-			SetInvoiceType(string(inv.InvoiceType)).
-			SetInvoiceStatus(string(inv.InvoiceStatus)).
-			SetPaymentStatus(string(inv.PaymentStatus)).
+			SetInvoiceType(inv.InvoiceType).
+			SetInvoiceStatus(inv.InvoiceStatus).
+			SetPaymentStatus(inv.PaymentStatus).
 			SetCurrency(inv.Currency).
 			SetAmountDue(inv.AmountDue).
 			SetAmountPaid(inv.AmountPaid).
@@ -180,7 +180,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillableVoidedAt(inv.VoidedAt).
 			SetNillableFinalizedAt(inv.FinalizedAt).
 			SetNillableInvoicePdfURL(inv.InvoicePDFURL).
-			SetNillableBillingPeriod(inv.BillingPeriod).
+			SetBillingPeriod(types.BillingPeriod(lo.FromPtr(inv.BillingPeriod))).
 			SetBillingReason(inv.BillingReason).
 			SetMetadata(inv.Metadata).
 			SetVersion(inv.Version).
@@ -244,9 +244,9 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetCustomerID(item.CustomerID).
 					SetNillableSubscriptionID(item.SubscriptionID).
 					SetNillableEntityID(item.EntityID).
-					SetNillableEntityType(item.EntityType).
+					SetNillableEntityType(convertStringPtrToInvoiceLineItemEntityTypePtr(item.EntityType)).
 					SetNillablePlanDisplayName(item.PlanDisplayName).
-					SetNillablePriceType(item.PriceType).
+					SetNillablePriceType(convertStringPtrToPriceTypePtr(item.PriceType)).
 					SetNillablePriceID(item.PriceID).
 					SetNillableMeterID(item.MeterID).
 					SetNillableMeterDisplayName(item.MeterDisplayName).
@@ -261,6 +261,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetNillablePeriodEnd(item.PeriodEnd).
 					SetMetadata(item.Metadata).
 					SetEnvironmentID(item.EnvironmentID).
+					SetCommitmentInfo(item.CommitmentInfo).
 					SetStatus(string(item.Status)).
 					SetCreatedBy(item.CreatedBy).
 					SetUpdatedBy(item.UpdatedBy).
@@ -315,9 +316,9 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetCustomerID(item.CustomerID).
 				SetNillableSubscriptionID(item.SubscriptionID).
 				SetNillableEntityID(item.EntityID).
-				SetNillableEntityType(item.EntityType).
+				SetNillableEntityType(convertStringPtrToInvoiceLineItemEntityTypePtr(item.EntityType)).
 				SetNillablePlanDisplayName(item.PlanDisplayName).
-				SetNillablePriceType(item.PriceType).
+				SetNillablePriceType(convertStringPtrToPriceTypePtr(item.PriceType)).
 				SetNillablePriceID(item.PriceID).
 				SetNillableMeterID(item.MeterID).
 				SetNillableMeterDisplayName(item.MeterDisplayName).
@@ -330,6 +331,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetNillablePeriodStart(item.PeriodStart).
 				SetNillablePeriodEnd(item.PeriodEnd).
 				SetMetadata(item.Metadata).
+				SetCommitmentInfo(item.CommitmentInfo).
 				SetStatus(string(item.Status)).
 				SetCreatedBy(item.CreatedBy).
 				SetUpdatedBy(item.UpdatedBy).
@@ -445,8 +447,8 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 
 	// Set all fields
 	query.
-		SetInvoiceStatus(string(inv.InvoiceStatus)).
-		SetPaymentStatus(string(inv.PaymentStatus)).
+		SetInvoiceStatus(inv.InvoiceStatus).
+		SetPaymentStatus(inv.PaymentStatus).
 		SetAmountDue(inv.AmountDue).
 		SetAmountPaid(inv.AmountPaid).
 		SetAmountRemaining(inv.AmountRemaining).
@@ -638,7 +640,7 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
 			invoice.TenantID(types.GetTenantID(ctx)),
 			invoice.StatusEQ(string(types.StatusPublished)),
-			invoice.InvoiceStatusNEQ(string(types.InvoiceStatusVoided)),
+			invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
 		).
 		First(ctx)
 	if err != nil {
@@ -671,7 +673,7 @@ func (r *invoiceRepository) ExistsForPeriod(ctx context.Context, subscriptionID 
 				invoice.PeriodStartEQ(periodStart),
 				invoice.PeriodEndEQ(periodEnd),
 				invoice.StatusEQ(string(types.StatusPublished)),
-				invoice.InvoiceStatusNEQ(string(types.InvoiceStatusVoided)),
+				invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
 			),
 		).
 		Exist(ctx)
@@ -930,24 +932,16 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 		query = query.Where(invoice.SubscriptionID(f.SubscriptionID))
 	}
 	if f.InvoiceType != "" {
-		query = query.Where(invoice.InvoiceType(string(f.InvoiceType)))
+		query = query.Where(invoice.InvoiceType(f.InvoiceType))
 	}
 	if len(f.InvoiceIDs) > 0 {
 		query = query.Where(invoice.IDIn(f.InvoiceIDs...))
 	}
 	if len(f.InvoiceStatus) > 0 {
-		invoiceStatuses := make([]string, len(f.InvoiceStatus))
-		for i, status := range f.InvoiceStatus {
-			invoiceStatuses[i] = string(status)
-		}
-		query = query.Where(invoice.InvoiceStatusIn(invoiceStatuses...))
+		query = query.Where(invoice.InvoiceStatusIn(f.InvoiceStatus...))
 	}
 	if len(f.PaymentStatus) > 0 {
-		paymentStatuses := make([]string, len(f.PaymentStatus))
-		for i, status := range f.PaymentStatus {
-			paymentStatuses[i] = string(status)
-		}
-		query = query.Where(invoice.PaymentStatusIn(paymentStatuses...))
+		query = query.Where(invoice.PaymentStatusIn(f.PaymentStatus...))
 	}
 	if f.AmountDueGt != nil {
 		query = query.Where(invoice.AmountDueGT(*f.AmountDueGt))
@@ -1097,4 +1091,21 @@ func (r *invoiceRepository) GetInvoicesForExport(ctx context.Context, tenantID, 
 	}
 
 	return result, nil
+}
+
+// Helper functions for type conversion
+func convertStringPtrToInvoiceLineItemEntityTypePtr(s *string) *types.InvoiceLineItemEntityType {
+	if s == nil {
+		return nil
+	}
+	t := types.InvoiceLineItemEntityType(*s)
+	return &t
+}
+
+func convertStringPtrToPriceTypePtr(s *string) *types.PriceType {
+	if s == nil {
+		return nil
+	}
+	t := types.PriceType(*s)
+	return &t
 }

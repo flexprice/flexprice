@@ -24,10 +24,11 @@ import (
 
 // BulkReprocessEventsParams holds parameters for bulk reprocessing events
 type BulkReprocessEventsParams struct {
-	TenantID      string
-	EnvironmentID string
-	EventName     string
-	BatchSize     int
+	TenantID           string
+	EnvironmentID      string
+	EventName          string
+	ExternalCustomerID string
+	BatchSize          int
 }
 
 // BulkReprocessEventsScript holds all dependencies for the script
@@ -64,7 +65,7 @@ func BulkReprocessEvents(params BulkReprocessEventsParams) error {
 	ctx = context.WithValue(ctx, types.CtxTenantID, params.TenantID)
 	ctx = context.WithValue(ctx, types.CtxEnvironmentID, params.EnvironmentID)
 
-	customer_list := []string{}
+	customer_list := []string{params.ExternalCustomerID}
 
 	// Process customers in batches
 	offset := 0
@@ -162,15 +163,15 @@ func BulkReprocessEvents(params BulkReprocessEventsParams) error {
 					BatchSize:          params.BatchSize,
 				}
 
-				// Call the service method directly instead of creating new connections
-				if err := script.eventPostProcessingService.ReprocessEvents(ctx, reprocessParams); err != nil {
-					script.log.Errorw("Failed to reprocess events for event post processing",
-						"customerID", customer.ID,
-						"externalCustomerID", customer.ExternalID,
-						"subscriptionID", subscription.ID,
-						"error", err)
-					continue
-				}
+				// // Call the service method directly instead of creating new connections
+				// if err := script.eventPostProcessingService.ReprocessEvents(ctx, reprocessParams); err != nil {
+				// 	script.log.Errorw("Failed to reprocess events for event post processing",
+				// 		"customerID", customer.ID,
+				// 		"externalCustomerID", customer.ExternalID,
+				// 		"subscriptionID", subscription.ID,
+				// 		"error", err)
+				// 	continue
+				// }
 
 				if err := script.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams); err != nil {
 					script.log.Errorw("Failed to reprocess events for feature usage tracking",

@@ -14,7 +14,7 @@ type PriceUnit struct {
 	Code           string          `json:"code"`
 	Symbol         string          `json:"symbol"`
 	BaseCurrency   string          `json:"base_currency"`
-	ConversionRate decimal.Decimal `json:"conversion_rate"`
+	ConversionRate decimal.Decimal `json:"conversion_rate" swaggertype:"string"`
 	Precision      int             `json:"precision"`
 	EnvironmentID  string          `json:"environment_id"`
 	types.BaseModel

@@ -13,6 +13,7 @@ import (
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoice"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -134,35 +135,35 @@ func (ic *InvoiceCreate) SetNillableSubscriptionID(s *string) *InvoiceCreate {
 }
 
 // SetInvoiceType sets the "invoice_type" field.
-func (ic *InvoiceCreate) SetInvoiceType(s string) *InvoiceCreate {
-	ic.mutation.SetInvoiceType(s)
+func (ic *InvoiceCreate) SetInvoiceType(tt types.InvoiceType) *InvoiceCreate {
+	ic.mutation.SetInvoiceType(tt)
 	return ic
 }
 
 // SetInvoiceStatus sets the "invoice_status" field.
-func (ic *InvoiceCreate) SetInvoiceStatus(s string) *InvoiceCreate {
-	ic.mutation.SetInvoiceStatus(s)
+func (ic *InvoiceCreate) SetInvoiceStatus(ts types.InvoiceStatus) *InvoiceCreate {
+	ic.mutation.SetInvoiceStatus(ts)
 	return ic
 }
 
 // SetNillableInvoiceStatus sets the "invoice_status" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableInvoiceStatus(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetInvoiceStatus(*s)
+func (ic *InvoiceCreate) SetNillableInvoiceStatus(ts *types.InvoiceStatus) *InvoiceCreate {
+	if ts != nil {
+		ic.SetInvoiceStatus(*ts)
 	}
 	return ic
 }
 
 // SetPaymentStatus sets the "payment_status" field.
-func (ic *InvoiceCreate) SetPaymentStatus(s string) *InvoiceCreate {
-	ic.mutation.SetPaymentStatus(s)
+func (ic *InvoiceCreate) SetPaymentStatus(ts types.PaymentStatus) *InvoiceCreate {
+	ic.mutation.SetPaymentStatus(ts)
 	return ic
 }
 
 // SetNillablePaymentStatus sets the "payment_status" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillablePaymentStatus(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetPaymentStatus(*s)
+func (ic *InvoiceCreate) SetNillablePaymentStatus(ts *types.PaymentStatus) *InvoiceCreate {
+	if ts != nil {
+		ic.SetPaymentStatus(*ts)
 	}
 	return ic
 }
@@ -370,15 +371,15 @@ func (ic *InvoiceCreate) SetNillableFinalizedAt(t *time.Time) *InvoiceCreate {
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (ic *InvoiceCreate) SetBillingPeriod(s string) *InvoiceCreate {
-	ic.mutation.SetBillingPeriod(s)
+func (ic *InvoiceCreate) SetBillingPeriod(tp types.BillingPeriod) *InvoiceCreate {
+	ic.mutation.SetBillingPeriod(tp)
 	return ic
 }
 
 // SetNillableBillingPeriod sets the "billing_period" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableBillingPeriod(s *string) *InvoiceCreate {
-	if s != nil {
-		ic.SetBillingPeriod(*s)
+func (ic *InvoiceCreate) SetNillableBillingPeriod(tp *types.BillingPeriod) *InvoiceCreate {
+	if tp != nil {
+		ic.SetBillingPeriod(*tp)
 	}
 	return ic
 }
@@ -669,15 +670,25 @@ func (ic *InvoiceCreate) check() error {
 		return &ValidationError{Name: "invoice_type", err: errors.New(`ent: missing required field "Invoice.invoice_type"`)}
 	}
 	if v, ok := ic.mutation.InvoiceType(); ok {
-		if err := invoice.InvoiceTypeValidator(v); err != nil {
+		if err := invoice.InvoiceTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "invoice_type", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_type": %w`, err)}
 		}
 	}
 	if _, ok := ic.mutation.InvoiceStatus(); !ok {
 		return &ValidationError{Name: "invoice_status", err: errors.New(`ent: missing required field "Invoice.invoice_status"`)}
 	}
+	if v, ok := ic.mutation.InvoiceStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.invoice_status": %w`, err)}
+		}
+	}
 	if _, ok := ic.mutation.PaymentStatus(); !ok {
 		return &ValidationError{Name: "payment_status", err: errors.New(`ent: missing required field "Invoice.payment_status"`)}
+	}
+	if v, ok := ic.mutation.PaymentStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_status", err: fmt.Errorf(`ent: validator failed for field "Invoice.payment_status": %w`, err)}
+		}
 	}
 	if _, ok := ic.mutation.Currency(); !ok {
 		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "Invoice.currency"`)}
@@ -695,6 +706,11 @@ func (ic *InvoiceCreate) check() error {
 	}
 	if _, ok := ic.mutation.AmountRemaining(); !ok {
 		return &ValidationError{Name: "amount_remaining", err: errors.New(`ent: missing required field "Invoice.amount_remaining"`)}
+	}
+	if v, ok := ic.mutation.BillingPeriod(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "Invoice.billing_period": %w`, err)}
+		}
 	}
 	if _, ok := ic.mutation.Version(); !ok {
 		return &ValidationError{Name: "version", err: errors.New(`ent: missing required field "Invoice.version"`)}

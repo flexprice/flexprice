@@ -164,7 +164,7 @@ func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit Grant ID"
-// @Success 200 {object} gin.H
+// @Success 200 {object} dto.SuccessResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /creditgrants/{id} [delete]

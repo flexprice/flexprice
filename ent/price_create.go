@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // PriceCreate is the builder for creating a Price entity.
@@ -111,9 +112,31 @@ func (pc *PriceCreate) SetNillableEnvironmentID(s *string) *PriceCreate {
 	return pc
 }
 
+// SetDisplayName sets the "display_name" field.
+func (pc *PriceCreate) SetDisplayName(s string) *PriceCreate {
+	pc.mutation.SetDisplayName(s)
+	return pc
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableDisplayName(s *string) *PriceCreate {
+	if s != nil {
+		pc.SetDisplayName(*s)
+	}
+	return pc
+}
+
 // SetAmount sets the "amount" field.
-func (pc *PriceCreate) SetAmount(f float64) *PriceCreate {
-	pc.mutation.SetAmount(f)
+func (pc *PriceCreate) SetAmount(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetAmount(d)
+	return pc
+}
+
+// SetNillableAmount sets the "amount" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableAmount(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetAmount(*d)
+	}
 	return pc
 }
 
@@ -130,15 +153,15 @@ func (pc *PriceCreate) SetDisplayAmount(s string) *PriceCreate {
 }
 
 // SetPriceUnitType sets the "price_unit_type" field.
-func (pc *PriceCreate) SetPriceUnitType(s string) *PriceCreate {
-	pc.mutation.SetPriceUnitType(s)
+func (pc *PriceCreate) SetPriceUnitType(tut types.PriceUnitType) *PriceCreate {
+	pc.mutation.SetPriceUnitType(tut)
 	return pc
 }
 
 // SetNillablePriceUnitType sets the "price_unit_type" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitType(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetPriceUnitType(*s)
+func (pc *PriceCreate) SetNillablePriceUnitType(tut *types.PriceUnitType) *PriceCreate {
+	if tut != nil {
+		pc.SetPriceUnitType(*tut)
 	}
 	return pc
 }
@@ -172,15 +195,15 @@ func (pc *PriceCreate) SetNillablePriceUnit(s *string) *PriceCreate {
 }
 
 // SetPriceUnitAmount sets the "price_unit_amount" field.
-func (pc *PriceCreate) SetPriceUnitAmount(f float64) *PriceCreate {
-	pc.mutation.SetPriceUnitAmount(f)
+func (pc *PriceCreate) SetPriceUnitAmount(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetPriceUnitAmount(d)
 	return pc
 }
 
 // SetNillablePriceUnitAmount sets the "price_unit_amount" field if the given value is not nil.
-func (pc *PriceCreate) SetNillablePriceUnitAmount(f *float64) *PriceCreate {
-	if f != nil {
-		pc.SetPriceUnitAmount(*f)
+func (pc *PriceCreate) SetNillablePriceUnitAmount(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetPriceUnitAmount(*d)
 	}
 	return pc
 }
@@ -200,28 +223,42 @@ func (pc *PriceCreate) SetNillableDisplayPriceUnitAmount(s *string) *PriceCreate
 }
 
 // SetConversionRate sets the "conversion_rate" field.
-func (pc *PriceCreate) SetConversionRate(f float64) *PriceCreate {
-	pc.mutation.SetConversionRate(f)
+func (pc *PriceCreate) SetConversionRate(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetConversionRate(d)
 	return pc
 }
 
 // SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableConversionRate(f *float64) *PriceCreate {
-	if f != nil {
-		pc.SetConversionRate(*f)
+func (pc *PriceCreate) SetNillableConversionRate(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetConversionRate(*d)
+	}
+	return pc
+}
+
+// SetMinQuantity sets the "min_quantity" field.
+func (pc *PriceCreate) SetMinQuantity(d decimal.Decimal) *PriceCreate {
+	pc.mutation.SetMinQuantity(d)
+	return pc
+}
+
+// SetNillableMinQuantity sets the "min_quantity" field if the given value is not nil.
+func (pc *PriceCreate) SetNillableMinQuantity(d *decimal.Decimal) *PriceCreate {
+	if d != nil {
+		pc.SetMinQuantity(*d)
 	}
 	return pc
 }
 
 // SetType sets the "type" field.
-func (pc *PriceCreate) SetType(s string) *PriceCreate {
-	pc.mutation.SetType(s)
+func (pc *PriceCreate) SetType(tt types.PriceType) *PriceCreate {
+	pc.mutation.SetType(tt)
 	return pc
 }
 
 // SetBillingPeriod sets the "billing_period" field.
-func (pc *PriceCreate) SetBillingPeriod(s string) *PriceCreate {
-	pc.mutation.SetBillingPeriod(s)
+func (pc *PriceCreate) SetBillingPeriod(tp types.BillingPeriod) *PriceCreate {
+	pc.mutation.SetBillingPeriod(tp)
 	return pc
 }
 
@@ -232,27 +269,27 @@ func (pc *PriceCreate) SetBillingPeriodCount(i int) *PriceCreate {
 }
 
 // SetBillingModel sets the "billing_model" field.
-func (pc *PriceCreate) SetBillingModel(s string) *PriceCreate {
-	pc.mutation.SetBillingModel(s)
+func (pc *PriceCreate) SetBillingModel(tm types.BillingModel) *PriceCreate {
+	pc.mutation.SetBillingModel(tm)
 	return pc
 }
 
 // SetBillingCadence sets the "billing_cadence" field.
-func (pc *PriceCreate) SetBillingCadence(s string) *PriceCreate {
-	pc.mutation.SetBillingCadence(s)
+func (pc *PriceCreate) SetBillingCadence(tc types.BillingCadence) *PriceCreate {
+	pc.mutation.SetBillingCadence(tc)
 	return pc
 }
 
 // SetInvoiceCadence sets the "invoice_cadence" field.
-func (pc *PriceCreate) SetInvoiceCadence(s string) *PriceCreate {
-	pc.mutation.SetInvoiceCadence(s)
+func (pc *PriceCreate) SetInvoiceCadence(tc types.InvoiceCadence) *PriceCreate {
+	pc.mutation.SetInvoiceCadence(tc)
 	return pc
 }
 
 // SetNillableInvoiceCadence sets the "invoice_cadence" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableInvoiceCadence(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetInvoiceCadence(*s)
+func (pc *PriceCreate) SetNillableInvoiceCadence(tc *types.InvoiceCadence) *PriceCreate {
+	if tc != nil {
+		pc.SetInvoiceCadence(*tc)
 	}
 	return pc
 }
@@ -292,15 +329,15 @@ func (pc *PriceCreate) SetFilterValues(m map[string][]string) *PriceCreate {
 }
 
 // SetTierMode sets the "tier_mode" field.
-func (pc *PriceCreate) SetTierMode(s string) *PriceCreate {
-	pc.mutation.SetTierMode(s)
+func (pc *PriceCreate) SetTierMode(tt types.BillingTier) *PriceCreate {
+	pc.mutation.SetTierMode(tt)
 	return pc
 }
 
 // SetNillableTierMode sets the "tier_mode" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableTierMode(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetTierMode(*s)
+func (pc *PriceCreate) SetNillableTierMode(tt *types.BillingTier) *PriceCreate {
+	if tt != nil {
+		pc.SetTierMode(*tt)
 	}
 	return pc
 }
@@ -366,15 +403,15 @@ func (pc *PriceCreate) SetMetadata(m map[string]string) *PriceCreate {
 }
 
 // SetEntityType sets the "entity_type" field.
-func (pc *PriceCreate) SetEntityType(s string) *PriceCreate {
-	pc.mutation.SetEntityType(s)
+func (pc *PriceCreate) SetEntityType(tet types.PriceEntityType) *PriceCreate {
+	pc.mutation.SetEntityType(tet)
 	return pc
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (pc *PriceCreate) SetNillableEntityType(s *string) *PriceCreate {
-	if s != nil {
-		pc.SetEntityType(*s)
+func (pc *PriceCreate) SetNillableEntityType(tet *types.PriceEntityType) *PriceCreate {
+	if tet != nil {
+		pc.SetEntityType(*tet)
 	}
 	return pc
 }
@@ -506,9 +543,21 @@ func (pc *PriceCreate) defaults() {
 		v := price.DefaultEnvironmentID
 		pc.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := pc.mutation.Amount(); !ok {
+		v := price.DefaultAmount
+		pc.mutation.SetAmount(v)
+	}
 	if _, ok := pc.mutation.PriceUnitType(); !ok {
 		v := price.DefaultPriceUnitType
 		pc.mutation.SetPriceUnitType(v)
+	}
+	if _, ok := pc.mutation.PriceUnitAmount(); !ok {
+		v := price.DefaultPriceUnitAmount
+		pc.mutation.SetPriceUnitAmount(v)
+	}
+	if _, ok := pc.mutation.ConversionRate(); !ok {
+		v := price.DefaultConversionRate
+		pc.mutation.SetConversionRate(v)
 	}
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		v := price.DefaultTrialPeriod
@@ -566,7 +615,7 @@ func (pc *PriceCreate) check() error {
 		return &ValidationError{Name: "price_unit_type", err: errors.New(`ent: missing required field "Price.price_unit_type"`)}
 	}
 	if v, ok := pc.mutation.PriceUnitType(); ok {
-		if err := price.PriceUnitTypeValidator(v); err != nil {
+		if err := price.PriceUnitTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "price_unit_type", err: fmt.Errorf(`ent: validator failed for field "Price.price_unit_type": %w`, err)}
 		}
 	}
@@ -574,7 +623,7 @@ func (pc *PriceCreate) check() error {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Price.type"`)}
 	}
 	if v, ok := pc.mutation.GetType(); ok {
-		if err := price.TypeValidator(v); err != nil {
+		if err := price.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Price.type": %w`, err)}
 		}
 	}
@@ -582,7 +631,7 @@ func (pc *PriceCreate) check() error {
 		return &ValidationError{Name: "billing_period", err: errors.New(`ent: missing required field "Price.billing_period"`)}
 	}
 	if v, ok := pc.mutation.BillingPeriod(); ok {
-		if err := price.BillingPeriodValidator(v); err != nil {
+		if err := price.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "Price.billing_period": %w`, err)}
 		}
 	}
@@ -598,7 +647,7 @@ func (pc *PriceCreate) check() error {
 		return &ValidationError{Name: "billing_model", err: errors.New(`ent: missing required field "Price.billing_model"`)}
 	}
 	if v, ok := pc.mutation.BillingModel(); ok {
-		if err := price.BillingModelValidator(v); err != nil {
+		if err := price.BillingModelValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_model", err: fmt.Errorf(`ent: validator failed for field "Price.billing_model": %w`, err)}
 		}
 	}
@@ -606,12 +655,27 @@ func (pc *PriceCreate) check() error {
 		return &ValidationError{Name: "billing_cadence", err: errors.New(`ent: missing required field "Price.billing_cadence"`)}
 	}
 	if v, ok := pc.mutation.BillingCadence(); ok {
-		if err := price.BillingCadenceValidator(v); err != nil {
+		if err := price.BillingCadenceValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.billing_cadence": %w`, err)}
+		}
+	}
+	if v, ok := pc.mutation.InvoiceCadence(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_cadence", err: fmt.Errorf(`ent: validator failed for field "Price.invoice_cadence": %w`, err)}
 		}
 	}
 	if _, ok := pc.mutation.TrialPeriod(); !ok {
 		return &ValidationError{Name: "trial_period", err: errors.New(`ent: missing required field "Price.trial_period"`)}
+	}
+	if v, ok := pc.mutation.TierMode(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "tier_mode", err: fmt.Errorf(`ent: validator failed for field "Price.tier_mode": %w`, err)}
+		}
+	}
+	if v, ok := pc.mutation.EntityType(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Price.entity_type": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -676,8 +740,12 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_spec.SetField(price.FieldEnvironmentID, field.TypeString, value)
 		_node.EnvironmentID = value
 	}
+	if value, ok := pc.mutation.DisplayName(); ok {
+		_spec.SetField(price.FieldDisplayName, field.TypeString, value)
+		_node.DisplayName = value
+	}
 	if value, ok := pc.mutation.Amount(); ok {
-		_spec.SetField(price.FieldAmount, field.TypeFloat64, value)
+		_spec.SetField(price.FieldAmount, field.TypeOther, value)
 		_node.Amount = value
 	}
 	if value, ok := pc.mutation.Currency(); ok {
@@ -701,16 +769,20 @@ func (pc *PriceCreate) createSpec() (*Price, *sqlgraph.CreateSpec) {
 		_node.PriceUnit = value
 	}
 	if value, ok := pc.mutation.PriceUnitAmount(); ok {
-		_spec.SetField(price.FieldPriceUnitAmount, field.TypeFloat64, value)
-		_node.PriceUnitAmount = value
+		_spec.SetField(price.FieldPriceUnitAmount, field.TypeOther, value)
+		_node.PriceUnitAmount = &value
 	}
 	if value, ok := pc.mutation.DisplayPriceUnitAmount(); ok {
 		_spec.SetField(price.FieldDisplayPriceUnitAmount, field.TypeString, value)
 		_node.DisplayPriceUnitAmount = value
 	}
 	if value, ok := pc.mutation.ConversionRate(); ok {
-		_spec.SetField(price.FieldConversionRate, field.TypeFloat64, value)
-		_node.ConversionRate = value
+		_spec.SetField(price.FieldConversionRate, field.TypeOther, value)
+		_node.ConversionRate = &value
+	}
+	if value, ok := pc.mutation.MinQuantity(); ok {
+		_spec.SetField(price.FieldMinQuantity, field.TypeOther, value)
+		_node.MinQuantity = &value
 	}
 	if value, ok := pc.mutation.GetType(); ok {
 		_spec.SetField(price.FieldType, field.TypeString, value)

@@ -9,7 +9,7 @@ import (
 )
 
 // Default threshold for wallet alerts
-const WalletBalanceAlertThreshold = 0.5
+// const WalletBalanceAlertThreshold = 0.5
 
 // AlertState represents the current state of a wallet alert
 type AlertState string
@@ -92,6 +92,21 @@ type AlertInfo struct {
 // AlertConfig represents the configuration for wallet alerts
 type AlertConfig struct {
 	Threshold *WalletAlertThreshold `json:"threshold,omitempty"`
+}
+
+// Validate implements SettingConfig interface
+func (c AlertConfig) Validate() error {
+	// Validate that threshold exists and is valid
+	if c.Threshold == nil {
+		return ierr.NewError("threshold is required").
+			WithHint("Please provide a threshold").
+			Mark(ierr.ErrValidation)
+	}
+	// Validate threshold type
+	if err := c.Threshold.Type.Validate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // WalletAlertThreshold represents the threshold configuration for wallet alerts

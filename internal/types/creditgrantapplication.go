@@ -2,6 +2,9 @@ package types
 
 import (
 	"time"
+
+	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/samber/lo"
 )
 
 type ApplicationStatus string
@@ -35,6 +38,27 @@ func (s ApplicationStatus) String() string {
 	return string(s)
 }
 
+func (s ApplicationStatus) Validate() error {
+	allowedStatuses := []ApplicationStatus{
+		ApplicationStatusApplied,
+		ApplicationStatusFailed,
+		ApplicationStatusPending,
+		ApplicationStatusSkipped,
+		ApplicationStatusCancelled,
+	}
+
+	if !lo.Contains(allowedStatuses, s) {
+		return ierr.NewError("invalid credit grant application status").
+			WithHint("Please provide a valid credit grant application status").
+			WithReportableDetails(map[string]any{
+				"allowed": allowedStatuses,
+				"status":  s,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
 // CreditGrantApplicationReason defines the reason why a credit grant application is being created.
 type CreditGrantApplicationReason string
 
@@ -50,6 +74,27 @@ const (
 	// ApplicationReasonOnetimeCreditGrant is used when a one-time credit is granted during subscription creation.
 	ApplicationReasonOnetimeCreditGrant CreditGrantApplicationReason = "onetime_credit_grant"
 )
+
+func (r CreditGrantApplicationReason) Validate() error {
+
+	allowedReasons := []CreditGrantApplicationReason{
+		ApplicationReasonFirstTimeRecurringCreditGrant,
+		ApplicationReasonRecurringCreditGrant,
+		ApplicationReasonOnetimeCreditGrant,
+	}
+
+	if !lo.Contains(allowedReasons, r) {
+		return ierr.NewError("invalid credit grant application reason").
+			WithHint("Please provide a valid credit grant application reason").
+			WithReportableDetails(map[string]any{
+				"allowed": allowedReasons,
+				"reason":  r,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
 
 func (r CreditGrantApplicationReason) String() string {
 	return string(r)

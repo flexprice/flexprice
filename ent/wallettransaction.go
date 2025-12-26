@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -35,8 +36,10 @@ type WalletTransaction struct {
 	EnvironmentID string `json:"environment_id,omitempty"`
 	// WalletID holds the value of the "wallet_id" field.
 	WalletID string `json:"wallet_id,omitempty"`
+	// CustomerID holds the value of the "customer_id" field.
+	CustomerID string `json:"customer_id,omitempty"`
 	// Type holds the value of the "type" field.
-	Type string `json:"type,omitempty"`
+	Type types.TransactionType `json:"type,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount decimal.Decimal `json:"amount,omitempty"`
 	// CreditAmount holds the value of the "credit_amount" field.
@@ -46,7 +49,7 @@ type WalletTransaction struct {
 	// CreditBalanceAfter holds the value of the "credit_balance_after" field.
 	CreditBalanceAfter decimal.Decimal `json:"credit_balance_after,omitempty"`
 	// ReferenceType holds the value of the "reference_type" field.
-	ReferenceType string `json:"reference_type,omitempty"`
+	ReferenceType types.WalletTxReferenceType `json:"reference_type,omitempty"`
 	// ReferenceID holds the value of the "reference_id" field.
 	ReferenceID string `json:"reference_id,omitempty"`
 	// Description holds the value of the "description" field.
@@ -54,15 +57,17 @@ type WalletTransaction struct {
 	// Metadata holds the value of the "metadata" field.
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// TransactionStatus holds the value of the "transaction_status" field.
-	TransactionStatus string `json:"transaction_status,omitempty"`
+	TransactionStatus types.TransactionStatus `json:"transaction_status,omitempty"`
 	// ExpiryDate holds the value of the "expiry_date" field.
 	ExpiryDate *time.Time `json:"expiry_date,omitempty"`
 	// CreditsAvailable holds the value of the "credits_available" field.
 	CreditsAvailable decimal.Decimal `json:"credits_available,omitempty"`
+	// Currency holds the value of the "currency" field.
+	Currency *string `json:"currency,omitempty"`
 	// IdempotencyKey holds the value of the "idempotency_key" field.
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// TransactionReason holds the value of the "transaction_reason" field.
-	TransactionReason string `json:"transaction_reason,omitempty"`
+	TransactionReason types.TransactionReason `json:"transaction_reason,omitempty"`
 	// Lower number indicates higher priority. Nil values are treated as lowest priority.
 	Priority     *int `json:"priority,omitempty"`
 	selectValues sql.SelectValues
@@ -79,7 +84,7 @@ func (*WalletTransaction) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case wallettransaction.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason:
+		case wallettransaction.FieldID, wallettransaction.FieldTenantID, wallettransaction.FieldStatus, wallettransaction.FieldCreatedBy, wallettransaction.FieldUpdatedBy, wallettransaction.FieldEnvironmentID, wallettransaction.FieldWalletID, wallettransaction.FieldCustomerID, wallettransaction.FieldType, wallettransaction.FieldReferenceType, wallettransaction.FieldReferenceID, wallettransaction.FieldDescription, wallettransaction.FieldTransactionStatus, wallettransaction.FieldCurrency, wallettransaction.FieldIdempotencyKey, wallettransaction.FieldTransactionReason:
 			values[i] = new(sql.NullString)
 		case wallettransaction.FieldCreatedAt, wallettransaction.FieldUpdatedAt, wallettransaction.FieldExpiryDate:
 			values[i] = new(sql.NullTime)
@@ -152,11 +157,17 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				wt.WalletID = value.String
 			}
+		case wallettransaction.FieldCustomerID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
+			} else if value.Valid {
+				wt.CustomerID = value.String
+			}
 		case wallettransaction.FieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
-				wt.Type = value.String
+				wt.Type = types.TransactionType(value.String)
 			}
 		case wallettransaction.FieldAmount:
 			if value, ok := values[i].(*decimal.Decimal); !ok {
@@ -186,7 +197,7 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field reference_type", values[i])
 			} else if value.Valid {
-				wt.ReferenceType = value.String
+				wt.ReferenceType = types.WalletTxReferenceType(value.String)
 			}
 		case wallettransaction.FieldReferenceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -212,7 +223,7 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field transaction_status", values[i])
 			} else if value.Valid {
-				wt.TransactionStatus = value.String
+				wt.TransactionStatus = types.TransactionStatus(value.String)
 			}
 		case wallettransaction.FieldExpiryDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -227,6 +238,13 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			} else if value != nil {
 				wt.CreditsAvailable = *value
 			}
+		case wallettransaction.FieldCurrency:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field currency", values[i])
+			} else if value.Valid {
+				wt.Currency = new(string)
+				*wt.Currency = value.String
+			}
 		case wallettransaction.FieldIdempotencyKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[i])
@@ -238,7 +256,7 @@ func (wt *WalletTransaction) assignValues(columns []string, values []any) error 
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field transaction_reason", values[i])
 			} else if value.Valid {
-				wt.TransactionReason = value.String
+				wt.TransactionReason = types.TransactionReason(value.String)
 			}
 		case wallettransaction.FieldPriority:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -307,8 +325,11 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString("wallet_id=")
 	builder.WriteString(wt.WalletID)
 	builder.WriteString(", ")
+	builder.WriteString("customer_id=")
+	builder.WriteString(wt.CustomerID)
+	builder.WriteString(", ")
 	builder.WriteString("type=")
-	builder.WriteString(wt.Type)
+	builder.WriteString(fmt.Sprintf("%v", wt.Type))
 	builder.WriteString(", ")
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", wt.Amount))
@@ -323,7 +344,7 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString(fmt.Sprintf("%v", wt.CreditBalanceAfter))
 	builder.WriteString(", ")
 	builder.WriteString("reference_type=")
-	builder.WriteString(wt.ReferenceType)
+	builder.WriteString(fmt.Sprintf("%v", wt.ReferenceType))
 	builder.WriteString(", ")
 	builder.WriteString("reference_id=")
 	builder.WriteString(wt.ReferenceID)
@@ -335,7 +356,7 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString(fmt.Sprintf("%v", wt.Metadata))
 	builder.WriteString(", ")
 	builder.WriteString("transaction_status=")
-	builder.WriteString(wt.TransactionStatus)
+	builder.WriteString(fmt.Sprintf("%v", wt.TransactionStatus))
 	builder.WriteString(", ")
 	if v := wt.ExpiryDate; v != nil {
 		builder.WriteString("expiry_date=")
@@ -345,13 +366,18 @@ func (wt *WalletTransaction) String() string {
 	builder.WriteString("credits_available=")
 	builder.WriteString(fmt.Sprintf("%v", wt.CreditsAvailable))
 	builder.WriteString(", ")
+	if v := wt.Currency; v != nil {
+		builder.WriteString("currency=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	if v := wt.IdempotencyKey; v != nil {
 		builder.WriteString("idempotency_key=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")
 	builder.WriteString("transaction_reason=")
-	builder.WriteString(wt.TransactionReason)
+	builder.WriteString(fmt.Sprintf("%v", wt.TransactionReason))
 	builder.WriteString(", ")
 	if v := wt.Priority; v != nil {
 		builder.WriteString("priority=")

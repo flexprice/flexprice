@@ -55,7 +55,7 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 	filter := &types.WalletTransactionFilter{
 		Type:               lo.ToPtr(types.TransactionTypeCredit),
 		TransactionStatus:  lo.ToPtr(types.TransactionStatusCompleted),
-		ExpiryDateBefore:   lo.ToPtr(time.Now().UTC()),
+		ExpiryDateBefore:   lo.ToPtr(time.Now().UTC().Add(6 * time.Hour)),
 		CreditsAvailableGT: lo.ToPtr(decimal.Zero),
 	}
 
@@ -67,48 +67,62 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 	}
 
 	for _, tenant := range tenants {
-		tenantResponse := &dto.ExpiredCreditsResponseItem{
-			TenantID: tenant.ID,
-			Count:    0,
-		}
-
-		h.logger.Infow("tenant", "id", tenant.ID, "name", tenant.Name)
 		ctx := context.WithValue(c.Request.Context(), types.CtxTenantID, tenant.ID)
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, "")
-		// Get transactions with expired credits
-		transactions, err := h.walletService.GetWalletTransactions(ctx, "", filter)
+		// fetch all environments for the tenant
+		environments, err := h.environmentService.GetEnvironments(ctx, types.GetDefaultFilter())
 		if err != nil {
-			h.logger.Errorw("failed to list expired credits",
-				"error", err,
-			)
+			h.logger.Errorw("failed to get all environments", "error", err)
 			c.Error(err)
 			return
 		}
 
-		h.logger.Infow("found expired credits", "count", len(transactions.Items))
+		for _, environment := range environments.Environments {
+			ctx = context.WithValue(ctx, types.CtxEnvironmentID, environment.ID)
 
-		// Process each expired credit
-		for _, tx := range transactions.Items {
-			if err := h.walletService.ExpireCredits(ctx, tx.ID); err != nil {
-				h.logger.Errorw("failed to expire credits",
-					"transaction_id", tx.ID,
-					"error", err,
-				)
-				response.Failed++
-				continue
+			tenantResponse := &dto.ExpiredCreditsResponseItem{
+				TenantID:      tenant.ID,
+				EnvironmentID: environment.ID,
+				Count:         0,
 			}
 
-			tenantResponse.Count++
-			response.Success++
+			// Get transactions with expired credits
+			transactions, err := h.walletService.ListWalletTransactionsByFilter(ctx, filter)
+			if err != nil {
+				h.logger.Errorw("failed to list expired credits",
+					"error", err,
+				)
+				c.Error(err)
+				return
+			}
 
-			h.logger.Infow("expired credits successfully",
-				"transaction_id", tx.ID,
-				"wallet_id", tx.WalletID,
-				"amount", tx.CreditsAvailable,
-			)
+			h.logger.Infow("found expired credits", "count", len(transactions.Items))
+
+			// Process each expired credit
+			for _, tx := range transactions.Items {
+				tenantResponse.Count++
+				response.Total++
+
+				// Setting same user for expiry as creation for RBAC in future
+				ctx = context.WithValue(ctx, types.CtxUserID, tx.CreatedBy)
+				if err := h.walletService.ExpireCredits(ctx, tx.ID); err != nil {
+					h.logger.Errorw("failed to expire credits",
+						"transaction_id", tx.ID,
+						"error", err,
+					)
+					response.Failed++
+					continue
+				}
+
+				response.Success++
+				h.logger.Infow("expired credits successfully",
+					"transaction_id", tx.ID,
+					"wallet_id", tx.WalletID,
+					"amount", tx.CreditsAvailable,
+				)
+			}
+
+			response.Items = append(response.Items, tenantResponse)
 		}
-
-		response.Items = append(response.Items, tenantResponse)
 	}
 
 	h.logger.Infow("completed credit expiry cron job")
@@ -276,27 +290,27 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 						"alert_status", alertStatus,
 					)
 
-				// Log the alert using AlertLogsService (includes state transition logic and webhook publishing)
-				// Get customer ID from wallet if available
-				var customerID *string
-				if wallet.CustomerID != "" {
-					customerID = lo.ToPtr(wallet.CustomerID)
-				}
-				
-				err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
-					EntityType:       types.AlertEntityTypeFeature,
-					EntityID:         feature.ID,
-					ParentEntityType: lo.ToPtr("wallet"),  // Parent entity is the wallet
-					ParentEntityID:   lo.ToPtr(wallet.ID), // Wallet ID as parent entity ID
-					CustomerID:       customerID,          // Customer ID from wallet
-					AlertType:        types.AlertTypeFeatureWalletBalance,
-					AlertStatus:      alertStatus,
-					AlertInfo: types.AlertInfo{
-						AlertSettings: feature.AlertSettings, // Include full alert settings
-						ValueAtTime:   *ongoingBalance,       // Ongoing balance at time of check
-						Timestamp:     time.Now().UTC(),
-					},
-				})
+					// Log the alert using AlertLogsService (includes state transition logic and webhook publishing)
+					// Get customer ID from wallet if available
+					var customerID *string
+					if wallet.CustomerID != "" {
+						customerID = lo.ToPtr(wallet.CustomerID)
+					}
+
+					err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
+						EntityType:       types.AlertEntityTypeFeature,
+						EntityID:         feature.ID,
+						ParentEntityType: lo.ToPtr("wallet"),  // Parent entity is the wallet
+						ParentEntityID:   lo.ToPtr(wallet.ID), // Wallet ID as parent entity ID
+						CustomerID:       customerID,          // Customer ID from wallet
+						AlertType:        types.AlertTypeFeatureWalletBalance,
+						AlertStatus:      alertStatus,
+						AlertInfo: types.AlertInfo{
+							AlertSettings: feature.AlertSettings, // Include full alert settings
+							ValueAtTime:   *ongoingBalance,       // Ongoing balance at time of check
+							Timestamp:     time.Now().UTC(),
+						},
+					})
 					if err != nil {
 						h.logger.Errorw("failed to check feature alert",
 							"feature_id", feature.ID,
@@ -347,32 +361,32 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 					"ongoing_balance_alert_state", wallet.AlertState,
 				)
 
-			// Use AlertLogsService to handle alert logging and webhook publishing
-			// For wallet alerts, we store the threshold info in AlertSettings format for consistency
-			// Get customer ID from wallet if available
-			var customerID *string
-			if wallet.CustomerID != "" {
-				customerID = lo.ToPtr(wallet.CustomerID)
-			}
-			
-			err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
-				EntityType:  types.AlertEntityTypeWallet,
-				EntityID:    wallet.ID,
-				CustomerID:  customerID, // Customer ID from wallet
-				AlertType:   types.AlertTypeLowOngoingBalance,
-				AlertStatus: alertStatus,
-				AlertInfo: types.AlertInfo{
-					AlertSettings: &types.AlertSettings{
-						Critical: &types.AlertThreshold{
-							Threshold: wallet.AlertConfig.Threshold.Value,
-							Condition: types.AlertConditionBelow, // Wallet alerts are "below" threshold
+				// Use AlertLogsService to handle alert logging and webhook publishing
+				// For wallet alerts, we store the threshold info in AlertSettings format for consistency
+				// Get customer ID from wallet if available
+				var customerID *string
+				if wallet.CustomerID != "" {
+					customerID = lo.ToPtr(wallet.CustomerID)
+				}
+
+				err = h.alertLogsService.LogAlert(ctx, &service.LogAlertRequest{
+					EntityType:  types.AlertEntityTypeWallet,
+					EntityID:    wallet.ID,
+					CustomerID:  customerID, // Customer ID from wallet
+					AlertType:   types.AlertTypeLowOngoingBalance,
+					AlertStatus: alertStatus,
+					AlertInfo: types.AlertInfo{
+						AlertSettings: &types.AlertSettings{
+							Critical: &types.AlertThreshold{
+								Threshold: wallet.AlertConfig.Threshold.Value,
+								Condition: types.AlertConditionBelow, // Wallet alerts are "below" threshold
+							},
+							AlertEnabled: lo.ToPtr(true),
 						},
-						AlertEnabled: lo.ToPtr(true),
+						ValueAtTime: *ongoingBalance,
+						Timestamp:   time.Now().UTC(),
 					},
-					ValueAtTime: *ongoingBalance,
-					Timestamp:   time.Now().UTC(),
-				},
-			})
+				})
 				if err != nil {
 					h.logger.Errorw("failed to check wallet ongoing balance alert",
 						"wallet_id", wallet.ID,

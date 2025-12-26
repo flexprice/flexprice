@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
@@ -18,7 +19,7 @@ type CreateCreditGrantRequest struct {
 	Scope                  types.CreditGrantScope               `json:"scope" binding:"required"`
 	PlanID                 *string                              `json:"plan_id,omitempty"`
 	SubscriptionID         *string                              `json:"subscription_id,omitempty"`
-	Credits                decimal.Decimal                      `json:"credits" binding:"required"`
+	Credits                decimal.Decimal                      `json:"credits" binding:"required" swaggertype:"string"`
 	Cadence                types.CreditGrantCadence             `json:"cadence" binding:"required"`
 	Period                 *types.CreditGrantPeriod             `json:"period,omitempty"`
 	PeriodCount            *int                                 `json:"period_count,omitempty"`
@@ -27,6 +28,9 @@ type CreateCreditGrantRequest struct {
 	ExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 	Priority               *int                                 `json:"priority,omitempty"`
 	Metadata               types.Metadata                       `json:"metadata,omitempty"`
+	CreditGrantAnchor      *time.Time                           `json:"-"`
+	StartDate              *time.Time                           `json:"-"`
+	EndDate                *time.Time                           `json:"-"`
 }
 
 // UpdateCreditGrantRequest represents the request to update an existing credit grant
@@ -70,6 +74,15 @@ func (r *CreateCreditGrantRequest) Validate() error {
 				}).
 				Mark(errors.ErrValidation)
 		}
+		// For plan-scoped grants, StartDate and EndDate are not allowed
+		if r.StartDate != nil || r.EndDate != nil {
+			return errors.NewError("start_date and end_date are not allowed for PLAN-scoped grants").
+				WithHint("Start date and end date are not allowed for PLAN-scoped grants").
+				WithReportableDetails(map[string]interface{}{
+					"scope": r.Scope,
+				}).
+				Mark(errors.ErrValidation)
+		}
 	case types.CreditGrantScopeSubscription:
 		if r.SubscriptionID == nil || *r.SubscriptionID == "" {
 			return errors.NewError("subscription_id is required for SUBSCRIPTION-scoped grants").
@@ -79,7 +92,36 @@ func (r *CreateCreditGrantRequest) Validate() error {
 				}).
 				Mark(errors.ErrValidation)
 		}
+		// StartDate is required for subscription-scoped grants
+		if r.StartDate == nil {
+			return errors.NewError("start_date is required for SUBSCRIPTION-scoped grants").
+				WithHint("Please provide a start date for the credit grant").
+				WithReportableDetails(map[string]interface{}{
+					"scope": r.Scope,
+				}).
+				Mark(errors.ErrValidation)
+		}
 
+		// If EndDate is provided, it must be >= StartDate
+		if r.EndDate != nil && r.EndDate.Before(lo.FromPtr(r.StartDate)) {
+			return errors.NewError("end_date cannot be before start_date").
+				WithHint("Credit grant end date must be on or after the start date").
+				WithReportableDetails(map[string]interface{}{
+					"start_date": r.StartDate,
+					"end_date":   r.EndDate,
+				}).
+				Mark(errors.ErrValidation)
+		}
+		// Credit grant anchor cannot be before start date
+		if r.CreditGrantAnchor != nil && r.StartDate != nil && r.CreditGrantAnchor.Before(*r.StartDate) {
+			return errors.NewError("credit_grant_anchor cannot be before start_date").
+				WithHint("Credit grant anchor must be on or after the start date").
+				WithReportableDetails(map[string]interface{}{
+					"start_date":          r.StartDate,
+					"credit_grant_anchor": r.CreditGrantAnchor,
+				}).
+				Mark(errors.ErrValidation)
+		}
 	default:
 		return errors.NewError("invalid scope").
 			WithHint("Scope must be either PLAN or SUBSCRIPTION").
@@ -166,24 +208,72 @@ func (r *CreateCreditGrantRequest) Validate() error {
 
 // ToCreditGrant converts CreateCreditGrantRequest to domain CreditGrant
 func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgrant.CreditGrant {
-	return &creditgrant.CreditGrant{
-		ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
-		Name:                   r.Name,
-		Scope:                  r.Scope,
-		PlanID:                 r.PlanID,
-		SubscriptionID:         r.SubscriptionID,
-		Credits:                r.Credits,
-		Cadence:                r.Cadence,
-		Period:                 r.Period,
-		PeriodCount:            r.PeriodCount,
-		ExpirationType:         r.ExpirationType,
-		ExpirationDuration:     r.ExpirationDuration,
-		ExpirationDurationUnit: r.ExpirationDurationUnit,
-		Priority:               r.Priority,
-		Metadata:               r.Metadata,
-		EnvironmentID:          types.GetEnvironmentID(ctx),
-		BaseModel:              types.GetDefaultBaseModel(ctx),
+	cg := &creditgrant.CreditGrant{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
+		Name:           r.Name,
+		Scope:          r.Scope,
+		Credits:        r.Credits,
+		Cadence:        r.Cadence,
+		ExpirationType: r.ExpirationType,
+		EnvironmentID:  types.GetEnvironmentID(ctx),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
 	}
+
+	// Set fields based on scope
+	switch r.Scope {
+	case types.CreditGrantScopePlan:
+		cg.PlanID = r.PlanID
+		// For PLAN scope, these fields must be nil
+		cg.SubscriptionID = nil
+		cg.StartDate = nil
+		cg.EndDate = nil
+		cg.CreditGrantAnchor = nil
+
+	case types.CreditGrantScopeSubscription:
+		cg.SubscriptionID = r.SubscriptionID
+		cg.StartDate = r.StartDate
+		// Set optional fields if provided
+		if r.EndDate != nil {
+			cg.EndDate = r.EndDate
+		}
+		if r.CreditGrantAnchor != nil {
+			cg.CreditGrantAnchor = r.CreditGrantAnchor
+		}
+		// PlanID can be provided for subscription-scoped grants
+		if r.PlanID != nil {
+			cg.PlanID = r.PlanID
+		}
+	}
+
+	// Set fields based on cadence
+	if r.Cadence == types.CreditGrantCadenceRecurring {
+		cg.Period = r.Period
+		cg.PeriodCount = r.PeriodCount
+	} else {
+		// For ONETIME cadence, these fields must be nil
+		cg.Period = nil
+		cg.PeriodCount = nil
+	}
+
+	// Set fields based on expiration type
+	if r.ExpirationType == types.CreditGrantExpiryTypeDuration {
+		cg.ExpirationDuration = r.ExpirationDuration
+		cg.ExpirationDurationUnit = r.ExpirationDurationUnit
+	} else {
+		// For NEVER or BILLING_CYCLE, these fields must be nil
+		cg.ExpirationDuration = nil
+		cg.ExpirationDurationUnit = nil
+	}
+
+	// Set optional fields only if provided
+	if r.Priority != nil {
+		cg.Priority = r.Priority
+	}
+	if len(r.Metadata) > 0 {
+		cg.Metadata = r.Metadata
+	}
+
+	return cg
 }
 
 // UpdateCreditGrant applies UpdateCreditGrantRequest to domain CreditGrant
@@ -229,3 +319,78 @@ type CreditGrantApplicationResponse struct {
 
 // ListCreditGrantApplicationsResponse represents a paginated list of credit grant applications
 type ListCreditGrantApplicationsResponse = types.ListResponse[*CreditGrantApplicationResponse]
+
+// CreateCreditGrantApplicationRequest represents the request to create a new credit grant application
+type CreateCreditGrantApplicationRequest struct {
+	CreditGrantID                   string                             `json:"credit_grant_id" binding:"required"`
+	SubscriptionID                  string                             `json:"subscription_id"`
+	ScheduledFor                    time.Time                          `json:"scheduled_for" binding:"required"`
+	PeriodStart                     *time.Time                         `json:"period_start"`
+	PeriodEnd                       *time.Time                         `json:"period_end"`
+	Credits                         decimal.Decimal                    `json:"credits" swaggertype:"string" binding:"required"`
+	ApplicationReason               types.CreditGrantApplicationReason `json:"application_reason"`
+	SubscriptionStatusAtApplication types.SubscriptionStatus           `json:"subscription_status_at_application"`
+	IdempotencyKey                  string                             `json:"idempotency_key"`
+}
+
+// Validate validates the create credit grant application request
+func (r *CreateCreditGrantApplicationRequest) Validate() error {
+
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.ScheduledFor.IsZero() {
+		return errors.NewError("scheduled_for is required").
+			WithHint("Please provide a valid scheduled date").
+			Mark(errors.ErrValidation)
+	}
+	if r.Credits.IsNegative() {
+		return errors.NewError("credits cannot be negative").
+			WithHint("Please provide a non-negative credits amount").
+			Mark(errors.ErrValidation)
+	}
+
+	if err := r.ApplicationReason.Validate(); err != nil {
+		return err
+	}
+
+	if err := r.SubscriptionStatusAtApplication.Validate(); err != nil {
+		return err
+	}
+
+	if r.PeriodEnd != nil && r.PeriodStart != nil {
+		if r.PeriodEnd.Before(*r.PeriodStart) {
+			return errors.NewError("period_end must be after period_start").
+				WithReportableDetails(map[string]interface{}{
+					"period_end":   r.PeriodEnd,
+					"period_start": r.PeriodStart,
+				}).
+				WithHint("Please provide a valid period end and start").
+				Mark(errors.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// ToCreditGrantApplication converts CreateCreditGrantApplicationRequest to domain CreditGrantApplication
+func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx context.Context) *domainCreditGrantApplication.CreditGrantApplication {
+	return &domainCreditGrantApplication.CreditGrantApplication{
+		ID:                              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT_APPLICATION),
+		CreditGrantID:                   r.CreditGrantID,
+		SubscriptionID:                  r.SubscriptionID,
+		ScheduledFor:                    r.ScheduledFor,
+		PeriodStart:                     r.PeriodStart,
+		PeriodEnd:                       r.PeriodEnd,
+		ApplicationStatus:               types.ApplicationStatusPending,
+		ApplicationReason:               r.ApplicationReason,
+		SubscriptionStatusAtApplication: r.SubscriptionStatusAtApplication,
+		Credits:                         r.Credits,
+		IdempotencyKey:                  r.IdempotencyKey,
+		RetryCount:                      0,
+		FailureReason:                   nil,
+		EnvironmentID:                   types.GetEnvironmentID(ctx),
+		BaseModel:                       types.GetDefaultBaseModel(ctx),
+	}
+}

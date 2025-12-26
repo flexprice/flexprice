@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -63,7 +64,8 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable().
-			Immutable(),
+			Immutable().
+			GoType(types.InvoiceLineItemEntityType("")),
 		field.String("plan_display_name").
 			Optional().
 			Nillable().
@@ -81,7 +83,8 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable().
-			Immutable(),
+			Immutable().
+			GoType(types.PriceType("")),
 		field.String("meter_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -147,6 +150,11 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.JSON("commitment_info", &types.CommitmentInfo{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}),
 	}
 }
 
@@ -173,5 +181,6 @@ func (InvoiceLineItem) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "price_id", "status"),
 		index.Fields("tenant_id", "environment_id", "meter_id", "status"),
 		index.Fields("period_start", "period_end"),
+		index.Fields("subscription_id", "status"),
 	}
 }

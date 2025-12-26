@@ -54,7 +54,7 @@ func (p PriceEntityType) Validate() error {
 		PRICE_ENTITY_TYPE_PRICE,
 		PRICE_ENTITY_TYPE_COSTSHEET,
 	}
-	if !lo.Contains(allowed, p) {
+	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid price entity type").
 			WithHint("Invalid price entity type").
 			WithReportableDetails(map[string]interface{}{
@@ -146,7 +146,7 @@ func (b BillingCadence) Validate() error {
 		BILLING_CADENCE_RECURRING,
 		BILLING_CADENCE_ONETIME,
 	}
-	if !lo.Contains(allowed, b) {
+	if b != "" && !lo.Contains(allowed, b) {
 		return ierr.NewError("invalid billing cadence").
 			WithHint("Invalid billing cadence").
 			WithReportableDetails(map[string]interface{}{
@@ -192,7 +192,8 @@ func (b BillingModel) Validate() error {
 		BILLING_MODEL_PACKAGE,
 		BILLING_MODEL_TIERED,
 	}
-	if !lo.Contains(allowed, b) {
+
+	if b != "" && !lo.Contains(allowed, b) {
 		return ierr.NewError("invalid billing model").
 			WithHint("Invalid billing model").
 			WithReportableDetails(map[string]interface{}{
@@ -209,7 +210,7 @@ func (b BillingTier) Validate() error {
 		BILLING_TIER_VOLUME,
 		BILLING_TIER_SLAB,
 	}
-	if !lo.Contains(allowed, b) {
+	if b != "" && !lo.Contains(allowed, b) {
 		return ierr.NewError("invalid billing tier").
 			WithHint("Invalid billing tier").
 			WithReportableDetails(map[string]interface{}{
@@ -226,7 +227,8 @@ func (p PriceType) Validate() error {
 		PRICE_TYPE_USAGE,
 		PRICE_TYPE_FIXED,
 	}
-	if !lo.Contains(allowed, p) {
+
+	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid price type").
 			WithHint("Invalid price type").
 			WithReportableDetails(map[string]interface{}{
@@ -243,7 +245,8 @@ func (p PriceScope) Validate() error {
 		PRICE_SCOPE_PLAN,
 		PRICE_SCOPE_SUBSCRIPTION,
 	}
-	if !lo.Contains(allowed, p) {
+
+	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid price scope").
 			WithHint("Invalid price scope").
 			WithReportableDetails(map[string]interface{}{
@@ -259,7 +262,8 @@ func (p PriceUnitType) Validate() error {
 		PRICE_UNIT_TYPE_FIAT,
 		PRICE_UNIT_TYPE_CUSTOM,
 	}
-	if !lo.Contains(allowed, p) {
+
+	if p != "" && !lo.Contains(allowed, p) {
 		return ierr.NewError("invalid price unit type").
 			WithHint("Price unit type must be either FIAT or CUSTOM").
 			WithReportableDetails(map[string]interface{}{

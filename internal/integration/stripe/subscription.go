@@ -706,14 +706,8 @@ func (s *stripeSubscriptionService) mapStripeStatusToFlexPrice(stripeStatus stri
 		return types.SubscriptionStatusActive
 	case stripe.SubscriptionStatusCanceled:
 		return types.SubscriptionStatusCancelled
-	case stripe.SubscriptionStatusIncompleteExpired:
-		return types.SubscriptionStatusIncompleteExpired
 	case stripe.SubscriptionStatusTrialing:
 		return types.SubscriptionStatusActive
-	case stripe.SubscriptionStatusPastDue:
-		return types.SubscriptionStatusActive // Or create a past_due status if needed
-	case stripe.SubscriptionStatusUnpaid:
-		return types.SubscriptionStatusActive // Or create an unpaid status if needed
 	case stripe.SubscriptionStatusIncomplete:
 		return types.SubscriptionStatusIncomplete // Or create an incomplete status if needed
 	case stripe.SubscriptionStatusPaused:

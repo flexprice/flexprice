@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/entitlement"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // EntitlementCreate is the builder for creating a Entitlement entity.
@@ -111,15 +112,15 @@ func (ec *EntitlementCreate) SetNillableEnvironmentID(s *string) *EntitlementCre
 }
 
 // SetEntityType sets the "entity_type" field.
-func (ec *EntitlementCreate) SetEntityType(s string) *EntitlementCreate {
-	ec.mutation.SetEntityType(s)
+func (ec *EntitlementCreate) SetEntityType(tet types.EntitlementEntityType) *EntitlementCreate {
+	ec.mutation.SetEntityType(tet)
 	return ec
 }
 
 // SetNillableEntityType sets the "entity_type" field if the given value is not nil.
-func (ec *EntitlementCreate) SetNillableEntityType(s *string) *EntitlementCreate {
-	if s != nil {
-		ec.SetEntityType(*s)
+func (ec *EntitlementCreate) SetNillableEntityType(tet *types.EntitlementEntityType) *EntitlementCreate {
+	if tet != nil {
+		ec.SetEntityType(*tet)
 	}
 	return ec
 }
@@ -145,8 +146,8 @@ func (ec *EntitlementCreate) SetFeatureID(s string) *EntitlementCreate {
 }
 
 // SetFeatureType sets the "feature_type" field.
-func (ec *EntitlementCreate) SetFeatureType(s string) *EntitlementCreate {
-	ec.mutation.SetFeatureType(s)
+func (ec *EntitlementCreate) SetFeatureType(tt types.FeatureType) *EntitlementCreate {
+	ec.mutation.SetFeatureType(tt)
 	return ec
 }
 
@@ -179,15 +180,15 @@ func (ec *EntitlementCreate) SetNillableUsageLimit(i *int64) *EntitlementCreate 
 }
 
 // SetUsageResetPeriod sets the "usage_reset_period" field.
-func (ec *EntitlementCreate) SetUsageResetPeriod(s string) *EntitlementCreate {
-	ec.mutation.SetUsageResetPeriod(s)
+func (ec *EntitlementCreate) SetUsageResetPeriod(turp types.EntitlementUsageResetPeriod) *EntitlementCreate {
+	ec.mutation.SetUsageResetPeriod(turp)
 	return ec
 }
 
 // SetNillableUsageResetPeriod sets the "usage_reset_period" field if the given value is not nil.
-func (ec *EntitlementCreate) SetNillableUsageResetPeriod(s *string) *EntitlementCreate {
-	if s != nil {
-		ec.SetUsageResetPeriod(*s)
+func (ec *EntitlementCreate) SetNillableUsageResetPeriod(turp *types.EntitlementUsageResetPeriod) *EntitlementCreate {
+	if turp != nil {
+		ec.SetUsageResetPeriod(*turp)
 	}
 	return ec
 }
@@ -342,6 +343,11 @@ func (ec *EntitlementCreate) check() error {
 	if _, ok := ec.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Entitlement.updated_at"`)}
 	}
+	if v, ok := ec.mutation.EntityType(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "entity_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.entity_type": %w`, err)}
+		}
+	}
 	if _, ok := ec.mutation.FeatureID(); !ok {
 		return &ValidationError{Name: "feature_id", err: errors.New(`ent: missing required field "Entitlement.feature_id"`)}
 	}
@@ -354,12 +360,17 @@ func (ec *EntitlementCreate) check() error {
 		return &ValidationError{Name: "feature_type", err: errors.New(`ent: missing required field "Entitlement.feature_type"`)}
 	}
 	if v, ok := ec.mutation.FeatureType(); ok {
-		if err := entitlement.FeatureTypeValidator(v); err != nil {
+		if err := entitlement.FeatureTypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "feature_type", err: fmt.Errorf(`ent: validator failed for field "Entitlement.feature_type": %w`, err)}
 		}
 	}
 	if _, ok := ec.mutation.IsEnabled(); !ok {
 		return &ValidationError{Name: "is_enabled", err: errors.New(`ent: missing required field "Entitlement.is_enabled"`)}
+	}
+	if v, ok := ec.mutation.UsageResetPeriod(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "usage_reset_period", err: fmt.Errorf(`ent: validator failed for field "Entitlement.usage_reset_period": %w`, err)}
+		}
 	}
 	if _, ok := ec.mutation.IsSoftLimit(); !ok {
 		return &ValidationError{Name: "is_soft_limit", err: errors.New(`ent: missing required field "Entitlement.is_soft_limit"`)}

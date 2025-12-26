@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -39,36 +40,54 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 		return nil, err // Validation errors are already properly formatted in the DTO
 	}
 
-	// Validate meter existence and status for metered features
-	if req.Type == types.FeatureTypeMetered {
-		var meter *meter.Meter
-		if req.MeterID != "" {
-			meter, err = meterService.GetMeter(ctx, req.MeterID)
-			if err != nil {
-				return nil, err
+	// Use client's WithTx for atomic operations
+	var featureModel *feature.Feature
+	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+
+		// Validate meter existence and status for metered features
+		if req.Type == types.FeatureTypeMetered {
+			var meter *meter.Meter
+			if req.MeterID != "" {
+				meter, err = meterService.GetMeter(ctx, req.MeterID)
+				if err != nil {
+					return err
+				}
+				// Ensure req.MeterID is set (in case it wasn't already)
+				req.MeterID = meter.ID
+			} else if req.Meter != nil {
+				meter, err = meterService.CreateMeter(ctx, req.Meter)
+				if err != nil {
+					return err
+				}
+				req.MeterID = meter.ID
+			} else {
+				return ierr.NewError("either meter_id or meter must be provided").
+					WithHint("Please provide meter details to setup a metered feature").
+					Mark(ierr.ErrValidation)
 			}
-		} else {
-			meter, err = meterService.CreateMeter(ctx, req.Meter)
-			if err != nil {
-				return nil, err
+
+			// Validate meter status
+			if meter.Status != types.StatusPublished {
+				return ierr.NewError("invalid meter status").
+					WithHint("The metered feature must be associated with an active meter").
+					Mark(ierr.ErrValidation)
 			}
-			req.MeterID = meter.ID
 		}
 
-		// Validate meter status
-		if meter.Status != types.StatusPublished {
-			return nil, ierr.NewError("invalid meter status").
-				WithHint("The metered feature must be associated with an active meter").
-				Mark(ierr.ErrValidation)
+		// Create feature model AFTER meter is resolved/created so MeterID is set
+		featureModel, err = req.ToFeature(ctx)
+		if err != nil {
+			return err
 		}
-	}
 
-	featureModel, err := req.ToFeature(ctx)
+		if err := s.FeatureRepo.Create(ctx, featureModel); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
 	if err != nil {
-		return nil, err
-	}
-
-	if err := s.FeatureRepo.Create(ctx, featureModel); err != nil {
 		return nil, err
 	}
 

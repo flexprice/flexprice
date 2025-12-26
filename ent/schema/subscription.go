@@ -53,7 +53,8 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Default(string(types.SubscriptionStatusActive)),
+			Default(string(types.SubscriptionStatusActive)).
+			GoType(types.SubscriptionStatus("")),
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
@@ -87,10 +88,12 @@ func (Subscription) Fields() []ent.Field {
 			Nillable(),
 		field.String("billing_cadence").
 			NotEmpty().
-			Immutable(),
+			Immutable().
+			GoType(types.BillingCadence("")),
 		field.String("billing_period").
 			NotEmpty().
-			Immutable(),
+			Immutable().
+			GoType(types.BillingPeriod("")),
 		field.Int("billing_period_count").
 			Default(1).
 			Immutable(),
@@ -105,7 +108,8 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			Default(string(types.PauseStatusNone)),
+			Default(string(types.PauseStatusNone)).
+			GoType(types.PauseStatus("")),
 		field.String("active_pause_id").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
@@ -115,7 +119,8 @@ func (Subscription) Fields() []ent.Field {
 		field.String("billing_cycle").
 			NotEmpty().
 			Immutable().
-			Default(string(types.BillingCycleAnniversary)),
+			Default(string(types.BillingCycleAnniversary)).
+			GoType(types.BillingCycle("")),
 		field.Other("commitment_amount", decimal.Decimal{}).
 			Optional().
 			Nillable().
@@ -130,13 +135,19 @@ func (Subscription) Fields() []ent.Field {
 				"postgres": "decimal(10,6)",
 			}),
 		// Payment behavior and collection method fields
-		field.Enum("payment_behavior").
-			Values("allow_incomplete", "default_incomplete", "error_if_incomplete", "default_active").
-			Default("default_active").
+		field.String("payment_behavior").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.PaymentBehaviorDefaultActive)).
+			GoType(types.PaymentBehavior("")).
 			Comment("Determines how subscription payments are handled"),
-		field.Enum("collection_method").
-			Values("charge_automatically", "send_invoice").
-			Default("charge_automatically").
+		field.String("collection_method").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Default(string(types.CollectionMethodChargeAutomatically)).
+			GoType(types.CollectionMethod("")).
 			Comment("Determines how invoices are collected"),
 		field.String("gateway_payment_method_id").
 			SchemaType(map[string]string{
@@ -149,7 +160,8 @@ func (Subscription) Fields() []ent.Field {
 		field.String("proration_behavior").
 			NotEmpty().
 			Immutable().
-			Default(string(types.ProrationBehaviorNone)),
+			Default(string(types.ProrationBehaviorNone)).
+			GoType(types.ProrationBehavior("")),
 		field.Bool("enable_true_up").
 			Default(false).
 			Comment("Enable Commitment True Up Fee"),

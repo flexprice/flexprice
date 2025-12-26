@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
+	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -117,16 +118,30 @@ func (wtc *WalletTransactionCreate) SetWalletID(s string) *WalletTransactionCrea
 	return wtc
 }
 
+// SetCustomerID sets the "customer_id" field.
+func (wtc *WalletTransactionCreate) SetCustomerID(s string) *WalletTransactionCreate {
+	wtc.mutation.SetCustomerID(s)
+	return wtc
+}
+
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableCustomerID(s *string) *WalletTransactionCreate {
+	if s != nil {
+		wtc.SetCustomerID(*s)
+	}
+	return wtc
+}
+
 // SetType sets the "type" field.
-func (wtc *WalletTransactionCreate) SetType(s string) *WalletTransactionCreate {
-	wtc.mutation.SetType(s)
+func (wtc *WalletTransactionCreate) SetType(tt types.TransactionType) *WalletTransactionCreate {
+	wtc.mutation.SetType(tt)
 	return wtc
 }
 
 // SetNillableType sets the "type" field if the given value is not nil.
-func (wtc *WalletTransactionCreate) SetNillableType(s *string) *WalletTransactionCreate {
-	if s != nil {
-		wtc.SetType(*s)
+func (wtc *WalletTransactionCreate) SetNillableType(tt *types.TransactionType) *WalletTransactionCreate {
+	if tt != nil {
+		wtc.SetType(*tt)
 	}
 	return wtc
 }
@@ -156,15 +171,15 @@ func (wtc *WalletTransactionCreate) SetCreditBalanceAfter(d decimal.Decimal) *Wa
 }
 
 // SetReferenceType sets the "reference_type" field.
-func (wtc *WalletTransactionCreate) SetReferenceType(s string) *WalletTransactionCreate {
-	wtc.mutation.SetReferenceType(s)
+func (wtc *WalletTransactionCreate) SetReferenceType(ttrt types.WalletTxReferenceType) *WalletTransactionCreate {
+	wtc.mutation.SetReferenceType(ttrt)
 	return wtc
 }
 
 // SetNillableReferenceType sets the "reference_type" field if the given value is not nil.
-func (wtc *WalletTransactionCreate) SetNillableReferenceType(s *string) *WalletTransactionCreate {
-	if s != nil {
-		wtc.SetReferenceType(*s)
+func (wtc *WalletTransactionCreate) SetNillableReferenceType(ttrt *types.WalletTxReferenceType) *WalletTransactionCreate {
+	if ttrt != nil {
+		wtc.SetReferenceType(*ttrt)
 	}
 	return wtc
 }
@@ -204,15 +219,15 @@ func (wtc *WalletTransactionCreate) SetMetadata(m map[string]string) *WalletTran
 }
 
 // SetTransactionStatus sets the "transaction_status" field.
-func (wtc *WalletTransactionCreate) SetTransactionStatus(s string) *WalletTransactionCreate {
-	wtc.mutation.SetTransactionStatus(s)
+func (wtc *WalletTransactionCreate) SetTransactionStatus(ts types.TransactionStatus) *WalletTransactionCreate {
+	wtc.mutation.SetTransactionStatus(ts)
 	return wtc
 }
 
 // SetNillableTransactionStatus sets the "transaction_status" field if the given value is not nil.
-func (wtc *WalletTransactionCreate) SetNillableTransactionStatus(s *string) *WalletTransactionCreate {
-	if s != nil {
-		wtc.SetTransactionStatus(*s)
+func (wtc *WalletTransactionCreate) SetNillableTransactionStatus(ts *types.TransactionStatus) *WalletTransactionCreate {
+	if ts != nil {
+		wtc.SetTransactionStatus(*ts)
 	}
 	return wtc
 }
@@ -237,6 +252,20 @@ func (wtc *WalletTransactionCreate) SetCreditsAvailable(d decimal.Decimal) *Wall
 	return wtc
 }
 
+// SetCurrency sets the "currency" field.
+func (wtc *WalletTransactionCreate) SetCurrency(s string) *WalletTransactionCreate {
+	wtc.mutation.SetCurrency(s)
+	return wtc
+}
+
+// SetNillableCurrency sets the "currency" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableCurrency(s *string) *WalletTransactionCreate {
+	if s != nil {
+		wtc.SetCurrency(*s)
+	}
+	return wtc
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (wtc *WalletTransactionCreate) SetIdempotencyKey(s string) *WalletTransactionCreate {
 	wtc.mutation.SetIdempotencyKey(s)
@@ -252,15 +281,15 @@ func (wtc *WalletTransactionCreate) SetNillableIdempotencyKey(s *string) *Wallet
 }
 
 // SetTransactionReason sets the "transaction_reason" field.
-func (wtc *WalletTransactionCreate) SetTransactionReason(s string) *WalletTransactionCreate {
-	wtc.mutation.SetTransactionReason(s)
+func (wtc *WalletTransactionCreate) SetTransactionReason(tr types.TransactionReason) *WalletTransactionCreate {
+	wtc.mutation.SetTransactionReason(tr)
 	return wtc
 }
 
 // SetNillableTransactionReason sets the "transaction_reason" field if the given value is not nil.
-func (wtc *WalletTransactionCreate) SetNillableTransactionReason(s *string) *WalletTransactionCreate {
-	if s != nil {
-		wtc.SetTransactionReason(*s)
+func (wtc *WalletTransactionCreate) SetNillableTransactionReason(tr *types.TransactionReason) *WalletTransactionCreate {
+	if tr != nil {
+		wtc.SetTransactionReason(*tr)
 	}
 	return wtc
 }
@@ -381,7 +410,7 @@ func (wtc *WalletTransactionCreate) check() error {
 		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "WalletTransaction.type"`)}
 	}
 	if v, ok := wtc.mutation.GetType(); ok {
-		if err := wallettransaction.TypeValidator(v); err != nil {
+		if err := wallettransaction.TypeValidator(string(v)); err != nil {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.type": %w`, err)}
 		}
 	}
@@ -397,14 +426,29 @@ func (wtc *WalletTransactionCreate) check() error {
 	if _, ok := wtc.mutation.CreditBalanceAfter(); !ok {
 		return &ValidationError{Name: "credit_balance_after", err: errors.New(`ent: missing required field "WalletTransaction.credit_balance_after"`)}
 	}
+	if v, ok := wtc.mutation.ReferenceType(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "reference_type", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.reference_type": %w`, err)}
+		}
+	}
 	if _, ok := wtc.mutation.TransactionStatus(); !ok {
 		return &ValidationError{Name: "transaction_status", err: errors.New(`ent: missing required field "WalletTransaction.transaction_status"`)}
+	}
+	if v, ok := wtc.mutation.TransactionStatus(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "transaction_status", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.transaction_status": %w`, err)}
+		}
 	}
 	if _, ok := wtc.mutation.CreditsAvailable(); !ok {
 		return &ValidationError{Name: "credits_available", err: errors.New(`ent: missing required field "WalletTransaction.credits_available"`)}
 	}
 	if _, ok := wtc.mutation.TransactionReason(); !ok {
 		return &ValidationError{Name: "transaction_reason", err: errors.New(`ent: missing required field "WalletTransaction.transaction_reason"`)}
+	}
+	if v, ok := wtc.mutation.TransactionReason(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "transaction_reason", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.transaction_reason": %w`, err)}
+		}
 	}
 	return nil
 }
@@ -473,6 +517,10 @@ func (wtc *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.
 		_spec.SetField(wallettransaction.FieldWalletID, field.TypeString, value)
 		_node.WalletID = value
 	}
+	if value, ok := wtc.mutation.CustomerID(); ok {
+		_spec.SetField(wallettransaction.FieldCustomerID, field.TypeString, value)
+		_node.CustomerID = value
+	}
 	if value, ok := wtc.mutation.GetType(); ok {
 		_spec.SetField(wallettransaction.FieldType, field.TypeString, value)
 		_node.Type = value
@@ -520,6 +568,10 @@ func (wtc *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.
 	if value, ok := wtc.mutation.CreditsAvailable(); ok {
 		_spec.SetField(wallettransaction.FieldCreditsAvailable, field.TypeOther, value)
 		_node.CreditsAvailable = value
+	}
+	if value, ok := wtc.mutation.Currency(); ok {
+		_spec.SetField(wallettransaction.FieldCurrency, field.TypeString, value)
+		_node.Currency = &value
 	}
 	if value, ok := wtc.mutation.IdempotencyKey(); ok {
 		_spec.SetField(wallettransaction.FieldIdempotencyKey, field.TypeString, value)

@@ -69,6 +69,8 @@ const (
 	FieldPeriodEnd = "period_end"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
+	// FieldCommitmentInfo holds the string denoting the commitment_info field in the database.
+	FieldCommitmentInfo = "commitment_info"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -121,6 +123,7 @@ var Columns = []string{
 	FieldPeriodStart,
 	FieldPeriodEnd,
 	FieldMetadata,
+	FieldCommitmentInfo,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

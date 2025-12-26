@@ -247,7 +247,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 	result.EventName = params.EventName
 
 	// For windowed queries, we need to process all rows
-	if params.WindowSize != "" || (params.AggregationType == types.AggregationMax && params.BucketSize != "") {
+	if params.WindowSize != "" || ((params.AggregationType == types.AggregationMax || params.AggregationType == types.AggregationSum) && params.BucketSize != "") {
 		for rows.Next() {
 			var windowSize time.Time
 			var value decimal.Decimal
@@ -267,7 +267,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 						Mark(ierr.ErrDatabase)
 				}
 				value = decimal.NewFromUint64(countValue)
-			case types.AggregationMax:
+			case types.AggregationMax, types.AggregationSum:
 				if params.BucketSize != "" {
 					var totalFloat, valueFloat float64
 					if err := rows.Scan(&totalFloat, &windowSize, &valueFloat); err != nil {
@@ -283,7 +283,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 					}
 					total = decimal.NewFromFloat(totalFloat)
 					value = decimal.NewFromFloat(valueFloat)
-					// Set the overall maximum as the result value
+					// Set the overall max/sum as the result value
 					result.Value = total
 				} else {
 					var floatValue float64
@@ -299,7 +299,7 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 					}
 					value = decimal.NewFromFloat(floatValue)
 				}
-			case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
+			case types.AggregationAvg, types.AggregationLatest, types.AggregationSumWithMultiplier, types.AggregationWeightedSum:
 				var floatValue float64
 				if err := rows.Scan(&windowSize, &floatValue); err != nil {
 					SetSpanError(span, err)

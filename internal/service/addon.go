@@ -23,7 +23,8 @@ type AddonService interface {
 	DeleteAddon(ctx context.Context, id string) error
 
 	// Addon Association operations
-	GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) ([]*dto.AddonAssociationResponse, error)
+	ListAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error)
+	GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) (*dto.ListAddonAssociationsResponse, error)
 }
 
 type addonService struct {
@@ -353,8 +354,113 @@ func (s *addonService) DeleteAddon(ctx context.Context, id string) error {
 	return nil
 }
 
+// ListAddonAssociations lists addon associations with optional expansions
+func (s *addonService) ListAddonAssociations(ctx context.Context, filter *types.AddonAssociationFilter) (*dto.ListAddonAssociationsResponse, error) {
+	if filter == nil {
+		filter = types.NewAddonAssociationFilter()
+	}
+	if filter.QueryFilter == nil {
+		filter.QueryFilter = types.NewDefaultQueryFilter()
+	}
+
+	// Validate expand parameters against config
+	if err := filter.GetExpand().Validate(types.AddonAssociationExpandConfig); err != nil {
+		return nil, err
+	}
+
+	// Validate the filter
+	if err := filter.Validate(); err != nil {
+		return nil, err
+	}
+
+	associations, err := s.AddonAssociationRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	count, err := s.AddonAssociationRepo.Count(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &dto.ListAddonAssociationsResponse{
+		Items: make([]*dto.AddonAssociationResponse, len(associations)),
+		Pagination: types.NewPaginationResponse(
+			count,
+			filter.GetLimit(),
+			filter.GetOffset(),
+		),
+	}
+
+	// Prepare expansion maps
+	expand := filter.GetExpand()
+
+	var addonMap map[string]*dto.AddonResponse
+	if expand.Has(types.ExpandAddons) {
+		addonMap = make(map[string]*dto.AddonResponse)
+		addonIDs := lo.Uniq(lo.Map(associations, func(a *addonassociation.AddonAssociation, _ int) string {
+			return a.AddonID
+		}))
+		if len(addonIDs) > 0 {
+			addonFilter := types.NewNoLimitAddonFilter()
+			addonFilter.AddonIDs = addonIDs
+			addonFilter.Expand = lo.ToPtr(string(types.ExpandPrices))
+			addonResults, err := s.GetAddons(ctx, addonFilter)
+			if err != nil {
+				return nil, err
+			}
+			for _, a := range addonResults.Items {
+				if a != nil && a.Addon != nil {
+					addonMap[a.Addon.ID] = a
+				}
+			}
+		}
+	}
+
+	var subscriptionMap map[string]*dto.SubscriptionResponse
+	if expand.Has(types.ExpandSubscription) {
+		subscriptionMap = make(map[string]*dto.SubscriptionResponse)
+		subscriptionIDs := lo.FilterMap(associations, func(a *addonassociation.AddonAssociation, _ int) (string, bool) {
+			if a.EntityType == types.AddonAssociationEntityTypeSubscription {
+				return a.EntityID, true
+			}
+			return "", false
+		})
+		if len(subscriptionIDs) > 0 {
+			subService := NewSubscriptionService(s.ServiceParams)
+			for _, subID := range lo.Uniq(subscriptionIDs) {
+				subResp, err := subService.GetSubscription(ctx, subID)
+				if err != nil {
+					return nil, err
+				}
+				subscriptionMap[subID] = subResp
+			}
+		}
+	}
+
+	// Build response items
+	for i, association := range associations {
+		item := &dto.AddonAssociationResponse{
+			AddonAssociation: association,
+		}
+		if addonMap != nil {
+			if addonResp, ok := addonMap[association.AddonID]; ok {
+				item.Addon = addonResp
+			}
+		}
+		if subscriptionMap != nil && association.EntityType == types.AddonAssociationEntityTypeSubscription {
+			if subResp, ok := subscriptionMap[association.EntityID]; ok {
+				item.Subscription = subResp
+			}
+		}
+		resp.Items[i] = item
+	}
+
+	return resp, nil
+}
+
 // GetActiveAddonAssociation retrieves active addon associations for a given entity at a point in time
-func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) ([]*dto.AddonAssociationResponse, error) {
+func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.GetActiveAddonAssociationRequest) (*dto.ListAddonAssociationsResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
@@ -366,23 +472,31 @@ func (s *addonService) GetActiveAddonAssociation(ctx context.Context, req dto.Ge
 		periodStart = &now
 	}
 
-	// Get active addon associations from repository (filtered at DB level)
-	associations, err := s.AddonAssociationRepo.GetActiveAddonAssociation(ctx, req.EntityID, req.EntityType, periodStart, req.AddonIds)
+	// Use end date if provided; if nil we treat it as point-in-time at start
+	periodEnd := req.EndDate
+	if periodEnd == nil {
+		periodEnd = periodStart
+	}
+
+	// Build filter to fetch active addon associations using the generic list method
+	filter := types.NewNoLimitAddonAssociationFilter()
+	filter.QueryFilter = types.NewNoLimitQueryFilter()
+	filter.EntityIDs = []string{req.EntityID}
+	filter.EntityType = &req.EntityType
+	filter.AddonStatus = lo.ToPtr(string(types.AddonStatusActive))
+	filter.StartDate = periodStart
+	filter.EndDate = periodEnd
+
+	// Always expand addon details for active association lookup
+	filter.QueryFilter.Expand = lo.ToPtr(string(types.ExpandAddons))
+	if len(req.AddonIds) > 0 {
+		filter.AddonIDs = req.AddonIds
+	}
+
+	associations, err := s.ListAddonAssociations(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
 
-	// Early return for empty results
-	if len(associations) == 0 {
-		return []*dto.AddonAssociationResponse{}, nil
-	}
-
-	// Convert to response format
-	responses := lo.Map(associations, func(association *addonassociation.AddonAssociation, _ int) *dto.AddonAssociationResponse {
-		return &dto.AddonAssociationResponse{
-			AddonAssociation: association,
-		}
-	})
-
-	return responses, nil
+	return associations, nil
 }

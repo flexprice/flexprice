@@ -34,18 +34,46 @@ func NewAddonAssociationRepository(client postgres.IClient, log *logger.Logger, 
 	}
 }
 
-// applyActiveAddonAssociationFilter applies the filter to ensure only active addon associations are returned
-// Active addon associations are those where EndDate > periodStart or EndDate is nil
-func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *ent.AddonAssociationQuery, periodStart *time.Time) *ent.AddonAssociationQuery {
-	if periodStart == nil {
-		// No period specified, just return published associations
-		return query.Where(addonassociation.Status(string(types.StatusPublished)))
+// applyActiveAddonAssociationFilter applies a time-window filter to return associations active during the window
+// Active means: published AND addon_status = active AND starts on/before window end AND (no end or end after window start)
+// If both bounds are nil, it simply enforces published + active status.
+func (o *AddonAssociationQueryOptions) applyActiveAddonAssociationFilter(query *ent.AddonAssociationQuery, windowStart, windowEnd *time.Time) *ent.AddonAssociationQuery {
+	// Always require published + active status when using the active window filter
+	query = query.Where(
+		addonassociation.Status(string(types.StatusPublished)),
+		addonassociation.AddonStatus(string(types.AddonStatusActive)),
+	)
+
+	// If no bounds provided, return status-qualified associations
+	if windowStart == nil && windowEnd == nil {
+		return query
 	}
 
+	// Derive bounds
+	var start time.Time
+	if windowStart != nil {
+		start = *windowStart
+	} else if windowEnd != nil {
+		// If only end provided, treat start as end (point-in-time)
+		start = *windowEnd
+	}
+
+	var end time.Time
+	if windowEnd != nil {
+		end = *windowEnd
+	} else {
+		// If only start provided, treat end as start (point-in-time)
+		end = start
+	}
+
+	// Overlap condition: start_date <= windowEnd AND (end_date is nil OR end_date > windowStart)
 	return query.Where(
-		addonassociation.Status(string(types.StatusPublished)),
 		addonassociation.Or(
-			addonassociation.EndDateGT(*periodStart),
+			addonassociation.StartDateLTE(end),
+			addonassociation.StartDateIsNil(),
+		),
+		addonassociation.Or(
+			addonassociation.EndDateGT(start),
 			addonassociation.EndDateIsNil(),
 		),
 	)
@@ -433,6 +461,11 @@ func (o AddonAssociationQueryOptions) applyEntityQueryOptions(ctx context.Contex
 		query = query.Where(addonassociation.AddonStatus(*f.AddonStatus))
 	}
 
+	// Apply active window filter if specified
+	if f.StartDate != nil || f.EndDate != nil {
+		query = o.applyActiveAddonAssociationFilter(query, f.StartDate, f.EndDate)
+	}
+
 	// Apply time range filters if specified
 	if f.TimeRangeFilter != nil {
 		if f.StartTime != nil {
@@ -519,48 +552,4 @@ func (r *addonAssociationRepository) DeleteCache(ctx context.Context, addonAssoc
 	environmentID := types.GetEnvironmentID(ctx)
 	cacheKey := cache.GenerateKey(cache.PrefixAddonAssociation, tenantID, environmentID, addonAssociationID)
 	r.cache.Delete(ctx, cacheKey)
-}
-
-// GetActiveAddonAssociation retrieves active addon associations for a given entity and optional time point
-func (r *addonAssociationRepository) GetActiveAddonAssociation(ctx context.Context, entityID string, entityType types.AddonAssociationEntityType, periodStart *time.Time, addonIds []string) ([]*domainAddonAssociation.AddonAssociation, error) {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "addon_association", "list_active", map[string]interface{}{
-		"entity_id":    entityID,
-		"entity_type":  entityType,
-		"period_start": periodStart,
-	})
-	defer FinishSpan(span)
-
-	client := r.client.Reader(ctx)
-	query := client.AddonAssociation.Query().
-		Where(
-			addonassociation.EntityID(entityID),
-			addonassociation.EntityType(string(entityType)),
-			addonassociation.TenantID(types.GetTenantID(ctx)),
-			addonassociation.EnvironmentID(types.GetEnvironmentID(ctx)),
-			addonassociation.AddonStatus(string(types.AddonStatusActive)),
-		)
-
-
-	if len(addonIds) > 0 {
-		query = query.Where(addonassociation.AddonIDIn(addonIds...))
-	}
-
-	// Apply the active filter
-	query = r.queryOpts.applyActiveAddonAssociationFilter(query, periodStart)
-
-	addonAssociations, err := query.All(ctx)
-	if err != nil {
-		SetSpanError(span, err)
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list active addon associations").
-			WithReportableDetails(map[string]any{
-				"entity_id":   entityID,
-				"entity_type": entityType,
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	SetSpanSuccess(span)
-	return domainAddonAssociation.FromEntList(addonAssociations), nil
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -111,7 +112,7 @@ var (
 	// DefaultEnvironmentID holds the default value on creation for the "environment_id" field.
 	DefaultEnvironmentID string
 	// DefaultEntityType holds the default value on creation for the "entity_type" field.
-	DefaultEntityType string
+	DefaultEntityType types.EntitlementEntityType
 	// FeatureIDValidator is a validator for the "feature_id" field. It is called by the builders before save.
 	FeatureIDValidator func(string) error
 	// FeatureTypeValidator is a validator for the "feature_type" field. It is called by the builders before save.

@@ -47,6 +47,7 @@ type DetailedUsageAnalytic struct {
 	FeatureName     string
 	EventName       string
 	Source          string
+	Sources         []string // List of distinct sources when source is not in group_by
 	MeterID         string
 	PriceID         string // Price ID used for this usage - allows tracking different prices per subscription
 	SubLineItemID   string // Subscription line item ID
@@ -54,35 +55,54 @@ type DetailedUsageAnalytic struct {
 	AggregationType types.AggregationType
 	Unit            string
 	UnitPlural      string
-	TotalUsage      decimal.Decimal
-	TotalCost       decimal.Decimal
+	TotalUsage      decimal.Decimal `swaggertype:"string"`
+	TotalCost       decimal.Decimal `swaggertype:"string"`
 	Currency        string
-	EventCount      uint64            // Number of events that contributed to this aggregation
-	Properties      map[string]string // Stores property values for flexible grouping (e.g., org_id -> "org123")
+	EventCount      uint64                // Number of events that contributed to this aggregation
+	Properties      map[string]string     // Stores property values for flexible grouping (e.g., org_id -> "org123")
+	CommitmentInfo  *types.CommitmentInfo // Stores commitment info if applicable
 	Points          []UsageAnalyticPoint
 
 	// All aggregation values - we fetch all and use the appropriate one based on meter type
-	MaxUsage         decimal.Decimal // MAX(qty_total * sign)
-	LatestUsage      decimal.Decimal // argMax(qty_total, timestamp)
+	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
+	LatestUsage      decimal.Decimal `swaggertype:"string"` // argMax(qty_total, timestamp)
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
 // UsageAnalyticPoint represents a data point in a time series
 type UsageAnalyticPoint struct {
-	Timestamp  time.Time
-	Usage      decimal.Decimal
-	Cost       decimal.Decimal
-	EventCount uint64 // Number of events in this time window
+	Timestamp   time.Time
+	WindowStart time.Time       // For bucketed features: which request window this bucket belongs to
+	Usage       decimal.Decimal `swaggertype:"string"`
+	Cost        decimal.Decimal `swaggertype:"string"`
+	EventCount  uint64          // Number of events in this time window
+
+	// Commitment breakdown (for windowed commitments)
+	ComputedCommitmentUtilizedAmount decimal.Decimal `swaggertype:"string"` // Amount of commitment utilized
+	ComputedOverageAmount            decimal.Decimal `swaggertype:"string"` // Overage charge amount
+	ComputedTrueUpAmount             decimal.Decimal `swaggertype:"string"` // True-up amount charged
 
 	// All aggregation values for this time point
-	MaxUsage         decimal.Decimal // MAX(qty_total * sign)
-	LatestUsage      decimal.Decimal // argMax(qty_total, timestamp)
+	MaxUsage         decimal.Decimal `swaggertype:"string"` // MAX(qty_total * sign)
+	LatestUsage      decimal.Decimal `swaggertype:"string"` // argMax(qty_total, timestamp)
 	CountUniqueUsage uint64          // COUNT(DISTINCT unique_hash)
 }
 
 // UsageByFeatureResult represents aggregated usage data for a feature
 type UsageByFeatureResult struct {
 	SubLineItemID    string
+	FeatureID        string
+	MeterID          string
+	PriceID          string
+	SumTotal         decimal.Decimal `swaggertype:"string"`
+	MaxTotal         decimal.Decimal `swaggertype:"string"`
+	CountDistinctIDs uint64
+	CountUniqueQty   uint64
+	LatestQty        decimal.Decimal `swaggertype:"string"`
+}
+
+type UsageByCostSheetResult struct {
+	CostSheetID      string
 	FeatureID        string
 	MeterID          string
 	PriceID          string

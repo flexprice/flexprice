@@ -63,8 +63,11 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetNillablePeriodCount(cg.PeriodCount).
 		SetExpirationType(cg.ExpirationType).
 		SetNillableExpirationDuration(cg.ExpirationDuration).
-		SetExpirationDurationUnit(lo.FromPtr(cg.ExpirationDurationUnit)).
+		SetNillableExpirationDurationUnit(cg.ExpirationDurationUnit).
 		SetNillablePriority(cg.Priority).
+		SetNillableStartDate(cg.StartDate).
+		SetNillableEndDate(cg.EndDate).
+		SetNillableCreditGrantAnchor(cg.CreditGrantAnchor).
 		SetTenantID(cg.TenantID).
 		SetStatus(string(cg.Status)).
 		SetCreatedAt(cg.CreatedAt).
@@ -145,8 +148,11 @@ func (r *creditGrantRepository) CreateBulk(ctx context.Context, creditGrants []*
 			SetNillablePeriodCount(cg.PeriodCount).
 			SetExpirationType(cg.ExpirationType).
 			SetNillableExpirationDuration(cg.ExpirationDuration).
-			SetExpirationDurationUnit(lo.FromPtr(cg.ExpirationDurationUnit)).
+			SetNillableExpirationDurationUnit(cg.ExpirationDurationUnit).
 			SetNillablePriority(cg.Priority).
+			SetNillableStartDate(cg.StartDate).
+			SetNillableEndDate(cg.EndDate).
+			SetNillableCreditGrantAnchor(cg.CreditGrantAnchor).
 			SetTenantID(cg.TenantID).
 			SetStatus(string(cg.Status)).
 			SetCreatedAt(cg.CreatedAt).

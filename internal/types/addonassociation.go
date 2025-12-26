@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/samber/lo"
 )
@@ -40,6 +42,8 @@ type AddonAssociationFilter struct {
 	EntityType  *AddonAssociationEntityType `json:"entity_type,omitempty" form:"entity_type" validate:"omitempty"`
 	EntityIDs   []string                    `json:"entity_ids,omitempty" form:"entity_ids" validate:"omitempty"`
 	AddonStatus *string                     `json:"addon_status,omitempty" form:"addon_status" validate:"omitempty"`
+	StartDate   *time.Time                  `json:"start_date,omitempty" form:"start_date" validate:"omitempty"`
+	EndDate     *time.Time                  `json:"end_date,omitempty" form:"end_date" validate:"omitempty"`
 }
 
 // NewAddonAssociationFilter creates a new addon association filter with default options

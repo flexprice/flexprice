@@ -59,12 +59,12 @@ type ProcessedEvent struct {
 
 	// Deduplication and metrics
 	UniqueHash     string          `json:"unique_hash" ch:"unique_hash"`
-	QtyTotal       decimal.Decimal `json:"qty_total" ch:"qty_total"`
-	QtyBillable    decimal.Decimal `json:"qty_billable" ch:"qty_billable"`
-	QtyFreeApplied decimal.Decimal `json:"qty_free_applied" ch:"qty_free_applied"`
-	TierSnapshot   decimal.Decimal `json:"tier_snapshot" ch:"tier_snapshot"`
-	UnitCost       decimal.Decimal `json:"unit_cost" ch:"unit_cost"`
-	Cost           decimal.Decimal `json:"cost" ch:"cost"`
+	QtyTotal       decimal.Decimal `json:"qty_total" ch:"qty_total" swaggertype:"string"`
+	QtyBillable    decimal.Decimal `json:"qty_billable" ch:"qty_billable" swaggertype:"string"`
+	QtyFreeApplied decimal.Decimal `json:"qty_free_applied" ch:"qty_free_applied" swaggertype:"string"`
+	TierSnapshot   decimal.Decimal `json:"tier_snapshot" ch:"tier_snapshot" swaggertype:"string"`
+	UnitCost       decimal.Decimal `json:"unit_cost" ch:"unit_cost" swaggertype:"string"`
+	Cost           decimal.Decimal `json:"cost" ch:"cost" swaggertype:"string"`
 
 	// Audit fields
 	Version uint64 `json:"version" ch:"version"`
@@ -169,6 +169,28 @@ type FeatureUsage struct {
 	FeatureID      string `json:"feature_id" ch:"feature_id"`
 	MeterID        string `json:"meter_id" ch:"meter_id"`
 	PeriodID       uint64 `json:"period_id" ch:"period_id"`
+	// Deduplication and metrics
+	UniqueHash string          `json:"unique_hash" ch:"unique_hash"`
+	QtyTotal   decimal.Decimal `json:"qty_total" ch:"qty_total" swaggertype:"string"`
+
+	// Audit fields
+	Version uint64 `json:"version" ch:"version"`
+	Sign    int8   `json:"sign" ch:"sign"`
+
+	// Processing metadata
+	ProcessedAt     time.Time `json:"processed_at" ch:"processed_at,timezone('UTC')"`
+	ProcessingLagMs uint32    `json:"processing_lag_ms" ch:"processing_lag_ms"`
+}
+
+type CostUsage struct {
+	// Original event fields
+	Event
+	// Processing fields
+	CostSheetID string `json:"costsheet_id" ch:"costsheet_id"`
+	PriceID     string `json:"price_id" ch:"price_id"`
+	FeatureID   string `json:"feature_id" ch:"feature_id"`
+	MeterID     string `json:"meter_id" ch:"meter_id"`
+
 	// Deduplication and metrics
 	UniqueHash string          `json:"unique_hash" ch:"unique_hash"`
 	QtyTotal   decimal.Decimal `json:"qty_total" ch:"qty_total"`
