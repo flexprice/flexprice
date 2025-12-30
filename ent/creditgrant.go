@@ -46,6 +46,10 @@ type CreditGrant struct {
 	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// Credits holds the value of the "credits" field.
 	Credits decimal.Decimal `json:"credits,omitempty"`
+	// ConversionRate holds the value of the "conversion_rate" field.
+	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty"`
+	// TopupConversionRate holds the value of the "topup_conversion_rate" field.
+	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty"`
 	// Cadence holds the value of the "cadence" field.
 	Cadence types.CreditGrantCadence `json:"cadence,omitempty"`
 	// Period holds the value of the "period" field.
@@ -112,6 +116,8 @@ func (*CreditGrant) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case creditgrant.FieldConversionRate, creditgrant.FieldTopupConversionRate:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case creditgrant.FieldMetadata:
 			values[i] = new([]byte)
 		case creditgrant.FieldCredits:
@@ -216,6 +222,20 @@ func (cg *CreditGrant) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field credits", values[i])
 			} else if value != nil {
 				cg.Credits = *value
+			}
+		case creditgrant.FieldConversionRate:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field conversion_rate", values[i])
+			} else if value.Valid {
+				cg.ConversionRate = new(decimal.Decimal)
+				*cg.ConversionRate = *value.S.(*decimal.Decimal)
+			}
+		case creditgrant.FieldTopupConversionRate:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field topup_conversion_rate", values[i])
+			} else if value.Valid {
+				cg.TopupConversionRate = new(decimal.Decimal)
+				*cg.TopupConversionRate = *value.S.(*decimal.Decimal)
 			}
 		case creditgrant.FieldCadence:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -378,6 +398,16 @@ func (cg *CreditGrant) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("credits=")
 	builder.WriteString(fmt.Sprintf("%v", cg.Credits))
+	builder.WriteString(", ")
+	if v := cg.ConversionRate; v != nil {
+		builder.WriteString("conversion_rate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := cg.TopupConversionRate; v != nil {
+		builder.WriteString("topup_conversion_rate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("cadence=")
 	builder.WriteString(fmt.Sprintf("%v", cg.Cadence))

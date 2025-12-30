@@ -468,6 +468,8 @@ var (
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "scope", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "credits", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "conversion_rate", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
+		{Name: "topup_conversion_rate", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
 		{Name: "cadence", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "period", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "period_count", Type: field.TypeInt, Nullable: true},
@@ -490,13 +492,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "credit_grants_plans_credit_grants",
-				Columns:    []*schema.Column{CreditGrantsColumns[22]},
+				Columns:    []*schema.Column{CreditGrantsColumns[24]},
 				RefColumns: []*schema.Column{PlansColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "credit_grants_subscriptions_credit_grants",
-				Columns:    []*schema.Column{CreditGrantsColumns[23]},
+				Columns:    []*schema.Column{CreditGrantsColumns[25]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -510,7 +512,7 @@ var (
 			{
 				Name:    "idx_plan_id_not_null",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[22]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[24]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "plan_id IS NOT NULL",
 				},
@@ -518,7 +520,7 @@ var (
 			{
 				Name:    "idx_subscription_id_not_null",
 				Unique:  false,
-				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[23]},
+				Columns: []*schema.Column{CreditGrantsColumns[1], CreditGrantsColumns[7], CreditGrantsColumns[9], CreditGrantsColumns[25]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "subscription_id IS NOT NULL",
 				},

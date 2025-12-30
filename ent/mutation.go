@@ -12109,6 +12109,8 @@ type CreditGrantMutation struct {
 	name                     *string
 	scope                    *types.CreditGrantScope
 	credits                  *decimal.Decimal
+	conversion_rate          *decimal.Decimal
+	topup_conversion_rate    *decimal.Decimal
 	cadence                  *types.CreditGrantCadence
 	period                   *types.CreditGrantPeriod
 	period_count             *int
@@ -12732,6 +12734,104 @@ func (m *CreditGrantMutation) OldCredits(ctx context.Context) (v decimal.Decimal
 // ResetCredits resets all changes to the "credits" field.
 func (m *CreditGrantMutation) ResetCredits() {
 	m.credits = nil
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (m *CreditGrantMutation) SetConversionRate(d decimal.Decimal) {
+	m.conversion_rate = &d
+}
+
+// ConversionRate returns the value of the "conversion_rate" field in the mutation.
+func (m *CreditGrantMutation) ConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionRate returns the old "conversion_rate" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionRate: %w", err)
+	}
+	return oldValue.ConversionRate, nil
+}
+
+// ClearConversionRate clears the value of the "conversion_rate" field.
+func (m *CreditGrantMutation) ClearConversionRate() {
+	m.conversion_rate = nil
+	m.clearedFields[creditgrant.FieldConversionRate] = struct{}{}
+}
+
+// ConversionRateCleared returns if the "conversion_rate" field was cleared in this mutation.
+func (m *CreditGrantMutation) ConversionRateCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldConversionRate]
+	return ok
+}
+
+// ResetConversionRate resets all changes to the "conversion_rate" field.
+func (m *CreditGrantMutation) ResetConversionRate() {
+	m.conversion_rate = nil
+	delete(m.clearedFields, creditgrant.FieldConversionRate)
+}
+
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (m *CreditGrantMutation) SetTopupConversionRate(d decimal.Decimal) {
+	m.topup_conversion_rate = &d
+}
+
+// TopupConversionRate returns the value of the "topup_conversion_rate" field in the mutation.
+func (m *CreditGrantMutation) TopupConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.topup_conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTopupConversionRate returns the old "topup_conversion_rate" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldTopupConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTopupConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTopupConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTopupConversionRate: %w", err)
+	}
+	return oldValue.TopupConversionRate, nil
+}
+
+// ClearTopupConversionRate clears the value of the "topup_conversion_rate" field.
+func (m *CreditGrantMutation) ClearTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	m.clearedFields[creditgrant.FieldTopupConversionRate] = struct{}{}
+}
+
+// TopupConversionRateCleared returns if the "topup_conversion_rate" field was cleared in this mutation.
+func (m *CreditGrantMutation) TopupConversionRateCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldTopupConversionRate]
+	return ok
+}
+
+// ResetTopupConversionRate resets all changes to the "topup_conversion_rate" field.
+func (m *CreditGrantMutation) ResetTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	delete(m.clearedFields, creditgrant.FieldTopupConversionRate)
 }
 
 // SetCadence sets the "cadence" field.
@@ -13398,7 +13498,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -13434,6 +13534,12 @@ func (m *CreditGrantMutation) Fields() []string {
 	}
 	if m.credits != nil {
 		fields = append(fields, creditgrant.FieldCredits)
+	}
+	if m.conversion_rate != nil {
+		fields = append(fields, creditgrant.FieldConversionRate)
+	}
+	if m.topup_conversion_rate != nil {
+		fields = append(fields, creditgrant.FieldTopupConversionRate)
 	}
 	if m.cadence != nil {
 		fields = append(fields, creditgrant.FieldCadence)
@@ -13500,6 +13606,10 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionID()
 	case creditgrant.FieldCredits:
 		return m.Credits()
+	case creditgrant.FieldConversionRate:
+		return m.ConversionRate()
+	case creditgrant.FieldTopupConversionRate:
+		return m.TopupConversionRate()
 	case creditgrant.FieldCadence:
 		return m.Cadence()
 	case creditgrant.FieldPeriod:
@@ -13555,6 +13665,10 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldSubscriptionID(ctx)
 	case creditgrant.FieldCredits:
 		return m.OldCredits(ctx)
+	case creditgrant.FieldConversionRate:
+		return m.OldConversionRate(ctx)
+	case creditgrant.FieldTopupConversionRate:
+		return m.OldTopupConversionRate(ctx)
 	case creditgrant.FieldCadence:
 		return m.OldCadence(ctx)
 	case creditgrant.FieldPeriod:
@@ -13669,6 +13783,20 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCredits(v)
+		return nil
+	case creditgrant.FieldConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionRate(v)
+		return nil
+	case creditgrant.FieldTopupConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTopupConversionRate(v)
 		return nil
 	case creditgrant.FieldCadence:
 		v, ok := value.(types.CreditGrantCadence)
@@ -13831,6 +13959,12 @@ func (m *CreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrant.FieldSubscriptionID) {
 		fields = append(fields, creditgrant.FieldSubscriptionID)
 	}
+	if m.FieldCleared(creditgrant.FieldConversionRate) {
+		fields = append(fields, creditgrant.FieldConversionRate)
+	}
+	if m.FieldCleared(creditgrant.FieldTopupConversionRate) {
+		fields = append(fields, creditgrant.FieldTopupConversionRate)
+	}
 	if m.FieldCleared(creditgrant.FieldPeriod) {
 		fields = append(fields, creditgrant.FieldPeriod)
 	}
@@ -13886,6 +14020,12 @@ func (m *CreditGrantMutation) ClearField(name string) error {
 		return nil
 	case creditgrant.FieldSubscriptionID:
 		m.ClearSubscriptionID()
+		return nil
+	case creditgrant.FieldConversionRate:
+		m.ClearConversionRate()
+		return nil
+	case creditgrant.FieldTopupConversionRate:
+		m.ClearTopupConversionRate()
 		return nil
 	case creditgrant.FieldPeriod:
 		m.ClearPeriod()
@@ -13957,6 +14097,12 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 		return nil
 	case creditgrant.FieldCredits:
 		m.ResetCredits()
+		return nil
+	case creditgrant.FieldConversionRate:
+		m.ResetConversionRate()
+		return nil
+	case creditgrant.FieldTopupConversionRate:
+		m.ResetTopupConversionRate()
 		return nil
 	case creditgrant.FieldCadence:
 		m.ResetCadence()
