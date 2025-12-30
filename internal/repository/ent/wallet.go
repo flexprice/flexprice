@@ -391,6 +391,8 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetCreditBalanceBefore(tx.CreditBalanceBefore).
 		SetCreditBalanceAfter(tx.CreditBalanceAfter).
 		SetCurrency(tx.Currency).
+		SetNillableConversionRate(tx.ConversionRate).
+		SetNillableTopupConversionRate(tx.TopupConversionRate).
 		SetCreatedAt(tx.CreatedAt).
 		SetCreatedBy(tx.CreatedBy).
 		SetUpdatedAt(tx.UpdatedAt).

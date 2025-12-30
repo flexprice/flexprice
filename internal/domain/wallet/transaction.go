@@ -5,7 +5,6 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -29,6 +28,12 @@ type Transaction struct {
 	TransactionReason   types.TransactionReason     `db:"transaction_reason" json:"transaction_reason"`
 	Priority            *int                        `db:"priority" json:"priority"`
 	Currency            string                      `db:"currency" json:"currency"`
+
+	// conversion_rate is the conversion rate for the transaction to the currency
+	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
+
+	// topup_conversion_rate is the conversion rate for the topup to the currency
+	TopupConversionRate *decimal.Decimal `db:"topup_conversion_rate" json:"topup_conversion_rate,omitempty" swaggertype:"string"`
 
 	IdempotencyKey string `db:"idempotency_key" json:"idempotency_key"`
 	EnvironmentID  string `db:"environment_id" json:"environment_id"`
@@ -71,7 +76,9 @@ func (t *Transaction) ToEnt() *ent.WalletTransaction {
 		CreditsAvailable:    t.CreditsAvailable,
 		TransactionReason:   t.TransactionReason,
 		Priority:            t.Priority,
-		Currency:            lo.ToPtr(t.Currency),
+		Currency:            t.Currency,
+		ConversionRate:      t.ConversionRate,
+		TopupConversionRate: t.TopupConversionRate,
 		EnvironmentID:       t.EnvironmentID,
 		TenantID:            t.TenantID,
 		Status:              string(t.Status),
@@ -104,9 +111,11 @@ func TransactionFromEnt(e *ent.WalletTransaction) *Transaction {
 		CreditsAvailable:    e.CreditsAvailable,
 		CreditBalanceBefore: e.CreditBalanceBefore,
 		CreditBalanceAfter:  e.CreditBalanceAfter,
-		Currency:            lo.FromPtrOr(e.Currency, ""),
+		Currency:            e.Currency,
 		TransactionReason:   e.TransactionReason,
 		Priority:            e.Priority,
+		ConversionRate:      e.ConversionRate,
+		TopupConversionRate: e.TopupConversionRate,
 		EnvironmentID:       e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
