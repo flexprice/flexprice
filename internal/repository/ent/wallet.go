@@ -64,6 +64,7 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		SetWalletType(w.WalletType).
 		SetConfig(w.Config).
 		SetConversionRate(w.ConversionRate).
+		SetTopupConversionRate(w.TopupConversionRate).
 		SetStatus(string(w.Status)).
 		SetCreatedBy(w.CreatedBy).
 		SetCreatedAt(w.CreatedAt).
