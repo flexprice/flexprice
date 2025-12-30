@@ -1,11 +1,16 @@
 package kafka
 
 import (
+	"crypto/sha256"
+	"crypto/sha512"
+	"hash"
+
 	"crypto/tls"
 	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/xdg-go/scram"
 )
 
 func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
@@ -47,5 +52,48 @@ func GetSaramaConfig(cfg *config.Configuration) *sarama.Config {
 	saramaConfig.Net.SASL.User = cfg.Kafka.SASLUser
 	saramaConfig.Net.SASL.Password = cfg.Kafka.SASLPassword
 
+	// Configure SCRAM client generator for SCRAM mechanisms
+	if cfg.Kafka.SASLMechanism == sarama.SASLTypeSCRAMSHA256 || cfg.Kafka.SASLMechanism == sarama.SASLTypeSCRAMSHA512 {
+		saramaConfig.Net.SASL.SCRAMClientGeneratorFunc = func() sarama.SCRAMClient {
+			return &XDGSCRAMClient{HashGeneratorFcn: getHashGenerator(cfg.Kafka.SASLMechanism)}
+		}
+	}
+
 	return saramaConfig
+}
+
+// XDGSCRAMClient implements sarama.SCRAMClient for SCRAM authentication
+type XDGSCRAMClient struct {
+	*scram.ClientConversation
+	scram.HashGeneratorFcn
+}
+
+func (x *XDGSCRAMClient) Begin(userName, password, authzID string) (err error) {
+	client, err := x.HashGeneratorFcn.NewClient(userName, password, authzID)
+	if err != nil {
+		return err
+	}
+	x.ClientConversation = client.NewConversation()
+	return nil
+}
+
+func (x *XDGSCRAMClient) Step(challenge string) (response string, err error) {
+	response, err = x.ClientConversation.Step(challenge)
+	return
+}
+
+func (x *XDGSCRAMClient) Done() bool {
+	return x.ClientConversation.Done()
+}
+
+// getHashGenerator returns the appropriate hash generator for the SASL mechanism
+func getHashGenerator(mechanism sarama.SASLMechanism) scram.HashGeneratorFcn {
+	switch mechanism {
+	case sarama.SASLTypeSCRAMSHA512:
+		return func() hash.Hash { return sha512.New() }
+	case sarama.SASLTypeSCRAMSHA256:
+		return func() hash.Hash { return sha256.New() }
+	default:
+		return func() hash.Hash { return sha512.New() }
+	}
 }

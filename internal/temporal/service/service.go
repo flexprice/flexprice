@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -355,6 +357,10 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildHubSpotDealSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalHubSpotInvoiceSyncWorkflow:
 		return s.buildHubSpotInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalScheduleSubscriptionBillingWorkflow:
+		return s.buildScheduleSubscriptionBillingWorkflowInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalProcessSubscriptionBillingWorkflow:
+		return s.buildProcessSubscriptionBillingWorkflowInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalHubSpotQuoteSyncWorkflow:
 		return s.buildHubSpotQuoteSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalNomodInvoiceSyncWorkflow:
@@ -558,6 +564,91 @@ func (s *temporalService) buildNomodInvoiceSyncInput(_ context.Context, tenantID
 
 	return nil, errors.NewError("invalid input for Nomod invoice sync workflow").
 		WithHint("Provide NomodInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
+// buildScheduleSubscriptionBillingWorkflowInput builds input for schedule subscription billing workflow
+func (s *temporalService) buildScheduleSubscriptionBillingWorkflowInput(_ context.Context, _, _, _ string, params interface{}) (interface{}, error) {
+	// If already correct type, return as-is
+	if input, ok := params.(subscriptionModels.ScheduleSubscriptionBillingWorkflowInput); ok {
+		// Validate the input
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	// Handle map input for batch size
+	if paramsMap, ok := params.(map[string]interface{}); ok {
+		batchSize := types.DEFAULT_BATCH_SIZE
+		if bs, ok := paramsMap["batch_size"].(int); ok && bs > 0 {
+			batchSize = bs
+		}
+		return subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{
+			BatchSize: batchSize,
+		}, nil
+	}
+
+	// Default with validation
+	defaultInput := subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{
+		BatchSize: types.DEFAULT_BATCH_SIZE,
+	}
+	if err := defaultInput.Validate(); err != nil {
+		return nil, err
+	}
+	return defaultInput, nil
+}
+
+// buildProcessSubscriptionBillingWorkflowInput builds input for process subscription billing workflow
+func (s *temporalService) buildProcessSubscriptionBillingWorkflowInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	// If already correct type, ensure context is set
+	if input, ok := params.(subscriptionModels.ProcessSubscriptionBillingWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		// Validate the input
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	// Handle map input
+	if paramsMap, ok := params.(map[string]interface{}); ok {
+		subscriptionID, _ := paramsMap["subscription_id"].(string)
+		if subscriptionID == "" {
+			return nil, errors.NewError("subscription_id is required").
+				WithHint("Provide map with subscription_id").
+				Mark(errors.ErrValidation)
+		}
+
+		// Extract optional period fields
+		var periodStart, periodEnd time.Time
+		if ps, ok := paramsMap["period_start"].(time.Time); ok {
+			periodStart = ps
+		}
+		if pe, ok := paramsMap["period_end"].(time.Time); ok {
+			periodEnd = pe
+		}
+
+		input := subscriptionModels.ProcessSubscriptionBillingWorkflowInput{
+			SubscriptionID: subscriptionID,
+			TenantID:       tenantID,
+			EnvironmentID:  environmentID,
+			UserID:         userID,
+			PeriodStart:    periodStart,
+			PeriodEnd:      periodEnd,
+		}
+
+		// Validate the input
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for process subscription billing workflow").
+		WithHint("Provide ProcessSubscriptionBillingWorkflowInput or map with subscription_id").
 		Mark(errors.ErrValidation)
 }
 

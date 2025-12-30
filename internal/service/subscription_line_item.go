@@ -16,7 +16,7 @@ import (
 func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
 	// Get the subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
+	if err != nil  {
 		return nil, err
 	}
 

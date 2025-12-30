@@ -514,7 +514,7 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
 		// Task 0: Expiry Check
 		// If the grant has an expiration duration, check if it has already expired relative to current time
-		if grant.ExpirationType == types.CreditGrantExpiryTypeDuration && expiryDate != nil {
+		if expiryDate != nil {
 			if expiryDate.Before(time.Now().UTC()) {
 				s.Logger.Infow("Credit grant application period has already expired, skipping application",
 					"cga_id", cga.ID,

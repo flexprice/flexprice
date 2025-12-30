@@ -54,6 +54,46 @@ type Service interface {
 		reason string,
 		behavior types.ProrationBehavior,
 	) (*SubscriptionProrationResult, error)
+
+	// CalculateEntitlementProration calculates prorated entitlement limits for a subscription
+	CalculateEntitlementProration(
+		ctx context.Context,
+		planID string,
+		periodStart time.Time,
+		periodEnd time.Time,
+		prorationDate time.Time,
+		customerTimezone string,
+		billingCycle types.BillingCycle,
+		billingAnchor time.Time,
+		billingPeriod types.BillingPeriod,
+		billingPeriodCount int,
+	) (*EntitlementProrationResult, error)
+
+	// CalculateAdditiveEntitlementProration calculates combined entitlement limits
+	// when changing plans mid-period. It adds the remaining entitlement from the old plan
+	// to the prorated entitlement from the new plan.
+	CalculateAdditiveEntitlementProration(
+		ctx context.Context,
+		oldPlanID string,
+		newPlanID string,
+		oldPeriodStart time.Time,
+		oldPeriodEnd time.Time,
+		changeDate time.Time,
+		customerTimezone string,
+		billingCycle types.BillingCycle,
+		billingAnchor time.Time,
+		billingPeriod types.BillingPeriod,
+		billingPeriodCount int,
+	) (*EntitlementProrationResult, error)
+
+	// CreateProratedEntitlements creates subscription-scoped entitlement overrides
+	CreateProratedEntitlements(
+		ctx context.Context,
+		subscriptionID string,
+		prorationResult *EntitlementProrationResult,
+		startDate time.Time,
+		endDate time.Time,
+	) error
 }
 
 // Calculator performs proration calculations.

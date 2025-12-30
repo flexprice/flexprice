@@ -550,12 +550,94 @@ func (s *subscriptionChangeService) createNewSubscription(
 		return nil, err
 	}
 
+	// Handle entitlement proration for subscription changes
+	// This handles both anniversary and calendar billing cycles
+	s.serviceParams.Logger.Infow("checking entitlement proration condition",
+		"req_proration_behavior", req.ProrationBehavior,
+		"expected_value", types.ProrationBehaviorCreateProrations,
+		"will_execute", req.ProrationBehavior == types.ProrationBehaviorCreateProrations,
+		"old_subscription_id", currentSub.ID,
+		"new_subscription_id", newSub.ID)
+
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations {
+		if err := s.handleSubscriptionChangeEntitlementProration(
+			ctx,
+			currentSub,
+			newSub,
+			targetPlan,
+			effectiveDate,
+		); err != nil {
+			// Log error but don't fail the change
+			s.serviceParams.Logger.Errorw("failed to create prorated entitlements for plan change",
+				"error", err,
+				"old_subscription_id", currentSub.ID,
+				"new_subscription_id", newSub.ID)
+		}
+	}
+
 	// Transfer line item coupons
 	if err := s.transferLineItemCoupons(ctx, currentSub.ID, newSub, oldLineItems, newLineItems); err != nil {
 		return nil, err
 	}
 
 	return newSub, nil
+}
+
+// handleSubscriptionChangeEntitlementProration handles entitlement proration for subscription plan changes
+func (s *subscriptionChangeService) handleSubscriptionChangeEntitlementProration(
+	ctx context.Context,
+	oldSub *subscription.Subscription,
+	newSub *subscription.Subscription,
+	targetPlan *plan.Plan,
+	effectiveDate time.Time,
+) error {
+	s.serviceParams.Logger.Infow("handling entitlement proration for subscription change",
+		"old_subscription_id", oldSub.ID,
+		"new_subscription_id", newSub.ID,
+		"target_plan_id", targetPlan.ID,
+		"billing_cycle", newSub.BillingCycle,
+		"effective_date", effectiveDate)
+
+	// Get proration service
+	prorationService := NewProrationService(s.serviceParams)
+
+	// Calculate ADDITIVE entitlement proration (old remaining + new prorated)
+	// This ensures customers don't lose unused entitlements when changing plans
+	prorationResult, err := prorationService.CalculateAdditiveEntitlementProration(
+		ctx,
+		oldSub.PlanID, // Old plan ID
+		targetPlan.ID, // New plan ID
+		oldSub.CurrentPeriodStart,
+		oldSub.CurrentPeriodEnd,
+		effectiveDate, // Change date
+		newSub.CustomerTimezone,
+		newSub.BillingCycle,
+		newSub.BillingAnchor,
+		newSub.BillingPeriod,
+		newSub.BillingPeriodCount,
+	)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to calculate additive entitlement proration for plan change").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Create prorated entitlements for the new subscription
+	if err = prorationService.CreateProratedEntitlements(ctx, newSub.ID, prorationResult, effectiveDate, newSub.CurrentPeriodEnd); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to create prorated entitlements for plan change").
+			Mark(ierr.ErrSystem)
+	}
+
+	s.serviceParams.Logger.Infow("additive entitlement proration completed for subscription change",
+		"new_subscription_id", newSub.ID,
+		"prorated_count", len(prorationResult.ProratedLimits),
+		"coefficient", prorationResult.ProrationCoefficient.String(),
+		"is_additive", prorationResult.IsAdditive,
+		"old_plan_features", len(prorationResult.OldPlanContribution),
+		"new_plan_features", len(prorationResult.NewPlanContribution))
+
+	return nil
 }
 
 // convertCancellationProrationToDetails converts cancellation proration result to DTO format

@@ -2025,6 +2025,14 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 	return results, nil
 }
 
+// GetUsageForMaxMetersWithBuckets queries the feature_usage table for bucketed aggregations.
+// Despite its name (kept for backward compatibility), this method supports both MAX and SUM aggregations.
+// The aggregation type is determined by params.UsageParams.AggregationType.
+//
+// For MAX aggregation: Calculates the maximum value within each bucket (window), then sums all bucket maxes
+// For SUM aggregation: Calculates the sum of values within each bucket (window), then sums all bucket sums
+//
+// This method queries the optimized feature_usage table (pre-aggregated data) rather than raw events.
 func (r *FeatureUsageRepository) GetUsageForMaxMetersWithBuckets(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "event", "get_usage", map[string]interface{}{
@@ -2114,12 +2122,25 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 	filterConditions := buildFilterConditions(params.Filters)
 	timeConditions := buildTimeConditions(params.UsageParams)
 
-	// First get max values per bucket, then get the max across all buckets
+	// Determine aggregation function and naming based on aggregation type
+	// Default to MAX for backward compatibility (if AggregationType is not set)
+	aggFunc := "max"
+	bucketTableName := "bucket_maxes"
+	bucketColumnName := "bucket_max"
+
+	if params.UsageParams.AggregationType == types.AggregationSum {
+		aggFunc = "sum"
+		bucketTableName = "bucket_sums"
+		bucketColumnName = "bucket_sum"
+	}
+
+	// First aggregate values per bucket using the appropriate function,
+	// then sum all bucket values to get the total
 	return fmt.Sprintf(`
-		WITH bucket_maxes AS (
+		WITH %s AS (
 			SELECT
 				%s as bucket_start,
-				max(qty_total * sign) as bucket_max
+				%s(qty_total * sign) as %s
 			FROM feature_usage
 			PREWHERE tenant_id = '%s'
 				AND environment_id = '%s'
@@ -2134,13 +2155,15 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			ORDER BY bucket_start
 		)
 		SELECT
-			(SELECT sum(bucket_max) FROM bucket_maxes) as total,
+			(SELECT sum(%s) FROM %s) as total,
 			bucket_start as timestamp,
-			bucket_max as value
-		FROM bucket_maxes
+			%s as value
+		FROM %s
 		ORDER BY bucket_start
 	`,
+		bucketTableName,
 		bucketWindow,
+		aggFunc, bucketColumnName,
 		types.GetTenantID(ctx),
 		types.GetEnvironmentID(ctx),
 		externalCustomerFilter,
@@ -2149,7 +2172,10 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		meterFilter,
 		subLineItemFilter,
 		filterConditions,
-		timeConditions)
+		timeConditions,
+		bucketColumnName, bucketTableName,
+		bucketColumnName,
+		bucketTableName)
 }
 
 // GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs

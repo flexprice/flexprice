@@ -6,6 +6,8 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -610,4 +612,344 @@ func (s *prorationService) isRefundEligible(
 		logger.Warnw("unknown cancellation type", "type", cancellationType)
 		return false
 	}
+}
+
+// CalculateEntitlementProration calculates prorated entitlement limits for a subscription
+func (s *prorationService) CalculateEntitlementProration(
+	ctx context.Context,
+	planID string,
+	periodStart time.Time,
+	periodEnd time.Time,
+	prorationDate time.Time,
+	customerTimezone string,
+	billingCycle types.BillingCycle,
+	billingAnchor time.Time,
+	billingPeriod types.BillingPeriod,
+	billingPeriodCount int,
+) (*proration.EntitlementProrationResult, error) {
+	logger := s.serviceParams.Logger.With(
+		zap.String("plan_id", planID),
+		zap.Time("period_start", periodStart),
+		zap.Time("period_end", periodEnd),
+		zap.Time("proration_date", prorationDate),
+		zap.String("billing_cycle", string(billingCycle)),
+	)
+
+	logger.Info("calculating entitlement proration")
+
+	// Get plan entitlements
+	entitlementService := NewEntitlementService(s.serviceParams)
+	entitlementsResp, err := entitlementService.GetPlanEntitlements(ctx, planID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to get plan entitlements").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Convert to domain entitlements
+	planEntitlements := make([]*entitlement.Entitlement, len(entitlementsResp.Items))
+	for i, item := range entitlementsResp.Items {
+		planEntitlements[i] = item.Entitlement
+	}
+
+	// Create entitlement proration calculator
+	entitlementCalculator := proration.NewEntitlementProrationCalculator(
+		s.serviceParams.Logger,
+		s.serviceParams.ProrationCalculator,
+	)
+
+	// Calculate proration
+	params := proration.EntitlementProrationParams{
+		PeriodStart:        periodStart,
+		PeriodEnd:          periodEnd,
+		ProrationDate:      prorationDate,
+		CustomerTimezone:   customerTimezone,
+		BillingCycle:       billingCycle,
+		BillingAnchor:      billingAnchor,
+		BillingPeriod:      billingPeriod,
+		BillingPeriodCount: billingPeriodCount,
+		PlanEntitlements:   planEntitlements,
+		Strategy:           types.StrategySecondBased, // Use second-based for precise time-based proration
+	}
+
+	result, err := entitlementCalculator.CalculateEntitlementProration(ctx, params)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to calculate entitlement proration").
+			Mark(ierr.ErrSystem)
+	}
+
+	logger.Infow("entitlement proration calculated",
+		"prorated_count", len(result.ProratedLimits),
+		"coefficient", result.ProrationCoefficient.String())
+
+	return result, nil
+}
+
+// CalculateAdditiveEntitlementProration calculates combined entitlement limits
+// when changing plans mid-period. It adds the remaining entitlement from the old plan
+// to the prorated entitlement from the new plan.
+func (s *prorationService) CalculateAdditiveEntitlementProration(
+	ctx context.Context,
+	oldPlanID string,
+	newPlanID string,
+	oldPeriodStart time.Time,
+	oldPeriodEnd time.Time,
+	changeDate time.Time,
+	customerTimezone string,
+	billingCycle types.BillingCycle,
+	billingAnchor time.Time,
+	billingPeriod types.BillingPeriod,
+	billingPeriodCount int,
+) (*proration.EntitlementProrationResult, error) {
+	logger := s.serviceParams.Logger.With(
+		zap.String("old_plan_id", oldPlanID),
+		zap.String("new_plan_id", newPlanID),
+		zap.Time("change_date", changeDate),
+		zap.String("billing_cycle", string(billingCycle)),
+	)
+
+	logger.Info("calculating additive entitlement proration for plan change")
+
+	// Determine the period end to use for proration based on billing cycle
+	var periodEnd time.Time
+	if billingCycle == types.BillingCycleCalendar {
+		// For calendar billing, use calendar period end
+		// CalculateCalendarBillingAnchor returns the START of the NEXT period,
+		// which is the END of the current period
+		periodEnd = types.CalculateCalendarBillingAnchor(changeDate, billingPeriod)
+		logger.Debugw("using calendar period end for proration",
+			"period_end", periodEnd)
+	} else {
+		// For anniversary billing, use subscription period end
+		periodEnd = oldPeriodEnd
+		logger.Debugw("using subscription period end for proration",
+			"period_end", periodEnd)
+	}
+
+	// Step 1: Calculate remaining entitlement from old plan
+	logger.Debug("calculating remaining entitlement from old plan")
+	oldProration, err := s.CalculateEntitlementProration(
+		ctx, oldPlanID,
+		oldPeriodStart, periodEnd,
+		changeDate, // Proration date is change date
+		customerTimezone, billingCycle, billingAnchor,
+		billingPeriod, billingPeriodCount,
+	)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to calculate old plan remaining entitlement").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Step 2: Calculate prorated entitlement for new plan
+	logger.Debug("calculating prorated entitlement for new plan")
+	newProration, err := s.CalculateEntitlementProration(
+		ctx, newPlanID,
+		oldPeriodStart, periodEnd,
+		changeDate, // Same proration date
+		customerTimezone, billingCycle, billingAnchor,
+		billingPeriod, billingPeriodCount,
+	)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to calculate new plan prorated entitlement").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Step 3: Combine the limits
+	logger.Infow("proration coefficient calculated",
+		"coefficient", oldProration.ProrationCoefficient.String(),
+		"total_days", oldProration.TotalDays,
+		"remaining_days", oldProration.RemainingDays,
+		"period_start", oldPeriodStart,
+		"period_end", periodEnd,
+		"change_date", changeDate)
+
+	combinedResult := &proration.EntitlementProrationResult{
+		ProratedLimits:       make(map[string]int64),
+		EntitlementDetails:   []proration.EntitlementProrationDetail{},
+		ProrationCoefficient: oldProration.ProrationCoefficient, // Same for both
+		PeriodStart:          oldPeriodStart,
+		PeriodEnd:            periodEnd,
+		ProrationDate:        changeDate,
+		TotalDays:            oldProration.TotalDays,
+		RemainingDays:        oldProration.RemainingDays,
+		IsAdditive:           true,
+		OldPlanContribution:  make(map[string]proration.AdditiveProrationDetail),
+		NewPlanContribution:  make(map[string]proration.AdditiveProrationDetail),
+	}
+
+	// Track all unique feature IDs
+	featureIDs := make(map[string]bool)
+	for featureID := range oldProration.ProratedLimits {
+		featureIDs[featureID] = true
+	}
+	for featureID := range newProration.ProratedLimits {
+		featureIDs[featureID] = true
+	}
+
+	// Combine limits for each feature
+	for featureID := range featureIDs {
+		oldLimit := oldProration.ProratedLimits[featureID]
+		newLimit := newProration.ProratedLimits[featureID]
+		combinedLimit := oldLimit + newLimit
+
+		combinedResult.ProratedLimits[featureID] = combinedLimit
+
+		// Find original limits from detail arrays
+		var oldOriginal, newOriginal int64
+		var oldParentID, newParentID string
+		var usageResetPeriod types.EntitlementUsageResetPeriod
+
+		for _, detail := range oldProration.EntitlementDetails {
+			if detail.FeatureID == featureID {
+				oldOriginal = detail.OriginalLimit
+				oldParentID = detail.ParentID
+				usageResetPeriod = detail.UsageResetPeriod
+				break
+			}
+		}
+
+		for _, detail := range newProration.EntitlementDetails {
+			if detail.FeatureID == featureID {
+				newOriginal = detail.OriginalLimit
+				newParentID = detail.ParentID
+				usageResetPeriod = detail.UsageResetPeriod
+				break
+			}
+		}
+
+		// Store contribution details
+		if oldLimit > 0 {
+			combinedResult.OldPlanContribution[featureID] = proration.AdditiveProrationDetail{
+				PlanID:        oldPlanID,
+				OriginalLimit: oldOriginal,
+				ProratedLimit: oldLimit,
+				Coefficient:   oldProration.ProrationCoefficient,
+			}
+		}
+
+		if newLimit > 0 {
+			combinedResult.NewPlanContribution[featureID] = proration.AdditiveProrationDetail{
+				PlanID:        newPlanID,
+				OriginalLimit: newOriginal,
+				ProratedLimit: newLimit,
+				Coefficient:   newProration.ProrationCoefficient,
+			}
+		}
+
+		// Create combined entitlement detail
+		// Use new plan's parent ID if available, otherwise old plan's
+		parentID := newParentID
+		if parentID == "" {
+			parentID = oldParentID
+		}
+
+		combinedResult.EntitlementDetails = append(combinedResult.EntitlementDetails, proration.EntitlementProrationDetail{
+			FeatureID:        featureID,
+			OriginalLimit:    oldOriginal + newOriginal, // Combined original
+			ProratedLimit:    combinedLimit,
+			Coefficient:      oldProration.ProrationCoefficient,
+			ParentID:         parentID,
+			UsageResetPeriod: usageResetPeriod,
+		})
+
+		logger.Infow("combined entitlement for feature",
+			"feature_id", featureID,
+			"old_plan_original_limit", oldOriginal,
+			"old_plan_prorated_limit", oldLimit,
+			"new_plan_original_limit", newOriginal,
+			"new_plan_prorated_limit", newLimit,
+			"combined_limit", combinedLimit,
+			"coefficient", oldProration.ProrationCoefficient.String())
+
+		logger.Debugw("combined entitlement limits",
+			"feature_id", featureID,
+			"old_limit", oldLimit,
+			"new_limit", newLimit,
+			"combined_limit", combinedLimit)
+	}
+
+	logger.Infow("additive entitlement proration calculation completed",
+		"total_features", len(combinedResult.ProratedLimits),
+		"coefficient", combinedResult.ProrationCoefficient.String(),
+		"old_plan_features", len(oldProration.ProratedLimits),
+		"new_plan_features", len(newProration.ProratedLimits))
+
+	return combinedResult, nil
+}
+
+// CreateProratedEntitlements creates subscription-scoped entitlement overrides
+func (s *prorationService) CreateProratedEntitlements(
+	ctx context.Context,
+	subscriptionID string,
+	prorationResult *proration.EntitlementProrationResult,
+	startDate time.Time,
+	endDate time.Time,
+) error {
+	logger := s.serviceParams.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.Int("entitlements_count", len(prorationResult.ProratedLimits)),
+	)
+
+	logger.Info("creating prorated entitlements")
+
+	if len(prorationResult.ProratedLimits) == 0 {
+		logger.Info("no entitlements to prorate")
+		return nil
+	}
+
+	entitlementService := NewEntitlementService(s.serviceParams)
+	createdCount := 0
+	var errors []error
+
+	// Create subscription-scoped entitlement for each prorated limit
+	for _, detail := range prorationResult.EntitlementDetails {
+		logger.Debugw("creating prorated entitlement",
+			"feature_id", detail.FeatureID,
+			"original_limit", detail.OriginalLimit,
+			"prorated_limit", detail.ProratedLimit)
+
+		// Create subscription-scoped entitlement override
+		_, err := entitlementService.CreateEntitlement(ctx, dto.CreateEntitlementRequest{
+			EntityType:          types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:            subscriptionID,
+			FeatureID:           detail.FeatureID,
+			FeatureType:         types.FeatureTypeMetered,
+			UsageLimit:          &detail.ProratedLimit,
+			UsageResetPeriod:    detail.UsageResetPeriod,
+			ParentEntitlementID: &detail.ParentID,
+			IsEnabled:           true,
+			StartDate:           &startDate,
+			EndDate:             &endDate,
+		})
+
+		if err != nil {
+			logger.Errorw("failed to create prorated entitlement",
+				"feature_id", detail.FeatureID,
+				"error", err)
+			errors = append(errors, err)
+			continue
+		}
+
+		createdCount++
+	}
+
+	if len(errors) > 0 {
+		logger.Warnw("some prorated entitlements failed to create",
+			"created", createdCount,
+			"failed", len(errors))
+		// Return error if all failed
+		if createdCount == 0 {
+			return ierr.NewErrorf("failed to create all prorated entitlements: %v", errors).
+				WithHint("Check entitlement creation errors").
+				Mark(ierr.ErrSystem)
+		}
+	}
+
+	logger.Infow("prorated entitlements created",
+		"created_count", createdCount)
+
+	return nil
 }

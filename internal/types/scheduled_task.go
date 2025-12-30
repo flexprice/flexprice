@@ -8,14 +8,16 @@ import (
 type ScheduledTaskInterval string
 
 const (
-	ScheduledTaskIntervalCustom ScheduledTaskInterval = "custom" // 10 minutes for testing
-	ScheduledTaskIntervalHourly ScheduledTaskInterval = "hourly"
-	ScheduledTaskIntervalDaily  ScheduledTaskInterval = "daily"
+	ScheduledTaskIntervalEvery15Minutes ScheduledTaskInterval = "15MIN"
+	ScheduledTaskIntervalCustom         ScheduledTaskInterval = "custom" // 10 minutes for testing
+	ScheduledTaskIntervalHourly         ScheduledTaskInterval = "hourly"
+	ScheduledTaskIntervalDaily          ScheduledTaskInterval = "daily"
 )
 
 // Validate validates the scheduled task interval
 func (s ScheduledTaskInterval) Validate() error {
 	allowedIntervals := []ScheduledTaskInterval{
+		ScheduledTaskIntervalEvery15Minutes,
 		ScheduledTaskIntervalCustom,
 		ScheduledTaskIntervalHourly,
 		ScheduledTaskIntervalDaily,
@@ -31,7 +33,7 @@ func (s ScheduledTaskInterval) Validate() error {
 		}
 	}
 	return ierr.NewError("invalid scheduled task interval").
-		WithHint("Interval must be one of: custom, hourly, daily").
+		WithHint("Interval must be one of: 15MIN, custom, hourly, daily").
 		Mark(ierr.ErrValidation)
 }
 

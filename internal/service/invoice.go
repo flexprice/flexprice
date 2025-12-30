@@ -53,6 +53,9 @@ type InvoiceService interface {
 	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
+
+	// Cron methods
+	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
 }
 
 type invoiceService struct {
@@ -3342,4 +3345,60 @@ func (s *invoiceService) DeleteInvoice(ctx context.Context, id string) error {
 	return ierr.NewError("invoice deletion not implemented").
 		WithHint("Invoice deletion is not currently supported").
 		Mark(ierr.ErrNotFound)
+}
+
+// SyncInvoiceToExternalVendors syncs an invoice to external vendors
+func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error {
+
+	invoice, err := s.InvoiceRepo.Get(ctx, invoiceID)
+	if err != nil {
+		return err
+	}
+
+	sub, err := s.SubRepo.Get(ctx, *invoice.SubscriptionID)
+	if err != nil {
+		return err
+	}
+
+	paymentParams := dto.NewPaymentParametersFromSubscription(sub.CollectionMethod, sub.PaymentBehavior, sub.GatewayPaymentMethodID)
+
+	if err := s.syncInvoiceToStripeIfEnabled(ctx, invoice, sub, paymentParams); err != nil {
+		// Log error but don't fail the entire process
+		s.Logger.Errorw("failed to sync invoice to Stripe",
+			"error", err,
+			"invoice_id", invoice.ID,
+			"subscription_id", sub.ID)
+	}
+
+	// Sync to Razorpay if Razorpay connection is enabled
+	if err := s.syncInvoiceToRazorpayIfEnabled(ctx, invoice); err != nil {
+		// Log error but don't fail the entire process
+		s.Logger.Errorw("failed to sync invoice to Razorpay",
+			"error", err,
+			"invoice_id", invoice.ID)
+	}
+
+	// Sync to HubSpot if HubSpot connection is enabled (async via Temporal)
+	s.triggerHubSpotInvoiceSyncWorkflow(ctx, invoice.ID, invoice.CustomerID)
+
+	// Sync to Chargebee if Chargebee connection is enabled
+	if err := s.syncInvoiceToChargebeeIfEnabled(ctx, invoice); err != nil {
+		// Log error but don't fail the entire process
+		s.Logger.Errorw("failed to sync invoice to Chargebee",
+			"error", err,
+			"invoice_id", invoice.ID)
+	}
+
+	// Sync to QuickBooks if QuickBooks connection is enabled
+	if err := s.syncInvoiceToQuickBooksIfEnabled(ctx, invoice); err != nil {
+		// Log error but don't fail the entire process
+		s.Logger.Errorw("failed to sync invoice to QuickBooks",
+			"error", err,
+			"invoice_id", invoice.ID)
+	}
+
+	// Sync to Nomod if Nomod connection is enabled (async via Temporal)
+	s.triggerNomodInvoiceSyncWorkflow(ctx, invoice.ID, invoice.CustomerID)
+
+	return nil
 }

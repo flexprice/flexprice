@@ -273,6 +273,46 @@ func (eu *EntitlementUpdate) ClearParentEntitlementID() *EntitlementUpdate {
 	return eu
 }
 
+// SetStartDate sets the "start_date" field.
+func (eu *EntitlementUpdate) SetStartDate(t time.Time) *EntitlementUpdate {
+	eu.mutation.SetStartDate(t)
+	return eu
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableStartDate(t *time.Time) *EntitlementUpdate {
+	if t != nil {
+		eu.SetStartDate(*t)
+	}
+	return eu
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (eu *EntitlementUpdate) ClearStartDate() *EntitlementUpdate {
+	eu.mutation.ClearStartDate()
+	return eu
+}
+
+// SetEndDate sets the "end_date" field.
+func (eu *EntitlementUpdate) SetEndDate(t time.Time) *EntitlementUpdate {
+	eu.mutation.SetEndDate(t)
+	return eu
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (eu *EntitlementUpdate) SetNillableEndDate(t *time.Time) *EntitlementUpdate {
+	if t != nil {
+		eu.SetEndDate(*t)
+	}
+	return eu
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (eu *EntitlementUpdate) ClearEndDate() *EntitlementUpdate {
+	eu.mutation.ClearEndDate()
+	return eu
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (eu *EntitlementUpdate) Mutation() *EntitlementMutation {
 	return eu.mutation
@@ -425,6 +465,18 @@ func (eu *EntitlementUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if eu.mutation.ParentEntitlementIDCleared() {
 		_spec.ClearField(entitlement.FieldParentEntitlementID, field.TypeString)
+	}
+	if value, ok := eu.mutation.StartDate(); ok {
+		_spec.SetField(entitlement.FieldStartDate, field.TypeTime, value)
+	}
+	if eu.mutation.StartDateCleared() {
+		_spec.ClearField(entitlement.FieldStartDate, field.TypeTime)
+	}
+	if value, ok := eu.mutation.EndDate(); ok {
+		_spec.SetField(entitlement.FieldEndDate, field.TypeTime, value)
+	}
+	if eu.mutation.EndDateCleared() {
+		_spec.ClearField(entitlement.FieldEndDate, field.TypeTime)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, eu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -690,6 +742,46 @@ func (euo *EntitlementUpdateOne) ClearParentEntitlementID() *EntitlementUpdateOn
 	return euo
 }
 
+// SetStartDate sets the "start_date" field.
+func (euo *EntitlementUpdateOne) SetStartDate(t time.Time) *EntitlementUpdateOne {
+	euo.mutation.SetStartDate(t)
+	return euo
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableStartDate(t *time.Time) *EntitlementUpdateOne {
+	if t != nil {
+		euo.SetStartDate(*t)
+	}
+	return euo
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (euo *EntitlementUpdateOne) ClearStartDate() *EntitlementUpdateOne {
+	euo.mutation.ClearStartDate()
+	return euo
+}
+
+// SetEndDate sets the "end_date" field.
+func (euo *EntitlementUpdateOne) SetEndDate(t time.Time) *EntitlementUpdateOne {
+	euo.mutation.SetEndDate(t)
+	return euo
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (euo *EntitlementUpdateOne) SetNillableEndDate(t *time.Time) *EntitlementUpdateOne {
+	if t != nil {
+		euo.SetEndDate(*t)
+	}
+	return euo
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (euo *EntitlementUpdateOne) ClearEndDate() *EntitlementUpdateOne {
+	euo.mutation.ClearEndDate()
+	return euo
+}
+
 // Mutation returns the EntitlementMutation object of the builder.
 func (euo *EntitlementUpdateOne) Mutation() *EntitlementMutation {
 	return euo.mutation
@@ -872,6 +964,18 @@ func (euo *EntitlementUpdateOne) sqlSave(ctx context.Context) (_node *Entitlemen
 	}
 	if euo.mutation.ParentEntitlementIDCleared() {
 		_spec.ClearField(entitlement.FieldParentEntitlementID, field.TypeString)
+	}
+	if value, ok := euo.mutation.StartDate(); ok {
+		_spec.SetField(entitlement.FieldStartDate, field.TypeTime, value)
+	}
+	if euo.mutation.StartDateCleared() {
+		_spec.ClearField(entitlement.FieldStartDate, field.TypeTime)
+	}
+	if value, ok := euo.mutation.EndDate(); ok {
+		_spec.SetField(entitlement.FieldEndDate, field.TypeTime, value)
+	}
+	if euo.mutation.EndDateCleared() {
+		_spec.ClearField(entitlement.FieldEndDate, field.TypeTime)
 	}
 	_node = &Entitlement{config: euo.config}
 	_spec.Assign = _node.assignValues

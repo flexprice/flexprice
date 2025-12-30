@@ -11,7 +11,9 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	temporalClient "github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
+	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/client"
 )
@@ -26,6 +28,7 @@ type ScheduledTaskService interface {
 	TriggerForceRun(ctx context.Context, id string, req dto.TriggerForceRunRequest) (*dto.TriggerForceRunResponse, error)
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
+	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
 }
 
 type scheduledTaskService struct {
@@ -657,7 +660,15 @@ func (s *scheduledTaskService) CalculateIntervalBoundaries(currentTime time.Time
 			0, 0, 0, 0, currentTime.Location(),
 		)
 		endTime = startTime.AddDate(0, 0, 1) // Next day
-
+	case types.ScheduledTaskIntervalEvery15Minutes:
+		// Return the CURRENT 15-minute interval
+		// Example: If current time is 2:07 PM, return 2:00 PM - 2:15 PM
+		minutes := currentTime.Minute() / 15 * 15
+		startTime = time.Date(
+			currentTime.Year(), currentTime.Month(), currentTime.Day(),
+			currentTime.Hour(), minutes, 0, 0, currentTime.Location(),
+		)
+		endTime = startTime.Add(15 * time.Minute)
 	default:
 		// Default to current day
 		startTime = time.Date(
@@ -668,4 +679,44 @@ func (s *scheduledTaskService) CalculateIntervalBoundaries(currentTime time.Time
 	}
 
 	return startTime, endTime
+}
+
+func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) (string, error) {
+
+	scheduleID := types.GenerateUUIDWithPrefix("schtask_billing")
+	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery15Minutes)
+
+	scheduleSpec := client.ScheduleSpec{
+		CronExpressions: []string{cronExpr},
+	}
+
+	action := &client.ScheduleWorkflowAction{
+		Workflow: subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
+		Args: []interface{}{
+			subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{
+				BatchSize: types.DEFAULT_BATCH_SIZE,
+			},
+		},
+		TaskQueue:                string(types.TemporalTaskQueueSubscription),
+		WorkflowExecutionTimeout: 15 * time.Minute,
+		WorkflowRunTimeout:       15 * time.Minute,
+		WorkflowTaskTimeout:      15 * time.Minute,
+	}
+
+	scheduleOptions := models.CreateScheduleOptions{
+		ID:     scheduleID,
+		Spec:   scheduleSpec,
+		Action: action,
+		Paused: false,
+	}
+
+	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
+	if err != nil {
+		s.logger.Errorw("failed to create temporal schedule", "error", err)
+		return "", ierr.WithError(err).
+			WithHint("Failed to create Temporal schedule").
+			Mark(ierr.ErrInternal)
+	}
+
+	return "Triggered update billing period workflow successfully", nil
 }

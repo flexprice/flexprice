@@ -865,7 +865,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 				matchingCharge.Quantity = totalBucketQuantity.InexactFloat64()
 				quantityForCalculation = totalBucketQuantity
 			} else if meter.IsBucketedSumMeter() && matchingCharge.Price != nil {
-				// Handle sum with bucket meters - similar to bucketed max but for sum aggregation
+				// Handle sum with bucket meters - uses optimized feature_usage table
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
 					PriceID: item.PriceID,
@@ -880,7 +880,7 @@ func (s *billingService) CalculateUsageChargesForPreview(
 					},
 				}
 
-				// Get usage data with buckets (reuse the same method as it handles windowed aggregation)
+				// Get usage data with buckets from feature_usage table (optimized, pre-aggregated)
 				usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
 				if err != nil {
 					return nil, decimal.Zero, err

@@ -58,48 +58,16 @@ func (c *calculatorImpl) Calculate(ctx context.Context, params ProrationParams) 
 	periodStartInTZ := params.CurrentPeriodStart.In(loc)
 	periodEndInTZ := params.CurrentPeriodEnd.In(loc)
 
-	var prorationCoefficient decimal.Decimal
-
-	switch params.ProrationStrategy {
-	case types.StrategySecondBased:
-		totalSeconds := periodEndInTZ.Sub(periodStartInTZ).Seconds()
-		if totalSeconds <= 0 {
-			return nil, ierr.NewError("invalid billing period").
-				WithHintf("total seconds is zero or negative (%v to %v)", periodStartInTZ, periodEndInTZ).
-				Mark(ierr.ErrValidation)
-		}
-
-		remainingSeconds := periodEndInTZ.Sub(prorationDateInTZ).Seconds()
-		if remainingSeconds < 0 {
-			remainingSeconds = 0
-		}
-		prorationCoefficient = decimal.NewFromFloat(remainingSeconds).Div(decimal.NewFromFloat(totalSeconds))
-
-	case types.StrategyDayBased:
-		totalDaysRaw := daysInDurationWithDST(periodStartInTZ, periodEndInTZ, loc)
-		totalDays := totalDaysRaw + 1
-		if totalDays <= 0 {
-			return nil, ierr.NewError("invalid billing period").
-				WithHintf("total days is zero or negative (%v to %v)", params.CurrentPeriodStart, params.CurrentPeriodEnd).
-				Mark(ierr.ErrValidation)
-		}
-
-		remainingDaysRaw := daysInDurationWithDST(prorationDateInTZ, periodEndInTZ, loc)
-		remainingDays := remainingDaysRaw + 1
-		if remainingDays < 0 {
-			remainingDays = 0
-		}
-
-		decimalTotalDays := decimal.NewFromInt(int64(totalDays))
-		decimalRemainingDays := decimal.NewFromInt(int64(remainingDays))
-		prorationCoefficient = decimal.Zero
-		if decimalTotalDays.GreaterThan(decimal.Zero) {
-			prorationCoefficient = decimalRemainingDays.Div(decimalTotalDays)
-		}
-	default:
-		return nil, ierr.NewError("invalid proration strategy").
-			WithHintf("invalid proration strategy: %s", params.ProrationStrategy).
-			Mark(ierr.ErrValidation)
+	// Calculate proration coefficient using shared helper
+	prorationCoefficient, err := calculateProrationCoefficient(
+		periodStartInTZ,
+		periodEndInTZ,
+		prorationDateInTZ,
+		loc,
+		params.ProrationStrategy,
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	result := &ProrationResult{

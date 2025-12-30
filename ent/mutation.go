@@ -20043,6 +20043,8 @@ type EntitlementMutation struct {
 	display_order         *int
 	adddisplay_order      *int
 	parent_entitlement_id *string
+	start_date            *time.Time
+	end_date              *time.Time
 	clearedFields         map[string]struct{}
 	done                  bool
 	oldValue              func(context.Context) (*Entitlement, error)
@@ -20959,6 +20961,104 @@ func (m *EntitlementMutation) ResetParentEntitlementID() {
 	delete(m.clearedFields, entitlement.FieldParentEntitlementID)
 }
 
+// SetStartDate sets the "start_date" field.
+func (m *EntitlementMutation) SetStartDate(t time.Time) {
+	m.start_date = &t
+}
+
+// StartDate returns the value of the "start_date" field in the mutation.
+func (m *EntitlementMutation) StartDate() (r time.Time, exists bool) {
+	v := m.start_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartDate returns the old "start_date" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldStartDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartDate: %w", err)
+	}
+	return oldValue.StartDate, nil
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (m *EntitlementMutation) ClearStartDate() {
+	m.start_date = nil
+	m.clearedFields[entitlement.FieldStartDate] = struct{}{}
+}
+
+// StartDateCleared returns if the "start_date" field was cleared in this mutation.
+func (m *EntitlementMutation) StartDateCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldStartDate]
+	return ok
+}
+
+// ResetStartDate resets all changes to the "start_date" field.
+func (m *EntitlementMutation) ResetStartDate() {
+	m.start_date = nil
+	delete(m.clearedFields, entitlement.FieldStartDate)
+}
+
+// SetEndDate sets the "end_date" field.
+func (m *EntitlementMutation) SetEndDate(t time.Time) {
+	m.end_date = &t
+}
+
+// EndDate returns the value of the "end_date" field in the mutation.
+func (m *EntitlementMutation) EndDate() (r time.Time, exists bool) {
+	v := m.end_date
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndDate returns the old "end_date" field's value of the Entitlement entity.
+// If the Entitlement object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntitlementMutation) OldEndDate(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndDate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndDate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndDate: %w", err)
+	}
+	return oldValue.EndDate, nil
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (m *EntitlementMutation) ClearEndDate() {
+	m.end_date = nil
+	m.clearedFields[entitlement.FieldEndDate] = struct{}{}
+}
+
+// EndDateCleared returns if the "end_date" field was cleared in this mutation.
+func (m *EntitlementMutation) EndDateCleared() bool {
+	_, ok := m.clearedFields[entitlement.FieldEndDate]
+	return ok
+}
+
+// ResetEndDate resets all changes to the "end_date" field.
+func (m *EntitlementMutation) ResetEndDate() {
+	m.end_date = nil
+	delete(m.clearedFields, entitlement.FieldEndDate)
+}
+
 // Where appends a list predicates to the EntitlementMutation builder.
 func (m *EntitlementMutation) Where(ps ...predicate.Entitlement) {
 	m.predicates = append(m.predicates, ps...)
@@ -20993,7 +21093,7 @@ func (m *EntitlementMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntitlementMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, entitlement.FieldTenantID)
 	}
@@ -21048,6 +21148,12 @@ func (m *EntitlementMutation) Fields() []string {
 	if m.parent_entitlement_id != nil {
 		fields = append(fields, entitlement.FieldParentEntitlementID)
 	}
+	if m.start_date != nil {
+		fields = append(fields, entitlement.FieldStartDate)
+	}
+	if m.end_date != nil {
+		fields = append(fields, entitlement.FieldEndDate)
+	}
 	return fields
 }
 
@@ -21092,6 +21198,10 @@ func (m *EntitlementMutation) Field(name string) (ent.Value, bool) {
 		return m.DisplayOrder()
 	case entitlement.FieldParentEntitlementID:
 		return m.ParentEntitlementID()
+	case entitlement.FieldStartDate:
+		return m.StartDate()
+	case entitlement.FieldEndDate:
+		return m.EndDate()
 	}
 	return nil, false
 }
@@ -21137,6 +21247,10 @@ func (m *EntitlementMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldDisplayOrder(ctx)
 	case entitlement.FieldParentEntitlementID:
 		return m.OldParentEntitlementID(ctx)
+	case entitlement.FieldStartDate:
+		return m.OldStartDate(ctx)
+	case entitlement.FieldEndDate:
+		return m.OldEndDate(ctx)
 	}
 	return nil, fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -21272,6 +21386,20 @@ func (m *EntitlementMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetParentEntitlementID(v)
 		return nil
+	case entitlement.FieldStartDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartDate(v)
+		return nil
+	case entitlement.FieldEndDate:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndDate(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)
 }
@@ -21356,6 +21484,12 @@ func (m *EntitlementMutation) ClearedFields() []string {
 	if m.FieldCleared(entitlement.FieldParentEntitlementID) {
 		fields = append(fields, entitlement.FieldParentEntitlementID)
 	}
+	if m.FieldCleared(entitlement.FieldStartDate) {
+		fields = append(fields, entitlement.FieldStartDate)
+	}
+	if m.FieldCleared(entitlement.FieldEndDate) {
+		fields = append(fields, entitlement.FieldEndDate)
+	}
 	return fields
 }
 
@@ -21396,6 +21530,12 @@ func (m *EntitlementMutation) ClearField(name string) error {
 		return nil
 	case entitlement.FieldParentEntitlementID:
 		m.ClearParentEntitlementID()
+		return nil
+	case entitlement.FieldStartDate:
+		m.ClearStartDate()
+		return nil
+	case entitlement.FieldEndDate:
+		m.ClearEndDate()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement nullable field %s", name)
@@ -21458,6 +21598,12 @@ func (m *EntitlementMutation) ResetField(name string) error {
 		return nil
 	case entitlement.FieldParentEntitlementID:
 		m.ResetParentEntitlementID()
+		return nil
+	case entitlement.FieldStartDate:
+		m.ResetStartDate()
+		return nil
+	case entitlement.FieldEndDate:
+		m.ResetEndDate()
 		return nil
 	}
 	return fmt.Errorf("unknown Entitlement field %s", name)

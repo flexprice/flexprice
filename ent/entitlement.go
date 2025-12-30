@@ -54,8 +54,12 @@ type Entitlement struct {
 	DisplayOrder int `json:"display_order,omitempty"`
 	// References the parent entitlement (for subscription-scoped entitlements)
 	ParentEntitlementID *string `json:"parent_entitlement_id,omitempty"`
-	addon_entitlements  *string
-	selectValues        sql.SelectValues
+	// Start date for time-bound entitlements (subscription-scoped only)
+	StartDate *time.Time `json:"start_date,omitempty"`
+	// End date for time-bound entitlements (subscription-scoped only)
+	EndDate            *time.Time `json:"end_date,omitempty"`
+	addon_entitlements *string
+	selectValues       sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -69,7 +73,7 @@ func (*Entitlement) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case entitlement.FieldID, entitlement.FieldTenantID, entitlement.FieldStatus, entitlement.FieldCreatedBy, entitlement.FieldUpdatedBy, entitlement.FieldEnvironmentID, entitlement.FieldEntityType, entitlement.FieldEntityID, entitlement.FieldFeatureID, entitlement.FieldFeatureType, entitlement.FieldUsageResetPeriod, entitlement.FieldStaticValue, entitlement.FieldParentEntitlementID:
 			values[i] = new(sql.NullString)
-		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt:
+		case entitlement.FieldCreatedAt, entitlement.FieldUpdatedAt, entitlement.FieldStartDate, entitlement.FieldEndDate:
 			values[i] = new(sql.NullTime)
 		case entitlement.ForeignKeys[0]: // addon_entitlements
 			values[i] = new(sql.NullString)
@@ -204,6 +208,20 @@ func (e *Entitlement) assignValues(columns []string, values []any) error {
 				e.ParentEntitlementID = new(string)
 				*e.ParentEntitlementID = value.String
 			}
+		case entitlement.FieldStartDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field start_date", values[i])
+			} else if value.Valid {
+				e.StartDate = new(time.Time)
+				*e.StartDate = value.Time
+			}
+		case entitlement.FieldEndDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field end_date", values[i])
+			} else if value.Valid {
+				e.EndDate = new(time.Time)
+				*e.EndDate = value.Time
+			}
 		case entitlement.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field addon_entitlements", values[i])
@@ -303,6 +321,16 @@ func (e *Entitlement) String() string {
 	if v := e.ParentEntitlementID; v != nil {
 		builder.WriteString("parent_entitlement_id=")
 		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := e.StartDate; v != nil {
+		builder.WriteString("start_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := e.EndDate; v != nil {
+		builder.WriteString("end_date=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteByte(')')
 	return builder.String()

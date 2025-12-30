@@ -170,27 +170,31 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// @Summary Get a customer by lookup key
-// @Description Get a customer by lookup key (external_id)
+// @Summary Get a customer by external id
+// @Description Get a customer by external id
 // @Tags Customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param lookup_key path string true "Customer Lookup Key (external_id)"
+// @Param external_id path string true "Customer External ID"
 // @Success 200 {object} dto.CustomerResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /customers/lookup/{lookup_key} [get]
+// @Router /customers/external/{external_id} [get]
 func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
-	lookupKey := c.Param("lookup_key")
-	if lookupKey == "" {
-		c.Error(ierr.NewError("lookup key is required").
-			WithHint("Lookup key is required").
+	var lookupKey string
+	if c.Param("external_id") != "" {
+		lookupKey = c.Param("external_id")
+	} else if c.Param("lookup_key") != "" {
+		// Using lookup key as fallback for backward compatibility with the legacy route
+		lookupKey = c.Param("lookup_key")
+	} else {
+		c.Error(ierr.NewError("external id or lookup key is required").
+			WithHint("External ID or lookup key is required").
 			Mark(ierr.ErrValidation))
 		return
 	}
-
 	resp, err := h.service.GetCustomerByLookupKey(c.Request.Context(), lookupKey)
 	if err != nil {
 		c.Error(err)

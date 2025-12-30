@@ -442,7 +442,7 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 	}
 
 	// Send onboarding email
-	if err := s.sendOnboardingEmail(ctx, email, ""); err != nil {
+	if err := s.sendOnboardingEmail(ctx, email); err != nil {
 		// Log error but don't fail the onboarding process
 		s.Logger.Errorw("failed to send onboarding email",
 			"error", err,
@@ -829,7 +829,7 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 }
 
 // sendOnboardingEmail sends a welcome email to a new user
-func (s *onboardingService) sendOnboardingEmail(ctx context.Context, toEmail, fromEmail string) error {
+func (s *onboardingService) sendOnboardingEmail(ctx context.Context, toEmail string) error {
 	// Create email client
 	emailClient := email.NewEmailClient(email.Config{
 		Enabled:     s.Config.Email.Enabled,
@@ -855,7 +855,7 @@ func (s *onboardingService) sendOnboardingEmail(ctx context.Context, toEmail, fr
 
 	// Send email using template
 	resp, err := emailSvc.SendEmailWithTemplate(ctx, email.SendEmailWithTemplateRequest{
-		FromAddress:  fromEmail,
+		FromAddress:  s.Config.Email.FromAddress,
 		ToAddress:    toEmail,
 		Subject:      "Welcome to Flexprice!",
 		TemplatePath: "welcome-email.html",

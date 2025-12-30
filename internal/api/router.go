@@ -182,7 +182,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			customer.GET("/:id", handlers.Customer.GetCustomer)
 			customer.PUT("/:id", handlers.Customer.UpdateCustomer)
 			customer.DELETE("/:id", handlers.Customer.DeleteCustomer)
-			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)
+			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)    // Legacy route with lookup_key as path parameter
+			customer.GET("/external/:external_id", handlers.Customer.GetCustomerByLookupKey) // New route with external_id as path parameter
 
 			// New endpoints for entitlements and usage
 			customer.GET("/:id/entitlements", handlers.Customer.GetCustomerEntitlements)
@@ -264,6 +265,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// Subscription line item management
 			subscription.PUT("/lineitems/:id", handlers.Subscription.UpdateSubscriptionLineItem)
 			subscription.DELETE("/lineitems/:id", handlers.Subscription.DeleteSubscriptionLineItem)
+
+			subscription.POST("/temporal/schedule-update-billing-period", handlers.ScheduledTask.ScheduleUpdateBillingPeriod)
 
 		}
 

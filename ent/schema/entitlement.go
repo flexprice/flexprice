@@ -80,6 +80,14 @@ func (Entitlement) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("References the parent entitlement (for subscription-scoped entitlements)"),
+		field.Time("start_date").
+			Optional().
+			Nillable().
+			Comment("Start date for time-bound entitlements (subscription-scoped only)"),
+		field.Time("end_date").
+			Optional().
+			Nillable().
+			Comment("End date for time-bound entitlements (subscription-scoped only)"),
 	}
 }
 
@@ -98,5 +106,9 @@ func (Entitlement) Indexes() []ent.Index {
 		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id"),
 		index.Fields("tenant_id", "environment_id", "feature_id"),
 		index.Fields("tenant_id", "environment_id", "parent_entitlement_id"),
+
+		// Index for time-based queries on subscription-scoped entitlements
+		index.Fields("entity_id", "entity_type", "feature_id", "start_date", "end_date").
+			Annotations(entsql.IndexWhere("entity_type = 'SUBSCRIPTION' AND status = 'published'")),
 	}
 }

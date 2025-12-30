@@ -1,6 +1,8 @@
 package entitlement
 
 import (
+	"time"
+
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
@@ -21,6 +23,8 @@ type Entitlement struct {
 	EnvironmentID       string                            `json:"environment_id"`
 	DisplayOrder        int                               `json:"display_order"`
 	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
+	StartDate           *time.Time                        `json:"start_date,omitempty"`
+	EndDate             *time.Time                        `json:"end_date,omitempty"`
 	types.BaseModel
 }
 
@@ -94,6 +98,8 @@ func FromEnt(e *ent.Entitlement) *Entitlement {
 		EnvironmentID:       e.EnvironmentID,
 		DisplayOrder:        e.DisplayOrder,
 		ParentEntitlementID: e.ParentEntitlementID,
+		StartDate:           e.StartDate,
+		EndDate:             e.EndDate,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

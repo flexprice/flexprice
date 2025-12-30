@@ -62,6 +62,8 @@ func (r *entitlementRepository) Create(ctx context.Context, e *domainEntitlement
 		SetIsSoftLimit(e.IsSoftLimit).
 		SetStaticValue(e.StaticValue).
 		SetNillableParentEntitlementID(e.ParentEntitlementID).
+		SetNillableStartDate(e.StartDate).
+		SetNillableEndDate(e.EndDate).
 		SetTenantID(e.TenantID).
 		SetStatus(string(e.Status)).
 		SetCreatedAt(e.CreatedAt).

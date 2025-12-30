@@ -249,6 +249,34 @@ func (ec *EntitlementCreate) SetNillableParentEntitlementID(s *string) *Entitlem
 	return ec
 }
 
+// SetStartDate sets the "start_date" field.
+func (ec *EntitlementCreate) SetStartDate(t time.Time) *EntitlementCreate {
+	ec.mutation.SetStartDate(t)
+	return ec
+}
+
+// SetNillableStartDate sets the "start_date" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableStartDate(t *time.Time) *EntitlementCreate {
+	if t != nil {
+		ec.SetStartDate(*t)
+	}
+	return ec
+}
+
+// SetEndDate sets the "end_date" field.
+func (ec *EntitlementCreate) SetEndDate(t time.Time) *EntitlementCreate {
+	ec.mutation.SetEndDate(t)
+	return ec
+}
+
+// SetNillableEndDate sets the "end_date" field if the given value is not nil.
+func (ec *EntitlementCreate) SetNillableEndDate(t *time.Time) *EntitlementCreate {
+	if t != nil {
+		ec.SetEndDate(*t)
+	}
+	return ec
+}
+
 // SetID sets the "id" field.
 func (ec *EntitlementCreate) SetID(s string) *EntitlementCreate {
 	ec.mutation.SetID(s)
@@ -489,6 +517,14 @@ func (ec *EntitlementCreate) createSpec() (*Entitlement, *sqlgraph.CreateSpec) {
 	if value, ok := ec.mutation.ParentEntitlementID(); ok {
 		_spec.SetField(entitlement.FieldParentEntitlementID, field.TypeString, value)
 		_node.ParentEntitlementID = &value
+	}
+	if value, ok := ec.mutation.StartDate(); ok {
+		_spec.SetField(entitlement.FieldStartDate, field.TypeTime, value)
+		_node.StartDate = &value
+	}
+	if value, ok := ec.mutation.EndDate(); ok {
+		_spec.SetField(entitlement.FieldEndDate, field.TypeTime, value)
+		_node.EndDate = &value
 	}
 	return _node, _spec
 }

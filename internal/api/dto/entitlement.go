@@ -3,6 +3,7 @@ package dto
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -23,6 +24,8 @@ type CreateEntitlementRequest struct {
 	EntityType          types.EntitlementEntityType       `json:"entity_type"`
 	EntityID            string                            `json:"entity_id"`
 	ParentEntitlementID *string                           `json:"parent_entitlement_id,omitempty"`
+	StartDate           *time.Time                        `json:"start_date,omitempty"`
+	EndDate             *time.Time                        `json:"end_date,omitempty"`
 }
 
 func (r *CreateEntitlementRequest) Validate() error {
@@ -96,6 +99,8 @@ func (r *CreateEntitlementRequest) ToEntitlement(ctx context.Context) *entitleme
 		IsSoftLimit:         r.IsSoftLimit,
 		StaticValue:         r.StaticValue,
 		ParentEntitlementID: r.ParentEntitlementID,
+		StartDate:           r.StartDate,
+		EndDate:             r.EndDate,
 		EnvironmentID:       types.GetEnvironmentID(ctx),
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
