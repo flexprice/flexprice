@@ -2196,8 +2196,16 @@ func init() {
 	wallettransactionDescTransactionStatus := wallettransactionFields[12].Descriptor()
 	// wallettransaction.DefaultTransactionStatus holds the default value on creation for the transaction_status field.
 	wallettransaction.DefaultTransactionStatus = types.TransactionStatus(wallettransactionDescTransactionStatus.Default.(string))
+	// wallettransactionDescCreditsAvailable is the schema descriptor for credits_available field.
+	wallettransactionDescCreditsAvailable := wallettransactionFields[14].Descriptor()
+	// wallettransaction.DefaultCreditsAvailable holds the default value on creation for the credits_available field.
+	wallettransaction.DefaultCreditsAvailable = wallettransactionDescCreditsAvailable.Default.(decimal.Decimal)
+	// wallettransactionDescCurrency is the schema descriptor for currency field.
+	wallettransactionDescCurrency := wallettransactionFields[15].Descriptor()
+	// wallettransaction.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	wallettransaction.CurrencyValidator = wallettransactionDescCurrency.Validators[0].(func(string) error)
 	// wallettransactionDescTransactionReason is the schema descriptor for transaction_reason field.
-	wallettransactionDescTransactionReason := wallettransactionFields[17].Descriptor()
+	wallettransactionDescTransactionReason := wallettransactionFields[19].Descriptor()
 	// wallettransaction.DefaultTransactionReason holds the default value on creation for the transaction_reason field.
 	wallettransaction.DefaultTransactionReason = types.TransactionReason(wallettransactionDescTransactionReason.Default.(string))
 }
