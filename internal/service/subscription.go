@@ -1197,6 +1197,42 @@ func (s *subscriptionService) handleCreditGrants(
 		"subscription_id", subscription.ID,
 		"credit_grants_count", len(creditGrantRequests))
 
+	// Validate that all credit grants have the same conversion rates
+	if len(creditGrantRequests) > 1 {
+		conversionRate := creditGrantRequests[0].ConversionRate
+		topupConversionRate := creditGrantRequests[0].TopupConversionRate
+
+		validationError := ierr.NewError("all credit grants must have the same conversion_rate and topup_conversion_rate").
+			WithHint("All credit grants must have the same conversion rates").
+			Mark(ierr.ErrValidation)
+
+		for i := 1; i < len(creditGrantRequests); i++ {
+			grantReq := creditGrantRequests[i]
+
+			// If first is nil, all must be nil. If first is not nil, all must match that value.
+			if conversionRate == nil {
+				if grantReq.ConversionRate != nil {
+					return validationError
+				}
+			} else {
+				if grantReq.ConversionRate == nil || !conversionRate.Equal(lo.FromPtr(grantReq.ConversionRate)) {
+					return validationError
+				}
+			}
+
+			if topupConversionRate == nil {
+				if grantReq.TopupConversionRate != nil {
+					return validationError
+				}
+			} else {
+				if grantReq.TopupConversionRate == nil || !topupConversionRate.Equal(lo.FromPtr(grantReq.TopupConversionRate)) {
+					return validationError
+				}
+			}
+		}
+	}
+
+	// Create and apply credit grants
 	startDate := subscription.StartDate
 	if subscription.TrialEnd != nil {
 		startDate = lo.FromPtr(subscription.TrialEnd)

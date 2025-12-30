@@ -428,13 +428,31 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 
 	var selectedWallet *dto.WalletResponse
 	for _, w := range wallets {
-		if types.IsMatchingCurrency(w.Currency, subscription.Currency) {
-			selectedWallet = w
-			break
+		if !types.IsMatchingCurrency(w.Currency, subscription.Currency) {
+			continue
 		}
+
+		// Check conversion_rate if set in grant
+		if grant.ConversionRate != nil {
+			if !w.ConversionRate.Equal(lo.FromPtr(grant.ConversionRate)) {
+				continue
+			}
+		}
+
+		// Check topup_conversion_rate if set in grant
+		if grant.TopupConversionRate != nil {
+			if !w.TopupConversionRate.Equal(lo.FromPtr(grant.TopupConversionRate)) {
+				continue
+			}
+		}
+
+		// Found matching wallet
+		selectedWallet = w
+		break
 	}
 	if selectedWallet == nil {
-		// Create new wallet
+		// Create new wallet with conversion rates from grant (if provided)
+		// Wallet will handle defaults: ConversionRate defaults to 1, TopupConversionRate defaults to ConversionRate
 		walletReq := &dto.CreateWalletRequest{
 			Name:       "Subscription Wallet",
 			CustomerID: subscription.CustomerID,
@@ -444,6 +462,14 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 					types.WalletConfigPriceTypeUsage,
 				},
 			},
+		}
+
+		// Set conversion rates only if provided in grant
+		if grant.ConversionRate != nil {
+			walletReq.ConversionRate = lo.FromPtr(grant.ConversionRate)
+		}
+		if grant.TopupConversionRate != nil {
+			walletReq.TopupConversionRate = grant.TopupConversionRate
 		}
 
 		selectedWallet, err = walletService.CreateWallet(ctx, walletReq)
