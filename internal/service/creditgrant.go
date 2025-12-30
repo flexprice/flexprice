@@ -104,6 +104,31 @@ func (s *creditGrantService) CreateCreditGrant(ctx context.Context, req dto.Crea
 
 	// Validate based on scope
 	switch req.Scope {
+	case types.CreditGrantScopePlan:
+		existingGrants, err := s.GetCreditGrantsByPlan(ctx, lo.FromPtr(req.PlanID))
+		if err != nil {
+			return nil, err
+		}
+
+		if len(existingGrants.Items) > 0 {
+			validationError := ierr.NewError("all credit grants for a plan must have the same conversion_rate and topup_conversion_rate").
+				WithHint("All credit grants for a plan must have the same conversion rates").
+				Mark(ierr.ErrValidation)
+
+			for _, existingGrant := range existingGrants.Items {
+				// Check if conversion_rate doesn't match
+				if (req.ConversionRate == nil) != (existingGrant.ConversionRate == nil) ||
+					(req.ConversionRate != nil && !req.ConversionRate.Equal(lo.FromPtr(existingGrant.ConversionRate))) {
+					return nil, validationError
+				}
+
+				// Check if topup_conversion_rate doesn't match
+				if (req.TopupConversionRate == nil) != (existingGrant.TopupConversionRate == nil) ||
+					(req.TopupConversionRate != nil && !req.TopupConversionRate.Equal(lo.FromPtr(existingGrant.TopupConversionRate))) {
+					return nil, validationError
+				}
+			}
+		}
 	case types.CreditGrantScopeSubscription:
 		// Validate subscription exists and is not cancelled (subscription_id presence is validated in DTO)
 		sub, err := s.SubRepo.Get(ctx, lo.FromPtr(req.SubscriptionID))
