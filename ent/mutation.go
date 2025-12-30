@@ -60319,35 +60319,36 @@ func (m *UserMutation) ResetEdge(name string) error {
 // WalletMutation represents an operation that mutates the Wallet nodes in the graph.
 type WalletMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	name            *string
-	customer_id     *string
-	currency        *string
-	description     *string
-	metadata        *map[string]string
-	balance         *decimal.Decimal
-	credit_balance  *decimal.Decimal
-	wallet_status   *types.WalletStatus
-	auto_topup      **types.AutoTopup
-	wallet_type     *types.WalletType
-	conversion_rate *decimal.Decimal
-	_config         *types.WalletConfig
-	alert_config    *types.AlertConfig
-	alert_enabled   *bool
-	alert_state     *types.AlertState
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*Wallet, error)
-	predicates      []predicate.Wallet
+	op                    Op
+	typ                   string
+	id                    *string
+	tenant_id             *string
+	status                *string
+	created_at            *time.Time
+	updated_at            *time.Time
+	created_by            *string
+	updated_by            *string
+	environment_id        *string
+	name                  *string
+	customer_id           *string
+	currency              *string
+	description           *string
+	metadata              *map[string]string
+	balance               *decimal.Decimal
+	credit_balance        *decimal.Decimal
+	wallet_status         *types.WalletStatus
+	auto_topup            **types.AutoTopup
+	wallet_type           *types.WalletType
+	conversion_rate       *decimal.Decimal
+	topup_conversion_rate *decimal.Decimal
+	_config               *types.WalletConfig
+	alert_config          *types.AlertConfig
+	alert_enabled         *bool
+	alert_state           *types.AlertState
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*Wallet, error)
+	predicates            []predicate.Wallet
 }
 
 var _ ent.Mutation = (*WalletMutation)(nil)
@@ -61193,6 +61194,55 @@ func (m *WalletMutation) ResetConversionRate() {
 	m.conversion_rate = nil
 }
 
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (m *WalletMutation) SetTopupConversionRate(d decimal.Decimal) {
+	m.topup_conversion_rate = &d
+}
+
+// TopupConversionRate returns the value of the "topup_conversion_rate" field in the mutation.
+func (m *WalletMutation) TopupConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.topup_conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTopupConversionRate returns the old "topup_conversion_rate" field's value of the Wallet entity.
+// If the Wallet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletMutation) OldTopupConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTopupConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTopupConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTopupConversionRate: %w", err)
+	}
+	return oldValue.TopupConversionRate, nil
+}
+
+// ClearTopupConversionRate clears the value of the "topup_conversion_rate" field.
+func (m *WalletMutation) ClearTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	m.clearedFields[wallet.FieldTopupConversionRate] = struct{}{}
+}
+
+// TopupConversionRateCleared returns if the "topup_conversion_rate" field was cleared in this mutation.
+func (m *WalletMutation) TopupConversionRateCleared() bool {
+	_, ok := m.clearedFields[wallet.FieldTopupConversionRate]
+	return ok
+}
+
+// ResetTopupConversionRate resets all changes to the "topup_conversion_rate" field.
+func (m *WalletMutation) ResetTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	delete(m.clearedFields, wallet.FieldTopupConversionRate)
+}
+
 // SetConfig sets the "config" field.
 func (m *WalletMutation) SetConfig(tc types.WalletConfig) {
 	m._config = &tc
@@ -61423,7 +61473,7 @@ func (m *WalletMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.tenant_id != nil {
 		fields = append(fields, wallet.FieldTenantID)
 	}
@@ -61477,6 +61527,9 @@ func (m *WalletMutation) Fields() []string {
 	}
 	if m.conversion_rate != nil {
 		fields = append(fields, wallet.FieldConversionRate)
+	}
+	if m.topup_conversion_rate != nil {
+		fields = append(fields, wallet.FieldTopupConversionRate)
 	}
 	if m._config != nil {
 		fields = append(fields, wallet.FieldConfig)
@@ -61534,6 +61587,8 @@ func (m *WalletMutation) Field(name string) (ent.Value, bool) {
 		return m.WalletType()
 	case wallet.FieldConversionRate:
 		return m.ConversionRate()
+	case wallet.FieldTopupConversionRate:
+		return m.TopupConversionRate()
 	case wallet.FieldConfig:
 		return m.Config()
 	case wallet.FieldAlertConfig:
@@ -61587,6 +61642,8 @@ func (m *WalletMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldWalletType(ctx)
 	case wallet.FieldConversionRate:
 		return m.OldConversionRate(ctx)
+	case wallet.FieldTopupConversionRate:
+		return m.OldTopupConversionRate(ctx)
 	case wallet.FieldConfig:
 		return m.OldConfig(ctx)
 	case wallet.FieldAlertConfig:
@@ -61730,6 +61787,13 @@ func (m *WalletMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConversionRate(v)
 		return nil
+	case wallet.FieldTopupConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTopupConversionRate(v)
+		return nil
 	case wallet.FieldConfig:
 		v, ok := value.(types.WalletConfig)
 		if !ok {
@@ -61809,6 +61873,9 @@ func (m *WalletMutation) ClearedFields() []string {
 	if m.FieldCleared(wallet.FieldAutoTopup) {
 		fields = append(fields, wallet.FieldAutoTopup)
 	}
+	if m.FieldCleared(wallet.FieldTopupConversionRate) {
+		fields = append(fields, wallet.FieldTopupConversionRate)
+	}
 	if m.FieldCleared(wallet.FieldConfig) {
 		fields = append(fields, wallet.FieldConfig)
 	}
@@ -61855,6 +61922,9 @@ func (m *WalletMutation) ClearField(name string) error {
 		return nil
 	case wallet.FieldAutoTopup:
 		m.ClearAutoTopup()
+		return nil
+	case wallet.FieldTopupConversionRate:
+		m.ClearTopupConversionRate()
 		return nil
 	case wallet.FieldConfig:
 		m.ClearConfig()
@@ -61929,6 +61999,9 @@ func (m *WalletMutation) ResetField(name string) error {
 		return nil
 	case wallet.FieldConversionRate:
 		m.ResetConversionRate()
+		return nil
+	case wallet.FieldTopupConversionRate:
+		m.ResetTopupConversionRate()
 		return nil
 	case wallet.FieldConfig:
 		m.ResetConfig()

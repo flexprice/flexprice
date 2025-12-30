@@ -2137,12 +2137,20 @@ func init() {
 	walletDescWalletType := walletFields[10].Descriptor()
 	// wallet.DefaultWalletType holds the default value on creation for the wallet_type field.
 	wallet.DefaultWalletType = types.WalletType(walletDescWalletType.Default.(string))
+	// walletDescConversionRate is the schema descriptor for conversion_rate field.
+	walletDescConversionRate := walletFields[11].Descriptor()
+	// wallet.DefaultConversionRate holds the default value on creation for the conversion_rate field.
+	wallet.DefaultConversionRate = walletDescConversionRate.Default.(decimal.Decimal)
+	// walletDescTopupConversionRate is the schema descriptor for topup_conversion_rate field.
+	walletDescTopupConversionRate := walletFields[12].Descriptor()
+	// wallet.DefaultTopupConversionRate holds the default value on creation for the topup_conversion_rate field.
+	wallet.DefaultTopupConversionRate = walletDescTopupConversionRate.Default.(decimal.Decimal)
 	// walletDescAlertEnabled is the schema descriptor for alert_enabled field.
-	walletDescAlertEnabled := walletFields[14].Descriptor()
+	walletDescAlertEnabled := walletFields[15].Descriptor()
 	// wallet.DefaultAlertEnabled holds the default value on creation for the alert_enabled field.
 	wallet.DefaultAlertEnabled = walletDescAlertEnabled.Default.(bool)
 	// walletDescAlertState is the schema descriptor for alert_state field.
-	walletDescAlertState := walletFields[15].Descriptor()
+	walletDescAlertState := walletFields[16].Descriptor()
 	// wallet.DefaultAlertState holds the default value on creation for the alert_state field.
 	wallet.DefaultAlertState = types.AlertState(walletDescAlertState.Default.(string))
 	wallettransactionMixin := schema.WalletTransaction{}.Mixin()

@@ -1787,7 +1787,9 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 		}
 	} else {
 		for i, w := range wallets {
-			response[i] = dto.ToWalletBalanceResponse(w)
+			response[i] = &dto.WalletBalanceResponse{
+				Wallet: w,
+			}
 		}
 	}
 	return response, nil

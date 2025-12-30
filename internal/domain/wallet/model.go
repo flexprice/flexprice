@@ -29,11 +29,18 @@ type Wallet struct {
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
 	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
 	// ex if conversion_rate is 0.5, then 1 USD = 2 credits
-	ConversionRate decimal.Decimal    `db:"conversion_rate" json:"conversion_rate" swaggertype:"string"`
-	EnvironmentID  string             `db:"environment_id" json:"environment_id"`
-	AlertEnabled   bool               `db:"alert_enabled" json:"alert_enabled"`
-	AlertConfig    *types.AlertConfig `db:"alert_config" json:"alert_config,omitempty"`
-	AlertState     string             `db:"alert_state" json:"alert_state"`
+	ConversionRate decimal.Decimal `db:"conversion_rate" json:"conversion_rate" swaggertype:"string"`
+
+	// topup_conversion_rate is the conversion rate for the topup to the currency
+	// ex if topup_conversion_rate is 1, then 1 USD = 1 credit
+	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
+	TopupConversionRate decimal.Decimal `db:"topup_conversion_rate" json:"topup_conversion_rate" swaggertype:"string"`
+
+	EnvironmentID string             `db:"environment_id" json:"environment_id"`
+	AlertEnabled  bool               `db:"alert_enabled" json:"alert_enabled"`
+	AlertConfig   *types.AlertConfig `db:"alert_config" json:"alert_config,omitempty"`
+	AlertState    string             `db:"alert_state" json:"alert_state"`
 	types.BaseModel
 }
 
@@ -105,6 +112,8 @@ func FromEnt(e *ent.Wallet) *Wallet {
 		AlertEnabled:   e.AlertEnabled,
 		AlertConfig:    alertConfig,
 		AlertState:     string(e.AlertState),
+		// TODO: remove this after migration
+		TopupConversionRate: lo.FromPtrOr(e.TopupConversionRate, decimal.NewFromInt(1)),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
