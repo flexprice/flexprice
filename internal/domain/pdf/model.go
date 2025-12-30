@@ -72,6 +72,7 @@ type LineItemData struct {
 	PlanDisplayName string                   `json:"plan_display_name"`
 	DisplayName     string                   `json:"display_name"`
 	Description     string                   `json:"description"`
+	Group           string                   `json:"group"` // Group name if the price belongs to a group, "--" if no group
 	PeriodStart     CustomTime               `json:"period_start"`
 	PeriodEnd       CustomTime               `json:"period_end"`
 	Amount          float64                  `json:"amount"` // Positive for charges, negative for discounts
