@@ -1901,6 +1901,15 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	if err != nil {
 		return nil, err
 	}
+
+	// Round all line item amounts to currency precision before creating invoice request
+	// This is the single point where all line items (fixed and usage) are rounded
+	// to ensure consistent currency precision across the invoice
+	allLineItems := append(result.FixedCharges, result.UsageCharges...)
+	for i := range allLineItems {
+		allLineItems[i].Amount = types.RoundToCurrencyPrecision(allLineItems[i].Amount, sub.Currency)
+	}
+
 	// Create invoice request
 	// Use invoicing customer ID if available, otherwise fallback to subscription customer ID
 	req := &dto.CreateInvoiceRequest{
@@ -1921,7 +1930,7 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
 		EnvironmentID:    sub.EnvironmentID,
 		Metadata:         metadata,
-		LineItems:        append(result.FixedCharges, result.UsageCharges...),
+		LineItems:        allLineItems,
 		InvoiceCoupons:   validCoupons,
 		LineItemCoupons:  validLineItemCoupons,
 		PreparedTaxRates: preparedTaxRates,
