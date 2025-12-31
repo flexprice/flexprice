@@ -48,6 +48,7 @@ COPY --from=typst /bin/typst /usr/local/bin/
 COPY internal/config ./config
 COPY assets/fonts ./assets/fonts
 COPY assets/typst-templates ./assets/typst-templates
+COPY assets/email-templates ./assets/email-templates
 
 RUN chmod +x /app/server
 

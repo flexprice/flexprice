@@ -158,19 +158,51 @@ func (s *Email) SendEmailWithTemplate(ctx context.Context, req SendEmailWithTemp
 
 // readTemplate reads an HTML template from the file system
 func (s *Email) readTemplate(templatePath string) (string, error) {
-	// If the path is relative, resolve it from the assets directory
-	if !filepath.IsAbs(templatePath) {
-		// Get the current working directory
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("failed to get working directory: %w", err)
+	var fullPath string
+	var err error
+
+	// If the path is absolute, use it directly
+	if filepath.IsAbs(templatePath) {
+		fullPath = templatePath
+	} else {
+		// Try multiple possible locations for the template
+		// 1. Docker container path: /app/assets/email-templates/
+		// 2. Local development: relative to current working directory
+		// 3. Relative to executable location
+
+		possiblePaths := []string{
+			filepath.Join("/app", "assets", "email-templates", templatePath), // Docker container
 		}
-		templatePath = filepath.Join(cwd, "assets", "email-templates", templatePath)
+
+		// Try current working directory (for local development)
+		if cwd, err := os.Getwd(); err == nil {
+			possiblePaths = append(possiblePaths, filepath.Join(cwd, "assets", "email-templates", templatePath))
+		}
+
+		// Try relative to executable location
+		if execPath, err := os.Executable(); err == nil {
+			execDir := filepath.Dir(execPath)
+			possiblePaths = append(possiblePaths, filepath.Join(execDir, "assets", "email-templates", templatePath))
+		}
+
+		// Try each possible path until one exists
+		found := false
+		for _, path := range possiblePaths {
+			if _, err := os.Stat(path); err == nil {
+				fullPath = path
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			return "", fmt.Errorf("template file not found in any of the expected locations: %v", possiblePaths)
+		}
 	}
 
-	content, err := os.ReadFile(templatePath)
+	content, err := os.ReadFile(fullPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read template file: %w", err)
+		return "", fmt.Errorf("failed to read template file %s: %w", fullPath, err)
 	}
 
 	return string(content), nil
