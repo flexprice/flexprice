@@ -1032,17 +1032,22 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 		originalPrice := priceMap[override.PriceID]
 		lineItem := lineItemsByPriceID[override.PriceID]
 
+		// Determine target billing model (use override if provided, otherwise original)
+		targetBillingModel := originalPrice.BillingModel
+		if override.BillingModel != "" {
+			targetBillingModel = override.BillingModel
+		}
+
 		// Create subscription-scoped price using price service
-		// Always preserve the original price's display name
+		// Always preserve the original price's display name and price unit type
 		createPriceReq := dto.CreatePriceRequest{
-			Amount:               lo.ToPtr(originalPrice.Amount),
 			Currency:             originalPrice.Currency,
 			EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
 			EntityID:             sub.ID,
 			Type:                 originalPrice.Type,
 			BillingPeriod:        originalPrice.BillingPeriod,
 			BillingPeriodCount:   originalPrice.BillingPeriodCount,
-			BillingModel:         originalPrice.BillingModel,
+			BillingModel:         targetBillingModel,
 			BillingCadence:       originalPrice.BillingCadence,
 			InvoiceCadence:       originalPrice.InvoiceCadence,
 			TrialPeriod:          originalPrice.TrialPeriod,
@@ -1052,50 +1057,88 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			Metadata:             originalPrice.Metadata,
 			ParentPriceID:        originalPrice.GetRootPriceID(), // Always point to the root price ID
 			DisplayName:          originalPrice.DisplayName,      // Preserve original price display name
+			PriceUnitType:        originalPrice.PriceUnitType,    // Always copy from original (cannot be changed)
 			SkipEntityValidation: true,
 		}
 
-		// Convert tiers if they exist
-		if len(originalPrice.Tiers) > 0 {
-			createPriceReq.Tiers = make([]dto.CreatePriceTier, len(originalPrice.Tiers))
-			for i, tier := range originalPrice.Tiers {
-				createPriceReq.Tiers[i] = dto.CreatePriceTier{
-					UpTo:       tier.UpTo,
-					UnitAmount: tier.UnitAmount,
-				}
-				createPriceReq.Tiers[i].FlatAmount = tier.FlatAmount
+		// Handle PriceUnitConfig construction for CUSTOM price unit type
+		var priceUnitConfig *dto.PriceUnitConfig
+		if originalPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+			priceUnitConfig = &dto.PriceUnitConfig{
+				PriceUnit: lo.FromPtr(originalPrice.PriceUnit), // Always use original price unit (cannot be changed)
 			}
 		}
 
-		// Convert transform quantity if it exists
-		if originalPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
-			transformQuantity := price.TransformQuantity(originalPrice.TransformQuantity)
-			createPriceReq.TransformQuantity = &transformQuantity
-		}
+		// Handle billing model-specific fields based on target billing model and price unit type
+		switch targetBillingModel {
+		case types.BILLING_MODEL_FLAT_FEE, types.BILLING_MODEL_PACKAGE:
+			// Handle amount based on price unit type
+			if originalPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+				// For CUSTOM price unit, amount is handled via PriceUnitConfig
+				if override.PriceUnitAmount != nil {
+					priceUnitConfig.Amount = override.PriceUnitAmount
+				} else if originalPrice.PriceUnitAmount != nil {
+					priceUnitConfig.Amount = originalPrice.PriceUnitAmount
+				}
+				createPriceReq.PriceUnitConfig = priceUnitConfig
+			} else {
+				// For FIAT price unit, use Amount
+				if override.Amount != nil {
+					createPriceReq.Amount = override.Amount
+				} else {
+					createPriceReq.Amount = lo.ToPtr(originalPrice.Amount)
+				}
+			}
 
-		// Amount override
-		if override.Amount != nil {
-			createPriceReq.Amount = override.Amount
-		}
+			// Handle TransformQuantity for PACKAGE (applies to both FIAT and CUSTOM)
+			if targetBillingModel == types.BILLING_MODEL_PACKAGE {
+				if override.TransformQuantity != nil {
+					createPriceReq.TransformQuantity = override.TransformQuantity
+				} else if originalPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+					transformQuantity := price.TransformQuantity(originalPrice.TransformQuantity)
+					createPriceReq.TransformQuantity = &transformQuantity
+				}
+			}
 
-		// Billing model override
-		if override.BillingModel != "" {
-			createPriceReq.BillingModel = override.BillingModel
-		}
+		case types.BILLING_MODEL_TIERED:
+			// Handle tiers based on price unit type
+			if originalPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+				// For CUSTOM price unit, tiers are handled via PriceUnitConfig
+				if len(override.PriceUnitTiers) > 0 {
+					priceUnitConfig.PriceUnitTiers = override.PriceUnitTiers
+				} else if len(originalPrice.PriceUnitTiers) > 0 {
+					priceUnitConfig.PriceUnitTiers = make([]dto.CreatePriceTier, len(originalPrice.PriceUnitTiers))
+					for i, tier := range originalPrice.PriceUnitTiers {
+						priceUnitConfig.PriceUnitTiers[i] = dto.CreatePriceTier{
+							UpTo:       tier.UpTo,
+							UnitAmount: tier.UnitAmount,
+						}
+						priceUnitConfig.PriceUnitTiers[i].FlatAmount = tier.FlatAmount
+					}
+				}
+				createPriceReq.PriceUnitConfig = priceUnitConfig
+			} else {
+				// For FIAT price unit, use Tiers
+				if len(override.Tiers) > 0 {
+					createPriceReq.Tiers = override.Tiers
+				} else if len(originalPrice.Tiers) > 0 {
+					createPriceReq.Tiers = make([]dto.CreatePriceTier, len(originalPrice.Tiers))
+					for i, tier := range originalPrice.Tiers {
+						createPriceReq.Tiers[i] = dto.CreatePriceTier{
+							UpTo:       tier.UpTo,
+							UnitAmount: tier.UnitAmount,
+						}
+						createPriceReq.Tiers[i].FlatAmount = tier.FlatAmount
+					}
+				}
+			}
 
-		// Tier mode override
-		if override.TierMode != "" {
-			createPriceReq.TierMode = override.TierMode
-		}
-
-		// Tiers override - if provided, replace the original tiers
-		if len(override.Tiers) > 0 {
-			createPriceReq.Tiers = override.Tiers
-		}
-
-		// Transform quantity override - if provided, replace the original transform quantity
-		if override.TransformQuantity != nil {
-			createPriceReq.TransformQuantity = override.TransformQuantity
+			// Handle TierMode for both types
+			if override.TierMode != "" {
+				createPriceReq.TierMode = override.TierMode
+			} else {
+				createPriceReq.TierMode = originalPrice.TierMode
+			}
 		}
 
 		// Create the subscription-scoped price using price service
@@ -1125,7 +1168,9 @@ func (s *subscriptionService) ProcessSubscriptionPriceOverrides(
 			"billing_model_override", override.BillingModel != "",
 			"tier_mode_override", override.TierMode != "",
 			"tiers_override", len(override.Tiers) > 0,
-			"transform_quantity_override", override.TransformQuantity != nil)
+			"transform_quantity_override", override.TransformQuantity != nil,
+			"price_unit_amount_override", override.PriceUnitAmount != nil,
+			"price_unit_tiers_override", len(override.PriceUnitTiers) > 0)
 	}
 
 	return nil

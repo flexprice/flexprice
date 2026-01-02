@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -20,12 +22,13 @@ import (
 
 type PriceServiceSuite struct {
 	suite.Suite
-	ctx          context.Context
-	priceService PriceService
-	priceRepo    *testutil.InMemoryPriceStore
-	meterRepo    *testutil.InMemoryMeterStore
-	planRepo     *testutil.InMemoryPlanStore
-	logger       *logger.Logger
+	ctx           context.Context
+	priceService  PriceService
+	priceRepo     *testutil.InMemoryPriceStore
+	meterRepo     *testutil.InMemoryMeterStore
+	planRepo      *testutil.InMemoryPlanStore
+	priceUnitRepo *testutil.InMemoryPriceUnitStore
+	logger        *logger.Logger
 }
 
 func TestPriceService(t *testing.T) {
@@ -37,15 +40,18 @@ func (s *PriceServiceSuite) SetupTest() {
 	s.priceRepo = testutil.NewInMemoryPriceStore()
 	s.meterRepo = testutil.NewInMemoryMeterStore()
 	s.planRepo = testutil.NewInMemoryPlanStore()
+	s.priceUnitRepo = testutil.NewInMemoryPriceUnitStore()
 	s.logger = logger.GetLogger()
 
 	serviceParams := ServiceParams{
-		PriceRepo: s.priceRepo,
-		MeterRepo: s.meterRepo,
-		PlanRepo:  s.planRepo,
-		AddonRepo: testutil.NewInMemoryAddonStore(),
-		SubRepo:   testutil.NewInMemorySubscriptionStore(),
-		Logger:    s.logger,
+		PriceRepo:     s.priceRepo,
+		MeterRepo:     s.meterRepo,
+		PlanRepo:      s.planRepo,
+		AddonRepo:     testutil.NewInMemoryAddonStore(),
+		SubRepo:       testutil.NewInMemorySubscriptionStore(),
+		PriceUnitRepo: s.priceUnitRepo,
+		Logger:        s.logger,
+		DB:            testutil.NewMockPostgresClient(s.logger),
 	}
 	s.priceService = NewPriceService(serviceParams)
 }
@@ -1313,5 +1319,306 @@ func (s *PriceServiceSuite) TestDeletePrice_EdgeCases() {
 		s.NotNil(updatedPrice.EndDate)
 		s.Equal(100, updatedPrice.TransformQuantity.DivideBy)
 		s.Equal(types.ROUND_UP, updatedPrice.TransformQuantity.Round)
+	})
+}
+
+func (s *PriceServiceSuite) TestUpdatePrice_CustomPriceUnitValidation() {
+	// Test validation for custom price unit fields in UpdatePriceRequest
+
+	s.Run("cannot_use_custom_price_unit_fields_on_fiat_price", func() {
+		// Create a FIAT price
+		fiatPrice := &price.Price{
+			ID:            "price-fiat",
+			Amount:        decimal.NewFromInt(100),
+			Currency:      "usd",
+			Type:          types.PRICE_TYPE_FIXED,
+			EntityType:    types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:      "plan-1",
+			PriceUnitType: types.PRICE_UNIT_TYPE_FIAT,
+		}
+		_ = s.priceRepo.Create(s.ctx, fiatPrice)
+
+		// Try to update with custom price unit fields
+		req := dto.UpdatePriceRequest{
+			PriceUnitAmount: lo.ToPtr(decimal.NewFromInt(50)),
+		}
+
+		_, err := s.priceService.UpdatePrice(s.ctx, fiatPrice.ID, req)
+		s.Error(err)
+		s.Contains(err.Error(), "cannot use custom price unit fields on a FIAT price")
+	})
+
+	s.Run("cannot_use_custom_price_unit_tiers_on_fiat_price", func() {
+		// Create a FIAT price
+		fiatPrice := &price.Price{
+			ID:            "price-fiat-2",
+			Amount:        decimal.NewFromInt(100),
+			Currency:      "usd",
+			Type:          types.PRICE_TYPE_FIXED,
+			EntityType:    types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:      "plan-1",
+			PriceUnitType: types.PRICE_UNIT_TYPE_FIAT,
+		}
+		_ = s.priceRepo.Create(s.ctx, fiatPrice)
+
+		// Try to update with custom price unit tiers
+		req := dto.UpdatePriceRequest{
+			PriceUnitTiers: []dto.CreatePriceTier{
+				{
+					UpTo:       lo.ToPtr(uint64(10)),
+					UnitAmount: decimal.NewFromInt(5),
+				},
+			},
+		}
+
+		_, err := s.priceService.UpdatePrice(s.ctx, fiatPrice.ID, req)
+		s.Error(err)
+		s.Contains(err.Error(), "cannot use custom price unit fields on a FIAT price")
+	})
+
+	s.Run("cannot_use_fiat_fields_on_custom_price", func() {
+		// Create a meter for USAGE type price
+		testMeter := &meter.Meter{
+			ID:        "meter-1",
+			Name:      "Test Meter",
+			EventName: "api_call",
+			Aggregation: meter.Aggregation{
+				Type: types.AggregationCount,
+			},
+			BaseModel: types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.meterRepo.CreateMeter(s.ctx, testMeter)
+
+		// Create a CUSTOM price
+		priceUnit := "btc"
+		customPrice := &price.Price{
+			ID:              "price-custom",
+			PriceUnitAmount: lo.ToPtr(decimal.NewFromFloat(0.001)),
+			Currency:        "usd",
+			Type:            types.PRICE_TYPE_USAGE,
+			MeterID:         "meter-1",
+			EntityType:      types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:        "plan-1",
+			PriceUnitType:   types.PRICE_UNIT_TYPE_CUSTOM,
+			PriceUnit:       &priceUnit,
+			BillingModel:    types.BILLING_MODEL_FLAT_FEE,
+		}
+		_ = s.priceRepo.Create(s.ctx, customPrice)
+
+		// Try to update with FIAT fields
+		req := dto.UpdatePriceRequest{
+			Amount: lo.ToPtr(decimal.NewFromInt(50)),
+		}
+
+		_, err := s.priceService.UpdatePrice(s.ctx, customPrice.ID, req)
+		s.Error(err)
+		s.Contains(err.Error(), "cannot use FIAT fields on a CUSTOM price")
+	})
+
+	s.Run("cannot_use_fiat_tiers_on_custom_price", func() {
+		// Create a meter for USAGE type price
+		testMeter := &meter.Meter{
+			ID:        "meter-2",
+			Name:      "Test Meter 2",
+			EventName: "api_call",
+			Aggregation: meter.Aggregation{
+				Type: types.AggregationCount,
+			},
+			BaseModel: types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.meterRepo.CreateMeter(s.ctx, testMeter)
+
+		// Create a CUSTOM price with tiers
+		priceUnit := "eth"
+		upTo10 := uint64(10)
+		customPrice := &price.Price{
+			ID:            "price-custom-tiered",
+			Currency:      "usd",
+			Type:          types.PRICE_TYPE_USAGE,
+			MeterID:       "meter-2",
+			EntityType:    types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:      "plan-1",
+			PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM,
+			PriceUnit:     &priceUnit,
+			BillingModel:  types.BILLING_MODEL_TIERED,
+			PriceUnitTiers: []price.PriceTier{
+				{
+					UpTo:       &upTo10,
+					UnitAmount: decimal.NewFromFloat(0.01),
+				},
+			},
+		}
+		_ = s.priceRepo.Create(s.ctx, customPrice)
+
+		// Try to update with FIAT tiers
+		req := dto.UpdatePriceRequest{
+			Tiers: []dto.CreatePriceTier{
+				{
+					UpTo:       lo.ToPtr(uint64(10)),
+					UnitAmount: decimal.NewFromInt(5),
+				},
+			},
+		}
+
+		_, err := s.priceService.UpdatePrice(s.ctx, customPrice.ID, req)
+		s.Error(err)
+		s.Contains(err.Error(), "cannot use FIAT fields on a CUSTOM price")
+	})
+
+	s.Run("can_update_custom_price_with_price_unit_amount", func() {
+		// Create a meter for USAGE type price
+		testMeter := &meter.Meter{
+			ID:        "meter-3",
+			Name:      "Test Meter 3",
+			EventName: "api_call",
+			Aggregation: meter.Aggregation{
+				Type: types.AggregationCount,
+			},
+			BaseModel: types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.meterRepo.CreateMeter(s.ctx, testMeter)
+
+		// Create a price unit first
+		priceUnitCode := "btc"
+		priceUnit := &priceunit.PriceUnit{
+			ID:             "price-unit-btc",
+			Name:           "Bitcoin",
+			Code:           priceUnitCode,
+			Symbol:         "BTC",
+			BaseCurrency:   "usd",
+			ConversionRate: decimal.NewFromFloat(50000.0), // 1 BTC = 50000 USD
+			BaseModel:      types.GetDefaultBaseModel(s.ctx),
+		}
+		priceUnit.Status = types.StatusPublished
+		_, _ = s.priceUnitRepo.Create(s.ctx, priceUnit)
+
+		// Create a CUSTOM price
+		customPrice := &price.Price{
+			ID:                 "price-custom-update",
+			PriceUnitAmount:    lo.ToPtr(decimal.NewFromFloat(0.001)),
+			Currency:           "usd",
+			Type:               types.PRICE_TYPE_USAGE,
+			MeterID:            "meter-3",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           "plan-1",
+			PriceUnitType:      types.PRICE_UNIT_TYPE_CUSTOM,
+			PriceUnit:          &priceUnitCode,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+		_ = s.priceRepo.Create(s.ctx, customPrice)
+
+		// Update with custom price unit amount
+		newAmount := decimal.NewFromFloat(0.002)
+		req := dto.UpdatePriceRequest{
+			PriceUnitAmount: &newAmount,
+		}
+
+		resp, err := s.priceService.UpdatePrice(s.ctx, customPrice.ID, req)
+		s.NoError(err)
+		s.NotNil(resp)
+		// Note: The actual update creates a new price, so we verify the request was accepted
+	})
+
+	s.Run("can_update_custom_price_with_price_unit_tiers", func() {
+		// Create a meter for USAGE type price
+		testMeter := &meter.Meter{
+			ID:        "meter-4",
+			Name:      "Test Meter 4",
+			EventName: "api_call",
+			Aggregation: meter.Aggregation{
+				Type: types.AggregationCount,
+			},
+			BaseModel: types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.meterRepo.CreateMeter(s.ctx, testMeter)
+
+		// Create a price unit first
+		priceUnitCode := "eth"
+		priceUnit := &priceunit.PriceUnit{
+			ID:             "price-unit-eth",
+			Name:           "Ethereum",
+			Code:           priceUnitCode,
+			Symbol:         "ETH",
+			BaseCurrency:   "usd",
+			ConversionRate: decimal.NewFromFloat(3000.0), // 1 ETH = 3000 USD
+			BaseModel:      types.GetDefaultBaseModel(s.ctx),
+		}
+		priceUnit.Status = types.StatusPublished
+		_, _ = s.priceUnitRepo.Create(s.ctx, priceUnit)
+
+		// Create a CUSTOM price with tiers
+		upTo10 := uint64(10)
+		customPrice := &price.Price{
+			ID:                 "price-custom-tiers-update",
+			Currency:           "usd",
+			Type:               types.PRICE_TYPE_USAGE,
+			MeterID:            "meter-4",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           "plan-1",
+			PriceUnitType:      types.PRICE_UNIT_TYPE_CUSTOM,
+			PriceUnit:          &priceUnitCode,
+			BillingModel:       types.BILLING_MODEL_TIERED,
+			TierMode:           types.BILLING_TIER_SLAB,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			PriceUnitTiers: []price.PriceTier{
+				{
+					UpTo:       &upTo10,
+					UnitAmount: decimal.NewFromFloat(0.01),
+				},
+			},
+		}
+		_ = s.priceRepo.Create(s.ctx, customPrice)
+
+		// Update with custom price unit tiers
+		req := dto.UpdatePriceRequest{
+			PriceUnitTiers: []dto.CreatePriceTier{
+				{
+					UpTo:       lo.ToPtr(uint64(20)),
+					UnitAmount: decimal.NewFromFloat(0.02),
+				},
+			},
+		}
+
+		resp, err := s.priceService.UpdatePrice(s.ctx, customPrice.ID, req)
+		s.NoError(err)
+		s.NotNil(resp)
+		// Note: The actual update creates a new price, so we verify the request was accepted
+	})
+
+	s.Run("can_update_fiat_price_with_amount", func() {
+		// Create a FIAT price
+		fiatPrice := &price.Price{
+			ID:                 "price-fiat-update",
+			Amount:             decimal.NewFromInt(100),
+			Currency:           "usd",
+			Type:               types.PRICE_TYPE_FIXED,
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           "plan-1",
+			PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+		_ = s.priceRepo.Create(s.ctx, fiatPrice)
+
+		// Update with FIAT amount
+		newAmount := decimal.NewFromInt(150)
+		req := dto.UpdatePriceRequest{
+			Amount: &newAmount,
+		}
+
+		resp, err := s.priceService.UpdatePrice(s.ctx, fiatPrice.ID, req)
+		s.NoError(err)
+		s.NotNil(resp)
+		// Note: The actual update creates a new price, so we verify the request was accepted
 	})
 }

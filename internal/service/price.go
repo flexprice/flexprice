@@ -663,26 +663,29 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 	hasFIATFields := req.Amount != nil || len(req.Tiers) > 0
 	hasCUSTOMFields := req.PriceUnitAmount != nil || len(req.PriceUnitTiers) > 0
 
-	if existingPrice.PriceUnitType == types.PRICE_UNIT_TYPE_FIAT && hasCUSTOMFields {
-		return nil, ierr.NewError("cannot use custom price unit fields on a FIAT price").
-			WithHint("Price unit type cannot be changed during update. Cannot use price_unit_amount or price_unit_tiers on a FIAT price.").
-			WithReportableDetails(map[string]interface{}{
-				"existing_price_unit_type": existingPrice.PriceUnitType,
-				"has_price_unit_amount":    req.PriceUnitAmount != nil,
-				"has_price_unit_tiers":     len(req.PriceUnitTiers) > 0,
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
-	if existingPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM && hasFIATFields {
-		return nil, ierr.NewError("cannot use FIAT fields on a CUSTOM price").
-			WithHint("Price unit type cannot be changed during update. Cannot use amount or tiers on a CUSTOM price. Use price_unit_amount or price_unit_tiers instead.").
-			WithReportableDetails(map[string]interface{}{
-				"existing_price_unit_type": existingPrice.PriceUnitType,
-				"has_amount":              req.Amount != nil,
-				"has_tiers":               len(req.Tiers) > 0,
-			}).
-			Mark(ierr.ErrValidation)
+	switch existingPrice.PriceUnitType {
+	case types.PRICE_UNIT_TYPE_FIAT:
+		if hasCUSTOMFields {
+			return nil, ierr.NewError("cannot use custom price unit fields on a FIAT price").
+				WithHint("Price unit type cannot be changed during update. Cannot use price_unit_amount or price_unit_tiers on a FIAT price.").
+				WithReportableDetails(map[string]interface{}{
+					"existing_price_unit_type": existingPrice.PriceUnitType,
+					"has_price_unit_amount":    req.PriceUnitAmount != nil,
+					"has_price_unit_tiers":     len(req.PriceUnitTiers) > 0,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	case types.PRICE_UNIT_TYPE_CUSTOM:
+		if hasFIATFields {
+			return nil, ierr.NewError("cannot use FIAT fields on a CUSTOM price").
+				WithHint("Price unit type cannot be changed during update. Cannot use amount or tiers on a CUSTOM price. Use price_unit_amount or price_unit_tiers instead.").
+				WithReportableDetails(map[string]interface{}{
+					"existing_price_unit_type": existingPrice.PriceUnitType,
+					"has_amount":               req.Amount != nil,
+					"has_tiers":                len(req.Tiers) > 0,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Check if the request has critical fields
@@ -728,6 +731,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 
 			// Create the new price - this will use all existing validation logic
 			newPriceResp, err = s.CreatePrice(ctx, createReq)
+
 			return err
 
 		}); err != nil {

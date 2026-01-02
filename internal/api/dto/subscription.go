@@ -1039,6 +1039,12 @@ type OverrideLineItemRequest struct {
 
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
+
+	// PriceUnitAmount is the amount of the price unit (for CUSTOM type, FLAT_FEE/PACKAGE billing models)
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty" swaggertype:"string"`
+
+	// PriceUnitTiers are the tiers for the price unit (for CUSTOM type, TIERED billing model)
+	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
 }
 
 // OverrideEntitlementRequest allows overriding entitlement values for a subscription
@@ -1081,10 +1087,17 @@ func (r *OverrideLineItemRequest) Validate(
 			Mark(ierr.ErrValidation)
 	}
 
-	// At least one override field (quantity, amount, billing_model, tier_mode, tiers, or transform_quantity) must be provided
-	if r.Quantity == nil && r.Amount == nil && r.BillingModel == "" && r.TierMode == "" && len(r.Tiers) == 0 && r.TransformQuantity == nil {
+	// At least one override field must be provided
+	if r.Quantity == nil && r.Amount == nil && r.BillingModel == "" && r.TierMode == "" && len(r.Tiers) == 0 && r.TransformQuantity == nil && r.PriceUnitAmount == nil && len(r.PriceUnitTiers) == 0 {
 		return ierr.NewError("at least one override field must be provided").
-			WithHint("Specify at least one of: quantity, amount, billing_model, tier_mode, tiers, or transform_quantity for price override").
+			WithHint("Specify at least one of: quantity, amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, or price_unit_tiers for price override").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Mutual exclusivity: cannot provide both FIAT fields and custom price unit fields
+	if (r.Amount != nil || len(r.Tiers) > 0) && (r.PriceUnitAmount != nil || len(r.PriceUnitTiers) > 0) {
+		return ierr.NewError("cannot provide both FIAT fields and custom price unit fields").
+			WithHint("Cannot use both FIAT fields (amount, tiers) and custom price unit fields (price_unit_amount, price_unit_tiers) in the same override request").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1094,6 +1107,16 @@ func (r *OverrideLineItemRequest) Validate(
 			WithHint("Override amount cannot be negative").
 			WithReportableDetails(map[string]interface{}{
 				"amount": r.Amount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate price_unit_amount if provided
+	if r.PriceUnitAmount != nil && r.PriceUnitAmount.IsNegative() {
+		return ierr.NewError("price_unit_amount must be non-negative").
+			WithHint("Override price unit amount cannot be negative").
+			WithReportableDetails(map[string]interface{}{
+				"price_unit_amount": r.PriceUnitAmount.String(),
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -1236,6 +1259,32 @@ func (r *OverrideLineItemRequest) Validate(
 					"price_id": r.PriceID,
 				}).
 				Mark(ierr.ErrInternal)
+		}
+
+		// Validate that override fields match the original price's PriceUnitType
+		if originalPrice, exists := priceMap[r.PriceID]; exists && originalPrice != nil {
+			switch originalPrice.PriceUnitType {
+			case types.PRICE_UNIT_TYPE_FIAT:
+				if r.PriceUnitAmount != nil || len(r.PriceUnitTiers) > 0 {
+					return ierr.NewError("cannot use custom price unit fields on a FIAT price").
+						WithHint("Price unit type cannot be changed during override. Use FIAT fields (amount or tiers) instead.").
+						WithReportableDetails(map[string]interface{}{
+							"price_id":        r.PriceID,
+							"price_unit_type": originalPrice.PriceUnitType,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			case types.PRICE_UNIT_TYPE_CUSTOM:
+				if r.Amount != nil || len(r.Tiers) > 0 {
+					return ierr.NewError("cannot use FIAT fields on a CUSTOM price").
+						WithHint("Price unit type cannot be changed during override. Use price_unit_amount or price_unit_tiers instead.").
+						WithReportableDetails(map[string]interface{}{
+							"price_id":        r.PriceID,
+							"price_unit_type": originalPrice.PriceUnitType,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
 		}
 	}
 
