@@ -79,6 +79,29 @@ jobs:
           echo "✓ Go SDK generated"
           ls -lah api/go/
           
+      - name: Copy custom files to SDK
+        run: |
+          echo "📋 Copying custom files from api/custom/go/ to api/go/..."
+          
+          # Copy custom Go files (helpers.go, async.go)
+          if [ -f "api/custom/go/helpers.go" ]; then
+            cp api/custom/go/helpers.go api/go/
+            echo "✓ Copied helpers.go"
+          fi
+          
+          if [ -f "api/custom/go/async.go" ]; then
+            cp api/custom/go/async.go api/go/
+            echo "✓ Copied async.go"
+          fi
+          
+          # Copy examples directory
+          if [ -d "api/custom/go/examples" ]; then
+            cp -r api/custom/go/examples api/go/
+            echo "✓ Copied examples/"
+          fi
+          
+          echo "✅ Custom files copied successfully"
+          
       - name: Verify Go SDK builds
         working-directory: api/go
         run: |
