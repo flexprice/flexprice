@@ -58,6 +58,15 @@ func (w *Wallet) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	if w.TopupConversionRate.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("topup_conversion_rate must be greater than 0").
+			WithHint("Topup conversion rate must be a positive value").
+			WithReportableDetails(map[string]interface{}{
+				"topup_conversion_rate": w.TopupConversionRate,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// Verify balance = credit_balance * conversion_rate
 	expectedBalance := w.CreditBalance.Mul(w.ConversionRate)
 	if !w.Balance.Equal(expectedBalance) {

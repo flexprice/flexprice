@@ -552,15 +552,16 @@ func (s *WalletServiceSuite) setupWallet() {
 	s.GetStores().PaymentRepo.(*testutil.InMemoryPaymentStore).Clear()
 
 	s.testData.wallet = &wallet.Wallet{
-		ID:             "wallet-1",
-		CustomerID:     s.testData.customer.ID,
-		Currency:       "usd",
-		WalletType:     types.WalletTypePrePaid,
-		Balance:        decimal.NewFromInt(1000),
-		CreditBalance:  decimal.NewFromInt(1000),
-		ConversionRate: decimal.NewFromFloat(1.0),
-		WalletStatus:   types.WalletStatusActive,
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		ID:                  "wallet-1",
+		CustomerID:          s.testData.customer.ID,
+		Currency:            "usd",
+		WalletType:          types.WalletTypePrePaid,
+		Balance:             decimal.NewFromInt(1000),
+		CreditBalance:       decimal.NewFromInt(1000),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:        types.WalletStatusActive,
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }
@@ -652,14 +653,15 @@ func (s *WalletServiceSuite) TestGetWalletByID() {
 func (s *WalletServiceSuite) TestGetWalletsByCustomerID() {
 	// Create another wallet for same customer
 	wallet2 := &wallet.Wallet{
-		ID:             "wallet-2",
-		CustomerID:     s.testData.wallet.CustomerID,
-		Currency:       "EUR",
-		Balance:        decimal.NewFromInt(500),
-		CreditBalance:  decimal.NewFromInt(500),
-		ConversionRate: decimal.NewFromFloat(1.0),
-		WalletStatus:   types.WalletStatusActive,
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		ID:                  "wallet-2",
+		CustomerID:          s.testData.wallet.CustomerID,
+		Currency:            "EUR",
+		Balance:             decimal.NewFromInt(500),
+		CreditBalance:       decimal.NewFromInt(500),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:        types.WalletStatusActive,
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), wallet2))
 
@@ -824,14 +826,15 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 
 	// Create inactive wallet for testing
 	inactiveWallet := &wallet.Wallet{
-		ID:             "wallet_inactive",
-		CustomerID:     s.testData.customer.ID,
-		Currency:       "usd",
-		Balance:        decimal.NewFromInt(1000),
-		CreditBalance:  decimal.NewFromInt(1000),
-		ConversionRate: decimal.NewFromFloat(1.0),
-		WalletStatus:   types.WalletStatusClosed,
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+		ID:                  "wallet_inactive",
+		CustomerID:          s.testData.customer.ID,
+		Currency:            "usd",
+		Balance:             decimal.NewFromInt(1000),
+		CreditBalance:       decimal.NewFromInt(1000),
+		ConversionRate:      decimal.NewFromFloat(1.0),
+		TopupConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:        types.WalletStatusClosed,
+		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 	}
 
 	err := s.GetStores().WalletRepo.CreateWallet(s.GetContext(), inactiveWallet)
@@ -908,14 +911,15 @@ func (s *WalletServiceSuite) TestWalletConversionRateHandling() {
 		s.Run(tc.name, func() {
 			// Create wallet with test conversion rate
 			wallet := &wallet.Wallet{
-				ID:             fmt.Sprintf("wallet-conv-%s", s.GetUUID()),
-				CustomerID:     s.testData.customer.ID,
-				Currency:       "usd",
-				Balance:        decimal.Zero,
-				CreditBalance:  decimal.Zero,
-				ConversionRate: tc.conversionRate,
-				WalletStatus:   types.WalletStatusActive,
-				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+				ID:                  fmt.Sprintf("wallet-conv-%s", s.GetUUID()),
+				CustomerID:          s.testData.customer.ID,
+				Currency:            "usd",
+				Balance:             decimal.Zero,
+				CreditBalance:       decimal.Zero,
+				ConversionRate:      tc.conversionRate,
+				TopupConversionRate: tc.conversionRate,
+				WalletStatus:        types.WalletStatusActive,
+				BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 			}
 			s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), wallet))
 
@@ -1046,14 +1050,15 @@ func (s *WalletServiceSuite) TestWalletTransactionAmountHandling() {
 		s.Run(tc.name, func() {
 			// Create wallet with test parameters
 			walletObj := &wallet.Wallet{
-				ID:             fmt.Sprintf("wallet-tx-%s", s.GetUUID()),
-				CustomerID:     s.testData.customer.ID,
-				Currency:       "usd",
-				Balance:        tc.initialCreditBalance.Mul(tc.conversionRate),
-				CreditBalance:  tc.initialCreditBalance,
-				ConversionRate: tc.conversionRate,
-				WalletStatus:   types.WalletStatusActive,
-				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+				ID:                  fmt.Sprintf("wallet-tx-%s", s.GetUUID()),
+				CustomerID:          s.testData.customer.ID,
+				Currency:            "usd",
+				Balance:             tc.initialCreditBalance.Mul(tc.conversionRate),
+				CreditBalance:       tc.initialCreditBalance,
+				ConversionRate:      tc.conversionRate,
+				TopupConversionRate: tc.conversionRate, // Set to same as ConversionRate for tests
+				WalletStatus:        types.WalletStatusActive,
+				BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
 			}
 			s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), walletObj))
 

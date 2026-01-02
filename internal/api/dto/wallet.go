@@ -191,7 +191,7 @@ func (r *CreateWalletRequest) Validate() error {
 	}
 
 	if r.TopupConversionRate != nil {
-		if r.TopupConversionRate.LessThan(decimal.Zero) {
+		if r.TopupConversionRate.LessThanOrEqual(decimal.Zero) {
 			return ierr.NewError("topup_conversion_rate must be greater than 0").
 				WithHint("Topup conversion rate must be a positive value").
 				WithReportableDetails(map[string]interface{}{
