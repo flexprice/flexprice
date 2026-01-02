@@ -7,6 +7,9 @@ on:
         description: 'SDK Version (e.g. 1.0.5)'
         required: true
         default: ''
+  push:
+    branches:
+      - develop
   release:
     types: [published]
 
@@ -36,9 +39,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             VERSION="${{ github.event.inputs.version }}"
-          else
+          elif [ "${{ github.event_name }}" == "release" ]; then
             VERSION="${{ github.event.release.tag_name }}"
             VERSION="${VERSION#v}"
+          else
+            # Auto-generate version from date and commit for push events
+            VERSION="1.1.$(date +%Y%m%d).$(git rev-parse --short HEAD)"
           fi
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
