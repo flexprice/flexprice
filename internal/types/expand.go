@@ -53,7 +53,7 @@ var (
 	PlanExpandConfig = ExpandConfig{
 		AllowedFields: []ExpandableField{ExpandPrices, ExpandMeters, ExpandEntitlements, ExpandCreditGrant, ExpandPriceUnit},
 		NestedExpands: map[ExpandableField][]ExpandableField{
-			ExpandPrices:       {ExpandMeters},
+			ExpandPrices:       {ExpandMeters, ExpandPriceUnit},
 			ExpandEntitlements: {ExpandFeatures},
 			ExpandCreditGrant:  {ExpandFeatures},
 			ExpandPriceUnit:    {},
