@@ -19,23 +19,3 @@ targets:
             labelOverride:
                 fixedValue: Go (SDK)
             blocking: false
-    flexprice-python:
-        target: python
-        source: flexprice-api
-        output: ./api/python
-        codeSamples:
-            registry:
-                location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api-python-code-samples
-            labelOverride:
-                fixedValue: Python (SDK)
-            blocking: false
-    flexprice-typescript:
-        target: typescript
-        source: flexprice-api
-        output: ./api/javascript
-        codeSamples:
-            registry:
-                location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api-typescript-code-samples
-            labelOverride:
-                fixedValue: Typescript (SDK)
-            blocking: false

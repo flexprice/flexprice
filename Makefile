@@ -459,8 +459,8 @@ speakeasy-generate:
 	@echo "Generating SDKs with Speakeasy..."
 	@speakeasy run
 
-regenerate-sdk: speakeasy-clean swagger speakeasy-generate
-	@echo "✓ SDKs regenerated successfully"
+regenerate-sdk: go-sdk
+	@echo "✓ Go SDK regenerated (Python/JS commented out for now)"
 
 speakeasy-test:
 	@echo "Testing generated SDKs..."
@@ -474,6 +474,66 @@ speakeasy-test:
 # New unified SDK generation with Speakeasy
 speakeasy-sdk: swagger speakeasy-generate
 	@echo "✓ SDKs generated successfully with Speakeasy"
+
+# =============================================================================
+# Go SDK Generation with Speakeasy (Production Pipeline)
+# =============================================================================
+
+.PHONY: speakeasy-go-sdk speakeasy-copy-go-custom clean-go-sdk go-sdk regenerate-go-sdk
+
+# Generate Go SDK only with Speakeasy
+speakeasy-go-sdk:
+	@echo "🔨 Generating Go SDK with Speakeasy..."
+	@speakeasy run --target flexprice-go
+	@echo "✓ Go SDK generated successfully"
+
+# Copy custom files to Go SDK (post-generation)
+speakeasy-copy-go-custom:
+	@echo "📋 Copying custom files to Go SDK..."
+	@if [ ! -d "api/go" ]; then \
+		echo "❌ Error: api/go directory not found. Run 'make speakeasy-go-sdk' first"; \
+		exit 1; \
+	fi
+	@# Copy helpers.go
+	@if [ -f "api/custom/go/helpers.go" ]; then \
+		cp api/custom/go/helpers.go api/go/; \
+		echo "✓ Copied helpers.go"; \
+	else \
+		echo "⚠️  Warning: api/custom/go/helpers.go not found"; \
+	fi
+	@# Copy async.go
+	@if [ -f "api/custom/go/async.go" ]; then \
+		cp api/custom/go/async.go api/go/; \
+		echo "✓ Copied async.go"; \
+	else \
+		echo "⚠️  Warning: api/custom/go/async.go not found"; \
+	fi
+	@# Copy examples directory
+	@if [ -d "api/custom/go/examples" ]; then \
+		rm -rf api/go/examples 2>/dev/null || true; \
+		cp -r api/custom/go/examples api/go/; \
+		echo "✓ Copied examples/ directory"; \
+	else \
+		echo "⚠️  Warning: api/custom/go/examples not found"; \
+	fi
+	@echo "✅ Custom files copied successfully"
+
+# Clean only Go SDK
+clean-go-sdk:
+	@echo "🧹 Cleaning Go SDK..."
+	@rm -rf api/go
+	@echo "✓ Go SDK cleaned"
+
+# Complete Go SDK pipeline: clean → generate → copy custom files → build
+go-sdk: clean-go-sdk swagger speakeasy-go-sdk speakeasy-copy-go-custom
+	@echo "🧪 Testing Go SDK compilation..."
+	@cd api/go && go mod tidy && go build ./...
+	@echo "✅ Go SDK ready for publishing!"
+
+# Quick regeneration (no clean, faster for development)
+regenerate-go-sdk: swagger speakeasy-go-sdk speakeasy-copy-go-custom
+	@echo "✓ Go SDK regenerated"
+
 
 # Testing all SDKs
 test-speakeasy-sdks: speakeasy-test

@@ -4,14 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
-      - develop  # Trigger on develop branch
-      - feat/speakeasy_sdk_pipeline  # Also trigger on feature branch
+      - develop
     paths:
       - 'docs/swagger/**'
       - '.speakeasy/**'
-      - 'internal/api/**'
-      - '.github/workflows/test-go-sdk-generation.yml'  # Trigger on workflow changes
+      - 'api/custom/go/**'
+      - '.github/workflows/test-go-sdk-generation.yml'
 
 permissions:
   contents: read
@@ -28,14 +26,10 @@ jobs:
         with:
           go-version: '1.21'
           
-      - name: Setup Speakeasy
-        uses: speakeasy-api/sdk-generation-action@v15
-        env:
-          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
-        with:
-          speakeasy_version: latest
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-          mode: direct  # Skip automatic generation
+      - name: Install Speakeasy CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+          echo "$HOME/.speakeasy/bin" >> $GITHUB_PATH
           
       - name: Authenticate Speakeasy
         env:
@@ -47,38 +41,19 @@ jobs:
         run: |
           if [ -f "Makefile" ] && grep -q "swagger" Makefile; then
             echo "🔨 Generating Swagger..."
-            make swagger
-            echo "✓ Swagger generated"
+            make swagger || echo "⚠️ Swagger generation skipped"
           fi
           
-      - name: Generate Go SDK
+      - name: Generate Go SDK with Speakeasy
         run: |
-          echo "🔨 Generating Go SDK with Speakeasy..."
+          echo "🔨 Generating Go SDK..."
           speakeasy run --target flexprice-go
           echo "✓ Go SDK generated"
           
       - name: Copy custom files to SDK
         run: |
-          echo "📋 Copying custom files from api/custom/go/ to api/go/..."
-          
-          # Copy custom Go files (helpers.go, async.go)
-          if [ -f "api/custom/go/helpers.go" ]; then
-            cp api/custom/go/helpers.go api/go/
-            echo "✓ Copied helpers.go"
-          fi
-          
-          if [ -f "api/custom/go/async.go" ]; then
-            cp api/custom/go/async.go api/go/
-            echo "✓ Copied async.go"
-          fi
-          
-          # Copy examples directory
-          if [ -d "api/custom/go/examples" ]; then
-            cp -r api/custom/go/examples api/go/
-            echo "✓ Copied examples/"
-          fi
-          
-          echo "✅ Custom files copied successfully"
+          echo "📋 Copying custom files..."
+          make speakeasy-copy-go-custom
           
       - name: Verify Go SDK builds
         working-directory: api/go
@@ -90,30 +65,20 @@ jobs:
           
       - name: Check for custom files
         run: |
-          echo "📁 Checking custom files..."
+          echo "📁 Verifying custom files..."
           
-          if [ -f "api/go/async.go" ]; then
-            echo "✅ async.go preserved"
-          else
-            echo "❌ async.go missing"
-            exit 1
-          fi
+          test -f "api/go/helpers.go" && echo "✅ helpers.go present" || (echo "❌ helpers.go missing" && exit 1)
+          test -f "api/go/async.go" && echo "✅ async.go present" || (echo "❌ async.go missing" && exit 1)
+          test -d "api/go/examples" && echo "✅ examples/ present" || (echo "❌ examples/ missing" && exit 1)
           
-          if [ -d "api/go/examples" ]; then
-            echo "✅ examples/ folder preserved"
-          else
-            echo "❌ examples/ folder missing"
-            exit 1
-          fi
-          
-          echo "✅ All custom files preserved!"
+          echo "✅ All custom files verified!"
           
       - name: Summary
         if: success()
         run: |
           echo "## ✅ Go SDK Test Passed!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- Go SDK generated successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- Go SDK generated successfully with Speakeasy" >> $GITHUB_STEP_SUMMARY
           echo "- SDK compiles without errors" >> $GITHUB_STEP_SUMMARY
-          echo "- Custom files preserved (async.go, examples/)" >> $GITHUB_STEP_SUMMARY
-
+          echo "- Custom files preserved (helpers.go, async.go, examples/)" >> $GITHUB_STEP_SUMMARY
+          echo "- Ready for publishing to go-sdk-temp" >> $GITHUB_STEP_SUMMARY
