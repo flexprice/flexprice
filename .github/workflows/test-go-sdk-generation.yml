@@ -31,13 +31,6 @@ jobs:
       - name: Install Speakeasy CLI
         run: |
           curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
-          echo "$HOME/.speakeasy/bin" >> $GITHUB_PATH
-          
-      - name: Authenticate Speakeasy
-        env:
-          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
-        run: |
-          echo "Speakeasy will use SPEAKEASY_API_KEY environment variable"
           
       - name: Generate Swagger
         run: |
@@ -47,9 +40,11 @@ jobs:
           fi
           
       - name: Generate Go SDK with Speakeasy
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
         run: |
           echo "🔨 Generating Go SDK..."
-          speakeasy run --target flexprice-go
+          /usr/local/bin/speakeasy run --target flexprice-go
           echo "✓ Go SDK generated"
           
       - name: Copy custom files to SDK
