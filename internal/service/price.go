@@ -73,6 +73,13 @@ func (s *priceService) CreatePrice(ctx context.Context, req dto.CreatePriceReque
 		}
 	}
 
+	// Validate plan price limit for plan-scoped prices
+	if !req.SkipEntityValidation && p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+		if err := s.validatePlanPriceLimit(ctx, p.EntityID, 1); err != nil {
+			return nil, err
+		}
+	}
+
 	if err := s.PriceRepo.Create(ctx, p); err != nil {
 		return nil, err
 	}
@@ -243,6 +250,22 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 		// Validate groups if provided
 		if err := s.validateGroup(txCtx, prices); err != nil {
 			return err
+		}
+
+		// Validate plan price limits for plan-scoped prices
+		// Group prices by plan ID to validate limits
+		planPriceCounts := make(map[string]int)
+		for _, p := range prices {
+			if p.EntityType == types.PRICE_ENTITY_TYPE_PLAN {
+				planPriceCounts[p.EntityID]++
+			}
+		}
+
+		// Validate each plan's price limit
+		for planID, newPricesCount := range planPriceCounts {
+			if err := s.validatePlanPriceLimit(txCtx, planID, newPricesCount); err != nil {
+				return err
+			}
 		}
 
 		// Create prices in bulk
@@ -1188,6 +1211,73 @@ func (s *priceService) validateGroup(ctx context.Context, prices []*price.Price)
 	if err := groupService.ValidateGroupBulk(ctx, groupIDs, types.GroupEntityTypePrice); err != nil {
 		return err
 	}
+	return nil
+}
+
+// validatePlanPriceLimit validates that adding new prices won't exceed the maximum
+// allowed active prices per plan (MAX_ACTIVE_PRICES_PER_PLAN).
+// Active prices are defined using the Price.IsActive() method which checks:
+// - status is published
+// - start date is in the past (or null)
+// - end date is in the future (or null)
+//
+// Parameters:
+//   - ctx: context for the operation
+//   - planID: the ID of the plan to validate
+//   - newPricesCount: number of new prices being added
+//
+// Returns error if the total (existing + new) would exceed the limit.
+func (s *priceService) validatePlanPriceLimit(ctx context.Context, planID string, newPricesCount int) error {
+	// Fetch all prices for the plan (no filters - we'll check IsActive on each)
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{planID}).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
+
+	// Get all prices for the plan
+	prices, err := s.PriceRepo.List(ctx, priceFilter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to fetch prices for plan").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id": planID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Count active prices using the IsActive method
+	existingActivePrices := 0
+	currentTime := lo.ToPtr(time.Now().UTC())
+	for _, p := range prices {
+		if p.IsActive(currentTime) {
+			existingActivePrices++
+		}
+	}
+
+	// Calculate total after adding new prices
+	totalAfterAddition := existingActivePrices + newPricesCount
+
+	// Check if limit would be exceeded
+	if totalAfterAddition > types.MAX_ACTIVE_PRICES_PER_PLAN {
+		return ierr.NewError("plan active price limit exceeded").
+			WithHint("A plan cannot have more than 1000 active prices.").
+			WithReportableDetails(map[string]interface{}{
+				"plan_id":                   planID,
+				"existing_active_prices":    existingActivePrices,
+				"new_prices_count":          newPricesCount,
+				"total_would_be":            totalAfterAddition,
+				"max_allowed":               types.MAX_ACTIVE_PRICES_PER_PLAN,
+				"prices_to_archive_or_skip": totalAfterAddition - types.MAX_ACTIVE_PRICES_PER_PLAN,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	s.Logger.Debugw("plan price limit validation passed",
+		"plan_id", planID,
+		"existing_active_prices", existingActivePrices,
+		"new_prices_count", newPricesCount,
+		"total_after_addition", totalAfterAddition,
+		"limit", types.MAX_ACTIVE_PRICES_PER_PLAN)
+
 	return nil
 }
 
