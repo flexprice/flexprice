@@ -34,6 +34,7 @@ jobs:
         with:
           speakeasy_version: latest
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          mode: direct  # Skip automatic generation
           
       - name: Authenticate Speakeasy
         env:
