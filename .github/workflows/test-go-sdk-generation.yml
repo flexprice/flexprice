@@ -11,6 +11,7 @@ on:
       - 'docs/swagger/**'
       - '.speakeasy/**'
       - 'internal/api/**'
+      - '.github/workflows/test-go-sdk-generation.yml'  # Trigger on workflow changes
 
 permissions:
   contents: read
@@ -29,6 +30,8 @@ jobs:
           
       - name: Setup Speakeasy
         uses: speakeasy-api/sdk-generation-action@v15
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
         with:
           speakeasy_version: latest
           

@@ -29,6 +29,8 @@ jobs:
           
       - name: Setup Speakeasy
         uses: speakeasy-api/sdk-generation-action@v15
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
         with:
           speakeasy_version: latest
           
