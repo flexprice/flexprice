@@ -37,7 +37,7 @@ jobs:
         env:
           SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
         run: |
-          speakeasy auth login --api-key $SPEAKEASY_API_KEY
+          echo "Speakeasy will use SPEAKEASY_API_KEY environment variable"
           
       - name: Generate Swagger
         run: |
