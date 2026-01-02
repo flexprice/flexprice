@@ -45,6 +45,7 @@ func (s *PriceServiceSuite) SetupTest() {
 		PlanRepo:  s.planRepo,
 		AddonRepo: testutil.NewInMemoryAddonStore(),
 		SubRepo:   testutil.NewInMemorySubscriptionStore(),
+		DB:        testutil.NewMockPostgresClient(s.logger),
 		Logger:    s.logger,
 	}
 	s.priceService = NewPriceService(serviceParams)
@@ -1315,3 +1316,428 @@ func (s *PriceServiceSuite) TestDeletePrice_EdgeCases() {
 		s.Equal(types.ROUND_UP, updatedPrice.TransformQuantity.Round)
 	})
 }
+
+// TestValidatePlanPriceLimit tests the plan price limit validation functionality
+func (s *PriceServiceSuite) TestValidatePlanPriceLimit() {
+	// Create a test plan
+	testPlan := &plan.Plan{
+		ID:          "plan-limit-test",
+		Name:        "Test Plan for Limit",
+		Description: "A test plan for price limit validation",
+		BaseModel:   types.GetDefaultBaseModel(s.ctx),
+	}
+	_ = s.planRepo.Create(s.ctx, testPlan)
+
+	s.Run("TC-LIMIT-001_Within_Limit", func() {
+		// Test creating a price when well within the limit
+		amount := decimal.NewFromInt(100)
+		req := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           testPlan.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp, err := s.priceService.CreatePrice(s.ctx, req)
+		s.NoError(err, "Should create price when within limit")
+		s.NotNil(resp)
+	})
+
+	s.Run("TC-LIMIT-002_At_Limit", func() {
+		// Create a new plan for this test
+		planAtLimit := &plan.Plan{
+			ID:          "plan-at-limit",
+			Name:        "Plan At Limit",
+			Description: "Test plan at limit",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, planAtLimit)
+
+		// Create exactly MAX_ACTIVE_PRICES_PER_PLAN - 1 prices
+		for i := 0; i < types.MAX_ACTIVE_PRICES_PER_PLAN-1; i++ {
+			p := &price.Price{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+				Amount:             decimal.NewFromInt(100),
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planAtLimit.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				BaseModel:          types.GetDefaultBaseModel(s.ctx),
+			}
+			_ = s.priceRepo.Create(s.ctx, p)
+		}
+
+		// Try to create one more price (should succeed - exactly at limit)
+		amount := decimal.NewFromInt(100)
+		req := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           planAtLimit.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp, err := s.priceService.CreatePrice(s.ctx, req)
+		s.NoError(err, "Should allow creating price when exactly at limit")
+		s.NotNil(resp)
+	})
+
+	s.Run("TC-LIMIT-003_Exceeds_Limit_Single_Price", func() {
+		// Create a new plan for this test
+		planOverLimit := &plan.Plan{
+			ID:          "plan-over-limit",
+			Name:        "Plan Over Limit",
+			Description: "Test plan over limit",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, planOverLimit)
+
+		// Create exactly MAX_ACTIVE_PRICES_PER_PLAN prices
+		for i := 0; i < types.MAX_ACTIVE_PRICES_PER_PLAN; i++ {
+			p := &price.Price{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+				Amount:             decimal.NewFromInt(100),
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planOverLimit.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				BaseModel:          types.GetDefaultBaseModel(s.ctx),
+			}
+			_ = s.priceRepo.Create(s.ctx, p)
+		}
+
+		// Try to create one more price (should fail - exceeds limit)
+		amount := decimal.NewFromInt(100)
+		req := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           planOverLimit.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp, err := s.priceService.CreatePrice(s.ctx, req)
+		s.Error(err, "Should fail when exceeding limit")
+		s.Nil(resp)
+		s.Contains(err.Error(), "plan active price limit exceeded")
+	})
+
+	s.Run("TC-LIMIT-004_Bulk_Create_Within_Limit", func() {
+		// Create a new plan
+		planBulk := &plan.Plan{
+			ID:          "plan-bulk-test",
+			Name:        "Plan Bulk Test",
+			Description: "Test plan for bulk creation",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, planBulk)
+
+		// Create 10 prices in bulk (well within limit)
+		items := make([]dto.CreatePriceRequest, 10)
+		for i := 0; i < 10; i++ {
+			amount := decimal.NewFromInt(100)
+			items[i] = dto.CreatePriceRequest{
+				Amount:             &amount,
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planBulk.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+			}
+		}
+
+		req := dto.CreateBulkPriceRequest{Items: items}
+		resp, err := s.priceService.CreateBulkPrice(s.ctx, req)
+		s.NoError(err, "Should create bulk prices when within limit")
+		s.NotNil(resp)
+		s.Equal(10, len(resp.Items))
+	})
+
+	s.Run("TC-LIMIT-005_Bulk_Create_Exceeds_Limit", func() {
+		// Create a new plan
+		planBulkOver := &plan.Plan{
+			ID:          "plan-bulk-over",
+			Name:        "Plan Bulk Over Limit",
+			Description: "Test plan for bulk over limit",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, planBulkOver)
+
+		// Create MAX_ACTIVE_PRICES_PER_PLAN - 5 prices first
+		for i := 0; i < types.MAX_ACTIVE_PRICES_PER_PLAN-5; i++ {
+			p := &price.Price{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+				Amount:             decimal.NewFromInt(100),
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planBulkOver.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				BaseModel:          types.GetDefaultBaseModel(s.ctx),
+			}
+			_ = s.priceRepo.Create(s.ctx, p)
+		}
+
+		// Try to create 10 more in bulk (should fail - would exceed limit)
+		items := make([]dto.CreatePriceRequest, 10)
+		for i := 0; i < 10; i++ {
+			amount := decimal.NewFromInt(100)
+			items[i] = dto.CreatePriceRequest{
+				Amount:             &amount,
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planBulkOver.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+			}
+		}
+
+		req := dto.CreateBulkPriceRequest{Items: items}
+		resp, err := s.priceService.CreateBulkPrice(s.ctx, req)
+		s.Error(err, "Should fail when bulk creation would exceed limit")
+		s.Nil(resp)
+		s.Contains(err.Error(), "plan active price limit exceeded")
+	})
+
+	s.Run("TC-LIMIT-006_Expired_Prices_Not_Counted", func() {
+		// Create a new plan
+		planExpired := &plan.Plan{
+			ID:          "plan-with-expired",
+			Name:        "Plan With Expired Prices",
+			Description: "Test plan with expired prices",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, planExpired)
+
+		// Create 50 expired prices (should not count toward limit)
+		pastDate := time.Now().UTC().AddDate(0, 0, -30)
+		for i := 0; i < 50; i++ {
+			p := &price.Price{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+				Amount:             decimal.NewFromInt(100),
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planExpired.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				EndDate:            &pastDate, // Expired
+				BaseModel:          types.GetDefaultBaseModel(s.ctx),
+			}
+			_ = s.priceRepo.Create(s.ctx, p)
+		}
+
+		// Create one active price (should succeed since expired don't count)
+		amount := decimal.NewFromInt(100)
+		req := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           planExpired.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp, err := s.priceService.CreatePrice(s.ctx, req)
+		s.NoError(err, "Should succeed since expired prices don't count toward limit")
+		s.NotNil(resp)
+	})
+
+	s.Run("TC-LIMIT-007_Archived_Prices_Not_Counted", func() {
+		// Create a new plan
+		planArchived := &plan.Plan{
+			ID:          "plan-with-archived",
+			Name:        "Plan With Archived Prices",
+			Description: "Test plan with archived prices",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, planArchived)
+
+		// Create 50 archived prices (should not count toward limit)
+		for i := 0; i < 50; i++ {
+			baseModel := types.GetDefaultBaseModel(s.ctx)
+			baseModel.Status = types.StatusArchived
+			p := &price.Price{
+				ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+				Amount:             decimal.NewFromInt(100),
+				Currency:           "usd",
+				EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+				EntityID:           planArchived.ID,
+				Type:               types.PRICE_TYPE_FIXED,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				InvoiceCadence:     types.InvoiceCadenceAdvance,
+				BaseModel:          baseModel,
+			}
+			_ = s.priceRepo.Create(s.ctx, p)
+		}
+
+		// Create one active price (should succeed since archived don't count)
+		amount := decimal.NewFromInt(100)
+		req := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           planArchived.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp, err := s.priceService.CreatePrice(s.ctx, req)
+		s.NoError(err, "Should succeed since archived prices don't count toward limit")
+		s.NotNil(resp)
+	})
+
+	s.Run("TC-LIMIT-008_Non_Plan_Prices_Not_Affected", func() {
+		// Create prices for subscription and addon (should not be subject to limit)
+		amount := decimal.NewFromInt(100)
+		
+		// Subscription-scoped price should not be validated
+		subReq := dto.CreatePriceRequest{
+			Amount:                &amount,
+			Currency:              "usd",
+			EntityType:            types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+			EntityID:              "sub-123",
+			Type:                  types.PRICE_TYPE_FIXED,
+			BillingPeriod:         types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount:    1,
+			BillingModel:          types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:        types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:        types.InvoiceCadenceAdvance,
+			SkipEntityValidation:  true,
+		}
+
+		resp, err := s.priceService.CreatePrice(s.ctx, subReq)
+		s.NoError(err, "Subscription prices should not be subject to plan limit")
+		s.NotNil(resp)
+
+		// Addon-scoped price should not be validated
+		addonReq := dto.CreatePriceRequest{
+			Amount:                &amount,
+			Currency:              "usd",
+			EntityType:            types.PRICE_ENTITY_TYPE_ADDON,
+			EntityID:              "addon-123",
+			Type:                  types.PRICE_TYPE_FIXED,
+			BillingPeriod:         types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount:    1,
+			BillingModel:          types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:        types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:        types.InvoiceCadenceAdvance,
+			SkipEntityValidation:  true,
+		}
+
+		resp, err = s.priceService.CreatePrice(s.ctx, addonReq)
+		s.NoError(err, "Addon prices should not be subject to plan limit")
+		s.NotNil(resp)
+	})
+
+	s.Run("TC-LIMIT-009_Multiple_Plans_Independent_Limits", func() {
+		// Create two plans
+		plan1 := &plan.Plan{
+			ID:          "plan-independent-1",
+			Name:        "Plan Independent 1",
+			Description: "First independent plan",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, plan1)
+
+		plan2 := &plan.Plan{
+			ID:          "plan-independent-2",
+			Name:        "Plan Independent 2",
+			Description: "Second independent plan",
+			BaseModel:   types.GetDefaultBaseModel(s.ctx),
+		}
+		_ = s.planRepo.Create(s.ctx, plan2)
+
+		// Create prices for both plans - each should have independent limits
+		amount := decimal.NewFromInt(100)
+		
+		// Create price for plan 1
+		req1 := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           plan1.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp1, err := s.priceService.CreatePrice(s.ctx, req1)
+		s.NoError(err)
+		s.NotNil(resp1)
+
+		// Create price for plan 2
+		req2 := dto.CreatePriceRequest{
+			Amount:             &amount,
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           plan2.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+		}
+
+		resp2, err := s.priceService.CreatePrice(s.ctx, req2)
+		s.NoError(err, "Each plan should have independent price limits")
+		s.NotNil(resp2)
+	})
+}
+

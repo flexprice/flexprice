@@ -43,6 +43,11 @@ const (
 	PRICE_ENTITY_TYPE_COSTSHEET    PriceEntityType = "COSTSHEET"
 )
 
+// MAX_ACTIVE_PRICES_PER_PLAN is the maximum number of active (published and not expired)
+// prices that can be associated with a single plan. This limit prevents performance
+// degradation and ensures manageable pricing structures.
+const MAX_ACTIVE_PRICES_PER_PLAN = 1000
+
 func (p PriceEntityType) Validate() error {
 	allowed := []PriceEntityType{
 		PRICE_ENTITY_TYPE_PLAN,
