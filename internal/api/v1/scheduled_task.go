@@ -257,8 +257,8 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.ScheduleUpdateBillingPeriodRequest true "Schedule Update Billing Period Request"
-// @Success 200 {object} dto.ScheduleUpdateBillingPeriodResponse
+// @Param request body object true "Schedule Update Billing Period Request"
+// @Success 200 {object} object
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /tasks/scheduled/schedule-update-billing-period [post]

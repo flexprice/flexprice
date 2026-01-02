@@ -1,0 +1,80 @@
+overlay: 1.0.0
+info:
+  title: FlexPrice API Overlays
+  version: 0.0.0
+actions:
+  # Add retries configuration for GET operations
+  - target: $.paths.*.get
+    update:
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+          - 429
+        retryConnectionErrors: true
+  
+  # Add retries configuration for POST operations
+  - target: $.paths.*.post
+    update:
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+          - 429
+        retryConnectionErrors: true
+  
+  # Add retries configuration for PUT operations
+  - target: $.paths.*.put
+    update:
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+          - 429
+        retryConnectionErrors: true
+  
+  # Add retries configuration for PATCH operations
+  - target: $.paths.*.patch
+    update:
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+          - 429
+        retryConnectionErrors: true
+  
+  # Add retries configuration for DELETE operations
+  - target: $.paths.*.delete
+    update:
+      x-speakeasy-retries:
+        strategy: backoff
+        backoff:
+          initialInterval: 500
+          maxInterval: 60000
+          maxElapsedTime: 3600000
+          exponent: 1.5
+        statusCodes:
+          - 5XX
+          - 429
+        retryConnectionErrors: true
+

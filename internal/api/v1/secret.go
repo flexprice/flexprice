@@ -133,7 +133,7 @@ func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 // @Success 201 {object} dto.SecretResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /secrets/integrations/{provider} [post]
+// @Router /secrets/integrations/create/{provider} [post]
 func (h *SecretHandler) CreateIntegration(c *gin.Context) {
 	provider := types.SecretProvider(c.Param("provider"))
 	var req dto.CreateIntegrationRequest
@@ -167,7 +167,7 @@ func (h *SecretHandler) CreateIntegration(c *gin.Context) {
 // @Success 200 {object} dto.SecretResponse
 // @Failure 404 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /secrets/integrations/{provider} [get]
+// @Router /secrets/integrations/by-provider/{provider} [get]
 func (h *SecretHandler) GetIntegration(c *gin.Context) {
 	provider := types.SecretProvider(c.Param("provider"))
 	filter := &types.SecretFilter{

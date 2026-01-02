@@ -1,0 +1,179 @@
+configVersion: 2.0.0
+generation:
+  devContainers:
+    enabled: true
+    schemaPath: ""
+  sdkClassName: FlexPrice
+  maintainOpenAPIOrder: true
+  usageSnippets:
+    optionalPropertyRendering: withExample
+    sdkInitStyle: constructor
+  useClassNamesForArrayFields: true
+  fixes:
+    nameResolutionDec2023: true
+    nameResolutionFeb2025: true
+    parameterOrderingFeb2024: true
+    requestResponseComponentNamesFeb2024: true
+    securityFeb2025: true
+    sharedErrorComponentsApr2025: true
+  auth:
+    oAuth2ClientCredentialsEnabled: true
+    oAuth2PasswordEnabled: true
+    hoistGlobalSecurity: true
+  inferSSEOverload: true
+  sdkHooksConfigAccess: true
+  schemas:
+    allOfMergeStrategy: shallowMerge
+  requestBodyFieldName: body
+  persistentEdits:
+    enabled: "true"
+  tests:
+    generateTests: false
+    generateNewTests: true
+    skipResponseBodyAssertions: false
+go:
+  version: 1.1.2
+  additionalDependencies: {}
+  baseErrorName: FlexPriceError
+  clientServerStatusCodesAsErrors: true
+  defaultErrorName: APIError
+  flattenGlobalSecurity: true
+  forwardCompatibleEnumsByDefault: true
+  imports:
+    option: openapi
+    paths:
+      callbacks: models/callbacks
+      errors: models/sdkerrors
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
+  includeEmptyObjects: true
+  inferUnionDiscriminators: true
+  inputModelSuffix: Input
+  maxMethodParams: 4
+  methodArguments: require-security-and-request
+  modulePath: ""
+  multipartArrayFormat: standard
+  nullableOptionalWrapper: true
+  outputModelSuffix: Output
+  packageName: github.com/flexprice/go-sdk
+  respectRequiredFields: false
+  responseFormat: flat
+  sdkPackageName: ""
+  templateVersion: v2
+  unionStrategy: populated-fields
+python:
+  version: 1.1.2
+  additionalDependencies:
+    dev: {}
+    main: {}
+  allowedRedefinedBuiltins:
+    - id
+    - object
+    - input
+    - credits
+  asyncMode: both
+  author: FlexPrice
+  authors:
+    - Speakeasy
+  baseErrorName: FlexPriceError
+  clientServerStatusCodesAsErrors: true
+  constFieldCasing: normal
+  defaultErrorName: FlexPriceDefaultError
+  description: Official Python SDK for FlexPrice API
+  disableLinting: true
+  enableCustomCodeRegions: false
+  enumFormat: union
+  fixFlags:
+    asyncPaginationSep2025: true
+    responseRequiredSep2024: true
+  flattenGlobalSecurity: true
+  flattenRequests: true
+  flatteningOrder: parameters-first
+  imports:
+    option: openapi
+    paths:
+      callbacks: models/callbacks
+      errors: models/errors
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
+  inferUnionDiscriminators: true
+  inputModelSuffix: Input
+  license: Apache-2.0
+  maxMethodParams: 4
+  methodArguments: require-security-and-request
+  moduleName: ""
+  multipartArrayFormat: standard
+  outputModelSuffix: Output
+  packageManager: uv
+  packageName: flexprice
+  preApplyUnionDiscriminators: true
+  pytestFilterWarnings: []
+  pytestTimeout: 0
+  responseFormat: flat
+  sseFlatResponse: false
+  templateVersion: v2
+typescript:
+  version: 1.0.6
+  acceptHeaderEnum: false
+  additionalDependencies:
+    dependencies: {}
+    devDependencies: {}
+    peerDependencies: {}
+  additionalPackageJSON: {}
+  additionalScripts: {}
+  alwaysIncludeInboundAndOutbound: false
+  author: FlexPrice
+  baseErrorName: FlexPriceError
+  clientServerStatusCodesAsErrors: true
+  constFieldsAlwaysOptional: false
+  defaultErrorName: FlexPriceDefaultError
+  enableCustomCodeRegions: false
+  enableMCPServer: false
+  enableReactQuery: false
+  enumFormat: union
+  exportZodModelNamespace: false
+  flattenGlobalSecurity: true
+  flatteningOrder: parameters-first
+  formStringArrayEncodeMode: array
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-only
+  generateExamples: true
+  imports:
+    option: openapi
+    paths:
+      callbacks: models/callbacks
+      errors: models/errors
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
+  inferUnionDiscriminators: true
+  inputModelSuffix: input
+  jsonpath: rfc9535
+  laxMode: lax
+  maxMethodParams: 4
+  methodArguments: require-security-and-request
+  modelPropertyCasing: camel
+  moduleFormat: commonjs
+  multipartArrayFormat: standard
+  outputModelSuffix: output
+  packageJSON:
+    exports:
+      .:
+        import: ./dist/index.js
+        require: ./dist/index.cjs
+        types: ./dist/index.d.ts
+    private: false
+    publishConfig:
+      access: public
+    type: module
+  packageName: '@flexprice/sdk'
+  preApplyUnionDiscriminators: true
+  responseFormat: flat
+  sseFlatResponse: false
+  templateVersion: v2
+  unionStrategy: populated-fields
+  usageSDKInitImports: []
+  useIndexModules: true
+  zodVersion: v4-mini

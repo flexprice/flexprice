@@ -297,7 +297,7 @@ func (h *PriceUnitHandler) GetPriceUnitByCode(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter body priceunit.PriceUnitFilter true "Filter"
+// @Param filter body types.Filter true "Filter"
 // @Success 200 {object} dto.ListPriceUnitsResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse

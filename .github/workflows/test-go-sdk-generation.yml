@@ -1,0 +1,91 @@
+name: Test Go SDK Generation (No Publish)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop  # Trigger on develop branch
+      - feat/speakeasy_sdk_pipeline  # Also trigger on feature branch
+    paths:
+      - 'docs/swagger/**'
+      - '.speakeasy/**'
+      - 'internal/api/**'
+
+permissions:
+  contents: read
+
+jobs:
+  test-go-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+          
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          
+      - name: Setup Speakeasy
+        uses: speakeasy-api/sdk-generation-action@v15
+        with:
+          speakeasy_version: latest
+          
+      - name: Authenticate Speakeasy
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+        run: |
+          speakeasy auth login --api-key $SPEAKEASY_API_KEY
+          
+      - name: Generate Swagger
+        run: |
+          if [ -f "Makefile" ] && grep -q "swagger" Makefile; then
+            echo "🔨 Generating Swagger..."
+            make swagger
+            echo "✓ Swagger generated"
+          fi
+          
+      - name: Generate Go SDK
+        run: |
+          echo "🔨 Generating Go SDK with Speakeasy..."
+          speakeasy run --target flexprice-go
+          echo "✓ Go SDK generated"
+          
+      - name: Verify Go SDK builds
+        working-directory: api/go
+        run: |
+          echo "🧪 Testing Go SDK compilation..."
+          go mod tidy
+          go build ./...
+          echo "✅ Go SDK compiles successfully!"
+          
+      - name: Check for custom files
+        run: |
+          echo "📁 Checking custom files..."
+          
+          if [ -f "api/go/async.go" ]; then
+            echo "✅ async.go preserved"
+          else
+            echo "❌ async.go missing"
+            exit 1
+          fi
+          
+          if [ -d "api/go/examples" ]; then
+            echo "✅ examples/ folder preserved"
+          else
+            echo "❌ examples/ folder missing"
+            exit 1
+          fi
+          
+          echo "✅ All custom files preserved!"
+          
+      - name: Summary
+        if: success()
+        run: |
+          echo "## ✅ Go SDK Test Passed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Go SDK generated successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- SDK compiles without errors" >> $GITHUB_STEP_SUMMARY
+          echo "- Custom files preserved (async.go, examples/)" >> $GITHUB_STEP_SUMMARY
+

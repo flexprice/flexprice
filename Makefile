@@ -261,9 +261,9 @@ install-openapi-generator:
 generate-sdk: generate-go-sdk generate-python-sdk generate-javascript-sdk
 	@echo "All SDKs generated successfully with custom files"
 
-# Regenerate all SDKs (clean + generate)
-regenerate-sdk: clean-sdk generate-sdk
-	@echo "All SDKs regenerated successfully with custom files"
+# Regenerate all SDKs (clean + generate) - DEPRECATED: Use speakeasy-regenerate-sdk
+# regenerate-sdk: clean-sdk generate-sdk
+# 	@echo "All SDKs regenerated successfully with custom files"
 
 # Update swagger and regenerate all SDKs
 update-sdk: swagger regenerate-sdk
@@ -416,3 +416,80 @@ test-github-workflow:
 	 --action-offline-mode
 
 .PHONY: sdk-publish-js sdk-publish-py sdk-publish-go sdk-publish-all sdk-publish-all-with-version test-github-workflow show-custom-files help-sdk
+
+# =============================================================================
+# Speakeasy SDK Generation (New Pipeline)
+# =============================================================================
+
+.PHONY: speakeasy-install speakeasy-generate speakeasy-validate speakeasy-test
+
+speakeasy-install:
+	@echo "Installing Speakeasy CLI..."
+	@brew install speakeasy-api/homebrew-tap/speakeasy || curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+	@speakeasy --version
+
+speakeasy-validate:
+	@echo "Validating OpenAPI spec..."
+	@speakeasy validate openapi --schema docs/swagger/swagger-3-0.json
+
+speakeasy-clean:
+	@echo "Cleaning generated SDK files..."
+	@echo "Removing Go SDK generated files..."
+	@find api/go -type f -name "*.go" ! -path "*/examples/*" ! -path "*/custom/*" ! -name "helpers.go" -delete 2>/dev/null || true
+	@find api/go -type d -name ".speakeasy" -exec rm -rf {} + 2>/dev/null || true
+	@rm -f api/go/go.mod api/go/go.sum 2>/dev/null || true
+	@rm -rf api/go/.devcontainer api/go/.openapi-generator api/go/.travis.yml 2>/dev/null || true
+	@rm -rf api/go/docs api/go/models api/go/internal api/go/types api/go/optionalnullable api/go/retry api/go/speakeasyusagegen 2>/dev/null || true
+	@rm -f api/go/*.md api/go/.git* 2>/dev/null || true
+	@echo "Removing Python SDK generated files..."
+	@find api/python -type f -name "*.py" ! -path "*/examples/*" ! -name "async_utils.py" -delete 2>/dev/null || true
+	@rm -rf api/python/src api/python/dist api/python/build api/python/*.egg-info 2>/dev/null || true
+	@rm -f api/python/setup.py api/python/pyproject.toml api/python/poetry.lock 2>/dev/null || true
+	@rm -rf api/python/.devcontainer api/python/docs 2>/dev/null || true
+	@rm -f api/python/*.md api/python/.git* 2>/dev/null || true
+	@echo "Removing JavaScript SDK generated files..."
+	@find api/javascript/src -type f -name "*.ts" ! -path "*/apis/CustomerPortal.ts" -delete 2>/dev/null || true
+	@rm -rf api/javascript/dist api/javascript/node_modules 2>/dev/null || true
+	@rm -f api/javascript/package*.json api/javascript/tsconfig*.json 2>/dev/null || true
+	@rm -rf api/javascript/.devcontainer api/javascript/docs 2>/dev/null || true
+	@rm -f api/javascript/*.md api/javascript/.git* 2>/dev/null || true
+	@echo "✓ SDK cleanup complete"
+
+speakeasy-generate:
+	@echo "Generating SDKs with Speakeasy..."
+	@speakeasy run
+
+regenerate-sdk: speakeasy-clean swagger speakeasy-generate
+	@echo "✓ SDKs regenerated successfully"
+
+speakeasy-test:
+	@echo "Testing generated SDKs..."
+	@echo "Testing JavaScript SDK..."
+	@cd api/javascript && npm ci && npm run build && npm test
+	@echo "Testing Python SDK..."
+	@cd api/python && pip install -e . && pytest
+	@echo "Testing Go SDK..."
+	@cd api/go && go mod tidy && go test ./...
+
+# New unified SDK generation with Speakeasy
+speakeasy-sdk: swagger speakeasy-generate
+	@echo "✓ SDKs generated successfully with Speakeasy"
+
+# Testing all SDKs
+test-speakeasy-sdks: speakeasy-test
+	@echo "✓ All SDK tests passed"
+
+# Migration helpers
+speakeasy-migrate:
+	@echo "Running Speakeasy migration..."
+	@./scripts/migrate-to-speakeasy.sh
+
+speakeasy-compare:
+	@echo "Comparing old and new SDK structures..."
+	@./scripts/compare-sdks.sh
+
+speakeasy-archive-old:
+	@echo "Archiving old OpenAPI Generator pipeline..."
+	@./scripts/archive-old-pipeline.sh
+
+.PHONY: speakeasy-sdk test-speakeasy-sdks speakeasy-migrate speakeasy-compare speakeasy-archive-old

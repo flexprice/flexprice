@@ -1020,6 +1020,12 @@ definitions:
         description: parent_customer_id is the internal FlexPrice ID of the parent
           customer
         type: string
+      skip_onboarding_workflow:
+        description: |-
+          skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered
+          This is used internally when a customer is created via a workflow to prevent infinite loops
+          Default: false
+        type: boolean
       tax_rate_overrides:
         description: tax_rate_overrides contains tax rate configurations to be linked
           to this customer
@@ -1031,6 +1037,8 @@ definitions:
     type: object
   dto.CreateEntitlementRequest:
     properties:
+      end_date:
+        type: string
       entity_id:
         type: string
       entity_type:
@@ -1046,6 +1054,8 @@ definitions:
       parent_entitlement_id:
         type: string
       plan_id:
+        type: string
+      start_date:
         type: string
       static_value:
         type: string
@@ -1521,19 +1531,29 @@ definitions:
   dto.CreatePriceUnitRequest:
     properties:
       base_currency:
+        description: base_currency  is the currency that the price unit is based on
         type: string
       code:
         type: string
       conversion_rate:
+        description: |-
+          ConversionRate defines the exchange rate from this price unit to the base currency.
+          This rate is used to convert amounts in the custom price unit to the base currency for storage and billing.
+
+          Conversion formula:
+            price_unit_amount * conversion_rate = base_currency_amount
+
+          Example:
+            If conversion_rate = "0.01" and base_currency = "usd":
+            100 price_unit tokens * 0.01 = 1.00 USD
+
+          Note: Rounding precision is determined by the base currency (e.g., USD uses 2 decimal places, JPY uses 0).
         type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
       name:
         type: string
-      precision:
-        maximum: 8
-        minimum: 0
-        type: integer
       symbol:
-        maxLength: 10
         type: string
     required:
     - base_currency
@@ -1541,6 +1561,37 @@ definitions:
     - conversion_rate
     - name
     - symbol
+    type: object
+  dto.CreatePriceUnitResponse:
+    properties:
+      base_currency:
+        type: string
+      code:
+        type: string
+      conversion_rate:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      environment_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      symbol:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
     type: object
   dto.CreateScheduledTaskRequest:
     properties:
@@ -1841,12 +1892,10 @@ definitions:
           alert_enabled is the flag to enable alerts for the wallet
           defaults to true, can be explicitly set to false to disable alerts
         type: boolean
-      auto_topup_amount:
-        type: string
-      auto_topup_min_balance:
-        type: string
-      auto_topup_trigger:
-        $ref: '#/definitions/types.AutoTopupTrigger'
+      auto_topup:
+        allOf:
+        - $ref: '#/definitions/types.AutoTopup'
+        description: auto top-up object
       config:
         $ref: '#/definitions/types.WalletConfig'
       conversion_rate:
@@ -1887,6 +1936,13 @@ definitions:
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
+        type: string
+      price_unit:
+        description: |-
+          price_unit is the code of the price unit to use for wallet creation
+          If provided, the price unit will be used to set the currency and conversion rate of the wallet:
+          - currency: set to price unit's base_currency
+          - conversion_rate: set to price unit's conversion_rate
         type: string
       wallet_type:
         $ref: '#/definitions/types.WalletType'
@@ -1948,7 +2004,11 @@ definitions:
         type: string
       created_by:
         type: string
+      credit_grant_anchor:
+        type: string
       credits:
+        type: string
+      end_date:
         type: string
       environment_id:
         type: string
@@ -1974,6 +2034,8 @@ definitions:
         type: integer
       scope:
         $ref: '#/definitions/types.CreditGrantScope'
+      start_date:
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
@@ -2251,6 +2313,8 @@ definitions:
         type: string
       display_order:
         type: integer
+      end_date:
+        type: string
       entity_id:
         type: string
       entity_type:
@@ -2275,6 +2339,8 @@ definitions:
         $ref: '#/definitions/dto.PlanResponse'
       plan_id:
         description: 'TODO: Remove this once we have a proper entitlement entity type'
+        type: string
+      start_date:
         type: string
       static_value:
         type: string
@@ -3890,10 +3956,9 @@ definitions:
           6, 12
         type: integer
       conversion_rate:
-        description: |-
-          ConversionRate is the rate of the price unit to the base currency
-          For BTC: 1 BTC = 100000000 USD
-        type: string
+        description: ConversionRate is the conversion rate of the price unit to the
+          fiat currency
+        type: number
       created_at:
         type: string
       created_by:
@@ -3914,9 +3979,7 @@ definitions:
         description: DisplayName is the name of the price
         type: string
       display_price_unit_amount:
-        description: |-
-          DisplayPriceUnitAmount is the formatted amount with price unit symbol
-          For BTC: 0.00000001 BTC
+        description: DisplayPriceUnitAmount is the formatted amount of the price unit
         type: string
       end_date:
         description: EndDate is the end date of the price
@@ -3961,27 +4024,24 @@ definitions:
       plan:
         $ref: '#/definitions/dto.PlanResponse'
       price_unit:
-        description: |-
-          PriceUnit 3 digit ISO currency code in lowercase ex btc
-          For BTC: btc
+        description: PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
         type: string
       price_unit_amount:
-        description: |-
-          PriceUnitAmount is the amount stored in price unit
-          For BTC: 0.00000001 means 0.00000001 BTC
-        type: string
+        description: PriceUnitAmount is the amount of the price unit
+        type: number
       price_unit_id:
-        description: PriceUnitID is the id of the price unit
+        description: PriceUnitID is the id of the price unit (for CUSTOM type)
         type: string
       price_unit_tiers:
-        description: PriceUnitTiers are the tiers for the price unit
+        description: PriceUnitTiers are the tiers for the price unit when BillingModel
+          is TIERED
         items:
           $ref: '#/definitions/price.PriceTier'
         type: array
       price_unit_type:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
-        description: PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
+        description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       pricing_unit:
         $ref: '#/definitions/dto.PriceUnitResponse'
       start_date:
@@ -4040,10 +4100,10 @@ definitions:
         type: string
       id:
         type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
       name:
         type: string
-      precision:
-        type: integer
       status:
         $ref: '#/definitions/types.Status'
       symbol:
@@ -5400,16 +5460,9 @@ definitions:
     type: object
   dto.UpdatePriceUnitRequest:
     properties:
-      conversion_rate:
-        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
       name:
-        type: string
-      precision:
-        maximum: 8
-        minimum: 0
-        type: integer
-      symbol:
-        maxLength: 10
         type: string
     type: object
   dto.UpdateScheduledTaskRequest:
@@ -5509,12 +5562,8 @@ definitions:
         $ref: '#/definitions/dto.AlertConfig'
       alert_enabled:
         type: boolean
-      auto_topup_amount:
-        type: string
-      auto_topup_min_balance:
-        type: string
-      auto_topup_trigger:
-        $ref: '#/definitions/types.AutoTopupTrigger'
+      auto_topup:
+        $ref: '#/definitions/types.AutoTopup'
       config:
         $ref: '#/definitions/types.WalletConfig'
       description:
@@ -5613,6 +5662,13 @@ definitions:
     type: object
   dto.UsageAnalyticPoint:
     properties:
+      computed_commitment_utilized_amount:
+        description: Commitment breakdown (only populated for windowed commitments)
+        type: string
+      computed_overage_amount:
+        type: string
+      computed_true_up_amount:
+        type: string
       cost:
         type: string
       event_count:
@@ -5677,12 +5733,8 @@ definitions:
         type: boolean
       alert_state:
         type: string
-      auto_topup_amount:
-        type: string
-      auto_topup_min_balance:
-        type: string
-      auto_topup_trigger:
-        $ref: '#/definitions/types.AutoTopupTrigger'
+      auto_topup:
+        $ref: '#/definitions/types.AutoTopup'
       balance:
         type: string
       balance_updated_at:
@@ -5690,6 +5742,11 @@ definitions:
       config:
         $ref: '#/definitions/types.WalletConfig'
       conversion_rate:
+        description: |-
+          amount in the currency =  number of credits * conversion_rate
+          ex if conversion_rate is 1, then 1 USD = 1 credit
+          ex if conversion_rate is 2, then 1 USD = 0.5 credits
+          ex if conversion_rate is 0.5, then 1 USD = 2 credits
         type: string
       created_at:
         type: string
@@ -5740,12 +5797,8 @@ definitions:
         type: boolean
       alert_state:
         type: string
-      auto_topup_amount:
-        type: string
-      auto_topup_min_balance:
-        type: string
-      auto_topup_trigger:
-        $ref: '#/definitions/types.AutoTopupTrigger'
+      auto_topup:
+        $ref: '#/definitions/types.AutoTopup'
       balance:
         type: string
       config:
@@ -6178,8 +6231,9 @@ definitions:
         description: Divide quantity by this number
         type: integer
       round:
+        allOf:
+        - $ref: '#/definitions/types.RoundType'
         description: up or down
-        type: string
     type: object
   price.Price:
     properties:
@@ -6200,10 +6254,9 @@ definitions:
           6, 12
         type: integer
       conversion_rate:
-        description: |-
-          ConversionRate is the rate of the price unit to the base currency
-          For BTC: 1 BTC = 100000000 USD
-        type: string
+        description: ConversionRate is the conversion rate of the price unit to the
+          fiat currency
+        type: number
       created_at:
         type: string
       created_by:
@@ -6224,9 +6277,7 @@ definitions:
         description: DisplayName is the name of the price
         type: string
       display_price_unit_amount:
-        description: |-
-          DisplayPriceUnitAmount is the formatted amount with price unit symbol
-          For BTC: 0.00000001 BTC
+        description: DisplayPriceUnitAmount is the formatted amount of the price unit
         type: string
       end_date:
         description: EndDate is the end date of the price
@@ -6265,27 +6316,24 @@ definitions:
           lineage tracking)
         type: string
       price_unit:
-        description: |-
-          PriceUnit 3 digit ISO currency code in lowercase ex btc
-          For BTC: btc
+        description: PriceUnit is the code of the price unit (e.g., 'btc', 'eth')
         type: string
       price_unit_amount:
-        description: |-
-          PriceUnitAmount is the amount stored in price unit
-          For BTC: 0.00000001 means 0.00000001 BTC
-        type: string
+        description: PriceUnitAmount is the amount of the price unit
+        type: number
       price_unit_id:
-        description: PriceUnitID is the id of the price unit
+        description: PriceUnitID is the id of the price unit (for CUSTOM type)
         type: string
       price_unit_tiers:
-        description: PriceUnitTiers are the tiers for the price unit
+        description: PriceUnitTiers are the tiers for the price unit when BillingModel
+          is TIERED
         items:
           $ref: '#/definitions/price.PriceTier'
         type: array
       price_unit_type:
         allOf:
         - $ref: '#/definitions/types.PriceUnitType'
-        description: PriceUnitType is the type of the price unit- Fiat, Custom, Crypto
+        description: PriceUnitType is the type of the price unit (FIAT, CUSTOM)
       start_date:
         description: StartDate is the start date of the price
         type: string
@@ -6337,39 +6385,9 @@ definitions:
         description: Divide quantity by this number
         type: integer
       round:
+        allOf:
+        - $ref: '#/definitions/types.RoundType'
         description: up or down
-        type: string
-    type: object
-  priceunit.PriceUnitFilter:
-    properties:
-      environment_id:
-        description: EnvironmentID filters by specific environment ID
-        type: string
-      filters:
-        description: Filters allows complex filtering based on multiple fields
-        items:
-          $ref: '#/definitions/types.FilterCondition'
-        type: array
-      queryFilter:
-        allOf:
-        - $ref: '#/definitions/types.QueryFilter'
-        description: QueryFilter contains pagination and basic query parameters
-      sort:
-        description: Sort allows sorting by multiple fields
-        items:
-          $ref: '#/definitions/types.SortCondition'
-        type: array
-      status:
-        allOf:
-        - $ref: '#/definitions/types.Status'
-        description: Status filters by price unit status
-      tenant_id:
-        description: TenantID filters by specific tenant ID
-        type: string
-      timeRangeFilter:
-        allOf:
-        - $ref: '#/definitions/types.TimeRangeFilter'
-        description: TimeRangeFilter allows filtering by time periods
     type: object
   subscription.SubscriptionLineItem:
     properties:
@@ -6767,14 +6785,17 @@ definitions:
     - ApplicationStatusPending
     - ApplicationStatusSkipped
     - ApplicationStatusCancelled
-  types.AutoTopupTrigger:
-    enum:
-    - disabled
-    - balance_below_threshold
-    type: string
-    x-enum-varnames:
-    - AutoTopupTriggerDisabled
-    - AutoTopupTriggerBalanceBelowThreshold
+  types.AutoTopup:
+    properties:
+      amount:
+        type: number
+      enabled:
+        type: boolean
+      invoicing:
+        type: boolean
+      threshold:
+        type: number
+    type: object
   types.BillingCadence:
     enum:
     - RECURRING
@@ -7295,6 +7316,21 @@ definitions:
     x-enum-varnames:
     - FileTypeCSV
     - FileTypeJSON
+  types.Filter:
+    properties:
+      expand:
+        type: string
+      limit:
+        type: integer
+      offset:
+        type: integer
+      order:
+        type: string
+      sort:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+    type: object
   types.FilterCondition:
     properties:
       data_type:
@@ -7792,6 +7828,14 @@ definitions:
     - ResumeModeImmediate
     - ResumeModeScheduled
     - ResumeModeAuto
+  types.RoundType:
+    enum:
+    - up
+    - down
+    type: string
+    x-enum-varnames:
+    - ROUND_UP
+    - ROUND_DOWN
   types.S3CompressionType:
     enum:
     - none
@@ -7864,6 +7908,7 @@ definitions:
     - ScheduledTaskEntityTypeCreditUsage
   types.ScheduledTaskInterval:
     enum:
+    - 15MIN
     - custom
     - hourly
     - daily
@@ -7871,10 +7916,12 @@ definitions:
     x-enum-comments:
       ScheduledTaskIntervalCustom: 10 minutes for testing
     x-enum-descriptions:
+    - ""
     - 10 minutes for testing
     - ""
     - ""
     x-enum-varnames:
+    - ScheduledTaskIntervalEvery15Minutes
     - ScheduledTaskIntervalCustom
     - ScheduledTaskIntervalHourly
     - ScheduledTaskIntervalDaily
@@ -8038,10 +8085,7 @@ definitions:
     - paused
     - cancelled
     - incomplete
-    - incomplete_expired
-    - past_due
     - trialing
-    - unpaid
     - draft
     type: string
     x-enum-varnames:
@@ -8049,10 +8093,7 @@ definitions:
     - SubscriptionStatusPaused
     - SubscriptionStatusCancelled
     - SubscriptionStatusIncomplete
-    - SubscriptionStatusIncompleteExpired
-    - SubscriptionStatusPastDue
     - SubscriptionStatusTrialing
-    - SubscriptionStatusUnpaid
     - SubscriptionStatusDraft
   types.SyncConfig:
     properties:
@@ -8095,47 +8136,6 @@ definitions:
     x-enum-varnames:
     - TaskTypeImport
     - TaskTypeExport
-  types.TaxAssociationFilter:
-    properties:
-      auto_apply:
-        type: boolean
-      currency:
-        type: string
-      end_time:
-        type: string
-      entity_id:
-        type: string
-      entity_type:
-        $ref: '#/definitions/types.TaxRateEntityType'
-      expand:
-        type: string
-      limit:
-        maximum: 1000
-        minimum: 1
-        type: integer
-      offset:
-        minimum: 0
-        type: integer
-      order:
-        enum:
-        - asc
-        - desc
-        type: string
-      sort:
-        type: string
-      start_time:
-        type: string
-      status:
-        $ref: '#/definitions/types.Status'
-      tax_association_ids:
-        items:
-          type: string
-        type: array
-      tax_rate_ids:
-        items:
-          type: string
-        type: array
-    type: object
   types.TaxRateEntityType:
     enum:
     - customer
@@ -10434,15 +10434,15 @@ paths:
       summary: Get wallets by customer ID
       tags:
       - Wallets
-  /customers/lookup/{lookup_key}:
+  /customers/external/{external_id}:
     get:
       consumes:
       - application/json
-      description: Get a customer by lookup key (external_id)
+      description: Get a customer by external id
       parameters:
-      - description: Customer Lookup Key (external_id)
+      - description: Customer External ID
         in: path
-        name: lookup_key
+        name: external_id
         required: true
         type: string
       produces:
@@ -10466,7 +10466,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Get a customer by lookup key
+      summary: Get a customer by external id
       tags:
       - Customers
   /customers/search:
@@ -13395,7 +13395,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.PriceUnitResponse'
+            $ref: '#/definitions/dto.CreatePriceUnitResponse'
         "400":
           description: Bad Request
           schema:
@@ -13409,8 +13409,7 @@ paths:
     delete:
       consumes:
       - application/json
-      description: Archive an existing price unit. The unit will be marked as archived
-        and cannot be used in new prices.
+      description: Delete an existing price unit.
       parameters:
       - description: Price unit ID
         in: path
@@ -13434,7 +13433,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Archive a price unit
+      summary: Delete a price unit
       tags:
       - Price Units
     get:
@@ -13458,8 +13457,8 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
+        "404":
+          description: Not Found
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
@@ -13470,9 +13469,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Update an existing price unit with the provided details. Only name,
-        symbol, precision, and conversion_rate can be updated. Status changes are
-        not allowed.
+      description: Update an existing price unit with the provided details. Only name
+        and metadata can be updated.
       parameters:
       - description: Price unit ID
         in: path
@@ -13527,6 +13525,10 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
         "500":
           description: Internal Server Error
           schema:
@@ -13547,7 +13549,7 @@ paths:
         name: filter
         required: true
         schema:
-          $ref: '#/definitions/priceunit.PriceUnitFilter'
+          $ref: '#/definitions/types.Filter'
       produces:
       - application/json
       responses:
@@ -13752,7 +13754,7 @@ paths:
       summary: Delete an integration
       tags:
       - Integrations
-  /secrets/integrations/{provider}:
+  /secrets/integrations/by-provider/{provider}:
     get:
       consumes:
       - application/json
@@ -13783,6 +13785,7 @@ paths:
       summary: Get integration details
       tags:
       - Integrations
+  /secrets/integrations/create/{provider}:
     post:
       consumes:
       - application/json
@@ -13942,10 +13945,7 @@ paths:
           - paused
           - cancelled
           - incomplete
-          - incomplete_expired
-          - past_due
           - trialing
-          - unpaid
           - draft
           type: string
         name: subscription_status
@@ -15094,18 +15094,56 @@ paths:
       summary: Trigger force run
       tags:
       - ScheduledTasks
+  /tasks/scheduled/schedule-update-billing-period:
+    post:
+      consumes:
+      - application/json
+      description: Schedule an update billing period workflow
+      parameters:
+      - description: Schedule Update Billing Period Request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Schedule update billing period
+      tags:
+      - ScheduledTasks
   /taxes/associations:
     get:
       consumes:
       - application/json
       description: List tax associations
       parameters:
-      - description: Tax Association Filter
-        in: body
-        name: tax_association
-        required: true
-        schema:
-          $ref: '#/definitions/types.TaxAssociationFilter'
+      - description: Entity Type
+        in: query
+        name: entity_type
+        type: string
+      - description: Entity ID
+        in: query
+        name: entity_id
+        type: string
+      - description: Tax Rate ID
+        in: query
+        name: tax_rate_id
+        type: string
       produces:
       - application/json
       responses:
