@@ -126,7 +126,6 @@ func (WalletTransaction) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "numeric(10,5)",
 			}).
-			// TODO: remove this after migration
 			Optional().
 			Nillable().
 			Immutable(),
