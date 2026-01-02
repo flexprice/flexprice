@@ -9,7 +9,9 @@ on:
       - 'docs/swagger/**'
       - '.speakeasy/**'
       - 'api/custom/go/**'
+      - 'Makefile'
       - '.github/workflows/test-go-sdk-generation.yml'
+      - '.github/workflows/publish-go-sdk.yml'
 
 permissions:
   contents: read
