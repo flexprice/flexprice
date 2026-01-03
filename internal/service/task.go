@@ -13,6 +13,8 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type TaskService interface {
@@ -216,6 +218,13 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 		processor = &CustomersChunkProcessor{
 			customerService: customerSvc,
 			logger:          s.Logger,
+		}
+	case types.EntityTypeFeatures:
+		// Create feature service for chunk processor
+		featureSvc := NewFeatureService(s.ServiceParams)
+		processor = &FeaturesChunkProcessor{
+			featureService: featureSvc,
+			logger:         s.Logger,
 		}
 	default:
 		return ierr.NewError("unsupported entity type").
@@ -697,5 +706,232 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 	}
 
 	p.logger.Info("created new customer", "external_id", customerReq.ExternalID)
+	return nil
+}
+
+// FeaturesChunkProcessor processes chunks of feature data
+type FeaturesChunkProcessor struct {
+	featureService FeatureService
+	logger         *logger.Logger
+}
+
+// ProcessChunk processes a chunk of feature records
+func (f *FeaturesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]string, headers []string, chunkIndex int) (*ChunkResult, error) {
+	processedRecords := 0
+	successfulRecords := 0
+	failedRecords := 0
+	var errors []string
+
+	f.logger.Debugw("processing feature chunk",
+		"chunk_index", chunkIndex,
+		"chunk_size", len(chunk),
+		"headers", headers)
+
+	// Process each record in the chunk
+	for i, record := range chunk {
+		processedRecords++
+
+		f.logger.Debugw("processing feature record",
+			"record_index", i,
+			"record", record,
+			"chunk_index", chunkIndex)
+
+		// Create feature request
+		featureReq := &dto.CreateFeatureRequest{
+			Metadata: make(map[string]string),
+		}
+
+		// Helper to initialize meter lazily
+		initMeterIfNeeded := func() {
+			if featureReq.Meter == nil {
+				featureReq.Meter = &dto.CreateMeterRequest{}
+			}
+		}
+
+		// Map standard fields
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			value := record[j]
+			switch header {
+			case "name":
+				featureReq.Name = value
+			case "type":
+				featureReq.Type = types.FeatureType(value)
+			case "lookup_key":
+				featureReq.LookupKey = value
+			case "unit_singular":
+				featureReq.UnitSingular = value
+			case "unit_plural":
+				featureReq.UnitPlural = value
+			case "meter_name":
+				initMeterIfNeeded()
+				featureReq.Meter.Name = value
+			case "event_name":
+				initMeterIfNeeded()
+				featureReq.Meter.EventName = value
+			case "reset_usage":
+				initMeterIfNeeded()
+				featureReq.Meter.ResetUsage = types.ResetUsage(value)
+			case "aggregation_type":
+				initMeterIfNeeded()
+				featureReq.Meter.Aggregation.Type = types.AggregationType(value)
+			case "aggregation_field":
+				initMeterIfNeeded()
+				featureReq.Meter.Aggregation.Field = value
+			case "aggregation_multiplier":
+				initMeterIfNeeded()
+				multiplier, err := decimal.NewFromString(value)
+				if err == nil {
+					featureReq.Meter.Aggregation.Multiplier = lo.ToPtr(multiplier)
+				}
+			case "aggregation_bucket_size":
+				initMeterIfNeeded()
+				featureReq.Meter.Aggregation.BucketSize = types.WindowSize(value)
+			}
+		}
+
+		// Parse metadata fields (headers starting with "metadata.")
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			if strings.HasPrefix(header, "metadata.") {
+				metadataKey := strings.TrimPrefix(header, "metadata.")
+				featureReq.Metadata[metadataKey] = record[j]
+			}
+		}
+
+		// Set default reset_usage if meter exists but reset_usage not provided
+		if featureReq.Meter != nil && featureReq.Meter.ResetUsage == "" {
+			featureReq.Meter.ResetUsage = types.ResetUsageBillingPeriod
+		}
+
+		// Log parsed feature request for debugging
+		f.logger.Debugw("parsed feature request",
+			"record_index", i,
+			"name", featureReq.Name,
+			"type", featureReq.Type,
+			"lookup_key", featureReq.LookupKey,
+			"has_meter", featureReq.Meter != nil)
+
+		// Validate the feature request
+		if err := featureReq.Validate(); err != nil {
+			f.logger.Errorw("feature validation failed",
+				"record_index", i,
+				"error", err,
+				"feature_req", featureReq)
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		// Process the feature (create or update)
+		if err := f.processFeature(ctx, featureReq); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		successfulRecords++
+	}
+
+	// Create error summary if there are errors
+	var errorSummary *string
+	if len(errors) > 0 {
+		summary := strings.Join(errors, "; ")
+		errorSummary = &summary
+	}
+
+	return &ChunkResult{
+		ProcessedRecords:  processedRecords,
+		SuccessfulRecords: successfulRecords,
+		FailedRecords:     failedRecords,
+		ErrorSummary:      errorSummary,
+	}, nil
+}
+
+// processFeature processes a single feature (create or update)
+func (f *FeaturesChunkProcessor) processFeature(ctx context.Context, featureReq *dto.CreateFeatureRequest) error {
+	// Check if feature with this lookup key already exists
+	if featureReq.LookupKey != "" {
+		// Log context information for debugging
+		tenantID := types.GetTenantID(ctx)
+		environmentID := types.GetEnvironmentID(ctx)
+		f.logger.Debugw("looking up existing feature",
+			"lookup_key", featureReq.LookupKey,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+
+		features, err := f.featureService.GetFeatures(ctx, &types.FeatureFilter{
+			LookupKey: featureReq.LookupKey,
+		})
+		if err != nil {
+			// Only treat non-"not found" errors as fatal
+			if !ierr.IsNotFound(err) {
+				f.logger.Error("failed to search for existing feature", "lookup_key", featureReq.LookupKey, "error", err)
+				return fmt.Errorf("failed to search for existing feature: %w", err)
+			}
+			// Feature not found - this is expected for new features
+			f.logger.Debugw("feature not found in current environment, will create new",
+				"lookup_key", featureReq.LookupKey,
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			features = nil
+		} else {
+			if len(features.Items) > 0 {
+				f.logger.Debugw("found existing feature",
+					"lookup_key", featureReq.LookupKey,
+					"feature_id", features.Items[0].ID,
+					"tenant_id", tenantID,
+					"environment_id", environmentID)
+			}
+		}
+
+		// If feature exists, update it
+		if features != nil && len(features.Items) > 0 && features.Items[0].Status == types.StatusPublished {
+			existingFeature := features.Items[0]
+
+			// Create update request from create request
+			updateReq := dto.UpdateFeatureRequest{}
+
+			// Only update fields that are different
+			if existingFeature.Name != featureReq.Name {
+				updateReq.Name = &featureReq.Name
+			}
+			if existingFeature.UnitSingular != featureReq.UnitSingular {
+				updateReq.UnitSingular = &featureReq.UnitSingular
+			}
+			if existingFeature.UnitPlural != featureReq.UnitPlural {
+				updateReq.UnitPlural = &featureReq.UnitPlural
+			}
+
+			// Merge metadata
+			mergedMetadata := make(map[string]string)
+			maps.Copy(mergedMetadata, existingFeature.Metadata)
+			maps.Copy(mergedMetadata, featureReq.Metadata)
+			updateReq.Metadata = lo.ToPtr(types.Metadata(mergedMetadata))
+
+			// Update the feature
+			_, err := f.featureService.UpdateFeature(ctx, existingFeature.ID, updateReq)
+			if err != nil {
+				f.logger.Error("failed to update feature", "feature_id", existingFeature.ID, "error", err)
+				return fmt.Errorf("failed to update feature: %w", err)
+			}
+
+			f.logger.Info("updated existing feature", "feature_id", existingFeature.ID, "lookup_key", featureReq.LookupKey)
+			return nil
+		}
+	}
+
+	// If no existing feature found, create a new one
+	_, err := f.featureService.CreateFeature(ctx, *featureReq)
+	if err != nil {
+		f.logger.Error("failed to create feature", "error", err)
+		return fmt.Errorf("failed to create feature: %w", err)
+	}
+
+	f.logger.Info("created new feature", "lookup_key", featureReq.LookupKey)
 	return nil
 }
