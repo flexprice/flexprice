@@ -145,7 +145,7 @@ services:
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
     volumes:
-      - ./internal/config:/app/config
+      - ./internal/config:/app/internal/config
     restart: unless-stopped
 
   flexprice-consumer:
@@ -167,7 +167,7 @@ services:
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
     volumes:
-      - ./internal/config:/app/config
+      - ./internal/config:/app/internal/config
     restart: unless-stopped
 
   flexprice-worker:
@@ -189,7 +189,7 @@ services:
       - FLEXPRICE_CLICKHOUSE_ADDRESS=clickhouse:9000
       - FLEXPRICE_TEMPORAL_ADDRESS=temporal:7233
     volumes:
-      - ./internal/config:/app/config
+      - ./internal/config:/app/internal/config
     restart: unless-stopped
 
 volumes:

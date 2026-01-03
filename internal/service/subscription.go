@@ -156,8 +156,9 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	if err != nil {
 		return nil, err
 	}
-	sub.CurrentPeriodStart = sub.StartDate
-	sub.CurrentPeriodEnd = nextBillingDate
+	// Truncate to seconds to avoid sub-second precision issues in billing period comparisons
+	sub.CurrentPeriodStart = sub.StartDate.Truncate(time.Second)
+	sub.CurrentPeriodEnd = nextBillingDate.Truncate(time.Second)
 
 	// Create line items using DTO method
 	subscriptionResponse := &dto.SubscriptionResponse{Subscription: sub}
@@ -460,8 +461,9 @@ func (s *subscriptionService) ActivateDraftSubscription(ctx context.Context, sub
 		return nil, err
 	}
 
-	sub.CurrentPeriodStart = sub.StartDate
-	sub.CurrentPeriodEnd = nextBillingDate
+	// Truncate to seconds to avoid sub-second precision issues in billing period comparisons
+	sub.CurrentPeriodStart = sub.StartDate.Truncate(time.Second)
+	sub.CurrentPeriodEnd = nextBillingDate.Truncate(time.Second)
 
 	// Update line item start dates and end dates
 	for _, item := range sub.LineItems {
@@ -2480,8 +2482,9 @@ func (s *subscriptionService) processSubscriptionPeriod(ctx context.Context, sub
 
 		// Update to the new current period (last period)
 		newPeriod := periods[len(periods)-1]
-		sub.CurrentPeriodStart = newPeriod.start
-		sub.CurrentPeriodEnd = newPeriod.end
+		// Truncate to seconds to avoid sub-second precision issues
+		sub.CurrentPeriodStart = newPeriod.start.Truncate(time.Second)
+		sub.CurrentPeriodEnd = newPeriod.end.Truncate(time.Second)
 
 		// Final cancellation check
 		if sub.CancelAtPeriodEnd && sub.CancelAt != nil && !sub.CancelAt.After(newPeriod.end) {

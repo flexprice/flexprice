@@ -1,0 +1,151 @@
+name: Publish Go SDK to go-sdk-temp
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'SDK Version (e.g. 1.0.5)'
+        required: true
+        default: ''
+  push:
+    branches:
+      - develop
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  publish-go-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          
+      - name: Install Speakeasy CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+          
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [ "${{ github.event_name }}" == "release" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          else
+            # Auto-generate version from date and commit for push events
+            VERSION="1.1.$(date +%Y%m%d).$(git rev-parse --short HEAD)"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "📦 Publishing Go SDK version: ${VERSION}"
+          
+      - name: Update version in gen.yaml
+        run: |
+          sed -i "s/^  version: .*/  version: ${{ env.VERSION }}/" .speakeasy/gen.yaml
+          echo "✓ Updated Go SDK version to ${{ env.VERSION }}"
+          
+      - name: Generate Swagger
+        run: |
+          if [ -f "Makefile" ] && grep -q "swagger" Makefile; then
+            echo "🔨 Generating Swagger..."
+            make swagger || echo "⚠️ Swagger generation skipped"
+          fi
+          
+      - name: Generate Go SDK with Speakeasy
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+        run: |
+          echo "🔨 Generating Go SDK..."
+          /usr/local/bin/speakeasy run --target flexprice-go
+          echo "✓ Go SDK generated"
+          
+      - name: Copy custom files to SDK
+        run: |
+          echo "📋 Copying custom files..."
+          make speakeasy-copy-go-custom
+          
+      - name: Verify Go SDK builds
+        working-directory: api/go
+        run: |
+          echo "🧪 Testing Go SDK compilation..."
+          go mod tidy
+          go build ./...
+          echo "✓ Go SDK compiles successfully"
+          
+      - name: Clone go-sdk-temp repository
+        run: |
+          echo "📥 Cloning go-sdk-temp repository..."
+          git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/go-sdk-temp.git /tmp/go-sdk
+          echo "✓ Repository cloned"
+          
+      - name: Copy SDK files to go-sdk-temp
+        run: |
+          echo "📁 Copying SDK files..."
+          
+          cd /tmp/go-sdk
+          
+          # Remove old files (except .git)
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          
+          # Copy SDK files
+          cp -r $GITHUB_WORKSPACE/api/go/* /tmp/go-sdk/
+          
+          # Copy LICENSE
+          if [ -f "$GITHUB_WORKSPACE/LICENSE" ]; then
+            cp $GITHUB_WORKSPACE/LICENSE /tmp/go-sdk/
+          fi
+          
+          echo "✓ Files copied"
+          
+      - name: Commit and push to go-sdk-temp
+        run: |
+          cd /tmp/go-sdk
+          
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          
+          # Check for changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "⚠️ No changes to commit"
+            exit 0
+          fi
+          
+          # Stage and commit
+          git add .
+          git commit -m "Release Go SDK v${{ env.VERSION }}"
+          
+          # Create tag
+          git tag -a "v${{ env.VERSION }}" -m "Go SDK version ${{ env.VERSION }}"
+          
+          # Push
+          git push origin main
+          git push origin "v${{ env.VERSION }}"
+          
+          echo "✅ Go SDK v${{ env.VERSION }} published successfully!"
+          echo "🔗 Repository: https://github.com/flexprice/go-sdk-temp"
+          echo "🏷️ Tag: v${{ env.VERSION }}"
+          
+      - name: Summary
+        if: success()
+        run: |
+          echo "## ✅ Go SDK Published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** https://github.com/flexprice/go-sdk-temp" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "go get github.com/flexprice/go-sdk-temp@v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

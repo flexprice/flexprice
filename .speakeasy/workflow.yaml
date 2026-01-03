@@ -1,0 +1,21 @@
+workflowVersion: 1.0.0
+speakeasyVersion: latest
+sources:
+    flexprice-api:
+        inputs:
+            - location: ./docs/swagger/swagger-3-0.json
+        overlays:
+            - location: .speakeasy/overlays.yaml
+        registry:
+            location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api
+targets:
+    flexprice-go:
+        target: go
+        source: flexprice-api
+        output: ./api/go
+        codeSamples:
+            registry:
+                location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api-go-code-samples
+            labelOverride:
+                fixedValue: Go (SDK)
+            blocking: false

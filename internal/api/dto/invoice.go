@@ -1121,7 +1121,11 @@ func (r *CreateSubscriptionInvoiceRequest) Validate() error {
 		return err
 	}
 
-	if r.PeriodStart.After(r.PeriodEnd) {
+	// Truncate to seconds to avoid false failures due to sub-second precision differences
+	// (e.g., period_start from DB might have milliseconds, period_end from NextBillingDate has none)
+	periodStartTruncated := r.PeriodStart.Truncate(time.Second)
+	periodEndTruncated := r.PeriodEnd.Truncate(time.Second)
+	if periodStartTruncated.After(periodEndTruncated) {
 		return ierr.NewError("period_start must be before period_end").
 			WithHint("Invoice period start must be before period end").
 			Mark(ierr.ErrValidation)

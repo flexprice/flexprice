@@ -1,0 +1,81 @@
+name: Test Go SDK Generation (No Publish)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'docs/swagger/**'
+      - '.speakeasy/**'
+      - 'api/custom/go/**'
+      - 'Makefile'
+      - '.github/workflows/test-go-sdk-generation.yml'
+      - '.github/workflows/publish-go-sdk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test-go-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+          
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+          
+      - name: Install Speakeasy CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+          
+      - name: Generate Swagger
+        run: |
+          if [ -f "Makefile" ] && grep -q "swagger" Makefile; then
+            echo "🔨 Generating Swagger..."
+            make swagger || echo "⚠️ Swagger generation skipped"
+          fi
+          
+      - name: Generate Go SDK with Speakeasy
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+        run: |
+          echo "🔨 Generating Go SDK..."
+          /usr/local/bin/speakeasy run --target flexprice-go
+          echo "✓ Go SDK generated"
+          
+      - name: Copy custom files to SDK
+        run: |
+          echo "📋 Copying custom files..."
+          make speakeasy-copy-go-custom
+          
+      - name: Verify Go SDK builds
+        working-directory: api/go
+        run: |
+          echo "🧪 Testing Go SDK compilation..."
+          go mod tidy
+          go build ./...
+          echo "✅ Go SDK compiles successfully!"
+          
+      - name: Check for custom files
+        run: |
+          echo "📁 Verifying custom files..."
+          
+          test -f "api/go/helpers.go" && echo "✅ helpers.go present" || (echo "❌ helpers.go missing" && exit 1)
+          test -f "api/go/async.go" && echo "✅ async.go present" || (echo "❌ async.go missing" && exit 1)
+          test -d "api/go/examples" && echo "✅ examples/ present" || (echo "❌ examples/ missing" && exit 1)
+          
+          echo "✅ All custom files verified!"
+          
+      - name: Summary
+        if: success()
+        run: |
+          echo "## ✅ Go SDK Test Passed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Go SDK generated successfully with Speakeasy" >> $GITHUB_STEP_SUMMARY
+          echo "- SDK compiles without errors" >> $GITHUB_STEP_SUMMARY
+          echo "- Custom files preserved (helpers.go, async.go, examples/)" >> $GITHUB_STEP_SUMMARY
+          echo "- Ready for publishing to go-sdk-temp" >> $GITHUB_STEP_SUMMARY

@@ -2746,14 +2746,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/customers/lookup/{lookup_key}": {
+        "/customers/external/{external_id}": {
             "get": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer by lookup key (external_id)",
+                "description": "Get a customer by external id",
                 "consumes": [
                     "application/json"
                 ],
@@ -2763,12 +2763,12 @@ const docTemplate = `{
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Get a customer by lookup key",
+                "summary": "Get a customer by external id",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Customer Lookup Key (external_id)",
-                        "name": "lookup_key",
+                        "description": "Customer External ID",
+                        "name": "external_id",
                         "in": "path",
                         "required": true
                     }
@@ -7538,7 +7538,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/dto.PriceUnitResponse"
+                            "$ref": "#/definitions/dto.CreatePriceUnitResponse"
                         }
                     },
                     "400": {
@@ -7590,6 +7590,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
@@ -7624,7 +7630,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/priceunit.PriceUnitFilter"
+                            "$ref": "#/definitions/types.Filter"
                         }
                     }
                 ],
@@ -7690,8 +7696,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
-                    "500": {
-                        "description": "Internal Server Error",
+                    "404": {
+                        "description": "Not Found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7704,7 +7710,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an existing price unit with the provided details. Only name, symbol, precision, and conversion_rate can be updated. Status changes are not allowed.",
+                "description": "Update an existing price unit with the provided details. Only name and metadata can be updated.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7760,7 +7766,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Archive an existing price unit. The unit will be marked as archived and cannot be used in new prices.",
+                "description": "Delete an existing price unit.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7770,7 +7776,7 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "Archive a price unit",
+                "summary": "Delete a price unit",
                 "parameters": [
                     {
                         "type": "string",
@@ -8203,6 +8209,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/secrets/integrations/by-provider/{provider}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get details of a specific integration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Get integration details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Integration provider",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SecretResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/secrets/integrations/create/{provider}": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create or update integration credentials",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Integrations"
+                ],
+                "summary": "Create or update an integration",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Integration provider",
+                        "name": "provider",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Integration creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateIntegrationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SecretResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/secrets/integrations/linked": {
             "get": {
                 "security": [
@@ -8270,111 +8383,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/secrets/integrations/{provider}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get details of a specific integration",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Integrations"
-                ],
-                "summary": "Get integration details",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Integration provider",
-                        "name": "provider",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.SecretResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Create or update integration credentials",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Integrations"
-                ],
-                "summary": "Create or update an integration",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Integration provider",
-                        "name": "provider",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Integration creation request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateIntegrationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/dto.SecretResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8539,10 +8547,7 @@ const docTemplate = `{
                                 "paused",
                                 "cancelled",
                                 "incomplete",
-                                "incomplete_expired",
-                                "past_due",
                                 "trialing",
-                                "unpaid",
                                 "draft"
                             ],
                             "type": "string"
@@ -9971,6 +9976,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/tasks/scheduled/schedule-update-billing-period": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Schedule an update billing period workflow",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ScheduledTasks"
+                ],
+                "summary": "Schedule update billing period",
+                "parameters": [
+                    {
+                        "description": "Schedule Update Billing Period Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/tasks/scheduled/{id}": {
             "get": {
                 "security": [
@@ -10340,13 +10396,22 @@ const docTemplate = `{
                 "summary": "List tax associations",
                 "parameters": [
                     {
-                        "description": "Tax Association Filter",
-                        "name": "tax_association",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/types.TaxAssociationFilter"
-                        }
+                        "type": "string",
+                        "description": "Entity Type",
+                        "name": "entity_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Entity ID",
+                        "name": "entity_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tax Rate ID",
+                        "name": "tax_rate_id",
+                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -13841,6 +13906,10 @@ const docTemplate = `{
                     "description": "parent_customer_id is the internal FlexPrice ID of the parent customer",
                     "type": "string"
                 },
+                "skip_onboarding_workflow": {
+                    "description": "skip_onboarding_workflow when true, prevents the customer onboarding workflow from being triggered\nThis is used internally when a customer is created via a workflow to prevent infinite loops\nDefault: false",
+                    "type": "boolean"
+                },
                 "tax_rate_overrides": {
                     "description": "tax_rate_overrides contains tax rate configurations to be linked to this customer",
                     "type": "array",
@@ -13857,6 +13926,9 @@ const docTemplate = `{
                 "feature_type"
             ],
             "properties": {
+                "end_date": {
+                    "type": "string"
+                },
                 "entity_id": {
                     "type": "string"
                 },
@@ -13879,6 +13951,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "plan_id": {
+                    "type": "string"
+                },
+                "start_date": {
                     "type": "string"
                 },
                 "static_value": {
@@ -14514,6 +14589,31 @@ const docTemplate = `{
             ],
             "properties": {
                 "base_currency": {
+                    "description": "base_currency  is the currency that the price unit is based on",
+                    "type": "string"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "conversion_rate": {
+                    "description": "ConversionRate defines the exchange rate from this price unit to the base currency.\nThis rate is used to convert amounts in the custom price unit to the base currency for storage and billing.\n\nConversion formula:\n  price_unit_amount * conversion_rate = base_currency_amount\n\nExample:\n  If conversion_rate = \"0.01\" and base_currency = \"usd\":\n  100 price_unit tokens * 0.01 = 1.00 USD\n\nNote: Rounding precision is determined by the base currency (e.g., USD uses 2 decimal places, JPY uses 0).",
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "symbol": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CreatePriceUnitResponse": {
+            "type": "object",
+            "properties": {
+                "base_currency": {
                     "type": "string"
                 },
                 "code": {
@@ -14522,17 +14622,38 @@ const docTemplate = `{
                 "conversion_rate": {
                     "type": "string"
                 },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
                 "name": {
                     "type": "string"
                 },
-                "precision": {
-                    "type": "integer",
-                    "maximum": 8,
-                    "minimum": 0
+                "status": {
+                    "$ref": "#/definitions/types.Status"
                 },
                 "symbol": {
-                    "type": "string",
-                    "maxLength": 10
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
                 }
             }
         },
@@ -14931,14 +15052,13 @@ const docTemplate = `{
                     "description": "alert_enabled is the flag to enable alerts for the wallet\ndefaults to true, can be explicitly set to false to disable alerts",
                     "type": "boolean"
                 },
-                "auto_topup_amount": {
-                    "type": "string"
-                },
-                "auto_topup_min_balance": {
-                    "type": "string"
-                },
-                "auto_topup_trigger": {
-                    "$ref": "#/definitions/types.AutoTopupTrigger"
+                "auto_topup": {
+                    "description": "auto top-up object",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.AutoTopup"
+                        }
+                    ]
                 },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
@@ -14978,6 +15098,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
+                    "type": "string"
+                },
+                "price_unit": {
+                    "description": "price_unit is the code of the price unit to use for wallet creation\nIf provided, the price unit will be used to set the currency and conversion rate of the wallet:\n- currency: set to price unit's base_currency\n- conversion_rate: set to price unit's conversion_rate",
                     "type": "string"
                 },
                 "wallet_type": {
@@ -15068,7 +15192,13 @@ const docTemplate = `{
                 "created_by": {
                     "type": "string"
                 },
+                "credit_grant_anchor": {
+                    "type": "string"
+                },
                 "credits": {
+                    "type": "string"
+                },
+                "end_date": {
                     "type": "string"
                 },
                 "environment_id": {
@@ -15106,6 +15236,9 @@ const docTemplate = `{
                 },
                 "scope": {
                     "$ref": "#/definitions/types.CreditGrantScope"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -15489,6 +15622,9 @@ const docTemplate = `{
                 "display_order": {
                     "type": "integer"
                 },
+                "end_date": {
+                    "type": "string"
+                },
                 "entity_id": {
                     "type": "string"
                 },
@@ -15524,6 +15660,9 @@ const docTemplate = `{
                 },
                 "plan_id": {
                     "description": "TODO: Remove this once we have a proper entitlement entity type",
+                    "type": "string"
+                },
+                "start_date": {
                     "type": "string"
                 },
                 "static_value": {
@@ -17720,8 +17859,8 @@ const docTemplate = `{
                     "default": 1
                 },
                 "conversion_rate": {
-                    "description": "ConversionRate is the rate of the price unit to the base currency\nFor BTC: 1 BTC = 100000000 USD",
-                    "type": "string"
+                    "description": "ConversionRate is the conversion rate of the price unit to the fiat currency",
+                    "type": "number"
                 },
                 "created_at": {
                     "type": "string"
@@ -17746,7 +17885,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "display_price_unit_amount": {
-                    "description": "DisplayPriceUnitAmount is the formatted amount with price unit symbol\nFor BTC: 0.00000001 BTC",
+                    "description": "DisplayPriceUnitAmount is the formatted amount of the price unit",
                     "type": "string"
                 },
                 "end_date": {
@@ -17809,26 +17948,26 @@ const docTemplate = `{
                     "$ref": "#/definitions/dto.PlanResponse"
                 },
                 "price_unit": {
-                    "description": "PriceUnit 3 digit ISO currency code in lowercase ex btc\nFor BTC: btc",
+                    "description": "PriceUnit is the code of the price unit (e.g., 'btc', 'eth')",
                     "type": "string"
                 },
                 "price_unit_amount": {
-                    "description": "PriceUnitAmount is the amount stored in price unit\nFor BTC: 0.00000001 means 0.00000001 BTC",
-                    "type": "string"
+                    "description": "PriceUnitAmount is the amount of the price unit",
+                    "type": "number"
                 },
                 "price_unit_id": {
-                    "description": "PriceUnitID is the id of the price unit",
+                    "description": "PriceUnitID is the id of the price unit (for CUSTOM type)",
                     "type": "string"
                 },
                 "price_unit_tiers": {
-                    "description": "PriceUnitTiers are the tiers for the price unit",
+                    "description": "PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/price.PriceTier"
                     }
                 },
                 "price_unit_type": {
-                    "description": "PriceUnitType is the type of the price unit- Fiat, Custom, Crypto",
+                    "description": "PriceUnitType is the type of the price unit (FIAT, CUSTOM)",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PriceUnitType"
@@ -17919,11 +18058,11 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
                 "name": {
                     "type": "string"
-                },
-                "precision": {
-                    "type": "integer"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -19849,20 +19988,11 @@ const docTemplate = `{
         "dto.UpdatePriceUnitRequest": {
             "type": "object",
             "properties": {
-                "conversion_rate": {
-                    "type": "string"
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
                     "type": "string"
-                },
-                "precision": {
-                    "type": "integer",
-                    "maximum": 8,
-                    "minimum": 0
-                },
-                "symbol": {
-                    "type": "string",
-                    "maxLength": 10
                 }
             }
         },
@@ -20008,14 +20138,8 @@ const docTemplate = `{
                 "alert_enabled": {
                     "type": "boolean"
                 },
-                "auto_topup_amount": {
-                    "type": "string"
-                },
-                "auto_topup_min_balance": {
-                    "type": "string"
-                },
-                "auto_topup_trigger": {
-                    "$ref": "#/definitions/types.AutoTopupTrigger"
+                "auto_topup": {
+                    "$ref": "#/definitions/types.AutoTopup"
                 },
                 "config": {
                     "$ref": "#/definitions/types.WalletConfig"
@@ -20174,6 +20298,16 @@ const docTemplate = `{
         "dto.UsageAnalyticPoint": {
             "type": "object",
             "properties": {
+                "computed_commitment_utilized_amount": {
+                    "description": "Commitment breakdown (only populated for windowed commitments)",
+                    "type": "string"
+                },
+                "computed_overage_amount": {
+                    "type": "string"
+                },
+                "computed_true_up_amount": {
+                    "type": "string"
+                },
                 "cost": {
                     "type": "string"
                 },
@@ -20264,14 +20398,8 @@ const docTemplate = `{
                 "alert_state": {
                     "type": "string"
                 },
-                "auto_topup_amount": {
-                    "type": "string"
-                },
-                "auto_topup_min_balance": {
-                    "type": "string"
-                },
-                "auto_topup_trigger": {
-                    "$ref": "#/definitions/types.AutoTopupTrigger"
+                "auto_topup": {
+                    "$ref": "#/definitions/types.AutoTopup"
                 },
                 "balance": {
                     "type": "string"
@@ -20283,6 +20411,7 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.WalletConfig"
                 },
                 "conversion_rate": {
+                    "description": "amount in the currency =  number of credits * conversion_rate\nex if conversion_rate is 1, then 1 USD = 1 credit\nex if conversion_rate is 2, then 1 USD = 0.5 credits\nex if conversion_rate is 0.5, then 1 USD = 2 credits",
                     "type": "string"
                 },
                 "created_at": {
@@ -20359,14 +20488,8 @@ const docTemplate = `{
                 "alert_state": {
                     "type": "string"
                 },
-                "auto_topup_amount": {
-                    "type": "string"
-                },
-                "auto_topup_min_balance": {
-                    "type": "string"
-                },
-                "auto_topup_trigger": {
-                    "$ref": "#/definitions/types.AutoTopupTrigger"
+                "auto_topup": {
+                    "$ref": "#/definitions/types.AutoTopup"
                 },
                 "balance": {
                     "type": "string"
@@ -20984,7 +21107,11 @@ const docTemplate = `{
                 },
                 "round": {
                     "description": "up or down",
-                    "type": "string"
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.RoundType"
+                        }
+                    ]
                 }
             }
         },
@@ -21010,8 +21137,8 @@ const docTemplate = `{
                     "default": 1
                 },
                 "conversion_rate": {
-                    "description": "ConversionRate is the rate of the price unit to the base currency\nFor BTC: 1 BTC = 100000000 USD",
-                    "type": "string"
+                    "description": "ConversionRate is the conversion rate of the price unit to the fiat currency",
+                    "type": "number"
                 },
                 "created_at": {
                     "type": "string"
@@ -21036,7 +21163,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "display_price_unit_amount": {
-                    "description": "DisplayPriceUnitAmount is the formatted amount with price unit symbol\nFor BTC: 0.00000001 BTC",
+                    "description": "DisplayPriceUnitAmount is the formatted amount of the price unit",
                     "type": "string"
                 },
                 "end_date": {
@@ -21090,26 +21217,26 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "price_unit": {
-                    "description": "PriceUnit 3 digit ISO currency code in lowercase ex btc\nFor BTC: btc",
+                    "description": "PriceUnit is the code of the price unit (e.g., 'btc', 'eth')",
                     "type": "string"
                 },
                 "price_unit_amount": {
-                    "description": "PriceUnitAmount is the amount stored in price unit\nFor BTC: 0.00000001 means 0.00000001 BTC",
-                    "type": "string"
+                    "description": "PriceUnitAmount is the amount of the price unit",
+                    "type": "number"
                 },
                 "price_unit_id": {
-                    "description": "PriceUnitID is the id of the price unit",
+                    "description": "PriceUnitID is the id of the price unit (for CUSTOM type)",
                     "type": "string"
                 },
                 "price_unit_tiers": {
-                    "description": "PriceUnitTiers are the tiers for the price unit",
+                    "description": "PriceUnitTiers are the tiers for the price unit when BillingModel is TIERED",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/price.PriceTier"
                     }
                 },
                 "price_unit_type": {
-                    "description": "PriceUnitType is the type of the price unit- Fiat, Custom, Crypto",
+                    "description": "PriceUnitType is the type of the price unit (FIAT, CUSTOM)",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PriceUnitType"
@@ -21179,56 +21306,9 @@ const docTemplate = `{
                 },
                 "round": {
                     "description": "up or down",
-                    "type": "string"
-                }
-            }
-        },
-        "priceunit.PriceUnitFilter": {
-            "type": "object",
-            "properties": {
-                "environment_id": {
-                    "description": "EnvironmentID filters by specific environment ID",
-                    "type": "string"
-                },
-                "filters": {
-                    "description": "Filters allows complex filtering based on multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.FilterCondition"
-                    }
-                },
-                "queryFilter": {
-                    "description": "QueryFilter contains pagination and basic query parameters",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/types.QueryFilter"
-                        }
-                    ]
-                },
-                "sort": {
-                    "description": "Sort allows sorting by multiple fields",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.SortCondition"
-                    }
-                },
-                "status": {
-                    "description": "Status filters by price unit status",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.Status"
-                        }
-                    ]
-                },
-                "tenant_id": {
-                    "description": "TenantID filters by specific tenant ID",
-                    "type": "string"
-                },
-                "timeRangeFilter": {
-                    "description": "TimeRangeFilter allows filtering by time periods",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.TimeRangeFilter"
+                            "$ref": "#/definitions/types.RoundType"
                         }
                     ]
                 }
@@ -21792,16 +21872,22 @@ const docTemplate = `{
                 "ApplicationStatusCancelled"
             ]
         },
-        "types.AutoTopupTrigger": {
-            "type": "string",
-            "enum": [
-                "disabled",
-                "balance_below_threshold"
-            ],
-            "x-enum-varnames": [
-                "AutoTopupTriggerDisabled",
-                "AutoTopupTriggerBalanceBelowThreshold"
-            ]
+        "types.AutoTopup": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "invoicing": {
+                    "type": "boolean"
+                },
+                "threshold": {
+                    "type": "number"
+                }
+            }
         },
         "types.BillingCadence": {
             "type": "string",
@@ -22517,6 +22603,29 @@ const docTemplate = `{
                 "FileTypeJSON"
             ]
         },
+        "types.Filter": {
+            "type": "object",
+            "properties": {
+                "expand": {
+                    "type": "string"
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "order": {
+                    "type": "string"
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.FilterCondition": {
             "type": "object",
             "properties": {
@@ -23160,6 +23269,17 @@ const docTemplate = `{
                 "ResumeModeAuto"
             ]
         },
+        "types.RoundType": {
+            "type": "string",
+            "enum": [
+                "up",
+                "down"
+            ],
+            "x-enum-varnames": [
+                "ROUND_UP",
+                "ROUND_DOWN"
+            ]
+        },
         "types.S3CompressionType": {
             "type": "string",
             "enum": [
@@ -23260,6 +23380,7 @@ const docTemplate = `{
         "types.ScheduledTaskInterval": {
             "type": "string",
             "enum": [
+                "15MIN",
                 "custom",
                 "hourly",
                 "daily"
@@ -23268,11 +23389,13 @@ const docTemplate = `{
                 "ScheduledTaskIntervalCustom": "10 minutes for testing"
             },
             "x-enum-descriptions": [
+                "",
                 "10 minutes for testing",
                 "",
                 ""
             ],
             "x-enum-varnames": [
+                "ScheduledTaskIntervalEvery15Minutes",
                 "ScheduledTaskIntervalCustom",
                 "ScheduledTaskIntervalHourly",
                 "ScheduledTaskIntervalDaily"
@@ -23496,10 +23619,7 @@ const docTemplate = `{
                 "paused",
                 "cancelled",
                 "incomplete",
-                "incomplete_expired",
-                "past_due",
                 "trialing",
-                "unpaid",
                 "draft"
             ],
             "x-enum-varnames": [
@@ -23507,10 +23627,7 @@ const docTemplate = `{
                 "SubscriptionStatusPaused",
                 "SubscriptionStatusCancelled",
                 "SubscriptionStatusIncomplete",
-                "SubscriptionStatusIncompleteExpired",
-                "SubscriptionStatusPastDue",
                 "SubscriptionStatusTrialing",
-                "SubscriptionStatusUnpaid",
                 "SubscriptionStatusDraft"
             ]
         },
@@ -23577,66 +23694,6 @@ const docTemplate = `{
                 "TaskTypeImport",
                 "TaskTypeExport"
             ]
-        },
-        "types.TaxAssociationFilter": {
-            "type": "object",
-            "properties": {
-                "auto_apply": {
-                    "type": "boolean"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "type": "string"
-                },
-                "entity_type": {
-                    "$ref": "#/definitions/types.TaxRateEntityType"
-                },
-                "expand": {
-                    "type": "string"
-                },
-                "limit": {
-                    "type": "integer",
-                    "maximum": 1000,
-                    "minimum": 1
-                },
-                "offset": {
-                    "type": "integer",
-                    "minimum": 0
-                },
-                "order": {
-                    "type": "string",
-                    "enum": [
-                        "asc",
-                        "desc"
-                    ]
-                },
-                "sort": {
-                    "type": "string"
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "tax_association_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "tax_rate_ids": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
         },
         "types.TaxRateEntityType": {
             "type": "string",

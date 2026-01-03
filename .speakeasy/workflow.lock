@@ -1,0 +1,67 @@
+speakeasyVersion: 1.680.11
+sources:
+    flexprice-api:
+        sourceNamespace: flexprice-api
+        sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
+        sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
+        tags:
+            - latest
+            - "1.0"
+targets:
+    flexprice-go:
+        source: flexprice-api
+        sourceNamespace: flexprice-api
+        sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
+        sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
+    flexprice-python:
+        source: flexprice-api
+        sourceNamespace: flexprice-api
+        sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
+        sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
+    flexprice-typescript:
+        source: flexprice-api
+        sourceNamespace: flexprice-api
+        sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
+        sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
+workflow:
+    workflowVersion: 1.0.0
+    speakeasyVersion: latest
+    sources:
+        flexprice-api:
+            inputs:
+                - location: ./docs/swagger/swagger-3-0.json
+            overlays:
+                - location: .speakeasy/overlays.yaml
+            registry:
+                location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api
+    targets:
+        flexprice-go:
+            target: go
+            source: flexprice-api
+            output: ./api/go
+            codeSamples:
+                registry:
+                    location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api-go-code-samples
+                labelOverride:
+                    fixedValue: Go (SDK)
+                blocking: false
+        flexprice-python:
+            target: python
+            source: flexprice-api
+            output: ./api/python
+            codeSamples:
+                registry:
+                    location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api-python-code-samples
+                labelOverride:
+                    fixedValue: Python (SDK)
+                blocking: false
+        flexprice-typescript:
+            target: typescript
+            source: flexprice-api
+            output: ./api/javascript
+            codeSamples:
+                registry:
+                    location: registry.speakeasyapi.dev/flexprice/staging-nyv/flexprice-api-typescript-code-samples
+                labelOverride:
+                    fixedValue: Typescript (SDK)
+                blocking: false
