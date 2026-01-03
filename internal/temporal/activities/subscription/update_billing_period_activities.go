@@ -144,8 +144,9 @@ func (s *BillingActivities) UpdateCurrentPeriodActivity(
 	}
 
 	// Update to the new current period
-	sub.CurrentPeriodStart = input.PeriodStart
-	sub.CurrentPeriodEnd = input.PeriodEnd
+	// Truncate to seconds to avoid sub-second precision issues in billing period comparisons
+	sub.CurrentPeriodStart = input.PeriodStart.Truncate(time.Second)
+	sub.CurrentPeriodEnd = input.PeriodEnd.Truncate(time.Second)
 
 	// Update the subscription
 	if err := s.serviceParams.SubRepo.Update(ctx, sub); err != nil {
