@@ -252,16 +252,44 @@ func (wtc *WalletTransactionCreate) SetCreditsAvailable(d decimal.Decimal) *Wall
 	return wtc
 }
 
+// SetNillableCreditsAvailable sets the "credits_available" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableCreditsAvailable(d *decimal.Decimal) *WalletTransactionCreate {
+	if d != nil {
+		wtc.SetCreditsAvailable(*d)
+	}
+	return wtc
+}
+
 // SetCurrency sets the "currency" field.
 func (wtc *WalletTransactionCreate) SetCurrency(s string) *WalletTransactionCreate {
 	wtc.mutation.SetCurrency(s)
 	return wtc
 }
 
-// SetNillableCurrency sets the "currency" field if the given value is not nil.
-func (wtc *WalletTransactionCreate) SetNillableCurrency(s *string) *WalletTransactionCreate {
-	if s != nil {
-		wtc.SetCurrency(*s)
+// SetConversionRate sets the "conversion_rate" field.
+func (wtc *WalletTransactionCreate) SetConversionRate(d decimal.Decimal) *WalletTransactionCreate {
+	wtc.mutation.SetConversionRate(d)
+	return wtc
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableConversionRate(d *decimal.Decimal) *WalletTransactionCreate {
+	if d != nil {
+		wtc.SetConversionRate(*d)
+	}
+	return wtc
+}
+
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (wtc *WalletTransactionCreate) SetTopupConversionRate(d decimal.Decimal) *WalletTransactionCreate {
+	wtc.mutation.SetTopupConversionRate(d)
+	return wtc
+}
+
+// SetNillableTopupConversionRate sets the "topup_conversion_rate" field if the given value is not nil.
+func (wtc *WalletTransactionCreate) SetNillableTopupConversionRate(d *decimal.Decimal) *WalletTransactionCreate {
+	if d != nil {
+		wtc.SetTopupConversionRate(*d)
 	}
 	return wtc
 }
@@ -373,6 +401,10 @@ func (wtc *WalletTransactionCreate) defaults() {
 		v := wallettransaction.DefaultTransactionStatus
 		wtc.mutation.SetTransactionStatus(v)
 	}
+	if _, ok := wtc.mutation.CreditsAvailable(); !ok {
+		v := wallettransaction.DefaultCreditsAvailable
+		wtc.mutation.SetCreditsAvailable(v)
+	}
 	if _, ok := wtc.mutation.TransactionReason(); !ok {
 		v := wallettransaction.DefaultTransactionReason
 		wtc.mutation.SetTransactionReason(v)
@@ -441,6 +473,14 @@ func (wtc *WalletTransactionCreate) check() error {
 	}
 	if _, ok := wtc.mutation.CreditsAvailable(); !ok {
 		return &ValidationError{Name: "credits_available", err: errors.New(`ent: missing required field "WalletTransaction.credits_available"`)}
+	}
+	if _, ok := wtc.mutation.Currency(); !ok {
+		return &ValidationError{Name: "currency", err: errors.New(`ent: missing required field "WalletTransaction.currency"`)}
+	}
+	if v, ok := wtc.mutation.Currency(); ok {
+		if err := wallettransaction.CurrencyValidator(v); err != nil {
+			return &ValidationError{Name: "currency", err: fmt.Errorf(`ent: validator failed for field "WalletTransaction.currency": %w`, err)}
+		}
 	}
 	if _, ok := wtc.mutation.TransactionReason(); !ok {
 		return &ValidationError{Name: "transaction_reason", err: errors.New(`ent: missing required field "WalletTransaction.transaction_reason"`)}
@@ -571,7 +611,15 @@ func (wtc *WalletTransactionCreate) createSpec() (*WalletTransaction, *sqlgraph.
 	}
 	if value, ok := wtc.mutation.Currency(); ok {
 		_spec.SetField(wallettransaction.FieldCurrency, field.TypeString, value)
-		_node.Currency = &value
+		_node.Currency = value
+	}
+	if value, ok := wtc.mutation.ConversionRate(); ok {
+		_spec.SetField(wallettransaction.FieldConversionRate, field.TypeOther, value)
+		_node.ConversionRate = &value
+	}
+	if value, ok := wtc.mutation.TopupConversionRate(); ok {
+		_spec.SetField(wallettransaction.FieldTopupConversionRate, field.TypeOther, value)
+		_node.TopupConversionRate = &value
 	}
 	if value, ok := wtc.mutation.IdempotencyKey(); ok {
 		_spec.SetField(wallettransaction.FieldIdempotencyKey, field.TypeString, value)

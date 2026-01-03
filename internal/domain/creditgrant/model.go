@@ -28,7 +28,20 @@ type CreditGrant struct {
 	StartDate              *time.Time                           `json:"start_date,omitempty"`
 	EndDate                *time.Time                           `json:"end_date,omitempty"`
 	CreditGrantAnchor      *time.Time                           `json:"credit_grant_anchor,omitempty"`
-	EnvironmentID          string                               `json:"environment_id"`
+
+	// amount in the currency =  number of credits * conversion_rate
+	// ex if conversion_rate is 1, then 1 USD = 1 credit
+	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if conversion_rate is 0.5, then 1 USD = 2 credits
+	ConversionRate *decimal.Decimal `db:"conversion_rate" json:"conversion_rate,omitempty" swaggertype:"string"`
+
+	// topup_conversion_rate is the conversion rate for the topup to the currency
+	// ex if topup_conversion_rate is 1, then 1 USD = 1 credit
+	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
+	TopupConversionRate *decimal.Decimal `db:"topup_conversion_rate" json:"topup_conversion_rate,omitempty" swaggertype:"string"`
+
+	EnvironmentID string `json:"environment_id"`
 	types.BaseModel
 }
 
@@ -154,6 +167,8 @@ func FromEnt(c *ent.CreditGrant) *CreditGrant {
 		StartDate:              c.StartDate,
 		EndDate:                c.EndDate,
 		CreditGrantAnchor:      c.CreditGrantAnchor,
+		ConversionRate:         c.ConversionRate,
+		TopupConversionRate:    c.TopupConversionRate,
 		EnvironmentID:          c.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  c.TenantID,

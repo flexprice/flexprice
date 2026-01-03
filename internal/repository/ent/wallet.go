@@ -45,11 +45,6 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 	})
 	defer FinishSpan(span)
 
-	// Set environment ID from context if not already set
-	if w.EnvironmentID == "" {
-		w.EnvironmentID = types.GetEnvironmentID(ctx)
-	}
-
 	walletBuilder := client.Wallet.Create().
 		SetID(w.ID).
 		SetTenantID(w.TenantID).
@@ -64,6 +59,7 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		SetWalletType(w.WalletType).
 		SetConfig(w.Config).
 		SetConversionRate(w.ConversionRate).
+		SetTopupConversionRate(w.TopupConversionRate).
 		SetStatus(string(w.Status)).
 		SetCreatedBy(w.CreatedBy).
 		SetCreatedAt(w.CreatedAt).
@@ -390,6 +386,8 @@ func (r *walletRepository) CreateTransaction(ctx context.Context, tx *walletdoma
 		SetCreditBalanceBefore(tx.CreditBalanceBefore).
 		SetCreditBalanceAfter(tx.CreditBalanceAfter).
 		SetCurrency(tx.Currency).
+		SetNillableConversionRate(tx.ConversionRate).
+		SetNillableTopupConversionRate(tx.TopupConversionRate).
 		SetCreatedAt(tx.CreatedAt).
 		SetCreatedBy(tx.CreatedBy).
 		SetUpdatedAt(tx.UpdatedAt).

@@ -31,6 +31,18 @@ type CreateCreditGrantRequest struct {
 	CreditGrantAnchor      *time.Time                           `json:"-"`
 	StartDate              *time.Time                           `json:"-"`
 	EndDate                *time.Time                           `json:"-"`
+
+	// amount in the currency =  number of credits * conversion_rate
+	// ex if conversion_rate is 1, then 1 USD = 1 credit
+	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if conversion_rate is 0.5, then 1 USD = 2 credits
+	ConversionRate *decimal.Decimal `json:"conversion_rate,omitempty" swaggertype:"string"`
+
+	// topup_conversion_rate is the conversion rate for the topup to the currency
+	// ex if topup_conversion_rate is 1, then 1 USD = 1 credit
+	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
+	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty" swaggertype:"string"`
 }
 
 // UpdateCreditGrantRequest represents the request to update an existing credit grant
@@ -271,6 +283,14 @@ func (r *CreateCreditGrantRequest) ToCreditGrant(ctx context.Context) *creditgra
 	}
 	if len(r.Metadata) > 0 {
 		cg.Metadata = r.Metadata
+	}
+
+	// Set conversion rates if provided
+	if r.ConversionRate != nil {
+		cg.ConversionRate = r.ConversionRate
+	}
+	if r.TopupConversionRate != nil {
+		cg.TopupConversionRate = r.TopupConversionRate
 	}
 
 	return cg

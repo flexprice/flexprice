@@ -498,15 +498,15 @@ func init() {
 	// creditgrant.DefaultCredits holds the default value on creation for the credits field.
 	creditgrant.DefaultCredits = creditgrantDescCredits.Default.(decimal.Decimal)
 	// creditgrantDescCadence is the schema descriptor for cadence field.
-	creditgrantDescCadence := creditgrantFields[6].Descriptor()
+	creditgrantDescCadence := creditgrantFields[8].Descriptor()
 	// creditgrant.CadenceValidator is a validator for the "cadence" field. It is called by the builders before save.
 	creditgrant.CadenceValidator = creditgrantDescCadence.Validators[0].(func(string) error)
 	// creditgrantDescExpirationType is the schema descriptor for expiration_type field.
-	creditgrantDescExpirationType := creditgrantFields[9].Descriptor()
+	creditgrantDescExpirationType := creditgrantFields[11].Descriptor()
 	// creditgrant.ExpirationTypeValidator is a validator for the "expiration_type" field. It is called by the builders before save.
 	creditgrant.ExpirationTypeValidator = creditgrantDescExpirationType.Validators[0].(func(string) error)
 	// creditgrantDescMetadata is the schema descriptor for metadata field.
-	creditgrantDescMetadata := creditgrantFields[13].Descriptor()
+	creditgrantDescMetadata := creditgrantFields[15].Descriptor()
 	// creditgrant.DefaultMetadata holds the default value on creation for the metadata field.
 	creditgrant.DefaultMetadata = creditgrantDescMetadata.Default.(map[string]string)
 	creditgrantapplicationMixin := schema.CreditGrantApplication{}.Mixin()
@@ -2137,12 +2137,20 @@ func init() {
 	walletDescWalletType := walletFields[10].Descriptor()
 	// wallet.DefaultWalletType holds the default value on creation for the wallet_type field.
 	wallet.DefaultWalletType = types.WalletType(walletDescWalletType.Default.(string))
+	// walletDescConversionRate is the schema descriptor for conversion_rate field.
+	walletDescConversionRate := walletFields[11].Descriptor()
+	// wallet.DefaultConversionRate holds the default value on creation for the conversion_rate field.
+	wallet.DefaultConversionRate = walletDescConversionRate.Default.(decimal.Decimal)
+	// walletDescTopupConversionRate is the schema descriptor for topup_conversion_rate field.
+	walletDescTopupConversionRate := walletFields[12].Descriptor()
+	// wallet.DefaultTopupConversionRate holds the default value on creation for the topup_conversion_rate field.
+	wallet.DefaultTopupConversionRate = walletDescTopupConversionRate.Default.(decimal.Decimal)
 	// walletDescAlertEnabled is the schema descriptor for alert_enabled field.
-	walletDescAlertEnabled := walletFields[14].Descriptor()
+	walletDescAlertEnabled := walletFields[15].Descriptor()
 	// wallet.DefaultAlertEnabled holds the default value on creation for the alert_enabled field.
 	wallet.DefaultAlertEnabled = walletDescAlertEnabled.Default.(bool)
 	// walletDescAlertState is the schema descriptor for alert_state field.
-	walletDescAlertState := walletFields[15].Descriptor()
+	walletDescAlertState := walletFields[16].Descriptor()
 	// wallet.DefaultAlertState holds the default value on creation for the alert_state field.
 	wallet.DefaultAlertState = types.AlertState(walletDescAlertState.Default.(string))
 	wallettransactionMixin := schema.WalletTransaction{}.Mixin()
@@ -2188,8 +2196,16 @@ func init() {
 	wallettransactionDescTransactionStatus := wallettransactionFields[12].Descriptor()
 	// wallettransaction.DefaultTransactionStatus holds the default value on creation for the transaction_status field.
 	wallettransaction.DefaultTransactionStatus = types.TransactionStatus(wallettransactionDescTransactionStatus.Default.(string))
+	// wallettransactionDescCreditsAvailable is the schema descriptor for credits_available field.
+	wallettransactionDescCreditsAvailable := wallettransactionFields[14].Descriptor()
+	// wallettransaction.DefaultCreditsAvailable holds the default value on creation for the credits_available field.
+	wallettransaction.DefaultCreditsAvailable = wallettransactionDescCreditsAvailable.Default.(decimal.Decimal)
+	// wallettransactionDescCurrency is the schema descriptor for currency field.
+	wallettransactionDescCurrency := wallettransactionFields[15].Descriptor()
+	// wallettransaction.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	wallettransaction.CurrencyValidator = wallettransactionDescCurrency.Validators[0].(func(string) error)
 	// wallettransactionDescTransactionReason is the schema descriptor for transaction_reason field.
-	wallettransactionDescTransactionReason := wallettransactionFields[17].Descriptor()
+	wallettransactionDescTransactionReason := wallettransactionFields[19].Descriptor()
 	// wallettransaction.DefaultTransactionReason holds the default value on creation for the transaction_reason field.
 	wallettransaction.DefaultTransactionReason = types.TransactionReason(wallettransactionDescTransactionReason.Default.(string))
 }

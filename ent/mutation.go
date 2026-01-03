@@ -12109,6 +12109,8 @@ type CreditGrantMutation struct {
 	name                     *string
 	scope                    *types.CreditGrantScope
 	credits                  *decimal.Decimal
+	conversion_rate          *decimal.Decimal
+	topup_conversion_rate    *decimal.Decimal
 	cadence                  *types.CreditGrantCadence
 	period                   *types.CreditGrantPeriod
 	period_count             *int
@@ -12732,6 +12734,104 @@ func (m *CreditGrantMutation) OldCredits(ctx context.Context) (v decimal.Decimal
 // ResetCredits resets all changes to the "credits" field.
 func (m *CreditGrantMutation) ResetCredits() {
 	m.credits = nil
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (m *CreditGrantMutation) SetConversionRate(d decimal.Decimal) {
+	m.conversion_rate = &d
+}
+
+// ConversionRate returns the value of the "conversion_rate" field in the mutation.
+func (m *CreditGrantMutation) ConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionRate returns the old "conversion_rate" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionRate: %w", err)
+	}
+	return oldValue.ConversionRate, nil
+}
+
+// ClearConversionRate clears the value of the "conversion_rate" field.
+func (m *CreditGrantMutation) ClearConversionRate() {
+	m.conversion_rate = nil
+	m.clearedFields[creditgrant.FieldConversionRate] = struct{}{}
+}
+
+// ConversionRateCleared returns if the "conversion_rate" field was cleared in this mutation.
+func (m *CreditGrantMutation) ConversionRateCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldConversionRate]
+	return ok
+}
+
+// ResetConversionRate resets all changes to the "conversion_rate" field.
+func (m *CreditGrantMutation) ResetConversionRate() {
+	m.conversion_rate = nil
+	delete(m.clearedFields, creditgrant.FieldConversionRate)
+}
+
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (m *CreditGrantMutation) SetTopupConversionRate(d decimal.Decimal) {
+	m.topup_conversion_rate = &d
+}
+
+// TopupConversionRate returns the value of the "topup_conversion_rate" field in the mutation.
+func (m *CreditGrantMutation) TopupConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.topup_conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTopupConversionRate returns the old "topup_conversion_rate" field's value of the CreditGrant entity.
+// If the CreditGrant object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CreditGrantMutation) OldTopupConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTopupConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTopupConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTopupConversionRate: %w", err)
+	}
+	return oldValue.TopupConversionRate, nil
+}
+
+// ClearTopupConversionRate clears the value of the "topup_conversion_rate" field.
+func (m *CreditGrantMutation) ClearTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	m.clearedFields[creditgrant.FieldTopupConversionRate] = struct{}{}
+}
+
+// TopupConversionRateCleared returns if the "topup_conversion_rate" field was cleared in this mutation.
+func (m *CreditGrantMutation) TopupConversionRateCleared() bool {
+	_, ok := m.clearedFields[creditgrant.FieldTopupConversionRate]
+	return ok
+}
+
+// ResetTopupConversionRate resets all changes to the "topup_conversion_rate" field.
+func (m *CreditGrantMutation) ResetTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	delete(m.clearedFields, creditgrant.FieldTopupConversionRate)
 }
 
 // SetCadence sets the "cadence" field.
@@ -13398,7 +13498,7 @@ func (m *CreditGrantMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CreditGrantMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 25)
 	if m.tenant_id != nil {
 		fields = append(fields, creditgrant.FieldTenantID)
 	}
@@ -13434,6 +13534,12 @@ func (m *CreditGrantMutation) Fields() []string {
 	}
 	if m.credits != nil {
 		fields = append(fields, creditgrant.FieldCredits)
+	}
+	if m.conversion_rate != nil {
+		fields = append(fields, creditgrant.FieldConversionRate)
+	}
+	if m.topup_conversion_rate != nil {
+		fields = append(fields, creditgrant.FieldTopupConversionRate)
 	}
 	if m.cadence != nil {
 		fields = append(fields, creditgrant.FieldCadence)
@@ -13500,6 +13606,10 @@ func (m *CreditGrantMutation) Field(name string) (ent.Value, bool) {
 		return m.SubscriptionID()
 	case creditgrant.FieldCredits:
 		return m.Credits()
+	case creditgrant.FieldConversionRate:
+		return m.ConversionRate()
+	case creditgrant.FieldTopupConversionRate:
+		return m.TopupConversionRate()
 	case creditgrant.FieldCadence:
 		return m.Cadence()
 	case creditgrant.FieldPeriod:
@@ -13555,6 +13665,10 @@ func (m *CreditGrantMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldSubscriptionID(ctx)
 	case creditgrant.FieldCredits:
 		return m.OldCredits(ctx)
+	case creditgrant.FieldConversionRate:
+		return m.OldConversionRate(ctx)
+	case creditgrant.FieldTopupConversionRate:
+		return m.OldTopupConversionRate(ctx)
 	case creditgrant.FieldCadence:
 		return m.OldCadence(ctx)
 	case creditgrant.FieldPeriod:
@@ -13669,6 +13783,20 @@ func (m *CreditGrantMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCredits(v)
+		return nil
+	case creditgrant.FieldConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionRate(v)
+		return nil
+	case creditgrant.FieldTopupConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTopupConversionRate(v)
 		return nil
 	case creditgrant.FieldCadence:
 		v, ok := value.(types.CreditGrantCadence)
@@ -13831,6 +13959,12 @@ func (m *CreditGrantMutation) ClearedFields() []string {
 	if m.FieldCleared(creditgrant.FieldSubscriptionID) {
 		fields = append(fields, creditgrant.FieldSubscriptionID)
 	}
+	if m.FieldCleared(creditgrant.FieldConversionRate) {
+		fields = append(fields, creditgrant.FieldConversionRate)
+	}
+	if m.FieldCleared(creditgrant.FieldTopupConversionRate) {
+		fields = append(fields, creditgrant.FieldTopupConversionRate)
+	}
 	if m.FieldCleared(creditgrant.FieldPeriod) {
 		fields = append(fields, creditgrant.FieldPeriod)
 	}
@@ -13886,6 +14020,12 @@ func (m *CreditGrantMutation) ClearField(name string) error {
 		return nil
 	case creditgrant.FieldSubscriptionID:
 		m.ClearSubscriptionID()
+		return nil
+	case creditgrant.FieldConversionRate:
+		m.ClearConversionRate()
+		return nil
+	case creditgrant.FieldTopupConversionRate:
+		m.ClearTopupConversionRate()
 		return nil
 	case creditgrant.FieldPeriod:
 		m.ClearPeriod()
@@ -13957,6 +14097,12 @@ func (m *CreditGrantMutation) ResetField(name string) error {
 		return nil
 	case creditgrant.FieldCredits:
 		m.ResetCredits()
+		return nil
+	case creditgrant.FieldConversionRate:
+		m.ResetConversionRate()
+		return nil
+	case creditgrant.FieldTopupConversionRate:
+		m.ResetTopupConversionRate()
 		return nil
 	case creditgrant.FieldCadence:
 		m.ResetCadence()
@@ -60319,35 +60465,36 @@ func (m *UserMutation) ResetEdge(name string) error {
 // WalletMutation represents an operation that mutates the Wallet nodes in the graph.
 type WalletMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *string
-	tenant_id       *string
-	status          *string
-	created_at      *time.Time
-	updated_at      *time.Time
-	created_by      *string
-	updated_by      *string
-	environment_id  *string
-	name            *string
-	customer_id     *string
-	currency        *string
-	description     *string
-	metadata        *map[string]string
-	balance         *decimal.Decimal
-	credit_balance  *decimal.Decimal
-	wallet_status   *types.WalletStatus
-	auto_topup      **types.AutoTopup
-	wallet_type     *types.WalletType
-	conversion_rate *decimal.Decimal
-	_config         *types.WalletConfig
-	alert_config    *types.AlertConfig
-	alert_enabled   *bool
-	alert_state     *types.AlertState
-	clearedFields   map[string]struct{}
-	done            bool
-	oldValue        func(context.Context) (*Wallet, error)
-	predicates      []predicate.Wallet
+	op                    Op
+	typ                   string
+	id                    *string
+	tenant_id             *string
+	status                *string
+	created_at            *time.Time
+	updated_at            *time.Time
+	created_by            *string
+	updated_by            *string
+	environment_id        *string
+	name                  *string
+	customer_id           *string
+	currency              *string
+	description           *string
+	metadata              *map[string]string
+	balance               *decimal.Decimal
+	credit_balance        *decimal.Decimal
+	wallet_status         *types.WalletStatus
+	auto_topup            **types.AutoTopup
+	wallet_type           *types.WalletType
+	conversion_rate       *decimal.Decimal
+	topup_conversion_rate *decimal.Decimal
+	_config               *types.WalletConfig
+	alert_config          *types.AlertConfig
+	alert_enabled         *bool
+	alert_state           *types.AlertState
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*Wallet, error)
+	predicates            []predicate.Wallet
 }
 
 var _ ent.Mutation = (*WalletMutation)(nil)
@@ -61193,6 +61340,55 @@ func (m *WalletMutation) ResetConversionRate() {
 	m.conversion_rate = nil
 }
 
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (m *WalletMutation) SetTopupConversionRate(d decimal.Decimal) {
+	m.topup_conversion_rate = &d
+}
+
+// TopupConversionRate returns the value of the "topup_conversion_rate" field in the mutation.
+func (m *WalletMutation) TopupConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.topup_conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTopupConversionRate returns the old "topup_conversion_rate" field's value of the Wallet entity.
+// If the Wallet object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletMutation) OldTopupConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTopupConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTopupConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTopupConversionRate: %w", err)
+	}
+	return oldValue.TopupConversionRate, nil
+}
+
+// ClearTopupConversionRate clears the value of the "topup_conversion_rate" field.
+func (m *WalletMutation) ClearTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	m.clearedFields[wallet.FieldTopupConversionRate] = struct{}{}
+}
+
+// TopupConversionRateCleared returns if the "topup_conversion_rate" field was cleared in this mutation.
+func (m *WalletMutation) TopupConversionRateCleared() bool {
+	_, ok := m.clearedFields[wallet.FieldTopupConversionRate]
+	return ok
+}
+
+// ResetTopupConversionRate resets all changes to the "topup_conversion_rate" field.
+func (m *WalletMutation) ResetTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	delete(m.clearedFields, wallet.FieldTopupConversionRate)
+}
+
 // SetConfig sets the "config" field.
 func (m *WalletMutation) SetConfig(tc types.WalletConfig) {
 	m._config = &tc
@@ -61423,7 +61619,7 @@ func (m *WalletMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.tenant_id != nil {
 		fields = append(fields, wallet.FieldTenantID)
 	}
@@ -61477,6 +61673,9 @@ func (m *WalletMutation) Fields() []string {
 	}
 	if m.conversion_rate != nil {
 		fields = append(fields, wallet.FieldConversionRate)
+	}
+	if m.topup_conversion_rate != nil {
+		fields = append(fields, wallet.FieldTopupConversionRate)
 	}
 	if m._config != nil {
 		fields = append(fields, wallet.FieldConfig)
@@ -61534,6 +61733,8 @@ func (m *WalletMutation) Field(name string) (ent.Value, bool) {
 		return m.WalletType()
 	case wallet.FieldConversionRate:
 		return m.ConversionRate()
+	case wallet.FieldTopupConversionRate:
+		return m.TopupConversionRate()
 	case wallet.FieldConfig:
 		return m.Config()
 	case wallet.FieldAlertConfig:
@@ -61587,6 +61788,8 @@ func (m *WalletMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldWalletType(ctx)
 	case wallet.FieldConversionRate:
 		return m.OldConversionRate(ctx)
+	case wallet.FieldTopupConversionRate:
+		return m.OldTopupConversionRate(ctx)
 	case wallet.FieldConfig:
 		return m.OldConfig(ctx)
 	case wallet.FieldAlertConfig:
@@ -61730,6 +61933,13 @@ func (m *WalletMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConversionRate(v)
 		return nil
+	case wallet.FieldTopupConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTopupConversionRate(v)
+		return nil
 	case wallet.FieldConfig:
 		v, ok := value.(types.WalletConfig)
 		if !ok {
@@ -61809,6 +62019,9 @@ func (m *WalletMutation) ClearedFields() []string {
 	if m.FieldCleared(wallet.FieldAutoTopup) {
 		fields = append(fields, wallet.FieldAutoTopup)
 	}
+	if m.FieldCleared(wallet.FieldTopupConversionRate) {
+		fields = append(fields, wallet.FieldTopupConversionRate)
+	}
 	if m.FieldCleared(wallet.FieldConfig) {
 		fields = append(fields, wallet.FieldConfig)
 	}
@@ -61855,6 +62068,9 @@ func (m *WalletMutation) ClearField(name string) error {
 		return nil
 	case wallet.FieldAutoTopup:
 		m.ClearAutoTopup()
+		return nil
+	case wallet.FieldTopupConversionRate:
+		m.ClearTopupConversionRate()
 		return nil
 	case wallet.FieldConfig:
 		m.ClearConfig()
@@ -61929,6 +62145,9 @@ func (m *WalletMutation) ResetField(name string) error {
 		return nil
 	case wallet.FieldConversionRate:
 		m.ResetConversionRate()
+		return nil
+	case wallet.FieldTopupConversionRate:
+		m.ResetTopupConversionRate()
 		return nil
 	case wallet.FieldConfig:
 		m.ResetConfig()
@@ -62022,6 +62241,8 @@ type WalletTransactionMutation struct {
 	expiry_date           *time.Time
 	credits_available     *decimal.Decimal
 	currency              *string
+	conversion_rate       *decimal.Decimal
+	topup_conversion_rate *decimal.Decimal
 	idempotency_key       *string
 	transaction_reason    *types.TransactionReason
 	priority              *int
@@ -63026,7 +63247,7 @@ func (m *WalletTransactionMutation) Currency() (r string, exists bool) {
 // OldCurrency returns the old "currency" field's value of the WalletTransaction entity.
 // If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WalletTransactionMutation) OldCurrency(ctx context.Context) (v *string, err error) {
+func (m *WalletTransactionMutation) OldCurrency(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCurrency is only allowed on UpdateOne operations")
 	}
@@ -63040,22 +63261,107 @@ func (m *WalletTransactionMutation) OldCurrency(ctx context.Context) (v *string,
 	return oldValue.Currency, nil
 }
 
-// ClearCurrency clears the value of the "currency" field.
-func (m *WalletTransactionMutation) ClearCurrency() {
-	m.currency = nil
-	m.clearedFields[wallettransaction.FieldCurrency] = struct{}{}
-}
-
-// CurrencyCleared returns if the "currency" field was cleared in this mutation.
-func (m *WalletTransactionMutation) CurrencyCleared() bool {
-	_, ok := m.clearedFields[wallettransaction.FieldCurrency]
-	return ok
-}
-
 // ResetCurrency resets all changes to the "currency" field.
 func (m *WalletTransactionMutation) ResetCurrency() {
 	m.currency = nil
-	delete(m.clearedFields, wallettransaction.FieldCurrency)
+}
+
+// SetConversionRate sets the "conversion_rate" field.
+func (m *WalletTransactionMutation) SetConversionRate(d decimal.Decimal) {
+	m.conversion_rate = &d
+}
+
+// ConversionRate returns the value of the "conversion_rate" field in the mutation.
+func (m *WalletTransactionMutation) ConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionRate returns the old "conversion_rate" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionRate: %w", err)
+	}
+	return oldValue.ConversionRate, nil
+}
+
+// ClearConversionRate clears the value of the "conversion_rate" field.
+func (m *WalletTransactionMutation) ClearConversionRate() {
+	m.conversion_rate = nil
+	m.clearedFields[wallettransaction.FieldConversionRate] = struct{}{}
+}
+
+// ConversionRateCleared returns if the "conversion_rate" field was cleared in this mutation.
+func (m *WalletTransactionMutation) ConversionRateCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldConversionRate]
+	return ok
+}
+
+// ResetConversionRate resets all changes to the "conversion_rate" field.
+func (m *WalletTransactionMutation) ResetConversionRate() {
+	m.conversion_rate = nil
+	delete(m.clearedFields, wallettransaction.FieldConversionRate)
+}
+
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (m *WalletTransactionMutation) SetTopupConversionRate(d decimal.Decimal) {
+	m.topup_conversion_rate = &d
+}
+
+// TopupConversionRate returns the value of the "topup_conversion_rate" field in the mutation.
+func (m *WalletTransactionMutation) TopupConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.topup_conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTopupConversionRate returns the old "topup_conversion_rate" field's value of the WalletTransaction entity.
+// If the WalletTransaction object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WalletTransactionMutation) OldTopupConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTopupConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTopupConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTopupConversionRate: %w", err)
+	}
+	return oldValue.TopupConversionRate, nil
+}
+
+// ClearTopupConversionRate clears the value of the "topup_conversion_rate" field.
+func (m *WalletTransactionMutation) ClearTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	m.clearedFields[wallettransaction.FieldTopupConversionRate] = struct{}{}
+}
+
+// TopupConversionRateCleared returns if the "topup_conversion_rate" field was cleared in this mutation.
+func (m *WalletTransactionMutation) TopupConversionRateCleared() bool {
+	_, ok := m.clearedFields[wallettransaction.FieldTopupConversionRate]
+	return ok
+}
+
+// ResetTopupConversionRate resets all changes to the "topup_conversion_rate" field.
+func (m *WalletTransactionMutation) ResetTopupConversionRate() {
+	m.topup_conversion_rate = nil
+	delete(m.clearedFields, wallettransaction.FieldTopupConversionRate)
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
@@ -63247,7 +63553,7 @@ func (m *WalletTransactionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WalletTransactionMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 27)
 	if m.tenant_id != nil {
 		fields = append(fields, wallettransaction.FieldTenantID)
 	}
@@ -63314,6 +63620,12 @@ func (m *WalletTransactionMutation) Fields() []string {
 	if m.currency != nil {
 		fields = append(fields, wallettransaction.FieldCurrency)
 	}
+	if m.conversion_rate != nil {
+		fields = append(fields, wallettransaction.FieldConversionRate)
+	}
+	if m.topup_conversion_rate != nil {
+		fields = append(fields, wallettransaction.FieldTopupConversionRate)
+	}
 	if m.idempotency_key != nil {
 		fields = append(fields, wallettransaction.FieldIdempotencyKey)
 	}
@@ -63375,6 +63687,10 @@ func (m *WalletTransactionMutation) Field(name string) (ent.Value, bool) {
 		return m.CreditsAvailable()
 	case wallettransaction.FieldCurrency:
 		return m.Currency()
+	case wallettransaction.FieldConversionRate:
+		return m.ConversionRate()
+	case wallettransaction.FieldTopupConversionRate:
+		return m.TopupConversionRate()
 	case wallettransaction.FieldIdempotencyKey:
 		return m.IdempotencyKey()
 	case wallettransaction.FieldTransactionReason:
@@ -63434,6 +63750,10 @@ func (m *WalletTransactionMutation) OldField(ctx context.Context, name string) (
 		return m.OldCreditsAvailable(ctx)
 	case wallettransaction.FieldCurrency:
 		return m.OldCurrency(ctx)
+	case wallettransaction.FieldConversionRate:
+		return m.OldConversionRate(ctx)
+	case wallettransaction.FieldTopupConversionRate:
+		return m.OldTopupConversionRate(ctx)
 	case wallettransaction.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
 	case wallettransaction.FieldTransactionReason:
@@ -63603,6 +63923,20 @@ func (m *WalletTransactionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetCurrency(v)
 		return nil
+	case wallettransaction.FieldConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionRate(v)
+		return nil
+	case wallettransaction.FieldTopupConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTopupConversionRate(v)
+		return nil
 	case wallettransaction.FieldIdempotencyKey:
 		v, ok := value.(string)
 		if !ok {
@@ -63696,8 +64030,11 @@ func (m *WalletTransactionMutation) ClearedFields() []string {
 	if m.FieldCleared(wallettransaction.FieldExpiryDate) {
 		fields = append(fields, wallettransaction.FieldExpiryDate)
 	}
-	if m.FieldCleared(wallettransaction.FieldCurrency) {
-		fields = append(fields, wallettransaction.FieldCurrency)
+	if m.FieldCleared(wallettransaction.FieldConversionRate) {
+		fields = append(fields, wallettransaction.FieldConversionRate)
+	}
+	if m.FieldCleared(wallettransaction.FieldTopupConversionRate) {
+		fields = append(fields, wallettransaction.FieldTopupConversionRate)
 	}
 	if m.FieldCleared(wallettransaction.FieldIdempotencyKey) {
 		fields = append(fields, wallettransaction.FieldIdempotencyKey)
@@ -63746,8 +64083,11 @@ func (m *WalletTransactionMutation) ClearField(name string) error {
 	case wallettransaction.FieldExpiryDate:
 		m.ClearExpiryDate()
 		return nil
-	case wallettransaction.FieldCurrency:
-		m.ClearCurrency()
+	case wallettransaction.FieldConversionRate:
+		m.ClearConversionRate()
+		return nil
+	case wallettransaction.FieldTopupConversionRate:
+		m.ClearTopupConversionRate()
 		return nil
 	case wallettransaction.FieldIdempotencyKey:
 		m.ClearIdempotencyKey()
@@ -63828,6 +64168,12 @@ func (m *WalletTransactionMutation) ResetField(name string) error {
 		return nil
 	case wallettransaction.FieldCurrency:
 		m.ResetCurrency()
+		return nil
+	case wallettransaction.FieldConversionRate:
+		m.ResetConversionRate()
+		return nil
+	case wallettransaction.FieldTopupConversionRate:
+		m.ResetTopupConversionRate()
 		return nil
 	case wallettransaction.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()

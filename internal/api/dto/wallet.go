@@ -26,15 +26,24 @@ type CreateWalletRequest struct {
 	Metadata           types.Metadata      `json:"metadata,omitempty"`
 	WalletType         types.WalletType    `json:"wallet_type"`
 	Config             *types.WalletConfig `json:"config,omitempty"`
+
 	// amount in the currency =  number of credits * conversion_rate
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
 	// ex if conversion_rate is 2, then 1 USD = 0.5 credits
 	// ex if conversion_rate is 0.5, then 1 USD = 2 credits
 	ConversionRate decimal.Decimal `json:"conversion_rate" default:"1" swaggertype:"string"`
+
+	// topup_conversion_rate is the conversion rate for the topup to the currency
+	// ex if topup_conversion_rate is 1, then 1 USD = 1 credit
+	// ex if topup_conversion_rate is 2, then 1 USD = 0.5 credits
+	// ex if topup_conversion_rate is 0.5, then 1 USD = 2 credits
+	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty" swaggertype:"string"`
+
 	// initial_credits_to_load is the number of credits to load to the wallet
 	// if not provided, the wallet will be created with 0 balance
 	// NOTE: this is not the amount in the currency, but the number of credits
 	InitialCreditsToLoad decimal.Decimal `json:"initial_credits_to_load,omitempty" default:"0" swaggertype:"string"`
+
 	// initial_credits_to_load_expiry_date YYYYMMDD format in UTC timezone (optional to set nil means no expiry)
 	// for ex 20250101 means the credits will expire on 2025-01-01 00:00:00 UTC
 	// hence they will be available for use until 2024-12-31 23:59:59 UTC
@@ -114,6 +123,10 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		r.ConversionRate = decimal.NewFromInt(1)
 	}
 
+	if r.TopupConversionRate == nil {
+		r.TopupConversionRate = lo.ToPtr(r.ConversionRate)
+	}
+
 	if r.Name == "" {
 		if r.WalletType == types.WalletTypePrePaid {
 			r.Name = fmt.Sprintf("Prepaid Wallet - %s", r.Currency)
@@ -134,24 +147,25 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	}
 
 	return &wallet.Wallet{
-		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
-		CustomerID:     r.CustomerID,
-		Name:           r.Name,
-		Currency:       strings.ToLower(r.Currency),
-		Description:    r.Description,
-		Metadata:       r.Metadata,
-		AutoTopup:      r.AutoTopup,
-		Balance:        decimal.Zero,
-		CreditBalance:  decimal.Zero,
-		WalletStatus:   types.WalletStatusActive,
-		EnvironmentID:  types.GetEnvironmentID(ctx),
-		BaseModel:      types.GetDefaultBaseModel(ctx),
-		WalletType:     r.WalletType,
-		Config:         lo.FromPtr(r.Config),
-		ConversionRate: r.ConversionRate,
-		AlertEnabled:   true, // Always enabled by default
-		AlertConfig:    alertConfig,
-		AlertState:     string(types.AlertStateOk), // Always starts in "ok" state
+		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
+		CustomerID:          r.CustomerID,
+		Name:                r.Name,
+		Currency:            strings.ToLower(r.Currency),
+		Description:         r.Description,
+		Metadata:            r.Metadata,
+		AutoTopup:           r.AutoTopup,
+		Balance:             decimal.Zero,
+		CreditBalance:       decimal.Zero,
+		WalletStatus:        types.WalletStatusActive,
+		EnvironmentID:       types.GetEnvironmentID(ctx),
+		BaseModel:           types.GetDefaultBaseModel(ctx),
+		WalletType:          r.WalletType,
+		Config:              lo.FromPtr(r.Config),
+		ConversionRate:      r.ConversionRate,
+		AlertEnabled:        true, // Always enabled by default
+		AlertConfig:         alertConfig,
+		AlertState:          string(types.AlertStateOk), // Always starts in "ok" state
+		TopupConversionRate: lo.FromPtr(r.TopupConversionRate),
 	}
 }
 
@@ -174,6 +188,17 @@ func (r *CreateWalletRequest) Validate() error {
 				"conversion_rate": r.ConversionRate,
 			}).
 			Mark(ierr.ErrValidation)
+	}
+
+	if r.TopupConversionRate != nil {
+		if r.TopupConversionRate.LessThanOrEqual(decimal.Zero) {
+			return ierr.NewError("topup_conversion_rate must be greater than 0").
+				WithHint("Topup conversion rate must be a positive value").
+				WithReportableDetails(map[string]interface{}{
+					"topup_conversion_rate": r.TopupConversionRate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	if r.CustomerID == "" && r.ExternalCustomerID == "" {
@@ -226,24 +251,7 @@ func (r *CreateWalletRequest) Validate() error {
 
 // WalletResponse represents a wallet in API responses
 type WalletResponse struct {
-	ID             string             `json:"id"`
-	CustomerID     string             `json:"customer_id"`
-	Name           string             `json:"name,omitempty"`
-	Currency       string             `json:"currency"`
-	Description    string             `json:"description,omitempty"`
-	Balance        decimal.Decimal    `json:"balance" swaggertype:"string"`
-	CreditBalance  decimal.Decimal    `json:"credit_balance" swaggertype:"string"`
-	WalletStatus   types.WalletStatus `json:"wallet_status"`
-	Metadata       types.Metadata     `json:"metadata,omitempty"`
-	AutoTopup      *types.AutoTopup   `json:"auto_topup,omitempty"`
-	WalletType     types.WalletType   `json:"wallet_type"`
-	Config         types.WalletConfig `json:"config,omitempty"`
-	ConversionRate decimal.Decimal    `json:"conversion_rate" swaggertype:"string"`
-	AlertEnabled   bool               `json:"alert_enabled"`
-	AlertConfig    *types.AlertConfig `json:"alert_config,omitempty"`
-	AlertState     string             `json:"alert_state,omitempty"`
-	CreatedAt      time.Time          `json:"created_at"`
-	UpdatedAt      time.Time          `json:"updated_at"`
+	*wallet.Wallet
 }
 
 // ToWalletResponse converts domain Wallet to WalletResponse
@@ -251,34 +259,8 @@ func FromWallet(w *wallet.Wallet) *WalletResponse {
 	if w == nil {
 		return nil
 	}
-	alertConfig := w.AlertConfig
-	if w.AlertConfig == nil || w.AlertConfig.Threshold == nil {
-		alertConfig = nil
-	}
-	return &WalletResponse{
-		ID:             w.ID,
-		CustomerID:     w.CustomerID,
-		Currency:       w.Currency,
-		Balance:        w.Balance,
-		CreditBalance:  w.CreditBalance,
-		Name:           w.Name,
-		Description:    w.Description,
-		WalletStatus:   w.WalletStatus,
-		Metadata:       w.Metadata,
-		AutoTopup:      w.AutoTopup,
-		WalletType:     w.WalletType,
-		Config:         w.Config,
-		ConversionRate: w.ConversionRate,
-		AlertEnabled:   w.AlertEnabled,
-		AlertConfig:    alertConfig,
-		AlertState:     w.AlertState,
-		CreatedAt:      w.CreatedAt,
-		UpdatedAt:      w.UpdatedAt,
-	}
-}
 
-func ToWalletBalanceResponse(w *wallet.Wallet) *WalletBalanceResponse {
-	return &WalletBalanceResponse{
+	return &WalletResponse{
 		Wallet: w,
 	}
 }

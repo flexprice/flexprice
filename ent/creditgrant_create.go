@@ -168,6 +168,34 @@ func (cgc *CreditGrantCreate) SetNillableCredits(d *decimal.Decimal) *CreditGran
 	return cgc
 }
 
+// SetConversionRate sets the "conversion_rate" field.
+func (cgc *CreditGrantCreate) SetConversionRate(d decimal.Decimal) *CreditGrantCreate {
+	cgc.mutation.SetConversionRate(d)
+	return cgc
+}
+
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableConversionRate(d *decimal.Decimal) *CreditGrantCreate {
+	if d != nil {
+		cgc.SetConversionRate(*d)
+	}
+	return cgc
+}
+
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (cgc *CreditGrantCreate) SetTopupConversionRate(d decimal.Decimal) *CreditGrantCreate {
+	cgc.mutation.SetTopupConversionRate(d)
+	return cgc
+}
+
+// SetNillableTopupConversionRate sets the "topup_conversion_rate" field if the given value is not nil.
+func (cgc *CreditGrantCreate) SetNillableTopupConversionRate(d *decimal.Decimal) *CreditGrantCreate {
+	if d != nil {
+		cgc.SetTopupConversionRate(*d)
+	}
+	return cgc
+}
+
 // SetCadence sets the "cadence" field.
 func (cgc *CreditGrantCreate) SetCadence(tgc types.CreditGrantCadence) *CreditGrantCreate {
 	cgc.mutation.SetCadence(tgc)
@@ -513,6 +541,14 @@ func (cgc *CreditGrantCreate) createSpec() (*CreditGrant, *sqlgraph.CreateSpec) 
 	if value, ok := cgc.mutation.Credits(); ok {
 		_spec.SetField(creditgrant.FieldCredits, field.TypeOther, value)
 		_node.Credits = value
+	}
+	if value, ok := cgc.mutation.ConversionRate(); ok {
+		_spec.SetField(creditgrant.FieldConversionRate, field.TypeOther, value)
+		_node.ConversionRate = &value
+	}
+	if value, ok := cgc.mutation.TopupConversionRate(); ok {
+		_spec.SetField(creditgrant.FieldTopupConversionRate, field.TypeOther, value)
+		_node.TopupConversionRate = &value
 	}
 	if value, ok := cgc.mutation.Cadence(); ok {
 		_spec.SetField(creditgrant.FieldCadence, field.TypeString, value)
