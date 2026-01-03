@@ -5,14 +5,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/task"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 type TaskService interface {
@@ -216,6 +219,13 @@ func (s *taskService) ProcessTaskWithStreaming(ctx context.Context, id string) e
 		processor = &CustomersChunkProcessor{
 			customerService: customerSvc,
 			logger:          s.Logger,
+		}
+	case types.EntityTypePrices:
+		// Create price service for chunk processor
+		priceSvc := NewPriceService(s.ServiceParams)
+		processor = &PricesChunkProcessor{
+			priceService: priceSvc,
+			logger:       s.Logger,
 		}
 	default:
 		return ierr.NewError("unsupported entity type").
@@ -697,5 +707,209 @@ func (p *CustomersChunkProcessor) processCustomer(ctx context.Context, customerR
 	}
 
 	p.logger.Info("created new customer", "external_id", customerReq.ExternalID)
+	return nil
+}
+
+// PricesChunkProcessor processes chunks of price data
+type PricesChunkProcessor struct {
+	priceService PriceService
+	logger       *logger.Logger
+}
+
+// ProcessChunk processes a chunk of price records
+func (p *PricesChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]string, headers []string, chunkIndex int) (*ChunkResult, error) {
+	processedRecords := 0
+	successfulRecords := 0
+	failedRecords := 0
+	var errors []string
+
+	p.logger.Debugw("processing price chunk",
+		"chunk_index", chunkIndex,
+		"chunk_size", len(chunk),
+		"headers", headers)
+
+	// Process each record in the chunk
+	for i, record := range chunk {
+		processedRecords++
+
+		p.logger.Debugw("processing price record",
+			"record_index", i,
+			"record", record,
+			"chunk_index", chunkIndex)
+
+		// Create price request
+		priceReq := &dto.CreatePriceRequest{
+			Metadata: make(map[string]string),
+		}
+
+		hasParsingError := false
+
+		// Map standard fields
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			value := record[j]
+			if value == "" {
+				continue
+			}
+			switch header {
+			case "amount":
+				amount, _ := decimal.NewFromString(value)
+				priceReq.Amount = &amount
+			case "currency":
+				priceReq.Currency = value
+			case "entity_type":
+				priceReq.EntityType = types.PriceEntityType(value)
+			case "entity_id":
+				priceReq.EntityID = value
+			case "type":
+				priceReq.Type = types.PriceType(value)
+			case "price_unit_type":
+				priceReq.PriceUnitType = types.PriceUnitType(value)
+			case "billing_period":
+				priceReq.BillingPeriod = types.BillingPeriod(value)
+			case "billing_period_count":
+				count, _ := strconv.Atoi(value)
+				priceReq.BillingPeriodCount = count
+			case "billing_model":
+				priceReq.BillingModel = types.BillingModel(value)
+			case "billing_cadence":
+				priceReq.BillingCadence = types.BillingCadence(value)
+			case "meter_id":
+				priceReq.MeterID = value
+			case "lookup_key":
+				priceReq.LookupKey = value
+			case "invoice_cadence":
+				priceReq.InvoiceCadence = types.InvoiceCadence(value)
+			case "trial_period":
+				trial, _ := strconv.Atoi(value)
+				priceReq.TrialPeriod = trial
+			case "description":
+				priceReq.Description = value
+			case "tier_mode":
+				priceReq.TierMode = types.BillingTier(value)
+			case "start_date":
+				startDate, _ := time.Parse(time.RFC3339, value)
+				priceReq.StartDate = &startDate
+			case "end_date":
+				endDate, _ := time.Parse(time.RFC3339, value)
+				priceReq.EndDate = &endDate
+			case "display_name":
+				priceReq.DisplayName = value
+			case "min_quantity":
+				minQty, _ := strconv.ParseInt(value, 10, 64)
+				priceReq.MinQuantity = &minQty
+			case "group_id":
+				priceReq.GroupID = value
+			case "transform_quantity_divide_by":
+				divideBy, _ := strconv.Atoi(value)
+				if priceReq.TransformQuantity == nil {
+					priceReq.TransformQuantity = &price.TransformQuantity{}
+				}
+				priceReq.TransformQuantity.DivideBy = divideBy
+			case "transform_quantity_round":
+				if priceReq.TransformQuantity == nil {
+					priceReq.TransformQuantity = &price.TransformQuantity{}
+				}
+				priceReq.TransformQuantity.Round = types.RoundType(value)
+			case "price_unit_config_price_unit":
+				if priceReq.PriceUnitConfig == nil {
+					priceReq.PriceUnitConfig = &dto.PriceUnitConfig{}
+				}
+				priceReq.PriceUnitConfig.PriceUnit = value
+			case "price_unit_config_amount":
+				amount, _ := decimal.NewFromString(value)
+				if priceReq.PriceUnitConfig == nil {
+					priceReq.PriceUnitConfig = &dto.PriceUnitConfig{}
+				}
+				priceReq.PriceUnitConfig.Amount = &amount
+			case "tiers":
+				// Parse JSON array of tiers
+				var tiers []dto.CreatePriceTier
+				if err := json.Unmarshal([]byte(value), &tiers); err != nil {
+					errors = append(errors, fmt.Sprintf("Record %d: failed to parse tiers JSON: %v", i, err))
+					failedRecords++
+					hasParsingError = true
+					break
+				}
+				priceReq.Tiers = tiers
+			case "price_unit_config_tiers":
+				// Parse JSON array of price unit config tiers
+				if priceReq.PriceUnitConfig == nil {
+					priceReq.PriceUnitConfig = &dto.PriceUnitConfig{}
+				}
+				var tiers []dto.CreatePriceTier
+				if err := json.Unmarshal([]byte(value), &tiers); err != nil {
+					errors = append(errors, fmt.Sprintf("Record %d: failed to parse price_unit_config_tiers JSON: %v", i, err))
+					failedRecords++
+					hasParsingError = true
+					break
+				}
+				priceReq.PriceUnitConfig.PriceUnitTiers = tiers
+			}
+		}
+
+		// Skip this record if there was a JSON parsing error
+		if hasParsingError {
+			continue
+		}
+
+		// Parse metadata fields (headers starting with "metadata.")
+		for j, header := range headers {
+			if j >= len(record) {
+				continue
+			}
+			if strings.HasPrefix(header, "metadata.") {
+				value := record[j]
+				if value != "" {
+					metadataKey := strings.TrimPrefix(header, "metadata.")
+					priceReq.Metadata[metadataKey] = value
+				}
+			}
+		}
+
+		// Validate the price request
+		if err := priceReq.Validate(); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		// Process the price (create)
+		if err := p.processPrice(ctx, priceReq); err != nil {
+			errors = append(errors, fmt.Sprintf("Record %d: %v", i, err))
+			failedRecords++
+			continue
+		}
+
+		successfulRecords++
+	}
+
+	// Create error summary if there are errors
+	var errorSummary *string
+	if len(errors) > 0 {
+		summary := strings.Join(errors, "; ")
+		errorSummary = &summary
+	}
+
+	return &ChunkResult{
+		ProcessedRecords:  processedRecords,
+		SuccessfulRecords: successfulRecords,
+		FailedRecords:     failedRecords,
+		ErrorSummary:      errorSummary,
+	}, nil
+}
+
+// processPrice processes a single price (create)
+func (p *PricesChunkProcessor) processPrice(ctx context.Context, priceReq *dto.CreatePriceRequest) error {
+	// Create the price
+	_, err := p.priceService.CreatePrice(ctx, *priceReq)
+	if err != nil {
+		p.logger.Error("failed to create price", "error", err)
+		return fmt.Errorf("failed to create price: %w", err)
+	}
+
+	p.logger.Info("created new price", "entity_type", priceReq.EntityType, "entity_id", priceReq.EntityID, "lookup_key", priceReq.LookupKey)
 	return nil
 }
