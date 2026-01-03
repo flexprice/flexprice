@@ -1,7 +1,7 @@
 
 [project]
 name = "flexprice-sdk-test"
-version = "2.0.0"
+version = "2.0.2"
 description = "Python SDK for FlexPrice API"
 authors = [{ name = "Speakeasy" },]
 readme = "README-PYPI.md"

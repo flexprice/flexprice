@@ -6,7 +6,7 @@ sources:
         sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
         tags:
             - latest
-            - speakeasy-sdk-regen-develop-1767449149
+            - speakeasy-sdk-regen-develop-1767451153
             - "1.0"
 targets:
     flexprice-go:
@@ -15,21 +15,21 @@ targets:
         sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
         sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
         codeSamplesNamespace: flexprice-api-go-code-samples
-        codeSamplesRevisionDigest: sha256:54ec9e9200f7cb9faa152d9d7adb954c3b851d9f32fa9c09825c0dda68c0892e
+        codeSamplesRevisionDigest: sha256:6ac68f4883ecf525ea3a90b1387c8478f9523af4e9acd9fee770953520ab9920
     flexprice-python:
         source: flexprice-api
         sourceNamespace: flexprice-api
         sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
         sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
         codeSamplesNamespace: flexprice-api-python-code-samples
-        codeSamplesRevisionDigest: sha256:d1aafdad817d301bc4892265b86e1cb22fa8781f41eae1793ad33658a2a7cfe0
+        codeSamplesRevisionDigest: sha256:aa3fbe77a9f165f1bc7d101613022f6fa5cf42fb71516f60e7c84eb04747cf61
     flexprice-typescript:
         source: flexprice-api
         sourceNamespace: flexprice-api
         sourceRevisionDigest: sha256:038fb757329ecadf37790c1134f995838e703e0bad216cc5a81a99b3ffa8432b
         sourceBlobDigest: sha256:bb4b9ed078b71cb6aee4b72c3c6a831899049bd466c6cf9ec321108bacdfc01c
         codeSamplesNamespace: flexprice-api-typescript-code-samples
-        codeSamplesRevisionDigest: sha256:6b0ea825c9c64d7914d8e4ba634558f4bf23ebb7be495129af2f0377074ee205
+        codeSamplesRevisionDigest: sha256:9b222d574591e27428be910f488ef1516a65fff12f433dc1d8057f175aef759f
 workflow:
     workflowVersion: 1.0.0
     speakeasyVersion: latest
