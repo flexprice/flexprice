@@ -413,14 +413,14 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				apiKeys.DELETE("/:id", handlers.Secret.DeleteAPIKey)
 			}
 
-		// Integration routes
-		integrations := secrets.Group("/integrations")
-		{
-			integrations.GET("/linked", handlers.Secret.ListLinkedIntegrations)
-			integrations.POST("/create/:provider", handlers.Secret.CreateIntegration)
-			integrations.GET("/by-provider/:provider", handlers.Secret.GetIntegration)
-			integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
-		}
+			// Integration routes
+			integrations := secrets.Group("/integrations")
+			{
+				integrations.GET("/linked", handlers.Secret.ListLinkedIntegrations)
+				integrations.POST("/create/:provider", handlers.Secret.CreateIntegration)
+				integrations.GET("/by-provider/:provider", handlers.Secret.GetIntegration)
+				integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
+			}
 		}
 
 		// Connection routes
@@ -517,10 +517,13 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 		// Invoices
 		customerDashboardAPI.POST("/invoices", handlers.CustomerDashboard.GetInvoices)
+		customerDashboardAPI.GET("/invoices/:id/pdf", handlers.CustomerDashboard.GetInvoicePDF)
 		customerDashboardAPI.GET("/invoices/:id", handlers.CustomerDashboard.GetInvoice)
 
 		// Wallets
 		customerDashboardAPI.POST("/wallets", handlers.CustomerDashboard.GetWallets)
+		customerDashboardAPI.GET("/wallets/:id/balance", handlers.CustomerDashboard.GetWalletBalance)
+		customerDashboardAPI.GET("/wallets/:id/transactions", handlers.CustomerDashboard.GetWalletTransactions)
 		customerDashboardAPI.GET("/wallets/:id", handlers.CustomerDashboard.GetWallet)
 
 		// Analytics
