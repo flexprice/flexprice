@@ -36,6 +36,14 @@ type CustomerDashboardService interface {
 	GetCostAnalytics(ctx context.Context, req dto.DashboardCostAnalyticsRequest) (*dto.GetDetailedCostAnalyticsResponse, error)
 	// GetUsageSummary returns usage summary for the dashboard customer
 	GetUsageSummary(ctx context.Context, req dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
+
+	// GetInvoicePDFUrl returns a presigned URL for an invoice PDF
+	GetInvoicePDFUrl(ctx context.Context, invoiceID string) (string, error)
+
+	// GetWalletBalance returns the real-time balance for a wallet
+	GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
+	// GetWalletTransactions returns transactions for a wallet with pagination
+	GetWalletTransactions(ctx context.Context, walletID string, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error)
 }
 
 type customerDashboardService struct {
@@ -334,4 +342,84 @@ func (s *customerDashboardService) GetUsageSummary(ctx context.Context, req dto.
 	// Use billing service to get usage summary
 	billingService := NewBillingService(s.ServiceParams)
 	return billingService.GetCustomerUsageSummary(ctx, customerID, &req)
+}
+
+// GetInvoicePDFUrl returns a presigned URL for an invoice PDF
+func (s *customerDashboardService) GetInvoicePDFUrl(ctx context.Context, invoiceID string) (string, error) {
+	customerID := types.GetCustomerID(ctx)
+	if customerID == "" {
+		return "", ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
+	}
+
+	invoiceService := NewInvoiceService(s.ServiceParams)
+
+	// Get the invoice to verify ownership
+	req := dto.GetInvoiceWithBreakdownRequest{
+		ID: invoiceID,
+	}
+	invoice, err := invoiceService.GetInvoiceWithBreakdown(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	// Verify it belongs to this customer
+	if invoice.CustomerID != customerID {
+		return "", ierr.NewError("invoice not found").
+			WithHint("Invoice does not belong to this customer").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get the presigned URL
+	return invoiceService.GetInvoicePDFUrl(ctx, invoiceID)
+}
+
+// GetWalletBalance returns the real-time balance for a wallet
+func (s *customerDashboardService) GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
+	customerID := types.GetCustomerID(ctx)
+	if customerID == "" {
+		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+
+	// Get the wallet balance
+	wallet, err := walletService.GetWalletBalance(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify it belongs to this customer
+	if wallet.CustomerID != customerID {
+		return nil, ierr.NewError("wallet not found").
+			WithHint("Wallet does not belong to this customer").
+			Mark(ierr.ErrNotFound)
+	}
+
+	return wallet, nil
+}
+
+// GetWalletTransactions returns transactions for a wallet with pagination
+func (s *customerDashboardService) GetWalletTransactions(ctx context.Context, walletID string, filter *types.WalletTransactionFilter) (*dto.ListWalletTransactionsResponse, error) {
+	customerID := types.GetCustomerID(ctx)
+	if customerID == "" {
+		return nil, ierr.NewError("customer not found in context").Mark(ierr.ErrPermissionDenied)
+	}
+
+	walletService := NewWalletService(s.ServiceParams)
+
+	// First verify the wallet belongs to this customer by getting the wallet
+	wallet, err := walletService.GetWalletBalance(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Verify it belongs to this customer
+	if wallet.CustomerID != customerID {
+		return nil, ierr.NewError("wallet not found").
+			WithHint("Wallet does not belong to this customer").
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Get the transactions
+	return walletService.GetWalletTransactions(ctx, walletID, filter)
 }
