@@ -39,4 +39,6 @@ type Repository interface {
 
 	// GetInvoicesForExport retrieves invoices for export purposes with pagination
 	GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*Invoice, error)
+
+	UpdateLineItem(ctx context.Context, item *InvoiceLineItem) error
 }
