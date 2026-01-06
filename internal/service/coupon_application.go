@@ -235,17 +235,22 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 			totalDiscount = totalDiscount.Add(discountResult.Discount)
 			lineItemDiscounts[targetLineItem.ID] = lineItemDiscounts[targetLineItem.ID].Add(discountResult.Discount)
 
+			// Set LineItemDiscount on the line item (accumulate if multiple coupons apply to same item)
+			targetLineItem.LineItemDiscount = targetLineItem.LineItemDiscount.Add(discountResult.Discount)
+
 			s.Logger.Debugw("applied line item coupon",
 				"line_item_id", targetLineItem.ID,
 				"price_id", lineItemCoupon.LineItemID,
 				"coupon_id", lineItemCoupon.CouponID,
 				"original_amount", originalLineItemAmount,
 				"discount", discountResult.Discount,
+				"line_item_discount", targetLineItem.LineItemDiscount,
 				"final_price", discountResult.FinalPrice)
 		}
 
 		// Step 2: Apply invoice-level coupons to the remaining invoice total
 		runningSubTotal := inv.Subtotal.Sub(totalDiscount)
+		invoiceLevelDiscountTotal := decimal.Zero
 
 		for _, invoiceCoupon := range invoiceCoupons {
 			// Get coupon from batch-fetched map or fetch individually
@@ -309,6 +314,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 				CouponApplication: ca,
 			})
 			totalDiscount = totalDiscount.Add(discountResult.Discount)
+			invoiceLevelDiscountTotal = invoiceLevelDiscountTotal.Add(discountResult.Discount)
 			runningSubTotal = discountResult.FinalPrice
 
 			s.Logger.Debugw("applied invoice coupon",
@@ -316,6 +322,40 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 				"original_subtotal", runningSubTotal.Add(discountResult.Discount),
 				"discount", discountResult.Discount,
 				"final_subtotal", discountResult.FinalPrice)
+		}
+
+		// Step 3: Distribute invoice-level discount proportionally across all line items
+		// This uses the remainder allocation pattern to ensure exact distribution without rounding errors
+		// Note: We use lineItem.Amount for proportional distribution, which remains unchanged throughout
+		// the coupon application flow (we only set LineItemDiscount, never modify Amount)
+		if !invoiceLevelDiscountTotal.IsZero() && len(inv.LineItems) > 0 {
+			// Create invoice service to access DistributeInvoiceLevelDiscount method
+			invoiceService := NewInvoiceService(s.ServiceParams)
+
+			// Distribute invoice-level discount proportionally across all line items
+			if err := invoiceService.DistributeInvoiceLevelDiscount(txCtx, inv.LineItems, invoiceLevelDiscountTotal); err != nil {
+				s.Logger.Errorw("failed to distribute invoice-level discount",
+					"invoice_id", inv.ID,
+					"total_invoice_level_discount", invoiceLevelDiscountTotal,
+					"error", err)
+				return err
+			}
+		}
+
+		// Batch update all line items that have discounts (either line item or invoice level)
+		// Iterate through all line items and update only those with non-zero discounts
+		for _, lineItem := range inv.LineItems {
+			// Only update if line item has either line item discount or invoice level discount
+			if !lineItem.LineItemDiscount.IsZero() || !lineItem.InvoiceLevelDiscount.IsZero() {
+				if err := s.InvoiceRepo.UpdateLineItem(txCtx, lineItem); err != nil {
+					s.Logger.Errorw("failed to update line item with discount",
+						"line_item_id", lineItem.ID,
+						"line_item_discount", lineItem.LineItemDiscount,
+						"invoice_level_discount", lineItem.InvoiceLevelDiscount,
+						"error", err)
+					return err
+				}
+			}
 		}
 
 		result = &CouponCalculationResult{
