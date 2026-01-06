@@ -94,6 +94,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetEnvironmentID(inv.EnvironmentID).
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
+		SetTotalCreditsApplied(inv.TotalCreditsApplied).
 		Save(ctx)
 
 	if err != nil {
@@ -196,6 +197,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePeriodStart(inv.PeriodStart).
 			SetNillablePeriodEnd(inv.PeriodEnd).
 			SetEnvironmentID(inv.EnvironmentID).
+			SetTotalCreditsApplied(inv.TotalCreditsApplied).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
@@ -262,6 +264,9 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetMetadata(item.Metadata).
 					SetEnvironmentID(item.EnvironmentID).
 					SetCommitmentInfo(item.CommitmentInfo).
+					SetCreditsApplied(item.CreditsApplied).
+					SetLineItemDiscount(item.LineItemDiscount).
+					SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 					SetStatus(string(item.Status)).
 					SetCreatedBy(item.CreatedBy).
 					SetUpdatedBy(item.UpdatedBy).
@@ -332,6 +337,9 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetNillablePeriodEnd(item.PeriodEnd).
 				SetMetadata(item.Metadata).
 				SetCommitmentInfo(item.CommitmentInfo).
+				SetCreditsApplied(item.CreditsApplied).
+				SetLineItemDiscount(item.LineItemDiscount).
+				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 				SetStatus(string(item.Status)).
 				SetCreatedBy(item.CreatedBy).
 				SetUpdatedBy(item.UpdatedBy).
@@ -465,6 +473,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetMetadata(inv.Metadata).
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
+		SetTotalCreditsApplied(inv.TotalCreditsApplied).
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
