@@ -92,6 +92,8 @@ type Invoice struct {
 	InvoiceNumber *string `json:"invoice_number,omitempty"`
 	// Sequence number for subscription billing periods
 	BillingSequence *int `json:"billing_sequence,omitempty"`
+	// Total credits applied to this invoice
+	TotalCreditsApplied *decimal.Decimal `json:"total_credits_applied,omitempty"`
 	// Key for ensuring idempotent invoice creation
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -134,7 +136,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoice.FieldTotalTax, invoice.FieldTotalDiscount:
+		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoice.FieldMetadata:
 			values[i] = new([]byte)
@@ -398,6 +400,13 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.BillingSequence = new(int)
 				*i.BillingSequence = int(value.Int64)
 			}
+		case invoice.FieldTotalCreditsApplied:
+			if value, ok := values[j].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field total_credits_applied", values[j])
+			} else if value.Valid {
+				i.TotalCreditsApplied = new(decimal.Decimal)
+				*i.TotalCreditsApplied = *value.S.(*decimal.Decimal)
+			}
 		case invoice.FieldIdempotencyKey:
 			if value, ok := values[j].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field idempotency_key", values[j])
@@ -582,6 +591,11 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	if v := i.BillingSequence; v != nil {
 		builder.WriteString("billing_sequence=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := i.TotalCreditsApplied; v != nil {
+		builder.WriteString("total_credits_applied=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

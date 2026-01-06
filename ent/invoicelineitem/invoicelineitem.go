@@ -71,6 +71,12 @@ const (
 	FieldMetadata = "metadata"
 	// FieldCommitmentInfo holds the string denoting the commitment_info field in the database.
 	FieldCommitmentInfo = "commitment_info"
+	// FieldCreditsApplied holds the string denoting the credits_applied field in the database.
+	FieldCreditsApplied = "credits_applied"
+	// FieldLineItemDiscount holds the string denoting the line_item_discount field in the database.
+	FieldLineItemDiscount = "line_item_discount"
+	// FieldInvoiceLevelDiscount holds the string denoting the invoice_level_discount field in the database.
+	FieldInvoiceLevelDiscount = "invoice_level_discount"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -124,6 +130,9 @@ var Columns = []string{
 	FieldPeriodEnd,
 	FieldMetadata,
 	FieldCommitmentInfo,
+	FieldCreditsApplied,
+	FieldLineItemDiscount,
+	FieldInvoiceLevelDiscount,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -159,6 +168,12 @@ var (
 	DefaultQuantity decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
+	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
+	DefaultCreditsApplied decimal.Decimal
+	// DefaultLineItemDiscount holds the default value on creation for the "line_item_discount" field.
+	DefaultLineItemDiscount decimal.Decimal
+	// DefaultInvoiceLevelDiscount holds the default value on creation for the "invoice_level_discount" field.
+	DefaultInvoiceLevelDiscount decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the InvoiceLineItem queries.
@@ -297,6 +312,21 @@ func ByPeriodStart(opts ...sql.OrderTermOption) OrderOption {
 // ByPeriodEnd orders the results by the period_end field.
 func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
+}
+
+// ByCreditsApplied orders the results by the credits_applied field.
+func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCreditsApplied, opts...).ToFunc()
+}
+
+// ByLineItemDiscount orders the results by the line_item_discount field.
+func ByLineItemDiscount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLineItemDiscount, opts...).ToFunc()
+}
+
+// ByInvoiceLevelDiscount orders the results by the invoice_level_discount field.
+func ByInvoiceLevelDiscount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceLevelDiscount, opts...).ToFunc()
 }
 
 // ByInvoiceField orders the results by invoice field.
