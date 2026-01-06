@@ -2,12 +2,12 @@ package dto
 
 import (
 	"context"
-	"time"
 
 	taxassociation "github.com/flexprice/flexprice/internal/domain/taxassociation"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
+	"github.com/samber/lo"
 )
 
 type CreateTaxAssociationRequest struct {
@@ -103,24 +103,8 @@ func (r *LinkTaxRateToEntityRequest) Validate() error {
 
 // TaxAssociationResponse represents the response for tax association operations
 type TaxAssociationResponse struct {
-	ID            string                  `json:"id"`
-	TaxRateID     string                  `json:"tax_rate_id"`
-	EntityType    types.TaxRateEntityType `json:"entity_type"`
-	EntityID      string                  `json:"entity_id"`
-	Priority      int                     `json:"priority"`
-	AutoApply     bool                    `json:"auto_apply"`
-	ValidFrom     *time.Time              `json:"valid_from,omitempty"`
-	ValidTo       *time.Time              `json:"valid_to,omitempty"`
-	Currency      string                  `json:"currency"`
-	Metadata      map[string]string       `json:"metadata,omitempty"`
-	EnvironmentID string                  `json:"environment_id"`
-	TenantID      string                  `json:"tenant_id"`
-	Status        string                  `json:"status"`
-	CreatedAt     time.Time               `json:"created_at"`
-	UpdatedAt     time.Time               `json:"updated_at"`
-	CreatedBy     string                  `json:"created_by"`
-	UpdatedBy     string                  `json:"updated_by"`
-	TaxRate       *TaxRateResponse        `json:"tax_rate,omitempty"`
+	taxassociation.TaxAssociation
+	TaxRate *TaxRateResponse `json:"tax_rate,omitempty"`
 }
 
 // ToTaxAssociationResponse converts a domain TaxConfig to a TaxAssociationResponse
@@ -130,21 +114,7 @@ func ToTaxAssociationResponse(tc *taxassociation.TaxAssociation) *TaxAssociation
 	}
 
 	return &TaxAssociationResponse{
-		ID:            tc.ID,
-		TaxRateID:     tc.TaxRateID,
-		EntityType:    tc.EntityType,
-		EntityID:      tc.EntityID,
-		Priority:      tc.Priority,
-		AutoApply:     tc.AutoApply,
-		Currency:      tc.Currency,
-		Metadata:      tc.Metadata,
-		EnvironmentID: tc.EnvironmentID,
-		TenantID:      tc.TenantID,
-		Status:        string(tc.Status),
-		CreatedAt:     tc.CreatedAt,
-		UpdatedAt:     tc.UpdatedAt,
-		CreatedBy:     tc.CreatedBy,
-		UpdatedBy:     tc.UpdatedBy,
+		TaxAssociation: lo.FromPtr(tc),
 	}
 }
 
