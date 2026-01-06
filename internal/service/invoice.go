@@ -53,6 +53,7 @@ type InvoiceService interface {
 	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
+	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, totalDiscountAmount decimal.Decimal) error
 
 	// Cron methods
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
@@ -3442,6 +3443,109 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 
 	// Sync to Nomod if Nomod connection is enabled (async via Temporal)
 	s.triggerNomodInvoiceSyncWorkflow(ctx, invoice.ID, invoice.CustomerID)
+
+	return nil
+}
+
+// DistributeInvoiceLevelDiscount proportionally distributes an invoice-level discount across all line items
+// using a precision-preserving algorithm that ensures exact distribution without rounding errors.
+//
+// PURPOSE:
+// When an invoice-level discount (e.g., from an invoice-level coupon) is applied, it must be
+// distributed proportionally across all line items based on their relative amounts. This allows
+// tracking how much of the invoice-level discount is attributed to each line item, which is
+// essential for accurate financial reporting, tax calculations, and audit trails.
+//
+// USE CASES:
+// - Invoice-level coupon applications (e.g., "10% off entire invoice")
+// - Invoice-level promotional discounts
+// - Any discount applied at the invoice level that needs to be allocated to line items
+//
+// ALGORITHM: Remainder Allocation Pattern (Industry Standard)
+// This function implements the "remainder allocation" pattern used by major billing platforms
+//
+// 1. Calculate proportional discount for each line item: (Line Item Amount / Total Invoice Amount) × Total Discount
+// 2. For all items except the last: assign the calculated proportional amount
+// 3. For the last item: assign the remainder (totalDiscountAmount - sum of all previous allocations)
+//
+// This guarantees that: sum(all lineItem.InvoiceLevelDiscount) == totalDiscountAmount exactly
+//
+// EXAMPLES:
+//
+// Example 1: Fixed Discount ($10.00 off)
+//
+//	Invoice: Line Item A = $60.00, Line Item B = $40.00 (Total = $100.00)
+//	Discount: $10.00 fixed amount
+//	Calculation:
+//	  - Item A proportion: $60.00 / $100.00 = 0.6 → $10.00 × 0.6 = $6.00
+//	  - Item B (last): $10.00 - $6.00 = $4.00 (remainder allocation)
+//	Result: Item A gets $6.00, Item B gets $4.00 (Total = $10.00 exactly)
+//
+// Example 2: Percentage Discount (10% off)
+//
+//	Invoice: Line Item A = $50.00, Line Item B = $30.00, Line Item C = $20.00 (Total = $100.00)
+//	Discount: 10% of $100.00 = $10.00
+//	Calculation:
+//	  - Item A proportion: $50.00 / $100.00 = 0.5 → $10.00 × 0.5 = $5.00
+//	  - Item B proportion: $30.00 / $100.00 = 0.3 → $10.00 × 0.3 = $3.00
+//	  - Item C (last): $10.00 - ($5.00 + $3.00) = $2.00 (remainder allocation)
+//	Result: Item A gets $5.00, Item B gets $3.00, Item C gets $2.00 (Total = $10.00 exactly)
+//
+// Example 3: Precision Preservation (Smallest Currency Units)
+//
+//	Invoice: Line Item A = $33.33, Line Item B = $33.33, Line Item C = $33.34 (Total = $100.00)
+//	Discount: $1.00 fixed amount
+//	Calculation (maintaining full precision):
+//	  - Item A: $33.33 / $100.00 = 0.3333 → $1.00 × 0.3333 = $0.3333
+//	  - Item B: $33.33 / $100.00 = 0.3333 → $1.00 × 0.3333 = $0.3333
+//	  - Item C (last): $1.00 - ($0.3333 + $0.3333) = $0.3334 (remainder ensures exact total)
+//	Result: No rounding errors, exact distribution preserved down to smallest currency unit
+//
+// Formula: Proportional Discount Amount = (Line Item Amount / Total Invoice Amount) × Total Discount Amount
+func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, totalDiscountAmount decimal.Decimal) error {
+	if totalDiscountAmount.IsZero() {
+		return nil
+	}
+
+	// Calculate total invoice amount (sum of all line items)
+	// This serves as the denominator for proportional calculations and represents the basis
+	// for determining each line item's share of the discount
+	totalInvoiceAmount := decimal.Zero
+	for _, lineItem := range lineItems {
+		totalInvoiceAmount = totalInvoiceAmount.Add(lineItem.Amount)
+	}
+
+	// Edge case: Cannot distribute discount on zero-amount invoice
+	// This can occur if all line items have zero amount, making proportional calculation impossible
+	// We log the error for debugging but return nil (non-fatal) to allow invoice processing to continue
+	if totalInvoiceAmount.IsZero() {
+		s.Logger.Errorw("cannot distribute discount on zero-amount invoice", "line_items", lineItems)
+		return nil
+	}
+
+	// Distribute discount proportionally across all line items using remainder allocation pattern
+	// This ensures exact distribution without any loss of precision or rounding errors
+	distributedTotal := decimal.Zero
+	for i, lineItem := range lineItems {
+		var discountAmount decimal.Decimal
+		if i == len(lineItems)-1 {
+			// REMAINDER ALLOCATION: For the last line item, assign the remaining discount amount
+			// This ensures exact distribution: sum(all discounts) == totalDiscountAmount (no rounding errors)
+			// This is the industry-standard approach used by Stripe, Orb, Lago, and Metronome
+			// The last item receives any remainder from floating-point precision or rounding differences
+			// Example: If totalDiscount = $10.00 and first items sum to $9.99999999, last gets $0.00000001
+			discountAmount = totalDiscountAmount.Sub(distributedTotal)
+		} else {
+			// PROPORTIONAL CALCULATION: Calculate each line item's proportional share
+			// Formula: (lineItem.Amount / totalInvoiceAmount) × totalDiscountAmount
+			// We maintain full precision throughout - NO rounding at this stage
+			// This preserves accuracy down to the smallest currency unit (e.g., satoshis, wei)
+			proportion := lineItem.Amount.Div(totalInvoiceAmount)
+			discountAmount = proportion.Mul(totalDiscountAmount)
+			distributedTotal = distributedTotal.Add(discountAmount)
+		}
+		lineItem.InvoiceLevelDiscount = discountAmount
+	}
 
 	return nil
 }
