@@ -323,7 +323,7 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 		}
 		response.WithSubscription(subscription)
 		if subscription.Customer != nil {
-			response.Customer = subscription.Customer
+			response.WithCustomer(subscription.Customer)
 		}
 	}
 
@@ -346,7 +346,7 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 		return nil, err
 	}
 
-	response.Taxes = appliedTaxes.Items
+	response.WithTaxes(appliedTaxes.Items)
 
 	return response, nil
 }
@@ -1934,12 +1934,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Create invoice response for payment processing
 		invoiceResponse := &dto.InvoiceResponse{
-			ID:              inv.ID,
-			AmountDue:       inv.AmountDue,
-			AmountRemaining: inv.AmountRemaining,
-			CustomerID:      inv.CustomerID,
-			Currency:        inv.Currency,
-			PaymentStatus:   inv.PaymentStatus,
+			Invoice: *inv,
 		}
 
 		// Delegate all payment behavior handling to the payment processor
@@ -2007,12 +2002,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Create invoice response for payment processing
 		invoiceResponse := &dto.InvoiceResponse{
-			ID:              inv.ID,
-			AmountDue:       inv.AmountDue,
-			AmountRemaining: inv.AmountRemaining,
-			CustomerID:      inv.CustomerID,
-			Currency:        inv.Currency,
-			PaymentStatus:   inv.PaymentStatus,
+			Invoice: lo.FromPtr(inv),
 		}
 
 		amountPaid := paymentProcessor.ProcessCreditsPaymentForInvoice(ctx, invoiceResponse, nil)

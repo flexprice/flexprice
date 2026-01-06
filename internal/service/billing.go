@@ -1952,7 +1952,6 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 		PeriodStart:      &periodStart,
 		PeriodEnd:        &periodEnd,
 		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
-		EnvironmentID:    sub.EnvironmentID,
 		Metadata:         metadata,
 		LineItems:        append(result.FixedCharges, result.UsageCharges...),
 		InvoiceCoupons:   validCoupons,
