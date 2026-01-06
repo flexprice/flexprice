@@ -85,6 +85,9 @@ type CreateInvoiceRequest struct {
 	// amount_paid is the amount that has been paid towards this invoice
 	AmountPaid *decimal.Decimal `json:"amount_paid,omitempty" swaggertype:"string"`
 
+	// total_credits_applied is the total amount of credits applied to this invoice
+	TotalCreditsApplied *decimal.Decimal `json:"total_credits_applied,omitempty" swaggertype:"string"`
+
 	// line_items contains the individual items that make up this invoice
 	LineItems []CreateInvoiceLineItemRequest `json:"line_items,omitempty"`
 
@@ -208,6 +211,15 @@ func (r *CreateInvoiceRequest) Validate() error {
 			WithReportableDetails(map[string]any{
 				"amount_due":   r.AmountDue.String(),
 				"invoice_type": r.InvoiceType,
+			}).Mark(ierr.ErrValidation)
+	}
+
+	// Validate total_credits_applied if provided
+	if r.TotalCreditsApplied != nil && r.TotalCreditsApplied.IsNegative() {
+		return ierr.NewError("total_credits_applied must be non-negative").
+			WithHint("total_credits_applied cannot be negative").
+			WithReportableDetails(map[string]any{
+				"total_credits_applied": r.TotalCreditsApplied.String(),
 			}).Mark(ierr.ErrValidation)
 	}
 
@@ -344,6 +356,9 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 	if r.AmountPaid != nil {
 		inv.AmountPaid = *r.AmountPaid
 	}
+
+	// Set total_credits_applied if provided, otherwise default to zero
+	inv.TotalCreditsApplied = lo.FromPtrOr(r.TotalCreditsApplied, decimal.Zero)
 
 	// Convert line items
 	if len(r.LineItems) > 0 {
@@ -487,6 +502,15 @@ type CreateInvoiceLineItemRequest struct {
 
 	// commitment_info contains details about any commitment applied to this line item
 	CommitmentInfo *types.CommitmentInfo `json:"commitment_info,omitempty"`
+
+	// credits_applied is the amount in invoice currency reduced from line item due to credit application
+	CreditsApplied *decimal.Decimal `json:"credits_applied,omitempty" swaggertype:"string"`
+
+	// line_item_discount is the discount amount in invoice currency applied to this line item
+	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty" swaggertype:"string"`
+
+	// invoice_level_discount is the discount amount in invoice currency applied to this line item due to invoice level discount
+	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -527,34 +551,67 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 		}
 	}
 
+	// Validate credits_applied if provided
+	if r.CreditsApplied != nil && r.CreditsApplied.IsNegative() {
+		return ierr.NewError("credits_applied must be non-negative").
+			WithHint("credits_applied cannot be negative").
+			WithReportableDetails(map[string]any{
+				"credits_applied": r.CreditsApplied.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate line_item_discount if provided
+	if r.LineItemDiscount != nil && r.LineItemDiscount.IsNegative() {
+		return ierr.NewError("line_item_discount must be non-negative").
+			WithHint("line_item_discount cannot be negative").
+			WithReportableDetails(map[string]any{
+				"line_item_discount": r.LineItemDiscount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate invoice_level_discount if provided
+	if r.InvoiceLevelDiscount != nil && r.InvoiceLevelDiscount.IsNegative() {
+		return ierr.NewError("invoice_level_discount must be non-negative").
+			WithHint("invoice_level_discount cannot be negative").
+			WithReportableDetails(map[string]any{
+				"invoice_level_discount": r.InvoiceLevelDiscount.String(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	return nil
 }
 
 func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, inv *invoice.Invoice) *invoice.InvoiceLineItem {
 	return &invoice.InvoiceLineItem{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-		InvoiceID:        inv.ID,
-		CustomerID:       inv.CustomerID,
-		SubscriptionID:   inv.SubscriptionID,
-		PriceID:          r.PriceID,
-		EntityID:         r.EntityID,
-		EntityType:       r.EntityType,
-		PlanDisplayName:  r.PlanDisplayName,
-		PriceType:        r.PriceType,
-		MeterID:          r.MeterID,
-		MeterDisplayName: r.MeterDisplayName,
-		PriceUnit:        r.PriceUnit,
-		PriceUnitAmount:  r.PriceUnitAmount,
-		DisplayName:      r.DisplayName,
-		Amount:           r.Amount,
-		Quantity:         r.Quantity,
-		Currency:         inv.Currency,
-		PeriodStart:      r.PeriodStart,
-		PeriodEnd:        r.PeriodEnd,
-		Metadata:         r.Metadata,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
-		CommitmentInfo:   r.CommitmentInfo,
+		ID:                   types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+		InvoiceID:            inv.ID,
+		CustomerID:           inv.CustomerID,
+		SubscriptionID:       inv.SubscriptionID,
+		PriceID:              r.PriceID,
+		EntityID:             r.EntityID,
+		EntityType:           r.EntityType,
+		PlanDisplayName:      r.PlanDisplayName,
+		PriceType:            r.PriceType,
+		MeterID:              r.MeterID,
+		MeterDisplayName:     r.MeterDisplayName,
+		PriceUnit:            r.PriceUnit,
+		PriceUnitAmount:      r.PriceUnitAmount,
+		DisplayName:          r.DisplayName,
+		Amount:               r.Amount,
+		Quantity:             r.Quantity,
+		Currency:             inv.Currency,
+		PeriodStart:          r.PeriodStart,
+		PeriodEnd:            r.PeriodEnd,
+		Metadata:             r.Metadata,
+		EnvironmentID:        types.GetEnvironmentID(ctx),
+		BaseModel:            types.GetDefaultBaseModel(ctx),
+		CommitmentInfo:       r.CommitmentInfo,
+		CreditsApplied:       lo.FromPtrOr(r.CreditsApplied, decimal.Zero),
+		LineItemDiscount:     lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount: lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 	}
 }
 
