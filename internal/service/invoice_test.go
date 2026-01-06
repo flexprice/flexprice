@@ -1169,17 +1169,17 @@ func (s *InvoiceServiceSuite) setupWallets() {
 	})
 
 	// Create test wallets for the test customer
-	// 1. Promotional wallet with $50
+	// 1. Postpaid wallet with $50
 	promoWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
 		CustomerID:     s.testData.customer.ID,
 		Currency:       "usd",
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePostPaid,
 		ConversionRate: decimal.NewFromInt(1),
 		Config:         types.GetDefaultWalletConfig(),
 	})
 	s.NoError(err)
 
-	// Top up the promotional wallet
+	// Top up the postpaid wallet
 	_, err = walletService.TopUpWallet(s.GetContext(), promoWallet.ID, &dto.TopUpWalletRequest{
 		CreditsToAdd:      decimal.NewFromInt(50),
 		IdempotencyKey:    lo.ToPtr("test_topup_1"),

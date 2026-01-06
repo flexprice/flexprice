@@ -21,8 +21,8 @@ const (
 type WalletType string
 
 const (
-	WalletTypePromotional WalletType = "PROMOTIONAL"
-	WalletTypePrePaid     WalletType = "PRE_PAID"
+	WalletTypePrePaid  WalletType = "PRE_PAID"
+	WalletTypePostPaid WalletType = "POST_PAID"
 )
 
 func (t WalletType) Validate() error {
@@ -31,8 +31,8 @@ func (t WalletType) Validate() error {
 	}
 
 	allowedValues := []string{
-		string(WalletTypePromotional),
 		string(WalletTypePrePaid),
+		string(WalletTypePostPaid),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid wallet type").
