@@ -12,32 +12,45 @@ import (
 
 // InvoiceLineItem represents a single line item in an invoice
 type InvoiceLineItem struct {
-	ID                   string                `json:"id"`
-	InvoiceID            string                `json:"invoice_id"`
-	CustomerID           string                `json:"customer_id"`
-	SubscriptionID       *string               `json:"subscription_id,omitempty"`
-	EntityID             *string               `json:"entity_id,omitempty"`
-	EntityType           *string               `json:"entity_type,omitempty"`
-	PlanDisplayName      *string               `json:"plan_display_name,omitempty"`
-	PriceID              *string               `json:"price_id,omitempty"`
-	PriceType            *string               `json:"price_type,omitempty"`
-	MeterID              *string               `json:"meter_id,omitempty"`
-	MeterDisplayName     *string               `json:"meter_display_name,omitempty"`
-	PriceUnitID          *string               `json:"price_unit_id,omitempty"`
-	PriceUnit            *string               `json:"price_unit,omitempty"`
-	PriceUnitAmount      *decimal.Decimal      `json:"price_unit_amount,omitempty"`
-	DisplayName          *string               `json:"display_name,omitempty"`
-	Amount               decimal.Decimal       `json:"amount"`
-	Quantity             decimal.Decimal       `json:"quantity"`
-	Currency             string                `json:"currency"`
-	PeriodStart          *time.Time            `json:"period_start,omitempty"`
-	PeriodEnd            *time.Time            `json:"period_end,omitempty"`
-	Metadata             types.Metadata        `json:"metadata,omitempty"`
-	EnvironmentID        string                `json:"environment_id"`
-	CommitmentInfo       *types.CommitmentInfo `json:"commitment_info,omitempty"`
-	CreditsApplied       decimal.Decimal       `json:"credits_applied"`
-	LineItemDiscount     decimal.Decimal       `json:"line_item_discount"`
-	InvoiceLevelDiscount decimal.Decimal       `json:"invoice_level_discount"`
+	ID               string                `json:"id"`
+	InvoiceID        string                `json:"invoice_id"`
+	CustomerID       string                `json:"customer_id"`
+	SubscriptionID   *string               `json:"subscription_id,omitempty"`
+	EntityID         *string               `json:"entity_id,omitempty"`
+	EntityType       *string               `json:"entity_type,omitempty"`
+	PlanDisplayName  *string               `json:"plan_display_name,omitempty"`
+	PriceID          *string               `json:"price_id,omitempty"`
+	PriceType        *string               `json:"price_type,omitempty"`
+	MeterID          *string               `json:"meter_id,omitempty"`
+	MeterDisplayName *string               `json:"meter_display_name,omitempty"`
+	PriceUnitID      *string               `json:"price_unit_id,omitempty"`
+	PriceUnit        *string               `json:"price_unit,omitempty"`
+	PriceUnitAmount  *decimal.Decimal      `json:"price_unit_amount,omitempty"`
+	DisplayName      *string               `json:"display_name,omitempty"`
+	Amount           decimal.Decimal       `json:"amount"`
+	Quantity         decimal.Decimal       `json:"quantity"`
+	Currency         string                `json:"currency"`
+	PeriodStart      *time.Time            `json:"period_start,omitempty"`
+	PeriodEnd        *time.Time            `json:"period_end,omitempty"`
+	Metadata         types.Metadata        `json:"metadata,omitempty"`
+	EnvironmentID    string                `json:"environment_id"`
+	CommitmentInfo   *types.CommitmentInfo `json:"commitment_info,omitempty"`
+
+	// credits_applied is the amount in invoice currency reduced from this line item due to credit application.
+	// This represents credits (from credit grants, credit notes, etc.) that are specifically applied to reduce this line item's amount.
+	CreditsApplied decimal.Decimal `json:"credits_applied"`
+
+	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
+	// This represents discounts that are applied specifically to this line item (e.g., via line-item level coupons or discounts).
+	// This is simpler and more direct - when a discount is applied directly to a line item, it goes here.
+	LineItemDiscount decimal.Decimal `json:"line_item_discount"`
+
+	// invoice_level_discount is the proportional share of an invoice-level discount attributed to this line item.
+	// When a discount is applied at the invoice level (e.g., invoice-level coupons), it is distributed proportionally
+	// across all line items based on their relative amounts. This field stores this line item's share of that invoice-level discount.
+	// Formula: (Line Item Amount / Total Invoice Amount) × Total Invoice-Level Discount Amount
+	// This allows tracking how much of the invoice-level discount is contributed by each line item.
+	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount"`
 	types.BaseModel
 }
 
