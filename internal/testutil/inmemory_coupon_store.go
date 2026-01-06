@@ -86,18 +86,6 @@ func (s *InMemoryCouponStore) Get(ctx context.Context, id string) (*coupon.Coupo
 	return copyCoupon(c), nil
 }
 
-func (s *InMemoryCouponStore) GetBatch(ctx context.Context, ids []string) ([]*coupon.Coupon, error) {
-	coupons := make([]*coupon.Coupon, 0, len(ids))
-	for _, id := range ids {
-		c, err := s.Get(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		coupons = append(coupons, c)
-	}
-	return coupons, nil
-}
-
 func (s *InMemoryCouponStore) Update(ctx context.Context, c *coupon.Coupon) error {
 	if c == nil {
 		return ierr.NewError("coupon cannot be nil").
