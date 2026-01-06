@@ -502,6 +502,26 @@ func (iu *InvoiceUpdate) ClearBillingSequence() *InvoiceUpdate {
 	return iu
 }
 
+// SetTotalCreditsApplied sets the "total_credits_applied" field.
+func (iu *InvoiceUpdate) SetTotalCreditsApplied(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetTotalCreditsApplied(d)
+	return iu
+}
+
+// SetNillableTotalCreditsApplied sets the "total_credits_applied" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTotalCreditsApplied(d *decimal.Decimal) *InvoiceUpdate {
+	if d != nil {
+		iu.SetTotalCreditsApplied(*d)
+	}
+	return iu
+}
+
+// ClearTotalCreditsApplied clears the value of the "total_credits_applied" field.
+func (iu *InvoiceUpdate) ClearTotalCreditsApplied() *InvoiceUpdate {
+	iu.mutation.ClearTotalCreditsApplied()
+	return iu
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (iu *InvoiceUpdate) SetIdempotencyKey(s string) *InvoiceUpdate {
 	iu.mutation.SetIdempotencyKey(s)
@@ -796,6 +816,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.BillingSequenceCleared() {
 		_spec.ClearField(invoice.FieldBillingSequence, field.TypeInt)
+	}
+	if value, ok := iu.mutation.TotalCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
+	}
+	if iu.mutation.TotalCreditsAppliedCleared() {
+		_spec.ClearField(invoice.FieldTotalCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iu.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
@@ -1383,6 +1409,26 @@ func (iuo *InvoiceUpdateOne) ClearBillingSequence() *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetTotalCreditsApplied sets the "total_credits_applied" field.
+func (iuo *InvoiceUpdateOne) SetTotalCreditsApplied(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetTotalCreditsApplied(d)
+	return iuo
+}
+
+// SetNillableTotalCreditsApplied sets the "total_credits_applied" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTotalCreditsApplied(d *decimal.Decimal) *InvoiceUpdateOne {
+	if d != nil {
+		iuo.SetTotalCreditsApplied(*d)
+	}
+	return iuo
+}
+
+// ClearTotalCreditsApplied clears the value of the "total_credits_applied" field.
+func (iuo *InvoiceUpdateOne) ClearTotalCreditsApplied() *InvoiceUpdateOne {
+	iuo.mutation.ClearTotalCreditsApplied()
+	return iuo
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (iuo *InvoiceUpdateOne) SetIdempotencyKey(s string) *InvoiceUpdateOne {
 	iuo.mutation.SetIdempotencyKey(s)
@@ -1707,6 +1753,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.BillingSequenceCleared() {
 		_spec.ClearField(invoice.FieldBillingSequence, field.TypeInt)
+	}
+	if value, ok := iuo.mutation.TotalCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
+	}
+	if iuo.mutation.TotalCreditsAppliedCleared() {
+		_spec.ClearField(invoice.FieldTotalCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iuo.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
