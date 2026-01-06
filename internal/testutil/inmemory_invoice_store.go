@@ -37,66 +37,70 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			continue
 		}
 		lineItems = append(lineItems, &invoice.InvoiceLineItem{
-			ID:               item.ID,
-			InvoiceID:        item.InvoiceID,
-			CustomerID:       item.CustomerID,
-			SubscriptionID:   item.SubscriptionID,
-			EntityID:         item.EntityID,
-			EntityType:       item.EntityType,
-			PlanDisplayName:  item.PlanDisplayName,
-			PriceID:          item.PriceID,
-			PriceType:        item.PriceType,
-			MeterID:          item.MeterID,
-			MeterDisplayName: item.MeterDisplayName,
-			PriceUnitID:      item.PriceUnitID,
-			PriceUnit:        item.PriceUnit,
-			PriceUnitAmount:  item.PriceUnitAmount,
-			DisplayName:      item.DisplayName,
-			Amount:           item.Amount,
-			Quantity:         item.Quantity,
-			Currency:         item.Currency,
-			PeriodStart:      item.PeriodStart,
-			PeriodEnd:        item.PeriodEnd,
-			Metadata:         item.Metadata,
-			CommitmentInfo:   item.CommitmentInfo,
-			EnvironmentID:    item.EnvironmentID,
-			BaseModel:        item.BaseModel,
+			ID:                   item.ID,
+			InvoiceID:            item.InvoiceID,
+			CustomerID:           item.CustomerID,
+			SubscriptionID:       item.SubscriptionID,
+			EntityID:             item.EntityID,
+			EntityType:           item.EntityType,
+			PlanDisplayName:      item.PlanDisplayName,
+			PriceID:              item.PriceID,
+			PriceType:            item.PriceType,
+			MeterID:              item.MeterID,
+			MeterDisplayName:     item.MeterDisplayName,
+			PriceUnitID:          item.PriceUnitID,
+			PriceUnit:            item.PriceUnit,
+			PriceUnitAmount:      item.PriceUnitAmount,
+			DisplayName:          item.DisplayName,
+			Amount:               item.Amount,
+			Quantity:             item.Quantity,
+			Currency:             item.Currency,
+			PeriodStart:          item.PeriodStart,
+			PeriodEnd:            item.PeriodEnd,
+			Metadata:             item.Metadata,
+			CommitmentInfo:       item.CommitmentInfo,
+			CreditsApplied:       item.CreditsApplied,
+			LineItemDiscount:     item.LineItemDiscount,
+			InvoiceLevelDiscount: item.InvoiceLevelDiscount,
+			EnvironmentID:        item.EnvironmentID,
+			BaseModel:            item.BaseModel,
 		})
 	}
 
 	return &invoice.Invoice{
-		ID:               inv.ID,
-		CustomerID:       inv.CustomerID,
-		SubscriptionID:   inv.SubscriptionID,
-		InvoiceType:      inv.InvoiceType,
-		InvoiceStatus:    inv.InvoiceStatus,
-		PaymentStatus:    inv.PaymentStatus,
-		Currency:         inv.Currency,
-		AmountDue:        inv.AmountDue,
-		AmountPaid:       inv.AmountPaid,
-		Subtotal:         inv.Subtotal,
-		Total:            inv.Total,
-		AmountRemaining:  inv.AmountRemaining,
-		AdjustmentAmount: inv.AdjustmentAmount,
-		RefundedAmount:   inv.RefundedAmount,
-		InvoiceNumber:    inv.InvoiceNumber,
-		IdempotencyKey:   inv.IdempotencyKey,
-		BillingSequence:  inv.BillingSequence,
-		Description:      inv.Description,
-		DueDate:          inv.DueDate,
-		PaidAt:           inv.PaidAt,
-		VoidedAt:         inv.VoidedAt,
-		FinalizedAt:      inv.FinalizedAt,
-		BillingPeriod:    inv.BillingPeriod,
-		PeriodStart:      inv.PeriodStart,
-		PeriodEnd:        inv.PeriodEnd,
-		InvoicePDFURL:    inv.InvoicePDFURL,
-		BillingReason:    inv.BillingReason,
-		LineItems:        lineItems,
-		Metadata:         inv.Metadata,
-		Version:          inv.Version,
-		EnvironmentID:    inv.EnvironmentID,
-		BaseModel:        inv.BaseModel,
+		ID:                  inv.ID,
+		CustomerID:          inv.CustomerID,
+		SubscriptionID:      inv.SubscriptionID,
+		InvoiceType:         inv.InvoiceType,
+		InvoiceStatus:       inv.InvoiceStatus,
+		PaymentStatus:       inv.PaymentStatus,
+		Currency:            inv.Currency,
+		AmountDue:           inv.AmountDue,
+		AmountPaid:          inv.AmountPaid,
+		Subtotal:            inv.Subtotal,
+		Total:               inv.Total,
+		AmountRemaining:     inv.AmountRemaining,
+		AdjustmentAmount:    inv.AdjustmentAmount,
+		RefundedAmount:      inv.RefundedAmount,
+		TotalCreditsApplied: inv.TotalCreditsApplied,
+		InvoiceNumber:       inv.InvoiceNumber,
+		IdempotencyKey:      inv.IdempotencyKey,
+		BillingSequence:     inv.BillingSequence,
+		Description:         inv.Description,
+		DueDate:             inv.DueDate,
+		PaidAt:              inv.PaidAt,
+		VoidedAt:            inv.VoidedAt,
+		FinalizedAt:         inv.FinalizedAt,
+		BillingPeriod:       inv.BillingPeriod,
+		PeriodStart:         inv.PeriodStart,
+		PeriodEnd:           inv.PeriodEnd,
+		InvoicePDFURL:       inv.InvoicePDFURL,
+		BillingReason:       inv.BillingReason,
+		LineItems:           lineItems,
+		Metadata:            inv.Metadata,
+		Version:             inv.Version,
+		EnvironmentID:       inv.EnvironmentID,
+		BaseModel:           inv.BaseModel,
 	}
 }
 
@@ -449,6 +453,51 @@ func (s *InMemoryInvoiceStore) GetInvoicePaymentStatus(ctx context.Context) (*ty
 	}
 
 	return status, nil
+}
+
+// UpdateLineItem updates a single line item with credit adjustment information
+func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice.InvoiceLineItem) error {
+	if item == nil {
+		return ierr.NewError("line item cannot be nil").
+			WithHint("Line item cannot be nil").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Find the invoice containing this line item
+	inv, err := s.Get(ctx, item.InvoiceID)
+	if err != nil {
+		return err
+	}
+
+	// Find and update the line item
+	found := false
+	for i, lineItem := range inv.LineItems {
+		if lineItem.ID == item.ID {
+			// Update the line item fields
+			inv.LineItems[i].CreditsApplied = item.CreditsApplied
+			inv.LineItems[i].LineItemDiscount = item.LineItemDiscount
+			inv.LineItems[i].InvoiceLevelDiscount = item.InvoiceLevelDiscount
+			inv.LineItems[i].Metadata = item.Metadata
+			inv.LineItems[i].Status = item.Status
+			inv.LineItems[i].UpdatedAt = time.Now().UTC()
+			inv.LineItems[i].UpdatedBy = types.GetUserID(ctx)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return ierr.NewError("line item not found").
+			WithHint("Line item not found in invoice").
+			WithReportableDetails(map[string]interface{}{
+				"line_item_id": item.ID,
+				"invoice_id":   item.InvoiceID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Update the invoice with the modified line item
+	return s.Update(ctx, inv)
 }
 
 // Clear removes all invoices from the store
