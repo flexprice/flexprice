@@ -130,8 +130,8 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	if r.Name == "" {
 		if r.WalletType == types.WalletTypePrePaid {
 			r.Name = fmt.Sprintf("Prepaid Wallet - %s", r.Currency)
-		} else if r.WalletType == types.WalletTypePromotional {
-			r.Name = fmt.Sprintf("Promotional Wallet - %s", r.Currency)
+		} else if r.WalletType == types.WalletTypePostPaid {
+			r.Name = fmt.Sprintf("Postpaid Wallet - %s", r.Currency)
 		}
 	}
 

@@ -16,11 +16,8 @@ import (
 type WalletPaymentStrategy string
 
 const (
-	// PromotionalFirstStrategy prioritizes promotional wallets before prepaid wallets
-	PromotionalFirstStrategy WalletPaymentStrategy = "promotional_first"
-	// PrepaidFirstStrategy prioritizes prepaid wallets before promotional wallets
-	PrepaidFirstStrategy WalletPaymentStrategy = "prepaid_first"
 	// BalanceOptimizedStrategy selects wallets to minimize leftover balances
+	// Since only postpaid wallets can be used for payments, all wallets are of the same type
 	BalanceOptimizedStrategy WalletPaymentStrategy = "balance_optimized"
 )
 
@@ -37,7 +34,7 @@ type WalletPaymentOptions struct {
 // DefaultWalletPaymentOptions returns the default options for wallet payments
 func DefaultWalletPaymentOptions() WalletPaymentOptions {
 	return WalletPaymentOptions{
-		Strategy:           PromotionalFirstStrategy,
+		Strategy:           BalanceOptimizedStrategy,
 		MaxWalletsToUse:    0,
 		AdditionalMetadata: types.Metadata{},
 	}
@@ -132,12 +129,14 @@ func (s *walletPaymentService) GetWalletsForPayment(
 		return nil, err
 	}
 
-	// Filter active wallets with matching currency and positive balance
+	// Filter active wallets with matching currency, positive balance, and postpaid type only
+	// Only postpaid wallets can be used for payments; prepaid wallets are excluded
 	activeWallets := make([]*wallet.Wallet, 0)
 	for _, w := range wallets {
 		if w.WalletStatus == types.WalletStatusActive &&
 			types.IsMatchingCurrency(w.Currency, currency) &&
-			w.Balance.GreaterThan(decimal.Zero) {
+			w.Balance.GreaterThan(decimal.Zero) &&
+			w.WalletType == types.WalletTypePostPaid {
 			activeWallets = append(activeWallets, w)
 		}
 	}
