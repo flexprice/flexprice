@@ -87,20 +87,38 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 	}
 
 	// select the wallet for the payment in case of credits payment where wallet id is not provided
-	if p.PaymentMethodType == types.PaymentMethodTypeCredits && p.PaymentMethodID == "" {
-		selectedWallet, err := s.selectWalletForPayment(ctx, invoice, req)
-		if err != nil {
-			return nil, err
-		}
+	if p.PaymentMethodType == types.PaymentMethodTypeCredits {
+		if p.PaymentMethodID == "" {
+			selectedWallet, err := s.selectWalletForPayment(ctx, invoice, req)
+			if err != nil {
+				return nil, err
+			}
 
-		p.PaymentMethodID = selectedWallet.ID
+			p.PaymentMethodID = selectedWallet.ID
 
-		// Add wallet information to metadata
-		if p.Metadata == nil {
-			p.Metadata = types.Metadata{}
+			// Add wallet information to metadata
+			if p.Metadata == nil {
+				p.Metadata = types.Metadata{}
+			}
+			p.Metadata["wallet_type"] = string(selectedWallet.WalletType)
+			p.Metadata["wallet_id"] = selectedWallet.ID
+		} else {
+			selectedWallet, err := s.WalletRepo.GetWalletByID(ctx, p.PaymentMethodID)
+			if err != nil {
+				return nil, err
+			}
+
+			if selectedWallet.WalletType != types.WalletTypePostPaid {
+				return nil, ierr.NewError("credits require a postpaid wallet").
+					WithHint("The provided payment method is not postpaid. Select a postpaid wallet to continue").
+					WithReportableDetails(map[string]interface{}{
+						"payment_method_id":    p.PaymentMethodID,
+						"expected_wallet_type": "postpaid",
+					}).
+					Mark(ierr.ErrValidation)
+
+			}
 		}
-		p.Metadata["wallet_type"] = string(selectedWallet.WalletType)
-		p.Metadata["wallet_id"] = selectedWallet.ID
 	}
 
 	// Handle payment link creation
@@ -242,7 +260,7 @@ func (s *paymentService) selectWalletForPayment(ctx context.Context, invoice *in
 	// Use the wallet payment service to find a suitable wallet
 	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
 
-	// Use default options (promotional wallets first, then prepaid)
+	// Use default options (only postpaid wallets can be used for payments)
 	options := DefaultWalletPaymentOptions()
 	options.AdditionalMetadata = p.Metadata
 	options.MaxWalletsToUse = 1 // Only need one wallet for this payment
