@@ -85,7 +85,8 @@ type CreateInvoiceRequest struct {
 	// amount_paid is the amount that has been paid towards this invoice
 	AmountPaid *decimal.Decimal `json:"amount_paid,omitempty" swaggertype:"string"`
 
-	// total_credits_applied is the total amount of credits applied to this invoice
+	// total_credits_applied is the total amount of credits applied to this invoice.
+	// This represents the sum of all credit applications (from credit grants, credit notes, etc.) that reduce the invoice amount.
 	TotalCreditsApplied *decimal.Decimal `json:"total_credits_applied,omitempty" swaggertype:"string"`
 
 	// line_items contains the individual items that make up this invoice
@@ -503,13 +504,20 @@ type CreateInvoiceLineItemRequest struct {
 	// commitment_info contains details about any commitment applied to this line item
 	CommitmentInfo *types.CommitmentInfo `json:"commitment_info,omitempty"`
 
-	// credits_applied is the amount in invoice currency reduced from line item due to credit application
+	// credits_applied is the amount in invoice currency reduced from this line item due to credit application.
+	// This represents credits (from credit grants, credit notes, etc.) that are specifically applied to reduce this line item's amount.
 	CreditsApplied *decimal.Decimal `json:"credits_applied,omitempty" swaggertype:"string"`
 
-	// line_item_discount is the discount amount in invoice currency applied to this line item
+	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
+	// This represents discounts that are applied specifically to this line item (e.g., via line-item level coupons or discounts).
+	// This is simpler and more direct - when a discount is applied directly to a line item, it goes here.
 	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty" swaggertype:"string"`
 
-	// invoice_level_discount is the discount amount in invoice currency applied to this line item due to invoice level discount
+	// invoice_level_discount is the proportional share of an invoice-level discount attributed to this line item.
+	// When a discount is applied at the invoice level (e.g., invoice-level coupons), it is distributed proportionally
+	// across all line items based on their relative amounts. This field stores this line item's share of that invoice-level discount.
+	// Formula: (Line Item Amount / Total Invoice Amount) × Total Invoice-Level Discount Amount
+	// This allows tracking how much of the invoice-level discount is contributed by each line item.
 	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
 }
 

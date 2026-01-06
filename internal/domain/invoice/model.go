@@ -117,7 +117,8 @@ type Invoice struct {
 	// total_tax is the sum of all taxes combined at the invoice level.
 	TotalTax decimal.Decimal `json:"total_tax"`
 
-	// total_credits_applied is the total amount of credits applied to this invoice
+	// total_credits_applied is the total amount of credits applied to this invoice.
+	// This represents the sum of all credit applications (from credit grants, credit notes, etc.) that reduce the invoice amount.
 	TotalCreditsApplied decimal.Decimal `json:"total_credits_applied"`
 
 	// common fields including tenant information, creation/update timestamps, and status
@@ -144,22 +145,22 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		couponApplications = coupon_application.FromEntList(e.Edges.CouponApplications)
 	}
 	return &Invoice{
-		ID:                  e.ID,
-		CustomerID:          e.CustomerID,
-		SubscriptionID:      e.SubscriptionID,
-		InvoiceType:         types.InvoiceType(e.InvoiceType),
-		InvoiceStatus:       types.InvoiceStatus(e.InvoiceStatus),
-		PaymentStatus:       types.PaymentStatus(e.PaymentStatus),
-		Currency:            e.Currency,
-		AmountDue:           e.AmountDue,
-		AmountPaid:          e.AmountPaid,
-		Subtotal:            e.Subtotal,
-		Total:               e.Total,
-		TotalDiscount:       lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
-		TotalTax:            lo.FromPtrOr(e.TotalTax, decimal.Zero),
-		AmountRemaining:     e.AmountRemaining,
-		AdjustmentAmount:    e.AdjustmentAmount,
-		RefundedAmount:      e.RefundedAmount,
+		ID:               e.ID,
+		CustomerID:       e.CustomerID,
+		SubscriptionID:   e.SubscriptionID,
+		InvoiceType:      types.InvoiceType(e.InvoiceType),
+		InvoiceStatus:    types.InvoiceStatus(e.InvoiceStatus),
+		PaymentStatus:    types.PaymentStatus(e.PaymentStatus),
+		Currency:         e.Currency,
+		AmountDue:        e.AmountDue,
+		AmountPaid:       e.AmountPaid,
+		Subtotal:         e.Subtotal,
+		Total:            e.Total,
+		TotalDiscount:    lo.FromPtrOr(e.TotalDiscount, decimal.Zero),
+		TotalTax:         lo.FromPtrOr(e.TotalTax, decimal.Zero),
+		AmountRemaining:  e.AmountRemaining,
+		AdjustmentAmount: e.AdjustmentAmount,
+		RefundedAmount:   e.RefundedAmount,
 		// TODO: remove optional and nillable after migration
 		TotalCreditsApplied: lo.FromPtrOr(e.TotalCreditsApplied, decimal.Zero),
 		InvoiceNumber:       e.InvoiceNumber,
