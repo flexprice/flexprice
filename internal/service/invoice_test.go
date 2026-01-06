@@ -1778,3 +1778,440 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithoutInvoicingCusto
 		}
 	}
 }
+
+// createLineItem is a helper function to create a line item with specified amount
+func createLineItem(id string, amount decimal.Decimal) *invoice.InvoiceLineItem {
+	return &invoice.InvoiceLineItem{
+		ID:                   id,
+		InvoiceID:            "inv_test",
+		CustomerID:           "cust_test",
+		Amount:               amount,
+		Quantity:             decimal.NewFromInt(1),
+		Currency:             "usd",
+		EnvironmentID:        "env_test",
+		CreditsApplied:       decimal.Zero,
+		LineItemDiscount:     decimal.Zero,
+		InvoiceLevelDiscount: decimal.Zero,
+	}
+}
+
+// verifyExactDistribution verifies that the sum of all discounts equals the total discount exactly
+// This is a critical assertion that ensures no rounding errors or precision loss occurs
+func verifyExactDistribution(s *InvoiceServiceSuite, lineItems []*invoice.InvoiceLineItem, totalDiscount decimal.Decimal) {
+	sum := decimal.Zero
+	for i, item := range lineItems {
+		sum = sum.Add(item.InvoiceLevelDiscount)
+		// Also verify each individual discount is non-negative
+		s.False(item.InvoiceLevelDiscount.IsNegative(), "Line item %d discount should not be negative (got %s)", i+1, item.InvoiceLevelDiscount.String())
+	}
+	// Use Equal() for exact comparison - no tolerance allowed
+	// This ensures mathematical correctness: sum(all InvoiceLevelDiscount) == totalDiscountAmount exactly
+	s.True(totalDiscount.Equal(sum),
+		"CRITICAL: Sum of all invoice level discounts (%s) must equal total discount (%s) exactly. Difference: %s",
+		sum.String(), totalDiscount.String(), sum.Sub(totalDiscount).Abs().String())
+
+	// Additional verification: ensure the difference is exactly zero (not just very close)
+	diff := sum.Sub(totalDiscount).Abs()
+	s.True(diff.IsZero(), "Difference between sum and total must be exactly zero, got: %s", diff.String())
+}
+
+// TestDistributeInvoiceLevelDiscount tests the DistributeInvoiceLevelDiscount method with comprehensive scenarios
+func (s *InvoiceServiceSuite) TestDistributeInvoiceLevelDiscount() {
+	ctx := s.GetContext()
+
+	// Test 1: Fixed discount with 2 line items (Example 1 from docs)
+	s.Run("FixedDiscountTwoItems", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(60.00)),
+			createLineItem("item2", decimal.NewFromFloat(40.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(10.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Expected: Item 1 gets $6.00 (60%), Item 2 gets $4.00 (40% + remainder)
+		s.True(decimal.NewFromFloat(6.00).Equal(lineItems[0].InvoiceLevelDiscount), "Item 1 should get $6.00")
+		s.True(decimal.NewFromFloat(4.00).Equal(lineItems[1].InvoiceLevelDiscount), "Item 2 should get $4.00")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 2: Percentage discount with 3 line items (Example 2 from docs)
+	s.Run("PercentageDiscountThreeItems", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(50.00)),
+			createLineItem("item2", decimal.NewFromFloat(30.00)),
+			createLineItem("item3", decimal.NewFromFloat(20.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(10.00) // 10% of $100
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Expected: Item 1 gets $5.00 (50%), Item 2 gets $3.00 (30%), Item 3 gets $2.00 (20% + remainder)
+		s.True(decimal.NewFromFloat(5.00).Equal(lineItems[0].InvoiceLevelDiscount), "Item 1 should get $5.00")
+		s.True(decimal.NewFromFloat(3.00).Equal(lineItems[1].InvoiceLevelDiscount), "Item 2 should get $3.00")
+		s.True(decimal.NewFromFloat(2.00).Equal(lineItems[2].InvoiceLevelDiscount), "Item 3 should get $2.00")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 3: Precision preservation with repeating decimals (Example 3 from docs)
+	s.Run("PrecisionPreservation", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(33.33)),
+			createLineItem("item2", decimal.NewFromFloat(33.33)),
+			createLineItem("item3", decimal.NewFromFloat(33.34)),
+		}
+		totalDiscount := decimal.NewFromFloat(1.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Verify exact distribution (no rounding errors)
+		verifyExactDistribution(s, lineItems, totalDiscount)
+		// Verify all discounts are non-negative
+		for i, item := range lineItems {
+			s.False(item.InvoiceLevelDiscount.IsNegative(), "Item %d discount should not be negative", i+1)
+		}
+	})
+
+	// Test 4: Zero discount
+	s.Run("ZeroDiscount", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(100.00)),
+		}
+		totalDiscount := decimal.Zero
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// All discounts should remain zero
+		for _, item := range lineItems {
+			s.True(item.InvoiceLevelDiscount.IsZero(), "Discount should be zero")
+		}
+		// Verify exact distribution: sum of zero discounts equals zero total
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 5: Zero total invoice amount
+	s.Run("ZeroTotalInvoice", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.Zero),
+			createLineItem("item2", decimal.Zero),
+		}
+		totalDiscount := decimal.NewFromFloat(10.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err) // Should return nil, not error
+
+		// Discounts should remain zero (cannot distribute)
+		for _, item := range lineItems {
+			s.True(item.InvoiceLevelDiscount.IsZero(), "Discount should remain zero when total is zero")
+		}
+		// Note: In this edge case, the function returns early and doesn't distribute
+		// The sum of zero discounts (0) does not equal totalDiscount (10.00)
+		// This is expected behavior - the function logs an error and returns without distributing
+		// We verify that all discounts remain zero as expected
+		sum := decimal.Zero
+		for _, item := range lineItems {
+			sum = sum.Add(item.InvoiceLevelDiscount)
+		}
+		s.True(sum.IsZero(), "Sum should be zero when distribution cannot occur")
+	})
+
+	// Test 6: Single line item
+	s.Run("SingleLineItem", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(100.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(10.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Single item should get 100% of discount
+		s.True(totalDiscount.Equal(lineItems[0].InvoiceLevelDiscount), "Single item should get 100%% of discount")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 7: Empty line items slice
+	s.Run("EmptyLineItems", func() {
+		lineItems := []*invoice.InvoiceLineItem{}
+		totalDiscount := decimal.NewFromFloat(10.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err) // Should handle gracefully
+
+		// With empty slice, sum should be zero (no items to distribute to)
+		// This is expected - function returns early when total is zero
+		sum := decimal.Zero
+		for _, item := range lineItems {
+			sum = sum.Add(item.InvoiceLevelDiscount)
+		}
+		s.True(sum.IsZero(), "Sum should be zero for empty line items")
+	})
+
+	// Test 8: Equal line items
+	s.Run("EqualLineItems", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(50.00)),
+			createLineItem("item2", decimal.NewFromFloat(50.00)),
+			createLineItem("item3", decimal.NewFromFloat(50.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(30.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// All items should get equal discount (except last may have remainder due to precision)
+		// With 3 equal items of $50 each and $30 discount, each should get $10
+		// However, due to precision in decimal calculations, values may not be exactly $10.00
+		expectedPerItem := decimal.NewFromFloat(10.00)
+		// Verify all items get approximately $10.00 (within 0.01 tolerance)
+		for i, item := range lineItems {
+			diff := item.InvoiceLevelDiscount.Sub(expectedPerItem).Abs()
+			s.True(diff.LessThanOrEqual(decimal.NewFromFloat(0.01)), "Item %d should get approximately $10.00 (got %s, diff: %s)", i+1, item.InvoiceLevelDiscount.String(), diff.String())
+		}
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 9: Unequal proportions
+	s.Run("UnequalProportions", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(10.00)),
+			createLineItem("item2", decimal.NewFromFloat(20.00)),
+			createLineItem("item3", decimal.NewFromFloat(70.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(20.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Verify proportional distribution
+		// Item 1: 10/100 = 10% → $2.00
+		// Item 2: 20/100 = 20% → $4.00
+		// Item 3: 70/100 = 70% → $14.00 (last, gets remainder)
+		s.True(decimal.NewFromFloat(2.00).Equal(lineItems[0].InvoiceLevelDiscount), "Item 1 should get $2.00")
+		s.True(decimal.NewFromFloat(4.00).Equal(lineItems[1].InvoiceLevelDiscount), "Item 2 should get $4.00")
+		s.True(decimal.NewFromFloat(14.00).Equal(lineItems[2].InvoiceLevelDiscount), "Item 3 should get $14.00")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 10: Very small amounts
+	s.Run("VerySmallAmounts", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(0.01)),
+			createLineItem("item2", decimal.NewFromFloat(0.02)),
+		}
+		totalDiscount := decimal.NewFromFloat(0.01)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		verifyExactDistribution(s, lineItems, totalDiscount)
+		// Verify all discounts are non-negative
+		for _, item := range lineItems {
+			s.False(item.InvoiceLevelDiscount.IsNegative(), "Discount should not be negative")
+		}
+	})
+
+	// Test 11: Very large amounts
+	s.Run("VeryLargeAmounts", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(1000000.00)),
+			createLineItem("item2", decimal.NewFromFloat(2000000.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(100000.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		verifyExactDistribution(s, lineItems, totalDiscount)
+		// Verify proportional correctness
+		expectedItem1 := decimal.NewFromFloat(33333.33333333) // Approximately 1/3 of discount
+		s.True(expectedItem1.Sub(lineItems[0].InvoiceLevelDiscount).Abs().LessThan(decimal.NewFromFloat(0.01)), "Item 1 should get approximately 1/3 of discount")
+	})
+
+	// Test 12: Discount larger than invoice (edge case)
+	s.Run("DiscountLargerThanInvoice", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(30.00)),
+			createLineItem("item2", decimal.NewFromFloat(20.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(100.00) // Larger than total invoice ($50)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Should still distribute proportionally
+		// Item 1: 30/50 = 60% → $60.00
+		// Item 2: 20/50 = 40% → $40.00 (last, gets remainder)
+		s.True(decimal.NewFromFloat(60.00).Equal(lineItems[0].InvoiceLevelDiscount), "Item 1 should get $60.00")
+		s.True(decimal.NewFromFloat(40.00).Equal(lineItems[1].InvoiceLevelDiscount), "Item 2 should get $40.00")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 13: Exact distribution verification
+	s.Run("ExactDistribution", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(25.50)),
+			createLineItem("item2", decimal.NewFromFloat(34.75)),
+			createLineItem("item3", decimal.NewFromFloat(39.75)),
+		}
+		totalDiscount := decimal.NewFromFloat(15.33)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Verify exact sum equals total discount
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 14: Remainder allocation verification
+	s.Run("RemainderAllocation", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(33.33)),
+			createLineItem("item2", decimal.NewFromFloat(33.33)),
+			createLineItem("item3", decimal.NewFromFloat(33.34)),
+		}
+		totalDiscount := decimal.NewFromFloat(3.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Calculate what first two items should get
+		distributedTotal := lineItems[0].InvoiceLevelDiscount.Add(lineItems[1].InvoiceLevelDiscount)
+		expectedRemainder := totalDiscount.Sub(distributedTotal)
+		s.True(expectedRemainder.Equal(lineItems[2].InvoiceLevelDiscount), "Last item should get exact remainder")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 15: Multiple items with remainder (4+ items)
+	s.Run("MultipleItemsRemainder", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(10.00)),
+			createLineItem("item2", decimal.NewFromFloat(20.00)),
+			createLineItem("item3", decimal.NewFromFloat(30.00)),
+			createLineItem("item4", decimal.NewFromFloat(40.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(10.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Verify exact distribution
+		verifyExactDistribution(s, lineItems, totalDiscount)
+		// Verify last item gets remainder
+		distributedTotal := decimal.Zero
+		for i := 0; i < len(lineItems)-1; i++ {
+			distributedTotal = distributedTotal.Add(lineItems[i].InvoiceLevelDiscount)
+		}
+		expectedRemainder := totalDiscount.Sub(distributedTotal)
+		s.True(expectedRemainder.Equal(lineItems[len(lineItems)-1].InvoiceLevelDiscount), "Last item should get exact remainder")
+	})
+
+	// Test 16: High precision calculations
+	s.Run("HighPrecision", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.RequireFromString("123.456789")),
+			createLineItem("item2", decimal.RequireFromString("234.567890")),
+			createLineItem("item3", decimal.RequireFromString("345.678901")),
+		}
+		totalDiscount := decimal.RequireFromString("7.123456")
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Verify exact distribution with high precision
+		verifyExactDistribution(s, lineItems, totalDiscount)
+		// Verify all discounts are non-negative
+		for _, item := range lineItems {
+			s.False(item.InvoiceLevelDiscount.IsNegative(), "Discount should not be negative")
+		}
+	})
+
+	// Test 17: Extreme proportions (99%/1% split)
+	s.Run("ExtremeProportions", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(99.00)),
+			createLineItem("item2", decimal.NewFromFloat(1.00)),
+		}
+		totalDiscount := decimal.NewFromFloat(10.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Item 1 should get ~99% of discount, Item 2 should get ~1% + remainder
+		// Item 1: 99/100 = 99% → ~$9.90
+		// Item 2: 1/100 = 1% → ~$0.10 (last, gets remainder)
+		s.True(lineItems[0].InvoiceLevelDiscount.GreaterThan(decimal.NewFromFloat(9.80)), "Item 1 should get most of discount (got %s)", lineItems[0].InvoiceLevelDiscount.String())
+		s.True(lineItems[1].InvoiceLevelDiscount.LessThan(decimal.NewFromFloat(0.20)), "Item 2 should get small portion (got %s)", lineItems[1].InvoiceLevelDiscount.String())
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 18: Complex invoice with many items
+	s.Run("ComplexInvoice", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(15.25)),
+			createLineItem("item2", decimal.NewFromFloat(22.50)),
+			createLineItem("item3", decimal.NewFromFloat(8.75)),
+			createLineItem("item4", decimal.NewFromFloat(33.00)),
+			createLineItem("item5", decimal.NewFromFloat(20.50)),
+		}
+		totalDiscount := decimal.NewFromFloat(25.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Verify exact distribution
+		verifyExactDistribution(s, lineItems, totalDiscount)
+		// Verify proportional correctness
+		totalAmount := decimal.Zero
+		for _, item := range lineItems {
+			totalAmount = totalAmount.Add(item.Amount)
+		}
+		for i, item := range lineItems {
+			if i < len(lineItems)-1 {
+				expectedProportion := item.Amount.Div(totalAmount)
+				expectedDiscount := expectedProportion.Mul(totalDiscount)
+				// Allow small difference due to precision
+				diff := item.InvoiceLevelDiscount.Sub(expectedDiscount).Abs()
+				s.True(diff.LessThan(decimal.NewFromFloat(0.01)), "Item %d discount should be approximately proportional", i+1)
+			}
+		}
+	})
+
+	// Test 19: One large, others small
+	s.Run("OneLargeOthersSmall", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(900.00)), // 90%
+			createLineItem("item2", decimal.NewFromFloat(50.00)),  // 5%
+			createLineItem("item3", decimal.NewFromFloat(50.00)),  // 5%
+		}
+		totalDiscount := decimal.NewFromFloat(100.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Item 1 should get ~90% of discount
+		s.True(lineItems[0].InvoiceLevelDiscount.GreaterThan(decimal.NewFromFloat(89.00)), "Item 1 should get most of discount")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+
+	// Test 20: One small, others large
+	s.Run("OneSmallOthersLarge", func() {
+		lineItems := []*invoice.InvoiceLineItem{
+			createLineItem("item1", decimal.NewFromFloat(10.00)),  // 1%
+			createLineItem("item2", decimal.NewFromFloat(495.00)), // 49.5%
+			createLineItem("item3", decimal.NewFromFloat(495.00)), // 49.5%
+		}
+		totalDiscount := decimal.NewFromFloat(100.00)
+
+		err := s.service.DistributeInvoiceLevelDiscount(ctx, lineItems, totalDiscount)
+		s.NoError(err)
+
+		// Item 1 should get ~1% of discount
+		s.True(lineItems[0].InvoiceLevelDiscount.LessThan(decimal.NewFromFloat(2.00)), "Item 1 should get small portion")
+		verifyExactDistribution(s, lineItems, totalDiscount)
+	})
+}
