@@ -368,6 +368,48 @@ func (ilic *InvoiceLineItemCreate) SetCommitmentInfo(ti *types.CommitmentInfo) *
 	return ilic
 }
 
+// SetCreditsApplied sets the "credits_applied" field.
+func (ilic *InvoiceLineItemCreate) SetCreditsApplied(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetCreditsApplied(d)
+	return ilic
+}
+
+// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableCreditsApplied(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetCreditsApplied(*d)
+	}
+	return ilic
+}
+
+// SetLineItemDiscount sets the "line_item_discount" field.
+func (ilic *InvoiceLineItemCreate) SetLineItemDiscount(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetLineItemDiscount(d)
+	return ilic
+}
+
+// SetNillableLineItemDiscount sets the "line_item_discount" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableLineItemDiscount(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetLineItemDiscount(*d)
+	}
+	return ilic
+}
+
+// SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
+func (ilic *InvoiceLineItemCreate) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetInvoiceLevelDiscount(d)
+	return ilic
+}
+
+// SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetInvoiceLevelDiscount(*d)
+	}
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -452,6 +494,18 @@ func (ilic *InvoiceLineItemCreate) defaults() {
 	if _, ok := ilic.mutation.Quantity(); !ok {
 		v := invoicelineitem.DefaultQuantity
 		ilic.mutation.SetQuantity(v)
+	}
+	if _, ok := ilic.mutation.CreditsApplied(); !ok {
+		v := invoicelineitem.DefaultCreditsApplied
+		ilic.mutation.SetCreditsApplied(v)
+	}
+	if _, ok := ilic.mutation.LineItemDiscount(); !ok {
+		v := invoicelineitem.DefaultLineItemDiscount
+		ilic.mutation.SetLineItemDiscount(v)
+	}
+	if _, ok := ilic.mutation.InvoiceLevelDiscount(); !ok {
+		v := invoicelineitem.DefaultInvoiceLevelDiscount
+		ilic.mutation.SetInvoiceLevelDiscount(v)
 	}
 }
 
@@ -654,6 +708,18 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.CommitmentInfo(); ok {
 		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
 		_node.CommitmentInfo = value
+	}
+	if value, ok := ilic.mutation.CreditsApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
+		_node.CreditsApplied = &value
+	}
+	if value, ok := ilic.mutation.LineItemDiscount(); ok {
+		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
+		_node.LineItemDiscount = &value
+	}
+	if value, ok := ilic.mutation.InvoiceLevelDiscount(); ok {
+		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
+		_node.InvoiceLevelDiscount = &value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
