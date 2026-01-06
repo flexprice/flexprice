@@ -110,7 +110,7 @@ func (s *WalletPaymentServiceSuite) setupTestData() {
 func (s *WalletPaymentServiceSuite) setupWallet() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	// Create test wallets
-	// 1. Promotional wallet
+	// 1. Postpaid wallet (can be used for payments)
 	s.testData.wallets.promotional = &wallet.Wallet{
 		ID:             "wallet_promotional",
 		CustomerID:     s.testData.customer.ID,
@@ -119,7 +119,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(50),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePostPaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.promotional))
@@ -134,7 +134,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 	}))
 
-	// 2. Prepaid wallet
+	// 2. Prepaid wallet (cannot be used for payments - should be excluded)
 	s.testData.wallets.prepaid = &wallet.Wallet{
 		ID:             "wallet_prepaid",
 		CustomerID:     s.testData.customer.ID,
@@ -158,7 +158,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 	}))
 
-	// 3. Small balance wallet
+	// 3. Small balance postpaid wallet (can be used for payments)
 	s.testData.wallets.smallBalance = &wallet.Wallet{
 		ID:             "wallet_small_balance",
 		CustomerID:     s.testData.customer.ID,
@@ -167,7 +167,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(10),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePostPaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.smallBalance))
@@ -215,7 +215,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(100),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusClosed,
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePostPaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.inactive))
@@ -224,15 +224,17 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 func (s *WalletPaymentServiceSuite) TestGetWalletsForPayment() {
 	// Test that wallets are returned in the correct order based on price type restrictions and balance
 	options := WalletPaymentOptions{
-		Strategy: PromotionalFirstStrategy, // Strategy no longer affects ordering
+		Strategy: BalanceOptimizedStrategy, // Only postpaid wallets can be used, sorted by balance
 	}
 
 	wallets, err := s.service.GetWalletsForPayment(s.GetContext(), s.testData.customer.ID, "usd", options)
 	s.NoError(err)
 
+	// Only postpaid wallets can be used for payments; prepaid wallets are excluded
 	// All wallets are categorized as "all" (no price type restrictions),
-	// sorted by balance (highest first): prepaid(200) > promotional(50) > small_balance(10)
-	expectedWallets := []string{"wallet_prepaid", "wallet_promotional", "wallet_small_balance"}
+	// sorted by balance (highest first): wallet_promotional(50, postpaid) > wallet_small_balance(10, postpaid)
+	// Note: wallet_prepaid is excluded because it's prepaid type
+	expectedWallets := []string{"wallet_promotional", "wallet_small_balance"}
 	s.Equal(len(expectedWallets), len(wallets), "Wrong number of wallets returned")
 
 	// Verify wallets are in expected order
@@ -240,10 +242,11 @@ func (s *WalletPaymentServiceSuite) TestGetWalletsForPayment() {
 		s.Equal(expectedID, wallets[i].ID, "Wallet at position %d incorrect", i)
 	}
 
-	// Verify that inactive and different currency wallets are excluded
+	// Verify that inactive, different currency, and prepaid wallets are excluded
 	for _, w := range wallets {
 		s.NotEqual("wallet_inactive", w.ID, "Inactive wallet should not be included")
 		s.NotEqual("wallet_different_currency", w.ID, "Different currency wallet should not be included")
+		s.NotEqual("wallet_prepaid", w.ID, "Prepaid wallet should not be included (only postpaid can be used for payments)")
 	}
 }
 
@@ -259,13 +262,13 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets() {
 			name:                "Full payment",
 			maxWalletsToUse:     0, // No limit
 			additionalMetadata:  types.Metadata{"test_key": "test_value"},
-			expectedAmountPaid:  decimal.NewFromFloat(150), // 150 from prepaid wallet (highest balance, can pay full amount)
-			expectedWalletsUsed: 1,                         // 1 wallet used (prepaid has enough balance)
+			expectedAmountPaid:  decimal.NewFromFloat(60), // 50 + 10 from postpaid wallets (prepaid excluded)
+			expectedWalletsUsed: 2,                        // 2 wallets used (both postpaid wallets)
 		},
 		{
 			name:                "Limited number of wallets",
-			maxWalletsToUse:     1,                         // Only use one wallet
-			expectedAmountPaid:  decimal.NewFromFloat(150), // 150 from prepaid wallet (highest balance)
+			maxWalletsToUse:     1,                        // Only use one wallet
+			expectedAmountPaid:  decimal.NewFromFloat(50), // 50 from promotional wallet (highest balance postpaid)
 			expectedWalletsUsed: 1,
 		},
 	}
@@ -299,7 +302,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets() {
 
 			// Create options for this test
 			options := WalletPaymentOptions{
-				Strategy:           PromotionalFirstStrategy, // Strategy no longer affects behavior
+				Strategy:           BalanceOptimizedStrategy, // Only postpaid wallets can be used
 				MaxWalletsToUse:    tc.maxWalletsToUse,
 				AdditionalMetadata: tc.additionalMetadata,
 			}
@@ -406,8 +409,9 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInsufficientBal
 	)
 
 	// Verify results - should pay partial amount
+	// Only postpaid wallets can be used: 50 + 10 = 60 (prepaid wallet excluded)
 	s.NoError(err)
-	expectedAmount := decimal.NewFromFloat(260) // 200 + 50 + 10 (all wallets combined, sorted by balance desc)
+	expectedAmount := decimal.NewFromFloat(60) // 50 + 10 (only postpaid wallets, sorted by balance desc)
 	s.True(expectedAmount.Equal(amountPaid),
 		"Amount paid mismatch: expected %s, got %s", expectedAmount, amountPaid)
 
@@ -417,7 +421,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInsufficientBal
 		DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
 	})
 	s.NoError(err)
-	s.Equal(3, len(payments), "Expected 3 payment requests (all wallets)")
+	s.Equal(2, len(payments), "Expected 2 payment requests (only postpaid wallets)")
 }
 
 func (s *WalletPaymentServiceSuite) TestNilInvoice() {
@@ -538,7 +542,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustom
 
 	// Process payment - should use invoicing customer's wallet
 	options := WalletPaymentOptions{
-		Strategy:        PromotionalFirstStrategy,
+		Strategy:        BalanceOptimizedStrategy,
 		MaxWalletsToUse: 0, // No limit
 	}
 	amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(
@@ -625,7 +629,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustom
 
 	// Process payment - should NOT use subscription customer's wallet
 	options := WalletPaymentOptions{
-		Strategy:        PromotionalFirstStrategy,
+		Strategy:        BalanceOptimizedStrategy,
 		MaxWalletsToUse: 0,
 	}
 	amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(

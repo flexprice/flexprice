@@ -2117,12 +2117,14 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 	}
 
 	// Find or create a suitable wallet for the proration credit
+	// Use postpaid wallet since proration credits should be usable for payments
+	// and only postpaid wallets can be used for payments
 
 	var selectedWallet *dto.WalletResponse
 	for _, w := range existingWallets {
 		if w.WalletStatus == types.WalletStatusActive &&
 			types.IsMatchingCurrency(w.Currency, currency) &&
-			w.WalletType == types.WalletTypePrePaid {
+			w.WalletType == types.WalletTypePostPaid {
 			selectedWallet = w
 			break
 		}
@@ -2140,7 +2142,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 			CustomerID:     customerID,
 			Currency:       currency,
 			ConversionRate: decimal.NewFromInt(1), // 1:1 conversion rate for credits
-			WalletType:     types.WalletTypePrePaid,
+			WalletType:     types.WalletTypePostPaid,
 			Metadata: types.Metadata{
 				"created_for": "proration_credit",
 				"source":      "subscription_change",
