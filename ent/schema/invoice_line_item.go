@@ -155,6 +155,35 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.Other("credits_applied", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			// TODO: remove optional and nillable after migration
+			Optional().
+			Nillable().
+			Default(decimal.Zero).
+			Comment("Amount in invoice currency reduced from line item due to credit application"),
+
+		field.Other("line_item_discount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			// TODO: remove optional and nillable after migration
+			Optional().
+			Nillable().
+			Default(decimal.Zero).
+			Comment("Discount amount in invoice currency applied to this line item"),
+
+		field.Other("invoice_level_discount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			// TODO: remove optional and nillable after migration
+			Optional().
+			Nillable().
+			Default(decimal.Zero).
+			Comment("Discount amount in invoice currency applied to this line item due to invoice level discount"),
 	}
 }
 

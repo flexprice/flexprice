@@ -186,6 +186,17 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Sequence number for subscription billing periods"),
+
+		field.Other("total_credits_applied", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			// TODO: remove optional and nillable after migration
+			Optional().
+			Nillable().
+			Default(decimal.Zero).
+			Comment("Total credits applied to this invoice"),
+
 		field.String("idempotency_key").
 			SchemaType(map[string]string{
 				"postgres": "varchar(100)",

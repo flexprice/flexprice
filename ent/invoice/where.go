@@ -246,6 +246,11 @@ func BillingSequence(v int) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldBillingSequence, v))
 }
 
+// TotalCreditsApplied applies equality check predicate on the "total_credits_applied" field. It's identical to TotalCreditsAppliedEQ.
+func TotalCreditsApplied(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotalCreditsApplied, v))
+}
+
 // IdempotencyKey applies equality check predicate on the "idempotency_key" field. It's identical to IdempotencyKeyEQ.
 func IdempotencyKey(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldIdempotencyKey, v))
@@ -2355,6 +2360,56 @@ func BillingSequenceIsNil() predicate.Invoice {
 // BillingSequenceNotNil applies the NotNil predicate on the "billing_sequence" field.
 func BillingSequenceNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldBillingSequence))
+}
+
+// TotalCreditsAppliedEQ applies the EQ predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedNEQ applies the NEQ predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedNEQ(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedIn applies the In predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldTotalCreditsApplied, vs...))
+}
+
+// TotalCreditsAppliedNotIn applies the NotIn predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedNotIn(vs ...decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldTotalCreditsApplied, vs...))
+}
+
+// TotalCreditsAppliedGT applies the GT predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedGT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedGTE applies the GTE predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedGTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedLT applies the LT predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedLT(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedLTE applies the LTE predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedLTE(v decimal.Decimal) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldTotalCreditsApplied, v))
+}
+
+// TotalCreditsAppliedIsNil applies the IsNil predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldTotalCreditsApplied))
+}
+
+// TotalCreditsAppliedNotNil applies the NotNil predicate on the "total_credits_applied" field.
+func TotalCreditsAppliedNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldTotalCreditsApplied))
 }
 
 // IdempotencyKeyEQ applies the EQ predicate on the "idempotency_key" field.

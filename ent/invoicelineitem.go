@@ -77,6 +77,12 @@ type InvoiceLineItem struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CommitmentInfo holds the value of the "commitment_info" field.
 	CommitmentInfo *types.CommitmentInfo `json:"commitment_info,omitempty"`
+	// Amount in invoice currency reduced from line item due to credit application
+	CreditsApplied *decimal.Decimal `json:"credits_applied,omitempty"`
+	// Discount amount in invoice currency applied to this line item
+	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty"`
+	// Discount amount in invoice currency applied to this line item due to invoice level discount
+	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceLineItemQuery when eager-loading is set.
 	Edges        InvoiceLineItemEdges `json:"edges"`
@@ -119,7 +125,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoicelineitem.FieldPriceUnitAmount:
+		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo:
 			values[i] = new([]byte)
@@ -336,6 +342,27 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field commitment_info: %w", err)
 				}
 			}
+		case invoicelineitem.FieldCreditsApplied:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field credits_applied", values[i])
+			} else if value.Valid {
+				ili.CreditsApplied = new(decimal.Decimal)
+				*ili.CreditsApplied = *value.S.(*decimal.Decimal)
+			}
+		case invoicelineitem.FieldLineItemDiscount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field line_item_discount", values[i])
+			} else if value.Valid {
+				ili.LineItemDiscount = new(decimal.Decimal)
+				*ili.LineItemDiscount = *value.S.(*decimal.Decimal)
+			}
+		case invoicelineitem.FieldInvoiceLevelDiscount:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_level_discount", values[i])
+			} else if value.Valid {
+				ili.InvoiceLevelDiscount = new(decimal.Decimal)
+				*ili.InvoiceLevelDiscount = *value.S.(*decimal.Decimal)
+			}
 		default:
 			ili.selectValues.Set(columns[i], values[i])
 		}
@@ -493,6 +520,21 @@ func (ili *InvoiceLineItem) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("commitment_info=")
 	builder.WriteString(fmt.Sprintf("%v", ili.CommitmentInfo))
+	builder.WriteString(", ")
+	if v := ili.CreditsApplied; v != nil {
+		builder.WriteString("credits_applied=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := ili.LineItemDiscount; v != nil {
+		builder.WriteString("line_item_discount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := ili.InvoiceLevelDiscount; v != nil {
+		builder.WriteString("invoice_level_discount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

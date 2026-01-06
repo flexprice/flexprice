@@ -1001,6 +1001,10 @@ func init() {
 	invoiceDescVersion := invoiceFields[27].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
+	// invoiceDescTotalCreditsApplied is the schema descriptor for total_credits_applied field.
+	invoiceDescTotalCreditsApplied := invoiceFields[30].Descriptor()
+	// invoice.DefaultTotalCreditsApplied holds the default value on creation for the total_credits_applied field.
+	invoice.DefaultTotalCreditsApplied = invoiceDescTotalCreditsApplied.Default.(decimal.Decimal)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
 	invoicelineitemMixinFields0 := invoicelineitemMixin[0].Fields()
 	_ = invoicelineitemMixinFields0
@@ -1050,6 +1054,18 @@ func init() {
 	invoicelineitemDescCurrency := invoicelineitemFields[17].Descriptor()
 	// invoicelineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	invoicelineitem.CurrencyValidator = invoicelineitemDescCurrency.Validators[0].(func(string) error)
+	// invoicelineitemDescCreditsApplied is the schema descriptor for credits_applied field.
+	invoicelineitemDescCreditsApplied := invoicelineitemFields[22].Descriptor()
+	// invoicelineitem.DefaultCreditsApplied holds the default value on creation for the credits_applied field.
+	invoicelineitem.DefaultCreditsApplied = invoicelineitemDescCreditsApplied.Default.(decimal.Decimal)
+	// invoicelineitemDescLineItemDiscount is the schema descriptor for line_item_discount field.
+	invoicelineitemDescLineItemDiscount := invoicelineitemFields[23].Descriptor()
+	// invoicelineitem.DefaultLineItemDiscount holds the default value on creation for the line_item_discount field.
+	invoicelineitem.DefaultLineItemDiscount = invoicelineitemDescLineItemDiscount.Default.(decimal.Decimal)
+	// invoicelineitemDescInvoiceLevelDiscount is the schema descriptor for invoice_level_discount field.
+	invoicelineitemDescInvoiceLevelDiscount := invoicelineitemFields[24].Descriptor()
+	// invoicelineitem.DefaultInvoiceLevelDiscount holds the default value on creation for the invoice_level_discount field.
+	invoicelineitem.DefaultInvoiceLevelDiscount = invoicelineitemDescInvoiceLevelDiscount.Default.(decimal.Decimal)
 	invoicesequenceFields := schema.InvoiceSequence{}.Fields()
 	_ = invoicesequenceFields
 	// invoicesequenceDescTenantID is the schema descriptor for tenant_id field.
