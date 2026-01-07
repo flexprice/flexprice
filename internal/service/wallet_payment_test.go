@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -43,6 +44,11 @@ func (s *WalletPaymentServiceSuite) SetupTest() {
 
 func (s *WalletPaymentServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
+}
+
+// GetContext returns context with environment ID set for settings lookup
+func (s *WalletPaymentServiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
 }
 
 func (s *WalletPaymentServiceSuite) setupService() {
@@ -110,16 +116,17 @@ func (s *WalletPaymentServiceSuite) setupTestData() {
 func (s *WalletPaymentServiceSuite) setupWallet() {
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
 	// Create test wallets
-	// 1. Postpaid wallet (can be used for payments)
+	// 1. Postpaid wallet (can be used for payments) - single postpaid wallet with combined balance
 	s.testData.wallets.promotional = &wallet.Wallet{
 		ID:             "wallet_promotional",
 		CustomerID:     s.testData.customer.ID,
 		Currency:       "usd",
-		Balance:        decimal.NewFromFloat(50),
-		CreditBalance:  decimal.NewFromFloat(50),
+		Balance:        decimal.NewFromFloat(60), // Combined balance: 50 + 10 from previous setup
+		CreditBalance:  decimal.NewFromFloat(60),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
 		WalletType:     types.WalletTypePostPaid,
+		EnvironmentID:  "env_test",
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.promotional))
@@ -134,7 +141,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 	}))
 
-	// 2. Prepaid wallet (cannot be used for payments - should be excluded)
+	// 2. Prepaid wallet (cannot be used for payments - used for credit adjustments)
 	s.testData.wallets.prepaid = &wallet.Wallet{
 		ID:             "wallet_prepaid",
 		CustomerID:     s.testData.customer.ID,
@@ -143,7 +150,8 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(200),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePrePaid,
+		WalletType:     types.WalletTypePrePaid, // Fixed: Actually PrePaid type
+		EnvironmentID:  "env_test",
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.prepaid))
@@ -158,29 +166,8 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
 	}))
 
-	// 3. Small balance postpaid wallet (can be used for payments)
-	s.testData.wallets.smallBalance = &wallet.Wallet{
-		ID:             "wallet_small_balance",
-		CustomerID:     s.testData.customer.ID,
-		Currency:       "usd",
-		Balance:        decimal.NewFromFloat(10),
-		CreditBalance:  decimal.NewFromFloat(10),
-		ConversionRate: decimal.NewFromFloat(1.0),
-		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePostPaid,
-		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
-	}
-	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.smallBalance))
-	s.NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), &wallet.Transaction{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
-		WalletID:         s.testData.wallets.smallBalance.ID,
-		Type:             types.TransactionTypeCredit,
-		Amount:           s.testData.wallets.smallBalance.Balance,
-		CreditAmount:     s.testData.wallets.smallBalance.CreditBalance,
-		CreditsAvailable: s.testData.wallets.smallBalance.CreditBalance,
-		TxStatus:         types.TransactionStatusCompleted,
-		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
-	}))
+	// Note: smallBalance wallet removed - consolidated into promotional wallet
+	s.testData.wallets.smallBalance = nil
 
 	// 4. Different currency wallet
 	s.testData.wallets.differentCurrency = &wallet.Wallet{
@@ -191,7 +178,8 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		CreditBalance:  decimal.NewFromFloat(300),
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusActive,
-		WalletType:     types.WalletTypePrePaid,
+		WalletType:     types.WalletTypePostPaid,
+		EnvironmentID:  "env_test",
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.differentCurrency))
@@ -216,6 +204,7 @@ func (s *WalletPaymentServiceSuite) setupWallet() {
 		ConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:   types.WalletStatusClosed,
 		WalletType:     types.WalletTypePostPaid,
+		EnvironmentID:  "env_test",
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallets.inactive))
@@ -231,10 +220,9 @@ func (s *WalletPaymentServiceSuite) TestGetWalletsForPayment() {
 	s.NoError(err)
 
 	// Only postpaid wallets can be used for payments; prepaid wallets are excluded
-	// All wallets are categorized as "all" (no price type restrictions),
-	// sorted by balance (highest first): wallet_promotional(50, postpaid) > wallet_small_balance(10, postpaid)
+	// Only one postpaid wallet exists: wallet_promotional(60, postpaid)
 	// Note: wallet_prepaid is excluded because it's prepaid type
-	expectedWallets := []string{"wallet_promotional", "wallet_small_balance"}
+	expectedWallets := []string{"wallet_promotional"}
 	s.Equal(len(expectedWallets), len(wallets), "Wrong number of wallets returned")
 
 	// Verify wallets are in expected order
@@ -262,13 +250,13 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets() {
 			name:                "Full payment",
 			maxWalletsToUse:     0, // No limit
 			additionalMetadata:  types.Metadata{"test_key": "test_value"},
-			expectedAmountPaid:  decimal.NewFromFloat(60), // 50 + 10 from postpaid wallets (prepaid excluded)
-			expectedWalletsUsed: 2,                        // 2 wallets used (both postpaid wallets)
+			expectedAmountPaid:  decimal.NewFromFloat(60), // Single postpaid wallet with 60 balance
+			expectedWalletsUsed: 1,                        // 1 wallet used (single postpaid wallet)
 		},
 		{
 			name:                "Limited number of wallets",
 			maxWalletsToUse:     1,                        // Only use one wallet
-			expectedAmountPaid:  decimal.NewFromFloat(50), // 50 from promotional wallet (highest balance postpaid)
+			expectedAmountPaid:  decimal.NewFromFloat(60), // Full balance from single promotional wallet
 			expectedWalletsUsed: 1,
 		},
 	}
@@ -409,9 +397,9 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInsufficientBal
 	)
 
 	// Verify results - should pay partial amount
-	// Only postpaid wallets can be used: 50 + 10 = 60 (prepaid wallet excluded)
+	// Only postpaid wallet can be used: 60 (prepaid wallet excluded)
 	s.NoError(err)
-	expectedAmount := decimal.NewFromFloat(60) // 50 + 10 (only postpaid wallets, sorted by balance desc)
+	expectedAmount := decimal.NewFromFloat(60) // Single postpaid wallet with 60 balance
 	s.True(expectedAmount.Equal(amountPaid),
 		"Amount paid mismatch: expected %s, got %s", expectedAmount, amountPaid)
 
@@ -421,7 +409,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInsufficientBal
 		DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
 	})
 	s.NoError(err)
-	s.Equal(2, len(payments), "Expected 2 payment requests (only postpaid wallets)")
+	s.Equal(1, len(payments), "Expected 1 payment request (single postpaid wallet)")
 }
 
 func (s *WalletPaymentServiceSuite) TestNilInvoice() {
@@ -501,7 +489,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustom
 		CustomerID:     invoicingCustomer.ID, // Wallet belongs to invoicing customer
 		Name:           "Invoicing Customer Wallet",
 		Currency:       "usd",
-		WalletType:     types.WalletTypePrePaid,
+		WalletType:     types.WalletTypePostPaid,
 		Balance:        decimal.NewFromFloat(200),
 		CreditBalance:  decimal.NewFromFloat(200),
 		ConversionRate: decimal.NewFromFloat(1.0),
@@ -601,7 +589,7 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustom
 		CustomerID:     subscriptionCustomer.ID, // Wallet belongs to subscription customer
 		Name:           "Subscription Customer Wallet",
 		Currency:       "usd",
-		WalletType:     types.WalletTypePrePaid,
+		WalletType:     types.WalletTypePostPaid,
 		Balance:        decimal.NewFromFloat(200),
 		ConversionRate: decimal.NewFromInt(1), // Required for wallet operations
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
@@ -649,4 +637,349 @@ func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithInvoicingCustom
 	})
 	s.NoError(err)
 	s.Empty(payments, "No payment should be created - invoicing customer has no wallet")
+}
+
+// TestGetWalletsForPayment_PostpaidOnly tests that only postpaid wallets are returned for payments
+func (s *WalletPaymentServiceSuite) TestGetWalletsForPayment_PostpaidOnly() {
+	options := WalletPaymentOptions{
+		Strategy: BalanceOptimizedStrategy,
+	}
+
+	wallets, err := s.service.GetWalletsForPayment(s.GetContext(), s.testData.customer.ID, "usd", options)
+	s.NoError(err)
+
+	// Verify only postpaid wallets are returned
+	for _, w := range wallets {
+		s.Equal(types.WalletTypePostPaid, w.WalletType, "Wallet %s should be postpaid", w.ID)
+		s.NotEqual("wallet_prepaid", w.ID, "Prepaid wallet should not be included")
+	}
+
+	// Verify expected postpaid wallet is included
+	walletIDs := make(map[string]bool)
+	for _, w := range wallets {
+		walletIDs[w.ID] = true
+	}
+	s.True(walletIDs["wallet_promotional"], "Postpaid promotional wallet should be included")
+	s.Equal(1, len(wallets), "Should have only 1 postpaid wallet")
+}
+
+// TestGetWalletsForCreditAdjustment_PrepaidOnly tests that only prepaid wallets are returned for credit adjustments
+func (s *WalletPaymentServiceSuite) TestGetWalletsForCreditAdjustment_PrepaidOnly() {
+	wallets, err := s.service.GetWalletsForCreditAdjustment(s.GetContext(), s.testData.customer.ID, "usd")
+	s.NoError(err)
+
+	// Verify only prepaid wallets are returned
+	for _, w := range wallets {
+		s.Equal(types.WalletTypePrePaid, w.WalletType, "Wallet %s should be prepaid", w.ID)
+		s.NotEqual("wallet_promotional", w.ID, "Postpaid promotional wallet should not be included")
+	}
+
+	// Verify expected prepaid wallet is included
+	walletIDs := make(map[string]bool)
+	for _, w := range wallets {
+		walletIDs[w.ID] = true
+	}
+	s.True(walletIDs["wallet_prepaid"], "Prepaid wallet should be included")
+}
+
+// TestProcessInvoicePaymentWithWallets_PostpaidOnly tests that only postpaid wallets are used for payments
+func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets_PostpaidOnly() {
+	// Reset payment store
+	s.GetStores().PaymentRepo.(*testutil.InMemoryPaymentStore).Clear()
+	s.setupWallet()
+
+	// Create invoice
+	now := time.Now().UTC()
+	inv := &invoice.Invoice{
+		ID:              "inv_postpaid_test",
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(100),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(100),
+		PeriodEnd:       lo.ToPtr(now),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), inv))
+
+	// Process payment
+	options := WalletPaymentOptions{
+		Strategy:        BalanceOptimizedStrategy,
+		MaxWalletsToUse: 0, // No limit
+	}
+	amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(s.GetContext(), inv, options)
+	s.NoError(err)
+
+	// Should only use postpaid wallet: 60 (prepaid wallet with 200 excluded)
+	expectedAmount := decimal.NewFromFloat(60)
+	s.True(expectedAmount.Equal(amountPaid), "Should only use postpaid wallet, expected %s, got %s", expectedAmount, amountPaid)
+
+	// Verify payments were created
+	payments, err := s.GetStores().PaymentRepo.List(s.GetContext(), &types.PaymentFilter{
+		DestinationID:   &inv.ID,
+		DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
+	})
+	s.NoError(err)
+	s.Equal(1, len(payments), "Should have 1 payment from postpaid wallet")
+
+	// Verify all payments are from postpaid wallets
+	for _, payment := range payments {
+		walletID := payment.Metadata["wallet_id"]
+		walletType := payment.Metadata["wallet_type"]
+		s.Equal(string(types.WalletTypePostPaid), walletType, "Payment from wallet %s should be postpaid", walletID)
+		s.NotEqual("wallet_prepaid", walletID, "Prepaid wallet should not be used for payments")
+	}
+}
+
+// TestProcessInvoicePaymentWithWallets_MixedWalletTypes tests payment with both prepaid and postpaid wallets
+func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets_MixedWalletTypes() {
+	// Reset payment store
+	s.GetStores().PaymentRepo.(*testutil.InMemoryPaymentStore).Clear()
+	s.setupWallet()
+
+	// Create invoice
+	now := time.Now().UTC()
+	inv := &invoice.Invoice{
+		ID:              "inv_mixed_wallets",
+		CustomerID:      s.testData.customer.ID,
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		Currency:        "usd",
+		AmountDue:       decimal.NewFromFloat(100),
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromFloat(100),
+		PeriodEnd:       lo.ToPtr(now),
+		BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), inv))
+
+	// Process payment - should only use postpaid wallets
+	options := WalletPaymentOptions{
+		Strategy:        BalanceOptimizedStrategy,
+		MaxWalletsToUse: 0,
+	}
+	amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(s.GetContext(), inv, options)
+	s.NoError(err)
+
+	// Should only use postpaid wallet (60), prepaid wallet (200) should be excluded
+	expectedAmount := decimal.NewFromFloat(60)
+	s.True(expectedAmount.Equal(amountPaid), "Should only use postpaid wallet, expected %s, got %s", expectedAmount, amountPaid)
+
+	// Verify prepaid wallet was not used
+	payments, err := s.GetStores().PaymentRepo.List(s.GetContext(), &types.PaymentFilter{
+		DestinationID:   &inv.ID,
+		DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
+	})
+	s.NoError(err)
+	for _, payment := range payments {
+		walletID := payment.Metadata["wallet_id"]
+		s.NotEqual("wallet_prepaid", walletID, "Prepaid wallet should not be used for payments")
+	}
+}
+
+// TestGetWalletsForPayment_NoPostpaidWallets tests behavior when only prepaid wallets exist
+func (s *WalletPaymentServiceSuite) TestGetWalletsForPayment_NoPostpaidWallets() {
+	// Clear wallets and create only prepaid wallets
+	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
+
+	prepaidOnly := &wallet.Wallet{
+		ID:             "wallet_prepaid_only",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		Balance:        decimal.NewFromFloat(100),
+		CreditBalance:  decimal.NewFromFloat(100),
+		ConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:   types.WalletStatusActive,
+		WalletType:     types.WalletTypePrePaid, // Fixed: Should be PrePaid, not PostPaid
+		EnvironmentID:  "env_test",
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), prepaidOnly))
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), &wallet.Transaction{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:         prepaidOnly.ID,
+		Type:             types.TransactionTypeCredit,
+		Amount:           prepaidOnly.Balance,
+		CreditAmount:     prepaidOnly.CreditBalance,
+		CreditsAvailable: prepaidOnly.CreditBalance,
+		TxStatus:         types.TransactionStatusCompleted,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	options := WalletPaymentOptions{
+		Strategy: BalanceOptimizedStrategy,
+	}
+
+	wallets, err := s.service.GetWalletsForPayment(s.GetContext(), s.testData.customer.ID, "usd", options)
+	s.NoError(err)
+	s.Empty(wallets, "Should return no wallets when only prepaid wallets exist")
+}
+
+// TestGetWalletsForCreditAdjustment_NoPrepaidWallets tests behavior when only postpaid wallets exist
+func (s *WalletPaymentServiceSuite) TestGetWalletsForCreditAdjustment_NoPrepaidWallets() {
+	// Clear wallets and create only postpaid wallets
+	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
+
+	postpaidOnly := &wallet.Wallet{
+		ID:             "wallet_postpaid_only",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "usd",
+		Balance:        decimal.NewFromFloat(100),
+		CreditBalance:  decimal.NewFromFloat(100),
+		ConversionRate: decimal.NewFromFloat(1.0),
+		WalletStatus:   types.WalletStatusActive,
+		WalletType:     types.WalletTypePostPaid,
+		EnvironmentID:  "env_test",
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), postpaidOnly))
+	s.NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), &wallet.Transaction{
+		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+		WalletID:         postpaidOnly.ID,
+		Type:             types.TransactionTypeCredit,
+		Amount:           postpaidOnly.Balance,
+		CreditAmount:     postpaidOnly.CreditBalance,
+		CreditsAvailable: postpaidOnly.CreditBalance,
+		TxStatus:         types.TransactionStatusCompleted,
+		BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+	}))
+
+	wallets, err := s.service.GetWalletsForCreditAdjustment(s.GetContext(), s.testData.customer.ID, "usd")
+	s.NoError(err)
+	s.Empty(wallets, "Should return no wallets when only postpaid wallets exist")
+}
+
+// TestProcessInvoicePaymentWithWallets_PostpaidWalletTypes tests various postpaid wallet scenarios
+func (s *WalletPaymentServiceSuite) TestProcessInvoicePaymentWithWallets_PostpaidWalletTypes() {
+	tests := []struct {
+		name                string
+		postpaidBalance     decimal.Decimal
+		prepaidBalance      decimal.Decimal
+		invoiceAmount       decimal.Decimal
+		expectedAmountPaid  decimal.Decimal
+		expectedWalletsUsed int
+	}{
+		{
+			name:                "Postpaid sufficient, prepaid ignored",
+			postpaidBalance:     decimal.NewFromFloat(100),
+			prepaidBalance:      decimal.NewFromFloat(200),
+			invoiceAmount:       decimal.NewFromFloat(80),
+			expectedAmountPaid:  decimal.NewFromFloat(80),
+			expectedWalletsUsed: 1,
+		},
+		{
+			name:                "Postpaid insufficient, prepaid still ignored",
+			postpaidBalance:     decimal.NewFromFloat(30),
+			prepaidBalance:      decimal.NewFromFloat(500),
+			invoiceAmount:       decimal.NewFromFloat(100),
+			expectedAmountPaid:  decimal.NewFromFloat(30), // Only postpaid wallet used (single wallet with 30)
+			expectedWalletsUsed: 1,
+		},
+	}
+
+	for _, tc := range tests {
+		s.Run(tc.name, func() {
+			// Reset stores
+			s.GetStores().PaymentRepo.(*testutil.InMemoryPaymentStore).Clear()
+			s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
+
+			// Create postpaid wallet
+			postpaidWallet := &wallet.Wallet{
+				ID:             "wallet_postpaid_test",
+				CustomerID:     s.testData.customer.ID,
+				Currency:       "usd",
+				Balance:        tc.postpaidBalance,
+				CreditBalance:  tc.postpaidBalance,
+				ConversionRate: decimal.NewFromFloat(1.0),
+				WalletStatus:   types.WalletStatusActive,
+				WalletType:     types.WalletTypePostPaid,
+				EnvironmentID:  "env_test",
+				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+			}
+			s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), postpaidWallet))
+			s.NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), &wallet.Transaction{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+				WalletID:         postpaidWallet.ID,
+				Type:             types.TransactionTypeCredit,
+				Amount:           postpaidWallet.Balance,
+				CreditAmount:     postpaidWallet.CreditBalance,
+				CreditsAvailable: postpaidWallet.CreditBalance,
+				TxStatus:         types.TransactionStatusCompleted,
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			}))
+
+			// Create prepaid wallet (should be ignored for payments, used for credit adjustments)
+			prepaidWallet := &wallet.Wallet{
+				ID:             "wallet_prepaid_test",
+				CustomerID:     s.testData.customer.ID,
+				Currency:       "usd",
+				Balance:        tc.prepaidBalance,
+				CreditBalance:  tc.prepaidBalance,
+				ConversionRate: decimal.NewFromFloat(1.0),
+				WalletStatus:   types.WalletStatusActive,
+				WalletType:     types.WalletTypePrePaid, // Fixed: Actually PrePaid type
+				EnvironmentID:  "env_test",
+				BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+			}
+			s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), prepaidWallet))
+			s.NoError(s.GetStores().WalletRepo.CreateTransaction(s.GetContext(), &wallet.Transaction{
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+				WalletID:         prepaidWallet.ID,
+				Type:             types.TransactionTypeCredit,
+				Amount:           prepaidWallet.Balance,
+				CreditAmount:     prepaidWallet.CreditBalance,
+				CreditsAvailable: prepaidWallet.CreditBalance,
+				TxStatus:         types.TransactionStatusCompleted,
+				BaseModel:        types.GetDefaultBaseModel(s.GetContext()),
+			}))
+
+			// Create invoice
+			now := time.Now().UTC()
+			inv := &invoice.Invoice{
+				ID:              "inv_" + tc.name,
+				CustomerID:      s.testData.customer.ID,
+				InvoiceType:     types.InvoiceTypeOneOff,
+				InvoiceStatus:   types.InvoiceStatusFinalized,
+				PaymentStatus:   types.PaymentStatusPending,
+				Currency:        "usd",
+				AmountDue:       tc.invoiceAmount,
+				AmountPaid:      decimal.Zero,
+				AmountRemaining: tc.invoiceAmount,
+				PeriodEnd:       lo.ToPtr(now),
+				BaseModel:       types.GetDefaultBaseModel(s.GetContext()),
+			}
+			s.NoError(s.GetStores().InvoiceRepo.Create(s.GetContext(), inv))
+
+			// Process payment
+			options := WalletPaymentOptions{
+				Strategy:        BalanceOptimizedStrategy,
+				MaxWalletsToUse: 0,
+			}
+			amountPaid, err := s.service.ProcessInvoicePaymentWithWallets(s.GetContext(), inv, options)
+			s.NoError(err)
+
+			// Verify results
+			s.True(tc.expectedAmountPaid.Equal(amountPaid),
+				"Amount paid mismatch: expected %s, got %s", tc.expectedAmountPaid, amountPaid)
+
+			// Verify payments
+			payments, err := s.GetStores().PaymentRepo.List(s.GetContext(), &types.PaymentFilter{
+				DestinationID:   &inv.ID,
+				DestinationType: lo.ToPtr(string(types.PaymentDestinationTypeInvoice)),
+			})
+			s.NoError(err)
+			s.Equal(tc.expectedWalletsUsed, len(payments),
+				"Expected %d payments, got %d", tc.expectedWalletsUsed, len(payments))
+
+			// Verify all payments are from postpaid wallets
+			for _, payment := range payments {
+				walletType := payment.Metadata["wallet_type"]
+				s.Equal(string(types.WalletTypePostPaid), walletType, "All payments should be from postpaid wallets")
+			}
+		})
+	}
 }
