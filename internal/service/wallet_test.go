@@ -555,7 +555,7 @@ func (s *WalletServiceSuite) setupWallet() {
 		ID:                  "wallet-1",
 		CustomerID:          s.testData.customer.ID,
 		Currency:            "usd",
-		WalletType:          types.WalletTypePrePaid,
+		WalletType:          types.WalletTypePostPaid,
 		Balance:             decimal.NewFromInt(1000),
 		CreditBalance:       decimal.NewFromInt(1000),
 		ConversionRate:      decimal.NewFromFloat(1.0),
