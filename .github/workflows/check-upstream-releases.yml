@@ -51,7 +51,7 @@ jobs:
         env:
           LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
           TRACKED_VERSION: ${{ secrets.LATEST_TRACKED_VERSION }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           echo "Setting up git configuration..."
           git config user.name "github-actions[bot]"
@@ -169,7 +169,7 @@ jobs:
         if: steps.compare.outputs.new_version_available == 'true'
         env:
           LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           echo "Updating LATEST_TRACKED_VERSION secret to $LATEST_VERSION..."
           echo "$LATEST_VERSION" | gh secret set LATEST_TRACKED_VERSION
