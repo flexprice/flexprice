@@ -59,6 +59,7 @@ const (
 	TransactionReasonCreditExpired           TransactionReason = "CREDIT_EXPIRED"
 	TransactionReasonWalletTermination       TransactionReason = "WALLET_TERMINATION"
 	TransactionReasonManualBalanceDebit      TransactionReason = "MANUAL_BALANCE_DEBIT"
+	TransactionReasonCreditAdjustment        TransactionReason = "CREDIT_ADJUSTMENT"
 )
 
 func (t TransactionReason) Validate() error {
