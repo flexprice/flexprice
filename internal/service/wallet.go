@@ -159,6 +159,9 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 			Mark(ierr.ErrDatabase)
 	}
 
+	// Convert to domain wallet model
+	w := req.ToWallet(ctx)
+
 	for _, w := range existingWallets {
 		if w.WalletStatus == types.WalletStatusActive && w.Currency == req.Currency && w.WalletType == req.WalletType {
 			return nil, ierr.NewError("customer already has an active wallet with the same currency and wallet type").
@@ -172,9 +175,6 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 				Mark(ierr.ErrAlreadyExists)
 		}
 	}
-
-	// Convert to domain wallet model
-	w := req.ToWallet(ctx)
 
 	// create a DB transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
