@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -151,9 +152,22 @@ func (s *planService) GetPlans(ctx context.Context, filter *types.PlanFilter) (*
 			WithStatus(types.StatusPublished).
 			WithEntityType(types.PRICE_ENTITY_TYPE_PLAN)
 
+		// Build expand string for nested expansions in prices
+		var expandFields []string
+
 		// If meters should be expanded, propagate the expansion to prices
 		if filter.GetExpand().Has(types.ExpandMeters) {
-			priceFilter = priceFilter.WithExpand(string(types.ExpandMeters))
+			expandFields = append(expandFields, string(types.ExpandMeters))
+		}
+
+		// If price units should be expanded (root level or nested under prices), propagate to prices
+		if filter.GetExpand().Has(types.ExpandPriceUnit) || filter.GetExpand().GetNested(types.ExpandPrices).Has(types.ExpandPriceUnit) {
+			expandFields = append(expandFields, string(types.ExpandPriceUnit))
+		}
+
+		// Set expand string if any expansions are requested
+		if len(expandFields) > 0 {
+			priceFilter = priceFilter.WithExpand(strings.Join(expandFields, ","))
 		}
 
 		prices, err := priceService.GetPrices(ctx, priceFilter)

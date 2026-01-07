@@ -128,6 +128,16 @@ func Credits(v decimal.Decimal) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldEQ(FieldCredits, v))
 }
 
+// ConversionRate applies equality check predicate on the "conversion_rate" field. It's identical to ConversionRateEQ.
+func ConversionRate(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldConversionRate, v))
+}
+
+// TopupConversionRate applies equality check predicate on the "topup_conversion_rate" field. It's identical to TopupConversionRateEQ.
+func TopupConversionRate(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldTopupConversionRate, v))
+}
+
 // Cadence applies equality check predicate on the "cadence" field. It's identical to CadenceEQ.
 func Cadence(v types.CreditGrantCadence) predicate.CreditGrant {
 	vc := string(v)
@@ -954,6 +964,106 @@ func CreditsLT(v decimal.Decimal) predicate.CreditGrant {
 // CreditsLTE applies the LTE predicate on the "credits" field.
 func CreditsLTE(v decimal.Decimal) predicate.CreditGrant {
 	return predicate.CreditGrant(sql.FieldLTE(FieldCredits, v))
+}
+
+// ConversionRateEQ applies the EQ predicate on the "conversion_rate" field.
+func ConversionRateEQ(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldConversionRate, v))
+}
+
+// ConversionRateNEQ applies the NEQ predicate on the "conversion_rate" field.
+func ConversionRateNEQ(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldConversionRate, v))
+}
+
+// ConversionRateIn applies the In predicate on the "conversion_rate" field.
+func ConversionRateIn(vs ...decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldConversionRate, vs...))
+}
+
+// ConversionRateNotIn applies the NotIn predicate on the "conversion_rate" field.
+func ConversionRateNotIn(vs ...decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldConversionRate, vs...))
+}
+
+// ConversionRateGT applies the GT predicate on the "conversion_rate" field.
+func ConversionRateGT(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldConversionRate, v))
+}
+
+// ConversionRateGTE applies the GTE predicate on the "conversion_rate" field.
+func ConversionRateGTE(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldConversionRate, v))
+}
+
+// ConversionRateLT applies the LT predicate on the "conversion_rate" field.
+func ConversionRateLT(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldConversionRate, v))
+}
+
+// ConversionRateLTE applies the LTE predicate on the "conversion_rate" field.
+func ConversionRateLTE(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldConversionRate, v))
+}
+
+// ConversionRateIsNil applies the IsNil predicate on the "conversion_rate" field.
+func ConversionRateIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldConversionRate))
+}
+
+// ConversionRateNotNil applies the NotNil predicate on the "conversion_rate" field.
+func ConversionRateNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldConversionRate))
+}
+
+// TopupConversionRateEQ applies the EQ predicate on the "topup_conversion_rate" field.
+func TopupConversionRateEQ(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldEQ(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateNEQ applies the NEQ predicate on the "topup_conversion_rate" field.
+func TopupConversionRateNEQ(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNEQ(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateIn applies the In predicate on the "topup_conversion_rate" field.
+func TopupConversionRateIn(vs ...decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIn(FieldTopupConversionRate, vs...))
+}
+
+// TopupConversionRateNotIn applies the NotIn predicate on the "topup_conversion_rate" field.
+func TopupConversionRateNotIn(vs ...decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotIn(FieldTopupConversionRate, vs...))
+}
+
+// TopupConversionRateGT applies the GT predicate on the "topup_conversion_rate" field.
+func TopupConversionRateGT(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGT(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateGTE applies the GTE predicate on the "topup_conversion_rate" field.
+func TopupConversionRateGTE(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldGTE(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateLT applies the LT predicate on the "topup_conversion_rate" field.
+func TopupConversionRateLT(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLT(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateLTE applies the LTE predicate on the "topup_conversion_rate" field.
+func TopupConversionRateLTE(v decimal.Decimal) predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldLTE(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateIsNil applies the IsNil predicate on the "topup_conversion_rate" field.
+func TopupConversionRateIsNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldIsNull(FieldTopupConversionRate))
+}
+
+// TopupConversionRateNotNil applies the NotNil predicate on the "topup_conversion_rate" field.
+func TopupConversionRateNotNil() predicate.CreditGrant {
+	return predicate.CreditGrant(sql.FieldNotNull(FieldTopupConversionRate))
 }
 
 // CadenceEQ applies the EQ predicate on the "cadence" field.

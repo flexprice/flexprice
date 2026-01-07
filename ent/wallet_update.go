@@ -402,6 +402,9 @@ func (wu *WalletUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if wu.mutation.AutoTopupCleared() {
 		_spec.ClearField(wallet.FieldAutoTopup, field.TypeJSON)
 	}
+	if wu.mutation.TopupConversionRateCleared() {
+		_spec.ClearField(wallet.FieldTopupConversionRate, field.TypeOther)
+	}
 	if value, ok := wu.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)
 	}
@@ -847,6 +850,9 @@ func (wuo *WalletUpdateOne) sqlSave(ctx context.Context) (_node *Wallet, err err
 	}
 	if wuo.mutation.AutoTopupCleared() {
 		_spec.ClearField(wallet.FieldAutoTopup, field.TypeJSON)
+	}
+	if wuo.mutation.TopupConversionRateCleared() {
+		_spec.ClearField(wallet.FieldTopupConversionRate, field.TypeOther)
 	}
 	if value, ok := wuo.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)

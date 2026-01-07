@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -58,6 +59,10 @@ const (
 	FieldCreditsAvailable = "credits_available"
 	// FieldCurrency holds the string denoting the currency field in the database.
 	FieldCurrency = "currency"
+	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
+	FieldConversionRate = "conversion_rate"
+	// FieldTopupConversionRate holds the string denoting the topup_conversion_rate field in the database.
+	FieldTopupConversionRate = "topup_conversion_rate"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
 	FieldIdempotencyKey = "idempotency_key"
 	// FieldTransactionReason holds the string denoting the transaction_reason field in the database.
@@ -93,6 +98,8 @@ var Columns = []string{
 	FieldExpiryDate,
 	FieldCreditsAvailable,
 	FieldCurrency,
+	FieldConversionRate,
+	FieldTopupConversionRate,
 	FieldIdempotencyKey,
 	FieldTransactionReason,
 	FieldPriority,
@@ -129,6 +136,10 @@ var (
 	TypeValidator func(string) error
 	// DefaultTransactionStatus holds the default value on creation for the "transaction_status" field.
 	DefaultTransactionStatus types.TransactionStatus
+	// DefaultCreditsAvailable holds the default value on creation for the "credits_available" field.
+	DefaultCreditsAvailable decimal.Decimal
+	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
+	CurrencyValidator func(string) error
 	// DefaultTransactionReason holds the default value on creation for the "transaction_reason" field.
 	DefaultTransactionReason types.TransactionReason
 )
@@ -244,6 +255,16 @@ func ByCreditsAvailable(opts ...sql.OrderTermOption) OrderOption {
 // ByCurrency orders the results by the currency field.
 func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCurrency, opts...).ToFunc()
+}
+
+// ByConversionRate orders the results by the conversion_rate field.
+func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
+}
+
+// ByTopupConversionRate orders the results by the topup_conversion_rate field.
+func ByTopupConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTopupConversionRate, opts...).ToFunc()
 }
 
 // ByIdempotencyKey orders the results by the idempotency_key field.

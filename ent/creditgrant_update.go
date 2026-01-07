@@ -265,6 +265,12 @@ func (cgu *CreditGrantUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if value, ok := cgu.mutation.Scope(); ok {
 		_spec.SetField(creditgrant.FieldScope, field.TypeString, value)
 	}
+	if cgu.mutation.ConversionRateCleared() {
+		_spec.ClearField(creditgrant.FieldConversionRate, field.TypeOther)
+	}
+	if cgu.mutation.TopupConversionRateCleared() {
+		_spec.ClearField(creditgrant.FieldTopupConversionRate, field.TypeOther)
+	}
 	if cgu.mutation.PeriodCleared() {
 		_spec.ClearField(creditgrant.FieldPeriod, field.TypeString)
 	}
@@ -636,6 +642,12 @@ func (cguo *CreditGrantUpdateOne) sqlSave(ctx context.Context) (_node *CreditGra
 	}
 	if value, ok := cguo.mutation.Scope(); ok {
 		_spec.SetField(creditgrant.FieldScope, field.TypeString, value)
+	}
+	if cguo.mutation.ConversionRateCleared() {
+		_spec.ClearField(creditgrant.FieldConversionRate, field.TypeOther)
+	}
+	if cguo.mutation.TopupConversionRateCleared() {
+		_spec.ClearField(creditgrant.FieldTopupConversionRate, field.TypeOther)
 	}
 	if cguo.mutation.PeriodCleared() {
 		_spec.ClearField(creditgrant.FieldPeriod, field.TypeString)

@@ -68,6 +68,8 @@ func (r *creditGrantRepository) Create(ctx context.Context, cg *domainCreditGran
 		SetNillableStartDate(cg.StartDate).
 		SetNillableEndDate(cg.EndDate).
 		SetNillableCreditGrantAnchor(cg.CreditGrantAnchor).
+		SetNillableConversionRate(cg.ConversionRate).
+		SetNillableTopupConversionRate(cg.TopupConversionRate).
 		SetTenantID(cg.TenantID).
 		SetStatus(string(cg.Status)).
 		SetCreatedAt(cg.CreatedAt).
@@ -153,6 +155,8 @@ func (r *creditGrantRepository) CreateBulk(ctx context.Context, creditGrants []*
 			SetNillableStartDate(cg.StartDate).
 			SetNillableEndDate(cg.EndDate).
 			SetNillableCreditGrantAnchor(cg.CreditGrantAnchor).
+			SetNillableConversionRate(cg.ConversionRate).
+			SetNillableTopupConversionRate(cg.TopupConversionRate).
 			SetTenantID(cg.TenantID).
 			SetStatus(string(cg.Status)).
 			SetCreatedAt(cg.CreatedAt).

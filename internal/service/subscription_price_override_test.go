@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -46,8 +47,20 @@ func TestCreateSubscriptionWithPriceOverrides(t *testing.T) {
 		assert.Equal(t, overrideAmount, *req.OverrideLineItems[0].Amount)
 		assert.Equal(t, overrideQuantity, *req.OverrideLineItems[0].Quantity)
 
+		// Create a mock priceMap with the test price ID for validation
+		priceMap := map[string]*dto.PriceResponse{
+			"test_price_789": {
+				Price: &price.Price{
+					ID:            "test_price_789",
+					Type:          types.PRICE_TYPE_FIXED,
+					BillingModel:  types.BILLING_MODEL_FLAT_FEE,
+					PriceUnitType: types.PRICE_UNIT_TYPE_FIAT,
+				},
+			},
+		}
+
 		// Validate override line item validation
-		err := req.OverrideLineItems[0].Validate(nil, nil, "test_plan_456")
+		err := req.OverrideLineItems[0].Validate(priceMap, nil, "test_plan_456")
 		require.NoError(t, err)
 
 		// Test validation logic

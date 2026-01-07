@@ -531,7 +531,7 @@ func (s *walletService) TopUpWallet(ctx context.Context, walletID string, req *d
 	// If Credits to Add is not provided then convert the currency amount to credits
 	// If both provided we give priority to Credits to add
 	if req.CreditsToAdd.IsZero() && !req.Amount.IsZero() {
-		req.CreditsToAdd = s.GetCreditsFromCurrencyAmount(req.Amount, w.ConversionRate)
+		req.CreditsToAdd = s.GetCreditsFromCurrencyAmount(req.Amount, w.TopupConversionRate)
 	}
 
 	// If ExpiryDateUTC is provided, convert it to YYYYMMDD format
@@ -716,7 +716,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			CustomerID:          w.CustomerID,
 			Type:                types.TransactionTypeCredit,
 			CreditAmount:        req.CreditsToAdd,
-			Amount:              s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate),
+			Amount:              s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate),
 			TxStatus:            txStatus,
 			ReferenceType:       types.WalletTxReferenceTypeExternal,
 			ReferenceID:         lo.FromPtr(idempotencyKey),
@@ -730,6 +730,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 			CreditBalanceAfter:  balanceAfter,
 			CreditsAvailable:    creditsAvailable,
 			Currency:            w.Currency,
+			TopupConversionRate: lo.ToPtr(w.TopupConversionRate),
 			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
 			BaseModel:           types.GetDefaultBaseModel(ctx),
 		}
@@ -761,7 +762,7 @@ func (s *walletService) handlePurchasedCreditInvoicedTransaction(ctx context.Con
 		walletTransactionID = tx.ID
 
 		// Step 2: Create invoice for credit purchase with wallet_transaction_id in metadata
-		amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.ConversionRate)
+		amount := s.GetCurrencyAmountFromCredits(req.CreditsToAdd, w.TopupConversionRate)
 		invoiceMetadata := make(types.Metadata)
 
 		// Copy existing metadata from request if provided
@@ -1409,15 +1410,20 @@ func (s *walletService) validateWalletOperation(w *wallet.Wallet, req *wallet.Wa
 	// Priority: Amount > CreditAmount
 	// Note: CreditAmount is used internally for BOTH credit and debit operations
 	// The Type field determines direction (add vs subtract)
+	// For credit operations (topup), use TopupConversionRate; for debit operations, use ConversionRate
+	conversionRate := w.ConversionRate
+	if req.Type == types.TransactionTypeCredit {
+		conversionRate = w.TopupConversionRate
+	}
 
 	switch {
 	case req.Amount.GreaterThan(decimal.Zero):
 		// Amount provided - convert to credits
-		req.CreditAmount = s.GetCreditsFromCurrencyAmount(req.Amount, w.ConversionRate)
+		req.CreditAmount = s.GetCreditsFromCurrencyAmount(req.Amount, conversionRate)
 
 	case req.CreditAmount.GreaterThan(decimal.Zero):
 		// CreditAmount already set - just convert to Amount
-		req.Amount = s.GetCurrencyAmountFromCredits(req.CreditAmount, w.ConversionRate)
+		req.Amount = s.GetCurrencyAmountFromCredits(req.CreditAmount, conversionRate)
 
 	default:
 		return ierr.NewError("amount or credit_amount is required").
@@ -1457,7 +1463,9 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 			if err != nil {
 				return err
 			}
-			timeReference = *invoice.PeriodEnd
+			if invoice.PeriodEnd != nil {
+				timeReference = lo.FromPtr(invoice.PeriodEnd)
+			}
 		}
 		credits, err = s.WalletRepo.FindEligibleCredits(ctx, req.WalletID, req.CreditAmount, 100, timeReference)
 		if err != nil {
@@ -1551,15 +1559,16 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
-	// Set credits available based on transaction type
+	// Set transaction-specific fields based on transaction type
 	if req.Type == types.TransactionTypeCredit {
+		tx.TopupConversionRate = lo.ToPtr(w.TopupConversionRate)
 		tx.CreditsAvailable = decimal.Max(decimal.Zero, tx.CreditBalanceAfter)
-	} else {
+		if req.ExpiryDate != nil {
+			tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
+		}
+	} else if req.Type == types.TransactionTypeDebit {
+		tx.ConversionRate = lo.ToPtr(w.ConversionRate)
 		tx.CreditsAvailable = decimal.Zero
-	}
-
-	if req.Type == types.TransactionTypeCredit && req.ExpiryDate != nil {
-		tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
 	}
 
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
@@ -1787,7 +1796,9 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 		}
 	} else {
 		for i, w := range wallets {
-			response[i] = dto.ToWalletBalanceResponse(w)
+			response[i] = &dto.WalletBalanceResponse{
+				Wallet: w,
+			}
 		}
 	}
 	return response, nil

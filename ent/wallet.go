@@ -56,6 +56,8 @@ type Wallet struct {
 	WalletType types.WalletType `json:"wallet_type,omitempty"`
 	// ConversionRate holds the value of the "conversion_rate" field.
 	ConversionRate decimal.Decimal `json:"conversion_rate,omitempty"`
+	// TopupConversionRate holds the value of the "topup_conversion_rate" field.
+	TopupConversionRate *decimal.Decimal `json:"topup_conversion_rate,omitempty"`
 	// Config holds the value of the "config" field.
 	Config types.WalletConfig `json:"config,omitempty"`
 	// AlertConfig holds the value of the "alert_config" field.
@@ -72,6 +74,8 @@ func (*Wallet) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case wallet.FieldTopupConversionRate:
+			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case wallet.FieldMetadata, wallet.FieldAutoTopup, wallet.FieldConfig, wallet.FieldAlertConfig:
 			values[i] = new([]byte)
 		case wallet.FieldBalance, wallet.FieldCreditBalance, wallet.FieldConversionRate:
@@ -215,6 +219,13 @@ func (w *Wallet) assignValues(columns []string, values []any) error {
 			} else if value != nil {
 				w.ConversionRate = *value
 			}
+		case wallet.FieldTopupConversionRate:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field topup_conversion_rate", values[i])
+			} else if value.Valid {
+				w.TopupConversionRate = new(decimal.Decimal)
+				*w.TopupConversionRate = *value.S.(*decimal.Decimal)
+			}
 		case wallet.FieldConfig:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field config", values[i])
@@ -332,6 +343,11 @@ func (w *Wallet) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("conversion_rate=")
 	builder.WriteString(fmt.Sprintf("%v", w.ConversionRate))
+	builder.WriteString(", ")
+	if v := w.TopupConversionRate; v != nil {
+		builder.WriteString("topup_conversion_rate=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("config=")
 	builder.WriteString(fmt.Sprintf("%v", w.Config))

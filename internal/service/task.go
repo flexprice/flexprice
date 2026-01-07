@@ -319,6 +319,8 @@ func (p *EventsChunkProcessor) ProcessChunk(ctx context.Context, chunk [][]strin
 			}
 			value := record[j]
 			switch header {
+			case "event_id":
+				eventReq.EventID = value
 			case "event_name":
 				eventReq.EventName = value
 			case "external_customer_id":

@@ -148,6 +148,11 @@ func ConversionRate(v decimal.Decimal) predicate.Wallet {
 	return predicate.Wallet(sql.FieldEQ(FieldConversionRate, v))
 }
 
+// TopupConversionRate applies equality check predicate on the "topup_conversion_rate" field. It's identical to TopupConversionRateEQ.
+func TopupConversionRate(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldTopupConversionRate, v))
+}
+
 // AlertEnabled applies equality check predicate on the "alert_enabled" field. It's identical to AlertEnabledEQ.
 func AlertEnabled(v bool) predicate.Wallet {
 	return predicate.Wallet(sql.FieldEQ(FieldAlertEnabled, v))
@@ -1180,6 +1185,56 @@ func ConversionRateLT(v decimal.Decimal) predicate.Wallet {
 // ConversionRateLTE applies the LTE predicate on the "conversion_rate" field.
 func ConversionRateLTE(v decimal.Decimal) predicate.Wallet {
 	return predicate.Wallet(sql.FieldLTE(FieldConversionRate, v))
+}
+
+// TopupConversionRateEQ applies the EQ predicate on the "topup_conversion_rate" field.
+func TopupConversionRateEQ(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldEQ(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateNEQ applies the NEQ predicate on the "topup_conversion_rate" field.
+func TopupConversionRateNEQ(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNEQ(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateIn applies the In predicate on the "topup_conversion_rate" field.
+func TopupConversionRateIn(vs ...decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldIn(FieldTopupConversionRate, vs...))
+}
+
+// TopupConversionRateNotIn applies the NotIn predicate on the "topup_conversion_rate" field.
+func TopupConversionRateNotIn(vs ...decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotIn(FieldTopupConversionRate, vs...))
+}
+
+// TopupConversionRateGT applies the GT predicate on the "topup_conversion_rate" field.
+func TopupConversionRateGT(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGT(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateGTE applies the GTE predicate on the "topup_conversion_rate" field.
+func TopupConversionRateGTE(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldGTE(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateLT applies the LT predicate on the "topup_conversion_rate" field.
+func TopupConversionRateLT(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLT(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateLTE applies the LTE predicate on the "topup_conversion_rate" field.
+func TopupConversionRateLTE(v decimal.Decimal) predicate.Wallet {
+	return predicate.Wallet(sql.FieldLTE(FieldTopupConversionRate, v))
+}
+
+// TopupConversionRateIsNil applies the IsNil predicate on the "topup_conversion_rate" field.
+func TopupConversionRateIsNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldIsNull(FieldTopupConversionRate))
+}
+
+// TopupConversionRateNotNil applies the NotNil predicate on the "topup_conversion_rate" field.
+func TopupConversionRateNotNil() predicate.Wallet {
+	return predicate.Wallet(sql.FieldNotNull(FieldTopupConversionRate))
 }
 
 // ConfigIsNil applies the IsNil predicate on the "config" field.

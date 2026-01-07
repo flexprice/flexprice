@@ -494,29 +494,34 @@ speakeasy-copy-go-custom:
 		echo "❌ Error: api/go directory not found. Run 'make speakeasy-go-sdk' first"; \
 		exit 1; \
 	fi
-	@# Copy helpers.go
-	@if [ -f "api/custom/go/helpers.go" ]; then \
-		cp api/custom/go/helpers.go api/go/; \
+	@COPIED=0; \
+	if [ -f "api/custom/go/helpers.go" ]; then \
+		cp api/custom/go/helpers.go api/go/ 2>/dev/null || true; \
 		echo "✓ Copied helpers.go"; \
+		COPIED=$$((COPIED + 1)); \
 	else \
-		echo "⚠️  Warning: api/custom/go/helpers.go not found"; \
-	fi
-	@# Copy async.go
-	@if [ -f "api/custom/go/async.go" ]; then \
-		cp api/custom/go/async.go api/go/; \
+		echo "⏭️  Skipping: helpers.go not found"; \
+	fi; \
+	if [ -f "api/custom/go/async.go" ]; then \
+		cp api/custom/go/async.go api/go/ 2>/dev/null || true; \
 		echo "✓ Copied async.go"; \
+		COPIED=$$((COPIED + 1)); \
 	else \
-		echo "⚠️  Warning: api/custom/go/async.go not found"; \
-	fi
-	@# Copy examples directory
-	@if [ -d "api/custom/go/examples" ]; then \
+		echo "⏭️  Skipping: async.go not found"; \
+	fi; \
+	if [ -d "api/custom/go/examples" ]; then \
 		rm -rf api/go/examples 2>/dev/null || true; \
-		cp -r api/custom/go/examples api/go/; \
+		cp -r api/custom/go/examples api/go/ 2>/dev/null || true; \
 		echo "✓ Copied examples/ directory"; \
+		COPIED=$$((COPIED + 1)); \
 	else \
-		echo "⚠️  Warning: api/custom/go/examples not found"; \
+		echo "⏭️  Skipping: examples/ not found"; \
+	fi; \
+	if [ $$COPIED -eq 0 ]; then \
+		echo "ℹ️  No custom files found to copy"; \
+	else \
+		echo "✅ Successfully copied $$COPIED custom file(s)/folder(s)"; \
 	fi
-	@echo "✅ Custom files copied successfully"
 
 # Clean only Go SDK
 clean-go-sdk:

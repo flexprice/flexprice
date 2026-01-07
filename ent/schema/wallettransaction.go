@@ -100,26 +100,41 @@ func (WalletTransaction) Fields() []ent.Field {
 			Immutable().
 			Optional().
 			Nillable(),
+
 		field.Other("credits_available", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
-			Annotations(
-				entsql.Default("0"),
-			),
+			Default(decimal.Zero),
 
-		// TODO: Add Immutable and NotEmpty constraints
 		field.String("currency").
 			SchemaType(map[string]string{
 				"postgres": "varchar(10)",
 			}).
+			NotEmpty().
+			Immutable(),
+
+		field.Other("conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(10,5)",
+			}).
 			Optional().
-			Nillable(),
+			Nillable().
+			Immutable(),
+
+		field.Other("topup_conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(10,5)",
+			}).
+			Optional().
+			Nillable().
+			Immutable(),
 
 		field.String("idempotency_key").
 			Nillable().
 			Immutable().
 			Optional(),
+
 		field.String("transaction_reason").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",

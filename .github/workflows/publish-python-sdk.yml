@@ -1,0 +1,298 @@
+name: Publish Python SDK to PyPI
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  publish-python-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Speakeasy CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+
+      - name: Get version from release tag
+        id: get_version
+        run: |
+          # Extract version from release tag (e.g., v1.0.48 -> 1.0.48)
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "📦 Publishing Python SDK version: ${VERSION}"
+
+      - name: Update version in gen.yaml
+        run: |
+          sed -i '/^python:/,/^[a-z]/ { /^  version:/ s/version: .*/version: ${{ env.VERSION }}/; }' .speakeasy/gen.yaml
+          echo "✓ Updated Python SDK version to ${{ env.VERSION }}"
+
+      - name: Generate Swagger
+        run: |
+          echo "🔨 Generating Swagger..."
+          make swagger
+          
+          if [ ! -f "docs/swagger/swagger-3-0.json" ]; then
+            echo "❌ ERROR: Swagger file not found at docs/swagger/swagger-3-0.json"
+            exit 1
+          fi
+          
+          echo "✓ Swagger generated successfully"
+          echo "📄 Swagger file size: $(wc -c < docs/swagger/swagger-3-0.json) bytes"
+
+      - name: Clean Python SDK directory
+        run: |
+          echo "🧹 Cleaning old Python SDK files..."
+          rm -rf api/python
+          echo "✓ Cleaned api/python directory"
+
+      - name: Generate Python SDK with Speakeasy
+        env:
+          SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+        run: |
+          echo "🔨 Generating Python SDK..."
+          /usr/local/bin/speakeasy run --target flexprice-python
+          echo "✓ Python SDK generated"
+          
+      - name: Verify Python SDK structure
+        run: |
+          echo "🔍 Verifying Python SDK structure..."
+          
+          if [ ! -d "api/python/src/flexprice_sdk_test" ]; then
+            echo "❌ ERROR: api/python/src/flexprice_sdk_test/ directory not found"
+            echo "Directory contents:"
+            ls -la api/python/
+            if [ -d "api/python/src" ]; then
+              echo "src/ contents:"
+              ls -la api/python/src/
+            fi
+            exit 1
+          fi
+          
+          if [ ! -f "api/python/src/flexprice_sdk_test/__init__.py" ]; then
+            echo "❌ ERROR: api/python/src/flexprice_sdk_test/__init__.py not found"
+            ls -la api/python/src/flexprice_sdk_test/
+            exit 1
+          fi
+          
+          echo "✓ Python SDK structure verified"
+          echo "📦 Package structure:"
+          ls -la api/python/src/flexprice_sdk_test/ | head -10
+          
+      - name: Fix build system configuration
+        working-directory: api/python
+        run: |
+          echo "🔧 Ensuring correct build system..."
+          
+          # Remove poetry.lock if it exists (causes build system confusion)
+          if [ -f "poetry.lock" ]; then
+            rm poetry.lock
+            echo "✓ Removed poetry.lock"
+          fi
+          
+          # Ensure pyproject.toml uses setuptools (not poetry)
+          if grep -q "poetry-core" pyproject.toml; then
+            echo "⚠️ Found poetry-core in pyproject.toml, fixing..."
+            sed -i 's/poetry-core/setuptools>=61.0/' pyproject.toml
+            sed -i 's/poetry\.core\.masonry\.api/setuptools.build_meta/' pyproject.toml
+          fi
+          
+          echo "✓ Build system configuration verified"
+
+      - name: Copy custom files to SDK
+        run: |
+          echo "📋 Copying custom files to Python SDK..."
+          
+          COPIED=0
+          
+          # Copy examples folder
+          if [ -d "api/custom/python/examples" ] && [ "$(ls -A api/custom/python/examples 2>/dev/null)" ]; then
+            mkdir -p api/python/examples
+            cp -r api/custom/python/examples/* api/python/examples/ 2>/dev/null || true
+            FILE_COUNT=$(ls -1 api/custom/python/examples 2>/dev/null | wc -l | tr -d ' ')
+            echo "✓ Copied examples folder ($FILE_COUNT files)"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: No examples found in api/custom/python/examples/"
+          fi
+          
+          # Copy async_utils.py if it exists
+          if [ -f "api/custom/python/async_utils.py" ]; then
+            mkdir -p api/python/src/flexprice_sdk_test
+            cp api/custom/python/async_utils.py api/python/src/flexprice_sdk_test/ 2>/dev/null || true
+            echo "✓ Copied async_utils.py"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: async_utils.py not found"
+          fi
+          
+          # Copy any other custom Python files
+          if [ -d "api/custom/python/utils" ] && [ "$(ls -A api/custom/python/utils 2>/dev/null)" ]; then
+            mkdir -p api/python/src/flexprice_sdk_test/utils
+            cp -r api/custom/python/utils/* api/python/src/flexprice_sdk_test/utils/ 2>/dev/null || true
+            echo "✓ Copied utils folder"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: No utils found in api/custom/python/utils/"
+          fi
+          
+          # Copy MANIFEST.in if it exists (required for packaging non-Python files)
+          if [ -f "api/custom/python/MANIFEST.in" ]; then
+            cp api/custom/python/MANIFEST.in api/python/ 2>/dev/null || true
+            echo "✓ Copied MANIFEST.in (for packaging examples)"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: MANIFEST.in not found"
+          fi
+          
+          if [ $COPIED -eq 0 ]; then
+            echo "ℹ️  No custom files found to copy - SDK will use only Speakeasy-generated files"
+          else
+            echo "✅ Successfully copied $COPIED custom file(s)/folder(s)"
+          fi
+
+      - name: Fix pyproject.toml for proper packaging
+        working-directory: api/python
+        run: |
+          echo "📝 Fixing pyproject.toml for proper packaging..."
+          
+          # Fix README reference if needed
+          if [ ! -f "README-PYPI.md" ] && [ -f "README.md" ]; then
+            sed -i 's/readme = "README-PYPI.md"/readme = "README.md"/' pyproject.toml || true
+            echo "✓ Fixed README reference to README.md"
+          fi
+          
+          # Add include-package-data if examples exist
+          if [ -d "examples" ] && [ "$(ls -A examples 2>/dev/null)" ]; then
+            if ! grep -q "include-package-data" pyproject.toml; then
+              # Add include-package-data on a new line after [tool.setuptools]
+              sed -i '/^\[tool\.setuptools\]/a\include-package-data = true' pyproject.toml
+              echo "✓ Enabled include-package-data in pyproject.toml"
+            fi
+          fi
+          
+          echo "✓ pyproject.toml ready for packaging"
+
+      - name: Update version in pyproject.toml
+        working-directory: api/python
+        run: |
+          echo "📝 Updating version in pyproject.toml..."
+          sed -i "s/^version = \".*\"/version = \"${{ env.VERSION }}\"/" pyproject.toml
+          echo "✓ Version updated to ${{ env.VERSION }}"
+
+      - name: Install build tools
+        run: |
+          echo "📦 Installing build tools..."
+          pip install --upgrade build twine
+          echo "✓ Build tools installed"
+
+      - name: Build package
+        working-directory: api/python
+        run: |
+          echo "🏗️ Building package with setuptools..."
+          python -m build
+          echo "✓ Package built successfully"
+
+      - name: Verify package contents
+        working-directory: api/python
+        run: |
+          echo "🧪 Verifying package contents..."
+          ls -lh dist/
+          echo ""
+          echo "Checking wheel contents:"
+          unzip -l dist/*.whl | head -30 || true
+          echo "✓ Package verified"
+
+      - name: Publish to PyPI
+        working-directory: api/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          echo "🚀 Publishing to PyPI..."
+          python -m twine upload dist/*
+          echo "✅ Python SDK v${{ env.VERSION }} published successfully to PyPI!"
+          echo "🔗 Package: https://pypi.org/project/flexprice-sdk-test/"
+
+      - name: Clone python-sdk-temp repository
+        run: |
+          echo "📥 Cloning python-sdk-temp repository..."
+          git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/flexprice/python-sdk-temp.git /tmp/python-sdk
+          echo "✓ Repository cloned"
+
+      - name: Copy SDK files to python-sdk-temp
+        run: |
+          echo "📁 Copying SDK files..."
+
+          cd /tmp/python-sdk
+
+          # Remove old files (except .git)
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+
+          # Copy SDK files
+          cp -r $GITHUB_WORKSPACE/api/python/* /tmp/python-sdk/
+
+          # Copy LICENSE
+          if [ -f "$GITHUB_WORKSPACE/LICENSE" ]; then
+            cp $GITHUB_WORKSPACE/LICENSE /tmp/python-sdk/
+          fi
+
+          echo "✓ Files copied"
+
+      - name: Commit and push to python-sdk-temp
+        run: |
+          cd /tmp/python-sdk
+
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          # Check for changes
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "⚠️ No changes to commit"
+            exit 0
+          fi
+
+          # Stage and commit
+          git add .
+          git commit -m "Release Python SDK v${{ env.VERSION }}"
+
+          # Create tag
+          git tag -a "v${{ env.VERSION }}" -m "Python SDK version ${{ env.VERSION }}"
+
+          # Push
+          git push origin main
+          git push origin "v${{ env.VERSION }}"
+
+          echo "✅ Python SDK v${{ env.VERSION }} pushed to repository!"
+          echo "🔗 Repository: https://github.com/flexprice/python-sdk-temp"
+          echo "🏷️ Tag: v${{ env.VERSION }}"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## ✅ Python SDK Published!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**PyPI:** https://pypi.org/project/flexprice-sdk-test/" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** https://github.com/flexprice/python-sdk-temp" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "pip install flexprice-sdk-test==${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+

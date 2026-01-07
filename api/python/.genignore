@@ -2,8 +2,9 @@
 src/flexprice/async_utils.py
 examples/
 
-# Preserve pyproject.toml to maintain proper packaging configuration
+# Preserve packaging configuration files
 pyproject.toml
+MANIFEST.in
 
 
 
