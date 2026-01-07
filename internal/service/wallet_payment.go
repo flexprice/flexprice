@@ -47,6 +47,10 @@ type WalletPaymentService interface {
 
 	// GetWalletsForPayment retrieves and filters wallets suitable for payment
 	GetWalletsForPayment(ctx context.Context, customerID string, currency string, options WalletPaymentOptions) ([]*wallet.Wallet, error)
+
+	// GetWalletsForCreditAdjustment retrieves prepaid wallets for credit adjustment
+	// Returns all prepaid wallets regardless of price type restrictions, sorted by balance (highest first)
+	GetWalletsForCreditAdjustment(ctx context.Context, customerID string, currency string) ([]*wallet.Wallet, error)
 }
 
 type walletPaymentService struct {
@@ -209,6 +213,47 @@ func (s *walletPaymentService) GetWalletsForPayment(
 		"total_wallets", len(result))
 
 	return result, nil
+}
+
+// GetWalletsForCreditAdjustment retrieves and filters prepaid wallets suitable for credit adjustment
+// Returns all prepaid wallets regardless of price type restrictions, sorted by balance (highest first)
+func (s *walletPaymentService) GetWalletsForCreditAdjustment(
+	ctx context.Context,
+	customerID string,
+	currency string,
+) ([]*wallet.Wallet, error) {
+	// Get all wallets for the customer
+	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter active prepaid wallets with matching currency and positive balance
+	// Only prepaid wallets can be used for credit adjustments; postpaid wallets are excluded
+	// All prepaid wallets are returned regardless of price type restrictions
+	activeWallets := make([]*wallet.Wallet, 0)
+	for _, w := range wallets {
+		if w.WalletStatus == types.WalletStatusActive &&
+			types.IsMatchingCurrency(w.Currency, currency) &&
+			w.Balance.GreaterThan(decimal.Zero) &&
+			w.WalletType == types.WalletTypePrePaid {
+			activeWallets = append(activeWallets, w)
+		}
+	}
+
+	if len(activeWallets) == 0 {
+		return activeWallets, nil
+	}
+
+	// Sort by balance (highest first) to minimize wallet usage
+	s.sortWalletsByBalanceDesc(activeWallets)
+
+	s.Logger.Infow("retrieved prepaid wallets for credit adjustment",
+		"customer_id", customerID,
+		"currency", currency,
+		"total_wallets", len(activeWallets))
+
+	return activeWallets, nil
 }
 
 // processWalletPayments processes payments using the provided wallets in order
