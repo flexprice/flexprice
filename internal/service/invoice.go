@@ -271,6 +271,13 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
+		// Apply credit adjustments
+		if err := s.applyCreditAdjustmentsToInvoice(ctx, inv); err != nil {
+			return err
+		}
+
+		// Apply taxes to invoice (now considers credits)
+
 		// Apply taxes to invoice
 		if err := s.applyTaxesToInvoice(ctx, inv, req); err != nil {
 			return err
@@ -2675,11 +2682,11 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 
 	// Update the invoice with calculated tax amounts
 	inv.TotalTax = taxResult.TotalTaxAmount
-	// Discount-first-then-tax: total = subtotal - discount + tax
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Add(taxResult.TotalTaxAmount)
+	// Discount-first-then-tax: total = subtotal - discount - credits + tax
+	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(taxResult.TotalTaxAmount)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
-	}
+	}   
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
@@ -3508,6 +3515,49 @@ func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lin
 		}
 		lineItem.InvoiceLevelDiscount = discountAmount
 	}
+
+	return nil
+}
+
+// applyCreditAdjustmentsToInvoice applies wallet credits as adjustments to invoice line items
+func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, inv *invoice.Invoice) error {
+	s.Logger.Debugw("applying credit adjustments to invoice",
+		"invoice_id", inv.ID,
+		"customer_id", inv.CustomerID,
+		"currency", inv.Currency,
+	)
+
+	// Create credit adjustment service
+	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
+
+	// Apply credits to the invoice
+	creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(ctx, inv)
+	if err != nil {
+		return err
+	}
+
+	// Update invoice with credits applied
+	inv.TotalCreditsApplied = creditResult.TotalCreditsApplied
+
+	// Recalculate total after credits are applied
+	// Formula: total = subtotal - discount - credits + tax
+	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
+	// total = subtotal - discount - credits
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(creditResult.TotalCreditsApplied)
+	if newTotal.IsNegative() {
+		newTotal = decimal.Zero
+	}
+	inv.Total = newTotal
+	inv.AmountDue = inv.Total
+	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+
+	s.Logger.Debugw("successfully applied credit adjustments to invoice",
+		"invoice_id", inv.ID,
+		"total_credits_applied", creditResult.TotalCreditsApplied,
+		"new_total", inv.Total,
+		"subtotal", inv.Subtotal,
+		"total_discount", inv.TotalDiscount,
+	)
 
 	return nil
 }
