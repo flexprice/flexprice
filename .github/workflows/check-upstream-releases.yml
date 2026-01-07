@@ -65,9 +65,8 @@ jobs:
           echo "Creating branch for new version..."
           BRANCH_NAME="update-to-$LATEST_VERSION"
 
-          # Delete existing branch if it exists
+          # Delete existing local branch if it exists
           git branch -D $BRANCH_NAME 2>/dev/null || true
-          git push origin --delete $BRANCH_NAME 2>/dev/null || true
 
           git checkout -b $BRANCH_NAME
 
@@ -78,8 +77,8 @@ jobs:
             git commit -m "Merge upstream tag $LATEST_VERSION (with conflicts)"
           }
 
-          echo "Pushing branch to origin..."
-          git push -u origin $BRANCH_NAME
+          echo "Pushing branch to origin (force push to overwrite if exists)..."
+          git push -u origin $BRANCH_NAME --force
 
           echo "Creating pull request..."
           gh pr create \
