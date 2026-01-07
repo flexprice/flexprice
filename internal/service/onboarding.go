@@ -5,14 +5,16 @@ import (
 	"math/rand"
 	"time"
 
+	"encoding/json"
+
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/environment"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/user"
-	"github.com/flexprice/flexprice/internal/email"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/types"
@@ -441,15 +443,8 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 		}
 	}
 
-	// Send onboarding email
-	if err := s.sendOnboardingEmail(ctx, email); err != nil {
-		// Log error but don't fail the onboarding process
-		s.Logger.Errorw("failed to send onboarding email",
-			"error", err,
-			"email", email,
-			"user_id", userID,
-		)
-	}
+	// Send Zapier webhook for onboarding (never fails - errors are logged internally)
+	_ = s.sendZapierWebhook(ctx, email)
 
 	return nil
 }
@@ -828,46 +823,79 @@ func (s *onboardingService) createDefaultSubscriptions(ctx context.Context, cust
 	return nil
 }
 
-// sendOnboardingEmail sends a welcome email to a new user
-func (s *onboardingService) sendOnboardingEmail(ctx context.Context, toEmail string) error {
-	// Create email client
-	emailClient := email.NewEmailClient(email.Config{
-		Enabled:     s.Config.Email.Enabled,
-		APIKey:      s.Config.Email.ResendAPIKey,
-		FromAddress: s.Config.Email.FromAddress,
-		ReplyTo:     s.Config.Email.ReplyTo,
-	})
+// ZapierWebhookPayload represents the data sent to Zapier webhook
+type ZapierWebhookPayload struct {
+	Email string `json:"email"`
+}
 
-	if !emailClient.IsEnabled() {
-		s.Logger.Debugw("email service is disabled, skipping onboarding email")
+// sendZapierWebhook sends a webhook event to Zapier for user signup
+// This function is fail-safe and will never break the onboarding flow
+func (s *onboardingService) sendZapierWebhook(ctx context.Context, email string) error {
+	// Get Zapier webhook URL from config
+	zapierWebhookURL := s.Config.Email.ZapierWebhookURL
+
+	// Skip if webhook URL is not configured
+	if zapierWebhookURL == "" {
+		s.Logger.Debugw("Zapier webhook URL not configured, skipping webhook")
 		return nil
 	}
 
-	// Create email service
-	emailSvc := email.NewEmail(emailClient, s.Logger.Desugar())
-
-	// Build template data from config
-	configData := map[string]string{
-		"calendar_url": s.Config.Email.CalendarURL,
+	// Build the payload - only send email
+	payload := ZapierWebhookPayload{
+		Email: email,
 	}
 
-	templateData := email.BuildTemplateData(configData, toEmail)
-
-	// Send email using template
-	resp, err := emailSvc.SendEmailWithTemplate(ctx, email.SendEmailWithTemplateRequest{
-		FromAddress:  s.Config.Email.FromAddress,
-		ToAddress:    toEmail,
-		Subject:      "Welcome to Flexprice!",
-		TemplatePath: "welcome-email.html",
-		Data:         templateData,
-	})
+	// Marshal payload to JSON
+	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		s.Logger.Errorw("failed to marshal Zapier webhook payload",
+			"error", err,
+			"email", email,
+		)
+		return nil // Don't fail onboarding
 	}
 
-	if !resp.Success {
-		s.Logger.Errorw("email send was not successful", "error", resp.Error)
+	// Create HTTP client with timeout
+	httpClient := httpclient.NewDefaultClient()
+
+	// Create request
+	req := &httpclient.Request{
+		Method: "POST",
+		URL:    zapierWebhookURL,
+		Headers: map[string]string{
+			"Content-Type": "application/json",
+		},
+		Body: payloadBytes,
 	}
+
+	// Send request
+	s.Logger.Infow("sending Zapier webhook",
+		"email", email,
+	)
+
+	resp, err := httpClient.Send(ctx, req)
+	if err != nil {
+		s.Logger.Errorw("failed to send Zapier webhook",
+			"error", err,
+			"email", email,
+		)
+		return nil // Don't fail onboarding
+	}
+
+	// Check response
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		s.Logger.Errorw("Zapier webhook request failed with non-2xx status",
+			"status_code", resp.StatusCode,
+			"response_body", string(resp.Body),
+			"email", email,
+		)
+		return nil // Don't fail onboarding
+	}
+
+	s.Logger.Infow("successfully sent Zapier webhook",
+		"email", email,
+		"status_code", resp.StatusCode,
+	)
 
 	return nil
 }

@@ -242,6 +242,7 @@ email:
   from_address: "" # Default from address for emails (MUST be verified in Resend)
   reply_to: "" # Reply-to address for emails
   calendar_url: "" # Calendar booking URL for onboarding
+  zapier_webhook_url: "" # Zapier webhook URL for user signup (set via FLEXPRICE_EMAIL_ZAPIER_WEBHOOK_URL environment variable)
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file
