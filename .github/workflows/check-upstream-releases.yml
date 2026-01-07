@@ -1,0 +1,157 @@
+# .github/workflows/check-upstream-releases.yml
+name: Check Upstream Releases
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC
+    - cron: "0 6 1,15 * *"
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  issues: write
+  contents: write
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Fetch latest upstream tag
+        id: upstream
+        run: |
+          LATEST_TAG=$(curl -s https://api.github.com/repos/flexprice/flexprice/tags | jq -r '.[0].name')
+          echo "latest_version=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Latest upstream tag: $LATEST_TAG"
+
+      - name: Compare versions
+        id: compare
+        env:
+          TRACKED_VERSION: ${{ secrets.LATEST_TRACKED_VERSION }}
+          LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
+        run: |
+          echo "Tracked version: $TRACKED_VERSION"
+          echo "Latest version: $LATEST_VERSION"
+
+          if [ "$LATEST_VERSION" != "$TRACKED_VERSION" ]; then
+            echo "new_version_available=true" >> $GITHUB_OUTPUT
+            echo "⚠️ New version available: $LATEST_VERSION (currently tracking: $TRACKED_VERSION)"
+          else
+            echo "new_version_available=false" >> $GITHUB_OUTPUT
+            echo "✅ Already tracking the latest version: $TRACKED_VERSION"
+          fi
+
+      - name: Pull new tag from upstream
+        if: steps.compare.outputs.new_version_available == 'true'
+        env:
+          LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
+          TRACKED_VERSION: ${{ secrets.LATEST_TRACKED_VERSION }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Setting up git configuration..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          echo "Setting up upstream remote..."
+          git remote add upstream https://github.com/flexprice/flexprice.git || git remote set-url upstream https://github.com/flexprice/flexprice.git
+
+          echo "Fetching from upstream..."
+          git fetch upstream --tags
+
+          echo "Creating branch for new version..."
+          BRANCH_NAME="update-to-$LATEST_VERSION"
+          git checkout -b $BRANCH_NAME
+
+          echo "Merging tag $LATEST_VERSION from upstream..."
+          git merge --no-edit tags/$LATEST_VERSION || {
+            echo "Merge conflict detected. Committing conflict markers for manual resolution."
+            git add .
+            git commit -m "Merge upstream tag $LATEST_VERSION (with conflicts)"
+          }
+
+          echo "Pushing branch to origin..."
+          git push -u origin $BRANCH_NAME
+
+          echo "Creating pull request..."
+          gh pr create \
+            --title "Update to upstream version $LATEST_VERSION" \
+            --body "## Upstream Update Available
+
+          This PR updates the codebase to track the new upstream tag: \`$LATEST_VERSION\`
+
+          **Previous version:** \`$TRACKED_VERSION\`
+          **New version:** \`$LATEST_VERSION\`
+
+          ### Changes
+          - View upstream release: https://github.com/flexprice/flexprice/releases/tag/$LATEST_VERSION
+          - Compare changes: https://github.com/flexprice/flexprice/compare/$TRACKED_VERSION...$LATEST_VERSION
+
+          ### Next Steps
+          1. Review the upstream changes
+          2. Test the changes
+          3. Merge this PR if everything looks good
+
+          **Note:** The \`LATEST_TRACKED_VERSION\` secret has been automatically updated to \`$LATEST_VERSION\`" \
+            --label "upstream-update" \
+            --label "automated-pr"
+
+          echo "✅ Successfully created pull request for $LATEST_VERSION"
+
+      - name: Build Docker image with new tag
+        if: steps.compare.outputs.new_version_available == 'true'
+        env:
+          LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
+        run: |
+          echo "Setting up Docker Buildx..."
+          docker buildx create --use --name multiarch-builder || docker buildx use multiarch-builder
+
+          echo "Building Docker image for $LATEST_VERSION..."
+          docker buildx build \
+            --file Dockerfile.local \
+            --platform linux/amd64 \
+            --tag flexprice:$LATEST_VERSION \
+            --tag flexprice:latest \
+            --load \
+            .
+
+          # Uncomment below to build for multiple architectures (amd64 and arm64)
+          # docker buildx build \
+          #   --file Dockerfile.local \
+          #   --platform linux/amd64,linux/arm64 \
+          #   --tag flexprice:$LATEST_VERSION \
+          #   --tag flexprice:latest \
+          #   --push \
+          #   .
+
+          echo "✅ Successfully built Docker image for $LATEST_VERSION"
+
+      - name: Update tracked version
+        if: steps.compare.outputs.new_version_available == 'true'
+        env:
+          LATEST_VERSION: ${{ steps.upstream.outputs.latest_version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Updating LATEST_TRACKED_VERSION secret to $LATEST_VERSION..."
+          echo "$LATEST_VERSION" | gh secret set LATEST_TRACKED_VERSION
+          echo "✅ Successfully updated LATEST_TRACKED_VERSION to $LATEST_VERSION"
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.compare.outputs.new_version_available }}" == "true" ]; then
+            echo "### ⚠️ New Upstream Tag Available" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Latest:** ${{ steps.upstream.outputs.latest_version }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Tracked:** ${{ secrets.LATEST_TRACKED_VERSION }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Pull request created to merge upstream changes" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Docker image built for linux/amd64" >> $GITHUB_STEP_SUMMARY
+            echo "✅ LATEST_TRACKED_VERSION secret updated to ${{ steps.upstream.outputs.latest_version }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ✅ Up to Date" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Currently tracking the latest upstream tag: ${{ secrets.LATEST_TRACKED_VERSION }}" >> $GITHUB_STEP_SUMMARY
+          fi
