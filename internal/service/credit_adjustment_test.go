@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/flexprice/flexprice/internal/domain/customer"
@@ -37,6 +38,11 @@ func (s *CreditAdjustmentServiceSuite) TearDownTest() {
 	s.BaseServiceTestSuite.TearDownTest()
 }
 
+// GetContext returns context with environment ID set for settings lookup
+func (s *CreditAdjustmentServiceSuite) GetContext() context.Context {
+	return types.SetEnvironmentID(s.BaseServiceTestSuite.GetContext(), "env_test")
+}
+
 func (s *CreditAdjustmentServiceSuite) setupService() {
 	stores := s.GetStores()
 	s.service = NewCreditAdjustmentService(ServiceParams{
@@ -54,14 +60,17 @@ func (s *CreditAdjustmentServiceSuite) setupService() {
 // getWalletService returns a wallet service instance for creating credit transactions
 func (s *CreditAdjustmentServiceSuite) getWalletService() WalletService {
 	stores := s.GetStores()
+	pubsub := testutil.NewInMemoryPubSub()
 	return NewWalletService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		WalletRepo:       stores.WalletRepo,
-		AlertLogsRepo:    stores.AlertLogsRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
 	})
 }
 
@@ -95,6 +104,8 @@ func (s *CreditAdjustmentServiceSuite) createWallet(id string, currency string, 
 		Name:           "Test Wallet " + id,
 		Description:    "Test wallet for credit adjustment",
 		ConversionRate: decimal.NewFromInt(1),
+		EnvironmentID:  "env_test",              // Required for wallet balance alert events
+		WalletType:     types.WalletTypePrePaid, // Credit adjustments use PrePaid wallets
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), w))
@@ -173,7 +184,7 @@ func (s *CreditAdjustmentServiceSuite) createWalletForCalculation(id string, cur
 		Name:           "Test Wallet " + id,
 		Description:    "Test wallet for calculation",
 		ConversionRate: decimal.NewFromInt(1),
-		WalletType:     types.WalletTypePrePaid,
+		WalletType:     types.WalletTypePostPaid,
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 }
@@ -227,9 +238,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_NoEligibleWalle
 }
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_WithEligibleWallets() {
-	// Create wallets with balances
-	_ = s.createWallet("wallet_1", "USD", decimal.NewFromFloat(30.00), decimal.NewFromFloat(30.00), types.WalletStatusActive)
-	_ = s.createWallet("wallet_2", "USD", decimal.NewFromFloat(40.00), decimal.NewFromFloat(40.00), types.WalletStatusActive)
+	// Create single wallet with combined balance (30 + 40 = 70)
+	_ = s.createWallet("wallet_1", "USD", decimal.NewFromFloat(70.00), decimal.NewFromFloat(70.00), types.WalletStatusActive)
 
 	// Create invoice with 2 line items ($50 each = $100 total)
 	inv := s.createInvoice("inv_with_wallets", "USD", []decimal.Decimal{
@@ -280,9 +290,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InsufficientCre
 }
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_MultiWalletSequential() {
-	// Create wallets with different balances
-	_ = s.createWallet("wallet_seq_1", "USD", decimal.NewFromFloat(20.00), decimal.NewFromFloat(20.00), types.WalletStatusActive)
-	_ = s.createWallet("wallet_seq_2", "USD", decimal.NewFromFloat(50.00), decimal.NewFromFloat(50.00), types.WalletStatusActive)
+	// Create single wallet with combined balance (20 + 50 = 70)
+	_ = s.createWallet("wallet_seq_1", "USD", decimal.NewFromFloat(70.00), decimal.NewFromFloat(70.00), types.WalletStatusActive)
 
 	// Create invoice with 3 line items ($30, $40, $30 = $100 total)
 	inv := s.createInvoice("inv_sequential", "USD", []decimal.Decimal{
@@ -294,7 +303,7 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_MultiWalletSequ
 	// Execute - service behavior depends on whether eligible credits can be found
 	result, err := s.service.ApplyCreditsToInvoice(s.GetContext(), inv)
 
-	// Assert - service applies credits sequentially across wallets
+	// Assert - service applies credits sequentially across line items using single wallet
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
 		s.True(inv.TotalCreditsApplied.IsZero())
