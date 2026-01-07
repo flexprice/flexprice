@@ -80,10 +80,14 @@ jobs:
           echo "Pushing branch to origin (force push to overwrite if exists)..."
           git push -u origin $BRANCH_NAME --force
 
-          echo "Creating pull request..."
-          gh pr create \
-            --title "Update to upstream version $LATEST_VERSION" \
-            --body "## Upstream Update Available
+          echo "Checking if PR already exists..."
+          EXISTING_PR=$(gh pr list --head $BRANCH_NAME --json number --jq '.[0].number' 2>/dev/null || echo "")
+
+          if [ -n "$EXISTING_PR" ]; then
+            echo "PR already exists (#$EXISTING_PR). Updating PR with new commits..."
+            gh pr edit $EXISTING_PR \
+              --title "Update to upstream version $LATEST_VERSION" \
+              --body "## Upstream Update Available
 
           This PR updates the codebase to track the new upstream tag: \`$LATEST_VERSION\`
 
@@ -99,11 +103,38 @@ jobs:
           2. Test the changes
           3. Merge this PR if everything looks good
 
-          **Note:** The \`LATEST_TRACKED_VERSION\` secret has been automatically updated to \`$LATEST_VERSION\`" \
-            --label "upstream-update" \
-            --label "automated-pr"
+          **Note:** The \`LATEST_TRACKED_VERSION\` secret has been automatically updated to \`$LATEST_VERSION\`"
 
-          echo "✅ Successfully created pull request for $LATEST_VERSION"
+            echo "✅ Successfully updated existing PR #$EXISTING_PR for $LATEST_VERSION"
+          else
+            echo "Creating new pull request..."
+            PR_URL=$(gh pr create \
+              --title "Update to upstream version $LATEST_VERSION" \
+              --body "## Upstream Update Available
+
+          This PR updates the codebase to track the new upstream tag: \`$LATEST_VERSION\`
+
+          **Previous version:** \`$TRACKED_VERSION\`
+          **New version:** \`$LATEST_VERSION\`
+
+          ### Changes
+          - View upstream release: https://github.com/flexprice/flexprice/releases/tag/$LATEST_VERSION
+          - Compare changes: https://github.com/flexprice/flexprice/compare/$TRACKED_VERSION...$LATEST_VERSION
+
+          ### Next Steps
+          1. Review the upstream changes
+          2. Test the changes
+          3. Merge this PR if everything looks good
+
+          **Note:** The \`LATEST_TRACKED_VERSION\` secret has been automatically updated to \`$LATEST_VERSION\`")
+
+            echo "✅ Successfully created pull request: $PR_URL"
+
+            # Add labels to the PR
+            echo "Adding labels to PR..."
+            PR_NUMBER=$(echo $PR_URL | grep -o '[0-9]*$')
+            gh pr edit $PR_NUMBER --add-label "upstream-update" --add-label "automated-pr" || echo "Warning: Could not add labels"
+          fi
 
       - name: Build Docker image with new tag
         if: steps.compare.outputs.new_version_available == 'true'
