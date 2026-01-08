@@ -3568,9 +3568,10 @@ func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lin
 			// REMAINDER ALLOCATION: For the last line item, assign the remaining discount amount
 			// This ensures exact distribution: sum(all discounts) == totalDiscountAmount
 			// The last item receives any remainder from rounding differences
+			// IMPORTANT: Do NOT round the remainder - use exact value to ensure sum matches total
 			// Example: If totalDiscount = $10.00 and previous items sum to $5.00, last gets $5.00
 			remainder := totalDiscountAmount.Sub(distributedTotal)
-			discountAmount = types.RoundToCurrencyPrecision(remainder, lineItem.Currency)
+			discountAmount = remainder
 		} else {
 			// PROPORTIONAL CALCULATION with IMMEDIATE ROUNDING
 			// Formula: (eligibleAmount / totalEligibleAmount) × totalDiscountAmount
