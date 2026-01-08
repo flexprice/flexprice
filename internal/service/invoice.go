@@ -3629,24 +3629,35 @@ func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lin
 		return nil
 	}
 
-	// Distribute discount proportionally with currency-aware rounding and remainder allocation
+	// First pass: Set zero discount for ineligible items and filter eligible items
+	// Eligible items are those with positive remaining amount after line-item discounts
+	filteredLineItems := make([]*invoice.InvoiceLineItem, 0, len(lineItems))
+	for _, lineItem := range lineItems {
+		eligibleAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		if eligibleAmount.IsPositive() {
+			filteredLineItems = append(filteredLineItems, lineItem)
+		} else {
+			// Set zero discount for non-eligible items (already fully discounted)
+			lineItem.InvoiceLevelDiscount = decimal.Zero
+		}
+	}
+
+	// If no eligible items, return early
+	if len(filteredLineItems) == 0 {
+		return nil
+	}
+
+	// Second pass: Distribute discount proportionally to eligible items with remainder allocation
 	// This ensures exact distribution without data loss, with rounding applied at each step
 	distributedTotal := decimal.Zero
-	for i, lineItem := range lineItems {
-		// Calculate eligible amount for this line item
+	for i, lineItem := range filteredLineItems {
 		eligibleAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
 
-		// Skip items with no eligible amount (already fully discounted)
-		if eligibleAmount.IsNegative() || eligibleAmount.IsZero() {
-			lineItem.InvoiceLevelDiscount = decimal.Zero
-			continue
-		}
-
 		var discountAmount decimal.Decimal
-		if i == len(lineItems)-1 {
-			// REMAINDER ALLOCATION: For the last line item, assign the remaining discount amount
+		if i == len(filteredLineItems)-1 {
+			// REMAINDER ALLOCATION: For the last eligible line item, assign the remaining discount amount
 			// This ensures exact distribution: sum(all discounts) == totalDiscountAmount
-			// The last item receives any remainder from rounding differences
+			// The last eligible item receives any remainder from rounding differences
 			// IMPORTANT: Do NOT round the remainder - use exact value to ensure sum matches total
 			// Example: If totalDiscount = $10.00 and previous items sum to $5.00, last gets $5.00
 			remainder := totalDiscountAmount.Sub(distributedTotal)
