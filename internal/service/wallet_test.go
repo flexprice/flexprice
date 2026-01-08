@@ -555,13 +555,18 @@ func (s *WalletServiceSuite) setupWallet() {
 		ID:                  "wallet-1",
 		CustomerID:          s.testData.customer.ID,
 		Currency:            "usd",
-		WalletType:          types.WalletTypePostPaid,
+		WalletType:          types.WalletTypePrePaid,
 		Balance:             decimal.NewFromInt(1000),
 		CreditBalance:       decimal.NewFromInt(1000),
 		ConversionRate:      decimal.NewFromFloat(1.0),
 		TopupConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:        types.WalletStatusActive,
-		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+		Config: types.WalletConfig{
+			AllowedPriceTypes: []types.WalletConfigPriceType{
+				types.WalletConfigPriceTypeUsage,
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }
