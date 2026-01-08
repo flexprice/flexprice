@@ -1,0 +1,27 @@
+name: "🎉 Welcome First-Time Pull Request"
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  greet:
+    if: github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR' || github.event.pull_request.author_association == 'NONE'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome first-time PR author
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            🎉 **Hey @${{ github.actor }}**, congrats on your first PR!  
+
+            Thanks for contributing — your efforts mean a lot to the project 💪  
+            The maintainers will review your PR soon.  
+
+            Meanwhile, you can connect with other contributors on our Slack:  
+            👉 [FlexPrice Community Slack](https://flexpricecommunity.slack.com/)
+
+            Keep up the great work 🚀

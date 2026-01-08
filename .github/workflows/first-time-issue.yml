@@ -1,0 +1,27 @@
+name: "👋 Welcome First-Time Issue"
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  greet:
+    if: github.event.issue.author_association == 'FIRST_TIME_CONTRIBUTOR' || github.event.issue.author_association == 'NONE'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome first-time issue author
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            👋 **Hey @${{ github.actor }}**, thanks for opening your first issue!  
+
+            We appreciate your contribution to the project 🙌  
+            If you’d like to take up this issue, feel free to assign it to yourself or comment below.
+
+            You can also join our community on Slack for guidance or discussions:  
+            👉 [FlexPrice Community Slack](https://flexpricecommunity.slack.com/)
+
+            Happy contributing 🚀
