@@ -691,8 +691,10 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 }
 
 // TestCalculateCreditAdjustments_ExtremePrecisionSmallDecimals tests calculations with very small decimal values (max 8 decimals)
+// Note: With rounding at source, sub-cent amounts round to zero for USD (2 decimal precision)
 func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePrecisionSmallDecimals() {
 	// Create wallets with very small balances (8 decimal places max)
+	// These amounts are below USD precision (2 decimals), so they round to zero
 	w1, _ := decimal.NewFromString("0.00000001")
 	w2, _ := decimal.NewFromString("0.00000002")
 	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
@@ -706,16 +708,12 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	// Execute
 	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
 
-	// Assert
+	// Assert - sub-cent amounts round to zero for USD
 	s.NoError(err)
 	s.NotNil(walletDebits)
-	s.Equal(2, len(walletDebits))
-	expectedW1, _ := decimal.NewFromString("0.00000001")
-	expectedW2, _ := decimal.NewFromString("0.00000002")
-	s.True(walletDebits["wallet_1"].Equal(expectedW1))
-	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	expectedTotal, _ := decimal.NewFromString("0.00000003")
-	s.True(lineItem.CreditsApplied.Equal(expectedTotal))
+	// With rounding, sub-cent amounts become zero, so no debits are made
+	s.Equal(0, len(walletDebits))
+	s.True(lineItem.CreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_ExtremePrecisionLargeDecimals tests calculations with very large decimal values
@@ -765,8 +763,10 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ManyDecima
 	s.NotNil(walletDebits)
 	s.Equal(2, len(walletDebits))
 	// First wallet covers full amount, second wallet covers remainder
-	s.True(walletDebits["wallet_1"].Equal(w1))
-	expectedW2, _ := decimal.NewFromString("76.54321099")
+	// With rounding: 123.45678901 -> 123.46, 76.54321099 -> 76.54
+	expectedW1, _ := decimal.NewFromString("123.46")
+	expectedW2, _ := decimal.NewFromString("76.54")
+	s.True(walletDebits["wallet_1"].Equal(expectedW1))
 	s.True(walletDebits["wallet_2"].Equal(expectedW2))
 	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
 }
@@ -793,9 +793,10 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionW
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
 	// Should debit the adjusted amount (115.86419754), but wallet only has 100.12345678
-	s.True(walletDebits["wallet_1"].Equal(w))
-	expectedCredits, _ := decimal.NewFromString("100.12345678")
-	s.True(lineItem.CreditsApplied.Equal(expectedCredits))
+	// With rounding: 100.12345678 rounds to 100.12 for USD
+	expectedDebit, _ := decimal.NewFromString("100.12")
+	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
+	s.True(lineItem.CreditsApplied.Equal(expectedDebit))
 }
 
 // TestCalculateCreditAdjustments_PrecisionRoundingEdgeCases tests edge cases that might cause rounding issues (max 8 decimals)
@@ -820,11 +821,15 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionR
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(3, len(walletDebits))
-	// All three wallets should be used
-	s.True(walletDebits["wallet_1"].Equal(w1))
-	s.True(walletDebits["wallet_2"].Equal(w2))
-	s.True(walletDebits["wallet_3"].Equal(w3))
-	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
+	// All three wallets should be used, but rounded to USD precision (2 decimals)
+	// 0.33333333 -> 0.33, 0.33333333 -> 0.33, 0.33333334 -> 0.33
+	expectedW, _ := decimal.NewFromString("0.33")
+	s.True(walletDebits["wallet_1"].Equal(expectedW))
+	s.True(walletDebits["wallet_2"].Equal(expectedW))
+	s.True(walletDebits["wallet_3"].Equal(expectedW))
+	// Sum of rounded amounts: 0.33 + 0.33 + 0.33 = 0.99 (not 1.00 due to rounding)
+	expectedTotal, _ := decimal.NewFromString("0.99")
+	s.True(lineItem.CreditsApplied.Equal(expectedTotal))
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemTwoWallets tests one line item adjusted by exactly 2 wallets
@@ -942,11 +947,13 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MixedPreci
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(3, len(walletDebits))
-	// All wallets should be used
-	// wallet1: $10.5, wallet2: $20.123, remaining for wallet3: $50 - $10.5 - $20.123 = $19.377
-	s.True(walletDebits["wallet_1"].Equal(w1))
-	s.True(walletDebits["wallet_2"].Equal(w2))
-	expectedW3, _ := decimal.NewFromString("19.377")
+	// All wallets should be used, but rounded to USD precision (2 decimals)
+	// wallet1: $10.5 -> $10.50, wallet2: $20.123 -> $20.12, remaining for wallet3: $50.00 - $10.50 - $20.12 = $19.38
+	expectedW1, _ := decimal.NewFromString("10.50")
+	expectedW2, _ := decimal.NewFromString("20.12")
+	expectedW3, _ := decimal.NewFromString("19.38")
+	s.True(walletDebits["wallet_1"].Equal(expectedW1))
+	s.True(walletDebits["wallet_2"].Equal(expectedW2))
 	s.True(walletDebits["wallet_3"].Equal(expectedW3))
 	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
 }
@@ -973,13 +980,17 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremeDis
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
 	// Should debit full wallet balance (adjusted amount is 115, but wallet only has 100.00000001)
-	s.True(walletDebits["wallet_1"].Equal(w))
-	s.True(lineItem.CreditsApplied.Equal(w))
+	// With rounding: 100.00000001 rounds to 100.00 for USD
+	expectedDebit, _ := decimal.NewFromString("100.00")
+	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
+	s.True(lineItem.CreditsApplied.Equal(expectedDebit))
 }
 
 // TestCalculateCreditAdjustments_NearZeroValues tests values very close to zero (max 8 decimals)
+// Note: With rounding at source, sub-cent amounts round to zero for USD (2 decimal precision)
 func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NearZeroValues() {
 	// Create wallet with value very close to zero (8 decimals max)
+	// This amount is below USD precision (2 decimals), so it rounds to zero
 	w, _ := decimal.NewFromString("0.00000001")
 	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
 
@@ -991,13 +1002,11 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NearZeroVa
 	// Execute
 	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{testWallet})
 
-	// Assert
+	// Assert - sub-cent amounts round to zero for USD
 	s.NoError(err)
 	s.NotNil(walletDebits)
-	s.Equal(1, len(walletDebits))
-	s.True(walletDebits["wallet_1"].Equal(w))
-	// Line item should get partial credit (only what wallet has)
-	s.True(lineItem.CreditsApplied.Equal(w))
+	s.Equal(0, len(walletDebits))
+	s.True(lineItem.CreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemTwoWalletsWithPrecision tests single line item with 2 wallets using precise decimals (max 8 decimals)
@@ -1020,9 +1029,12 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(2, len(walletDebits))
-	// Both wallets should be fully used
-	s.True(walletDebits["wallet_1"].Equal(w1))
-	s.True(walletDebits["wallet_2"].Equal(w2))
+	// Both wallets should be fully used, but rounded to USD precision (2 decimals)
+	// 33.33333333 -> 33.33, 66.66666667 -> 66.67
+	expectedW1, _ := decimal.NewFromString("33.33")
+	expectedW2, _ := decimal.NewFromString("66.67")
+	s.True(walletDebits["wallet_1"].Equal(expectedW1))
+	s.True(walletDebits["wallet_2"].Equal(expectedW2))
 	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
 }
 
@@ -1048,11 +1060,15 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(3, len(walletDebits))
-	// All wallets should be fully used
-	s.True(walletDebits["wallet_1"].Equal(w1))
-	s.True(walletDebits["wallet_2"].Equal(w2))
-	s.True(walletDebits["wallet_3"].Equal(w3))
-	// Line item should get sum of all wallets
-	expectedTotal := w1.Add(w2).Add(w3)
+	// All wallets should be fully used, but rounded to USD precision (2 decimals)
+	// 0.12345678 -> 0.12, 0.23456789 -> 0.23, 0.34567890 -> 0.35
+	expectedW1, _ := decimal.NewFromString("0.12")
+	expectedW2, _ := decimal.NewFromString("0.23")
+	expectedW3, _ := decimal.NewFromString("0.35")
+	s.True(walletDebits["wallet_1"].Equal(expectedW1))
+	s.True(walletDebits["wallet_2"].Equal(expectedW2))
+	s.True(walletDebits["wallet_3"].Equal(expectedW3))
+	// Line item should get sum of rounded wallets: 0.12 + 0.23 + 0.35 = 0.70
+	expectedTotal, _ := decimal.NewFromString("0.70")
 	s.True(lineItem.CreditsApplied.Equal(expectedTotal))
 }

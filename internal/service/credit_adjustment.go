@@ -60,27 +60,37 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 
 		for walletIndex < len(wallets) && amountToApply.LessThan(adjustedAmount) {
 			selectedWallet := wallets[walletIndex]
-			remaining := adjustedAmount.Sub(amountToApply)
 			walletBalance := walletBalances[selectedWallet.ID]
 
-			if walletBalance.GreaterThan(decimal.Zero) {
-				fromThisWallet := decimal.Min(walletBalance, remaining)
-				amountToApply = amountToApply.Add(fromThisWallet)
-
-				// Track total debit per wallet (same wallet can cover multiple line items)
-				walletDebits[selectedWallet.ID] = walletDebits[selectedWallet.ID].Add(fromThisWallet)
-				walletBalances[selectedWallet.ID] = walletBalance.Sub(fromThisWallet)
+			// Skip wallets with zero balance
+			if walletBalance.LessThanOrEqual(decimal.Zero) {
+				walletIndex++
+				continue
 			}
 
-			if walletBalances[selectedWallet.ID].LessThanOrEqual(decimal.Zero) {
+			// Calculate amount needed from this wallet and round once
+			needed := adjustedAmount.Sub(amountToApply)
+			fromThisWallet := decimal.Min(walletBalance, needed)
+			roundedFromThisWallet := types.RoundToCurrencyPrecision(fromThisWallet, inv.Currency)
+
+			// Apply credits if rounded amount is positive
+			if roundedFromThisWallet.GreaterThan(decimal.Zero) {
+
+				amountToApply = amountToApply.Add(roundedFromThisWallet)
+
+				walletDebits[selectedWallet.ID] = walletDebits[selectedWallet.ID].Add(roundedFromThisWallet)
+
+				walletBalances[selectedWallet.ID] = walletBalance.Sub(roundedFromThisWallet)
+			}
+
+			// Move to next wallet if current one is exhausted or rounded amount is zero
+			if walletBalances[selectedWallet.ID].LessThanOrEqual(decimal.Zero) || roundedFromThisWallet.LessThanOrEqual(decimal.Zero) {
 				walletIndex++
 			}
 		}
 
-		if amountToApply.GreaterThan(decimal.Zero) {
-			// Round credit amount immediately at source to ensure currency precision
-			lineItem.CreditsApplied = types.RoundToCurrencyPrecision(amountToApply, inv.Currency)
-		}
+		// amountToApply is already the sum of rounded wallet contributions, so use it directly
+		lineItem.CreditsApplied = amountToApply
 	}
 
 	return walletDebits, nil
