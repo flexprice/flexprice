@@ -1154,7 +1154,8 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 
 	// PRE_PAID wallets: calculate pending usage charges that will consume prepaid balance
 	// Unpaid invoices are NOT subtracted (they are postpaid charges, separate from prepaid balance)
-	if w.WalletType == types.WalletTypePrePaid {
+	switch w.WalletType {
+	case types.WalletTypePrePaid:
 		// Check if wallet allows usage-based charges
 		shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
 			lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
@@ -1199,7 +1200,7 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			}
 		}
 		totalPendingCharges = pendingUsageCharges
-	} else {
+	case types.WalletTypePostPaid:
 		// POST_PAID wallets: get unpaid invoices to show what's available to pay
 		invoiceService := NewInvoiceService(s.ServiceParams)
 		resp, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
