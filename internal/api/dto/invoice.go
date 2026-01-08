@@ -608,7 +608,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		PriceUnit:            r.PriceUnit,
 		PriceUnitAmount:      r.PriceUnitAmount,
 		DisplayName:          r.DisplayName,
-		Amount:               r.Amount,
+		Amount:               types.RoundToCurrencyPrecision(r.Amount, inv.Currency),
 		Quantity:             r.Quantity,
 		Currency:             inv.Currency,
 		PeriodStart:          r.PeriodStart,

@@ -78,7 +78,8 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 		}
 
 		if amountToApply.GreaterThan(decimal.Zero) {
-			lineItem.CreditsApplied = amountToApply
+			// Round credit amount immediately at source to ensure currency precision
+			lineItem.CreditsApplied = types.RoundToCurrencyPrecision(amountToApply, inv.Currency)
 		}
 	}
 

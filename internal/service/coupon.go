@@ -18,7 +18,7 @@ type CouponService interface {
 	UpdateCoupon(ctx context.Context, id string, req dto.UpdateCouponRequest) (*dto.CouponResponse, error)
 	DeleteCoupon(ctx context.Context, id string) error
 	ListCoupons(ctx context.Context, filter *types.CouponFilter) (*dto.ListCouponsResponse, error)
-	ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal) (dto.DiscountResult, error)
+	ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal, currency string) (dto.DiscountResult, error)
 }
 
 type couponService struct {
@@ -123,7 +123,8 @@ func (s *couponService) ListCoupons(ctx context.Context, filter *types.CouponFil
 
 // ApplyDiscount calculates the discount amount for a given coupon and price.
 // The coupon object must be provided (callers should fetch it first).
-func (s *couponService) ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal) (dto.DiscountResult, error) {
+// The discount is rounded to currency precision immediately at the source.
+func (s *couponService) ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal, currency string) (dto.DiscountResult, error) {
 
 	if originalPrice.LessThanOrEqual(decimal.Zero) {
 		return dto.DiscountResult{}, ierr.NewError("original_price must be greater than zero").
@@ -137,7 +138,8 @@ func (s *couponService) ApplyDiscount(ctx context.Context, coupon coupon.Coupon,
 
 	s.Logger.Debugw("calculating discount for coupon",
 		"coupon_id", coupon.ID,
-		"original_price", originalPrice)
+		"original_price", originalPrice,
+		"currency", currency)
 
 	// Validate coupon is valid for redemption
 	if !coupon.IsValid() {
@@ -153,7 +155,7 @@ func (s *couponService) ApplyDiscount(ctx context.Context, coupon coupon.Coupon,
 			Mark(ierr.ErrValidation)
 	}
 
-	result := coupon.ApplyDiscount(originalPrice)
+	result := coupon.ApplyDiscount(originalPrice, currency)
 	return dto.DiscountResult{
 		Discount:   result.Discount,
 		FinalPrice: result.FinalPrice,

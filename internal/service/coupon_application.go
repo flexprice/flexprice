@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -191,7 +192,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 		// Coupon already validated to exist in map
 		coupon := couponsMap[lineItemCoupon.CouponID]
 
-		discountResult, err := couponService.ApplyDiscount(ctx, *coupon, targetLineItem.Amount)
+		discountResult, err := couponService.ApplyDiscount(ctx, lo.FromPtr(coupon), targetLineItem.Amount, inv.Currency)
 		if err != nil {
 			s.Logger.Warnw("failed to apply line item coupon, skipping",
 				"coupon_id", lineItemCoupon.CouponID,
@@ -255,7 +256,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 		// Coupon already validated to exist in map
 		coupon := couponsMap[invoiceCoupon.CouponID]
 
-		discountResult, err := couponService.ApplyDiscount(ctx, *coupon, runningSubTotal)
+		discountResult, err := couponService.ApplyDiscount(ctx, lo.FromPtr(coupon), runningSubTotal, inv.Currency)
 		if err != nil {
 			s.Logger.Warnw("failed to apply invoice coupon, skipping",
 				"coupon_id", invoiceCoupon.CouponID,

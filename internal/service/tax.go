@@ -928,8 +928,11 @@ func (s *taxService) ApplyTaxesOnInvoice(ctx context.Context, inv *invoice.Invoi
 			continue // Skip invalid tax rate types
 		}
 
-		totalTaxAmount = totalTaxAmount.Add(*taxAmount)
-		taxAppliedRecord, err := s.processTaxApplication(ctx, inv, taxRate, taxableAmount, *taxAmount)
+		// Round each tax amount immediately at source to ensure currency precision
+		roundedTaxAmount := types.RoundToCurrencyPrecision(lo.FromPtr(taxAmount), inv.Currency)
+		totalTaxAmount = totalTaxAmount.Add(roundedTaxAmount)
+
+		taxAppliedRecord, err := s.processTaxApplication(ctx, inv, taxRate, taxableAmount, roundedTaxAmount)
 		if err != nil {
 			return nil, err
 		}
