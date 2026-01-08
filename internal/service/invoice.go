@@ -2396,13 +2396,14 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 		}
 	}
 
-	// Calculate total adjustment credits
-	inv.AdjustmentAmount = totalAdjustmentAmount
-	inv.RefundedAmount = totalRefundAmount
-	inv.AmountDue = inv.Total.Sub(totalAdjustmentAmount)
+	// Calculate total adjustment credits (with currency-aware rounding)
+	inv.AdjustmentAmount = types.RoundToCurrencyPrecision(totalAdjustmentAmount, inv.Currency)
+	inv.RefundedAmount = types.RoundToCurrencyPrecision(totalRefundAmount, inv.Currency)
+	inv.AmountDue = types.RoundToCurrencyPrecision(inv.Total.Sub(inv.AdjustmentAmount), inv.Currency)
+
 	remaining := inv.AmountDue.Sub(inv.AmountPaid)
 	if remaining.IsPositive() {
-		inv.AmountRemaining = remaining
+		inv.AmountRemaining = types.RoundToCurrencyPrecision(remaining, inv.Currency)
 	} else {
 		inv.AmountRemaining = decimal.Zero
 	}
@@ -2707,27 +2708,29 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 	}
 
 	// Update the invoice with calculated discount amounts
+	// TotalDiscount is already rounded at source (each discount rounded before summing)
 	inv.TotalDiscount = couponResult.TotalDiscountAmount
 
 	// Calculate new total based on subtotal - discount (discount-first approach)
 	// This ensures consistency with tax calculation which uses subtotal - discount
 	// ApplyDiscount already ensures individual discounts don't make prices negative,
 	// and the service applies discounts sequentially, so total discount is already validated
-	newTotal := inv.Subtotal.Sub(couponResult.TotalDiscountAmount)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 		inv.TotalDiscount = inv.Subtotal
 	}
 
+	// Total is computed from rounded values (Subtotal and TotalDiscount), so no additional rounding needed
 	inv.Total = newTotal
 
-	// Update AmountDue and AmountRemaining to reflect new total
-	inv.AmountDue = newTotal
-	inv.AmountRemaining = newTotal.Sub(inv.AmountPaid)
+	// AmountDue and AmountRemaining are computed from already-rounded values
+	inv.AmountDue = inv.Total
+	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
 	s.Logger.Infow("successfully updated invoice with coupon discounts",
 		"invoice_id", inv.ID,
-		"total_discount", couponResult.TotalDiscountAmount,
+		"total_discount", inv.TotalDiscount,
 		"invoice_level_coupons", len(req.InvoiceCoupons),
 		"line_item_level_coupons", len(req.LineItemCoupons),
 		"new_total", inv.Total)
@@ -2768,12 +2771,18 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 	}
 
 	// Update the invoice with calculated tax amounts
+	// TotalTax is already rounded at source (each tax rounded before summing)
 	inv.TotalTax = taxResult.TotalTaxAmount
+
 	// Discount-first-then-tax: total = subtotal - discount - credits + tax
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(taxResult.TotalTaxAmount)
-	if inv.Total.IsNegative() {
-		inv.Total = decimal.Zero
-	}   
+	// All components are already rounded, so the result is naturally rounded
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(inv.TotalTax)
+	if newTotal.IsNegative() {
+		newTotal = decimal.Zero
+	}
+
+	// Total is computed from rounded values, no additional rounding needed
+	inv.Total = newTotal
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
@@ -3459,7 +3468,7 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *dto
 }
 
 // isSafeUpdateForPaidInvoice checks if the update request contains only safe fields for paid invoices
-func isSafeUpdateForPaidInvoice(req dto.UpdateInvoiceRequest) bool {
+func isSafeUpdateForPaidInvoice(_ dto.UpdateInvoiceRequest) bool {
 	// Currently, UpdateInvoiceRequest only contains InvoicePDFURL and DueDate
 	// Both of these are considered safe for paid invoices
 	// In the future, if more fields are added, they should be categorized here
@@ -3534,102 +3543,124 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 }
 
 // DistributeInvoiceLevelDiscount proportionally distributes an invoice-level discount across all line items
-// using a precision-preserving algorithm that ensures exact distribution without rounding errors.
+// using a precision-preserving algorithm with currency-aware rounding that ensures exact distribution.
 //
 // PURPOSE:
 // When an invoice-level discount (e.g., from an invoice-level coupon) is applied, it must be
-// distributed proportionally across all line items based on their relative amounts. This allows
-// tracking how much of the invoice-level discount is attributed to each line item, which is
-// essential for accurate financial reporting, tax calculations, and audit trails.
+// distributed proportionally across all line items based on their remaining billable amounts
+// (after line-item discounts). This allows tracking how much of the invoice-level discount is
+// attributed to each line item, which is essential for accurate financial reporting, tax calculations,
+// and audit trails.
 //
 // USE CASES:
 // - Invoice-level coupon applications (e.g., "10% off entire invoice")
 // - Invoice-level promotional discounts
 // - Any discount applied at the invoice level that needs to be allocated to line items
 //
-// ALGORITHM: Remainder Allocation Pattern (Industry Standard)
-// This function implements the "remainder allocation" pattern used by major billing platforms
+// ALGORITHM: Remainder Allocation Pattern with Currency-Aware Rounding (Industry Standard)
+// This function implements the "remainder allocation" pattern used by major billing platforms (Stripe, etc.)
 //
-// 1. Calculate proportional discount for each line item: (Line Item Amount / Total Invoice Amount) × Total Discount
-// 2. For all items except the last: assign the calculated proportional amount
-// 3. For the last item: assign the remainder (totalDiscountAmount - sum of all previous allocations)
+// 1. Calculate eligible amount for each line item: (Line Item Amount - Line Item Discount)
+// 2. Calculate proportional discount: (Eligible Amount / Total Eligible Amount) × Total Discount
+// 3. Round each proportional discount immediately using currency-specific precision
+// 4. For the last item: assign the remainder (totalDiscountAmount - sum of rounded allocations)
 //
-// This guarantees that: sum(all lineItem.InvoiceLevelDiscount) == totalDiscountAmount exactly
+// This guarantees that: sum(all lineItem.InvoiceLevelDiscount) == totalDiscountAmount (accounting for rounding)
 //
 // EXAMPLES:
 //
-// Example 1: Fixed Discount ($10.00 off)
+// Example 1: With Existing Line-Item Discount
 //
-//	Invoice: Line Item A = $60.00, Line Item B = $40.00 (Total = $100.00)
-//	Discount: $10.00 fixed amount
+//	Invoice: Line Item A = $10.00 (LineItemDiscount=$10), Line Item B = $10.00, Line Item C = $10.00
+//	Invoice-level discount: $10.00
 //	Calculation:
-//	  - Item A proportion: $60.00 / $100.00 = 0.6 → $10.00 × 0.6 = $6.00
-//	  - Item B (last): $10.00 - $6.00 = $4.00 (remainder allocation)
-//	Result: Item A gets $6.00, Item B gets $4.00 (Total = $10.00 exactly)
+//	  - Item A eligible: $10.00 - $10.00 = $0.00 (already fully discounted)
+//	  - Item B eligible: $10.00 - $0.00 = $10.00
+//	  - Item C eligible: $10.00 - $0.00 = $10.00
+//	  - Total eligible: $20.00
+//	  - Item A: $0/$20 × $10 = $0.00 (rounded: $0.00)
+//	  - Item B: $10/$20 × $10 = $5.00 (rounded: $5.00)
+//	  - Item C (last): $10.00 - $5.00 = $5.00 (rounded: $5.00)
+//	Result: Item A gets $0.00, Item B gets $5.00, Item C gets $5.00 (Total = $10.00 exactly)
 //
-// Example 2: Percentage Discount (10% off)
-//
-//	Invoice: Line Item A = $50.00, Line Item B = $30.00, Line Item C = $20.00 (Total = $100.00)
-//	Discount: 10% of $100.00 = $10.00
-//	Calculation:
-//	  - Item A proportion: $50.00 / $100.00 = 0.5 → $10.00 × 0.5 = $5.00
-//	  - Item B proportion: $30.00 / $100.00 = 0.3 → $10.00 × 0.3 = $3.00
-//	  - Item C (last): $10.00 - ($5.00 + $3.00) = $2.00 (remainder allocation)
-//	Result: Item A gets $5.00, Item B gets $3.00, Item C gets $2.00 (Total = $10.00 exactly)
-//
-// Example 3: Precision Preservation (Smallest Currency Units)
+// Example 2: High Precision with Rounding
 //
 //	Invoice: Line Item A = $33.33, Line Item B = $33.33, Line Item C = $33.34 (Total = $100.00)
-//	Discount: $1.00 fixed amount
-//	Calculation (maintaining full precision):
-//	  - Item A: $33.33 / $100.00 = 0.3333 → $1.00 × 0.3333 = $0.3333
-//	  - Item B: $33.33 / $100.00 = 0.3333 → $1.00 × 0.3333 = $0.3333
-//	  - Item C (last): $1.00 - ($0.3333 + $0.3333) = $0.3334 (remainder ensures exact total)
-//	Result: No rounding errors, exact distribution preserved down to smallest currency unit
+//	Discount: $1.00 fixed amount (USD, 2 decimal precision)
+//	Calculation:
+//	  - Item A: $33.33/$100 × $1.00 = $0.3333 (rounded: $0.33)
+//	  - Item B: $33.33/$100 × $1.00 = $0.3333 (rounded: $0.33)
+//	  - Item C (last): $1.00 - ($0.33 + $0.33) = $0.34 (rounded: $0.34)
+//	Result: Item A gets $0.33, Item B gets $0.33, Item C gets $0.34 (Total = $1.00 exactly)
 //
-// Formula: Proportional Discount Amount = (Line Item Amount / Total Invoice Amount) × Total Discount Amount
+// Example 3: Discount with Many Decimal Places
+//
+//	Invoice: Line Item A = $50.00, Line Item B = $50.00 (Total = $100.00)
+//	Discount: $10.278798 (USD, 2 decimal precision)
+//	Calculation:
+//	  - Item A: $50/$100 × $10.278798 = $5.139399 (rounded: $5.14)
+//	  - Item B (last): $10.278798 - $5.14 = $5.138798 (rounded: $5.14)
+//	Result: Item A gets $5.14, Item B gets $5.14 (Total = $10.28, original rounded down)
+//
+// Formula: Proportional Discount = (Eligible Amount / Total Eligible Amount) × Total Discount, then round
 func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, totalDiscountAmount decimal.Decimal) error {
 	if totalDiscountAmount.IsZero() {
 		return nil
 	}
 
-	// Calculate total invoice amount (sum of all line items)
-	// This serves as the denominator for proportional calculations and represents the basis
-	// for determining each line item's share of the discount
-	totalInvoiceAmount := decimal.Zero
+	// Calculate total eligible amount (sum of all line items after line-item discounts)
+	// Eligible amount = Amount - LineItemDiscount (remaining billable amount)
+	// This represents the basis for proportional distribution of the invoice-level discount
+	totalEligibleAmount := decimal.Zero
 	for _, lineItem := range lineItems {
-		totalInvoiceAmount = totalInvoiceAmount.Add(lineItem.Amount)
+		eligibleAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		if eligibleAmount.IsPositive() {
+			totalEligibleAmount = totalEligibleAmount.Add(eligibleAmount)
+		}
 	}
 
-	// Edge case: Cannot distribute discount on zero-amount invoice
-	// This can occur if all line items have zero amount, making proportional calculation impossible
-	// We log the error for debugging but return nil (non-fatal) to allow invoice processing to continue
-	if totalInvoiceAmount.IsZero() {
-		s.Logger.Errorw("cannot distribute discount on zero-amount invoice", "line_items", lineItems)
+	// Edge case: Cannot distribute discount if all line items are fully discounted
+	// This can occur if line-item discounts have already reduced all items to zero
+	// We log for debugging but return nil (non-fatal) to allow invoice processing to continue
+	if totalEligibleAmount.IsZero() {
+		s.Logger.Infow("cannot distribute invoice-level discount: all line items already fully discounted",
+			"total_discount", totalDiscountAmount,
+			"line_items_count", len(lineItems))
 		return nil
 	}
 
-	// Distribute discount proportionally across all line items using remainder allocation pattern
-	// This ensures exact distribution without any loss of precision or rounding errors
+	// Distribute discount proportionally with currency-aware rounding and remainder allocation
+	// This ensures exact distribution without data loss, with rounding applied at each step
 	distributedTotal := decimal.Zero
 	for i, lineItem := range lineItems {
+		// Calculate eligible amount for this line item
+		eligibleAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+
+		// Skip items with no eligible amount (already fully discounted)
+		if eligibleAmount.IsNegative() || eligibleAmount.IsZero() {
+			lineItem.InvoiceLevelDiscount = decimal.Zero
+			continue
+		}
+
 		var discountAmount decimal.Decimal
 		if i == len(lineItems)-1 {
 			// REMAINDER ALLOCATION: For the last line item, assign the remaining discount amount
-			// This ensures exact distribution: sum(all discounts) == totalDiscountAmount (no rounding errors)
-			// This is the industry-standard approach used by Stripe, Orb, Lago, and Metronome
-			// The last item receives any remainder from floating-point precision or rounding differences
-			// Example: If totalDiscount = $10.00 and first items sum to $9.99999999, last gets $0.00000001
-			discountAmount = totalDiscountAmount.Sub(distributedTotal)
+			// This ensures exact distribution: sum(all discounts) == totalDiscountAmount
+			// The last item receives any remainder from rounding differences
+			// Example: If totalDiscount = $10.00 and previous items sum to $5.00, last gets $5.00
+			remainder := totalDiscountAmount.Sub(distributedTotal)
+			discountAmount = types.RoundToCurrencyPrecision(remainder, lineItem.Currency)
 		} else {
-			// PROPORTIONAL CALCULATION: Calculate each line item's proportional share
-			// Formula: (lineItem.Amount / totalInvoiceAmount) × totalDiscountAmount
-			// We maintain full precision throughout - NO rounding at this stage
-			// This preserves accuracy down to the smallest currency unit (e.g., satoshis, wei)
-			proportion := lineItem.Amount.Div(totalInvoiceAmount)
-			discountAmount = proportion.Mul(totalDiscountAmount)
+			// PROPORTIONAL CALCULATION with IMMEDIATE ROUNDING
+			// Formula: (eligibleAmount / totalEligibleAmount) × totalDiscountAmount
+			// Round immediately using currency precision to prevent compound errors
+			// Example: $10.278798 → $10.28 for USD (2 decimals), ¥1023.45 → ¥1023 for JPY (0 decimals)
+			proportion := eligibleAmount.Div(totalEligibleAmount)
+			proportionalDiscount := proportion.Mul(totalDiscountAmount)
+			discountAmount = types.RoundToCurrencyPrecision(proportionalDiscount, lineItem.Currency)
 			distributedTotal = distributedTotal.Add(discountAmount)
 		}
+
 		lineItem.InvoiceLevelDiscount = discountAmount
 	}
 
@@ -3654,23 +3685,27 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 	}
 
 	// Update invoice with credits applied
+	// TotalCreditsApplied is already rounded at source (each credit rounded before summing)
 	inv.TotalCreditsApplied = creditResult.TotalCreditsApplied
 
 	// Recalculate total after credits are applied
 	// Formula: total = subtotal - discount - credits + tax
 	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
 	// total = subtotal - discount - credits
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(creditResult.TotalCreditsApplied)
+	// All components are already rounded, so the result is naturally rounded
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 	}
+
+	// Total is computed from rounded values, no additional rounding needed
 	inv.Total = newTotal
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
 	s.Logger.Debugw("successfully applied credit adjustments to invoice",
 		"invoice_id", inv.ID,
-		"total_credits_applied", creditResult.TotalCreditsApplied,
+		"total_credits_applied", inv.TotalCreditsApplied,
 		"new_total", inv.Total,
 		"subtotal", inv.Subtotal,
 		"total_discount", inv.TotalDiscount,
