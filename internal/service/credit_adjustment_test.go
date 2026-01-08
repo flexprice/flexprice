@@ -46,15 +46,21 @@ func (s *CreditAdjustmentServiceSuite) GetContext() context.Context {
 func (s *CreditAdjustmentServiceSuite) setupService() {
 	stores := s.GetStores()
 	s.service = NewCreditAdjustmentService(ServiceParams{
-		Logger:           s.GetLogger(),
-		Config:           s.GetConfig(),
-		DB:               s.GetDB(),
-		WalletRepo:       stores.WalletRepo,
-		InvoiceRepo:      stores.InvoiceRepo,
-		SettingsRepo:     stores.SettingsRepo,
-		AlertLogsRepo:    stores.AlertLogsRepo,
-		EventPublisher:   s.GetPublisher(),
-		WebhookPublisher: s.GetWebhookPublisher(),
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		WalletRepo:               stores.WalletRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		AlertLogsRepo:            stores.AlertLogsRepo,
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		MeterRepo:                stores.MeterRepo,
+		PriceRepo:                stores.PriceRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		FeatureUsageRepo:         stores.FeatureUsageRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
 	})
 }
 
