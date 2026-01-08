@@ -106,6 +106,9 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		r.ConversionRate = decimal.NewFromInt(1)
 	}
 
+	// Default to PRE_PAID if not specified. PRE_PAID is the default because it's used for the most common cases:
+	// credit adjustments (reducing invoice amounts) and credit note refunds.
+	// Explicitly set POST_PAID if the wallet is intended for invoice payments.
 	if r.WalletType == "" {
 		r.WalletType = types.WalletTypePrePaid
 	}

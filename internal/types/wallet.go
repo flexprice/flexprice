@@ -21,7 +21,14 @@ const (
 type WalletType string
 
 const (
-	WalletTypePrePaid  WalletType = "PRE_PAID"
+	// WalletTypePrePaid stores credits that reduce invoice amounts during invoice creation/finalization.
+	// Used for credit adjustments, credit note refunds, and purchased credits that adjust invoices.
+	// These wallets are automatically filtered for credit adjustment operations only.
+	WalletTypePrePaid WalletType = "PRE_PAID"
+
+	// WalletTypePostPaid stores credits used to pay invoices during payment processing.
+	// Used for invoice payments via payment method type "credits" and customer-initiated payments.
+	// These wallets are automatically filtered for payment processing operations only.
 	WalletTypePostPaid WalletType = "POST_PAID"
 )
 

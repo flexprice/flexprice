@@ -502,7 +502,9 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 				}
 			}
 			if selectedWallet == nil {
-				// Create new wallet using transaction context
+				// Create PRE_PAID wallet for credit note refunds. Credit note refunds add credits that reduce
+				// future invoice amounts (credit adjustments), not credits used for direct invoice payments.
+				// POST_PAID wallets are used for invoice payments, while PRE_PAID wallets are for adjustments.
 				walletReq := &dto.CreateWalletRequest{
 					Name:           "Subscription Wallet",
 					CustomerID:     inv.CustomerID,

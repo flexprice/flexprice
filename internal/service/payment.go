@@ -88,10 +88,16 @@ func (s *paymentService) CreatePayment(ctx context.Context, req *dto.CreatePayme
 
 			if selectedWallet.WalletType != types.WalletTypePostPaid {
 				return nil, ierr.NewError("credits require a postpaid wallet").
-					WithHint("The provided payment method is not postpaid. Select a postpaid wallet to continue").
+					WithHintf(
+						"Wallet '%s' is %s but invoice payments require POST_PAID. ",
+						selectedWallet.ID,
+						selectedWallet.WalletType,
+					).
 					WithReportableDetails(map[string]interface{}{
 						"payment_method_id":    p.PaymentMethodID,
-						"expected_wallet_type": "postpaid",
+						"wallet_id":            selectedWallet.ID,
+						"wallet_type":          string(selectedWallet.WalletType),
+						"expected_wallet_type": "POST_PAID",
 					}).
 					Mark(ierr.ErrValidation)
 
