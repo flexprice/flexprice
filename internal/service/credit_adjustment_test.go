@@ -51,6 +51,7 @@ func (s *CreditAdjustmentServiceSuite) setupService() {
 		DB:               s.GetDB(),
 		WalletRepo:       stores.WalletRepo,
 		InvoiceRepo:      stores.InvoiceRepo,
+		SettingsRepo:     stores.SettingsRepo,
 		AlertLogsRepo:    stores.AlertLogsRepo,
 		EventPublisher:   s.GetPublisher(),
 		WebhookPublisher: s.GetWebhookPublisher(),
@@ -94,12 +95,19 @@ func (s *CreditAdjustmentServiceSuite) setupTestData() {
 
 // Helper method to create a wallet with specified properties
 func (s *CreditAdjustmentServiceSuite) createWallet(id string, currency string, balance decimal.Decimal, creditBalance decimal.Decimal, status types.WalletStatus) *wallet.Wallet {
+	// If a credit transaction will be created, set initial CreditBalance to 0
+	// The credit transaction will set both Balance and CreditBalance correctly
+	initialCreditBalance := creditBalance
+	if creditBalance.GreaterThan(decimal.Zero) && status == types.WalletStatusActive {
+		initialCreditBalance = decimal.Zero
+	}
+
 	w := &wallet.Wallet{
 		ID:             id,
 		CustomerID:     s.testData.customer.ID,
 		Currency:       currency,
 		Balance:        balance,
-		CreditBalance:  creditBalance,
+		CreditBalance:  initialCreditBalance,
 		WalletStatus:   status,
 		Name:           "Test Wallet " + id,
 		Description:    "Test wallet for credit adjustment",
@@ -239,7 +247,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_NoEligibleWalle
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_WithEligibleWallets() {
 	// Create single wallet with combined balance (30 + 40 = 70)
-	_ = s.createWallet("wallet_1", "USD", decimal.NewFromFloat(70.00), decimal.NewFromFloat(70.00), types.WalletStatusActive)
+	// Pass 0 as initial balance, credit transaction will set it to 70.00
+	_ = s.createWallet("wallet_1", "USD", decimal.Zero, decimal.NewFromFloat(70.00), types.WalletStatusActive)
 
 	// Create invoice with 2 line items ($50 each = $100 total)
 	inv := s.createInvoice("inv_with_wallets", "USD", []decimal.Decimal{
@@ -267,7 +276,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_WithEligibleWal
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InsufficientCredits() {
 	// Create wallet with insufficient balance
-	_ = s.createWallet("wallet_insufficient", "USD", decimal.NewFromFloat(25.00), decimal.NewFromFloat(25.00), types.WalletStatusActive)
+	// Pass 0 as initial balance, credit transaction will set it to 25.00
+	_ = s.createWallet("wallet_insufficient", "USD", decimal.Zero, decimal.NewFromFloat(25.00), types.WalletStatusActive)
 
 	// Create invoice with $100 line item
 	inv := s.createInvoice("inv_insufficient", "USD", []decimal.Decimal{
@@ -291,7 +301,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InsufficientCre
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_MultiWalletSequential() {
 	// Create single wallet with combined balance (20 + 50 = 70)
-	_ = s.createWallet("wallet_seq_1", "USD", decimal.NewFromFloat(70.00), decimal.NewFromFloat(70.00), types.WalletStatusActive)
+	// Pass 0 as initial balance, credit transaction will set it to 70.00
+	_ = s.createWallet("wallet_seq_1", "USD", decimal.Zero, decimal.NewFromFloat(70.00), types.WalletStatusActive)
 
 	// Create invoice with 3 line items ($30, $40, $30 = $100 total)
 	inv := s.createInvoice("inv_sequential", "USD", []decimal.Decimal{
