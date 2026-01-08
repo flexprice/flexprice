@@ -122,6 +122,7 @@ func (s *CreditGrantServiceTestSuite) setupTestData() {
 		ID:                 "sub_test_123",
 		PlanID:             s.testData.plan.ID,
 		CustomerID:         s.testData.customer.ID,
+		Currency:           "USD",
 		StartDate:          s.testData.now,
 		CurrentPeriodStart: s.testData.now,
 		CurrentPeriodEnd:   s.testData.now.Add(30 * 24 * time.Hour), // 30 days
@@ -156,26 +157,28 @@ func (s *CreditGrantServiceTestSuite) getWalletTransactionByGrantID(customerID s
 		return nil, fmt.Errorf("wallet not found for customer: %s", customerID)
 	}
 
-	walletID := wallets[0].ID
-	txFilter := &types.WalletTransactionFilter{
-		WalletID:    &walletID,
-		QueryFilter: types.NewDefaultQueryFilter(),
-	}
-	transactions, err := s.walletService.GetWalletTransactions(s.GetContext(), walletID, txFilter)
-	if err != nil {
-		return nil, err
-	}
+	// Search through all wallets to find the transaction
+	for _, wallet := range wallets {
+		txFilter := &types.WalletTransactionFilter{
+			WalletID:    &wallet.ID,
+			QueryFilter: types.NewDefaultQueryFilter(),
+		}
+		transactions, err := s.walletService.GetWalletTransactions(s.GetContext(), wallet.ID, txFilter)
+		if err != nil {
+			return nil, err
+		}
 
-	for _, tx := range transactions.Items {
-		if tx.Metadata != nil {
-			if grantID != nil {
-				if id, ok := tx.Metadata["grant_id"]; ok && id == *grantID {
-					return tx, nil
+		for _, tx := range transactions.Items {
+			if tx.Metadata != nil {
+				if grantID != nil {
+					if id, ok := tx.Metadata["grant_id"]; ok && id == *grantID {
+						return tx, nil
+					}
 				}
-			}
-			if cgaID != nil {
-				if id, ok := tx.Metadata["cga_id"]; ok && id == *cgaID {
-					return tx, nil
+				if cgaID != nil {
+					if id, ok := tx.Metadata["cga_id"]; ok && id == *cgaID {
+						return tx, nil
+					}
 				}
 			}
 		}
