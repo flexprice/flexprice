@@ -457,6 +457,14 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 			continue
 		}
 
+		if w.WalletType != types.WalletTypePostPaid {
+			s.Logger.Infow("skipping wallet for top up because it is not a postpaid wallet",
+				"wallet_id", w.ID,
+				"wallet_type", w.WalletType,
+			)
+			continue
+		}
+
 		// Check conversion_rate if set in grant
 		if grant.ConversionRate != nil {
 			if !w.ConversionRate.Equal(lo.FromPtr(grant.ConversionRate)) {
