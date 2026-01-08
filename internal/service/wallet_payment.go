@@ -133,8 +133,9 @@ func (s *walletPaymentService) GetWalletsForPayment(
 		return nil, err
 	}
 
-	// Filter active wallets with matching currency, positive balance, and postpaid type only
-	// Only postpaid wallets can be used for payments; prepaid wallets are excluded
+	// Filter for POST_PAID wallets only. POST_PAID wallets are used to pay invoices directly.
+	// PRE_PAID wallets are excluded here as they're used for credit adjustments (reducing invoice amounts),
+	// not for actual payment processing. This separation ensures proper accounting.
 	activeWallets := make([]*wallet.Wallet, 0)
 	for _, w := range wallets {
 		if w.WalletStatus == types.WalletStatusActive &&
@@ -228,9 +229,9 @@ func (s *walletPaymentService) GetWalletsForCreditAdjustment(
 		return nil, err
 	}
 
-	// Filter active prepaid wallets with matching currency and positive balance
-	// Only prepaid wallets can be used for credit adjustments; postpaid wallets are excluded
-	// All prepaid wallets are returned regardless of price type restrictions
+	// Filter for PRE_PAID wallets only. PRE_PAID wallets are used for credit adjustments (reducing invoice amounts).
+	// POST_PAID wallets are excluded here as they're used for invoice payments, not credit adjustments.
+	// All PRE_PAID wallets are returned regardless of price type restrictions since adjustments can apply to any line item.
 	activeWallets := make([]*wallet.Wallet, 0)
 	for _, w := range wallets {
 		if w.WalletStatus == types.WalletStatusActive &&
