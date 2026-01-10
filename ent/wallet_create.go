@@ -218,6 +218,28 @@ func (wc *WalletCreate) SetConversionRate(d decimal.Decimal) *WalletCreate {
 	return wc
 }
 
+// SetNillableConversionRate sets the "conversion_rate" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableConversionRate(d *decimal.Decimal) *WalletCreate {
+	if d != nil {
+		wc.SetConversionRate(*d)
+	}
+	return wc
+}
+
+// SetTopupConversionRate sets the "topup_conversion_rate" field.
+func (wc *WalletCreate) SetTopupConversionRate(d decimal.Decimal) *WalletCreate {
+	wc.mutation.SetTopupConversionRate(d)
+	return wc
+}
+
+// SetNillableTopupConversionRate sets the "topup_conversion_rate" field if the given value is not nil.
+func (wc *WalletCreate) SetNillableTopupConversionRate(d *decimal.Decimal) *WalletCreate {
+	if d != nil {
+		wc.SetTopupConversionRate(*d)
+	}
+	return wc
+}
+
 // SetConfig sets the "config" field.
 func (wc *WalletCreate) SetConfig(tc types.WalletConfig) *WalletCreate {
 	wc.mutation.SetConfig(tc)
@@ -342,6 +364,14 @@ func (wc *WalletCreate) defaults() {
 	if _, ok := wc.mutation.WalletType(); !ok {
 		v := wallet.DefaultWalletType
 		wc.mutation.SetWalletType(v)
+	}
+	if _, ok := wc.mutation.ConversionRate(); !ok {
+		v := wallet.DefaultConversionRate
+		wc.mutation.SetConversionRate(v)
+	}
+	if _, ok := wc.mutation.TopupConversionRate(); !ok {
+		v := wallet.DefaultTopupConversionRate
+		wc.mutation.SetTopupConversionRate(v)
 	}
 	if _, ok := wc.mutation.AlertEnabled(); !ok {
 		v := wallet.DefaultAlertEnabled
@@ -529,6 +559,10 @@ func (wc *WalletCreate) createSpec() (*Wallet, *sqlgraph.CreateSpec) {
 	if value, ok := wc.mutation.ConversionRate(); ok {
 		_spec.SetField(wallet.FieldConversionRate, field.TypeOther, value)
 		_node.ConversionRate = value
+	}
+	if value, ok := wc.mutation.TopupConversionRate(); ok {
+		_spec.SetField(wallet.FieldTopupConversionRate, field.TypeOther, value)
+		_node.TopupConversionRate = &value
 	}
 	if value, ok := wc.mutation.Config(); ok {
 		_spec.SetField(wallet.FieldConfig, field.TypeJSON, value)

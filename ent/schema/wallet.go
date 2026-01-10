@@ -85,14 +85,26 @@ func (Wallet) Fields() []ent.Field {
 			Immutable().
 			Default(string(types.WalletTypePrePaid)).
 			GoType(types.WalletType("")),
+
+		// conversion_rate is used for converting the wallet credits to the currency during consumption
 		field.Other("conversion_rate", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(10,5)",
 			}).
 			Immutable().
-			Annotations(
-				entsql.Default("1"),
-			),
+			Default(decimal.NewFromInt(1)),
+
+		// topup_conversion_rate is the conversion rate for the topup to the currency
+		field.Other("topup_conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(10,5)",
+			}).
+			// TODO: remove this after migration
+			Optional().
+			Nillable().
+			Immutable().
+			Default(decimal.NewFromInt(1)),
+
 		field.JSON("config", types.WalletConfig{}).
 			Optional(),
 		field.JSON("alert_config", types.AlertConfig{}).

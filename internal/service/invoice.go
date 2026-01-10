@@ -49,7 +49,7 @@ type InvoiceService interface {
 	RecalculateInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
-	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error)
+	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string, forceRealtimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error)
 	GetInvoiceWithBreakdown(ctx context.Context, req dto.GetInvoiceWithBreakdownRequest) (*dto.InvoiceResponse, error)
 	TriggerCommunication(ctx context.Context, id string) error
 	HandleIncompleteSubscriptionPayment(ctx context.Context, invoice *invoice.Invoice) error
@@ -2480,6 +2480,8 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		// STEP 3: Update invoice totals, metadata, and customer ID
 		// Use invoicing customer ID from the new invoice request (which uses sub.GetInvoicingCustomerID())
 		// This ensures backward compatibility - if subscription has invoicing customer ID, use it; otherwise use subscription customer ID
+		inv.Total = newInvoiceReq.Total
+		inv.Subtotal = newInvoiceReq.Subtotal
 		inv.CustomerID = newInvoiceReq.CustomerID
 		inv.AmountDue = newInvoiceReq.AmountDue
 		inv.AmountRemaining = newInvoiceReq.AmountDue.Sub(inv.AmountPaid)
@@ -2502,23 +2504,29 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 		for i, lineItemReq := range newInvoiceReq.LineItems {
 
 			lineItem := &invoice.InvoiceLineItem{
-				ID:              types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
-				InvoiceID:       inv.ID,
-				CustomerID:      inv.CustomerID,
-				EntityID:        lineItemReq.EntityID,
-				EntityType:      lineItemReq.EntityType,
-				PlanDisplayName: lineItemReq.PlanDisplayName,
-				PriceID:         lineItemReq.PriceID,
-				PriceType:       lineItemReq.PriceType,
-				DisplayName:     lineItemReq.DisplayName,
-				Amount:          lineItemReq.Amount,
-				Quantity:        lineItemReq.Quantity,
-				Currency:        inv.Currency,
-				PeriodStart:     lineItemReq.PeriodStart,
-				PeriodEnd:       lineItemReq.PeriodEnd,
-				Metadata:        lineItemReq.Metadata,
-				EnvironmentID:   inv.EnvironmentID,
-				BaseModel:       types.GetDefaultBaseModel(txCtx),
+				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE_LINE_ITEM),
+				InvoiceID:        inv.ID,
+				CustomerID:       inv.CustomerID,
+				SubscriptionID:   inv.SubscriptionID,
+				EntityID:         lineItemReq.EntityID,
+				EntityType:       lineItemReq.EntityType,
+				PlanDisplayName:  lineItemReq.PlanDisplayName,
+				PriceID:          lineItemReq.PriceID,
+				PriceType:        lineItemReq.PriceType,
+				DisplayName:      lineItemReq.DisplayName,
+				MeterID:          lineItemReq.MeterID,
+				MeterDisplayName: lineItemReq.MeterDisplayName,
+				PriceUnit:        lineItemReq.PriceUnit,
+				PriceUnitAmount:  lineItemReq.PriceUnitAmount,
+				Amount:           lineItemReq.Amount,
+				Quantity:         lineItemReq.Quantity,
+				Currency:         inv.Currency,
+				PeriodStart:      lineItemReq.PeriodStart,
+				PeriodEnd:        lineItemReq.PeriodEnd,
+				Metadata:         lineItemReq.Metadata,
+				EnvironmentID:    inv.EnvironmentID,
+				CommitmentInfo:   lineItemReq.CommitmentInfo,
+				BaseModel:        types.GetDefaultBaseModel(txCtx),
 			}
 			newLineItems[i] = lineItem
 		}
@@ -2828,7 +2836,7 @@ func (s *invoiceService) generateProrationInvoiceDescription(cancellationType, c
 }
 
 // CalculateUsageBreakdown provides flexible usage breakdown with custom grouping
-func (s *invoiceService) CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error) {
+func (s *invoiceService) CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string, forceRuntimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error) {
 	s.Logger.Infow("calculating usage breakdown for invoice",
 		"invoice_id", inv.ID,
 		"period_start", inv.PeriodStart,
@@ -2859,12 +2867,12 @@ func (s *invoiceService) CalculateUsageBreakdown(ctx context.Context, inv *dto.I
 	}
 
 	// Use flexible grouping analytics call
-	return s.getFlexibleUsageBreakdownForInvoice(ctx, usageBasedLineItems, inv, groupBy)
+	return s.getFlexibleUsageBreakdownForInvoice(ctx, usageBasedLineItems, inv, groupBy, forceRuntimeRecalculation)
 }
 
 // getFlexibleUsageBreakdownForInvoice gets usage breakdown with flexible grouping for invoice line items
 // Groups line items by their billing periods for efficient analytics queries
-func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context, usageBasedLineItems []*dto.InvoiceLineItemResponse, inv *dto.InvoiceResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error) {
+func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context, usageBasedLineItems []*dto.InvoiceLineItemResponse, inv *dto.InvoiceResponse, groupBy []string, forceRuntimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error) {
 	// Step 1: Get customer external ID first
 	customer, err := s.CustomerRepo.Get(ctx, inv.CustomerID)
 	if err != nil {
@@ -2990,7 +2998,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 
 	// Step 3: Make analytics requests for each period group
 	allAnalyticsItems := make([]dto.UsageAnalyticItem, 0)
-	eventPostProcessingService := NewEventPostProcessingService(s.ServiceParams, s.EventRepo, s.ProcessedEventRepo)
+	featureUsageTrackingService := NewFeatureUsageTrackingService(s.ServiceParams, s.EventRepo, s.FeatureUsageRepo)
 
 	for periodKey, lineItemsInPeriod := range periodGroups {
 		// Collect feature IDs for this period
@@ -3022,7 +3030,7 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 			"line_items_count", len(lineItemsInPeriod),
 			"group_by", groupBy)
 
-		analyticsResponse, err := eventPostProcessingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
+		analyticsResponse, err := featureUsageTrackingService.GetDetailedUsageAnalytics(ctx, analyticsReq)
 		if err != nil {
 			s.Logger.Errorw("failed to get period-specific usage analytics",
 				"invoice_id", inv.ID,
@@ -3052,11 +3060,11 @@ func (s *invoiceService) getFlexibleUsageBreakdownForInvoice(ctx context.Context
 		"total_analytics_items", len(allAnalyticsItems))
 
 	// Step 5: Map results back to line items with flexible grouping
-	return s.mapFlexibleAnalyticsToLineItems(ctx, combinedResponse, lineItemToFeatureMap, lineItemMetadata, groupBy)
+	return s.mapFlexibleAnalyticsToLineItems(combinedResponse, lineItemToFeatureMap, lineItemMetadata, groupBy, forceRuntimeRecalculation)
 }
 
 // mapFlexibleAnalyticsToLineItems maps analytics response to line items with flexible grouping
-func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, analyticsResponse *dto.GetUsageAnalyticsResponse, lineItemToFeatureMap map[string]string, lineItemMetadata map[string]*dto.InvoiceLineItemResponse, groupBy []string) (map[string][]dto.UsageBreakdownItem, error) {
+func (s *invoiceService) mapFlexibleAnalyticsToLineItems(analyticsResponse *dto.GetUsageAnalyticsResponse, lineItemToFeatureMap map[string]string, lineItemMetadata map[string]*dto.InvoiceLineItemResponse, groupBy []string, forceRuntimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error) {
 	usageBreakdownResponse := make(map[string][]dto.UsageBreakdownItem)
 
 	// Step 1: Group analytics by feature_id for line item mapping
@@ -3091,27 +3099,12 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 
 		// Step 4: Calculate proportional costs for each group
 		lineItemUsageBreakdown := make([]dto.UsageBreakdownItem, 0, len(analyticsItems))
-		totalLineItemCost := lineItem.Amount
-
+		totalUsageRevenue := decimal.Zero
 		for _, analyticsItem := range analyticsItems {
-			// Calculate proportional cost based on usage
-			var cost string
-			if !totalLineItemCost.IsZero() && !totalUsageForLineItem.IsZero() {
-				proportionalCost := analyticsItem.TotalUsage.Div(totalUsageForLineItem).Mul(totalLineItemCost)
-				cost = proportionalCost.StringFixed(2)
-			} else {
-				cost = "0"
-			}
 
-			// Calculate percentage
-			var percentage string
-			if !totalUsageForLineItem.IsZero() {
-				pct := analyticsItem.TotalUsage.Div(totalUsageForLineItem).Mul(decimal.NewFromInt(100))
-				percentage = pct.StringFixed(2)
-			} else {
-				percentage = "0"
+			if forceRuntimeRecalculation {
+				totalUsageRevenue = totalUsageRevenue.Add(analyticsItem.TotalCost)
 			}
-
 			// Build grouped_by map from the analytics item
 			groupedBy := make(map[string]string)
 			if analyticsItem.FeatureID != "" {
@@ -3129,7 +3122,7 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 
 			// Create usage breakdown item
 			breakdownItem := dto.UsageBreakdownItem{
-				Cost:      cost,
+				Cost:      analyticsItem.TotalCost.StringFixed(2),
 				GroupedBy: groupedBy,
 			}
 
@@ -3137,10 +3130,6 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 			if !analyticsItem.TotalUsage.IsZero() {
 				usageStr := analyticsItem.TotalUsage.StringFixed(2)
 				breakdownItem.Usage = &usageStr
-			}
-
-			if percentage != "0" {
-				breakdownItem.Percentage = &percentage
 			}
 
 			if analyticsItem.EventCount > 0 {
@@ -3151,6 +3140,13 @@ func (s *invoiceService) mapFlexibleAnalyticsToLineItems(ctx context.Context, an
 			lineItemUsageBreakdown = append(lineItemUsageBreakdown, breakdownItem)
 		}
 
+		// Update the line item quantity and amount with totals from breakdown
+		lineItem.Quantity = totalUsageForLineItem
+		if forceRuntimeRecalculation {
+			lineItem.Amount = totalUsageRevenue
+		}
+
+		// Assign to response
 		usageBreakdownResponse[lineItemID] = lineItemUsageBreakdown
 
 		s.Logger.Debugw("mapped flexible usage breakdown for line item",
@@ -3179,14 +3175,56 @@ func (s *invoiceService) GetInvoiceWithBreakdown(ctx context.Context, req dto.Ge
 	// Handle usage breakdown - prioritize group_by over expand_by_source for flexibility
 	if len(req.GroupBy) > 0 {
 		// Use flexible grouping
-		usageBreakdown, err := s.CalculateUsageBreakdown(ctx, invoice, req.GroupBy)
+		usageBreakdown, err := s.CalculateUsageBreakdown(ctx, invoice, req.GroupBy, req.ForceRuntimeRecalculation)
 		if err != nil {
 			return nil, err
 		}
 		invoice.WithUsageBreakdown(usageBreakdown)
+
+		// Recalculate invoice totals based on updated line item amounts
+
+		if req.ForceRuntimeRecalculation {
+			s.recalculateInvoiceTotals(invoice)
+		}
 	}
 
 	return invoice, nil
+}
+
+// recalculateInvoiceTotals recalculates invoice subtotal, total, amount_due and amount_remaining
+// based on updated line item amounts after usage breakdown calculation
+func (s *invoiceService) recalculateInvoiceTotals(inv *dto.InvoiceResponse) {
+	// Calculate new subtotal from line item amounts
+	newSubtotal := decimal.Zero
+	for _, lineItem := range inv.LineItems {
+		newSubtotal = newSubtotal.Add(lineItem.Amount)
+	}
+
+	// Update subtotal
+	inv.Subtotal = newSubtotal
+
+	// Calculate new total: subtotal - discount + tax
+	newTotal := newSubtotal.Sub(inv.TotalDiscount).Add(inv.TotalTax)
+	if newTotal.IsNegative() {
+		newTotal = decimal.Zero
+	}
+
+	// Update total and amount_due
+	inv.Total = newTotal
+	inv.AmountDue = newTotal
+
+	// Calculate amount_remaining: total - amount_paid
+	inv.AmountRemaining = newTotal.Sub(inv.AmountPaid)
+	if inv.AmountRemaining.IsNegative() {
+		inv.AmountRemaining = decimal.Zero
+	}
+
+	s.Logger.Debugw("recalculated invoice totals after usage breakdown",
+		"invoice_id", inv.ID,
+		"new_subtotal", newSubtotal.StringFixed(2),
+		"new_total", newTotal.StringFixed(2),
+		"amount_due", inv.AmountDue.StringFixed(2),
+		"amount_remaining", inv.AmountRemaining.StringFixed(2))
 }
 
 // getAppliedTaxesForPDF retrieves and formats applied tax data for PDF generation

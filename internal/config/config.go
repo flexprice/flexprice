@@ -32,6 +32,7 @@ type Configuration struct {
 	Secrets                    SecretsConfig                    `validate:"required"`
 	Billing                    BillingConfig                    `validate:"omitempty"`
 	S3                         S3Config                         `validate:"required"`
+	FlexpriceS3Exports         FlexpriceS3ExportsConfig         `mapstructure:"flexprice_s3_exports" validate:"omitempty"`
 	Cache                      CacheConfig                      `validate:"required"`
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
@@ -63,6 +64,14 @@ type BucketConfig struct {
 	Bucket                string `mapstructure:"bucket" validate:"required"`
 	PresignExpiryDuration string `mapstructure:"presign_expiry_duration" validate:"required"`
 	KeyPrefix             string `mapstructure:"key_prefix" validate:"omitempty"`
+}
+
+type FlexpriceS3ExportsConfig struct {
+	Bucket             string `mapstructure:"bucket" validate:"required"`
+	Region             string `mapstructure:"region" validate:"required"`
+	AWSAccessKeyID     string `mapstructure:"aws_access_key_id" validate:"required"`
+	AWSSecretAccessKey string `mapstructure:"aws_secret_access_key" validate:"required"`
+	AWSSessionToken    string `mapstructure:"aws_session_token,omitempty"`
 }
 
 type DeploymentConfig struct {

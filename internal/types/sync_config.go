@@ -14,6 +14,8 @@ type SyncConfig struct {
 	// CRM sync (HubSpot, Salesforce, etc.)
 	Deal  *EntitySyncConfig `json:"deal,omitempty"`
 	Quote *EntitySyncConfig `json:"quote,omitempty"`
+	// S3 connection metadata (for Flexprice-managed S3 connections)
+	S3 *S3ExportConfig `json:"s3,omitempty"`
 }
 
 // EntitySyncConfig defines sync direction for an entity
@@ -60,6 +62,13 @@ func (s *SyncConfig) Validate() error {
 
 	if s.Quote != nil && s.Quote.Inbound {
 		return ierr.NewError("quote inbound sync is not allowed").Mark(ierr.ErrValidation)
+	}
+
+	// Validate S3 export config if present
+	if s.S3 != nil {
+		if err := s.S3.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

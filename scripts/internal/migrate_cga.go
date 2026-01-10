@@ -172,7 +172,7 @@ func MigrateCGA() error {
 			continue
 		}
 
-		cga.PeriodStart = &periodStart
+		cga.PeriodStart = periodStart
 		cga.PeriodEnd = &periodEnd
 
 		if isDryRun {

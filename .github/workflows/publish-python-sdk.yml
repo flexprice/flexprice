@@ -115,11 +115,54 @@ jobs:
 
       - name: Copy custom files to SDK
         run: |
-          echo "📋 Copying custom files..."
+          echo "📋 Copying custom files to Python SDK..."
+          
+          COPIED=0
+          
+          # Copy examples folder
+          if [ -d "api/custom/python/examples" ] && [ "$(ls -A api/custom/python/examples 2>/dev/null)" ]; then
+            mkdir -p api/python/examples
+            cp -r api/custom/python/examples/* api/python/examples/ 2>/dev/null || true
+            FILE_COUNT=$(ls -1 api/custom/python/examples 2>/dev/null | wc -l | tr -d ' ')
+            echo "✓ Copied examples folder ($FILE_COUNT files)"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: No examples found in api/custom/python/examples/"
+          fi
+          
+          # Copy async_utils.py if it exists
           if [ -f "api/custom/python/async_utils.py" ]; then
             mkdir -p api/python/src/flexprice_sdk_test
-            cp api/custom/python/async_utils.py api/python/src/flexprice_sdk_test/
+            cp api/custom/python/async_utils.py api/python/src/flexprice_sdk_test/ 2>/dev/null || true
             echo "✓ Copied async_utils.py"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: async_utils.py not found"
+          fi
+          
+          # Copy any other custom Python files
+          if [ -d "api/custom/python/utils" ] && [ "$(ls -A api/custom/python/utils 2>/dev/null)" ]; then
+            mkdir -p api/python/src/flexprice_sdk_test/utils
+            cp -r api/custom/python/utils/* api/python/src/flexprice_sdk_test/utils/ 2>/dev/null || true
+            echo "✓ Copied utils folder"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: No utils found in api/custom/python/utils/"
+          fi
+          
+          # Copy MANIFEST.in if it exists (required for packaging non-Python files)
+          if [ -f "api/custom/python/MANIFEST.in" ]; then
+            cp api/custom/python/MANIFEST.in api/python/ 2>/dev/null || true
+            echo "✓ Copied MANIFEST.in (for packaging examples)"
+            COPIED=$((COPIED + 1))
+          else
+            echo "⏭️  Skipping: MANIFEST.in not found"
+          fi
+          
+          if [ $COPIED -eq 0 ]; then
+            echo "ℹ️  No custom files found to copy - SDK will use only Speakeasy-generated files"
+          else
+            echo "✅ Successfully copied $COPIED custom file(s)/folder(s)"
           fi
 
       - name: Fix pyproject.toml for proper packaging
@@ -131,6 +174,15 @@ jobs:
           if [ ! -f "README-PYPI.md" ] && [ -f "README.md" ]; then
             sed -i 's/readme = "README-PYPI.md"/readme = "README.md"/' pyproject.toml || true
             echo "✓ Fixed README reference to README.md"
+          fi
+          
+          # Add include-package-data if examples exist
+          if [ -d "examples" ] && [ "$(ls -A examples 2>/dev/null)" ]; then
+            if ! grep -q "include-package-data" pyproject.toml; then
+              # Add include-package-data on a new line after [tool.setuptools]
+              sed -i '/^\[tool\.setuptools\]/a\include-package-data = true' pyproject.toml
+              echo "✓ Enabled include-package-data in pyproject.toml"
+            fi
           fi
           
           echo "✓ pyproject.toml ready for packaging"

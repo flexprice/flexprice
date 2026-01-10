@@ -168,6 +168,14 @@ func (sp *StreamingProcessor) processCSVStream(
 			}).
 			Mark(ierr.ErrValidation)
 	}
+
+	// Strip BOM from first header if present
+	if len(headers) > 0 && len(headers[0]) >= 3 {
+		if headers[0][0] == '\xEF' && headers[0][1] == '\xBB' && headers[0][2] == '\xBF' {
+			headers[0] = headers[0][3:]
+		}
+	}
+
 	sp.Logger.Debugw("parsed CSV headers", "headers", headers)
 
 	// Process file in chunks

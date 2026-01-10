@@ -52,8 +52,10 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	// Note: temporal client is nil because activity only uses CalculateIntervalBoundaries method
 	scheduledTaskService := service.NewScheduledTaskService(
 		params.ScheduledTaskRepo,
+		params.ConnectionRepo,
 		nil, // temporal client not needed for boundary calculations
 		params.Logger,
+		params.Config,
 	)
 
 	scheduledTaskActivity := exportActivities.NewScheduledTaskActivity(

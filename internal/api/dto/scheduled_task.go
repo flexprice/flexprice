@@ -42,10 +42,8 @@ func (r *CreateScheduledTaskRequest) Validate() error {
 		return err
 	}
 
-	// Validate S3 job config
-	if err := r.JobConfig.Validate(); err != nil {
-		return err
-	}
+	// Note: S3JobConfig validation is done in service layer after checking
+	// if connection is Flexprice-managed
 
 	return nil
 }

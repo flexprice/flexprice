@@ -37,6 +37,7 @@ const (
 	EntityTypeEvents    EntityType = "EVENTS"
 	EntityTypePrices    EntityType = "PRICES"
 	EntityTypeCustomers EntityType = "CUSTOMERS"
+	EntityTypeFeatures  EntityType = "FEATURES"
 )
 
 func (e EntityType) String() string {
@@ -48,6 +49,7 @@ func (e EntityType) Validate() error {
 		EntityTypeEvents,
 		EntityTypePrices,
 		EntityTypeCustomers,
+		EntityTypeFeatures,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid entity type").

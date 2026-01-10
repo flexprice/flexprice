@@ -368,6 +368,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			tasks.GET("", handlers.Task.ListTasks)
 			tasks.GET("/:id", handlers.Task.GetTask)
 			tasks.PUT("/:id/status", handlers.Task.UpdateTaskStatus)
+			tasks.GET("/:id/download", handlers.Task.DownloadTaskFile)
 
 			// Scheduled tasks routes under /tasks/scheduled
 			scheduledTasks := tasks.Group("/scheduled")
@@ -413,14 +414,14 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 				apiKeys.DELETE("/:id", handlers.Secret.DeleteAPIKey)
 			}
 
-		// Integration routes
-		integrations := secrets.Group("/integrations")
-		{
-			integrations.GET("/linked", handlers.Secret.ListLinkedIntegrations)
-			integrations.POST("/create/:provider", handlers.Secret.CreateIntegration)
-			integrations.GET("/by-provider/:provider", handlers.Secret.GetIntegration)
-			integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
-		}
+			// Integration routes
+			integrations := secrets.Group("/integrations")
+			{
+				integrations.GET("/linked", handlers.Secret.ListLinkedIntegrations)
+				integrations.POST("/create/:provider", handlers.Secret.CreateIntegration)
+				integrations.GET("/by-provider/:provider", handlers.Secret.GetIntegration)
+				integrations.DELETE("/:id", handlers.Secret.DeleteIntegration)
+			}
 		}
 
 		// Connection routes

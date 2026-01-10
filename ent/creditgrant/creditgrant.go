@@ -39,6 +39,10 @@ const (
 	FieldSubscriptionID = "subscription_id"
 	// FieldCredits holds the string denoting the credits field in the database.
 	FieldCredits = "credits"
+	// FieldConversionRate holds the string denoting the conversion_rate field in the database.
+	FieldConversionRate = "conversion_rate"
+	// FieldTopupConversionRate holds the string denoting the topup_conversion_rate field in the database.
+	FieldTopupConversionRate = "topup_conversion_rate"
 	// FieldCadence holds the string denoting the cadence field in the database.
 	FieldCadence = "cadence"
 	// FieldPeriod holds the string denoting the period field in the database.
@@ -98,6 +102,8 @@ var Columns = []string{
 	FieldPlanID,
 	FieldSubscriptionID,
 	FieldCredits,
+	FieldConversionRate,
+	FieldTopupConversionRate,
 	FieldCadence,
 	FieldPeriod,
 	FieldPeriodCount,
@@ -214,6 +220,16 @@ func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 // ByCredits orders the results by the credits field.
 func ByCredits(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCredits, opts...).ToFunc()
+}
+
+// ByConversionRate orders the results by the conversion_rate field.
+func ByConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversionRate, opts...).ToFunc()
+}
+
+// ByTopupConversionRate orders the results by the topup_conversion_rate field.
+func ByTopupConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTopupConversionRate, opts...).ToFunc()
 }
 
 // ByCadence orders the results by the cadence field.

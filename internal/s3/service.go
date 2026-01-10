@@ -30,6 +30,8 @@ type Service interface {
 	GetPresignedUrl(ctx context.Context, id string, docType DocumentType) (string, error)
 	GetDocument(ctx context.Context, id string, docType DocumentType) ([]byte, error)
 	Exists(ctx context.Context, id string, docType DocumentType) (bool, error)
+	// GeneratePresignedURL generates a presigned URL for any S3 object given bucket and key
+	GeneratePresignedURL(ctx context.Context, bucket, key string, duration time.Duration) (string, error)
 }
 
 type s3ServiceImpl struct {
@@ -133,6 +135,27 @@ func (s *s3ServiceImpl) GetPresignedUrl(ctx context.Context, id string, docType 
 	if err != nil {
 		return "", ierr.WithError(err).WithHint("failed to get presigned url").
 			WithMessagef("bucket:%s, key:%s", s.getBucket(docType), key).
+			Mark(ierr.ErrHTTPClient)
+	}
+
+	return result.URL, nil
+}
+
+// GeneratePresignedURL generates a presigned URL for any S3 object.
+// This is useful for generating download URLs for export files, invoices, etc.
+func (s *s3ServiceImpl) GeneratePresignedURL(ctx context.Context, bucket, key string, duration time.Duration) (string, error) {
+	if duration == 0 {
+		duration = defaultPresignExpiryDuration
+	}
+
+	presigner := s3.NewPresignClient(s.client)
+	result, err := presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(duration))
+	if err != nil {
+		return "", ierr.WithError(err).WithHint("failed to generate presigned url").
+			WithMessagef("bucket:%s, key:%s", bucket, key).
 			Mark(ierr.ErrHTTPClient)
 	}
 

@@ -442,7 +442,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 			invoice.TenantID(types.GetTenantID(ctx)),
 			invoice.Status(string(types.StatusPublished)),
 			invoice.EnvironmentID(types.GetEnvironmentID(ctx)),
-			invoice.Version(inv.Version), // Version check for optimistic locking
+			// invoice.Version(inv.Version), // Version check for optimistic locking
 		)
 
 	// Set all fields

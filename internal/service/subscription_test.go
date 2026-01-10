@@ -275,6 +275,7 @@ func (s *SubscriptionServiceSuite) setupTestData() {
 		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
 		EntityID:           s.testData.plan.ID,
 		Type:               types.PRICE_TYPE_USAGE,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
@@ -4361,11 +4362,13 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideValidation() {
 				BillingModel: types.BILLING_MODEL_TIERED,
 				// Missing tiers
 			},
-			priceMap:      nil,
+			priceMap: map[string]*dto.PriceResponse{
+				s.testData.prices.storage.ID: {Price: s.testData.prices.storage},
+			},
 			lineItemsMap:  nil,
 			planID:        s.testData.plan.ID,
 			shouldSucceed: false,
-			expectedError: "tier_mode or tiers are required when billing model is TIERED",
+			expectedError: "invalid override line item",
 			description:   "TIERED billing model without tiers should fail validation",
 		},
 		{
@@ -4401,6 +4404,149 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideValidation() {
 			shouldSucceed: false,
 			expectedError: "line item not found for price",
 			description:   "Override with missing line item should fail validation",
+		},
+		{
+			name: "invalid_override_mutual_exclusivity_fiat_and_custom",
+			override: dto.OverrideLineItemRequest{
+				PriceID:         s.testData.prices.storage.ID,
+				Amount:          lo.ToPtr(decimal.NewFromFloat(50.00)),
+				PriceUnitAmount: lo.ToPtr(decimal.NewFromFloat(0.001)),
+			},
+			priceMap:      nil,
+			lineItemsMap:  nil,
+			planID:        s.testData.plan.ID,
+			shouldSucceed: false,
+			expectedError: "cannot provide both FIAT fields and custom price unit fields",
+			description:   "Override with both FIAT and custom price unit fields should fail validation",
+		},
+		{
+			name: "invalid_override_custom_fields_on_fiat_price",
+			override: dto.OverrideLineItemRequest{
+				PriceID:         s.testData.prices.storage.ID,
+				PriceUnitAmount: lo.ToPtr(decimal.NewFromFloat(0.001)),
+			},
+			priceMap: map[string]*dto.PriceResponse{
+				s.testData.prices.storage.ID: {
+					Price: &price.Price{
+						ID:            s.testData.prices.storage.ID,
+						PriceUnitType: types.PRICE_UNIT_TYPE_FIAT,
+					},
+				},
+			},
+			lineItemsMap: map[string]*subscription.SubscriptionLineItem{
+				s.testData.prices.storage.ID: {PriceID: s.testData.prices.storage.ID},
+			},
+			planID:        s.testData.plan.ID,
+			shouldSucceed: false,
+			expectedError: "cannot use custom price unit fields on a FIAT price",
+			description:   "Override with custom price unit fields on FIAT price should fail validation",
+		},
+		{
+			name: "invalid_override_fiat_fields_on_custom_price",
+			override: dto.OverrideLineItemRequest{
+				PriceID: "price-custom-test",
+				Amount:  lo.ToPtr(decimal.NewFromFloat(50.00)),
+			},
+			priceMap: map[string]*dto.PriceResponse{
+				"price-custom-test": {
+					Price: &price.Price{
+						ID:            "price-custom-test",
+						PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM,
+					},
+				},
+			},
+			lineItemsMap: map[string]*subscription.SubscriptionLineItem{
+				"price-custom-test": {PriceID: "price-custom-test"},
+			},
+			planID:        s.testData.plan.ID,
+			shouldSucceed: false,
+			expectedError: "cannot use FIAT fields on a CUSTOM price",
+			description:   "Override with FIAT fields on CUSTOM price should fail validation",
+		},
+		{
+			name: "valid_override_custom_price_with_price_unit_amount",
+			override: dto.OverrideLineItemRequest{
+				PriceID:         "price-custom-valid",
+				PriceUnitAmount: lo.ToPtr(decimal.NewFromFloat(0.002)),
+			},
+			priceMap: map[string]*dto.PriceResponse{
+				"price-custom-valid": {
+					Price: &price.Price{
+						ID:            "price-custom-valid",
+						PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM,
+					},
+				},
+			},
+			lineItemsMap: map[string]*subscription.SubscriptionLineItem{
+				"price-custom-valid": {PriceID: "price-custom-valid"},
+			},
+			planID:        s.testData.plan.ID,
+			shouldSucceed: true,
+			description:   "Valid override with price_unit_amount on CUSTOM price should pass validation",
+		},
+		{
+			name: "valid_override_custom_price_with_price_unit_tiers",
+			override: dto.OverrideLineItemRequest{
+				PriceID: "price-custom-tiers-valid",
+				PriceUnitTiers: []dto.CreatePriceTier{
+					{
+						UpTo:       lo.ToPtr(uint64(10)),
+						UnitAmount: decimal.NewFromFloat(0.01),
+					},
+				},
+			},
+			priceMap: map[string]*dto.PriceResponse{
+				"price-custom-tiers-valid": {
+					Price: &price.Price{
+						ID:            "price-custom-tiers-valid",
+						PriceUnitType: types.PRICE_UNIT_TYPE_CUSTOM,
+					},
+				},
+			},
+			lineItemsMap: map[string]*subscription.SubscriptionLineItem{
+				"price-custom-tiers-valid": {PriceID: "price-custom-tiers-valid"},
+			},
+			planID:        s.testData.plan.ID,
+			shouldSucceed: true,
+			description:   "Valid override with price_unit_tiers on CUSTOM price should pass validation",
+		},
+		{
+			name: "invalid_override_negative_price_unit_amount",
+			override: dto.OverrideLineItemRequest{
+				PriceID:         "price-custom-negative",
+				PriceUnitAmount: lo.ToPtr(decimal.NewFromFloat(-0.001)),
+			},
+			priceMap:      nil,
+			lineItemsMap:  nil,
+			planID:        s.testData.plan.ID,
+			shouldSucceed: false,
+			expectedError: "price_unit_amount must be non-negative",
+			description:   "Override with negative price_unit_amount should fail validation",
+		},
+		{
+			name: "invalid_override_tiered_with_invalid_price_unit_type",
+			override: dto.OverrideLineItemRequest{
+				PriceID:      "price-invalid-unit-type",
+				BillingModel: types.BILLING_MODEL_TIERED,
+				Tiers: []dto.CreatePriceTier{
+					{UpTo: nil, UnitAmount: decimal.NewFromFloat(10.00)},
+				},
+			},
+			priceMap: map[string]*dto.PriceResponse{
+				"price-invalid-unit-type": {
+					Price: &price.Price{
+						ID:            "price-invalid-unit-type",
+						Type:          types.PRICE_TYPE_FIXED,
+						PriceUnitType: types.PriceUnitType("INVALID_TYPE"), // Invalid price unit type
+						BillingModel:  types.BILLING_MODEL_FLAT_FEE,
+					},
+				},
+			},
+			lineItemsMap:  nil,
+			planID:        s.testData.plan.ID,
+			shouldSucceed: false,
+			expectedError: "invalid override line item",
+			description:   "TIERED billing model with invalid price unit type should fail validation",
 		},
 	}
 
@@ -4461,7 +4607,7 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideEdgeCases() {
 		{
 			name: "override_with_very_large_quantity",
 			override: dto.OverrideLineItemRequest{
-				PriceID:  s.testData.prices.storage.ID,
+				PriceID:  s.testData.prices.fixedMonthly.ID,
 				Quantity: lo.ToPtr(decimal.NewFromFloat(999999.99)),
 			},
 			description:   "Should allow large quantity override",
@@ -4479,7 +4625,7 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideEdgeCases() {
 		{
 			name: "override_with_decimal_quantity",
 			override: dto.OverrideLineItemRequest{
-				PriceID:  s.testData.prices.storage.ID,
+				PriceID:  s.testData.prices.fixedMonthly.ID,
 				Quantity: lo.ToPtr(decimal.NewFromFloat(0.5)),
 			},
 			description:   "Should allow decimal quantity",
@@ -4519,8 +4665,24 @@ func (s *SubscriptionServiceSuite) TestPriceOverrideEdgeCases() {
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
+			// Create priceMap for validation - provide it when priceID is not empty
+			// and we're not testing the empty price_id error case
+			var priceMap map[string]*dto.PriceResponse
+			if tc.override.PriceID != "" && tc.expectedError != "price_id is required for override line items" {
+				// Determine which price to use based on the priceID
+				var priceToUse *price.Price
+				if tc.override.PriceID == s.testData.prices.fixedMonthly.ID {
+					priceToUse = s.testData.prices.fixedMonthly
+				} else {
+					priceToUse = s.testData.prices.storage
+				}
+				priceMap = map[string]*dto.PriceResponse{
+					tc.override.PriceID: {Price: priceToUse},
+				}
+			}
+
 			// Test validation
-			err := tc.override.Validate(nil, nil, "")
+			err := tc.override.Validate(priceMap, nil, "")
 
 			if !tc.shouldSucceed {
 				s.Error(err, "Expected validation error for: %s", tc.description)

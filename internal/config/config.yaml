@@ -143,6 +143,14 @@ s3:
     presign_expiry_duration: "1h"
     key_prefix: ""
 
+flexprice_s3_exports:
+  bucket: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_BUCKET env var
+  region: "ap-south-1"
+  aws_access_key_id: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_ACCESS_KEY_ID env var
+  aws_secret_access_key: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SECRET_ACCESS_KEY env var
+  aws_session_token: "" # Set via FLEXPRICE_FLEXPRICE_S3_EXPORTS_SESSION_TOKEN env var
+  
+
 cache:
   enabled: false
 

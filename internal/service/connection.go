@@ -350,12 +350,44 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	conn.CreatedBy = types.GetUserID(ctx)
 	conn.UpdatedBy = types.GetUserID(ctx)
 
+	// Check if this is a Flexprice-managed S3 connection
+	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
+		s.Logger.Infow("creating flexprice-managed S3 connection",
+			"tenant_id", conn.TenantID,
+			"connection_id", conn.ID)
+
+		// Validate that Flexprice config has required credentials
+		if s.Config.FlexpriceS3Exports.AWSAccessKeyID == "" || s.Config.FlexpriceS3Exports.AWSSecretAccessKey == "" {
+			return nil, ierr.NewError("flexprice S3 exports not configured").
+				WithHint("FlexpriceS3Exports credentials are missing from configuration").
+				Mark(ierr.ErrSystem)
+		}
+
+		// Inject Flexprice credentials from config
+		conn.EncryptedSecretData.S3 = &types.S3ConnectionMetadata{
+			AWSAccessKeyID:     s.Config.FlexpriceS3Exports.AWSAccessKeyID,
+			AWSSecretAccessKey: s.Config.FlexpriceS3Exports.AWSSecretAccessKey,
+			AWSSessionToken:    s.Config.FlexpriceS3Exports.AWSSessionToken,
+		}
+
+		// Set bucket and region from config
+		conn.SyncConfig.S3.Bucket = s.Config.FlexpriceS3Exports.Bucket
+		conn.SyncConfig.S3.Region = s.Config.FlexpriceS3Exports.Region
+		conn.SyncConfig.S3.KeyPrefix = conn.TenantID // Tenant isolation via tenant_id as key prefix
+
+		s.Logger.Infow("injected flexprice S3 credentials",
+			"bucket", conn.SyncConfig.S3.Bucket,
+			"region", conn.SyncConfig.S3.Region,
+			"key_prefix", conn.SyncConfig.S3.KeyPrefix)
+	}
+
 	// Encrypt metadata
 	s.Logger.Debugw("encrypting metadata",
 		"provider_type", conn.ProviderType,
 		"has_quickbooks", conn.EncryptedSecretData.QuickBooks != nil,
 		"has_stripe", conn.EncryptedSecretData.Stripe != nil,
-		"has_chargebee", conn.EncryptedSecretData.Chargebee != nil)
+		"has_chargebee", conn.EncryptedSecretData.Chargebee != nil,
+		"has_s3", conn.EncryptedSecretData.S3 != nil)
 	encryptedMetadata, err := s.encryptMetadata(conn.EncryptedSecretData, conn.ProviderType)
 	if err != nil {
 		s.Logger.Errorw("failed to encrypt metadata", "error", err)

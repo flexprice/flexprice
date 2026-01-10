@@ -99,6 +99,12 @@ type UpdatePriceRequest struct {
 	// TransformQuantity determines how to transform the quantity for this line item
 	TransformQuantity *price.TransformQuantity `json:"transform_quantity,omitempty"`
 
+	// PriceUnitAmount is the price unit amount (for CUSTOM price unit type, FLAT_FEE/PACKAGE billing models)
+	PriceUnitAmount *decimal.Decimal `json:"price_unit_amount,omitempty" swaggertype:"string"`
+
+	// PriceUnitTiers are the price unit tiers (for CUSTOM price unit type, TIERED billing model)
+	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
+
 	// GroupID is the id of the group to update the price in
 	GroupID string `json:"group_id,omitempty"`
 }
@@ -519,10 +525,26 @@ func (r *CreatePriceRequest) createDecimalError(hint, field, value string) error
 }
 
 func (r *UpdatePriceRequest) Validate() error {
+	// Check mutual exclusivity: cannot provide both FIAT and CUSTOM fields
+	hasFIATFields := r.Amount != nil || len(r.Tiers) > 0
+	hasCUSTOMFields := r.PriceUnitAmount != nil || len(r.PriceUnitTiers) > 0
+
+	if hasFIATFields && hasCUSTOMFields {
+		return ierr.NewError("cannot provide both FIAT fields and custom price unit fields").
+			WithHint("Cannot provide both FIAT fields (amount, tiers) and custom price unit fields (price_unit_amount, price_unit_tiers) in the same request").
+			WithReportableDetails(map[string]interface{}{
+				"has_amount":            r.Amount != nil,
+				"has_tiers":             len(r.Tiers) > 0,
+				"has_price_unit_amount": r.PriceUnitAmount != nil,
+				"has_price_unit_tiers":  len(r.PriceUnitTiers) > 0,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	// If EffectiveFrom is provided, at least one critical field must be present
 	if r.EffectiveFrom != nil && !r.ShouldCreateNewPrice() {
 		return ierr.NewError("effective_from requires at least one critical field").
-			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, or transform_quantity").
+			WithHint("When providing effective_from, you must also provide one of: amount, billing_model, tier_mode, tiers, transform_quantity, price_unit_amount, or price_unit_tiers").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -541,7 +563,9 @@ func (r *UpdatePriceRequest) ShouldCreateNewPrice() bool {
 		r.Amount != nil ||
 		r.TierMode != "" ||
 		len(r.Tiers) > 0 ||
-		r.TransformQuantity != nil
+		r.TransformQuantity != nil ||
+		r.PriceUnitAmount != nil ||
+		len(r.PriceUnitTiers) > 0
 }
 
 // ToCreatePriceRequest converts the update request to a create request for the new price
@@ -551,6 +575,7 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 		EntityType:           existingPrice.EntityType,
 		EntityID:             existingPrice.EntityID,
 		SkipEntityValidation: true, // Skip validation since we're updating an existing entity
+		PriceUnitType:        existingPrice.PriceUnitType,
 	}
 
 	// Copy all non-critical, non-billing-model-specific fields from existing price
@@ -569,12 +594,8 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 		createReq.MinQuantity = lo.ToPtr(existingPrice.MinQuantity.IntPart())
 	}
 
-	// GroupID is the id of the group to update the price in
-	if r.GroupID != "" {
-		createReq.GroupID = r.GroupID
-	} else {
-		createReq.GroupID = existingPrice.GroupID
-	}
+	// Handle GroupID: use request value if provided, otherwise use existing
+	createReq.GroupID = lo.Ternary(r.GroupID != "", r.GroupID, existingPrice.GroupID)
 
 	// Determine target billing model (use request billing model if provided, otherwise existing)
 	targetBillingModel := existingPrice.BillingModel
@@ -583,76 +604,83 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	}
 	createReq.BillingModel = targetBillingModel
 
-	// Handle billing model-specific fields based on target billing model
+	// Handle PriceUnitConfig construction for CUSTOM price unit type
+	var priceUnitConfig *PriceUnitConfig
+	if existingPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+		priceUnitConfig = &PriceUnitConfig{
+			PriceUnit: lo.FromPtr(existingPrice.PriceUnit), // Always use existing price unit (cannot be changed)
+		}
+	}
+
+	// Handle billing model-specific fields based on target billing model and price unit type
 	switch targetBillingModel {
-	case types.BILLING_MODEL_FLAT_FEE:
-		// For FLAT_FEE, only amount is relevant
-		if r.Amount != nil {
-			createReq.Amount = r.Amount
+	case types.BILLING_MODEL_FLAT_FEE, types.BILLING_MODEL_PACKAGE:
+		// Handle amount based on price unit type
+		if existingPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+			// For CUSTOM price unit, amount is handled via PriceUnitConfig
+			if r.PriceUnitAmount != nil {
+				priceUnitConfig.Amount = r.PriceUnitAmount
+			} else if existingPrice.PriceUnitAmount != nil {
+				priceUnitConfig.Amount = existingPrice.PriceUnitAmount
+			}
+			createReq.PriceUnitConfig = priceUnitConfig
 		} else {
-			existingAmount := existingPrice.Amount
-			createReq.Amount = &existingAmount
+			// For FIAT price unit, use Amount
+			createReq.Amount = lo.Ternary(r.Amount != nil, r.Amount, lo.ToPtr(existingPrice.Amount))
 		}
 
-	case types.BILLING_MODEL_PACKAGE:
-		// For PACKAGE, amount and transform_quantity are relevant
-		if r.Amount != nil {
-			createReq.Amount = r.Amount
-		} else {
-			existingAmount := existingPrice.Amount
-			createReq.Amount = &existingAmount
-		}
-
-		if r.TransformQuantity != nil {
-			createReq.TransformQuantity = r.TransformQuantity
-		} else if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
-			transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
-			createReq.TransformQuantity = &transformQuantity
+		// Handle TransformQuantity for PACKAGE (applies to both FIAT and CUSTOM)
+		if targetBillingModel == types.BILLING_MODEL_PACKAGE {
+			if r.TransformQuantity != nil {
+				createReq.TransformQuantity = r.TransformQuantity
+			} else if existingPrice.TransformQuantity != (price.JSONBTransformQuantity{}) {
+				transformQuantity := price.TransformQuantity(existingPrice.TransformQuantity)
+				createReq.TransformQuantity = &transformQuantity
+			}
 		}
 
 	case types.BILLING_MODEL_TIERED:
-		// For TIERED, only tier_mode and tiers are relevant
-		if r.TierMode != "" {
-			createReq.TierMode = r.TierMode
-		} else {
-			createReq.TierMode = existingPrice.TierMode
-		}
-
-		if len(r.Tiers) > 0 {
-			createReq.Tiers = r.Tiers
-		} else if len(existingPrice.Tiers) > 0 {
-			createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
-			for i, tier := range existingPrice.Tiers {
-				createReq.Tiers[i] = CreatePriceTier{
-					UpTo:       tier.UpTo,
-					UnitAmount: tier.UnitAmount,
+		// Handle tiers based on price unit type
+		if existingPrice.PriceUnitType == types.PRICE_UNIT_TYPE_CUSTOM {
+			// For CUSTOM price unit, tiers are handled via PriceUnitConfig
+			if len(r.PriceUnitTiers) > 0 {
+				priceUnitConfig.PriceUnitTiers = r.PriceUnitTiers
+			} else if len(existingPrice.PriceUnitTiers) > 0 {
+				priceUnitConfig.PriceUnitTiers = make([]CreatePriceTier, len(existingPrice.PriceUnitTiers))
+				for i, tier := range existingPrice.PriceUnitTiers {
+					priceUnitConfig.PriceUnitTiers[i] = CreatePriceTier{
+						UpTo:       tier.UpTo,
+						UnitAmount: tier.UnitAmount,
+					}
+					priceUnitConfig.PriceUnitTiers[i].FlatAmount = tier.FlatAmount
 				}
-				createReq.Tiers[i].FlatAmount = tier.FlatAmount
+			}
+			createReq.PriceUnitConfig = priceUnitConfig
+		} else {
+			// For FIAT price unit, use Tiers
+			if len(r.Tiers) > 0 {
+				createReq.Tiers = r.Tiers
+			} else if len(existingPrice.Tiers) > 0 {
+				createReq.Tiers = make([]CreatePriceTier, len(existingPrice.Tiers))
+				for i, tier := range existingPrice.Tiers {
+					createReq.Tiers[i] = CreatePriceTier{
+						UpTo:       tier.UpTo,
+						UnitAmount: tier.UnitAmount,
+					}
+					createReq.Tiers[i].FlatAmount = tier.FlatAmount
+				}
 			}
 		}
+
+		// Handle TierMode for both types
+		createReq.TierMode = lo.Ternary(r.TierMode != "", r.TierMode, existingPrice.TierMode)
 	}
 
-	// Apply non-critical field updates from request
-	if r.LookupKey != "" {
-		createReq.LookupKey = r.LookupKey
-	} else {
-		createReq.LookupKey = existingPrice.LookupKey
-	}
-	if r.Description != "" {
-		createReq.Description = r.Description
-	} else {
-		createReq.Description = existingPrice.Description
-	}
-	if r.DisplayName != "" {
-		createReq.DisplayName = r.DisplayName
-	} else {
-		createReq.DisplayName = existingPrice.DisplayName
-	}
-	if r.Metadata != nil {
-		createReq.Metadata = r.Metadata
-	} else {
-		createReq.Metadata = existingPrice.Metadata
-	}
+	// Apply non-critical field updates from request (use request value if provided, otherwise use existing)
+	createReq.LookupKey = lo.Ternary(r.LookupKey != "", r.LookupKey, existingPrice.LookupKey)
+	createReq.Description = lo.Ternary(r.Description != "", r.Description, existingPrice.Description)
+	createReq.DisplayName = lo.Ternary(r.DisplayName != "", r.DisplayName, existingPrice.DisplayName)
+	createReq.Metadata = lo.Ternary(r.Metadata != nil, r.Metadata, existingPrice.Metadata)
 
 	// Note: StartDate and EndDate are handled by the service layer:
 	// - EffectiveFrom in the request is used as termination date for the old price

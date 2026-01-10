@@ -118,20 +118,15 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		"end_time", taskDetails.EndTime)
 
 	// ================================================================================
-	// STEP 2: Generate Task ID
+	// STEP 2: Use Workflow ID as Task ID
 	// ================================================================================
-	logger.Info("Step 2: Generating task ID")
-	var taskID string
-	err = workflow.SideEffect(ctx, func(ctx workflow.Context) interface{} {
-		return types.GenerateUUIDWithPrefix(types.UUID_PREFIX_TASK)
-	}).Get(&taskID)
-	if err != nil {
-		logger.Error("Failed to generate task ID", "error", err)
-		return nil, fmt.Errorf("failed to generate task ID: %w", err)
-	}
-
+	// IMPORTANT: The task ID must be the same as the workflow ID
+	// For force runs: triggerForceRun generates a task ID and uses it as workflow ID
+	// For scheduled runs: Temporal generates the workflow ID automatically
+	// In both cases, we use the workflow ID as the task ID for consistency
 	workflowID := workflow.GetInfo(ctx).WorkflowExecution.ID
-	logger.Info("Generated task ID", "task_id", taskID, "workflow_id", workflowID)
+	taskID := workflowID
+	logger.Debug("Task ID set from workflow ID", "task_id", taskID, "workflow_id", workflowID)
 
 	// ================================================================================
 	// STEP 3: Create Task Record

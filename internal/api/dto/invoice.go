@@ -1214,6 +1214,9 @@ type GetInvoiceWithBreakdownRequest struct {
 
 	// GroupBy contains the grouping parameters for flexible usage breakdown
 	GroupBy []string `json:"group_by,omitempty"`
+
+	// Force Runtime recalculation of usage breakdown
+	ForceRuntimeRecalculation bool `json:"force_runtime_recalculation,omitempty" default:"false"`
 }
 
 func (r *GetInvoiceWithBreakdownRequest) Validate() error {
