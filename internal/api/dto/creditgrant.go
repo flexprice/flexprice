@@ -7,6 +7,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	domainCreditGrantApplication "github.com/flexprice/flexprice/internal/domain/creditgrantapplication"
 	"github.com/flexprice/flexprice/internal/errors"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
@@ -434,4 +435,26 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 		EnvironmentID:                   types.GetEnvironmentID(ctx),
 		BaseModel:                       types.GetDefaultBaseModel(ctx),
 	}
+}
+
+// CancelFutureSubscriptionGrantsRequest represents the request to cancel future credit grants for a subscription
+type CancelFutureSubscriptionGrantsRequest struct {
+	SubscriptionID string     `json:"subscription_id" binding:"required"`
+	EffectiveDate  *time.Time `json:"effective_date,omitempty"`
+}
+
+// Validate validates the cancel future subscription grants request
+func (r *CancelFutureSubscriptionGrantsRequest) Validate() error {
+
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	if r.EffectiveDate != nil && (r.EffectiveDate.IsZero() || r.EffectiveDate.Before(time.Now().UTC())) {
+		return errors.NewError("effective_date is required").
+			WithHint("Please provide a valid effective date").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }

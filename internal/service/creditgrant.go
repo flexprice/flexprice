@@ -53,8 +53,8 @@ type CreditGrantService interface {
 	ProcessCreditGrantApplication(ctx context.Context, applicationID string) error
 
 	// CancelFutureSubscriptionGrants cancels all future credit grants for this subscription
-	// This is typically used when a subscription is cancelled
-	CancelFutureSubscriptionGrants(ctx context.Context, subscriptionID string) error
+	// Sets the grant end date to the effective cancellation date (defaults to now if not provided), then archives the grants
+	CancelFutureSubscriptionGrants(ctx context.Context, req dto.CancelFutureSubscriptionGrantsRequest) error
 
 	// ListCreditGrantApplications retrieves credit grant applications based on filter
 	ListCreditGrantApplications(ctx context.Context, filter *types.CreditGrantApplicationFilter) (*dto.ListCreditGrantApplicationsResponse, error)
@@ -1080,28 +1080,48 @@ func (s *creditGrantService) cancelFutureGrantApplications(ctx context.Context, 
 	return nil
 }
 
-func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context, subscriptionID string) error {
-	// get all credit grants for this subscription
-	// use List with filter directly
+func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context, req dto.CancelFutureSubscriptionGrantsRequest) error {
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return err
+	}
+
+	// Default to now if no effective date provided
+	now := time.Now().UTC()
+	effective := now
+	if req.EffectiveDate != nil && !req.EffectiveDate.IsZero() {
+		effective = req.EffectiveDate.UTC()
+	}
+
+	// Get all credit grants for this subscription
 	filter := types.NewNoLimitCreditGrantFilter()
-	filter.SubscriptionIDs = []string{subscriptionID}
+	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("Failed to fetch credit grants for subscription", "subscription_id", subscriptionID, "error", err)
+		s.Logger.Errorw("Failed to fetch credit grants for subscription", "subscription_id", req.SubscriptionID, "error", err)
 		return err
 	}
 
 	for _, grant := range creditGrants {
-		if err := s.cancelFutureGrantApplications(ctx, grant); err != nil {
-			s.Logger.Errorw("Failed to void future applications", "grant_id", grant.ID, "error", err)
-			return err
+		// Set end date to effective cancellation date (only if not already set or if new date is earlier)
+		shouldUpdateEndDate := grant.EndDate == nil || effective.Before(*grant.EndDate)
+		if shouldUpdateEndDate {
+			grant.EndDate = &effective
+			if _, err := s.CreditGrantRepo.Update(ctx, grant); err != nil {
+				s.Logger.Errorw("Failed to update credit grant end date", "grant_id", grant.ID, "error", err)
+				return err
+			}
+			s.Logger.Infow("Updated credit grant end date",
+				"grant_id", grant.ID,
+				"subscription_id", req.SubscriptionID,
+				"end_date", effective)
 		}
 
-		// archive the grant
-		if err := s.CreditGrantRepo.Delete(ctx, grant.ID); err != nil {
-			s.Logger.Errorw("Failed to archive credit grant", "grant_id", grant.ID, "error", err)
+		// Delete (archive) the grant - this also cancels future applications
+		if err := s.DeleteCreditGrant(ctx, grant.ID); err != nil {
+			s.Logger.Errorw("Failed to delete credit grant", "grant_id", grant.ID, "error", err)
 			return err
 		}
 	}

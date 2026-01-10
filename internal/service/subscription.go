@@ -1543,9 +1543,12 @@ func (s *subscriptionService) CancelSubscription(
 			return err
 		}
 
-		// Step 8: Void future credit grants
+		// Step 8: Set credit grant end dates to effective cancellation date, then archive grants
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
-		err = creditGrantService.CancelFutureSubscriptionGrants(ctx, subscription.ID)
+		err = creditGrantService.CancelFutureSubscriptionGrants(ctx, dto.CancelFutureSubscriptionGrantsRequest{
+			SubscriptionID: subscription.ID,
+			EffectiveDate:  &effectiveDate,
+		})
 		if err != nil {
 			return err
 		}

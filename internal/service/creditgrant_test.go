@@ -2135,7 +2135,10 @@ func (s *CreditGrantServiceTestSuite) TestSubscriptionCancellationCancelsFutureG
 	s.NoError(s.GetStores().SubscriptionRepo.Update(s.GetContext(), testSub))
 
 	// Call CancelFutureSubscriptionGrants directly to test the functionality
-	err = s.creditGrantService.CancelFutureSubscriptionGrants(s.GetContext(), testSub.ID)
+	err = s.creditGrantService.CancelFutureSubscriptionGrants(s.GetContext(), dto.CancelFutureSubscriptionGrantsRequest{
+		SubscriptionID: testSub.ID,
+		// EffectiveDate is optional, defaults to now if not provided
+	})
 	s.NoError(err)
 
 	// Verify that future grant applications are cancelled
