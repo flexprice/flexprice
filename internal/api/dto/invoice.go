@@ -359,7 +359,7 @@ func (r *CreateInvoiceRequest) ToInvoice(ctx context.Context) (*invoice.Invoice,
 	}
 
 	// Set total_prepaid_applied if provided, otherwise default to zero
-	inv.TotalPrepaidApplied = lo.FromPtrOr(r.TotalPrepaidApplied, decimal.Zero)
+	inv.TotalPrepaidCreditsApplied = lo.FromPtrOr(r.TotalPrepaidApplied, decimal.Zero)
 
 	// Convert line items
 	if len(r.LineItems) > 0 {

@@ -1001,10 +1001,10 @@ func init() {
 	invoiceDescVersion := invoiceFields[27].Descriptor()
 	// invoice.DefaultVersion holds the default value on creation for the version field.
 	invoice.DefaultVersion = invoiceDescVersion.Default.(int)
-	// invoiceDescTotalPrepaidApplied is the schema descriptor for total_prepaid_applied field.
-	invoiceDescTotalPrepaidApplied := invoiceFields[30].Descriptor()
-	// invoice.DefaultTotalPrepaidApplied holds the default value on creation for the total_prepaid_applied field.
-	invoice.DefaultTotalPrepaidApplied = invoiceDescTotalPrepaidApplied.Default.(decimal.Decimal)
+	// invoiceDescTotalPrepaidCreditsApplied is the schema descriptor for total_prepaid_credits_applied field.
+	invoiceDescTotalPrepaidCreditsApplied := invoiceFields[30].Descriptor()
+	// invoice.DefaultTotalPrepaidCreditsApplied holds the default value on creation for the total_prepaid_credits_applied field.
+	invoice.DefaultTotalPrepaidCreditsApplied = invoiceDescTotalPrepaidCreditsApplied.Default.(decimal.Decimal)
 	invoicelineitemMixin := schema.InvoiceLineItem{}.Mixin()
 	invoicelineitemMixinFields0 := invoicelineitemMixin[0].Fields()
 	_ = invoicelineitemMixinFields0

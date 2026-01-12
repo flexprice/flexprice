@@ -502,23 +502,23 @@ func (iu *InvoiceUpdate) ClearBillingSequence() *InvoiceUpdate {
 	return iu
 }
 
-// SetTotalPrepaidApplied sets the "total_prepaid_applied" field.
-func (iu *InvoiceUpdate) SetTotalPrepaidApplied(d decimal.Decimal) *InvoiceUpdate {
-	iu.mutation.SetTotalPrepaidApplied(d)
+// SetTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field.
+func (iu *InvoiceUpdate) SetTotalPrepaidCreditsApplied(d decimal.Decimal) *InvoiceUpdate {
+	iu.mutation.SetTotalPrepaidCreditsApplied(d)
 	return iu
 }
 
-// SetNillableTotalPrepaidApplied sets the "total_prepaid_applied" field if the given value is not nil.
-func (iu *InvoiceUpdate) SetNillableTotalPrepaidApplied(d *decimal.Decimal) *InvoiceUpdate {
+// SetNillableTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableTotalPrepaidCreditsApplied(d *decimal.Decimal) *InvoiceUpdate {
 	if d != nil {
-		iu.SetTotalPrepaidApplied(*d)
+		iu.SetTotalPrepaidCreditsApplied(*d)
 	}
 	return iu
 }
 
-// ClearTotalPrepaidApplied clears the value of the "total_prepaid_applied" field.
-func (iu *InvoiceUpdate) ClearTotalPrepaidApplied() *InvoiceUpdate {
-	iu.mutation.ClearTotalPrepaidApplied()
+// ClearTotalPrepaidCreditsApplied clears the value of the "total_prepaid_credits_applied" field.
+func (iu *InvoiceUpdate) ClearTotalPrepaidCreditsApplied() *InvoiceUpdate {
+	iu.mutation.ClearTotalPrepaidCreditsApplied()
 	return iu
 }
 
@@ -817,11 +817,11 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if iu.mutation.BillingSequenceCleared() {
 		_spec.ClearField(invoice.FieldBillingSequence, field.TypeInt)
 	}
-	if value, ok := iu.mutation.TotalPrepaidApplied(); ok {
-		_spec.SetField(invoice.FieldTotalPrepaidApplied, field.TypeOther, value)
+	if value, ok := iu.mutation.TotalPrepaidCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther, value)
 	}
-	if iu.mutation.TotalPrepaidAppliedCleared() {
-		_spec.ClearField(invoice.FieldTotalPrepaidApplied, field.TypeOther)
+	if iu.mutation.TotalPrepaidCreditsAppliedCleared() {
+		_spec.ClearField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iu.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
@@ -1409,23 +1409,23 @@ func (iuo *InvoiceUpdateOne) ClearBillingSequence() *InvoiceUpdateOne {
 	return iuo
 }
 
-// SetTotalPrepaidApplied sets the "total_prepaid_applied" field.
-func (iuo *InvoiceUpdateOne) SetTotalPrepaidApplied(d decimal.Decimal) *InvoiceUpdateOne {
-	iuo.mutation.SetTotalPrepaidApplied(d)
+// SetTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field.
+func (iuo *InvoiceUpdateOne) SetTotalPrepaidCreditsApplied(d decimal.Decimal) *InvoiceUpdateOne {
+	iuo.mutation.SetTotalPrepaidCreditsApplied(d)
 	return iuo
 }
 
-// SetNillableTotalPrepaidApplied sets the "total_prepaid_applied" field if the given value is not nil.
-func (iuo *InvoiceUpdateOne) SetNillableTotalPrepaidApplied(d *decimal.Decimal) *InvoiceUpdateOne {
+// SetNillableTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableTotalPrepaidCreditsApplied(d *decimal.Decimal) *InvoiceUpdateOne {
 	if d != nil {
-		iuo.SetTotalPrepaidApplied(*d)
+		iuo.SetTotalPrepaidCreditsApplied(*d)
 	}
 	return iuo
 }
 
-// ClearTotalPrepaidApplied clears the value of the "total_prepaid_applied" field.
-func (iuo *InvoiceUpdateOne) ClearTotalPrepaidApplied() *InvoiceUpdateOne {
-	iuo.mutation.ClearTotalPrepaidApplied()
+// ClearTotalPrepaidCreditsApplied clears the value of the "total_prepaid_credits_applied" field.
+func (iuo *InvoiceUpdateOne) ClearTotalPrepaidCreditsApplied() *InvoiceUpdateOne {
+	iuo.mutation.ClearTotalPrepaidCreditsApplied()
 	return iuo
 }
 
@@ -1754,11 +1754,11 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	if iuo.mutation.BillingSequenceCleared() {
 		_spec.ClearField(invoice.FieldBillingSequence, field.TypeInt)
 	}
-	if value, ok := iuo.mutation.TotalPrepaidApplied(); ok {
-		_spec.SetField(invoice.FieldTotalPrepaidApplied, field.TypeOther, value)
+	if value, ok := iuo.mutation.TotalPrepaidCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther, value)
 	}
-	if iuo.mutation.TotalPrepaidAppliedCleared() {
-		_spec.ClearField(invoice.FieldTotalPrepaidApplied, field.TypeOther)
+	if iuo.mutation.TotalPrepaidCreditsAppliedCleared() {
+		_spec.ClearField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iuo.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
