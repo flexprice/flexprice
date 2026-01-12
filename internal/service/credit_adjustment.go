@@ -113,11 +113,11 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 // Phase 2 (Inside Transaction): Database Writes Only
 //   - Executes all wallet debits sequentially
 //   - Updates line items in database with PrepaidCreditsApplied values
-//   - Sets inv.TotalPrepaidApplied in memory (for return value)
+//   - Sets inv.TotalPrepaidCreditsApplied in memory and persists to the database
 //
 // IMPORTANT NOTES:
 //   - This method ONLY updates PrepaidCreditsApplied in the database for line items
-//   - The invoice's TotalPrepaidApplied is set in memory but NOT persisted to the database
+//   - The invoice's TotalPrepaidCreditsApplied is set in memory but NOT persisted to the database
 //   - It is the CALLER'S RESPONSIBILITY to update the invoice in the database if needed
 //   - This design allows callers to batch invoice updates with other operations if required
 func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*CreditAdjustmentResult, error) {
