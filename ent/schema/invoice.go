@@ -187,7 +187,7 @@ func (Invoice) Fields() []ent.Field {
 			Nillable().
 			Comment("Sequence number for subscription billing periods"),
 
-		field.Other("total_prepaid_applied", decimal.Decimal{}).
+		field.Other("total_prepaid_credits_applied", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
@@ -195,7 +195,7 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Default(decimal.Zero).
-			Comment("Total prepaid applied to this invoice"),
+			Comment("Total prepaid credits applied to this invoice"),
 
 		field.String("idempotency_key").
 			SchemaType(map[string]string{

@@ -94,7 +94,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetEnvironmentID(inv.EnvironmentID).
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
-		SetTotalPrepaidApplied(inv.TotalPrepaidApplied).
+		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		Save(ctx)
 
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePeriodStart(inv.PeriodStart).
 			SetNillablePeriodEnd(inv.PeriodEnd).
 			SetEnvironmentID(inv.EnvironmentID).
-			SetTotalPrepaidApplied(inv.TotalPrepaidApplied).
+			SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
@@ -471,7 +471,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetMetadata(inv.Metadata).
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
-		SetTotalPrepaidApplied(inv.TotalPrepaidApplied).
+		SetTotalPrepaidCreditsApplied(inv.TotalPrepaidCreditsApplied).
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
