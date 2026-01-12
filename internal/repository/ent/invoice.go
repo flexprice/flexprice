@@ -266,7 +266,6 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetCommitmentInfo(item.CommitmentInfo).
 					SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 					SetLineItemDiscount(item.LineItemDiscount).
-					SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 					SetStatus(string(item.Status)).
 					SetCreatedBy(item.CreatedBy).
 					SetUpdatedBy(item.UpdatedBy).
@@ -339,7 +338,6 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetCommitmentInfo(item.CommitmentInfo).
 				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
-				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 				SetStatus(string(item.Status)).
 				SetCreatedBy(item.CreatedBy).
 				SetUpdatedBy(item.UpdatedBy).
@@ -1134,7 +1132,6 @@ func (r *invoiceRepository) UpdateLineItem(ctx context.Context, item *domainInvo
 	_, err := client.InvoiceLineItem.UpdateOneID(item.ID).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
-		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 		SetMetadata(item.Metadata).
 		SetStatus(string(item.Status)).
 		SetUpdatedAt(time.Now().UTC()).
