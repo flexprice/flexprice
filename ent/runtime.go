@@ -1062,10 +1062,6 @@ func init() {
 	invoicelineitemDescLineItemDiscount := invoicelineitemFields[23].Descriptor()
 	// invoicelineitem.DefaultLineItemDiscount holds the default value on creation for the line_item_discount field.
 	invoicelineitem.DefaultLineItemDiscount = invoicelineitemDescLineItemDiscount.Default.(decimal.Decimal)
-	// invoicelineitemDescInvoiceLevelDiscount is the schema descriptor for invoice_level_discount field.
-	invoicelineitemDescInvoiceLevelDiscount := invoicelineitemFields[24].Descriptor()
-	// invoicelineitem.DefaultInvoiceLevelDiscount holds the default value on creation for the invoice_level_discount field.
-	invoicelineitem.DefaultInvoiceLevelDiscount = invoicelineitemDescInvoiceLevelDiscount.Default.(decimal.Decimal)
 	invoicesequenceFields := schema.InvoiceSequence{}.Fields()
 	_ = invoicesequenceFields
 	// invoicesequenceDescTenantID is the schema descriptor for tenant_id field.
