@@ -25,7 +25,8 @@ type CouponCalculationResult struct {
 type CouponApplicationService interface {
 	CreateCouponApplication(ctx context.Context, req dto.CreateCouponApplicationRequest) (*dto.CouponApplicationResponse, error)
 	GetCouponApplication(ctx context.Context, id string) (*dto.CouponApplicationResponse, error)
-	ApplyCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, invoiceCoupons []dto.InvoiceCoupon, lineItemCoupons []dto.InvoiceLineItemCoupon) (*CouponCalculationResult, error)
+	ApplyLineItemCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, lineItemCoupons []dto.InvoiceLineItemCoupon) (*CouponCalculationResult, error)
+	ApplyInvoiceLevelCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, invoiceCoupons []dto.InvoiceCoupon) (*CouponCalculationResult, error)
 }
 
 type couponApplicationService struct {
@@ -39,7 +40,7 @@ func NewCouponApplicationService(
 		ServiceParams: params,
 	}
 }
-
+ 
 func (s *couponApplicationService) CreateCouponApplication(ctx context.Context, req dto.CreateCouponApplicationRequest) (*dto.CouponApplicationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -101,32 +102,25 @@ func (s *couponApplicationService) GetCouponApplication(ctx context.Context, id 
 	}, nil
 }
 
-// ApplyCouponsToInvoice applies both invoice-level and line item-level coupons to an invoice.
-// This is the unified method that handles all coupon application logic.
-// CouponService.ApplyDiscount() handles all validation and calculation.
-func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, invoiceCoupons []dto.InvoiceCoupon, lineItemCoupons []dto.InvoiceLineItemCoupon) (*CouponCalculationResult, error) {
-
+// ApplyLineItemCouponsToInvoice applies line item-level coupons to an invoice.
+func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, lineItemCoupons []dto.InvoiceLineItemCoupon) (*CouponCalculationResult, error) {
 	result := &CouponCalculationResult{
 		TotalDiscountAmount: decimal.Zero,
 		AppliedCoupons:      make([]*dto.CouponApplicationResponse, 0),
 		Currency:            inv.Currency,
 		Metadata:            make(map[string]interface{}),
 	}
-	if len(invoiceCoupons) == 0 && len(lineItemCoupons) == 0 {
+	if len(lineItemCoupons) == 0 {
 		return result, nil
 	}
 
-	s.Logger.Infow("applying coupons to invoice",
+	s.Logger.Infow("applying line item coupons to invoice",
 		"invoice_id", inv.ID,
-		"invoice_coupon_count", len(invoiceCoupons),
 		"line_item_coupon_count", len(lineItemCoupons),
-		"original_total", inv.Total)
+	)
 
 	// Step 1: Fetch all coupons upfront before transaction (fail fast if any missing)
-	couponIDs := make([]string, 0, len(invoiceCoupons)+len(lineItemCoupons))
-	for _, ic := range invoiceCoupons {
-		couponIDs = append(couponIDs, ic.CouponID)
-	}
+	couponIDs := make([]string, 0, len(lineItemCoupons))
 	for _, lic := range lineItemCoupons {
 		couponIDs = append(couponIDs, lic.CouponID)
 	}
@@ -169,8 +163,6 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 	totalDiscount := decimal.Zero
 	appliedCoupons := make([]*dto.CouponApplicationResponse, 0)
 	lineItemCouponApplications := make([]*coupon_application.CouponApplication, 0)
-	invoiceLevelCouponApplications := make([]*coupon_application.CouponApplication, 0)
-	invoiceLevelDiscountTotal := decimal.Zero
 
 	// Process line item coupons (outside transaction)
 	for _, lineItemCoupon := range lineItemCoupons {
@@ -250,8 +242,140 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 			"final_price", discountResult.FinalPrice)
 	}
 
+	// Step 3: Minimal transaction - only database writes
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Create line item coupon applications
+		for _, ca := range lineItemCouponApplications {
+			if err := s.CouponApplicationRepo.Create(txCtx, ca); err != nil {
+				s.Logger.Errorw("failed to create line item coupon application",
+					"coupon_id", ca.CouponID,
+					"error", err)
+				return err
+			}
+		}
+
+		// Update line items with discounts
+		for _, lineItem := range inv.LineItems {
+			if !lineItem.LineItemDiscount.IsZero() {
+				if err := s.InvoiceRepo.UpdateLineItem(txCtx, lineItem); err != nil {
+					s.Logger.Errorw("failed to update line item with discount",
+						"line_item_id", lineItem.ID,
+						"line_item_discount", lineItem.LineItemDiscount,
+						"error", err)
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Compute metadata from final state (outside transaction)
+	lineItemDiscounts := make(map[string]decimal.Decimal)
+	for _, lineItem := range inv.LineItems {
+		if !lineItem.LineItemDiscount.IsZero() {
+			lineItemDiscounts[lineItem.ID] = lineItem.LineItemDiscount
+		}
+	}
+
+	result = &CouponCalculationResult{
+		TotalDiscountAmount: totalDiscount,
+		AppliedCoupons:      appliedCoupons,
+		Currency:            inv.Currency,
+		Metadata: map[string]interface{}{
+			"line_item_level_coupons":    len(lineItemCoupons),
+			"successful_applications":    len(appliedCoupons),
+			"validation_failures":        len(lineItemCoupons) - len(appliedCoupons),
+			"line_item_discount_details": lineItemDiscounts,
+		},
+	}
+
+	s.Logger.Infow("completed line item coupon application to invoice",
+		"invoice_id", inv.ID,
+		"total_discount", result.TotalDiscountAmount,
+		"applied_coupon_count", len(result.AppliedCoupons))
+
+	return result, nil
+}
+
+// ApplyInvoiceLevelCouponsToInvoice applies invoice-level coupons to an invoice.
+// It considers prepaid credits applied when calculating the running subtotal.
+func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, invoiceCoupons []dto.InvoiceCoupon) (*CouponCalculationResult, error) {
+	result := &CouponCalculationResult{
+		TotalDiscountAmount: decimal.Zero,
+		AppliedCoupons:      make([]*dto.CouponApplicationResponse, 0),
+		Currency:            inv.Currency,
+		Metadata:            make(map[string]interface{}),
+	}
+	if len(invoiceCoupons) == 0 {
+		return result, nil
+	}
+
+	s.Logger.Infow("applying invoice level coupons to invoice",
+		"invoice_id", inv.ID,
+		"invoice_coupon_count", len(invoiceCoupons),
+		"total_prepaid_credits_applied", inv.TotalPrepaidCreditsApplied,
+	)
+
+	// Step 1: Fetch all coupons upfront before transaction (fail fast if any missing)
+	couponIDs := make([]string, 0, len(invoiceCoupons))
+	for _, ic := range invoiceCoupons {
+		couponIDs = append(couponIDs, ic.CouponID)
+	}
+
+	couponsMap := make(map[string]*coupon.Coupon)
+	if len(couponIDs) == 0 {
+		return result, nil
+	}
+	couponFilter := types.NewNoLimitCouponFilter()
+	couponFilter.CouponIDs = couponIDs
+	coupons, err := s.CouponRepo.List(ctx, couponFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch coupons").
+			Mark(ierr.ErrDatabase)
+	}
+
+	for _, c := range coupons {
+		couponsMap[c.ID] = c
+	}
+
+	// Validate all coupons exist - fail fast if any missing
+	missingCoupons := make([]string, 0)
+	for _, couponID := range couponIDs {
+		if _, exists := couponsMap[couponID]; !exists {
+			missingCoupons = append(missingCoupons, couponID)
+		}
+	}
+	if len(missingCoupons) > 0 {
+		return nil, ierr.NewError("one or more coupons not found").
+			WithHint("Coupons must exist before applying to invoice").
+			WithReportableDetails(map[string]interface{}{
+				"missing_coupon_ids": missingCoupons,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Step 2: Calculate total line item discounts (if any were applied)
+	totalLineItemDiscount := decimal.Zero
+	for _, lineItem := range inv.LineItems {
+		totalLineItemDiscount = totalLineItemDiscount.Add(lineItem.LineItemDiscount)
+	}
+
+	// Step 3: Prepare all data outside transaction (calculations, validations, entity building)
+	couponService := NewCouponService(s.ServiceParams)
+	totalDiscount := decimal.Zero
+	appliedCoupons := make([]*dto.CouponApplicationResponse, 0)
+	invoiceLevelCouponApplications := make([]*coupon_application.CouponApplication, 0)
+
 	// Process invoice-level coupons (outside transaction)
-	runningSubTotal := inv.Subtotal.Sub(totalDiscount)
+	// Key change: running subtotal now accounts for prepaid credits applied
+	// Formula: subtotal - line item discounts - prepaid credits applied
+	runningSubTotal := inv.Subtotal.Sub(totalLineItemDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	for _, invoiceCoupon := range invoiceCoupons {
 		// Coupon already validated to exist in map
 		coupon := couponsMap[invoiceCoupon.CouponID]
@@ -297,7 +421,6 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 			CouponApplication: ca,
 		})
 		totalDiscount = totalDiscount.Add(discountResult.Discount)
-		invoiceLevelDiscountTotal = invoiceLevelDiscountTotal.Add(discountResult.Discount)
 		runningSubTotal = discountResult.FinalPrice
 
 		s.Logger.Debugw("prepared invoice coupon application",
@@ -307,19 +430,8 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 			"final_subtotal", discountResult.FinalPrice)
 	}
 
-	// Step 3: Minimal transaction - only database writes
+	// Step 4: Minimal transaction - only database writes
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
-
-		// Create line item coupon applications
-		for _, ca := range lineItemCouponApplications {
-			if err := s.CouponApplicationRepo.Create(txCtx, ca); err != nil {
-				s.Logger.Errorw("failed to create line item coupon application",
-					"coupon_id", ca.CouponID,
-					"error", err)
-				return err
-			}
-		}
-
 		// Create invoice-level coupon applications
 		for _, ca := range invoiceLevelCouponApplications {
 			if err := s.CouponApplicationRepo.Create(txCtx, ca); err != nil {
@@ -330,19 +442,6 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 			}
 		}
 
-		// Update line items with discounts
-		for _, lineItem := range inv.LineItems {
-			if !lineItem.LineItemDiscount.IsZero() {
-				if err := s.InvoiceRepo.UpdateLineItem(txCtx, lineItem); err != nil {
-					s.Logger.Errorw("failed to update line item with discount",
-						"line_item_id", lineItem.ID,
-						"line_item_discount", lineItem.LineItemDiscount,
-						"error", err)
-					return err
-				}
-			}
-		}
-
 		return nil
 	})
 
@@ -350,29 +449,18 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 		return nil, err
 	}
 
-	// Compute metadata from final state (outside transaction)
-	lineItemDiscounts := make(map[string]decimal.Decimal)
-	for _, lineItem := range inv.LineItems {
-		if !lineItem.LineItemDiscount.IsZero() {
-			lineItemDiscounts[lineItem.ID] = lineItem.LineItemDiscount
-		}
-	}
-
 	result = &CouponCalculationResult{
 		TotalDiscountAmount: totalDiscount,
 		AppliedCoupons:      appliedCoupons,
 		Currency:            inv.Currency,
 		Metadata: map[string]interface{}{
-			"total_coupons_processed":    len(invoiceCoupons) + len(lineItemCoupons),
-			"successful_applications":    len(appliedCoupons),
-			"validation_failures":        (len(invoiceCoupons) + len(lineItemCoupons)) - len(appliedCoupons),
-			"invoice_level_coupons":      len(invoiceCoupons),
-			"line_item_level_coupons":    len(lineItemCoupons),
-			"line_item_discount_details": lineItemDiscounts,
+			"invoice_level_coupons":   len(invoiceCoupons),
+			"successful_applications": len(appliedCoupons),
+			"validation_failures":     len(invoiceCoupons) - len(appliedCoupons),
 		},
 	}
 
-	s.Logger.Infow("completed coupon application to invoice",
+	s.Logger.Infow("completed invoice level coupon application to invoice",
 		"invoice_id", inv.ID,
 		"total_discount", result.TotalDiscountAmount,
 		"applied_coupon_count", len(result.AppliedCoupons))
