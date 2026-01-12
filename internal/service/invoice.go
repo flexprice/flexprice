@@ -2729,6 +2729,15 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 
 	// Discount-first-then-tax: total = subtotal - discount - credits + tax
 	// All components are already rounded, so the result is naturally rounded
+	// Cap discount to ensure discount + credits don't exceed subtotal (before tax)
+	maxAllowedDiscount := inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied)
+	if maxAllowedDiscount.IsNegative() {
+		maxAllowedDiscount = decimal.Zero
+	}
+	if inv.TotalDiscount.GreaterThan(maxAllowedDiscount) {
+		inv.TotalDiscount = maxAllowedDiscount
+	}
+
 	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied).Add(inv.TotalTax)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
@@ -3530,9 +3539,14 @@ func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, in
 	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
-		// If total becomes negative, cap the discount at subtotal
-		if inv.TotalDiscount.GreaterThan(inv.Subtotal) {
-			inv.TotalDiscount = inv.Subtotal
+		// Cap discount to ensure discount + credits don't exceed subtotal
+		// Formula: max(0, subtotal - credits) ensures discount + credits <= subtotal
+		maxAllowedDiscount := inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied)
+		if maxAllowedDiscount.IsNegative() {
+			maxAllowedDiscount = decimal.Zero
+		}
+		if inv.TotalDiscount.GreaterThan(maxAllowedDiscount) {
+			inv.TotalDiscount = maxAllowedDiscount
 		}
 	}
 
