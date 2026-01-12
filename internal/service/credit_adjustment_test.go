@@ -198,7 +198,7 @@ func (s *CreditAdjustmentServiceSuite) createWalletForCalculation(id string, cur
 		Name:           "Test Wallet " + id,
 		Description:    "Test wallet for calculation",
 		ConversionRate: decimal.NewFromInt(1),
-		WalletType:     types.WalletTypePostPaid,
+		WalletType:     types.WalletTypePrePaid, // Credit adjustments only process PrePaid wallets
 		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
 	}
 }
@@ -1082,4 +1082,58 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	// Line item should get sum of rounded wallets: 0.12 + 0.23 + 0.35 = 0.70
 	expectedTotal, _ := decimal.NewFromString("0.70")
 	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedTotal))
+}
+
+// TestCalculateCreditAdjustments_WalletTypeFiltering tests that CalculateCreditAdjustments processes
+// both PrePaid and PostPaid wallets when passed directly, but in production GetWalletsForCreditAdjustment
+// only returns PrePaid wallets. This test verifies the calculation logic works with both types.
+func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WalletTypeFiltering() {
+	// Create PrePaid wallet (should be processed)
+	prepaidWallet := &wallet.Wallet{
+		ID:             "wallet_prepaid",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "USD",
+		Balance:        decimal.NewFromFloat(50.00),
+		CreditBalance:  decimal.Zero,
+		WalletStatus:   types.WalletStatusActive,
+		Name:           "PrePaid Wallet",
+		Description:    "PrePaid wallet for credit adjustment",
+		ConversionRate: decimal.NewFromInt(1),
+		WalletType:     types.WalletTypePrePaid,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create PostPaid wallet (should also be processed when passed directly to CalculateCreditAdjustments,
+	// but would be filtered out by GetWalletsForCreditAdjustment in production)
+	postpaidWallet := &wallet.Wallet{
+		ID:             "wallet_postpaid",
+		CustomerID:     s.testData.customer.ID,
+		Currency:       "USD",
+		Balance:        decimal.NewFromFloat(30.00),
+		CreditBalance:  decimal.Zero,
+		WalletStatus:   types.WalletStatusActive,
+		Name:           "PostPaid Wallet",
+		Description:    "PostPaid wallet (should not be used in production)",
+		ConversionRate: decimal.NewFromInt(1),
+		WalletType:     types.WalletTypePostPaid,
+		BaseModel:      types.GetDefaultBaseModel(s.GetContext()),
+	}
+
+	// Create invoice with line item
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(70.00), nil, decimal.Zero)
+	inv := s.createInvoiceForCalculation("inv_wallet_types", "USD", []*invoice.InvoiceLineItem{lineItem})
+
+	// Execute with both wallet types
+	// Note: In production, only PrePaid wallets would be passed via GetWalletsForCreditAdjustment
+	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{prepaidWallet, postpaidWallet})
+
+	// Assert - CalculateCreditAdjustments processes both wallet types when passed directly
+	s.NoError(err)
+	s.NotNil(walletDebits)
+	s.Equal(2, len(walletDebits))
+	// PrePaid wallet should contribute $50
+	s.True(walletDebits["wallet_prepaid"].Equal(decimal.NewFromFloat(50.00)))
+	// PostPaid wallet should contribute $20 (remaining amount)
+	s.True(walletDebits["wallet_postpaid"].Equal(decimal.NewFromFloat(20.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(70.00)))
 }
