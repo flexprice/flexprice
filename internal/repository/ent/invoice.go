@@ -1275,6 +1275,10 @@ func (r *invoiceRepository) UpdateLineItem(ctx context.Context, item *domainInvo
 	client := r.client.Writer(ctx)
 
 	_, err := client.InvoiceLineItem.UpdateOneID(item.ID).
+		Where(
+			invoicelineitem.TenantID(types.GetTenantID(ctx)),
+			invoicelineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
+		).
 		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetMetadata(item.Metadata).
