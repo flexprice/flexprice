@@ -117,9 +117,9 @@ type Invoice struct {
 	// total_tax is the sum of all taxes combined at the invoice level.
 	TotalTax decimal.Decimal `json:"total_tax"`
 
-	// total_credits_applied is the total amount of credits applied to this invoice.
-	// This represents the sum of all credit applications (from credit grants, credit notes, etc.) that reduce the invoice amount.
-	TotalCreditsApplied decimal.Decimal `json:"total_credits_applied"`
+	// total_prepaid_applied is the total amount of prepaid applied to this invoice.
+	// This represents the sum of all prepaid applications (from credit grants, credit notes, etc.) that reduce the invoice amount.
+	TotalPrepaidApplied decimal.Decimal `json:"total_prepaid_applied"`
 
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
@@ -162,7 +162,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		AdjustmentAmount: e.AdjustmentAmount,
 		RefundedAmount:   e.RefundedAmount,
 		// TODO: remove optional and nillable after migration
-		TotalCreditsApplied: lo.FromPtrOr(e.TotalCreditsApplied, decimal.Zero),
+		TotalPrepaidApplied: lo.FromPtrOr(e.TotalPrepaidApplied, decimal.Zero),
 		InvoiceNumber:       e.InvoiceNumber,
 		IdempotencyKey:      e.IdempotencyKey,
 		BillingSequence:     e.BillingSequence,

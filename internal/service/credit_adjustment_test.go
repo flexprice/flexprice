@@ -209,15 +209,15 @@ func (s *CreditAdjustmentServiceSuite) createLineItemForCalculation(amount decim
 		priceType = lo.ToPtr(string(types.PRICE_TYPE_USAGE))
 	}
 	return &invoice.InvoiceLineItem{
-		ID:                   s.GetUUID(),
-		Amount:               amount,
-		Currency:             "USD",
-		Quantity:             decimal.NewFromInt(1),
-		PriceType:            priceType,
-		LineItemDiscount:     lineItemDiscount,
-		InvoiceLevelDiscount: invoiceLevelDiscount,
-		CreditsApplied:       decimal.Zero,
-		BaseModel:            types.GetDefaultBaseModel(s.GetContext()),
+		ID:                    s.GetUUID(),
+		Amount:                amount,
+		Currency:              "USD",
+		Quantity:              decimal.NewFromInt(1),
+		PriceType:             priceType,
+		LineItemDiscount:      lineItemDiscount,
+		InvoiceLevelDiscount:  invoiceLevelDiscount,
+		PrepaidCreditsApplied: decimal.Zero,
+		BaseModel:             types.GetDefaultBaseModel(s.GetContext()),
 	}
 }
 
@@ -246,9 +246,9 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_NoEligibleWalle
 
 	// Assert
 	s.NoError(err)
-	s.True(inv.TotalCreditsApplied.IsZero())
-	s.True(inv.LineItems[0].CreditsApplied.IsZero())
-	s.True(inv.LineItems[1].CreditsApplied.IsZero())
+	s.True(inv.TotalPrepaidApplied.IsZero())
+	s.True(inv.LineItems[0].PrepaidCreditsApplied.IsZero())
+	s.True(inv.LineItems[1].PrepaidCreditsApplied.IsZero())
 }
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_WithEligibleWallets() {
@@ -271,12 +271,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_WithEligibleWal
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
 		// This is expected behavior when eligible credits can't be found
-		s.True(inv.TotalCreditsApplied.IsZero())
+		s.True(inv.TotalPrepaidApplied.IsZero())
 	} else {
 		// Service succeeded - credits were applied
 		s.NotNil(result)
-		s.True(inv.TotalCreditsApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
+		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
 	}
 }
 
@@ -296,12 +296,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InsufficientCre
 	// Assert - service applies what it can based on available credits
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
-		s.True(inv.TotalCreditsApplied.IsZero())
+		s.True(inv.TotalPrepaidApplied.IsZero())
 	} else {
 		// Service succeeded - partial credits may be applied
 		s.NotNil(result)
-		s.True(inv.TotalCreditsApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(25.00)))
+		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(25.00)))
 	}
 }
 
@@ -323,12 +323,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_MultiWalletSequ
 	// Assert - service applies credits sequentially across line items using single wallet
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
-		s.True(inv.TotalCreditsApplied.IsZero())
+		s.True(inv.TotalPrepaidApplied.IsZero())
 	} else {
 		// Service succeeded - credits were applied
 		s.NotNil(result)
-		s.True(inv.TotalCreditsApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
+		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
 	}
 }
 
@@ -346,8 +346,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_CurrencyMismatc
 
 	// Assert - service doesn't apply credits due to currency mismatch
 	s.NoError(err)
-	s.True(inv.TotalCreditsApplied.IsZero())
-	s.True(inv.LineItems[0].CreditsApplied.IsZero())
+	s.True(inv.TotalPrepaidApplied.IsZero())
+	s.True(inv.LineItems[0].PrepaidCreditsApplied.IsZero())
 }
 
 func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InactiveWalletFiltered() {
@@ -367,12 +367,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InactiveWalletF
 	// Assert - service only uses active wallets
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
-		s.True(inv.TotalCreditsApplied.IsZero())
+		s.True(inv.TotalPrepaidApplied.IsZero())
 	} else {
 		// Service succeeded - credits applied only from active wallet
 		s.NotNil(result)
-		s.True(inv.TotalCreditsApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(30.00)))
+		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(30.00)))
 	}
 }
 
@@ -390,8 +390,8 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_ZeroBalanceWall
 
 	// Assert
 	s.NoError(err)
-	s.True(inv.TotalCreditsApplied.IsZero())
-	s.True(inv.LineItems[0].CreditsApplied.IsZero())
+	s.True(inv.TotalPrepaidApplied.IsZero())
+	s.True(inv.LineItems[0].PrepaidCreditsApplied.IsZero())
 
 	// Verify no credit adjustment transactions were created
 	transactions, err := s.GetStores().WalletRepo.ListWalletTransactions(s.GetContext(), &types.WalletTransactionFilter{
@@ -426,7 +426,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_BasicSingl
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(50.00)))
-	s.True(lineItem.CreditsApplied.Equal(decimal.NewFromFloat(50.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(50.00)))
 }
 
 // TestCalculateCreditAdjustments_MultipleWalletsMultipleLineItems tests multiple wallets covering multiple line items
@@ -451,8 +451,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	// Second line item: $30, wallet1 is exhausted, wallet2 has $20 remaining, so wallet2 covers $20 (partial)
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(30.00)))
 	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(40.00))) // $20 from first line item + $20 from second line item
-	s.True(lineItem1.CreditsApplied.Equal(decimal.NewFromFloat(50.00)))
-	s.True(lineItem2.CreditsApplied.Equal(decimal.NewFromFloat(20.00))) // Only $20 available from wallet2
+	s.True(lineItem1.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(50.00)))
+	s.True(lineItem2.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(20.00))) // Only $20 available from wallet2
 }
 
 // TestCalculateCreditAdjustments_WithDiscounts tests calculation with line item and invoice level discounts
@@ -479,7 +479,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WithDiscou
 	s.Equal(1, len(walletDebits))
 	// Should debit $85 (adjusted amount), not $100 (original amount)
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(85.00)))
-	s.True(lineItem.CreditsApplied.Equal(decimal.NewFromFloat(85.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(85.00)))
 }
 
 // TestCalculateCreditAdjustments_FiltersNonUsageLineItems tests that non-usage line items are filtered out
@@ -500,8 +500,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_FiltersNon
 	s.Equal(1, len(walletDebits))
 	// Only usage line item should have credits applied
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(50.00)))
-	s.True(usageLineItem.CreditsApplied.Equal(decimal.NewFromFloat(50.00)))
-	s.True(fixedLineItem.CreditsApplied.IsZero())
+	s.True(usageLineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(50.00)))
+	s.True(fixedLineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_InsufficientBalance tests partial credit application when wallet has insufficient balance
@@ -522,7 +522,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_Insufficie
 	s.Equal(1, len(walletDebits))
 	// Should only debit available balance
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(25.00)))
-	s.True(lineItem.CreditsApplied.Equal(decimal.NewFromFloat(25.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(25.00)))
 }
 
 // TestCalculateCreditAdjustments_ZeroBalanceWallet tests that zero balance wallets are skipped
@@ -541,7 +541,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroBalanc
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_NegativeAdjustedAmount tests that line items with negative adjusted amounts are skipped
@@ -567,7 +567,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NegativeAd
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_ZeroAdjustedAmount tests that line items with zero adjusted amounts are skipped
@@ -593,7 +593,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroAdjust
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_WalletBalanceTracking tests wallet balance tracking across multiple line items
@@ -617,9 +617,9 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WalletBala
 	// Wallet should cover first two line items fully ($30 + $25 = $55) and part of third ($5)
 	// Total debit should be $60 (full wallet balance)
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(60.00)))
-	s.True(lineItem1.CreditsApplied.Equal(decimal.NewFromFloat(30.00)))
-	s.True(lineItem2.CreditsApplied.Equal(decimal.NewFromFloat(25.00)))
-	s.True(lineItem3.CreditsApplied.Equal(decimal.NewFromFloat(5.00))) // Only $5 from wallet, $15 remaining
+	s.True(lineItem1.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(30.00)))
+	s.True(lineItem2.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(25.00)))
+	s.True(lineItem3.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(5.00))) // Only $5 from wallet, $15 remaining
 }
 
 // TestCalculateCreditAdjustments_EmptyWallets tests behavior with empty wallets slice
@@ -635,7 +635,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_EmptyWalle
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_EmptyLineItems tests behavior with empty line items
@@ -678,7 +678,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NilPriceTy
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_MultipleWalletsSequentialUsage tests sequential wallet usage across line items
@@ -703,8 +703,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	// Second line item: wallet2 covers $40 (remaining $40 from wallet2)
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(20.00)))
 	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(50.00))) // $10 + $40
-	s.True(lineItem1.CreditsApplied.Equal(decimal.NewFromFloat(30.00)))
-	s.True(lineItem2.CreditsApplied.Equal(decimal.NewFromFloat(40.00)))
+	s.True(lineItem1.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(30.00)))
+	s.True(lineItem2.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(40.00)))
 }
 
 // TestCalculateCreditAdjustments_ExtremePrecisionSmallDecimals tests calculations with very small decimal values (max 8 decimals)
@@ -730,7 +730,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	s.NotNil(walletDebits)
 	// With rounding, sub-cent amounts become zero, so no debits are made
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_ExtremePrecisionLargeDecimals tests calculations with very large decimal values
@@ -756,7 +756,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	// First wallet should cover the full amount
 	expectedW1, _ := decimal.NewFromString("750000000.00")
 	s.True(walletDebits["wallet_1"].Equal(expectedW1))
-	s.True(lineItem.CreditsApplied.Equal(expectedW1))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedW1))
 }
 
 // TestCalculateCreditAdjustments_ManyDecimalPlaces tests calculations with maximum decimal places (8 decimals)
@@ -785,7 +785,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ManyDecima
 	expectedW2, _ := decimal.NewFromString("76.54")
 	s.True(walletDebits["wallet_1"].Equal(expectedW1))
 	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(lineItemAmount))
 }
 
 // TestCalculateCreditAdjustments_PrecisionWithDiscounts tests precision maintenance with discounts (max 8 decimals)
@@ -813,7 +813,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionW
 	// With rounding: 100.12345678 rounds to 100.12 for USD
 	expectedDebit, _ := decimal.NewFromString("100.12")
 	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
-	s.True(lineItem.CreditsApplied.Equal(expectedDebit))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedDebit))
 }
 
 // TestCalculateCreditAdjustments_PrecisionRoundingEdgeCases tests edge cases that might cause rounding issues (max 8 decimals)
@@ -846,7 +846,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionR
 	s.True(walletDebits["wallet_3"].Equal(expectedW))
 	// Sum of rounded amounts: 0.33 + 0.33 + 0.33 = 0.99 (not 1.00 due to rounding)
 	expectedTotal, _ := decimal.NewFromString("0.99")
-	s.True(lineItem.CreditsApplied.Equal(expectedTotal))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedTotal))
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemTwoWallets tests one line item adjusted by exactly 2 wallets
@@ -869,7 +869,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	// First wallet covers $30, second wallet covers $40
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(30.00)))
 	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(40.00)))
-	s.True(lineItem.CreditsApplied.Equal(decimal.NewFromFloat(70.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(70.00)))
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemMultipleWalletsExactSplit tests one line item split exactly across multiple wallets
@@ -894,7 +894,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(33.33)))
 	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(33.33)))
 	s.True(walletDebits["wallet_3"].Equal(decimal.NewFromFloat(33.34)))
-	s.True(lineItem.CreditsApplied.Equal(decimal.NewFromFloat(100.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(100.00)))
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemMultipleWalletsPartialCoverage tests one line item that can't be fully covered
@@ -918,7 +918,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(25.00)))
 	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(30.00)))
 	// Line item should only get partial credit
-	s.True(lineItem.CreditsApplied.Equal(decimal.NewFromFloat(55.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(55.00)))
 }
 
 // TestCalculateCreditAdjustments_VerySmallWalletBalance tests wallet with minimal balance
@@ -939,7 +939,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_VerySmallW
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
 	s.True(walletDebits["wallet_1"].Equal(w))
-	s.True(lineItem.CreditsApplied.Equal(w))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(w))
 }
 
 // TestCalculateCreditAdjustments_MixedPrecisionWallets tests wallets with different decimal precisions (max 8 decimals)
@@ -972,7 +972,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MixedPreci
 	s.True(walletDebits["wallet_1"].Equal(expectedW1))
 	s.True(walletDebits["wallet_2"].Equal(expectedW2))
 	s.True(walletDebits["wallet_3"].Equal(expectedW3))
-	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(lineItemAmount))
 }
 
 // TestCalculateCreditAdjustments_ExtremeDiscountPrecision tests discounts with maximum precision (8 decimals)
@@ -1000,7 +1000,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremeDis
 	// With rounding: 100.00000001 rounds to 100.00 for USD
 	expectedDebit, _ := decimal.NewFromString("100.00")
 	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
-	s.True(lineItem.CreditsApplied.Equal(expectedDebit))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedDebit))
 }
 
 // TestCalculateCreditAdjustments_NearZeroValues tests values very close to zero (max 8 decimals)
@@ -1023,7 +1023,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NearZeroVa
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(0, len(walletDebits))
-	s.True(lineItem.CreditsApplied.IsZero())
+	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemTwoWalletsWithPrecision tests single line item with 2 wallets using precise decimals (max 8 decimals)
@@ -1052,7 +1052,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	expectedW2, _ := decimal.NewFromString("66.67")
 	s.True(walletDebits["wallet_1"].Equal(expectedW1))
 	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	s.True(lineItem.CreditsApplied.Equal(lineItemAmount))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(lineItemAmount))
 }
 
 // TestCalculateCreditAdjustments_ExtremePrecisionSingleLineItemMultipleWallets tests maximum precision with single line item and multiple wallets (max 8 decimals)
@@ -1087,5 +1087,5 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	s.True(walletDebits["wallet_3"].Equal(expectedW3))
 	// Line item should get sum of rounded wallets: 0.12 + 0.23 + 0.35 = 0.70
 	expectedTotal, _ := decimal.NewFromString("0.70")
-	s.True(lineItem.CreditsApplied.Equal(expectedTotal))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedTotal))
 }

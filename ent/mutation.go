@@ -25870,7 +25870,7 @@ type InvoiceMutation struct {
 	invoice_number             *string
 	billing_sequence           *int
 	addbilling_sequence        *int
-	total_credits_applied      *decimal.Decimal
+	total_prepaid_applied      *decimal.Decimal
 	idempotency_key            *string
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
@@ -27624,53 +27624,53 @@ func (m *InvoiceMutation) ResetBillingSequence() {
 	delete(m.clearedFields, invoice.FieldBillingSequence)
 }
 
-// SetTotalCreditsApplied sets the "total_credits_applied" field.
-func (m *InvoiceMutation) SetTotalCreditsApplied(d decimal.Decimal) {
-	m.total_credits_applied = &d
+// SetTotalPrepaidApplied sets the "total_prepaid_applied" field.
+func (m *InvoiceMutation) SetTotalPrepaidApplied(d decimal.Decimal) {
+	m.total_prepaid_applied = &d
 }
 
-// TotalCreditsApplied returns the value of the "total_credits_applied" field in the mutation.
-func (m *InvoiceMutation) TotalCreditsApplied() (r decimal.Decimal, exists bool) {
-	v := m.total_credits_applied
+// TotalPrepaidApplied returns the value of the "total_prepaid_applied" field in the mutation.
+func (m *InvoiceMutation) TotalPrepaidApplied() (r decimal.Decimal, exists bool) {
+	v := m.total_prepaid_applied
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldTotalCreditsApplied returns the old "total_credits_applied" field's value of the Invoice entity.
+// OldTotalPrepaidApplied returns the old "total_prepaid_applied" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldTotalCreditsApplied(ctx context.Context) (v *decimal.Decimal, err error) {
+func (m *InvoiceMutation) OldTotalPrepaidApplied(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTotalCreditsApplied is only allowed on UpdateOne operations")
+		return v, errors.New("OldTotalPrepaidApplied is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTotalCreditsApplied requires an ID field in the mutation")
+		return v, errors.New("OldTotalPrepaidApplied requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTotalCreditsApplied: %w", err)
+		return v, fmt.Errorf("querying old value for OldTotalPrepaidApplied: %w", err)
 	}
-	return oldValue.TotalCreditsApplied, nil
+	return oldValue.TotalPrepaidApplied, nil
 }
 
-// ClearTotalCreditsApplied clears the value of the "total_credits_applied" field.
-func (m *InvoiceMutation) ClearTotalCreditsApplied() {
-	m.total_credits_applied = nil
-	m.clearedFields[invoice.FieldTotalCreditsApplied] = struct{}{}
+// ClearTotalPrepaidApplied clears the value of the "total_prepaid_applied" field.
+func (m *InvoiceMutation) ClearTotalPrepaidApplied() {
+	m.total_prepaid_applied = nil
+	m.clearedFields[invoice.FieldTotalPrepaidApplied] = struct{}{}
 }
 
-// TotalCreditsAppliedCleared returns if the "total_credits_applied" field was cleared in this mutation.
-func (m *InvoiceMutation) TotalCreditsAppliedCleared() bool {
-	_, ok := m.clearedFields[invoice.FieldTotalCreditsApplied]
+// TotalPrepaidAppliedCleared returns if the "total_prepaid_applied" field was cleared in this mutation.
+func (m *InvoiceMutation) TotalPrepaidAppliedCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldTotalPrepaidApplied]
 	return ok
 }
 
-// ResetTotalCreditsApplied resets all changes to the "total_credits_applied" field.
-func (m *InvoiceMutation) ResetTotalCreditsApplied() {
-	m.total_credits_applied = nil
-	delete(m.clearedFields, invoice.FieldTotalCreditsApplied)
+// ResetTotalPrepaidApplied resets all changes to the "total_prepaid_applied" field.
+func (m *InvoiceMutation) ResetTotalPrepaidApplied() {
+	m.total_prepaid_applied = nil
+	delete(m.clearedFields, invoice.FieldTotalPrepaidApplied)
 }
 
 // SetIdempotencyKey sets the "idempotency_key" field.
@@ -27973,8 +27973,8 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.billing_sequence != nil {
 		fields = append(fields, invoice.FieldBillingSequence)
 	}
-	if m.total_credits_applied != nil {
-		fields = append(fields, invoice.FieldTotalCreditsApplied)
+	if m.total_prepaid_applied != nil {
+		fields = append(fields, invoice.FieldTotalPrepaidApplied)
 	}
 	if m.idempotency_key != nil {
 		fields = append(fields, invoice.FieldIdempotencyKey)
@@ -28059,8 +28059,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceNumber()
 	case invoice.FieldBillingSequence:
 		return m.BillingSequence()
-	case invoice.FieldTotalCreditsApplied:
-		return m.TotalCreditsApplied()
+	case invoice.FieldTotalPrepaidApplied:
+		return m.TotalPrepaidApplied()
 	case invoice.FieldIdempotencyKey:
 		return m.IdempotencyKey()
 	}
@@ -28144,8 +28144,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldInvoiceNumber(ctx)
 	case invoice.FieldBillingSequence:
 		return m.OldBillingSequence(ctx)
-	case invoice.FieldTotalCreditsApplied:
-		return m.OldTotalCreditsApplied(ctx)
+	case invoice.FieldTotalPrepaidApplied:
+		return m.OldTotalPrepaidApplied(ctx)
 	case invoice.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
 	}
@@ -28409,12 +28409,12 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetBillingSequence(v)
 		return nil
-	case invoice.FieldTotalCreditsApplied:
+	case invoice.FieldTotalPrepaidApplied:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetTotalCreditsApplied(v)
+		m.SetTotalPrepaidApplied(v)
 		return nil
 	case invoice.FieldIdempotencyKey:
 		v, ok := value.(string)
@@ -28549,8 +28549,8 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldBillingSequence) {
 		fields = append(fields, invoice.FieldBillingSequence)
 	}
-	if m.FieldCleared(invoice.FieldTotalCreditsApplied) {
-		fields = append(fields, invoice.FieldTotalCreditsApplied)
+	if m.FieldCleared(invoice.FieldTotalPrepaidApplied) {
+		fields = append(fields, invoice.FieldTotalPrepaidApplied)
 	}
 	if m.FieldCleared(invoice.FieldIdempotencyKey) {
 		fields = append(fields, invoice.FieldIdempotencyKey)
@@ -28638,8 +28638,8 @@ func (m *InvoiceMutation) ClearField(name string) error {
 	case invoice.FieldBillingSequence:
 		m.ClearBillingSequence()
 		return nil
-	case invoice.FieldTotalCreditsApplied:
-		m.ClearTotalCreditsApplied()
+	case invoice.FieldTotalPrepaidApplied:
+		m.ClearTotalPrepaidApplied()
 		return nil
 	case invoice.FieldIdempotencyKey:
 		m.ClearIdempotencyKey()
@@ -28760,8 +28760,8 @@ func (m *InvoiceMutation) ResetField(name string) error {
 	case invoice.FieldBillingSequence:
 		m.ResetBillingSequence()
 		return nil
-	case invoice.FieldTotalCreditsApplied:
-		m.ResetTotalCreditsApplied()
+	case invoice.FieldTotalPrepaidApplied:
+		m.ResetTotalPrepaidApplied()
 		return nil
 	case invoice.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()
@@ -28913,7 +28913,7 @@ type InvoiceLineItemMutation struct {
 	period_end                 *time.Time
 	metadata                   *map[string]string
 	commitment_info            **types.CommitmentInfo
-	credits_applied            *decimal.Decimal
+	prepaid_credits_applied    *decimal.Decimal
 	line_item_discount         *decimal.Decimal
 	invoice_level_discount     *decimal.Decimal
 	clearedFields              map[string]struct{}
@@ -30286,53 +30286,53 @@ func (m *InvoiceLineItemMutation) ResetCommitmentInfo() {
 	delete(m.clearedFields, invoicelineitem.FieldCommitmentInfo)
 }
 
-// SetCreditsApplied sets the "credits_applied" field.
-func (m *InvoiceLineItemMutation) SetCreditsApplied(d decimal.Decimal) {
-	m.credits_applied = &d
+// SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
+func (m *InvoiceLineItemMutation) SetPrepaidCreditsApplied(d decimal.Decimal) {
+	m.prepaid_credits_applied = &d
 }
 
-// CreditsApplied returns the value of the "credits_applied" field in the mutation.
-func (m *InvoiceLineItemMutation) CreditsApplied() (r decimal.Decimal, exists bool) {
-	v := m.credits_applied
+// PrepaidCreditsApplied returns the value of the "prepaid_credits_applied" field in the mutation.
+func (m *InvoiceLineItemMutation) PrepaidCreditsApplied() (r decimal.Decimal, exists bool) {
+	v := m.prepaid_credits_applied
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldCreditsApplied returns the old "credits_applied" field's value of the InvoiceLineItem entity.
+// OldPrepaidCreditsApplied returns the old "prepaid_credits_applied" field's value of the InvoiceLineItem entity.
 // If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceLineItemMutation) OldCreditsApplied(ctx context.Context) (v *decimal.Decimal, err error) {
+func (m *InvoiceLineItemMutation) OldPrepaidCreditsApplied(ctx context.Context) (v *decimal.Decimal, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreditsApplied is only allowed on UpdateOne operations")
+		return v, errors.New("OldPrepaidCreditsApplied is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreditsApplied requires an ID field in the mutation")
+		return v, errors.New("OldPrepaidCreditsApplied requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreditsApplied: %w", err)
+		return v, fmt.Errorf("querying old value for OldPrepaidCreditsApplied: %w", err)
 	}
-	return oldValue.CreditsApplied, nil
+	return oldValue.PrepaidCreditsApplied, nil
 }
 
-// ClearCreditsApplied clears the value of the "credits_applied" field.
-func (m *InvoiceLineItemMutation) ClearCreditsApplied() {
-	m.credits_applied = nil
-	m.clearedFields[invoicelineitem.FieldCreditsApplied] = struct{}{}
+// ClearPrepaidCreditsApplied clears the value of the "prepaid_credits_applied" field.
+func (m *InvoiceLineItemMutation) ClearPrepaidCreditsApplied() {
+	m.prepaid_credits_applied = nil
+	m.clearedFields[invoicelineitem.FieldPrepaidCreditsApplied] = struct{}{}
 }
 
-// CreditsAppliedCleared returns if the "credits_applied" field was cleared in this mutation.
-func (m *InvoiceLineItemMutation) CreditsAppliedCleared() bool {
-	_, ok := m.clearedFields[invoicelineitem.FieldCreditsApplied]
+// PrepaidCreditsAppliedCleared returns if the "prepaid_credits_applied" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) PrepaidCreditsAppliedCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldPrepaidCreditsApplied]
 	return ok
 }
 
-// ResetCreditsApplied resets all changes to the "credits_applied" field.
-func (m *InvoiceLineItemMutation) ResetCreditsApplied() {
-	m.credits_applied = nil
-	delete(m.clearedFields, invoicelineitem.FieldCreditsApplied)
+// ResetPrepaidCreditsApplied resets all changes to the "prepaid_credits_applied" field.
+func (m *InvoiceLineItemMutation) ResetPrepaidCreditsApplied() {
+	m.prepaid_credits_applied = nil
+	delete(m.clearedFields, invoicelineitem.FieldPrepaidCreditsApplied)
 }
 
 // SetLineItemDiscount sets the "line_item_discount" field.
@@ -30633,8 +30633,8 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.commitment_info != nil {
 		fields = append(fields, invoicelineitem.FieldCommitmentInfo)
 	}
-	if m.credits_applied != nil {
-		fields = append(fields, invoicelineitem.FieldCreditsApplied)
+	if m.prepaid_credits_applied != nil {
+		fields = append(fields, invoicelineitem.FieldPrepaidCreditsApplied)
 	}
 	if m.line_item_discount != nil {
 		fields = append(fields, invoicelineitem.FieldLineItemDiscount)
@@ -30706,8 +30706,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.Metadata()
 	case invoicelineitem.FieldCommitmentInfo:
 		return m.CommitmentInfo()
-	case invoicelineitem.FieldCreditsApplied:
-		return m.CreditsApplied()
+	case invoicelineitem.FieldPrepaidCreditsApplied:
+		return m.PrepaidCreditsApplied()
 	case invoicelineitem.FieldLineItemDiscount:
 		return m.LineItemDiscount()
 	case invoicelineitem.FieldInvoiceLevelDiscount:
@@ -30777,8 +30777,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldMetadata(ctx)
 	case invoicelineitem.FieldCommitmentInfo:
 		return m.OldCommitmentInfo(ctx)
-	case invoicelineitem.FieldCreditsApplied:
-		return m.OldCreditsApplied(ctx)
+	case invoicelineitem.FieldPrepaidCreditsApplied:
+		return m.OldPrepaidCreditsApplied(ctx)
 	case invoicelineitem.FieldLineItemDiscount:
 		return m.OldLineItemDiscount(ctx)
 	case invoicelineitem.FieldInvoiceLevelDiscount:
@@ -30988,12 +30988,12 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCommitmentInfo(v)
 		return nil
-	case invoicelineitem.FieldCreditsApplied:
+	case invoicelineitem.FieldPrepaidCreditsApplied:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetCreditsApplied(v)
+		m.SetPrepaidCreditsApplied(v)
 		return nil
 	case invoicelineitem.FieldLineItemDiscount:
 		v, ok := value.(decimal.Decimal)
@@ -31096,8 +31096,8 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldCommitmentInfo) {
 		fields = append(fields, invoicelineitem.FieldCommitmentInfo)
 	}
-	if m.FieldCleared(invoicelineitem.FieldCreditsApplied) {
-		fields = append(fields, invoicelineitem.FieldCreditsApplied)
+	if m.FieldCleared(invoicelineitem.FieldPrepaidCreditsApplied) {
+		fields = append(fields, invoicelineitem.FieldPrepaidCreditsApplied)
 	}
 	if m.FieldCleared(invoicelineitem.FieldLineItemDiscount) {
 		fields = append(fields, invoicelineitem.FieldLineItemDiscount)
@@ -31176,8 +31176,8 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 	case invoicelineitem.FieldCommitmentInfo:
 		m.ClearCommitmentInfo()
 		return nil
-	case invoicelineitem.FieldCreditsApplied:
-		m.ClearCreditsApplied()
+	case invoicelineitem.FieldPrepaidCreditsApplied:
+		m.ClearPrepaidCreditsApplied()
 		return nil
 	case invoicelineitem.FieldLineItemDiscount:
 		m.ClearLineItemDiscount()
@@ -31277,8 +31277,8 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 	case invoicelineitem.FieldCommitmentInfo:
 		m.ResetCommitmentInfo()
 		return nil
-	case invoicelineitem.FieldCreditsApplied:
-		m.ResetCreditsApplied()
+	case invoicelineitem.FieldPrepaidCreditsApplied:
+		m.ResetPrepaidCreditsApplied()
 		return nil
 	case invoicelineitem.FieldLineItemDiscount:
 		m.ResetLineItemDiscount()

@@ -36,33 +36,33 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			continue
 		}
 		lineItems = append(lineItems, &invoice.InvoiceLineItem{
-			ID:                   item.ID,
-			InvoiceID:            item.InvoiceID,
-			CustomerID:           item.CustomerID,
-			SubscriptionID:       item.SubscriptionID,
-			EntityID:             item.EntityID,
-			EntityType:           item.EntityType,
-			PlanDisplayName:      item.PlanDisplayName,
-			PriceID:              item.PriceID,
-			PriceType:            item.PriceType,
-			MeterID:              item.MeterID,
-			MeterDisplayName:     item.MeterDisplayName,
-			PriceUnitID:          item.PriceUnitID,
-			PriceUnit:            item.PriceUnit,
-			PriceUnitAmount:      item.PriceUnitAmount,
-			DisplayName:          item.DisplayName,
-			Amount:               item.Amount,
-			Quantity:             item.Quantity,
-			Currency:             item.Currency,
-			PeriodStart:          item.PeriodStart,
-			PeriodEnd:            item.PeriodEnd,
-			Metadata:             item.Metadata,
-			CommitmentInfo:       item.CommitmentInfo,
-			CreditsApplied:       item.CreditsApplied,
-			LineItemDiscount:     item.LineItemDiscount,
-			InvoiceLevelDiscount: item.InvoiceLevelDiscount,
-			EnvironmentID:        item.EnvironmentID,
-			BaseModel:            item.BaseModel,
+			ID:                    item.ID,
+			InvoiceID:             item.InvoiceID,
+			CustomerID:            item.CustomerID,
+			SubscriptionID:        item.SubscriptionID,
+			EntityID:              item.EntityID,
+			EntityType:            item.EntityType,
+			PlanDisplayName:       item.PlanDisplayName,
+			PriceID:               item.PriceID,
+			PriceType:             item.PriceType,
+			MeterID:               item.MeterID,
+			MeterDisplayName:      item.MeterDisplayName,
+			PriceUnitID:           item.PriceUnitID,
+			PriceUnit:             item.PriceUnit,
+			PriceUnitAmount:       item.PriceUnitAmount,
+			DisplayName:           item.DisplayName,
+			Amount:                item.Amount,
+			Quantity:              item.Quantity,
+			Currency:              item.Currency,
+			PeriodStart:           item.PeriodStart,
+			PeriodEnd:             item.PeriodEnd,
+			Metadata:              item.Metadata,
+			CommitmentInfo:        item.CommitmentInfo,
+			PrepaidCreditsApplied: item.PrepaidCreditsApplied,
+			LineItemDiscount:      item.LineItemDiscount,
+			InvoiceLevelDiscount:  item.InvoiceLevelDiscount,
+			EnvironmentID:         item.EnvironmentID,
+			BaseModel:             item.BaseModel,
 		})
 	}
 
@@ -81,7 +81,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountRemaining:     inv.AmountRemaining,
 		AdjustmentAmount:    inv.AdjustmentAmount,
 		RefundedAmount:      inv.RefundedAmount,
-		TotalCreditsApplied: inv.TotalCreditsApplied,
+		TotalPrepaidApplied: inv.TotalPrepaidApplied,
 		InvoiceNumber:       inv.InvoiceNumber,
 		IdempotencyKey:      inv.IdempotencyKey,
 		BillingSequence:     inv.BillingSequence,
@@ -388,7 +388,7 @@ func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice
 	for i, lineItem := range inv.LineItems {
 		if lineItem.ID == item.ID {
 			// Update the line item fields
-			inv.LineItems[i].CreditsApplied = item.CreditsApplied
+			inv.LineItems[i].PrepaidCreditsApplied = item.PrepaidCreditsApplied
 			inv.LineItems[i].LineItemDiscount = item.LineItemDiscount
 			inv.LineItems[i].InvoiceLevelDiscount = item.InvoiceLevelDiscount
 			inv.LineItems[i].Metadata = item.Metadata
