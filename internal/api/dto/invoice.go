@@ -512,13 +512,6 @@ type CreateInvoiceLineItemRequest struct {
 	// This represents discounts that are applied specifically to this line item (e.g., via line-item level coupons or discounts).
 	// This is simpler and more direct - when a discount is applied directly to a line item, it goes here.
 	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty" swaggertype:"string"`
-
-	// invoice_level_discount is the proportional share of an invoice-level discount attributed to this line item.
-	// When a discount is applied at the invoice level (e.g., invoice-level coupons), it is distributed proportionally
-	// across all line items based on their relative amounts. This field stores this line item's share of that invoice-level discount.
-	// Formula: (Line Item Amount / Total Invoice Amount) × Total Invoice-Level Discount Amount
-	// This allows tracking how much of the invoice-level discount is contributed by each line item.
-	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -579,16 +572,6 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 			Mark(ierr.ErrValidation)
 	}
 
-	// Validate invoice_level_discount if provided
-	if r.InvoiceLevelDiscount != nil && r.InvoiceLevelDiscount.IsNegative() {
-		return ierr.NewError("invoice_level_discount must be non-negative").
-			WithHint("invoice_level_discount cannot be negative").
-			WithReportableDetails(map[string]any{
-				"invoice_level_discount": r.InvoiceLevelDiscount.String(),
-			}).
-			Mark(ierr.ErrValidation)
-	}
-
 	return nil
 }
 
@@ -619,7 +602,6 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		CommitmentInfo:        r.CommitmentInfo,
 		PrepaidCreditsApplied: lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
 		LineItemDiscount:      lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount:  lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 	}
 }
 
