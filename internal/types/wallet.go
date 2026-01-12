@@ -275,7 +275,7 @@ const (
 type WalletConfig struct {
 	// AllowedPriceTypes is a list of price types that are allowed for the wallet
 	// nil means all price types are allowed
-	AllowedPriceTypes []WalletConfigPriceType `json:"allowed_price_types,omitempty"`
+	AllowedPriceTypes []WalletConfigPriceType `json:"-"`
 }
 
 func GetDefaultWalletConfig() *WalletConfig {
