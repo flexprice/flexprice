@@ -414,20 +414,18 @@ func (r *CancelFutureSubscriptionGrantsRequest) Validate() error {
 		return err
 	}
 
-	if r.EffectiveDate == nil || r.EffectiveDate.IsZero() {
-		return errors.NewError("effective_date is required").
-			WithHint("Please provide a valid effective date").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Allow dates that are at or within 5 seconds of the current time
-	// This accounts for timing differences between date calculation and validation
-	now := time.Now().UTC()
-	tolerance := 5 * time.Second
-	if r.EffectiveDate.Before(now.Add(-tolerance)) {
-		return errors.NewError("effective_date must be at or after the current time (within tolerance)").
-			WithHint("Please provide a valid effective date that is not too far in the past").
-			Mark(ierr.ErrValidation)
+	// EffectiveDate is optional - if not provided, it defaults to now in the implementation
+	// Only validate if it's provided
+	if r.EffectiveDate != nil && !r.EffectiveDate.IsZero() {
+		// Allow dates that are at or within 5 seconds of the current time
+		// This accounts for timing differences between date calculation and validation
+		now := time.Now().UTC()
+		tolerance := 5 * time.Second
+		if r.EffectiveDate.Before(now.Add(-tolerance)) {
+			return errors.NewError("effective_date must be at or after the current time (within tolerance)").
+				WithHint("Please provide a valid effective date that is not too far in the past").
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	return nil
