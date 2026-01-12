@@ -94,7 +94,7 @@ func (r *invoiceRepository) Create(ctx context.Context, inv *domainInvoice.Invoi
 		SetEnvironmentID(inv.EnvironmentID).
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
-		SetTotalCreditsApplied(inv.TotalCreditsApplied).
+		SetTotalPrepaidApplied(inv.TotalPrepaidApplied).
 		Save(ctx)
 
 	if err != nil {
@@ -197,7 +197,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 			SetNillablePeriodStart(inv.PeriodStart).
 			SetNillablePeriodEnd(inv.PeriodEnd).
 			SetEnvironmentID(inv.EnvironmentID).
-			SetTotalCreditsApplied(inv.TotalCreditsApplied).
+			SetTotalPrepaidApplied(inv.TotalPrepaidApplied).
 			Save(ctx)
 		if err != nil {
 			if ent.IsConstraintError(err) {
@@ -264,7 +264,7 @@ func (r *invoiceRepository) CreateWithLineItems(ctx context.Context, inv *domain
 					SetMetadata(item.Metadata).
 					SetEnvironmentID(item.EnvironmentID).
 					SetCommitmentInfo(item.CommitmentInfo).
-					SetCreditsApplied(item.CreditsApplied).
+					SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 					SetLineItemDiscount(item.LineItemDiscount).
 					SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 					SetStatus(string(item.Status)).
@@ -337,7 +337,7 @@ func (r *invoiceRepository) AddLineItems(ctx context.Context, invoiceID string, 
 				SetNillablePeriodEnd(item.PeriodEnd).
 				SetMetadata(item.Metadata).
 				SetCommitmentInfo(item.CommitmentInfo).
-				SetCreditsApplied(item.CreditsApplied).
+				SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 				SetLineItemDiscount(item.LineItemDiscount).
 				SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 				SetStatus(string(item.Status)).
@@ -473,7 +473,7 @@ func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoi
 		SetMetadata(inv.Metadata).
 		SetAdjustmentAmount(inv.AdjustmentAmount).
 		SetRefundedAmount(inv.RefundedAmount).
-		SetTotalCreditsApplied(inv.TotalCreditsApplied).
+		SetTotalPrepaidApplied(inv.TotalPrepaidApplied).
 		SetUpdatedAt(time.Now()).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetTotal(inv.Total).
@@ -1277,7 +1277,7 @@ func (r *invoiceRepository) UpdateLineItem(ctx context.Context, item *domainInvo
 	client := r.client.Writer(ctx)
 
 	_, err := client.InvoiceLineItem.UpdateOneID(item.ID).
-		SetCreditsApplied(item.CreditsApplied).
+		SetPrepaidCreditsApplied(item.PrepaidCreditsApplied).
 		SetLineItemDiscount(item.LineItemDiscount).
 		SetInvoiceLevelDiscount(item.InvoiceLevelDiscount).
 		SetMetadata(item.Metadata).

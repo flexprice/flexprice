@@ -77,8 +77,8 @@ type InvoiceLineItem struct {
 	Metadata map[string]string `json:"metadata,omitempty"`
 	// CommitmentInfo holds the value of the "commitment_info" field.
 	CommitmentInfo *types.CommitmentInfo `json:"commitment_info,omitempty"`
-	// Amount in invoice currency reduced from line item due to credit application
-	CreditsApplied *decimal.Decimal `json:"credits_applied,omitempty"`
+	// Amount in invoice currency reduced from line item due to prepaid credits application
+	PrepaidCreditsApplied *decimal.Decimal `json:"prepaid_credits_applied,omitempty"`
 	// Discount amount in invoice currency applied to this line item
 	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty"`
 	// Discount amount in invoice currency applied to this line item due to invoice level discount
@@ -125,7 +125,7 @@ func (*InvoiceLineItem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount:
+		case invoicelineitem.FieldPriceUnitAmount, invoicelineitem.FieldPrepaidCreditsApplied, invoicelineitem.FieldLineItemDiscount, invoicelineitem.FieldInvoiceLevelDiscount:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoicelineitem.FieldMetadata, invoicelineitem.FieldCommitmentInfo:
 			values[i] = new([]byte)
@@ -342,12 +342,12 @@ func (ili *InvoiceLineItem) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field commitment_info: %w", err)
 				}
 			}
-		case invoicelineitem.FieldCreditsApplied:
+		case invoicelineitem.FieldPrepaidCreditsApplied:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field credits_applied", values[i])
+				return fmt.Errorf("unexpected type %T for field prepaid_credits_applied", values[i])
 			} else if value.Valid {
-				ili.CreditsApplied = new(decimal.Decimal)
-				*ili.CreditsApplied = *value.S.(*decimal.Decimal)
+				ili.PrepaidCreditsApplied = new(decimal.Decimal)
+				*ili.PrepaidCreditsApplied = *value.S.(*decimal.Decimal)
 			}
 		case invoicelineitem.FieldLineItemDiscount:
 			if value, ok := values[i].(*sql.NullScanner); !ok {
@@ -521,8 +521,8 @@ func (ili *InvoiceLineItem) String() string {
 	builder.WriteString("commitment_info=")
 	builder.WriteString(fmt.Sprintf("%v", ili.CommitmentInfo))
 	builder.WriteString(", ")
-	if v := ili.CreditsApplied; v != nil {
-		builder.WriteString("credits_applied=")
+	if v := ili.PrepaidCreditsApplied; v != nil {
+		builder.WriteString("prepaid_credits_applied=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")

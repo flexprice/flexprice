@@ -2776,7 +2776,7 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 
 	// Discount-first-then-tax: total = subtotal - discount - credits + tax
 	// All components are already rounded, so the result is naturally rounded
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied).Add(inv.TotalTax)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidApplied).Add(inv.TotalTax)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 	}
@@ -3697,15 +3697,15 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 	}
 
 	// Update invoice with credits applied
-	// TotalCreditsApplied is already rounded at source (each credit rounded before summing)
-	inv.TotalCreditsApplied = creditResult.TotalCreditsApplied
+	// TotalPrepaidApplied is already rounded at source (each prepaid rounded before summing)
+	inv.TotalPrepaidApplied = creditResult.TotalPrepaidApplied
 
-	// Recalculate total after credits are applied
-	// Formula: total = subtotal - discount - credits + tax
+	// Recalculate total after prepaid is applied
+	// Formula: total = subtotal - discount - prepaid + tax
 	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
-	// total = subtotal - discount - credits
+	// total = subtotal - discount - prepaid
 	// All components are already rounded, so the result is naturally rounded
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalCreditsApplied)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 	}
@@ -3717,7 +3717,7 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 
 	s.Logger.Debugw("successfully applied credit adjustments to invoice",
 		"invoice_id", inv.ID,
-		"total_credits_applied", inv.TotalCreditsApplied,
+		"total_prepaid_applied", inv.TotalPrepaidApplied,
 		"new_total", inv.Total,
 		"subtotal", inv.Subtotal,
 		"total_discount", inv.TotalDiscount,

@@ -1763,16 +1763,16 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithoutInvoicingCusto
 // createLineItem is a helper function to create a line item with specified amount
 func createLineItem(id string, amount decimal.Decimal) *invoice.InvoiceLineItem {
 	return &invoice.InvoiceLineItem{
-		ID:                   id,
-		InvoiceID:            "inv_test",
-		CustomerID:           "cust_test",
-		Amount:               amount,
-		Quantity:             decimal.NewFromInt(1),
-		Currency:             "usd",
-		EnvironmentID:        "env_test",
-		CreditsApplied:       decimal.Zero,
-		LineItemDiscount:     decimal.Zero,
-		InvoiceLevelDiscount: decimal.Zero,
+		ID:                    id,
+		InvoiceID:             "inv_test",
+		CustomerID:            "cust_test",
+		Amount:                amount,
+		Quantity:              decimal.NewFromInt(1),
+		Currency:              "usd",
+		EnvironmentID:         "env_test",
+		PrepaidCreditsApplied: decimal.Zero,
+		LineItemDiscount:      decimal.Zero,
+		InvoiceLevelDiscount:  decimal.Zero,
 	}
 }
 

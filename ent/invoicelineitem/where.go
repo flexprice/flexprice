@@ -199,9 +199,9 @@ func PeriodEnd(v time.Time) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPeriodEnd, v))
 }
 
-// CreditsApplied applies equality check predicate on the "credits_applied" field. It's identical to CreditsAppliedEQ.
-func CreditsApplied(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCreditsApplied, v))
+// PrepaidCreditsApplied applies equality check predicate on the "prepaid_credits_applied" field. It's identical to PrepaidCreditsAppliedEQ.
+func PrepaidCreditsApplied(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPrepaidCreditsApplied, v))
 }
 
 // LineItemDiscount applies equality check predicate on the "line_item_discount" field. It's identical to LineItemDiscountEQ.
@@ -1957,54 +1957,54 @@ func CommitmentInfoNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldCommitmentInfo))
 }
 
-// CreditsAppliedEQ applies the EQ predicate on the "credits_applied" field.
-func CreditsAppliedEQ(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldEQ(FieldCreditsApplied, v))
+// PrepaidCreditsAppliedEQ applies the EQ predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldPrepaidCreditsApplied, v))
 }
 
-// CreditsAppliedNEQ applies the NEQ predicate on the "credits_applied" field.
-func CreditsAppliedNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldCreditsApplied, v))
+// PrepaidCreditsAppliedNEQ applies the NEQ predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldPrepaidCreditsApplied, v))
 }
 
-// CreditsAppliedIn applies the In predicate on the "credits_applied" field.
-func CreditsAppliedIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldIn(FieldCreditsApplied, vs...))
+// PrepaidCreditsAppliedIn applies the In predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldPrepaidCreditsApplied, vs...))
 }
 
-// CreditsAppliedNotIn applies the NotIn predicate on the "credits_applied" field.
-func CreditsAppliedNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldCreditsApplied, vs...))
+// PrepaidCreditsAppliedNotIn applies the NotIn predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldPrepaidCreditsApplied, vs...))
 }
 
-// CreditsAppliedGT applies the GT predicate on the "credits_applied" field.
-func CreditsAppliedGT(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldGT(FieldCreditsApplied, v))
+// PrepaidCreditsAppliedGT applies the GT predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedGT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldPrepaidCreditsApplied, v))
 }
 
-// CreditsAppliedGTE applies the GTE predicate on the "credits_applied" field.
-func CreditsAppliedGTE(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldGTE(FieldCreditsApplied, v))
+// PrepaidCreditsAppliedGTE applies the GTE predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedGTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldPrepaidCreditsApplied, v))
 }
 
-// CreditsAppliedLT applies the LT predicate on the "credits_applied" field.
-func CreditsAppliedLT(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldLT(FieldCreditsApplied, v))
+// PrepaidCreditsAppliedLT applies the LT predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedLT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldPrepaidCreditsApplied, v))
 }
 
-// CreditsAppliedLTE applies the LTE predicate on the "credits_applied" field.
-func CreditsAppliedLTE(v decimal.Decimal) predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldLTE(FieldCreditsApplied, v))
+// PrepaidCreditsAppliedLTE applies the LTE predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedLTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldPrepaidCreditsApplied, v))
 }
 
-// CreditsAppliedIsNil applies the IsNil predicate on the "credits_applied" field.
-func CreditsAppliedIsNil() predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldCreditsApplied))
+// PrepaidCreditsAppliedIsNil applies the IsNil predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldPrepaidCreditsApplied))
 }
 
-// CreditsAppliedNotNil applies the NotNil predicate on the "credits_applied" field.
-func CreditsAppliedNotNil() predicate.InvoiceLineItem {
-	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldCreditsApplied))
+// PrepaidCreditsAppliedNotNil applies the NotNil predicate on the "prepaid_credits_applied" field.
+func PrepaidCreditsAppliedNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldPrepaidCreditsApplied))
 }
 
 // LineItemDiscountEQ applies the EQ predicate on the "line_item_discount" field.
