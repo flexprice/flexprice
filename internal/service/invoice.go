@@ -265,13 +265,8 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
-		// Apply coupons first (invoice and line-item)
-		if err := s.applyCouponsToInvoice(ctx, inv, req); err != nil {
-			return err
-		}
-
-		// Apply credit adjustments
-		if err := s.applyCreditAdjustmentsToInvoice(ctx, inv); err != nil {
+		// Apply credit adjustments and coupons
+		if err := s.applyCreditsAndCouponsToInvoice(ctx, inv, req); err != nil {
 			return err
 		}
 
@@ -2695,47 +2690,6 @@ func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *inv
 	return nil
 }
 
-// applyCouponsToInvoice applies coupons to an invoice and updates invoice totals
-func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
-	// Use coupon service to apply coupons (empty check is handled by the service)
-	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
-
-	// Apply both invoice-level and line item-level coupons
-	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, inv, req.InvoiceCoupons, req.LineItemCoupons)
-	if err != nil {
-		return err
-	}
-
-	// Update the invoice with calculated discount amounts
-	// TotalDiscount is already rounded at source (each discount rounded before summing)
-	inv.TotalDiscount = couponResult.TotalDiscountAmount
-
-	// Calculate new total based on subtotal - discount (discount-first approach)
-	// This ensures consistency with tax calculation which uses subtotal - discount
-	// ApplyDiscount already ensures individual discounts don't make prices negative,
-	// and the service applies discounts sequentially, so total discount is already validated
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
-	if newTotal.IsNegative() {
-		newTotal = decimal.Zero
-		inv.TotalDiscount = inv.Subtotal
-	}
-
-	// Total is computed from rounded values (Subtotal and TotalDiscount), so no additional rounding needed
-	inv.Total = newTotal
-
-	// AmountDue and AmountRemaining are computed from already-rounded values
-	inv.AmountDue = inv.Total
-	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
-
-	s.Logger.Infow("successfully updated invoice with coupon discounts",
-		"invoice_id", inv.ID,
-		"total_discount", inv.TotalDiscount,
-		"invoice_level_coupons", len(req.InvoiceCoupons),
-		"line_item_level_coupons", len(req.LineItemCoupons),
-		"new_total", inv.Total)
-	return nil
-}
-
 // applyTaxesToInvoice applies taxes to an invoice.
 // For one-off invoices, uses prepared tax rates from req.PreparedTaxRates.
 // For subscription invoices, prepares tax rates from subscription associations.
@@ -3541,18 +3495,16 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	return nil
 }
 
-// applyCreditAdjustmentsToInvoice applies wallet credits as adjustments to invoice line items
-func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, inv *invoice.Invoice) error {
-	s.Logger.Debugw("applying credit adjustments to invoice",
+// applyCreditsAndCouponsToInvoice applies wallet credits and coupons to invoice, updating totals once
+func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
+	s.Logger.Debugw("applying credit adjustments and coupons to invoice",
 		"invoice_id", inv.ID,
 		"customer_id", inv.CustomerID,
 		"currency", inv.Currency,
 	)
 
-	// Create credit adjustment service
+	// Step 1: Apply credit adjustments
 	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
-
-	// Apply credits to the invoice
 	creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(ctx, inv)
 	if err != nil {
 		return err
@@ -3560,29 +3512,47 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 
 	// Update invoice with credits applied
 	// TotalPrepaidApplied is already rounded at source (each prepaid rounded before summing)
-	inv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidApplied
+	inv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidCreditsApplied
 
-	// Recalculate total after prepaid is applied
-	// Formula: total = subtotal - discount - prepaid + tax
-	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
-	// total = subtotal - discount - prepaid
-	// All components are already rounded, so the result is naturally rounded
+	// Step 2: Apply coupons (invoice and line-item)
+	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
+	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, inv, req.InvoiceCoupons, req.LineItemCoupons)
+	if err != nil {
+		return err
+	}
+
+	// Update the invoice with calculated discount amounts
+	// TotalDiscount is already rounded at source (each discount rounded before summing)
+	inv.TotalDiscount = couponResult.TotalDiscountAmount
+
+	// Step 3: Calculate new total based on subtotal - discount - prepaid (discount-first approach)
+	// This ensures consistency with tax calculation which uses subtotal - discount
+	// ApplyDiscount already ensures individual discounts don't make prices negative,
+	// and the service applies discounts sequentially, so total discount is already validated
 	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
+		// If total becomes negative, cap the discount at subtotal
+		if inv.TotalDiscount.GreaterThan(inv.Subtotal) {
+			inv.TotalDiscount = inv.Subtotal
+		}
 	}
 
-	// Total is computed from rounded values, no additional rounding needed
+	// Total is computed from rounded values (Subtotal, TotalDiscount, and TotalPrepaidCreditsApplied), so no additional rounding needed
 	inv.Total = newTotal
+
+	// AmountDue and AmountRemaining are computed from already-rounded values
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
-	s.Logger.Debugw("successfully applied credit adjustments to invoice",
+	s.Logger.Infow("successfully applied credit adjustments and coupons to invoice",
 		"invoice_id", inv.ID,
 		"total_prepaid_applied", inv.TotalPrepaidCreditsApplied,
+		"total_discount", inv.TotalDiscount,
+		"invoice_level_coupons", len(req.InvoiceCoupons),
+		"line_item_level_coupons", len(req.LineItemCoupons),
 		"new_total", inv.Total,
 		"subtotal", inv.Subtotal,
-		"total_discount", inv.TotalDiscount,
 	)
 
 	return nil
