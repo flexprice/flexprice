@@ -230,7 +230,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		// persisted to the database. The caller is responsible for updating the invoice
 		// in the database if they need to persist TotalPrepaidApplied.
 		// This design allows callers to batch invoice updates with other operations.
-		inv.TotalPrepaidApplied = totalApplied
+		inv.TotalPrepaidCreditsApplied = totalApplied
 
 		result = &CreditAdjustmentResult{
 			TotalPrepaidApplied: totalApplied,

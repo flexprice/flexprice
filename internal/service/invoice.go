@@ -2635,7 +2635,7 @@ func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice
 	// This ensures consistency with tax calculation which uses subtotal - discount
 	// ApplyDiscount already ensures individual discounts don't make prices negative,
 	// and the service applies discounts sequentially, so total discount is already validated
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 		inv.TotalDiscount = inv.Subtotal
@@ -2696,7 +2696,7 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 
 	// Discount-first-then-tax: total = subtotal - discount - credits + tax
 	// All components are already rounded, so the result is naturally rounded
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidApplied).Add(inv.TotalTax)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied).Add(inv.TotalTax)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 	}
@@ -3481,14 +3481,14 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 
 	// Update invoice with credits applied
 	// TotalPrepaidApplied is already rounded at source (each prepaid rounded before summing)
-	inv.TotalPrepaidApplied = creditResult.TotalPrepaidApplied
+	inv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidApplied
 
 	// Recalculate total after prepaid is applied
 	// Formula: total = subtotal - discount - prepaid + tax
 	// Note: Tax will be added later in applyTaxesToInvoice, so for now we calculate:
 	// total = subtotal - discount - prepaid
 	// All components are already rounded, so the result is naturally rounded
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidApplied)
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
 	}
@@ -3500,7 +3500,7 @@ func (s *invoiceService) applyCreditAdjustmentsToInvoice(ctx context.Context, in
 
 	s.Logger.Debugw("successfully applied credit adjustments to invoice",
 		"invoice_id", inv.ID,
-		"total_prepaid_applied", inv.TotalPrepaidApplied,
+		"total_prepaid_applied", inv.TotalPrepaidCreditsApplied,
 		"new_total", inv.Total,
 		"subtotal", inv.Subtotal,
 		"total_discount", inv.TotalDiscount,

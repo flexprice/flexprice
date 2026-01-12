@@ -215,7 +215,6 @@ func (s *CreditAdjustmentServiceSuite) createLineItemForCalculation(amount decim
 		Quantity:              decimal.NewFromInt(1),
 		PriceType:             priceType,
 		LineItemDiscount:      lineItemDiscount,
-		InvoiceLevelDiscount:  invoiceLevelDiscount,
 		PrepaidCreditsApplied: decimal.Zero,
 		BaseModel:             types.GetDefaultBaseModel(s.GetContext()),
 	}
@@ -246,7 +245,7 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_NoEligibleWalle
 
 	// Assert
 	s.NoError(err)
-	s.True(inv.TotalPrepaidApplied.IsZero())
+	s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	s.True(inv.LineItems[0].PrepaidCreditsApplied.IsZero())
 	s.True(inv.LineItems[1].PrepaidCreditsApplied.IsZero())
 }
@@ -271,12 +270,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_WithEligibleWal
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
 		// This is expected behavior when eligible credits can't be found
-		s.True(inv.TotalPrepaidApplied.IsZero())
+		s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	} else {
 		// Service succeeded - credits were applied
 		s.NotNil(result)
-		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
+		s.True(inv.TotalPrepaidCreditsApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
 	}
 }
 
@@ -296,12 +295,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InsufficientCre
 	// Assert - service applies what it can based on available credits
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
-		s.True(inv.TotalPrepaidApplied.IsZero())
+		s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	} else {
 		// Service succeeded - partial credits may be applied
 		s.NotNil(result)
-		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(25.00)))
+		s.True(inv.TotalPrepaidCreditsApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(25.00)))
 	}
 }
 
@@ -323,12 +322,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_MultiWalletSequ
 	// Assert - service applies credits sequentially across line items using single wallet
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
-		s.True(inv.TotalPrepaidApplied.IsZero())
+		s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	} else {
 		// Service succeeded - credits were applied
 		s.NotNil(result)
-		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
+		s.True(inv.TotalPrepaidCreditsApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(70.00)))
 	}
 }
 
@@ -346,7 +345,7 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_CurrencyMismatc
 
 	// Assert - service doesn't apply credits due to currency mismatch
 	s.NoError(err)
-	s.True(inv.TotalPrepaidApplied.IsZero())
+	s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	s.True(inv.LineItems[0].PrepaidCreditsApplied.IsZero())
 }
 
@@ -367,12 +366,12 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_InactiveWalletF
 	// Assert - service only uses active wallets
 	if err != nil {
 		// Service returned error (e.g., insufficient balance when debiting)
-		s.True(inv.TotalPrepaidApplied.IsZero())
+		s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	} else {
 		// Service succeeded - credits applied only from active wallet
 		s.NotNil(result)
-		s.True(inv.TotalPrepaidApplied.GreaterThanOrEqual(decimal.Zero))
-		s.True(inv.TotalPrepaidApplied.LessThanOrEqual(decimal.NewFromFloat(30.00)))
+		s.True(inv.TotalPrepaidCreditsApplied.GreaterThanOrEqual(decimal.Zero))
+		s.True(inv.TotalPrepaidCreditsApplied.LessThanOrEqual(decimal.NewFromFloat(30.00)))
 	}
 }
 
@@ -390,7 +389,7 @@ func (s *CreditAdjustmentServiceSuite) TestApplyCreditsToInvoice_ZeroBalanceWall
 
 	// Assert
 	s.NoError(err)
-	s.True(inv.TotalPrepaidApplied.IsZero())
+	s.True(inv.TotalPrepaidCreditsApplied.IsZero())
 	s.True(inv.LineItems[0].PrepaidCreditsApplied.IsZero())
 
 	// Verify no credit adjustment transactions were created
