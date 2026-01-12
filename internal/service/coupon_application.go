@@ -330,29 +330,13 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, in
 			}
 		}
 
-		// Distribute invoice-level discount proportionally across all line items
-		// This uses the remainder allocation pattern to ensure exact distribution without rounding errors
-		// Note: We use lineItem.Amount for proportional distribution, which remains unchanged throughout
-		// the coupon application flow (we only set LineItemDiscount, never modify Amount)
-		if !invoiceLevelDiscountTotal.IsZero() && len(inv.LineItems) > 0 {
-			invoiceService := NewInvoiceService(s.ServiceParams)
-			if err := invoiceService.DistributeInvoiceLevelDiscount(txCtx, inv.LineItems, invoiceLevelDiscountTotal); err != nil {
-				s.Logger.Errorw("failed to distribute invoice-level discount",
-					"invoice_id", inv.ID,
-					"total_invoice_level_discount", invoiceLevelDiscountTotal,
-					"error", err)
-				return err
-			}
-		}
-
 		// Update line items with discounts
 		for _, lineItem := range inv.LineItems {
-			if !lineItem.LineItemDiscount.IsZero() || !lineItem.InvoiceLevelDiscount.IsZero() {
+			if !lineItem.LineItemDiscount.IsZero() {
 				if err := s.InvoiceRepo.UpdateLineItem(txCtx, lineItem); err != nil {
 					s.Logger.Errorw("failed to update line item with discount",
 						"line_item_id", lineItem.ID,
 						"line_item_discount", lineItem.LineItemDiscount,
-						"invoice_level_discount", lineItem.InvoiceLevelDiscount,
 						"error", err)
 					return err
 				}
