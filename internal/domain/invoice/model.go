@@ -117,9 +117,9 @@ type Invoice struct {
 	// total_tax is the sum of all taxes combined at the invoice level.
 	TotalTax decimal.Decimal `json:"total_tax"`
 
-	// total_prepaid_applied is the total amount of prepaid applied to this invoice.
+	// total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.
 	// This represents the sum of all prepaid applications (from credit grants, credit notes, etc.) that reduce the invoice amount.
-	TotalPrepaidApplied decimal.Decimal `json:"total_prepaid_applied"`
+	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied"`
 
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
@@ -162,25 +162,25 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		AdjustmentAmount: e.AdjustmentAmount,
 		RefundedAmount:   e.RefundedAmount,
 		// TODO: remove optional and nillable after migration
-		TotalPrepaidApplied: lo.FromPtrOr(e.TotalPrepaidApplied, decimal.Zero),
-		InvoiceNumber:       e.InvoiceNumber,
-		IdempotencyKey:      e.IdempotencyKey,
-		BillingSequence:     e.BillingSequence,
-		Description:         e.Description,
-		DueDate:             e.DueDate,
-		PaidAt:              e.PaidAt,
-		VoidedAt:            e.VoidedAt,
-		FinalizedAt:         e.FinalizedAt,
-		BillingPeriod:       lo.ToPtr(string(lo.FromPtr(e.BillingPeriod))),
-		PeriodStart:         e.PeriodStart,
-		PeriodEnd:           e.PeriodEnd,
-		InvoicePDFURL:       e.InvoicePdfURL,
-		BillingReason:       e.BillingReason,
-		Metadata:            e.Metadata,
-		LineItems:           lineItems,
-		CouponApplications:  couponApplications,
-		Version:             e.Version,
-		EnvironmentID:       e.EnvironmentID,
+		TotalPrepaidCreditsApplied: lo.FromPtrOr(e.TotalPrepaidCreditsApplied, decimal.Zero),
+		InvoiceNumber:              e.InvoiceNumber,
+		IdempotencyKey:             e.IdempotencyKey,
+		BillingSequence:            e.BillingSequence,
+		Description:                e.Description,
+		DueDate:                    e.DueDate,
+		PaidAt:                     e.PaidAt,
+		VoidedAt:                   e.VoidedAt,
+		FinalizedAt:                e.FinalizedAt,
+		BillingPeriod:              lo.ToPtr(string(lo.FromPtr(e.BillingPeriod))),
+		PeriodStart:                e.PeriodStart,
+		PeriodEnd:                  e.PeriodEnd,
+		InvoicePDFURL:              e.InvoicePdfURL,
+		BillingReason:              e.BillingReason,
+		Metadata:                   e.Metadata,
+		LineItems:                  lineItems,
+		CouponApplications:         couponApplications,
+		Version:                    e.Version,
+		EnvironmentID:              e.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

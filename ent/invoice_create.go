@@ -488,16 +488,16 @@ func (ic *InvoiceCreate) SetNillableBillingSequence(i *int) *InvoiceCreate {
 	return ic
 }
 
-// SetTotalPrepaidApplied sets the "total_prepaid_applied" field.
-func (ic *InvoiceCreate) SetTotalPrepaidApplied(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetTotalPrepaidApplied(d)
+// SetTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field.
+func (ic *InvoiceCreate) SetTotalPrepaidCreditsApplied(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotalPrepaidCreditsApplied(d)
 	return ic
 }
 
-// SetNillableTotalPrepaidApplied sets the "total_prepaid_applied" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTotalPrepaidApplied(d *decimal.Decimal) *InvoiceCreate {
+// SetNillableTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotalPrepaidCreditsApplied(d *decimal.Decimal) *InvoiceCreate {
 	if d != nil {
-		ic.SetTotalPrepaidApplied(*d)
+		ic.SetTotalPrepaidCreditsApplied(*d)
 	}
 	return ic
 }
@@ -651,9 +651,9 @@ func (ic *InvoiceCreate) defaults() {
 		v := invoice.DefaultVersion
 		ic.mutation.SetVersion(v)
 	}
-	if _, ok := ic.mutation.TotalPrepaidApplied(); !ok {
-		v := invoice.DefaultTotalPrepaidApplied
-		ic.mutation.SetTotalPrepaidApplied(v)
+	if _, ok := ic.mutation.TotalPrepaidCreditsApplied(); !ok {
+		v := invoice.DefaultTotalPrepaidCreditsApplied
+		ic.mutation.SetTotalPrepaidCreditsApplied(v)
 	}
 }
 
@@ -912,9 +912,9 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
 		_node.BillingSequence = &value
 	}
-	if value, ok := ic.mutation.TotalPrepaidApplied(); ok {
-		_spec.SetField(invoice.FieldTotalPrepaidApplied, field.TypeOther, value)
-		_node.TotalPrepaidApplied = &value
+	if value, ok := ic.mutation.TotalPrepaidCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther, value)
+		_node.TotalPrepaidCreditsApplied = &value
 	}
 	if value, ok := ic.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)

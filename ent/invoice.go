@@ -92,8 +92,8 @@ type Invoice struct {
 	InvoiceNumber *string `json:"invoice_number,omitempty"`
 	// Sequence number for subscription billing periods
 	BillingSequence *int `json:"billing_sequence,omitempty"`
-	// Total prepaid applied to this invoice
-	TotalPrepaidApplied *decimal.Decimal `json:"total_prepaid_applied,omitempty"`
+	// Total prepaid credits applied to this invoice
+	TotalPrepaidCreditsApplied *decimal.Decimal `json:"total_prepaid_credits_applied,omitempty"`
 	// Key for ensuring idempotent invoice creation
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -136,7 +136,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalPrepaidApplied:
+		case invoice.FieldTotalTax, invoice.FieldTotalDiscount, invoice.FieldTotalPrepaidCreditsApplied:
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case invoice.FieldMetadata:
 			values[i] = new([]byte)
@@ -400,12 +400,12 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.BillingSequence = new(int)
 				*i.BillingSequence = int(value.Int64)
 			}
-		case invoice.FieldTotalPrepaidApplied:
+		case invoice.FieldTotalPrepaidCreditsApplied:
 			if value, ok := values[j].(*sql.NullScanner); !ok {
-				return fmt.Errorf("unexpected type %T for field total_prepaid_applied", values[j])
+				return fmt.Errorf("unexpected type %T for field total_prepaid_credits_applied", values[j])
 			} else if value.Valid {
-				i.TotalPrepaidApplied = new(decimal.Decimal)
-				*i.TotalPrepaidApplied = *value.S.(*decimal.Decimal)
+				i.TotalPrepaidCreditsApplied = new(decimal.Decimal)
+				*i.TotalPrepaidCreditsApplied = *value.S.(*decimal.Decimal)
 			}
 		case invoice.FieldIdempotencyKey:
 			if value, ok := values[j].(*sql.NullString); !ok {
@@ -594,8 +594,8 @@ func (i *Invoice) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
-	if v := i.TotalPrepaidApplied; v != nil {
-		builder.WriteString("total_prepaid_applied=")
+	if v := i.TotalPrepaidCreditsApplied; v != nil {
+		builder.WriteString("total_prepaid_credits_applied=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
