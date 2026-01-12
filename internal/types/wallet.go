@@ -85,7 +85,6 @@ func (t TransactionReason) Validate() error {
 		string(TransactionReasonWalletTermination),
 		string(TransactionReasonManualBalanceDebit),
 		string(TransactionReasonCreditAdjustment),
-		string(TransactionReasonCreditAdjustment),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid transaction reason").
