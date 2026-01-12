@@ -155,7 +155,7 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
-		field.Other("credits_applied", decimal.Decimal{}).
+		field.Other("prepaid_credits_applied", decimal.Decimal{}).
 			SchemaType(map[string]string{
 				"postgres": "numeric(20,8)",
 			}).
@@ -163,7 +163,7 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Default(decimal.Zero).
-			Comment("Amount in invoice currency reduced from line item due to credit application"),
+			Comment("Amount in invoice currency reduced from line item due to prepaid credits application"),
 
 		field.Other("line_item_discount", decimal.Decimal{}).
 			SchemaType(map[string]string{

@@ -71,8 +71,8 @@ const (
 	FieldMetadata = "metadata"
 	// FieldCommitmentInfo holds the string denoting the commitment_info field in the database.
 	FieldCommitmentInfo = "commitment_info"
-	// FieldCreditsApplied holds the string denoting the credits_applied field in the database.
-	FieldCreditsApplied = "credits_applied"
+	// FieldPrepaidCreditsApplied holds the string denoting the prepaid_credits_applied field in the database.
+	FieldPrepaidCreditsApplied = "prepaid_credits_applied"
 	// FieldLineItemDiscount holds the string denoting the line_item_discount field in the database.
 	FieldLineItemDiscount = "line_item_discount"
 	// FieldInvoiceLevelDiscount holds the string denoting the invoice_level_discount field in the database.
@@ -130,7 +130,7 @@ var Columns = []string{
 	FieldPeriodEnd,
 	FieldMetadata,
 	FieldCommitmentInfo,
-	FieldCreditsApplied,
+	FieldPrepaidCreditsApplied,
 	FieldLineItemDiscount,
 	FieldInvoiceLevelDiscount,
 }
@@ -168,8 +168,8 @@ var (
 	DefaultQuantity decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
-	// DefaultCreditsApplied holds the default value on creation for the "credits_applied" field.
-	DefaultCreditsApplied decimal.Decimal
+	// DefaultPrepaidCreditsApplied holds the default value on creation for the "prepaid_credits_applied" field.
+	DefaultPrepaidCreditsApplied decimal.Decimal
 	// DefaultLineItemDiscount holds the default value on creation for the "line_item_discount" field.
 	DefaultLineItemDiscount decimal.Decimal
 	// DefaultInvoiceLevelDiscount holds the default value on creation for the "invoice_level_discount" field.
@@ -314,9 +314,9 @@ func ByPeriodEnd(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPeriodEnd, opts...).ToFunc()
 }
 
-// ByCreditsApplied orders the results by the credits_applied field.
-func ByCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldCreditsApplied, opts...).ToFunc()
+// ByPrepaidCreditsApplied orders the results by the prepaid_credits_applied field.
+func ByPrepaidCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrepaidCreditsApplied, opts...).ToFunc()
 }
 
 // ByLineItemDiscount orders the results by the line_item_discount field.

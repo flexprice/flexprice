@@ -88,8 +88,8 @@ const (
 	FieldInvoiceNumber = "invoice_number"
 	// FieldBillingSequence holds the string denoting the billing_sequence field in the database.
 	FieldBillingSequence = "billing_sequence"
-	// FieldTotalCreditsApplied holds the string denoting the total_credits_applied field in the database.
-	FieldTotalCreditsApplied = "total_credits_applied"
+	// FieldTotalPrepaidApplied holds the string denoting the total_prepaid_applied field in the database.
+	FieldTotalPrepaidApplied = "total_prepaid_applied"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
 	FieldIdempotencyKey = "idempotency_key"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
@@ -153,7 +153,7 @@ var Columns = []string{
 	FieldVersion,
 	FieldInvoiceNumber,
 	FieldBillingSequence,
-	FieldTotalCreditsApplied,
+	FieldTotalPrepaidApplied,
 	FieldIdempotencyKey,
 }
 
@@ -210,8 +210,8 @@ var (
 	DefaultTotal decimal.Decimal
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
-	// DefaultTotalCreditsApplied holds the default value on creation for the "total_credits_applied" field.
-	DefaultTotalCreditsApplied decimal.Decimal
+	// DefaultTotalPrepaidApplied holds the default value on creation for the "total_prepaid_applied" field.
+	DefaultTotalPrepaidApplied decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the Invoice queries.
@@ -397,9 +397,9 @@ func ByBillingSequence(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingSequence, opts...).ToFunc()
 }
 
-// ByTotalCreditsApplied orders the results by the total_credits_applied field.
-func ByTotalCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTotalCreditsApplied, opts...).ToFunc()
+// ByTotalPrepaidApplied orders the results by the total_prepaid_applied field.
+func ByTotalPrepaidApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalPrepaidApplied, opts...).ToFunc()
 }
 
 // ByIdempotencyKey orders the results by the idempotency_key field.

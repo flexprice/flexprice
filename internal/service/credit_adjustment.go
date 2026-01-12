@@ -13,7 +13,7 @@ import (
 
 // CreditAdjustmentResult holds the result of applying credit adjustments to an invoice
 type CreditAdjustmentResult struct {
-	TotalCreditsApplied decimal.Decimal
+	TotalPrepaidApplied decimal.Decimal
 	Currency            string
 }
 
@@ -90,7 +90,7 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 		}
 
 		// amountToApply is already the sum of rounded wallet contributions, so use it directly
-		lineItem.CreditsApplied = amountToApply
+		lineItem.PrepaidCreditsApplied = amountToApply
 	}
 
 	return walletDebits, nil
@@ -107,17 +107,17 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 //   - Filters usage-based line items
 //   - Calculates adjusted amount per line item (Amount - LineItemDiscount - InvoiceLevelDiscount)
 //   - Iterates wallets to determine how much credit to apply from each wallet
-//   - Directly updates lineItem.CreditsApplied in memory (not yet persisted)
+//   - Directly updates lineItem.PrepaidCreditsApplied in memory (not yet persisted)
 //   - Returns a map of wallet debits (walletID -> amount to debit)
 //
 // Phase 2 (Inside Transaction): Database Writes Only
 //   - Executes all wallet debits sequentially
-//   - Updates line items in database with CreditsApplied values
-//   - Sets inv.TotalCreditsApplied in memory (for return value)
+//   - Updates line items in database with PrepaidCreditsApplied values
+//   - Sets inv.TotalPrepaidApplied in memory (for return value)
 //
 // IMPORTANT NOTES:
-//   - This method ONLY updates CreditsApplied in the database for line items
-//   - The invoice's TotalCreditsApplied is set in memory but NOT persisted to the database
+//   - This method ONLY updates PrepaidCreditsApplied in the database for line items
+//   - The invoice's TotalPrepaidApplied is set in memory but NOT persisted to the database
 //   - It is the CALLER'S RESPONSIBILITY to update the invoice in the database if needed
 //   - This design allows callers to batch invoice updates with other operations if required
 func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*CreditAdjustmentResult, error) {
@@ -125,7 +125,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(inv.LineItems) == 0 {
 		s.Logger.Infow("no line items to apply credits to, returning zero result", "invoice_id", inv.ID)
 		return &CreditAdjustmentResult{
-			TotalCreditsApplied: decimal.Zero,
+			TotalPrepaidApplied: decimal.Zero,
 			Currency:            inv.Currency,
 		}, nil
 	}
@@ -142,7 +142,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(wallets) == 0 {
 		s.Logger.Infow("no wallets available for credit adjustment, returning zero result", "invoice_id", inv.ID)
 		return &CreditAdjustmentResult{
-			TotalCreditsApplied: decimal.Zero,
+			TotalPrepaidApplied: decimal.Zero,
 			Currency:            inv.Currency,
 		}, nil
 	}
@@ -152,7 +152,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// - Filters usage-based line items only
 	// - Calculates adjusted amount per line item (Amount - LineItemDiscount - InvoiceLevelDiscount)
 	// - Determines how much credit to apply from each wallet
-	// - Directly modifies lineItem.CreditsApplied in memory (NOT persisted yet)
+	// - Directly modifies lineItem.PrepaidCreditsApplied in memory (NOT persisted yet)
 	// - Returns a map of wallet debits (walletID -> total amount to debit)
 	walletDebits, err := s.CalculateCreditAdjustments(inv, wallets)
 	if err != nil {
@@ -162,7 +162,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// If no credits were calculated to apply, return zero result
 	if len(walletDebits) == 0 {
 		return &CreditAdjustmentResult{
-			TotalCreditsApplied: decimal.Zero,
+			TotalPrepaidApplied: decimal.Zero,
 			Currency:            inv.Currency,
 		}, nil
 	}
@@ -212,28 +212,28 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 			}
 		}
 
-		// Step 2: Update line items in database with CreditsApplied values
-		// The CreditsApplied values were calculated in Phase 1 and are now persisted here
-		// We also calculate totalApplied as we iterate (sum of all CreditsApplied)
+		// Step 2: Update line items in database with PrepaidCreditsApplied values
+		// The PrepaidCreditsApplied values were calculated in Phase 1 and are now persisted here
+		// We also calculate totalApplied as we iterate (sum of all PrepaidCreditsApplied)
 		totalApplied := decimal.Zero
 		for _, lineItem := range inv.LineItems {
-			if lineItem.CreditsApplied.GreaterThan(decimal.Zero) {
-				totalApplied = totalApplied.Add(lineItem.CreditsApplied)
+			if lineItem.PrepaidCreditsApplied.GreaterThan(decimal.Zero) {
+				totalApplied = totalApplied.Add(lineItem.PrepaidCreditsApplied)
 				if err := s.InvoiceRepo.UpdateLineItem(ctx, lineItem); err != nil {
 					return err
 				}
 			}
 		}
 
-		// Step 3: Set inv.TotalCreditsApplied in memory (NOT persisted to database)
+		// Step 3: Set inv.TotalPrepaidApplied in memory (NOT persisted to database)
 		// IMPORTANT: This value is set in memory for the return value, but it is NOT
 		// persisted to the database. The caller is responsible for updating the invoice
-		// in the database if they need to persist TotalCreditsApplied.
+		// in the database if they need to persist TotalPrepaidApplied.
 		// This design allows callers to batch invoice updates with other operations.
-		inv.TotalCreditsApplied = totalApplied
+		inv.TotalPrepaidApplied = totalApplied
 
 		result = &CreditAdjustmentResult{
-			TotalCreditsApplied: totalApplied,
+			TotalPrepaidApplied: totalApplied,
 			Currency:            inv.Currency,
 		}
 

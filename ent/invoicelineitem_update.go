@@ -135,23 +135,23 @@ func (iliu *InvoiceLineItemUpdate) ClearCommitmentInfo() *InvoiceLineItemUpdate 
 	return iliu
 }
 
-// SetCreditsApplied sets the "credits_applied" field.
-func (iliu *InvoiceLineItemUpdate) SetCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdate {
-	iliu.mutation.SetCreditsApplied(d)
+// SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
+func (iliu *InvoiceLineItemUpdate) SetPrepaidCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdate {
+	iliu.mutation.SetPrepaidCreditsApplied(d)
 	return iliu
 }
 
-// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
-func (iliu *InvoiceLineItemUpdate) SetNillableCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdate {
+// SetNillablePrepaidCreditsApplied sets the "prepaid_credits_applied" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillablePrepaidCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdate {
 	if d != nil {
-		iliu.SetCreditsApplied(*d)
+		iliu.SetPrepaidCreditsApplied(*d)
 	}
 	return iliu
 }
 
-// ClearCreditsApplied clears the value of the "credits_applied" field.
-func (iliu *InvoiceLineItemUpdate) ClearCreditsApplied() *InvoiceLineItemUpdate {
-	iliu.mutation.ClearCreditsApplied()
+// ClearPrepaidCreditsApplied clears the value of the "prepaid_credits_applied" field.
+func (iliu *InvoiceLineItemUpdate) ClearPrepaidCreditsApplied() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearPrepaidCreditsApplied()
 	return iliu
 }
 
@@ -370,11 +370,11 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	if iliu.mutation.CommitmentInfoCleared() {
 		_spec.ClearField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON)
 	}
-	if value, ok := iliu.mutation.CreditsApplied(); ok {
-		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
+	if value, ok := iliu.mutation.PrepaidCreditsApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther, value)
 	}
-	if iliu.mutation.CreditsAppliedCleared() {
-		_spec.ClearField(invoicelineitem.FieldCreditsApplied, field.TypeOther)
+	if iliu.mutation.PrepaidCreditsAppliedCleared() {
+		_spec.ClearField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iliu.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
@@ -557,23 +557,23 @@ func (iliuo *InvoiceLineItemUpdateOne) ClearCommitmentInfo() *InvoiceLineItemUpd
 	return iliuo
 }
 
-// SetCreditsApplied sets the "credits_applied" field.
-func (iliuo *InvoiceLineItemUpdateOne) SetCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdateOne {
-	iliuo.mutation.SetCreditsApplied(d)
+// SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetPrepaidCreditsApplied(d decimal.Decimal) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetPrepaidCreditsApplied(d)
 	return iliuo
 }
 
-// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
-func (iliuo *InvoiceLineItemUpdateOne) SetNillableCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
+// SetNillablePrepaidCreditsApplied sets the "prepaid_credits_applied" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillablePrepaidCreditsApplied(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
 	if d != nil {
-		iliuo.SetCreditsApplied(*d)
+		iliuo.SetPrepaidCreditsApplied(*d)
 	}
 	return iliuo
 }
 
-// ClearCreditsApplied clears the value of the "credits_applied" field.
-func (iliuo *InvoiceLineItemUpdateOne) ClearCreditsApplied() *InvoiceLineItemUpdateOne {
-	iliuo.mutation.ClearCreditsApplied()
+// ClearPrepaidCreditsApplied clears the value of the "prepaid_credits_applied" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearPrepaidCreditsApplied() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearPrepaidCreditsApplied()
 	return iliuo
 }
 
@@ -822,11 +822,11 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	if iliuo.mutation.CommitmentInfoCleared() {
 		_spec.ClearField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON)
 	}
-	if value, ok := iliuo.mutation.CreditsApplied(); ok {
-		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
+	if value, ok := iliuo.mutation.PrepaidCreditsApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther, value)
 	}
-	if iliuo.mutation.CreditsAppliedCleared() {
-		_spec.ClearField(invoicelineitem.FieldCreditsApplied, field.TypeOther)
+	if iliuo.mutation.PrepaidCreditsAppliedCleared() {
+		_spec.ClearField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther)
 	}
 	if value, ok := iliuo.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
