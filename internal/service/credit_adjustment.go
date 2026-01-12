@@ -13,7 +13,7 @@ import (
 
 // CreditAdjustmentResult holds the result of applying credit adjustments to an invoice
 type CreditAdjustmentResult struct {
-	TotalPrepaidApplied decimal.Decimal
+	TotalPrepaidCreditsApplied decimal.Decimal
 	Currency            string
 }
 
@@ -125,7 +125,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(inv.LineItems) == 0 {
 		s.Logger.Infow("no line items to apply credits to, returning zero result", "invoice_id", inv.ID)
 		return &CreditAdjustmentResult{
-			TotalPrepaidApplied: decimal.Zero,
+			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:            inv.Currency,
 		}, nil
 	}
@@ -142,7 +142,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(wallets) == 0 {
 		s.Logger.Infow("no wallets available for credit adjustment, returning zero result", "invoice_id", inv.ID)
 		return &CreditAdjustmentResult{
-			TotalPrepaidApplied: decimal.Zero,
+			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:            inv.Currency,
 		}, nil
 	}
@@ -162,7 +162,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// If no credits were calculated to apply, return zero result
 	if len(walletDebits) == 0 {
 		return &CreditAdjustmentResult{
-			TotalPrepaidApplied: decimal.Zero,
+			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:            inv.Currency,
 		}, nil
 	}
@@ -233,7 +233,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		inv.TotalPrepaidCreditsApplied = totalApplied
 
 		result = &CreditAdjustmentResult{
-			TotalPrepaidApplied: totalApplied,
+			TotalPrepaidCreditsApplied: totalApplied,
 			Currency:            inv.Currency,
 		}
 
