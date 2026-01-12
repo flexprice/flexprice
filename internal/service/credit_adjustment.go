@@ -14,7 +14,7 @@ import (
 // CreditAdjustmentResult holds the result of applying credit adjustments to an invoice
 type CreditAdjustmentResult struct {
 	TotalPrepaidCreditsApplied decimal.Decimal
-	Currency            string
+	Currency                   string
 }
 
 // CreditAdjustmentService handles applying wallet credits as invoice adjustments
@@ -105,7 +105,7 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 //   - Retrieves eligible prepaid wallets for credit adjustment
 //   - Calls calculateCreditAdjustments() which:
 //   - Filters usage-based line items
-//   - Calculates adjusted amount per line item (Amount - LineItemDiscount - InvoiceLevelDiscount)
+//   - Calculates adjusted amount per line item (Amount - LineItemDiscount)
 //   - Iterates wallets to determine how much credit to apply from each wallet
 //   - Directly updates lineItem.PrepaidCreditsApplied in memory (not yet persisted)
 //   - Returns a map of wallet debits (walletID -> amount to debit)
@@ -126,7 +126,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		s.Logger.Infow("no line items to apply credits to, returning zero result", "invoice_id", inv.ID)
 		return &CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
-			Currency:            inv.Currency,
+			Currency:                   inv.Currency,
 		}, nil
 	}
 
@@ -143,14 +143,14 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		s.Logger.Infow("no wallets available for credit adjustment, returning zero result", "invoice_id", inv.ID)
 		return &CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
-			Currency:            inv.Currency,
+			Currency:                   inv.Currency,
 		}, nil
 	}
 
 	// Step 2: Calculate all credit adjustments (OUTSIDE TRANSACTION)
 	// This method:
 	// - Filters usage-based line items only
-	// - Calculates adjusted amount per line item (Amount - LineItemDiscount - InvoiceLevelDiscount)
+	// - Calculates adjusted amount per line item (Amount - LineItemDiscount)
 	// - Determines how much credit to apply from each wallet
 	// - Directly modifies lineItem.PrepaidCreditsApplied in memory (NOT persisted yet)
 	// - Returns a map of wallet debits (walletID -> total amount to debit)
@@ -163,7 +163,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	if len(walletDebits) == 0 {
 		return &CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
-			Currency:            inv.Currency,
+			Currency:                   inv.Currency,
 		}, nil
 	}
 
@@ -234,7 +234,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 		result = &CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: totalApplied,
-			Currency:            inv.Currency,
+			Currency:                   inv.Currency,
 		}
 
 		return nil
