@@ -488,16 +488,16 @@ func (ic *InvoiceCreate) SetNillableBillingSequence(i *int) *InvoiceCreate {
 	return ic
 }
 
-// SetTotalCreditsApplied sets the "total_credits_applied" field.
-func (ic *InvoiceCreate) SetTotalCreditsApplied(d decimal.Decimal) *InvoiceCreate {
-	ic.mutation.SetTotalCreditsApplied(d)
+// SetTotalPrepaidApplied sets the "total_prepaid_applied" field.
+func (ic *InvoiceCreate) SetTotalPrepaidApplied(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotalPrepaidApplied(d)
 	return ic
 }
 
-// SetNillableTotalCreditsApplied sets the "total_credits_applied" field if the given value is not nil.
-func (ic *InvoiceCreate) SetNillableTotalCreditsApplied(d *decimal.Decimal) *InvoiceCreate {
+// SetNillableTotalPrepaidApplied sets the "total_prepaid_applied" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotalPrepaidApplied(d *decimal.Decimal) *InvoiceCreate {
 	if d != nil {
-		ic.SetTotalCreditsApplied(*d)
+		ic.SetTotalPrepaidApplied(*d)
 	}
 	return ic
 }
@@ -651,9 +651,9 @@ func (ic *InvoiceCreate) defaults() {
 		v := invoice.DefaultVersion
 		ic.mutation.SetVersion(v)
 	}
-	if _, ok := ic.mutation.TotalCreditsApplied(); !ok {
-		v := invoice.DefaultTotalCreditsApplied
-		ic.mutation.SetTotalCreditsApplied(v)
+	if _, ok := ic.mutation.TotalPrepaidApplied(); !ok {
+		v := invoice.DefaultTotalPrepaidApplied
+		ic.mutation.SetTotalPrepaidApplied(v)
 	}
 }
 
@@ -912,9 +912,9 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
 		_node.BillingSequence = &value
 	}
-	if value, ok := ic.mutation.TotalCreditsApplied(); ok {
-		_spec.SetField(invoice.FieldTotalCreditsApplied, field.TypeOther, value)
-		_node.TotalCreditsApplied = &value
+	if value, ok := ic.mutation.TotalPrepaidApplied(); ok {
+		_spec.SetField(invoice.FieldTotalPrepaidApplied, field.TypeOther, value)
+		_node.TotalPrepaidApplied = &value
 	}
 	if value, ok := ic.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)

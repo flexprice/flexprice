@@ -36,9 +36,9 @@ type InvoiceLineItem struct {
 	EnvironmentID    string                `json:"environment_id"`
 	CommitmentInfo   *types.CommitmentInfo `json:"commitment_info,omitempty"`
 
-	// credits_applied is the amount in invoice currency reduced from this line item due to credit application.
-	// This represents credits (from credit grants, credit notes, etc.) that are specifically applied to reduce this line item's amount.
-	CreditsApplied decimal.Decimal `json:"credits_applied"`
+	// prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.
+	// This represents prepaid credits (from credit grants, credit notes, etc.) that are specifically applied to reduce this line item's amount.
+	PrepaidCreditsApplied decimal.Decimal `json:"prepaid_credits_applied"`
 
 	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
 	// This represents discounts that are applied specifically to this line item (e.g., via line-item level coupons or discounts).
@@ -61,32 +61,32 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 	}
 
 	return &InvoiceLineItem{
-		ID:                   e.ID,
-		InvoiceID:            e.InvoiceID,
-		CustomerID:           e.CustomerID,
-		SubscriptionID:       e.SubscriptionID,
-		EntityID:             e.EntityID,
-		EntityType:           lo.ToPtr(string(lo.FromPtr(e.EntityType))),
-		PlanDisplayName:      e.PlanDisplayName,
-		PriceID:              e.PriceID,
-		PriceType:            lo.ToPtr(string(lo.FromPtr(e.PriceType))),
-		MeterID:              e.MeterID,
-		MeterDisplayName:     e.MeterDisplayName,
-		PriceUnitID:          e.PriceUnitID,
-		PriceUnit:            e.PriceUnit,
-		PriceUnitAmount:      e.PriceUnitAmount,
-		DisplayName:          e.DisplayName,
-		Amount:               e.Amount,
-		Quantity:             e.Quantity,
-		Currency:             e.Currency,
-		PeriodStart:          e.PeriodStart,
-		PeriodEnd:            e.PeriodEnd,
-		Metadata:             e.Metadata,
-		CommitmentInfo:       e.CommitmentInfo,
-		EnvironmentID:        e.EnvironmentID,
-		CreditsApplied:       lo.FromPtrOr(e.CreditsApplied, decimal.Zero),
-		LineItemDiscount:     lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount: lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
+		ID:                    e.ID,
+		InvoiceID:             e.InvoiceID,
+		CustomerID:            e.CustomerID,
+		SubscriptionID:        e.SubscriptionID,
+		EntityID:              e.EntityID,
+		EntityType:            lo.ToPtr(string(lo.FromPtr(e.EntityType))),
+		PlanDisplayName:       e.PlanDisplayName,
+		PriceID:               e.PriceID,
+		PriceType:             lo.ToPtr(string(lo.FromPtr(e.PriceType))),
+		MeterID:               e.MeterID,
+		MeterDisplayName:      e.MeterDisplayName,
+		PriceUnitID:           e.PriceUnitID,
+		PriceUnit:             e.PriceUnit,
+		PriceUnitAmount:       e.PriceUnitAmount,
+		DisplayName:           e.DisplayName,
+		Amount:                e.Amount,
+		Quantity:              e.Quantity,
+		Currency:              e.Currency,
+		PeriodStart:           e.PeriodStart,
+		PeriodEnd:             e.PeriodEnd,
+		Metadata:              e.Metadata,
+		CommitmentInfo:        e.CommitmentInfo,
+		EnvironmentID:         e.EnvironmentID,
+		PrepaidCreditsApplied: lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
+		LineItemDiscount:      lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:  lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

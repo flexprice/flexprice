@@ -368,16 +368,16 @@ func (ilic *InvoiceLineItemCreate) SetCommitmentInfo(ti *types.CommitmentInfo) *
 	return ilic
 }
 
-// SetCreditsApplied sets the "credits_applied" field.
-func (ilic *InvoiceLineItemCreate) SetCreditsApplied(d decimal.Decimal) *InvoiceLineItemCreate {
-	ilic.mutation.SetCreditsApplied(d)
+// SetPrepaidCreditsApplied sets the "prepaid_credits_applied" field.
+func (ilic *InvoiceLineItemCreate) SetPrepaidCreditsApplied(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetPrepaidCreditsApplied(d)
 	return ilic
 }
 
-// SetNillableCreditsApplied sets the "credits_applied" field if the given value is not nil.
-func (ilic *InvoiceLineItemCreate) SetNillableCreditsApplied(d *decimal.Decimal) *InvoiceLineItemCreate {
+// SetNillablePrepaidCreditsApplied sets the "prepaid_credits_applied" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillablePrepaidCreditsApplied(d *decimal.Decimal) *InvoiceLineItemCreate {
 	if d != nil {
-		ilic.SetCreditsApplied(*d)
+		ilic.SetPrepaidCreditsApplied(*d)
 	}
 	return ilic
 }
@@ -495,9 +495,9 @@ func (ilic *InvoiceLineItemCreate) defaults() {
 		v := invoicelineitem.DefaultQuantity
 		ilic.mutation.SetQuantity(v)
 	}
-	if _, ok := ilic.mutation.CreditsApplied(); !ok {
-		v := invoicelineitem.DefaultCreditsApplied
-		ilic.mutation.SetCreditsApplied(v)
+	if _, ok := ilic.mutation.PrepaidCreditsApplied(); !ok {
+		v := invoicelineitem.DefaultPrepaidCreditsApplied
+		ilic.mutation.SetPrepaidCreditsApplied(v)
 	}
 	if _, ok := ilic.mutation.LineItemDiscount(); !ok {
 		v := invoicelineitem.DefaultLineItemDiscount
@@ -709,9 +709,9 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 		_spec.SetField(invoicelineitem.FieldCommitmentInfo, field.TypeJSON, value)
 		_node.CommitmentInfo = value
 	}
-	if value, ok := ilic.mutation.CreditsApplied(); ok {
-		_spec.SetField(invoicelineitem.FieldCreditsApplied, field.TypeOther, value)
-		_node.CreditsApplied = &value
+	if value, ok := ilic.mutation.PrepaidCreditsApplied(); ok {
+		_spec.SetField(invoicelineitem.FieldPrepaidCreditsApplied, field.TypeOther, value)
+		_node.PrepaidCreditsApplied = &value
 	}
 	if value, ok := ilic.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
