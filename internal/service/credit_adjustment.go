@@ -49,7 +49,7 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 		}
 
 		// We adjust the discounted amount, not the original amount
-		adjustedAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
+		adjustedAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
 
 		if adjustedAmount.LessThanOrEqual(decimal.Zero) {
 			continue
