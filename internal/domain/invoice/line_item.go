@@ -45,12 +45,6 @@ type InvoiceLineItem struct {
 	// This is simpler and more direct - when a discount is applied directly to a line item, it goes here.
 	LineItemDiscount decimal.Decimal `json:"line_item_discount"`
 
-	// invoice_level_discount is the proportional share of an invoice-level discount attributed to this line item.
-	// When a discount is applied at the invoice level (e.g., invoice-level coupons), it is distributed proportionally
-	// across all line items based on their relative amounts. This field stores this line item's share of that invoice-level discount.
-	// Formula: (Line Item Amount / Total Invoice Amount) × Total Invoice-Level Discount Amount
-	// This allows tracking how much of the invoice-level discount is contributed by each line item.
-	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount"`
 	types.BaseModel
 }
 
@@ -86,7 +80,6 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		EnvironmentID:         e.EnvironmentID,
 		PrepaidCreditsApplied: lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
 		LineItemDiscount:      lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
-		InvoiceLevelDiscount:  lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
