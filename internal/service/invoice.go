@@ -3505,30 +3505,28 @@ func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, in
 
 	// Step 1: Apply credit adjustments
 	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
+	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
+
+	// Apply line item coupons first
+	lineItemCouponResult, err := couponApplicationService.ApplyLineItemCouponsToInvoice(ctx, inv, req.LineItemCoupons)
+	if err != nil {
+		return err
+	}
+
+	// Step 2: Apply credit adjustments to invoice
 	creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(ctx, inv)
 	if err != nil {
 		return err
 	}
-
-	// Update invoice with credits applied
-	// TotalPrepaidApplied is already rounded at source (each prepaid rounded before summing)
 	inv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidCreditsApplied
 
-	// Step 2: Apply coupons (invoice and line-item)
-	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
-	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, inv, req.InvoiceCoupons, req.LineItemCoupons)
+	invoiceCouponResult, err := couponApplicationService.ApplyInvoiceLevelCouponsToInvoice(ctx, inv, req.InvoiceCoupons)
 	if err != nil {
 		return err
 	}
 
-	// Update the invoice with calculated discount amounts
-	// TotalDiscount is already rounded at source (each discount rounded before summing)
-	inv.TotalDiscount = couponResult.TotalDiscountAmount
+	inv.TotalDiscount = lineItemCouponResult.TotalDiscountAmount.Add(invoiceCouponResult.TotalDiscountAmount)
 
-	// Step 3: Calculate new total based on subtotal - discount - prepaid (discount-first approach)
-	// This ensures consistency with tax calculation which uses subtotal - discount
-	// ApplyDiscount already ensures individual discounts don't make prices negative,
-	// and the service applies discounts sequentially, so total discount is already validated
 	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
@@ -3538,10 +3536,8 @@ func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, in
 		}
 	}
 
-	// Total is computed from rounded values (Subtotal, TotalDiscount, and TotalPrepaidCreditsApplied), so no additional rounding needed
 	inv.Total = newTotal
 
-	// AmountDue and AmountRemaining are computed from already-rounded values
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
