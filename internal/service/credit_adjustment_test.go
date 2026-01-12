@@ -204,7 +204,7 @@ func (s *CreditAdjustmentServiceSuite) createWalletForCalculation(id string, cur
 }
 
 // Helper method to create an invoice line item for calculation tests (in-memory, no database)
-func (s *CreditAdjustmentServiceSuite) createLineItemForCalculation(amount decimal.Decimal, priceType *string, lineItemDiscount decimal.Decimal, invoiceLevelDiscount decimal.Decimal) *invoice.InvoiceLineItem {
+func (s *CreditAdjustmentServiceSuite) createLineItemForCalculation(amount decimal.Decimal, priceType *string, lineItemDiscount decimal.Decimal) *invoice.InvoiceLineItem {
 	if priceType == nil {
 		priceType = lo.ToPtr(string(types.PRICE_TYPE_USAGE))
 	}
@@ -414,7 +414,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_BasicSingl
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
 
 	// Create invoice with single line item
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -435,8 +435,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(40.00))
 
 	// Create invoice with multiple line items
-	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero, decimal.Zero)
-	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), nil, decimal.Zero, decimal.Zero)
+	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero)
+	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1, lineItem2})
 
 	// Execute
@@ -454,18 +454,17 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	s.True(lineItem2.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(20.00))) // Only $20 available from wallet2
 }
 
-// TestCalculateCreditAdjustments_WithDiscounts tests calculation with line item and invoice level discounts
+// TestCalculateCreditAdjustments_WithDiscounts tests calculation with line item discounts
 func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WithDiscounts() {
 	// Create wallet with sufficient balance
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
 
-	// Create line item with discounts: $100 amount, $10 line item discount, $5 invoice level discount
-	// Adjusted amount = $100 - $10 - $5 = $85
+	// Create line item with discount: $100 amount, $10 line item discount
+	// Adjusted amount = $100 - $10 = $90
 	lineItem := s.createLineItemForCalculation(
 		decimal.NewFromFloat(100.00),
 		nil,
 		decimal.NewFromFloat(10.00), // LineItemDiscount
-		decimal.NewFromFloat(5.00),  // InvoiceLevelDiscount
 	)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
@@ -476,9 +475,9 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WithDiscou
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
-	// Should debit $85 (adjusted amount), not $100 (original amount)
-	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(85.00)))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(85.00)))
+	// Should debit $90 (adjusted amount), not $100 (original amount)
+	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(90.00)))
+	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(90.00)))
 }
 
 // TestCalculateCreditAdjustments_FiltersNonUsageLineItems tests that non-usage line items are filtered out
@@ -487,8 +486,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_FiltersNon
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
 
 	// Create mix of usage and non-usage line items
-	usageLineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), lo.ToPtr(string(types.PRICE_TYPE_USAGE)), decimal.Zero, decimal.Zero)
-	fixedLineItem := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), lo.ToPtr(string(types.PRICE_TYPE_FIXED)), decimal.Zero, decimal.Zero)
+	usageLineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), lo.ToPtr(string(types.PRICE_TYPE_USAGE)), decimal.Zero)
+	fixedLineItem := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), lo.ToPtr(string(types.PRICE_TYPE_FIXED)), decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{usageLineItem, fixedLineItem})
 	// Execute
 	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
@@ -509,7 +508,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_Insufficie
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(25.00))
 
 	// Create line item with amount greater than wallet balance
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -530,7 +529,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroBalanc
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.Zero)
 
 	// Create line item
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -548,14 +547,13 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NegativeAd
 	// Create wallet with sufficient balance
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
 
-	// Create line item where discounts exceed amount
-	// Amount: $50, LineItemDiscount: $30, InvoiceLevelDiscount: $25
-	// Adjusted amount = $50 - $30 - $25 = -$5 (negative, should be skipped)
+	// Create line item where discount exceeds amount
+	// Amount: $50, LineItemDiscount: $55
+	// Adjusted amount = $50 - $55 = -$5 (negative, should be skipped)
 	lineItem := s.createLineItemForCalculation(
 		decimal.NewFromFloat(50.00),
 		nil,
-		decimal.NewFromFloat(30.00), // LineItemDiscount
-		decimal.NewFromFloat(25.00), // InvoiceLevelDiscount
+		decimal.NewFromFloat(55.00), // LineItemDiscount
 	)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
@@ -574,14 +572,13 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroAdjust
 	// Create wallet with sufficient balance
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
 
-	// Create line item where discounts equal amount
-	// Amount: $50, LineItemDiscount: $30, InvoiceLevelDiscount: $20
-	// Adjusted amount = $50 - $30 - $20 = $0 (zero, should be skipped)
+	// Create line item where discount equals amount
+	// Amount: $50, LineItemDiscount: $50
+	// Adjusted amount = $50 - $50 = $0 (zero, should be skipped)
 	lineItem := s.createLineItemForCalculation(
 		decimal.NewFromFloat(50.00),
 		nil,
-		decimal.NewFromFloat(30.00), // LineItemDiscount
-		decimal.NewFromFloat(20.00), // InvoiceLevelDiscount
+		decimal.NewFromFloat(50.00), // LineItemDiscount
 	)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
@@ -601,9 +598,9 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WalletBala
 	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(60.00))
 
 	// Create multiple line items that will use the same wallet
-	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), nil, decimal.Zero, decimal.Zero)
-	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(25.00), nil, decimal.Zero, decimal.Zero)
-	lineItem3 := s.createLineItemForCalculation(decimal.NewFromFloat(20.00), nil, decimal.Zero, decimal.Zero)
+	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), nil, decimal.Zero)
+	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(25.00), nil, decimal.Zero)
+	lineItem3 := s.createLineItemForCalculation(decimal.NewFromFloat(20.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1, lineItem2, lineItem3})
 
 	// Execute
@@ -624,7 +621,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WalletBala
 // TestCalculateCreditAdjustments_EmptyWallets tests behavior with empty wallets slice
 func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_EmptyWallets() {
 	// Create invoice with line items
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute with empty wallets
@@ -687,8 +684,8 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(50.00))
 
 	// Create line items that will require both wallets
-	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), nil, decimal.Zero, decimal.Zero)
-	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(40.00), nil, decimal.Zero, decimal.Zero)
+	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), nil, decimal.Zero)
+	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(40.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1, lineItem2})
 
 	// Execute
@@ -718,7 +715,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 
 	// Create line item with very small amount
 	lineItemAmount, _ := decimal.NewFromString("0.00000003")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -742,7 +739,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 
 	// Create line item with large amount
 	lineItemAmount, _ := decimal.NewFromString("750000000.00")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -768,7 +765,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ManyDecima
 
 	// Create line item with maximum decimal places
 	lineItemAmount, _ := decimal.NewFromString("200.00000000")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -793,12 +790,11 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionW
 	w, _ := decimal.NewFromString("100.12345678")
 	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
 
-	// Create line item with precise amount and discounts (8 decimals max)
+	// Create line item with precise amount and discount (8 decimals max)
 	amount, _ := decimal.NewFromString("150.98765432")
 	lineItemDiscount, _ := decimal.NewFromString("25.12345678")
-	invoiceLevelDiscount, _ := decimal.NewFromString("10.00000000")
-	// Adjusted amount = 150.98765432 - 25.12345678 - 10.00000000 = 115.86419754
-	lineItem := s.createLineItemForCalculation(amount, nil, lineItemDiscount, invoiceLevelDiscount)
+	// Adjusted amount = 150.98765432 - 25.12345678 = 125.86419754
+	lineItem := s.createLineItemForCalculation(amount, nil, lineItemDiscount)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -808,7 +804,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionW
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
-	// Should debit the adjusted amount (115.86419754), but wallet only has 100.12345678
+	// Should debit the adjusted amount (125.86419754), but wallet only has 100.12345678
 	// With rounding: 100.12345678 rounds to 100.12 for USD
 	expectedDebit, _ := decimal.NewFromString("100.12")
 	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
@@ -827,7 +823,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionR
 
 	// Create line item that sums to exactly 1.00000000
 	lineItemAmount, _ := decimal.NewFromString("1.00000000")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -855,7 +851,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(40.00))
 
 	// Create single line item that requires both wallets
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(70.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(70.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -879,7 +875,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	w3 := s.createWalletForCalculation("wallet_3", "USD", decimal.NewFromFloat(33.34))
 
 	// Create line item that exactly matches the sum
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -903,7 +899,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(30.00))
 
 	// Create line item that exceeds available balance
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -927,7 +923,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_VerySmallW
 	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
 
 	// Create line item
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -953,7 +949,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MixedPreci
 
 	// Create line item
 	lineItemAmount, _ := decimal.NewFromString("50.0")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -980,12 +976,11 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremeDis
 	w, _ := decimal.NewFromString("100.00000001")
 	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
 
-	// Create line item with maximum precision discounts (8 decimals)
+	// Create line item with maximum precision discount (8 decimals)
 	amount, _ := decimal.NewFromString("150.12345678")
 	lineItemDiscount, _ := decimal.NewFromString("25.12345678")
-	invoiceLevelDiscount, _ := decimal.NewFromString("10.00000000")
-	// Adjusted amount = 150.12345678 - 25.12345678 - 10.00000000 = 115.00000000
-	lineItem := s.createLineItemForCalculation(amount, nil, lineItemDiscount, invoiceLevelDiscount)
+	// Adjusted amount = 150.12345678 - 25.12345678 = 125.00000000
+	lineItem := s.createLineItemForCalculation(amount, nil, lineItemDiscount)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -995,7 +990,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremeDis
 	s.NoError(err)
 	s.NotNil(walletDebits)
 	s.Equal(1, len(walletDebits))
-	// Should debit full wallet balance (adjusted amount is 115, but wallet only has 100.00000001)
+	// Should debit full wallet balance (adjusted amount is 125, but wallet only has 100.00000001)
 	// With rounding: 100.00000001 rounds to 100.00 for USD
 	expectedDebit, _ := decimal.NewFromString("100.00")
 	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
@@ -1012,7 +1007,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NearZeroVa
 
 	// Create line item with value very close to zero
 	lineItemAmount, _ := decimal.NewFromString("0.00000002")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -1035,7 +1030,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 
 	// Create single line item that requires both wallets
 	lineItemAmount, _ := decimal.NewFromString("100.00000000")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
@@ -1066,7 +1061,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 
 	// Create single line item
 	lineItemAmount, _ := decimal.NewFromString("0.70370357")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero, decimal.Zero)
+	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
