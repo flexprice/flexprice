@@ -20,7 +20,7 @@ type CreateWalletRequest struct {
 
 	// external_customer_id is the customer id in the external system
 	ExternalCustomerID string              `json:"external_customer_id,omitempty"`
-	Name               string              `json:"name,omitempty"`
+	Name               string              `json:"-"`
 	Currency           string              `json:"currency" binding:"required"`
 	Description        string              `json:"description,omitempty"`
 	Metadata           types.Metadata      `json:"metadata,omitempty"`
@@ -81,7 +81,7 @@ type Threshold struct {
 
 // UpdateWalletRequest represents the request to update a wallet
 type UpdateWalletRequest struct {
-	Name         *string             `json:"name,omitempty"`
+	Name         *string             `json:"-"`
 	Description  *string             `json:"description,omitempty"`
 	Metadata     *types.Metadata     `json:"metadata,omitempty"`
 	AutoTopup    *types.AutoTopup    `json:"auto_topup,omitempty"`
@@ -121,6 +121,15 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	if r.Config == nil {
 		r.Config = types.GetDefaultWalletConfig()
 	}
+	// Set default allowed price types if not already configured
+	if r.Config.AllowedPriceTypes == nil {
+		switch r.WalletType {
+		case types.WalletTypePrePaid:
+			r.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}
+		case types.WalletTypePostPaid:
+			r.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}
+		}
+	}
 
 	if r.ConversionRate.LessThanOrEqual(decimal.NewFromInt(0)) {
 		r.ConversionRate = decimal.NewFromInt(1)
@@ -131,10 +140,12 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 	}
 
 	if r.Name == "" {
-		if r.WalletType == types.WalletTypePrePaid {
-			r.Name = fmt.Sprintf("Prepaid Wallet - %s", r.Currency)
-		} else if r.WalletType == types.WalletTypePostPaid {
-			r.Name = fmt.Sprintf("Postpaid Wallet - %s", r.Currency)
+		currency := strings.ToUpper(r.Currency)
+		switch r.WalletType {
+		case types.WalletTypePrePaid:
+			r.Name = fmt.Sprintf("Prepaid Wallet - %s", currency)
+		case types.WalletTypePostPaid:
+			r.Name = fmt.Sprintf("Postpaid Wallet - %s", currency)
 		}
 	}
 
