@@ -142,19 +142,16 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 	}
 
 	// Validate all coupons exist - fail fast if any missing
-	missingCoupons := make([]string, 0)
 	for _, couponID := range couponIDs {
 		if _, exists := couponsMap[couponID]; !exists {
-			missingCoupons = append(missingCoupons, couponID)
+			return nil, ierr.NewError("one or more coupons not found").
+				WithHint("Coupons must exist before applying to invoice").
+				WithReportableDetails(map[string]interface{}{
+					"missing_coupon_id": couponID,
+					"coupon_ids":        couponIDs,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-	}
-	if len(missingCoupons) > 0 {
-		return nil, ierr.NewError("one or more coupons not found").
-			WithHint("Coupons must exist before applying to invoice").
-			WithReportableDetails(map[string]interface{}{
-				"missing_coupon_ids": missingCoupons,
-			}).
-			Mark(ierr.ErrNotFound)
 	}
 
 	// Step 2: Prepare all data outside transaction (calculations, validations, entity building)
