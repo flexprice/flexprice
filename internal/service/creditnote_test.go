@@ -440,7 +440,7 @@ func (s *CreditNoteServiceSuite) createTestWallets() {
 		Name:                 "USD Wallet",
 		Currency:             "USD",
 		ConversionRate:       decimal.NewFromInt(1),
-		WalletType:           types.WalletTypePostPaid,
+		WalletType:           types.WalletTypePrePaid,
 		InitialCreditsToLoad: decimal.NewFromFloat(100.00),
 	})
 	s.NoError(err)
@@ -460,7 +460,7 @@ func (s *CreditNoteServiceSuite) createTestWallets() {
 		Name:                 "EUR Wallet",
 		Currency:             "EUR",
 		ConversionRate:       decimal.NewFromInt(1),
-		WalletType:           types.WalletTypePostPaid,
+		WalletType:           types.WalletTypePrePaid,
 		InitialCreditsToLoad: decimal.NewFromFloat(50.00),
 	})
 	s.NoError(err)

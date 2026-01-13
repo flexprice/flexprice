@@ -1857,7 +1857,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Create invoice response for payment processing
 		invoiceResponse := &dto.InvoiceResponse{
-			Invoice: *inv,
+			Invoice: lo.FromPtr(inv),
 		}
 
 		// Delegate all payment behavior handling to the payment processor
@@ -2645,27 +2645,12 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 	}
 
 	// Update the invoice with calculated tax amounts
-	// TotalTax is already rounded at source (each tax rounded before summing)
 	inv.TotalTax = taxResult.TotalTaxAmount
-
-	// Discount-first-then-tax: total = subtotal - discount - credits + tax
-	// All components are already rounded, so the result is naturally rounded
-	// Cap discount to ensure discount + credits don't exceed subtotal (before tax)
-	maxAllowedDiscount := inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied)
-	if maxAllowedDiscount.IsNegative() {
-		maxAllowedDiscount = decimal.Zero
+	// Discount-first-then-tax: total = subtotal - prepaid credits - discount + tax
+	inv.Total = inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied).Sub(inv.TotalDiscount).Add(taxResult.TotalTaxAmount)
+	if inv.Total.IsNegative() {
+		inv.Total = decimal.Zero
 	}
-	if inv.TotalDiscount.GreaterThan(maxAllowedDiscount) {
-		inv.TotalDiscount = maxAllowedDiscount
-	}
-
-	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied).Add(inv.TotalTax)
-	if newTotal.IsNegative() {
-		newTotal = decimal.Zero
-	}
-
-	// Total is computed from rounded values, no additional rounding needed
-	inv.Total = newTotal
 	inv.AmountDue = inv.Total
 	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
 
@@ -3460,15 +3445,6 @@ func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, in
 	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
 		newTotal = decimal.Zero
-		// Cap discount to ensure discount + credits don't exceed subtotal
-		// Formula: max(0, subtotal - credits) ensures discount + credits <= subtotal
-		maxAllowedDiscount := inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied)
-		if maxAllowedDiscount.IsNegative() {
-			maxAllowedDiscount = decimal.Zero
-		}
-		if inv.TotalDiscount.GreaterThan(maxAllowedDiscount) {
-			inv.TotalDiscount = maxAllowedDiscount
-		}
 	}
 
 	inv.Total = newTotal
