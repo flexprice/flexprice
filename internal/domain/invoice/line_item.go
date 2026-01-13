@@ -37,12 +37,9 @@ type InvoiceLineItem struct {
 	CommitmentInfo   *types.CommitmentInfo `json:"commitment_info,omitempty"`
 
 	// prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.
-	// This represents prepaid credits (from credit grants, credit notes, etc.) that are specifically applied to reduce this line item's amount.
 	PrepaidCreditsApplied decimal.Decimal `json:"prepaid_credits_applied"`
 
 	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
-	// This represents discounts that are applied specifically to this line item (e.g., via line-item level coupons or discounts).
-	// This is simpler and more direct - when a discount is applied directly to a line item, it goes here.
 	LineItemDiscount decimal.Decimal `json:"line_item_discount"`
 
 	types.BaseModel
