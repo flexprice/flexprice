@@ -455,7 +455,6 @@ func (r *CancelFutureSubscriptionGrantsRequest) Validate() error {
 	if r.EffectiveDate != nil && !r.EffectiveDate.IsZero() {
 		// Allow dates that are at or within 1 minute of the current time
 		// This accounts for timing differences between date calculation and validation,
-		// network latency, clock skew, and processing delays
 		now := time.Now().UTC()
 		tolerance := 1 * time.Minute
 		if r.EffectiveDate.Before(now.Add(-tolerance)) {
