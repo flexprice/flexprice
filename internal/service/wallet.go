@@ -1161,7 +1161,15 @@ func (s *walletService) GetWalletBalance(ctx context.Context, walletID string) (
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
 
-			usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+			// As we are moving to new pipeline: hence commenting this code which calculated usage based on raw events
+			// usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+			// 	SubscriptionID: sub.ID,
+			// 	StartTime:      periodStart,
+			// 	EndTime:        periodEnd,
+			// })
+
+			// The below function has similar request and response that of above function. But it works on feature usage pipeline
+			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
 				EndTime:        periodEnd,
