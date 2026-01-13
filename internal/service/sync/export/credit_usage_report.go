@@ -18,7 +18,7 @@ import (
 // WalletBalanceGetter is an interface for getting wallet balance
 // This avoids import cycle with service package
 type WalletBalanceGetter interface {
-	GetWalletBalanceV2(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
+	GetWalletBalance(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
 }
 
 // CreditUsageExporter handles credit usage export operations
@@ -110,7 +110,7 @@ func (e *CreditUsageExporter) PrepareData(ctx context.Context, request *dto.Expo
 
 		for _, wallet := range wallets {
 			// Get wallet balance
-			balanceResp, err := e.walletBalanceGetter.GetWalletBalanceV2(ctx, wallet.ID)
+			balanceResp, err := e.walletBalanceGetter.GetWalletBalance(ctx, wallet.ID)
 			if err != nil {
 				e.logger.Debugw("Failed to get wallet balance for wallet", "wallet_id", wallet.ID, "error", err)
 				continue
