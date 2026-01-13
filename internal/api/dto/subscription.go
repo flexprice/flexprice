@@ -1405,7 +1405,7 @@ func (r *OverrideLineItemRequest) Validate(
 				WithReportableDetails(map[string]interface{}{
 					"price_id": r.PriceID,
 				}).
-				Mark(ierr.ErrInternal)
+				Mark(ierr.ErrNotFound)
 		}
 	}
 
