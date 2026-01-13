@@ -10,87 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestCreditRounding_SingleCredit tests that a single credit application
-// is rounded at source
-func TestCreditRounding_SingleCredit(t *testing.T) {
-	tests := []struct {
-		name           string
-		lineItemAmount string
-		creditAmount   string
-		currency       string
-		expectedCredit string
-		description    string
-	}{
-		{
-			name:           "Exact_Credit_USD",
-			lineItemAmount: "100.00",
-			creditAmount:   "50.00",
-			currency:       "usd",
-			expectedCredit: "50.00",
-			description:    "Credit exactly $50.00",
-		},
-		{
-			name:           "Credit_WithRounding_USD",
-			lineItemAmount: "100.00",
-			creditAmount:   "33.333",
-			currency:       "usd",
-			expectedCredit: "33.33",
-			description:    "Credit 33.333 rounds to $33.33",
-		},
-		{
-			name:           "Full_Credit_USD",
-			lineItemAmount: "100.00",
-			creditAmount:   "100.00",
-			currency:       "usd",
-			expectedCredit: "100.00",
-			description:    "Full credit equals line item",
-		},
-		{
-			name:           "Credit_JPY",
-			lineItemAmount: "1000",
-			creditAmount:   "500.5",
-			currency:       "jpy",
-			expectedCredit: "501", // Rounds up to nearest yen
-			description:    "JPY credit rounds to integer",
-		},
-		{
-			name:           "SubCent_Credit",
-			lineItemAmount: "1.00",
-			creditAmount:   "0.004",
-			currency:       "usd",
-			expectedCredit: "0.00",
-			description:    "Sub-cent credit rounds to zero",
-		},
-		{
-			name:           "Credit_RoundUp",
-			lineItemAmount: "10.00",
-			creditAmount:   "3.335",
-			currency:       "usd",
-			expectedCredit: "3.34",
-			description:    "Credit rounds up from 3.335",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			creditAmount := decimal.RequireFromString(tt.creditAmount)
-			expectedCredit := decimal.RequireFromString(tt.expectedCredit)
-
-			// Round credit at source (as done in credit_adjustment.go)
-			roundedCredit := types.RoundToCurrencyPrecision(creditAmount, tt.currency)
-
-			assert.True(t, roundedCredit.Equal(expectedCredit),
-				"%s: expected %s, got %s",
-				tt.description, expectedCredit.String(), roundedCredit.String())
-
-			// Verify precision
-			precision := types.GetCurrencyPrecision(tt.currency)
-			assert.Equal(t, roundedCredit.Round(precision), roundedCredit,
-				"Credit should be rounded to currency precision")
-		})
-	}
-}
-
 // TestCreditRounding_MultipleWallets tests that credits from multiple wallets
 // are each rounded individually before being summed
 func TestCreditRounding_MultipleWallets(t *testing.T) {
@@ -138,8 +57,9 @@ func TestCreditRounding_MultipleWallets(t *testing.T) {
 	})
 }
 
-// TestCreditRounding_PartialCredit tests partial credit application
-func TestCreditRounding_PartialCredit(t *testing.T) {
+// TestCreditRounding_CreditApplication tests credit application scenarios including
+// partial credits, capping at line item amounts, and distribution across multiple line items
+func TestCreditRounding_CreditApplication(t *testing.T) {
 	t.Run("Credit_Less_Than_LineItem", func(t *testing.T) {
 		// $100 line item with $25.555 credit available
 		// Credit applied: $25.56 (rounded)
@@ -159,24 +79,19 @@ func TestCreditRounding_PartialCredit(t *testing.T) {
 
 	t.Run("Credit_Exceeds_LineItem", func(t *testing.T) {
 		// $50 line item with $75.50 credit available
-		// Only $50.00 can be applied
+		// Only $50.00 can be applied (capped at line item amount)
 
 		lineItemAmount := decimal.NewFromFloat(50.00)
 		creditAvailable := decimal.NewFromFloat(75.50)
 
-		// In real implementation, we'd cap at line item amount
 		appliedCredit := decimal.Min(creditAvailable, lineItemAmount)
 		roundedCredit := types.RoundToCurrencyPrecision(appliedCredit, "usd")
 
 		assert.True(t, roundedCredit.Equal(lineItemAmount),
 			"Applied credit should be capped at line item amount")
 	})
-}
 
-// TestCreditRounding_MultipleLineItems tests credits distributed across
-// multiple line items
-func TestCreditRounding_MultipleLineItems(t *testing.T) {
-	t.Run("Credits_Across_Three_Items", func(t *testing.T) {
+	t.Run("Credits_Across_Multiple_LineItems", func(t *testing.T) {
 		// Scenario: 3 line items, $100 total credit
 		// Item 1: $50, gets $33.333 credit -> $33.33
 		// Item 2: $30, gets $33.333 credit -> $30.00 (capped)
@@ -284,7 +199,7 @@ func TestCreditRounding_NoAccumulationErrors(t *testing.T) {
 	})
 }
 
-// TestCreditRounding_EdgeCases tests edge cases for credit rounding
+// TestCreditRounding_EdgeCases tests edge cases and basic rounding scenarios for credit rounding
 func TestCreditRounding_EdgeCases(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -301,6 +216,27 @@ func TestCreditRounding_EdgeCases(t *testing.T) {
 			description:    "Zero credit remains zero",
 		},
 		{
+			name:           "Exact_Credit_USD",
+			creditAmount:   "50.00",
+			currency:       "usd",
+			expectedCredit: "50.00",
+			description:    "Exact credit amount",
+		},
+		{
+			name:           "Credit_WithRounding_USD",
+			creditAmount:   "33.333",
+			currency:       "usd",
+			expectedCredit: "33.33",
+			description:    "Credit 33.333 rounds to $33.33",
+		},
+		{
+			name:           "Credit_RoundUp",
+			creditAmount:   "3.335",
+			currency:       "usd",
+			expectedCredit: "3.34",
+			description:    "Credit rounds up from 3.335",
+		},
+		{
 			name:           "SubCent_Rounds_Down",
 			creditAmount:   "0.004",
 			currency:       "usd",
@@ -315,6 +251,13 @@ func TestCreditRounding_EdgeCases(t *testing.T) {
 			description:    "$0.005 rounds to $0.01",
 		},
 		{
+			name:           "Exactly_Half_Cent",
+			creditAmount:   "10.125",
+			currency:       "usd",
+			expectedCredit: "10.13",
+			description:    "Half-cent rounds up (standard rounding)",
+		},
+		{
 			name:           "Large_Credit",
 			creditAmount:   "999999.999",
 			currency:       "usd",
@@ -322,18 +265,18 @@ func TestCreditRounding_EdgeCases(t *testing.T) {
 			description:    "Large credit rounds correctly",
 		},
 		{
+			name:           "JPY_Credit",
+			creditAmount:   "500.5",
+			currency:       "jpy",
+			expectedCredit: "501",
+			description:    "JPY credit rounds to integer",
+		},
+		{
 			name:           "JPY_Half",
 			creditAmount:   "100.5",
 			currency:       "jpy",
 			expectedCredit: "101",
 			description:    "JPY half value rounds up",
-		},
-		{
-			name:           "Exactly_Half_Cent",
-			creditAmount:   "10.125",
-			currency:       "usd",
-			expectedCredit: "10.13",
-			description:    "Half-cent rounds up (standard rounding)",
 		},
 	}
 
@@ -347,6 +290,13 @@ func TestCreditRounding_EdgeCases(t *testing.T) {
 			assert.True(t, roundedCredit.Equal(expectedCredit),
 				"%s: expected %s, got %s",
 				tt.description, expectedCredit.String(), roundedCredit.String())
+
+			// Verify precision for non-zero values
+			if !roundedCredit.IsZero() {
+				precision := types.GetCurrencyPrecision(tt.currency)
+				assert.Equal(t, roundedCredit.Round(precision), roundedCredit,
+					"Credit should be rounded to currency precision")
+			}
 		})
 	}
 }
