@@ -16,7 +16,7 @@ import (
 
 type CreditAdjustmentServiceSuite struct {
 	testutil.BaseServiceTestSuite
-	service  *CreditAdjustmentService
+	service  CreditAdjustmentService
 	testData struct {
 		customer *customer.Customer
 		wallets  []*wallet.Wallet
@@ -62,6 +62,11 @@ func (s *CreditAdjustmentServiceSuite) setupService() {
 		EventPublisher:           s.GetPublisher(),
 		WebhookPublisher:         s.GetWebhookPublisher(),
 	})
+}
+
+// getServiceImpl returns the concrete service implementation for accessing testing-only methods
+func (s *CreditAdjustmentServiceSuite) getServiceImpl() *creditAdjustmentService {
+	return s.service.(*creditAdjustmentService)
 }
 
 // getWalletService returns a wallet service instance for creating credit transactions
@@ -418,7 +423,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_BasicSingl
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -440,7 +445,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1, lineItem2})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
 
 	// Assert
 	s.NoError(err)
@@ -469,7 +474,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WithDiscou
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -490,7 +495,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_FiltersNon
 	fixedLineItem := s.createLineItemForCalculation(decimal.NewFromFloat(30.00), lo.ToPtr(string(types.PRICE_TYPE_FIXED)), decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{usageLineItem, fixedLineItem})
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -512,7 +517,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_Insufficie
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -533,7 +538,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroBalanc
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -542,54 +547,42 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroBalanc
 	s.True(lineItem.PrepaidCreditsApplied.IsZero())
 }
 
-// TestCalculateCreditAdjustments_NegativeAdjustedAmount tests that line items with negative adjusted amounts are skipped
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NegativeAdjustedAmount() {
-	// Create wallet with sufficient balance
-	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
-
-	// Create line item where discount exceeds amount
+// TestCalculateCreditAdjustments_InvalidAdjustedAmounts tests that line items with invalid adjusted amounts
+// (negative or zero) are skipped and no credits are applied
+func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_InvalidAdjustedAmounts() {
+	// Test 1: Negative adjusted amount (discount exceeds amount)
+	w1 := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
 	// Amount: $50, LineItemDiscount: $55
 	// Adjusted amount = $50 - $55 = -$5 (negative, should be skipped)
-	lineItem := s.createLineItemForCalculation(
+	lineItem1 := s.createLineItemForCalculation(
 		decimal.NewFromFloat(50.00),
 		nil,
 		decimal.NewFromFloat(55.00), // LineItemDiscount
 	)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
+	inv1 := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1})
 
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
-
-	// Assert
+	walletDebits1, err := s.getServiceImpl().CalculateCreditAdjustments(inv1, []*wallet.Wallet{w1})
 	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(0, len(walletDebits))
-	s.True(lineItem.PrepaidCreditsApplied.IsZero())
-}
+	s.NotNil(walletDebits1)
+	s.Equal(0, len(walletDebits1))
+	s.True(lineItem1.PrepaidCreditsApplied.IsZero())
 
-// TestCalculateCreditAdjustments_ZeroAdjustedAmount tests that line items with zero adjusted amounts are skipped
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ZeroAdjustedAmount() {
-	// Create wallet with sufficient balance
-	w := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(100.00))
-
-	// Create line item where discount equals amount
+	// Test 2: Zero adjusted amount (discount equals amount)
+	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(100.00))
 	// Amount: $50, LineItemDiscount: $50
 	// Adjusted amount = $50 - $50 = $0 (zero, should be skipped)
-	lineItem := s.createLineItemForCalculation(
+	lineItem2 := s.createLineItemForCalculation(
 		decimal.NewFromFloat(50.00),
 		nil,
 		decimal.NewFromFloat(50.00), // LineItemDiscount
 	)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
+	inv2 := s.createInvoiceForCalculation("inv_2", "USD", []*invoice.InvoiceLineItem{lineItem2})
 
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
-
-	// Assert
+	walletDebits2, err := s.getServiceImpl().CalculateCreditAdjustments(inv2, []*wallet.Wallet{w2})
 	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(0, len(walletDebits))
-	s.True(lineItem.PrepaidCreditsApplied.IsZero())
+	s.NotNil(walletDebits2)
+	s.Equal(0, len(walletDebits2))
+	s.True(lineItem2.PrepaidCreditsApplied.IsZero())
 }
 
 // TestCalculateCreditAdjustments_WalletBalanceTracking tests wallet balance tracking across multiple line items
@@ -604,7 +597,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WalletBala
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1, lineItem2, lineItem3})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -625,7 +618,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_EmptyWalle
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute with empty wallets
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{})
 
 	// Assert
 	s.NoError(err)
@@ -643,7 +636,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_EmptyLineI
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -668,7 +661,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NilPriceTy
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w})
 
 	// Assert
 	s.NoError(err)
@@ -689,7 +682,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1, lineItem2})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
 
 	// Assert
 	s.NoError(err)
@@ -703,30 +696,142 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MultipleWa
 	s.True(lineItem2.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(40.00)))
 }
 
-// TestCalculateCreditAdjustments_ExtremePrecisionSmallDecimals tests calculations with very small decimal values (max 8 decimals)
-// Note: With rounding at source, sub-cent amounts round to zero for USD (2 decimal precision)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePrecisionSmallDecimals() {
-	// Create wallets with very small balances (8 decimal places max)
-	// These amounts are below USD precision (2 decimals), so they round to zero
+// TestCalculateCreditAdjustments_PrecisionEdgeCases tests various precision edge cases including
+// sub-cent rounding, 8-decimal precision with rounding, and multiple wallets with precision
+func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionEdgeCases() {
+	// Test 1: Sub-cent amounts round to zero for USD (2 decimal precision)
+	// This tests that very small amounts below USD precision round to zero
 	w1, _ := decimal.NewFromString("0.00000001")
 	w2, _ := decimal.NewFromString("0.00000002")
 	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
 	wallet2 := s.createWalletForCalculation("wallet_2", "USD", w2)
 
-	// Create line item with very small amount
 	lineItemAmount, _ := decimal.NewFromString("0.00000003")
 	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
-
-	// Assert - sub-cent amounts round to zero for USD
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
 	s.NoError(err)
 	s.NotNil(walletDebits)
-	// With rounding, sub-cent amounts become zero, so no debits are made
 	s.Equal(0, len(walletDebits))
 	s.True(lineItem.PrepaidCreditsApplied.IsZero())
+
+	// Test 2: 8-decimal precision with rounding to USD (2 decimals)
+	// Tests maximum decimal places with proper rounding
+	w3, _ := decimal.NewFromString("123.45678901")
+	w4, _ := decimal.NewFromString("234.56789012")
+	wallet3 := s.createWalletForCalculation("wallet_3", "USD", w3)
+	wallet4 := s.createWalletForCalculation("wallet_4", "USD", w4)
+
+	lineItemAmount2, _ := decimal.NewFromString("200.00000000")
+	lineItem2 := s.createLineItemForCalculation(lineItemAmount2, nil, decimal.Zero)
+	inv2 := s.createInvoiceForCalculation("inv_2", "USD", []*invoice.InvoiceLineItem{lineItem2})
+
+	walletDebits2, err := s.getServiceImpl().CalculateCreditAdjustments(inv2, []*wallet.Wallet{wallet3, wallet4})
+	s.NoError(err)
+	s.NotNil(walletDebits2)
+	s.Equal(2, len(walletDebits2))
+	expectedW3, _ := decimal.NewFromString("123.46")
+	expectedW4, _ := decimal.NewFromString("76.54")
+	s.True(walletDebits2["wallet_3"].Equal(expectedW3))
+	s.True(walletDebits2["wallet_4"].Equal(expectedW4))
+	s.True(lineItem2.PrepaidCreditsApplied.Equal(lineItemAmount2))
+
+	// Test 3: Precision rounding edge cases with repeating decimals
+	// Tests rounding behavior when values sum to exactly 1.0
+	w5, _ := decimal.NewFromString("0.33333333")
+	w6, _ := decimal.NewFromString("0.33333333")
+	w7, _ := decimal.NewFromString("0.33333334")
+	wallet5 := s.createWalletForCalculation("wallet_5", "USD", w5)
+	wallet6 := s.createWalletForCalculation("wallet_6", "USD", w6)
+	wallet7 := s.createWalletForCalculation("wallet_7", "USD", w7)
+
+	lineItemAmount3, _ := decimal.NewFromString("1.00000000")
+	lineItem3 := s.createLineItemForCalculation(lineItemAmount3, nil, decimal.Zero)
+	inv3 := s.createInvoiceForCalculation("inv_3", "USD", []*invoice.InvoiceLineItem{lineItem3})
+
+	walletDebits3, err := s.getServiceImpl().CalculateCreditAdjustments(inv3, []*wallet.Wallet{wallet5, wallet6, wallet7})
+	s.NoError(err)
+	s.NotNil(walletDebits3)
+	s.Equal(3, len(walletDebits3))
+	expectedW, _ := decimal.NewFromString("0.33")
+	s.True(walletDebits3["wallet_5"].Equal(expectedW))
+	s.True(walletDebits3["wallet_6"].Equal(expectedW))
+	s.True(walletDebits3["wallet_7"].Equal(expectedW))
+	expectedTotal, _ := decimal.NewFromString("0.99")
+	s.True(lineItem3.PrepaidCreditsApplied.Equal(expectedTotal))
+
+	// Test 4: Multiple wallets with different precisions (mixed precision)
+	// Tests wallets with varying decimal places all within 8 decimals
+	w8, _ := decimal.NewFromString("10.5")
+	w9, _ := decimal.NewFromString("20.123")
+	w10, _ := decimal.NewFromString("30.12345678")
+	wallet8 := s.createWalletForCalculation("wallet_8", "USD", w8)
+	wallet9 := s.createWalletForCalculation("wallet_9", "USD", w9)
+	wallet10 := s.createWalletForCalculation("wallet_10", "USD", w10)
+
+	lineItemAmount4, _ := decimal.NewFromString("50.0")
+	lineItem4 := s.createLineItemForCalculation(lineItemAmount4, nil, decimal.Zero)
+	inv4 := s.createInvoiceForCalculation("inv_4", "USD", []*invoice.InvoiceLineItem{lineItem4})
+
+	walletDebits4, err := s.getServiceImpl().CalculateCreditAdjustments(inv4, []*wallet.Wallet{wallet8, wallet9, wallet10})
+	s.NoError(err)
+	s.NotNil(walletDebits4)
+	s.Equal(3, len(walletDebits4))
+	expectedW8, _ := decimal.NewFromString("10.50")
+	expectedW9, _ := decimal.NewFromString("20.12")
+	expectedW10, _ := decimal.NewFromString("19.38")
+	s.True(walletDebits4["wallet_8"].Equal(expectedW8))
+	s.True(walletDebits4["wallet_9"].Equal(expectedW9))
+	s.True(walletDebits4["wallet_10"].Equal(expectedW10))
+	s.True(lineItem4.PrepaidCreditsApplied.Equal(lineItemAmount4))
+
+	// Test 5: Single line item with 2 wallets using precise decimals
+	// Tests precise decimal splitting across two wallets
+	w11, _ := decimal.NewFromString("33.33333333")
+	w12, _ := decimal.NewFromString("66.66666667")
+	wallet11 := s.createWalletForCalculation("wallet_11", "USD", w11)
+	wallet12 := s.createWalletForCalculation("wallet_12", "USD", w12)
+
+	lineItemAmount5, _ := decimal.NewFromString("100.00000000")
+	lineItem5 := s.createLineItemForCalculation(lineItemAmount5, nil, decimal.Zero)
+	inv5 := s.createInvoiceForCalculation("inv_5", "USD", []*invoice.InvoiceLineItem{lineItem5})
+
+	walletDebits5, err := s.getServiceImpl().CalculateCreditAdjustments(inv5, []*wallet.Wallet{wallet11, wallet12})
+	s.NoError(err)
+	s.NotNil(walletDebits5)
+	s.Equal(2, len(walletDebits5))
+	expectedW11, _ := decimal.NewFromString("33.33")
+	expectedW12, _ := decimal.NewFromString("66.67")
+	s.True(walletDebits5["wallet_11"].Equal(expectedW11))
+	s.True(walletDebits5["wallet_12"].Equal(expectedW12))
+	s.True(lineItem5.PrepaidCreditsApplied.Equal(lineItemAmount5))
+
+	// Test 6: Maximum precision with single line item and multiple wallets
+	// Tests extreme precision values with multiple wallets
+	w13, _ := decimal.NewFromString("0.12345678")
+	w14, _ := decimal.NewFromString("0.23456789")
+	w15, _ := decimal.NewFromString("0.34567890")
+	wallet13 := s.createWalletForCalculation("wallet_13", "USD", w13)
+	wallet14 := s.createWalletForCalculation("wallet_14", "USD", w14)
+	wallet15 := s.createWalletForCalculation("wallet_15", "USD", w15)
+
+	lineItemAmount6, _ := decimal.NewFromString("0.70370357")
+	lineItem6 := s.createLineItemForCalculation(lineItemAmount6, nil, decimal.Zero)
+	inv6 := s.createInvoiceForCalculation("inv_6", "USD", []*invoice.InvoiceLineItem{lineItem6})
+
+	walletDebits6, err := s.getServiceImpl().CalculateCreditAdjustments(inv6, []*wallet.Wallet{wallet13, wallet14, wallet15})
+	s.NoError(err)
+	s.NotNil(walletDebits6)
+	s.Equal(3, len(walletDebits6))
+	expectedW13, _ := decimal.NewFromString("0.12")
+	expectedW14, _ := decimal.NewFromString("0.23")
+	expectedW15, _ := decimal.NewFromString("0.35")
+	s.True(walletDebits6["wallet_13"].Equal(expectedW13))
+	s.True(walletDebits6["wallet_14"].Equal(expectedW14))
+	s.True(walletDebits6["wallet_15"].Equal(expectedW15))
+	expectedTotal6, _ := decimal.NewFromString("0.70")
+	s.True(lineItem6.PrepaidCreditsApplied.Equal(expectedTotal6))
 }
 
 // TestCalculateCreditAdjustments_ExtremePrecisionLargeDecimals tests calculations with very large decimal values
@@ -743,7 +848,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
 
 	// Assert
 	s.NoError(err)
@@ -753,35 +858,6 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePre
 	expectedW1, _ := decimal.NewFromString("750000000.00")
 	s.True(walletDebits["wallet_1"].Equal(expectedW1))
 	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedW1))
-}
-
-// TestCalculateCreditAdjustments_ManyDecimalPlaces tests calculations with maximum decimal places (8 decimals)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ManyDecimalPlaces() {
-	// Create wallets with maximum decimal places (8 decimals)
-	w1, _ := decimal.NewFromString("123.45678901")
-	w2, _ := decimal.NewFromString("234.56789012")
-	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
-	wallet2 := s.createWalletForCalculation("wallet_2", "USD", w2)
-
-	// Create line item with maximum decimal places
-	lineItemAmount, _ := decimal.NewFromString("200.00000000")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(2, len(walletDebits))
-	// First wallet covers full amount, second wallet covers remainder
-	// With rounding: 123.45678901 -> 123.46, 76.54321099 -> 76.54
-	expectedW1, _ := decimal.NewFromString("123.46")
-	expectedW2, _ := decimal.NewFromString("76.54")
-	s.True(walletDebits["wallet_1"].Equal(expectedW1))
-	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(lineItemAmount))
 }
 
 // TestCalculateCreditAdjustments_PrecisionWithDiscounts tests precision maintenance with discounts (max 8 decimals)
@@ -798,7 +874,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionW
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{testWallet})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{testWallet})
 
 	// Assert
 	s.NoError(err)
@@ -809,39 +885,6 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionW
 	expectedDebit, _ := decimal.NewFromString("100.12")
 	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
 	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedDebit))
-}
-
-// TestCalculateCreditAdjustments_PrecisionRoundingEdgeCases tests edge cases that might cause rounding issues (max 8 decimals)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_PrecisionRoundingEdgeCases() {
-	// Create wallets with values that might cause rounding issues (8 decimals max)
-	w1, _ := decimal.NewFromString("0.33333333")
-	w2, _ := decimal.NewFromString("0.33333333")
-	w3, _ := decimal.NewFromString("0.33333334")
-	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
-	wallet2 := s.createWalletForCalculation("wallet_2", "USD", w2)
-	wallet3 := s.createWalletForCalculation("wallet_3", "USD", w3)
-
-	// Create line item that sums to exactly 1.00000000
-	lineItemAmount, _ := decimal.NewFromString("1.00000000")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2, wallet3})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(3, len(walletDebits))
-	// All three wallets should be used, but rounded to USD precision (2 decimals)
-	// 0.33333333 -> 0.33, 0.33333333 -> 0.33, 0.33333334 -> 0.33
-	expectedW, _ := decimal.NewFromString("0.33")
-	s.True(walletDebits["wallet_1"].Equal(expectedW))
-	s.True(walletDebits["wallet_2"].Equal(expectedW))
-	s.True(walletDebits["wallet_3"].Equal(expectedW))
-	// Sum of rounded amounts: 0.33 + 0.33 + 0.33 = 0.99 (not 1.00 due to rounding)
-	expectedTotal, _ := decimal.NewFromString("0.99")
-	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedTotal))
 }
 
 // TestCalculateCreditAdjustments_SingleLineItemTwoWallets tests one line item adjusted by exactly 2 wallets
@@ -855,7 +898,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
 
 	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
 
 	// Assert
 	s.NoError(err)
@@ -867,221 +910,40 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLine
 	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(70.00)))
 }
 
-// TestCalculateCreditAdjustments_SingleLineItemMultipleWalletsExactSplit tests one line item split exactly across multiple wallets
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLineItemMultipleWalletsExactSplit() {
-	// Create three wallets with equal balances that sum to line item amount
+// TestCalculateCreditAdjustments_SingleLineItemMultipleWallets tests one line item split across multiple wallets,
+// covering both exact split and partial coverage scenarios
+func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLineItemMultipleWallets() {
+	// Test 1: Exact split - wallets sum to exactly match line item amount
 	w1 := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(33.33))
 	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(33.33))
 	w3 := s.createWalletForCalculation("wallet_3", "USD", decimal.NewFromFloat(33.34))
 
-	// Create line item that exactly matches the sum
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
+	lineItem1 := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
+	inv1 := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem1})
 
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2, w3})
-
-	// Assert
+	walletDebits1, err := s.getServiceImpl().CalculateCreditAdjustments(inv1, []*wallet.Wallet{w1, w2, w3})
 	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(3, len(walletDebits))
-	// All wallets should be fully used
-	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(33.33)))
-	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(33.33)))
-	s.True(walletDebits["wallet_3"].Equal(decimal.NewFromFloat(33.34)))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(100.00)))
-}
+	s.NotNil(walletDebits1)
+	s.Equal(3, len(walletDebits1))
+	s.True(walletDebits1["wallet_1"].Equal(decimal.NewFromFloat(33.33)))
+	s.True(walletDebits1["wallet_2"].Equal(decimal.NewFromFloat(33.33)))
+	s.True(walletDebits1["wallet_3"].Equal(decimal.NewFromFloat(33.34)))
+	s.True(lineItem1.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(100.00)))
 
-// TestCalculateCreditAdjustments_SingleLineItemMultipleWalletsPartialCoverage tests one line item that can't be fully covered
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLineItemMultipleWalletsPartialCoverage() {
-	// Create wallets with insufficient total balance
-	w1 := s.createWalletForCalculation("wallet_1", "USD", decimal.NewFromFloat(25.00))
-	w2 := s.createWalletForCalculation("wallet_2", "USD", decimal.NewFromFloat(30.00))
+	// Test 2: Partial coverage - wallets have insufficient total balance
+	w4 := s.createWalletForCalculation("wallet_4", "USD", decimal.NewFromFloat(25.00))
+	w5 := s.createWalletForCalculation("wallet_5", "USD", decimal.NewFromFloat(30.00))
 
-	// Create line item that exceeds available balance
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
+	lineItem2 := s.createLineItemForCalculation(decimal.NewFromFloat(100.00), nil, decimal.Zero)
+	inv2 := s.createInvoiceForCalculation("inv_2", "USD", []*invoice.InvoiceLineItem{lineItem2})
 
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{w1, w2})
-
-	// Assert
+	walletDebits2, err := s.getServiceImpl().CalculateCreditAdjustments(inv2, []*wallet.Wallet{w4, w5})
 	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(2, len(walletDebits))
-	// Both wallets should be fully used
-	s.True(walletDebits["wallet_1"].Equal(decimal.NewFromFloat(25.00)))
-	s.True(walletDebits["wallet_2"].Equal(decimal.NewFromFloat(30.00)))
-	// Line item should only get partial credit
-	s.True(lineItem.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(55.00)))
-}
-
-// TestCalculateCreditAdjustments_VerySmallWalletBalance tests wallet with minimal balance
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_VerySmallWalletBalance() {
-	// Create wallet with minimal balance
-	w, _ := decimal.NewFromString("0.01")
-	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
-
-	// Create line item
-	lineItem := s.createLineItemForCalculation(decimal.NewFromFloat(50.00), nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{testWallet})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(1, len(walletDebits))
-	s.True(walletDebits["wallet_1"].Equal(w))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(w))
-}
-
-// TestCalculateCreditAdjustments_MixedPrecisionWallets tests wallets with different decimal precisions (max 8 decimals)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_MixedPrecisionWallets() {
-	// Create wallets with different precisions (all within 8 decimals)
-	w1, _ := decimal.NewFromString("10.5")
-	w2, _ := decimal.NewFromString("20.123")
-	w3, _ := decimal.NewFromString("30.12345678")
-	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
-	wallet2 := s.createWalletForCalculation("wallet_2", "USD", w2)
-	wallet3 := s.createWalletForCalculation("wallet_3", "USD", w3)
-
-	// Create line item
-	lineItemAmount, _ := decimal.NewFromString("50.0")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2, wallet3})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(3, len(walletDebits))
-	// All wallets should be used, but rounded to USD precision (2 decimals)
-	// wallet1: $10.5 -> $10.50, wallet2: $20.123 -> $20.12, remaining for wallet3: $50.00 - $10.50 - $20.12 = $19.38
-	expectedW1, _ := decimal.NewFromString("10.50")
-	expectedW2, _ := decimal.NewFromString("20.12")
-	expectedW3, _ := decimal.NewFromString("19.38")
-	s.True(walletDebits["wallet_1"].Equal(expectedW1))
-	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	s.True(walletDebits["wallet_3"].Equal(expectedW3))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(lineItemAmount))
-}
-
-// TestCalculateCreditAdjustments_ExtremeDiscountPrecision tests discounts with maximum precision (8 decimals)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremeDiscountPrecision() {
-	// Create wallet with precise balance (8 decimals max)
-	w, _ := decimal.NewFromString("100.00000001")
-	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
-
-	// Create line item with maximum precision discount (8 decimals)
-	amount, _ := decimal.NewFromString("150.12345678")
-	lineItemDiscount, _ := decimal.NewFromString("25.12345678")
-	// Adjusted amount = 150.12345678 - 25.12345678 = 125.00000000
-	lineItem := s.createLineItemForCalculation(amount, nil, lineItemDiscount)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{testWallet})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(1, len(walletDebits))
-	// Should debit full wallet balance (adjusted amount is 125, but wallet only has 100.00000001)
-	// With rounding: 100.00000001 rounds to 100.00 for USD
-	expectedDebit, _ := decimal.NewFromString("100.00")
-	s.True(walletDebits["wallet_1"].Equal(expectedDebit))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedDebit))
-}
-
-// TestCalculateCreditAdjustments_NearZeroValues tests values very close to zero (max 8 decimals)
-// Note: With rounding at source, sub-cent amounts round to zero for USD (2 decimal precision)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_NearZeroValues() {
-	// Create wallet with value very close to zero (8 decimals max)
-	// This amount is below USD precision (2 decimals), so it rounds to zero
-	w, _ := decimal.NewFromString("0.00000001")
-	testWallet := s.createWalletForCalculation("wallet_1", "USD", w)
-
-	// Create line item with value very close to zero
-	lineItemAmount, _ := decimal.NewFromString("0.00000002")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{testWallet})
-
-	// Assert - sub-cent amounts round to zero for USD
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(0, len(walletDebits))
-	s.True(lineItem.PrepaidCreditsApplied.IsZero())
-}
-
-// TestCalculateCreditAdjustments_SingleLineItemTwoWalletsWithPrecision tests single line item with 2 wallets using precise decimals (max 8 decimals)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_SingleLineItemTwoWalletsWithPrecision() {
-	// Create two wallets with precise balances (8 decimals max)
-	w1, _ := decimal.NewFromString("33.33333333")
-	w2, _ := decimal.NewFromString("66.66666667")
-	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
-	wallet2 := s.createWalletForCalculation("wallet_2", "USD", w2)
-
-	// Create single line item that requires both wallets
-	lineItemAmount, _ := decimal.NewFromString("100.00000000")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(2, len(walletDebits))
-	// Both wallets should be fully used, but rounded to USD precision (2 decimals)
-	// 33.33333333 -> 33.33, 66.66666667 -> 66.67
-	expectedW1, _ := decimal.NewFromString("33.33")
-	expectedW2, _ := decimal.NewFromString("66.67")
-	s.True(walletDebits["wallet_1"].Equal(expectedW1))
-	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	s.True(lineItem.PrepaidCreditsApplied.Equal(lineItemAmount))
-}
-
-// TestCalculateCreditAdjustments_ExtremePrecisionSingleLineItemMultipleWallets tests maximum precision with single line item and multiple wallets (max 8 decimals)
-func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_ExtremePrecisionSingleLineItemMultipleWallets() {
-	// Create multiple wallets with maximum precision (8 decimals)
-	w1, _ := decimal.NewFromString("0.12345678")
-	w2, _ := decimal.NewFromString("0.23456789")
-	w3, _ := decimal.NewFromString("0.34567890")
-	wallet1 := s.createWalletForCalculation("wallet_1", "USD", w1)
-	wallet2 := s.createWalletForCalculation("wallet_2", "USD", w2)
-	wallet3 := s.createWalletForCalculation("wallet_3", "USD", w3)
-
-	// Create single line item
-	lineItemAmount, _ := decimal.NewFromString("0.70370357")
-	lineItem := s.createLineItemForCalculation(lineItemAmount, nil, decimal.Zero)
-	inv := s.createInvoiceForCalculation("inv_1", "USD", []*invoice.InvoiceLineItem{lineItem})
-
-	// Execute
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{wallet1, wallet2, wallet3})
-
-	// Assert
-	s.NoError(err)
-	s.NotNil(walletDebits)
-	s.Equal(3, len(walletDebits))
-	// All wallets should be fully used, but rounded to USD precision (2 decimals)
-	// 0.12345678 -> 0.12, 0.23456789 -> 0.23, 0.34567890 -> 0.35
-	expectedW1, _ := decimal.NewFromString("0.12")
-	expectedW2, _ := decimal.NewFromString("0.23")
-	expectedW3, _ := decimal.NewFromString("0.35")
-	s.True(walletDebits["wallet_1"].Equal(expectedW1))
-	s.True(walletDebits["wallet_2"].Equal(expectedW2))
-	s.True(walletDebits["wallet_3"].Equal(expectedW3))
-	// Line item should get sum of rounded wallets: 0.12 + 0.23 + 0.35 = 0.70
-	expectedTotal, _ := decimal.NewFromString("0.70")
-	s.True(lineItem.PrepaidCreditsApplied.Equal(expectedTotal))
+	s.NotNil(walletDebits2)
+	s.Equal(2, len(walletDebits2))
+	s.True(walletDebits2["wallet_4"].Equal(decimal.NewFromFloat(25.00)))
+	s.True(walletDebits2["wallet_5"].Equal(decimal.NewFromFloat(30.00)))
+	s.True(lineItem2.PrepaidCreditsApplied.Equal(decimal.NewFromFloat(55.00)))
 }
 
 // TestCalculateCreditAdjustments_WalletTypeFiltering tests that CalculateCreditAdjustments processes
@@ -1125,7 +987,7 @@ func (s *CreditAdjustmentServiceSuite) TestCalculateCreditAdjustments_WalletType
 
 	// Execute with both wallet types
 	// Note: In production, only PrePaid wallets would be passed via GetWalletsForCreditAdjustment
-	walletDebits, err := s.service.CalculateCreditAdjustments(inv, []*wallet.Wallet{prepaidWallet, postpaidWallet})
+	walletDebits, err := s.getServiceImpl().CalculateCreditAdjustments(inv, []*wallet.Wallet{prepaidWallet, postpaidWallet})
 
 	// Assert - CalculateCreditAdjustments processes both wallet types when passed directly
 	s.NoError(err)

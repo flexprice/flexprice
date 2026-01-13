@@ -4,37 +4,37 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
-// CreditAdjustmentResult holds the result of applying credit adjustments to an invoice
-type CreditAdjustmentResult struct {
-	TotalPrepaidCreditsApplied decimal.Decimal
-	Currency                   string
-}
+// CreditAdjustmentService is a type alias for the interface
+type CreditAdjustmentService = interfaces.CreditAdjustmentService
 
-// CreditAdjustmentService handles applying wallet credits as invoice adjustments
-type CreditAdjustmentService struct {
+// creditAdjustmentService implements the CreditAdjustmentService interface
+type creditAdjustmentService struct {
 	ServiceParams
 }
 
 // NewCreditAdjustmentService creates a new credit adjustment service
 func NewCreditAdjustmentService(
 	params ServiceParams,
-) *CreditAdjustmentService {
-	return &CreditAdjustmentService{
+) CreditAdjustmentService {
+	return &creditAdjustmentService{
 		ServiceParams: params,
 	}
 }
 
+// CalculateCreditAdjustments calculates credit adjustments for invoice line items.
 // NOTE: This method is exported ONLY for testing purposes. Do not use it directly in production code.
 // Use ApplyCreditsToInvoice() instead, which handles the full workflow including database operations.
-func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoice, wallets []*wallet.Wallet) (map[string]decimal.Decimal, error) {
+func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoice, wallets []*wallet.Wallet) (map[string]decimal.Decimal, error) {
 	walletDebits := make(map[string]decimal.Decimal)
 
 	// Track remaining balances as we use wallets across multiple line items
@@ -121,11 +121,11 @@ func (s *CreditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 //   - The invoice's TotalPrepaidCreditsApplied is set in memory but NOT persisted to the database
 //   - It is the CALLER'S RESPONSIBILITY to update the invoice in the database if needed
 //   - This design allows callers to batch invoice updates with other operations if required
-func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*CreditAdjustmentResult, error) {
+func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error) {
 
 	if len(inv.LineItems) == 0 {
 		s.Logger.Infow("no line items to apply credits to, returning zero result", "invoice_id", inv.ID)
-		return &CreditAdjustmentResult{
+		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
 		}, nil
@@ -142,7 +142,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 	if len(wallets) == 0 {
 		s.Logger.Infow("no wallets available for credit adjustment, returning zero result", "invoice_id", inv.ID)
-		return &CreditAdjustmentResult{
+		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
 		}, nil
@@ -162,7 +162,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 	// If no credits were calculated to apply, return zero result
 	if len(walletDebits) == 0 {
-		return &CreditAdjustmentResult{
+		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
 		}, nil
@@ -178,7 +178,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	}
 
 	// Now do all the DB writes in a transaction
-	var result *CreditAdjustmentResult
+	var result *dto.CreditAdjustmentResult
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
 		// Step 1: Execute all wallet debits
 		// For each wallet that was used, debit the calculated amount
@@ -242,7 +242,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		// This design allows callers to batch invoice updates with other operations.
 		inv.TotalPrepaidCreditsApplied = totalApplied
 
-		result = &CreditAdjustmentResult{
+		result = &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: totalApplied,
 			Currency:                   inv.Currency,
 		}

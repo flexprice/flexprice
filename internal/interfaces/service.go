@@ -5,6 +5,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
+	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
@@ -147,6 +148,12 @@ type PriceUnitService interface {
 	DeletePriceUnit(ctx context.Context, id string) error
 }
 
+// CreditAdjustmentService defines the interface for credit adjustment operations
+type CreditAdjustmentService interface {
+	// ApplyCreditsToInvoice applies wallet credits to invoice line items
+	ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error)
+}
+
 type ServiceDependencies struct {
 	CustomerService                 CustomerService
 	PaymentService                  PaymentService
@@ -155,5 +162,6 @@ type ServiceDependencies struct {
 	SubscriptionService             SubscriptionService
 	EntityIntegrationMappingService EntityIntegrationMappingService
 	PriceUnitService                PriceUnitService
+	CreditAdjustmentService         CreditAdjustmentService
 	DB                              postgres.IClient
 }
