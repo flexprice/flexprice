@@ -506,7 +506,6 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 				// future invoice amounts (credit adjustments), not credits used for direct invoice payments.
 				// POST_PAID wallets are used for invoice payments, while PRE_PAID wallets are for adjustments.
 				walletReq := &dto.CreateWalletRequest{
-					Name:           "Subscription Wallet",
 					CustomerID:     inv.CustomerID,
 					Currency:       inv.Currency,
 					ConversionRate: decimal.NewFromInt(1), // Set default conversion rate to avoid division by zero
