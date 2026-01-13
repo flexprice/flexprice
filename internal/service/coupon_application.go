@@ -328,16 +328,11 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 	}
 
 	couponsMap := make(map[string]*coupon.Coupon)
-	if len(couponIDs) == 0 {
-		return result, nil
-	}
 	couponFilter := types.NewNoLimitCouponFilter()
 	couponFilter.CouponIDs = couponIDs
 	coupons, err := s.CouponRepo.List(ctx, couponFilter)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to fetch coupons").
-			Mark(ierr.ErrDatabase)
+		return nil, err
 	}
 
 	for _, c := range coupons {
@@ -345,19 +340,16 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 	}
 
 	// Validate all coupons exist - fail fast if any missing
-	missingCoupons := make([]string, 0)
 	for _, couponID := range couponIDs {
 		if _, exists := couponsMap[couponID]; !exists {
-			missingCoupons = append(missingCoupons, couponID)
+			return nil, ierr.NewError("one or more coupons not found").
+				WithHint("Coupons must exist before applying to invoice").
+				WithReportableDetails(map[string]interface{}{
+					"missing_coupon_id": couponID,
+					"coupon_ids":        couponIDs,
+				}).
+				Mark(ierr.ErrNotFound)
 		}
-	}
-	if len(missingCoupons) > 0 {
-		return nil, ierr.NewError("one or more coupons not found").
-			WithHint("Coupons must exist before applying to invoice").
-			WithReportableDetails(map[string]interface{}{
-				"missing_coupon_ids": missingCoupons,
-			}).
-			Mark(ierr.ErrNotFound)
 	}
 
 	// Step 2: Calculate total line item discounts (if any were applied)
