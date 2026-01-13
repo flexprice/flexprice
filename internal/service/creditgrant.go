@@ -487,7 +487,6 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		// Create new wallet with conversion rates from grant (if provided)
 		// Wallet will handle defaults: ConversionRate defaults to 1, TopupConversionRate defaults to ConversionRate
 		walletReq := &dto.CreateWalletRequest{
-			Name:       "Subscription Wallet",
 			CustomerID: subscription.CustomerID,
 			Currency:   subscription.Currency,
 			Config: &types.WalletConfig{
