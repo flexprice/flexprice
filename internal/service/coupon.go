@@ -7,7 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/coupon"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/shopspring/decimal"
 )
 
 // CouponService defines the interface for core coupon CRUD operations
@@ -18,7 +17,7 @@ type CouponService interface {
 	UpdateCoupon(ctx context.Context, id string, req dto.UpdateCouponRequest) (*dto.CouponResponse, error)
 	DeleteCoupon(ctx context.Context, id string) error
 	ListCoupons(ctx context.Context, filter *types.CouponFilter) (*dto.ListCouponsResponse, error)
-	ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal, currency string) (dto.DiscountResult, error)
+	ApplyDiscount(ctx context.Context, req dto.ApplyDiscountRequest) (*dto.DiscountResult, error)
 }
 
 type couponService struct {
@@ -122,41 +121,40 @@ func (s *couponService) ListCoupons(ctx context.Context, filter *types.CouponFil
 }
 
 // ApplyDiscount calculates the discount amount for a given coupon and price.
-// The coupon object must be provided (callers should fetch it first).
 // The discount is rounded to currency precision immediately at the source.
-func (s *couponService) ApplyDiscount(ctx context.Context, coupon coupon.Coupon, originalPrice decimal.Decimal, currency string) (dto.DiscountResult, error) {
+func (s *couponService) ApplyDiscount(ctx context.Context, req dto.ApplyDiscountRequest) (*dto.DiscountResult, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
 
-	if originalPrice.LessThanOrEqual(decimal.Zero) {
-		return dto.DiscountResult{}, ierr.NewError("original_price must be greater than zero").
-			WithHint("Please provide a valid original price").
-			WithReportableDetails(map[string]interface{}{
-				"original_price": originalPrice,
-				"coupon_id":      coupon.ID,
-			}).
-			Mark(ierr.ErrValidation)
+	// Fetch the coupon
+	var c *coupon.Coupon
+	c, err := s.CouponRepo.Get(ctx, req.CouponID)
+	if err != nil {
+		return nil, err
 	}
 
 	s.Logger.Debugw("calculating discount for coupon",
-		"coupon_id", coupon.ID,
-		"original_price", originalPrice,
-		"currency", currency)
+		"coupon_id", c.ID,
+		"original_price", req.OriginalPrice,
+		"currency", req.Currency)
 
 	// Validate coupon is valid for redemption
-	if !coupon.IsValid() {
-		return dto.DiscountResult{}, ierr.NewError("coupon is not valid for redemption").
+	if !c.IsValid() {
+		return nil, ierr.NewError("coupon is not valid for redemption").
 			WithHint("Coupon may be expired, have reached maximum redemptions, or not yet available for redemption").
 			WithReportableDetails(map[string]interface{}{
-				"coupon_id":         coupon.ID,
-				"redeem_after":      coupon.RedeemAfter,
-				"redeem_before":     coupon.RedeemBefore,
-				"total_redemptions": coupon.TotalRedemptions,
-				"max_redemptions":   coupon.MaxRedemptions,
+				"coupon_id":         c.ID,
+				"redeem_after":      c.RedeemAfter,
+				"redeem_before":     c.RedeemBefore,
+				"total_redemptions": c.TotalRedemptions,
+				"max_redemptions":   c.MaxRedemptions,
 			}).
 			Mark(ierr.ErrValidation)
 	}
 
-	result := coupon.ApplyDiscount(originalPrice, currency)
-	return dto.DiscountResult{
+	result := c.ApplyDiscount(req.OriginalPrice, req.Currency)
+	return &dto.DiscountResult{
 		Discount:   result.Discount,
 		FinalPrice: result.FinalPrice,
 	}, nil
