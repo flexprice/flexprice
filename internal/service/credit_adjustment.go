@@ -6,6 +6,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/idempotency"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
@@ -191,6 +192,14 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 				continue
 			}
 
+			// Generate unique idempotency key for this wallet operation
+			// This ensures uniqueness per invoice-wallet pair and prevents double-debits on retries
+			generator := idempotency.NewGenerator()
+			idempotencyKey := generator.GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
+				"invoice_id": inv.ID,
+				"wallet_id":  walletID,
+			})
+
 			operation := &wallet.WalletOperation{
 				WalletID:          walletID,
 				Type:              types.TransactionTypeDebit,
@@ -199,6 +208,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 				ReferenceID:       inv.ID,
 				Description:       fmt.Sprintf("Credit adjustment for invoice %s", inv.ID),
 				TransactionReason: types.TransactionReasonCreditAdjustment,
+				IdempotencyKey:    idempotencyKey,
 				Metadata: types.Metadata{
 					"invoice_id":      inv.ID,
 					"customer_id":     inv.CustomerID,

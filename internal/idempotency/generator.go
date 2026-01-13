@@ -29,6 +29,9 @@ const (
 
 	// Wallet Top Up
 	ScopeWalletTopUp Scope = "wallet_top_up"
+
+	// Wallet Credit Adjustment
+	ScopeWalletCreditAdjustment Scope = "wallet_credit_adjustment"
 )
 
 // Generator generates idempotency keys
