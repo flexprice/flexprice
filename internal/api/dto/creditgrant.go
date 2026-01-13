@@ -460,6 +460,10 @@ func (r *CancelFutureSubscriptionGrantsRequest) Validate() error {
 		if r.EffectiveDate.Before(now.Add(-tolerance)) {
 			return errors.NewError("effective_date must be at or after the current time (within tolerance)").
 				WithHint("Please provide a valid effective date that is not too far in the past").
+				WithReportableDetails(map[string]interface{}{
+					"effective_date": r.EffectiveDate,
+					"current_time":   now,
+				}).
 				Mark(ierr.ErrValidation)
 		}
 	}
