@@ -10,7 +10,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -40,7 +39,7 @@ func NewCouponApplicationService(
 		ServiceParams: params,
 	}
 }
- 
+
 func (s *couponApplicationService) CreateCouponApplication(ctx context.Context, req dto.CreateCouponApplicationRequest) (*dto.CouponApplicationResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
@@ -184,7 +183,11 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 		// Coupon already validated to exist in map
 		coupon := couponsMap[lineItemCoupon.CouponID]
 
-		discountResult, err := couponService.ApplyDiscount(ctx, lo.FromPtr(coupon), targetLineItem.Amount, inv.Currency)
+		discountResult, err := couponService.ApplyDiscount(ctx, dto.ApplyDiscountRequest{
+			CouponID:      lineItemCoupon.CouponID,
+			OriginalPrice: targetLineItem.Amount,
+			Currency:      inv.Currency,
+		})
 		if err != nil {
 			s.Logger.Warnw("failed to apply line item coupon, skipping",
 				"coupon_id", lineItemCoupon.CouponID,
@@ -380,7 +383,11 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 		// Coupon already validated to exist in map
 		coupon := couponsMap[invoiceCoupon.CouponID]
 
-		discountResult, err := couponService.ApplyDiscount(ctx, lo.FromPtr(coupon), runningSubTotal, inv.Currency)
+		discountResult, err := couponService.ApplyDiscount(ctx, dto.ApplyDiscountRequest{
+			CouponID:      invoiceCoupon.CouponID,
+			OriginalPrice: runningSubTotal,
+			Currency:      inv.Currency,
+		})
 		if err != nil {
 			s.Logger.Warnw("failed to apply invoice coupon, skipping",
 				"coupon_id", invoiceCoupon.CouponID,
