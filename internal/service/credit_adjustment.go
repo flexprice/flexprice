@@ -195,7 +195,7 @@ func (s *CreditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 				WalletID:          walletID,
 				Type:              types.TransactionTypeDebit,
 				Amount:            debitAmount,
-				ReferenceType:     types.WalletTxReferenceTypeRequest,
+				ReferenceType:     types.WalletTxReferenceTypeInvoice,
 				ReferenceID:       inv.ID,
 				Description:       fmt.Sprintf("Credit adjustment for invoice %s", inv.ID),
 				TransactionReason: types.TransactionReasonCreditAdjustment,

@@ -108,6 +108,9 @@ const (
 	WalletTxReferenceTypeExternal WalletTxReferenceType = "EXTERNAL"
 	// WalletTxReferenceTypeRequest is used for auto generated reference IDs
 	WalletTxReferenceTypeRequest WalletTxReferenceType = "REQUEST"
+
+	// WalletTxReferenceTypeInvoice is used for invoice reference IDs
+	WalletTxReferenceTypeInvoice WalletTxReferenceType = "INVOICE"
 )
 
 func (t WalletTxReferenceType) Validate() error {
@@ -118,6 +121,7 @@ func (t WalletTxReferenceType) Validate() error {
 		string(WalletTxReferenceTypePayment),
 		string(WalletTxReferenceTypeExternal),
 		string(WalletTxReferenceTypeRequest),
+		string(WalletTxReferenceTypeInvoice),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid wallet transaction reference type").

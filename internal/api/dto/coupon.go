@@ -163,3 +163,33 @@ func NewCouponResponse(c *coupon.Coupon) *CouponResponse {
 
 // ListCouponsResponse represents the response for listing coupons
 type ListCouponsResponse = types.ListResponse[*CouponResponse]
+
+// ApplyDiscountRequest represents the request to apply a discount
+type ApplyDiscountRequest struct {
+	CouponID      string          `json:"coupon_id" validate:"required"`
+	OriginalPrice decimal.Decimal `json:"original_price" validate:"required" swaggertype:"string"`
+	Currency      string          `json:"currency" validate:"required"`
+}
+
+// Validate validates the ApplyDiscountRequest
+func (r *ApplyDiscountRequest) Validate() error {
+	if r.CouponID == "" {
+		return ierr.NewError("coupon_id is required").
+			WithHint("Please provide a valid coupon ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.OriginalPrice.LessThanOrEqual(decimal.Zero) {
+		return ierr.NewError("original_price must be greater than zero").
+			WithHint("Please provide a valid original price").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.Currency == "" {
+		return ierr.NewError("currency is required").
+			WithHint("Please provide a valid currency code").
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
