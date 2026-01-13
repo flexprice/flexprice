@@ -360,7 +360,6 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 	// Formula: subtotal - line item discounts - prepaid credits applied
 	runningSubTotal := inv.Subtotal.Sub(totalLineItemDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	for _, invoiceCoupon := range invoiceCoupons {
-		// Coupon already validated to exist in map
 		coupon := couponsMap[invoiceCoupon.CouponID]
 
 		discountResult, err := couponService.ApplyDiscount(ctx, dto.ApplyDiscountRequest{
@@ -443,7 +442,6 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 		Metadata: map[string]interface{}{
 			"invoice_level_coupons":   len(invoiceCoupons),
 			"successful_applications": len(appliedCoupons),
-			"validation_failures":     len(invoiceCoupons) - len(appliedCoupons),
 		},
 	}
 
