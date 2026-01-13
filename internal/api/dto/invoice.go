@@ -86,7 +86,6 @@ type CreateInvoiceRequest struct {
 	AmountPaid *decimal.Decimal `json:"amount_paid,omitempty" swaggertype:"string"`
 
 	// total_prepaid_applied is the total amount of prepaid applied to this invoice.
-	// This represents the sum of all prepaid applications (from credit grants, credit notes, etc.) that reduce the invoice amount.
 	TotalPrepaidApplied *decimal.Decimal `json:"total_prepaid_applied,omitempty" swaggertype:"string"`
 
 	// line_items contains the individual items that make up this invoice
@@ -98,7 +97,7 @@ type CreateInvoiceRequest struct {
 	// tax_rates
 	TaxRates []string `json:"tax_rates,omitempty"`
 
-	// Invoice Coupns
+	// Invoice Coupons
 	InvoiceCoupons []InvoiceCoupon `json:"invoice_coupons,omitempty"`
 
 	// Invoice Line Item Coupons
@@ -111,7 +110,6 @@ type CreateInvoiceRequest struct {
 	TaxRateOverrides []*TaxRateOverride `json:"tax_rate_overrides,omitempty"`
 
 	// prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)
-	// These are applied at invoice level by the invoice service without further resolution
 	PreparedTaxRates []*TaxRateResponse `json:"prepared_tax_rates,omitempty"`
 
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
@@ -505,12 +503,9 @@ type CreateInvoiceLineItemRequest struct {
 	CommitmentInfo *types.CommitmentInfo `json:"commitment_info,omitempty"`
 
 	// prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.
-	// This represents prepaid credits (from credit grants, credit notes, etc.) that are specifically applied to reduce this line item's amount.
 	PrepaidCreditsApplied *decimal.Decimal `json:"prepaid_credits_applied,omitempty" swaggertype:"string"`
 
 	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
-	// This represents discounts that are applied specifically to this line item (e.g., via line-item level coupons or discounts).
-	// This is simpler and more direct - when a discount is applied directly to a line item, it goes here.
 	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty" swaggertype:"string"`
 }
 
