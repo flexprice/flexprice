@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -124,10 +125,6 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 		couponIDs = append(couponIDs, lic.CouponID)
 	}
 
-	couponsMap := make(map[string]*coupon.Coupon)
-	if len(couponIDs) == 0 {
-		return result, nil
-	}
 	couponFilter := types.NewNoLimitCouponFilter()
 	couponFilter.CouponIDs = couponIDs
 	coupons, err := s.CouponRepo.List(ctx, couponFilter)
@@ -136,6 +133,8 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 			WithHint("Failed to fetch coupons").
 			Mark(ierr.ErrDatabase)
 	}
+
+	couponsMap := make(map[string]*coupon.Coupon)
 
 	for _, c := range coupons {
 		couponsMap[c.ID] = c
@@ -154,6 +153,14 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 		}
 	}
 
+	// Build a map of line items by PriceID for O(1) lookup
+	lineItemsByPriceID := make(map[string]*invoice.InvoiceLineItem)
+	for _, lineItem := range inv.LineItems {
+		if lineItem.PriceID != nil {
+			lineItemsByPriceID[lo.FromPtr(lineItem.PriceID)] = lineItem
+		}
+	}
+
 	// Step 2: Prepare all data outside transaction (calculations, validations, entity building)
 	couponService := NewCouponService(s.ServiceParams)
 	totalDiscount := decimal.Zero
@@ -163,14 +170,8 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 	// Process line item coupons (outside transaction)
 	for _, lineItemCoupon := range lineItemCoupons {
 		// Find the line item this coupon applies to by matching price_id
-		var targetLineItem *invoice.InvoiceLineItem
-		for _, lineItem := range inv.LineItems {
-			if lineItem.PriceID != nil && *lineItem.PriceID == lineItemCoupon.LineItemID {
-				targetLineItem = lineItem
-				break
-			}
-		}
-		if targetLineItem == nil {
+		targetLineItem, exists := lineItemsByPriceID[lineItemCoupon.LineItemID]
+		if !exists {
 			s.Logger.Warnw("line item not found for coupon, skipping",
 				"price_id_used_as_line_item_id", lineItemCoupon.LineItemID,
 				"coupon_id", lineItemCoupon.CouponID)
@@ -274,23 +275,13 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 		return nil, err
 	}
 
-	// Compute metadata from final state (outside transaction)
-	lineItemDiscounts := make(map[string]decimal.Decimal)
-	for _, lineItem := range inv.LineItems {
-		if !lineItem.LineItemDiscount.IsZero() {
-			lineItemDiscounts[lineItem.ID] = lineItem.LineItemDiscount
-		}
-	}
-
 	result = &CouponCalculationResult{
 		TotalDiscountAmount: totalDiscount,
 		AppliedCoupons:      appliedCoupons,
 		Currency:            inv.Currency,
 		Metadata: map[string]interface{}{
-			"line_item_level_coupons":    len(lineItemCoupons),
-			"successful_applications":    len(appliedCoupons),
-			"validation_failures":        len(lineItemCoupons) - len(appliedCoupons),
-			"line_item_discount_details": lineItemDiscounts,
+			"line_item_level_coupons": len(lineItemCoupons),
+			"successful_applications": len(appliedCoupons),
 		},
 	}
 
@@ -327,7 +318,6 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 		couponIDs = append(couponIDs, ic.CouponID)
 	}
 
-	couponsMap := make(map[string]*coupon.Coupon)
 	couponFilter := types.NewNoLimitCouponFilter()
 	couponFilter.CouponIDs = couponIDs
 	coupons, err := s.CouponRepo.List(ctx, couponFilter)
@@ -335,6 +325,7 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 		return nil, err
 	}
 
+	couponsMap := make(map[string]*coupon.Coupon)
 	for _, c := range coupons {
 		couponsMap[c.ID] = c
 	}
