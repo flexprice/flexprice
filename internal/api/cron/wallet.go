@@ -246,7 +246,7 @@ func (h *WalletCronHandler) CheckAlerts(c *gin.Context) {
 				}
 
 				// Get real-time balance
-				balance, err := h.walletService.GetWalletBalanceV2(ctx, wallet.ID)
+				balance, err := h.walletService.GetWalletBalance(ctx, wallet.ID)
 				if err != nil {
 					h.logger.Errorw("failed to get wallet balance",
 						"wallet_id", wallet.ID,
