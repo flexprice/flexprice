@@ -457,7 +457,6 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 			continue
 		}
 
-		// TODO: Rethink should be allow the customer to configure this or not
 		if w.WalletType != types.WalletTypePrePaid {
 			s.Logger.Infow("skipping wallet for top up because it is not a prepaid wallet",
 				"wallet_id", w.ID,
