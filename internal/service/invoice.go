@@ -270,8 +270,6 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
-		// Apply taxes to invoice (now considers credits)
-
 		// Apply taxes to invoice
 		if err := s.applyTaxesToInvoice(ctx, inv, req); err != nil {
 			return err

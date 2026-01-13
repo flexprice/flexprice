@@ -163,7 +163,6 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 
 	// Step 2: Prepare all data outside transaction (calculations, validations, entity building)
 	couponService := NewCouponService(s.ServiceParams)
-	totalDiscount := decimal.Zero
 	appliedCoupons := make([]*dto.CouponApplicationResponse, 0)
 	lineItemCouponApplications := make([]*coupon_application.CouponApplication, 0)
 
@@ -228,7 +227,6 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 		appliedCoupons = append(appliedCoupons, &dto.CouponApplicationResponse{
 			CouponApplication: ca,
 		})
-		totalDiscount = totalDiscount.Add(discountResult.Discount)
 
 		// Set LineItemDiscount on the line item (accumulate if multiple coupons apply to same item)
 		targetLineItem.LineItemDiscount = targetLineItem.LineItemDiscount.Add(discountResult.Discount)
@@ -273,6 +271,12 @@ func (s *couponApplicationService) ApplyLineItemCouponsToInvoice(ctx context.Con
 
 	if err != nil {
 		return nil, err
+	}
+
+	// Calculate total discount from line item discounts
+	totalDiscount := decimal.Zero
+	for _, lineItem := range inv.LineItems {
+		totalDiscount = totalDiscount.Add(lineItem.LineItemDiscount)
 	}
 
 	result = &CouponCalculationResult{
@@ -356,10 +360,17 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 	invoiceLevelCouponApplications := make([]*coupon_application.CouponApplication, 0)
 
 	// Process invoice-level coupons (outside transaction)
-	// Key change: running subtotal now accounts for prepaid credits applied
-	// Formula: subtotal - line item discounts - prepaid credits applied
 	runningSubTotal := inv.Subtotal.Sub(totalLineItemDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	for _, invoiceCoupon := range invoiceCoupons {
+
+		// Skip if running subtotal is less than zero i.e. no more discounts can be applied
+		if runningSubTotal.LessThan(decimal.Zero) {
+			s.Logger.Warnw("running subtotal is less than zero, skipping invoice coupon",
+				"running_subtotal", runningSubTotal,
+				"coupon_id", invoiceCoupon.CouponID)
+			break
+		}
+
 		coupon := couponsMap[invoiceCoupon.CouponID]
 
 		discountResult, err := couponService.ApplyDiscount(ctx, dto.ApplyDiscountRequest{
@@ -407,7 +418,7 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 			CouponApplication: ca,
 		})
 		totalDiscount = totalDiscount.Add(discountResult.Discount)
-		runningSubTotal = discountResult.FinalPrice
+		runningSubTotal = runningSubTotal.Sub(discountResult.Discount)
 
 		s.Logger.Debugw("prepared invoice coupon application",
 			"coupon_id", invoiceCoupon.CouponID,
@@ -436,12 +447,14 @@ func (s *couponApplicationService) ApplyInvoiceLevelCouponsToInvoice(ctx context
 	}
 
 	result = &CouponCalculationResult{
-		TotalDiscountAmount: totalDiscount,
+		TotalDiscountAmount: totalDiscount.Add(totalLineItemDiscount),
 		AppliedCoupons:      appliedCoupons,
 		Currency:            inv.Currency,
 		Metadata: map[string]interface{}{
-			"invoice_level_coupons":   len(invoiceCoupons),
-			"successful_applications": len(appliedCoupons),
+			"invoice_level_coupons":    len(invoiceCoupons),
+			"successful_applications":  len(appliedCoupons),
+			"total_line_item_discount": totalLineItemDiscount,
+			"total_invoice_discount":   totalDiscount,
 		},
 	}
 
