@@ -42,6 +42,9 @@ type InvoiceLineItem struct {
 	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
 	LineItemDiscount decimal.Decimal `json:"line_item_discount"`
 
+	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
+	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount"`
+
 	types.BaseModel
 }
 
@@ -77,6 +80,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		EnvironmentID:         e.EnvironmentID,
 		PrepaidCreditsApplied: lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
 		LineItemDiscount:      lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:  lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -102,6 +106,16 @@ func (i *InvoiceLineItem) Validate() error {
 		if i.PeriodEnd.Before(*i.PeriodStart) {
 			return ierr.NewError("invoice line item validation failed").WithHint("period_end must be after period_start").Mark(ierr.ErrValidation)
 		}
+	}
+
+	// Validate invoice_level_discount: must be non-negative (zero is allowed, meaning no discount)
+	if i.InvoiceLevelDiscount.IsNegative() {
+		return ierr.NewError("invoice line item validation failed").
+			WithHint("invoice_level_discount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"invoice_level_discount": i.InvoiceLevelDiscount.String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

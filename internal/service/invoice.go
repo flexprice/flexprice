@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -56,6 +57,8 @@ type InvoiceService interface {
 
 	// Cron methods
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
+
+	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 }
 
 type invoiceService struct {
@@ -3416,29 +3419,28 @@ func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, in
 		"currency", inv.Currency,
 	)
 
-	// Step 1: Apply credit adjustments
-	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
+	// Step 1: Apply coupons first (handles computation, persistence, and mutations internally)
 	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
-
-	// Apply line item coupons first
-	lineItemCouponResult, err := couponApplicationService.ApplyLineItemCouponsToInvoice(ctx, inv, req.LineItemCoupons)
+	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice:         inv,
+		InvoiceCoupons:  req.InvoiceCoupons,
+		LineItemCoupons: req.LineItemCoupons,
+	})
 	if err != nil {
 		return err
 	}
 
-	// Step 2: Apply credit adjustments to invoice
+	// Update invoice totals
+	inv.TotalDiscount = couponResult.TotalDiscountAmount
+
+	// Step 2: Apply credit adjustments after discounts
+	// Credits are applied to: amount - line_item_discount - invoice_level_discount
+	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
 	creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(ctx, inv)
 	if err != nil {
 		return err
 	}
 	inv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidCreditsApplied
-
-	invoiceCouponResult, err := couponApplicationService.ApplyInvoiceLevelCouponsToInvoice(ctx, inv, req.InvoiceCoupons)
-	if err != nil {
-		return err
-	}
-
-	inv.TotalDiscount = lineItemCouponResult.TotalDiscountAmount.Add(invoiceCouponResult.TotalDiscountAmount)
 
 	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
 	if newTotal.IsNegative() {
@@ -3459,6 +3461,129 @@ func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, in
 		"new_total", inv.Total,
 		"subtotal", inv.Subtotal,
 	)
+
+	return nil
+}
+
+// DistributeInvoiceLevelDiscount proportionally distributes an invoice-level discount across all line items
+// using a precision-preserving algorithm with currency-aware rounding that ensures exact distribution.
+//
+// PURPOSE:
+// When an invoice-level discount (e.g., from an invoice-level coupon) is applied, it must be
+// distributed proportionally across all line items based on their remaining billable amounts
+// (after line-item discounts). This allows tracking how much of the invoice-level discount is
+// attributed to each line item, which is essential for accurate financial reporting, tax calculations,
+// and audit trails.
+//
+// USE CASES:
+// - Invoice-level coupon applications (e.g., "10% off entire invoice")
+// - Invoice-level promotional discounts
+// - Any discount applied at the invoice level that needs to be allocated to line items
+//
+// ALGORITHM: Proportional Distribution with Capping and Consistent Rounding
+//
+// 1. Filter eligible line items: amountAfterLineItemDiscount > 0
+// 2. Calculate total eligible amount (sum of all eligible amounts)
+// 3. Sort items by amount desc, then ID (for consistent rounding behavior)
+// 4. Distribute proportionally to all except last item, capping at line item amount
+// 5. Assign remainder to last item, capping at line item amount
+//
+// This ensures consistent distribution behavior and prevents over-allocation to any line item.
+func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error {
+	// Early return if no discount to distribute
+	if invoiceDiscountAmount.IsZero() {
+		return nil
+	}
+
+	// Initialize InvoiceLevelDiscount to zero for all line items
+	for _, lineItem := range lineItems {
+		lineItem.InvoiceLevelDiscount = decimal.Zero
+	}
+
+	// Find eligible line items (non-zero amounts after line-item discount)
+	eligibleItems := make([]*invoice.InvoiceLineItem, 0, len(lineItems))
+	for _, lineItem := range lineItems {
+		amountAfterLineItemDiscount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		if amountAfterLineItemDiscount.IsPositive() {
+			eligibleItems = append(eligibleItems, lineItem)
+		}
+	}
+
+	// If no eligible items or discount is zero, return early
+	if len(eligibleItems) == 0 {
+		return nil
+	}
+
+	// Calculate total eligible amount
+	totalEligibleAmount := decimal.Zero
+	for _, lineItem := range eligibleItems {
+		amountAfterLineItemDiscount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		totalEligibleAmount = totalEligibleAmount.Add(amountAfterLineItemDiscount)
+	}
+
+	// Edge case: Cannot distribute discount if all line items are fully discounted
+	if totalEligibleAmount.IsZero() {
+		s.Logger.Infow("cannot distribute invoice-level discount: all line items already fully discounted",
+			"total_discount", invoiceDiscountAmount,
+			"line_items_count", len(eligibleItems))
+		return nil
+	}
+
+	// Sort items for consistent rounding behavior (by amount descending)
+	// If amounts are equal, order doesn't matter
+	sort.Slice(eligibleItems, func(i, j int) bool {
+		amountI := eligibleItems[i].Amount.Sub(eligibleItems[i].LineItemDiscount)
+		amountJ := eligibleItems[j].Amount.Sub(eligibleItems[j].LineItemDiscount)
+
+		// Sort by amount descending (greater or equal)
+		return amountI.GreaterThanOrEqual(amountJ)
+	})
+
+	// Track remaining discount amount
+	remainingDiscount := invoiceDiscountAmount
+
+	// First pass - apply to all except last item
+	for i, lineItem := range eligibleItems {
+		if i == len(eligibleItems)-1 {
+			break // Skip last item, handled separately
+		}
+
+		// Line item's share of invoice discount = (Line item amount after line item discount / Total invoice amount after line item discounts) × Total invoice-level discount amount
+		amountAfterLineItemDiscount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+
+		proportion := amountAfterLineItemDiscount.Div(totalEligibleAmount)
+		lineItemShare := proportion.Mul(invoiceDiscountAmount)
+
+		// Round using currency precision
+		lineItemShare = types.RoundToCurrencyPrecision(lineItemShare, lineItem.Currency)
+
+		// Cap at line item amount (cannot exceed the eligible amount)
+		if lineItemShare.GreaterThan(amountAfterLineItemDiscount) {
+			lineItemShare = amountAfterLineItemDiscount
+		}
+
+		lineItem.InvoiceLevelDiscount = lineItemShare
+		remainingDiscount = remainingDiscount.Sub(lineItemShare)
+	}
+
+	// Handle last item (with any rounding adjustment)
+	if len(eligibleItems) > 0 {
+		lastItem := eligibleItems[len(eligibleItems)-1]
+		amountAfterLineItemDiscount := lastItem.Amount.Sub(lastItem.LineItemDiscount)
+
+		// Cap at remaining discount and line item amount
+		lastItemShare := remainingDiscount
+		if lastItemShare.GreaterThan(amountAfterLineItemDiscount) {
+			lastItemShare = amountAfterLineItemDiscount
+		}
+
+		// Ensure non-negative
+		if lastItemShare.IsNegative() {
+			lastItemShare = decimal.Zero
+		}
+
+		lastItem.InvoiceLevelDiscount = lastItemShare
+	}
 
 	return nil
 }

@@ -396,6 +396,20 @@ func (ilic *InvoiceLineItemCreate) SetNillableLineItemDiscount(d *decimal.Decima
 	return ilic
 }
 
+// SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
+func (ilic *InvoiceLineItemCreate) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemCreate {
+	ilic.mutation.SetInvoiceLevelDiscount(d)
+	return ilic
+}
+
+// SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
+func (ilic *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemCreate {
+	if d != nil {
+		ilic.SetInvoiceLevelDiscount(*d)
+	}
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -488,6 +502,10 @@ func (ilic *InvoiceLineItemCreate) defaults() {
 	if _, ok := ilic.mutation.LineItemDiscount(); !ok {
 		v := invoicelineitem.DefaultLineItemDiscount
 		ilic.mutation.SetLineItemDiscount(v)
+	}
+	if _, ok := ilic.mutation.InvoiceLevelDiscount(); !ok {
+		v := invoicelineitem.DefaultInvoiceLevelDiscount
+		ilic.mutation.SetInvoiceLevelDiscount(v)
 	}
 }
 
@@ -698,6 +716,10 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.LineItemDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldLineItemDiscount, field.TypeOther, value)
 		_node.LineItemDiscount = &value
+	}
+	if value, ok := ilic.mutation.InvoiceLevelDiscount(); ok {
+		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
+		_node.InvoiceLevelDiscount = &value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

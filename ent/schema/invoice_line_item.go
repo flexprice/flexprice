@@ -174,6 +174,16 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Nillable().
 			Default(decimal.Zero).
 			Comment("Discount amount in invoice currency applied to this line item"),
+
+		field.Other("invoice_level_discount", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,8)",
+			}).
+			// TODO: remove optional and nillable after migration
+			Optional().
+			Nillable().
+			Default(decimal.Zero).
+			Comment("Discount amount in invoice currency applied to all line items on the invoice"),
 	}
 }
 

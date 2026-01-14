@@ -60,6 +60,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 			CommitmentInfo:        item.CommitmentInfo,
 			PrepaidCreditsApplied: item.PrepaidCreditsApplied,
 			LineItemDiscount:      item.LineItemDiscount,
+			InvoiceLevelDiscount:  item.InvoiceLevelDiscount,
 			EnvironmentID:         item.EnvironmentID,
 			BaseModel:             item.BaseModel,
 		})
@@ -77,6 +78,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		AmountPaid:                 inv.AmountPaid,
 		Subtotal:                   inv.Subtotal,
 		Total:                      inv.Total,
+		TotalDiscount:              inv.TotalDiscount,
 		AmountRemaining:            inv.AmountRemaining,
 		AdjustmentAmount:           inv.AdjustmentAmount,
 		RefundedAmount:             inv.RefundedAmount,
@@ -389,6 +391,7 @@ func (s *InMemoryInvoiceStore) UpdateLineItem(ctx context.Context, item *invoice
 			// Update the line item fields
 			inv.LineItems[i].PrepaidCreditsApplied = item.PrepaidCreditsApplied
 			inv.LineItems[i].LineItemDiscount = item.LineItemDiscount
+			inv.LineItems[i].InvoiceLevelDiscount = item.InvoiceLevelDiscount
 			inv.LineItems[i].Metadata = item.Metadata
 			inv.LineItems[i].Status = item.Status
 			inv.LineItems[i].UpdatedAt = time.Now().UTC()

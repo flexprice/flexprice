@@ -442,6 +442,53 @@ func (c *InvoiceLineItemCoupon) Validate() error {
 	return nil
 }
 
+// ApplyCouponsToInvoiceRequest represents the request to apply coupons to an invoice
+type ApplyCouponsToInvoiceRequest struct {
+	// invoice contains the invoice to apply coupons to
+	Invoice *invoice.Invoice `json:"invoice" validate:"required"`
+
+	// invoice_coupons contains the coupons to be applied at the invoice level
+	InvoiceCoupons []InvoiceCoupon `json:"invoice_coupons,omitempty"`
+
+	// line_item_coupons contains the coupons to be applied to specific line items
+	LineItemCoupons []InvoiceLineItemCoupon `json:"line_item_coupons,omitempty"`
+}
+
+// Validate validates the ApplyCouponsToInvoiceRequest
+func (r *ApplyCouponsToInvoiceRequest) Validate() error {
+	if r.Invoice == nil {
+		return ierr.NewError("invoice is required").
+			WithHint("invoice is required for applying coupons").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate invoice coupons
+	for i, ic := range r.InvoiceCoupons {
+		if err := ic.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHintf("invalid invoice coupon at index %d", i).
+				WithReportableDetails(map[string]any{
+					"coupon_id": ic.CouponID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Validate line item coupons
+	for i, lic := range r.LineItemCoupons {
+		if err := lic.Validate(); err != nil {
+			return ierr.WithError(err).
+				WithHintf("invalid line item coupon at index %d", i).
+				WithReportableDetails(map[string]any{
+					"coupon_id": lic.CouponID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
 // DiscountResult holds the result of applying a discount
 type DiscountResult struct {
 	Discount   decimal.Decimal // The discount amount applied
@@ -507,6 +554,9 @@ type CreateInvoiceLineItemRequest struct {
 
 	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
 	LineItemDiscount *decimal.Decimal `json:"line_item_discount,omitempty" swaggertype:"string"`
+
+	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
+	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -567,6 +617,18 @@ func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) e
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate invoice_level_discount if provided
+	if r.InvoiceLevelDiscount != nil {
+		if r.InvoiceLevelDiscount.IsNegative() || r.InvoiceLevelDiscount.IsZero() {
+			return ierr.NewError("invoice_level_discount must be non-negative and non-zero").
+				WithHint("invoice_level_discount cannot be negative or zero").
+				WithReportableDetails(map[string]any{
+					"invoice_level_discount": r.InvoiceLevelDiscount.String(),
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -597,6 +659,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		CommitmentInfo:        r.CommitmentInfo,
 		PrepaidCreditsApplied: lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
 		LineItemDiscount:      lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:  lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
 	}
 }
 
