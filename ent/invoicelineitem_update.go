@@ -175,6 +175,26 @@ func (iliu *InvoiceLineItemUpdate) ClearLineItemDiscount() *InvoiceLineItemUpdat
 	return iliu
 }
 
+// SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
+func (iliu *InvoiceLineItemUpdate) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemUpdate {
+	iliu.mutation.SetInvoiceLevelDiscount(d)
+	return iliu
+}
+
+// SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
+func (iliu *InvoiceLineItemUpdate) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemUpdate {
+	if d != nil {
+		iliu.SetInvoiceLevelDiscount(*d)
+	}
+	return iliu
+}
+
+// ClearInvoiceLevelDiscount clears the value of the "invoice_level_discount" field.
+func (iliu *InvoiceLineItemUpdate) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearInvoiceLevelDiscount()
+	return iliu
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (iliu *InvoiceLineItemUpdate) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdate {
 	iliu.mutation.AddCouponApplicationIDs(ids...)
@@ -361,6 +381,12 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if iliu.mutation.LineItemDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldLineItemDiscount, field.TypeOther)
+	}
+	if value, ok := iliu.mutation.InvoiceLevelDiscount(); ok {
+		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
+	}
+	if iliu.mutation.InvoiceLevelDiscountCleared() {
+		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
 	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -568,6 +594,26 @@ func (iliuo *InvoiceLineItemUpdateOne) SetNillableLineItemDiscount(d *decimal.De
 // ClearLineItemDiscount clears the value of the "line_item_discount" field.
 func (iliuo *InvoiceLineItemUpdateOne) ClearLineItemDiscount() *InvoiceLineItemUpdateOne {
 	iliuo.mutation.ClearLineItemDiscount()
+	return iliuo
+}
+
+// SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetInvoiceLevelDiscount(d decimal.Decimal) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetInvoiceLevelDiscount(d)
+	return iliuo
+}
+
+// SetNillableInvoiceLevelDiscount sets the "invoice_level_discount" field if the given value is not nil.
+func (iliuo *InvoiceLineItemUpdateOne) SetNillableInvoiceLevelDiscount(d *decimal.Decimal) *InvoiceLineItemUpdateOne {
+	if d != nil {
+		iliuo.SetInvoiceLevelDiscount(*d)
+	}
+	return iliuo
+}
+
+// ClearInvoiceLevelDiscount clears the value of the "invoice_level_discount" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearInvoiceLevelDiscount()
 	return iliuo
 }
 
@@ -787,6 +833,12 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.LineItemDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldLineItemDiscount, field.TypeOther)
+	}
+	if value, ok := iliuo.mutation.InvoiceLevelDiscount(); ok {
+		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
+	}
+	if iliuo.mutation.InvoiceLevelDiscountCleared() {
+		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

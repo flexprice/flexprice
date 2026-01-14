@@ -209,6 +209,11 @@ func LineItemDiscount(v decimal.Decimal) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldLineItemDiscount, v))
 }
 
+// InvoiceLevelDiscount applies equality check predicate on the "invoice_level_discount" field. It's identical to InvoiceLevelDiscountEQ.
+func InvoiceLevelDiscount(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldInvoiceLevelDiscount, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -2050,6 +2055,56 @@ func LineItemDiscountIsNil() predicate.InvoiceLineItem {
 // LineItemDiscountNotNil applies the NotNil predicate on the "line_item_discount" field.
 func LineItemDiscountNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldLineItemDiscount))
+}
+
+// InvoiceLevelDiscountEQ applies the EQ predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldEQ(FieldInvoiceLevelDiscount, v))
+}
+
+// InvoiceLevelDiscountNEQ applies the NEQ predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountNEQ(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNEQ(FieldInvoiceLevelDiscount, v))
+}
+
+// InvoiceLevelDiscountIn applies the In predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIn(FieldInvoiceLevelDiscount, vs...))
+}
+
+// InvoiceLevelDiscountNotIn applies the NotIn predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountNotIn(vs ...decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotIn(FieldInvoiceLevelDiscount, vs...))
+}
+
+// InvoiceLevelDiscountGT applies the GT predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountGT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGT(FieldInvoiceLevelDiscount, v))
+}
+
+// InvoiceLevelDiscountGTE applies the GTE predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountGTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldGTE(FieldInvoiceLevelDiscount, v))
+}
+
+// InvoiceLevelDiscountLT applies the LT predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountLT(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLT(FieldInvoiceLevelDiscount, v))
+}
+
+// InvoiceLevelDiscountLTE applies the LTE predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountLTE(v decimal.Decimal) predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldLTE(FieldInvoiceLevelDiscount, v))
+}
+
+// InvoiceLevelDiscountIsNil applies the IsNil predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldInvoiceLevelDiscount))
+}
+
+// InvoiceLevelDiscountNotNil applies the NotNil predicate on the "invoice_level_discount" field.
+func InvoiceLevelDiscountNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldInvoiceLevelDiscount))
 }
 
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.

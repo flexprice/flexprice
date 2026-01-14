@@ -31,76 +31,148 @@ func NewCreditAdjustmentService(
 	}
 }
 
-// CalculateCreditAdjustments calculates credit adjustments for invoice line items.
-// NOTE: This method is exported ONLY for testing purposes. Do not use it directly in production code.
-// Use ApplyCreditsToInvoice() instead, which handles the full workflow including database operations.
+// CalculateCreditAdjustments calculates how much amount to apply from prepaid wallets to invoice line items.
+//
+// The basic idea is simple: we take all the money available in wallets, put it in a pool, then
+// apply it to line items one by one until we run out. We only apply amounts to usage-based line
+// items (not one-time charges), and we apply them to the amount after discounts.
+//
+// Here's how it works:
+//
+// First, we gather up all the wallet balances into one big pool. As we apply amounts, we track
+// which wallets contributed what, so we can debit them later. We consume wallets in order
+// (first wallet first, then second, etc.) until we've covered the line item or run out of available amount.
+//
+// For each line item, we:
+//   - Skip it if it's not a usage item (only usage items get amounts applied)
+//   - Calculate how much we need: the line item amount minus any discounts
+//   - Figure out how much we can apply (can't exceed what's in the pool or what's needed)
+//   - Take money from wallets one by one until we've covered it
+//   - Round everything to the right currency precision (2 decimals for USD, 0 for JPY, etc.)
+//   - Update the line item with how much was applied
+//   - Subtract what we used from the pool
+//
+// At the end, we return a map showing how much to debit from each wallet. The actual debiting
+// happens later in a database transaction.
+//
+// Why this approach? It's simpler than trying to distribute amounts proportionally, and the
+// end result (total amount applied) is the same. We use a pool so we don't have to think
+// about which wallet to use for which line item - we just grab from the pool as needed.
+//
+// NOTE: This is exported for testing only. In production, use ApplyCreditsToInvoice() which
+// handles the full workflow including database operations.
 func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoice, wallets []*wallet.Wallet) (map[string]decimal.Decimal, error) {
-	walletDebits := make(map[string]decimal.Decimal)
+	amountsToDebitFromWallets := make(map[string]decimal.Decimal)
 
-	// Track remaining balances as we use wallets across multiple line items
+	// Nothing to do if there are no wallets
+	if len(wallets) == 0 {
+		return nil, nil
+	}
+
+	// Keep track of each wallet's balance as we use up amounts from them
 	walletBalances := make(map[string]decimal.Decimal)
 	for _, w := range wallets {
 		walletBalances[w.ID] = w.Balance
 	}
 
+	// Add up all the wallet balances to create our available amount pool
+	remainingAmountAvailable := decimal.Zero
+	for _, w := range wallets {
+		remainingAmountAvailable = remainingAmountAvailable.Add(w.Balance)
+	}
+
+	// If there's no amount available, we're done
+	if remainingAmountAvailable.LessThanOrEqual(decimal.Zero) {
+		return nil, nil
+	}
+
+	// We'll consume wallets in order (first wallet first, then second, etc.)
+	currentWalletIdx := 0
+
+	// Go through each line item and apply amounts
 	for _, lineItem := range inv.LineItems {
-		// Only usage line items get credits
+		// Only usage-based items get amounts applied (one-time charges don't)
 		if lineItem.PriceType == nil || lo.FromPtr(lineItem.PriceType) != string(types.PRICE_TYPE_USAGE) {
+			lineItem.PrepaidCreditsApplied = decimal.Zero
 			continue
 		}
 
-		// We adjust the discounted amount, not the original amount
-		adjustedAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		// Figure out how much this line item actually costs after discounts
+		// We apply amounts to the net amount, not the gross amount
+		lineItemAmountAfterDiscounts := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
 
-		if adjustedAmount.LessThanOrEqual(decimal.Zero) {
+		// If it's already free (or negative), skip it
+		if lineItemAmountAfterDiscounts.LessThanOrEqual(decimal.Zero) {
+			lineItem.PrepaidCreditsApplied = decimal.Zero
 			continue
 		}
 
-		amountToApply := decimal.Zero
-		walletIndex := 0
+		// How much can we apply to this line item? Can't exceed what's available or what's needed
+		maxAmountToApply := decimal.Min(remainingAmountAvailable, lineItemAmountAfterDiscounts)
+		amountAppliedToLineItem := decimal.Zero
 
-		for walletIndex < len(wallets) && amountToApply.LessThan(adjustedAmount) {
-			selectedWallet := wallets[walletIndex]
-			walletBalance := walletBalances[selectedWallet.ID]
+		// Take money from wallets one by one until we've covered this line item or run out
+		for currentWalletIdx < len(wallets) && amountAppliedToLineItem.LessThan(maxAmountToApply) {
+			currentWallet := wallets[currentWalletIdx]
+			currentWalletBalance := walletBalances[currentWallet.ID]
 
-			// Skip wallets with zero balance
-			if walletBalance.LessThanOrEqual(decimal.Zero) {
-				walletIndex++
+			// Skip wallets that are already empty
+			if currentWalletBalance.LessThanOrEqual(decimal.Zero) {
+				currentWalletIdx++
 				continue
 			}
 
-			// Calculate amount needed from this wallet and round once
-			needed := adjustedAmount.Sub(amountToApply)
-			fromThisWallet := decimal.Min(walletBalance, needed)
-			roundedFromThisWallet := types.RoundToCurrencyPrecision(fromThisWallet, inv.Currency)
+			// Calculate how much more we still need for this line item
+			amountStillNeeded := maxAmountToApply.Sub(amountAppliedToLineItem)
 
-			// Apply credits if rounded amount is positive
-			if roundedFromThisWallet.GreaterThan(decimal.Zero) {
+			// Take as much as we can from this wallet (either all of it or what we need, whichever is less)
+			// Round it to the right precision for the currency (USD = 2 decimals, JPY = 0 decimals, etc.)
+			roundedAmountFromWallet := types.RoundToCurrencyPrecision(decimal.Min(currentWalletBalance, amountStillNeeded), inv.Currency)
 
-				amountToApply = amountToApply.Add(roundedFromThisWallet)
-
-				walletDebits[selectedWallet.ID] = walletDebits[selectedWallet.ID].Add(roundedFromThisWallet)
-
-				walletBalances[selectedWallet.ID] = walletBalance.Sub(roundedFromThisWallet)
+			if roundedAmountFromWallet.GreaterThan(decimal.Zero) {
+				// Remember how much we're taking from this wallet (we'll debit it later)
+				amountsToDebitFromWallets[currentWallet.ID] = amountsToDebitFromWallets[currentWallet.ID].Add(roundedAmountFromWallet)
+				// Update our tracking of this wallet's balance
+				walletBalances[currentWallet.ID] = currentWalletBalance.Sub(roundedAmountFromWallet)
+				// Keep track of how much we've actually applied
+				amountAppliedToLineItem = amountAppliedToLineItem.Add(roundedAmountFromWallet)
 			}
 
-			// Move to next wallet if current one is exhausted or rounded amount is zero
-			if walletBalances[selectedWallet.ID].LessThanOrEqual(decimal.Zero) || roundedFromThisWallet.LessThanOrEqual(decimal.Zero) {
-				walletIndex++
+			// Move to the next wallet if this one is empty or we couldn't take anything
+			if walletBalances[currentWallet.ID].LessThanOrEqual(decimal.Zero) {
+				currentWalletIdx++
 			}
 		}
 
-		// amountToApply is already the sum of rounded wallet contributions, so use it directly
-		lineItem.PrepaidCreditsApplied = amountToApply
+		lineItem.PrepaidCreditsApplied = amountAppliedToLineItem
+
+		// Subtract what we used from the pool (use unrounded value to keep precision)
+		remainingAmountAvailable = remainingAmountAvailable.Sub(amountAppliedToLineItem)
 	}
 
-	return walletDebits, nil
+	// Return a map showing how much to take from each wallet
+	return amountsToDebitFromWallets, nil
 }
 
-// ApplyCreditsToInvoice applies wallet credits to invoice line items.
+// ApplyCreditsToInvoice applies wallet amounts to an invoice.
 //
-// HOW IT WORKS:
-// This method follows a two-phase approach to minimize transaction time and improve maintainability:
+// This method does the work in two phases to keep database transactions short. We do all the
+// math first (outside the transaction), then write everything to the database in one go (inside
+// the transaction). This way, we're not holding a database lock while we're doing calculations.
+//
+// Phase 1: Do all the calculations (outside transaction)
+//
+//	First, we get all the prepaid wallets for this customer. Only prepaid wallets can be used
+//	for applying amounts - postpaid wallets are for payments, not amount applications.
+//
+//	Then we figure out how much amount to apply to each line item. This is where all the math
+//	happens - we look at each line item, see how much it costs after discounts, and apply
+//	amounts from the wallet pool. All of this happens in memory, so it's fast.
+//
+//	Finally, we build a lookup map so we can quickly find wallet details when we need them
+//	during the transaction.
+//
+// Phase 2: Write everything to the database (inside transaction)
 //
 // Phase 1 (Outside Transaction): Calculation
 //   - Retrieves eligible prepaid wallets for credit adjustment
@@ -124,7 +196,7 @@ func (s *creditAdjustmentService) CalculateCreditAdjustments(inv *invoice.Invoic
 func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv *invoice.Invoice) (*dto.CreditAdjustmentResult, error) {
 
 	if len(inv.LineItems) == 0 {
-		s.Logger.Infow("no line items to apply credits to, returning zero result", "invoice_id", inv.ID)
+		s.Logger.Infow("no line items to apply amounts to, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
@@ -133,15 +205,15 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 	walletPaymentService := NewWalletPaymentService(s.ServiceParams)
 
-	// Step 1: Get eligible prepaid wallets for credit adjustment
-	// Only prepaid wallets can be used for credit adjustments (postpaid wallets are for payments)
+	// Get all the prepaid wallets we can use for this customer
+	// Only prepaid wallets work here - postpaid wallets are for payments, not amount applications
 	wallets, err := walletPaymentService.GetWalletsForCreditAdjustment(ctx, inv.CustomerID, inv.Currency)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(wallets) == 0 {
-		s.Logger.Infow("no wallets available for credit adjustment, returning zero result", "invoice_id", inv.ID)
+		s.Logger.Infow("no wallets available for amount application, returning zero result", "invoice_id", inv.ID)
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
@@ -155,13 +227,13 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 	// - Determines how much credit to apply from each wallet
 	// - Directly modifies lineItem.PrepaidCreditsApplied in memory (NOT persisted yet)
 	// - Returns a map of wallet debits (walletID -> total amount to debit)
-	walletDebits, err := s.CalculateCreditAdjustments(inv, wallets)
+	amountsToDebitFromWallets, err := s.CalculateCreditAdjustments(inv, wallets)
 	if err != nil {
 		return nil, err
 	}
 
-	// If no credits were calculated to apply, return zero result
-	if len(walletDebits) == 0 {
+	// If no amounts were calculated to apply, return zero result
+	if len(amountsToDebitFromWallets) == 0 {
 		return &dto.CreditAdjustmentResult{
 			TotalPrepaidCreditsApplied: decimal.Zero,
 			Currency:                   inv.Currency,
@@ -170,21 +242,17 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 
 	walletService := NewWalletService(s.ServiceParams)
 
-	// Create wallet lookup map for O(1) access during transaction
-	// This avoids linear search when looking up wallet details for each debit
-	walletMap := make(map[string]*wallet.Wallet)
+	// Build a quick lookup map so we can find wallet details fast during the transaction
+	walletLookupMap := make(map[string]*wallet.Wallet)
 	for _, w := range wallets {
-		walletMap[w.ID] = w
+		walletLookupMap[w.ID] = w
 	}
 
-	// Now do all the DB writes in a transaction
 	var result *dto.CreditAdjustmentResult
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		// Step 1: Execute all wallet debits
-		// For each wallet that was used, debit the calculated amount
-		// This creates wallet transaction records and updates wallet balances in the database
-		for walletID, debitAmount := range walletDebits {
-			selectedWallet, exists := walletMap[walletID]
+		// Take money from each wallet that contributed amounts
+		for walletID, amountToDebit := range amountsToDebitFromWallets {
+			walletToDebit, exists := walletLookupMap[walletID]
 			if !exists {
 				s.Logger.Warnw("wallet not found for debit",
 					"wallet_id", walletID,
@@ -200,35 +268,34 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 				"wallet_id":  walletID,
 			})
 
-			operation := &wallet.WalletOperation{
+			walletDebitOperation := &wallet.WalletOperation{
 				WalletID:          walletID,
 				Type:              types.TransactionTypeDebit,
-				Amount:            debitAmount,
+				Amount:            amountToDebit,
 				ReferenceType:     types.WalletTxReferenceTypeInvoice,
 				ReferenceID:       inv.ID,
-				Description:       fmt.Sprintf("Credit adjustment for invoice %s", inv.ID),
+				Description:       fmt.Sprintf("Amount applied as credit adjustment to invoice %s from wallet %s", inv.ID, walletID),
 				TransactionReason: types.TransactionReasonCreditAdjustment,
 				IdempotencyKey:    idempotencyKey,
 				Metadata: types.Metadata{
 					"invoice_id":      inv.ID,
 					"customer_id":     inv.CustomerID,
-					"wallet_type":     string(selectedWallet.WalletType),
-					"adjustment_type": "credit_application",
+					"wallet_type":     string(walletToDebit.WalletType),
+					"adjustment_type": "amount_application",
 				},
 			}
 
-			if err := walletService.DebitWallet(ctx, operation); err != nil {
+			if err := walletService.DebitWallet(ctx, walletDebitOperation); err != nil {
 				return err
 			}
 		}
 
-		// Step 2: Update line items in database with PrepaidCreditsApplied values
-		// The PrepaidCreditsApplied values were calculated in Phase 1 and are now persisted here
-		// We also calculate totalApplied as we iterate (sum of all PrepaidCreditsApplied)
-		totalApplied := decimal.Zero
+		// Save how much was applied to each line item
+		// We calculated these values earlier, now we're just saving them to the database
+		totalAmountApplied := decimal.Zero
 		for _, lineItem := range inv.LineItems {
 			if lineItem.PrepaidCreditsApplied.GreaterThan(decimal.Zero) {
-				totalApplied = totalApplied.Add(lineItem.PrepaidCreditsApplied)
+				totalAmountApplied = totalAmountApplied.Add(lineItem.PrepaidCreditsApplied)
 				if err := s.InvoiceRepo.UpdateLineItem(ctx, lineItem); err != nil {
 					return err
 				}
@@ -240,10 +307,10 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 		// persisted to the database. The caller is responsible for updating the invoice
 		// in the database if they need to persist TotalPrepaidApplied.
 		// This design allows callers to batch invoice updates with other operations.
-		inv.TotalPrepaidCreditsApplied = totalApplied
+		inv.TotalPrepaidCreditsApplied = totalAmountApplied
 
 		result = &dto.CreditAdjustmentResult{
-			TotalPrepaidCreditsApplied: totalApplied,
+			TotalPrepaidCreditsApplied: totalAmountApplied,
 			Currency:                   inv.Currency,
 		}
 

@@ -28919,6 +28919,7 @@ type InvoiceLineItemMutation struct {
 	commitment_info            **types.CommitmentInfo
 	prepaid_credits_applied    *decimal.Decimal
 	line_item_discount         *decimal.Decimal
+	invoice_level_discount     *decimal.Decimal
 	clearedFields              map[string]struct{}
 	invoice                    *string
 	clearedinvoice             bool
@@ -30387,6 +30388,55 @@ func (m *InvoiceLineItemMutation) ResetLineItemDiscount() {
 	delete(m.clearedFields, invoicelineitem.FieldLineItemDiscount)
 }
 
+// SetInvoiceLevelDiscount sets the "invoice_level_discount" field.
+func (m *InvoiceLineItemMutation) SetInvoiceLevelDiscount(d decimal.Decimal) {
+	m.invoice_level_discount = &d
+}
+
+// InvoiceLevelDiscount returns the value of the "invoice_level_discount" field in the mutation.
+func (m *InvoiceLineItemMutation) InvoiceLevelDiscount() (r decimal.Decimal, exists bool) {
+	v := m.invoice_level_discount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceLevelDiscount returns the old "invoice_level_discount" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldInvoiceLevelDiscount(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceLevelDiscount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceLevelDiscount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceLevelDiscount: %w", err)
+	}
+	return oldValue.InvoiceLevelDiscount, nil
+}
+
+// ClearInvoiceLevelDiscount clears the value of the "invoice_level_discount" field.
+func (m *InvoiceLineItemMutation) ClearInvoiceLevelDiscount() {
+	m.invoice_level_discount = nil
+	m.clearedFields[invoicelineitem.FieldInvoiceLevelDiscount] = struct{}{}
+}
+
+// InvoiceLevelDiscountCleared returns if the "invoice_level_discount" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) InvoiceLevelDiscountCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldInvoiceLevelDiscount]
+	return ok
+}
+
+// ResetInvoiceLevelDiscount resets all changes to the "invoice_level_discount" field.
+func (m *InvoiceLineItemMutation) ResetInvoiceLevelDiscount() {
+	m.invoice_level_discount = nil
+	delete(m.clearedFields, invoicelineitem.FieldInvoiceLevelDiscount)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -30502,7 +30552,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 30)
+	fields := make([]string, 0, 31)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -30593,6 +30643,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.line_item_discount != nil {
 		fields = append(fields, invoicelineitem.FieldLineItemDiscount)
 	}
+	if m.invoice_level_discount != nil {
+		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
+	}
 	return fields
 }
 
@@ -30661,6 +30714,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.PrepaidCreditsApplied()
 	case invoicelineitem.FieldLineItemDiscount:
 		return m.LineItemDiscount()
+	case invoicelineitem.FieldInvoiceLevelDiscount:
+		return m.InvoiceLevelDiscount()
 	}
 	return nil, false
 }
@@ -30730,6 +30785,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldPrepaidCreditsApplied(ctx)
 	case invoicelineitem.FieldLineItemDiscount:
 		return m.OldLineItemDiscount(ctx)
+	case invoicelineitem.FieldInvoiceLevelDiscount:
+		return m.OldInvoiceLevelDiscount(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -30949,6 +31006,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetLineItemDiscount(v)
 		return nil
+	case invoicelineitem.FieldInvoiceLevelDiscount:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceLevelDiscount(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -31042,6 +31106,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldLineItemDiscount) {
 		fields = append(fields, invoicelineitem.FieldLineItemDiscount)
 	}
+	if m.FieldCleared(invoicelineitem.FieldInvoiceLevelDiscount) {
+		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
+	}
 	return fields
 }
 
@@ -31118,6 +31185,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldLineItemDiscount:
 		m.ClearLineItemDiscount()
+		return nil
+	case invoicelineitem.FieldInvoiceLevelDiscount:
+		m.ClearInvoiceLevelDiscount()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -31216,6 +31286,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldLineItemDiscount:
 		m.ResetLineItemDiscount()
+		return nil
+	case invoicelineitem.FieldInvoiceLevelDiscount:
+		m.ResetInvoiceLevelDiscount()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
