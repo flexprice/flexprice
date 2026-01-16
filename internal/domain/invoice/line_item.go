@@ -35,6 +35,16 @@ type InvoiceLineItem struct {
 	Metadata         types.Metadata        `json:"metadata,omitempty"`
 	EnvironmentID    string                `json:"environment_id"`
 	CommitmentInfo   *types.CommitmentInfo `json:"commitment_info,omitempty"`
+
+	// prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.
+	PrepaidCreditsApplied decimal.Decimal `json:"prepaid_credits_applied"`
+
+	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
+	LineItemDiscount decimal.Decimal `json:"line_item_discount"`
+
+	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
+	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount"`
+
 	types.BaseModel
 }
 
@@ -45,29 +55,32 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 	}
 
 	return &InvoiceLineItem{
-		ID:               e.ID,
-		InvoiceID:        e.InvoiceID,
-		CustomerID:       e.CustomerID,
-		SubscriptionID:   e.SubscriptionID,
-		EntityID:         e.EntityID,
-		EntityType:       lo.ToPtr(string(lo.FromPtr(e.EntityType))),
-		PlanDisplayName:  e.PlanDisplayName,
-		PriceID:          e.PriceID,
-		PriceType:        lo.ToPtr(string(lo.FromPtr(e.PriceType))),
-		MeterID:          e.MeterID,
-		MeterDisplayName: e.MeterDisplayName,
-		PriceUnitID:      e.PriceUnitID,
-		PriceUnit:        e.PriceUnit,
-		PriceUnitAmount:  e.PriceUnitAmount,
-		DisplayName:      e.DisplayName,
-		Amount:           e.Amount,
-		Quantity:         e.Quantity,
-		Currency:         e.Currency,
-		PeriodStart:      e.PeriodStart,
-		PeriodEnd:        e.PeriodEnd,
-		Metadata:         e.Metadata,
-		CommitmentInfo:   e.CommitmentInfo,
-		EnvironmentID:    e.EnvironmentID,
+		ID:                    e.ID,
+		InvoiceID:             e.InvoiceID,
+		CustomerID:            e.CustomerID,
+		SubscriptionID:        e.SubscriptionID,
+		EntityID:              e.EntityID,
+		EntityType:            lo.ToPtr(string(lo.FromPtr(e.EntityType))),
+		PlanDisplayName:       e.PlanDisplayName,
+		PriceID:               e.PriceID,
+		PriceType:             lo.ToPtr(string(lo.FromPtr(e.PriceType))),
+		MeterID:               e.MeterID,
+		MeterDisplayName:      e.MeterDisplayName,
+		PriceUnitID:           e.PriceUnitID,
+		PriceUnit:             e.PriceUnit,
+		PriceUnitAmount:       e.PriceUnitAmount,
+		DisplayName:           e.DisplayName,
+		Amount:                e.Amount,
+		Quantity:              e.Quantity,
+		Currency:              e.Currency,
+		PeriodStart:           e.PeriodStart,
+		PeriodEnd:             e.PeriodEnd,
+		Metadata:              e.Metadata,
+		CommitmentInfo:        e.CommitmentInfo,
+		EnvironmentID:         e.EnvironmentID,
+		PrepaidCreditsApplied: lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
+		LineItemDiscount:      lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
+		InvoiceLevelDiscount:  lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -93,6 +106,16 @@ func (i *InvoiceLineItem) Validate() error {
 		if i.PeriodEnd.Before(*i.PeriodStart) {
 			return ierr.NewError("invoice line item validation failed").WithHint("period_end must be after period_start").Mark(ierr.ErrValidation)
 		}
+	}
+
+	// Validate invoice_level_discount: must be non-negative (zero is allowed, meaning no discount)
+	if i.InvoiceLevelDiscount.IsNegative() {
+		return ierr.NewError("invoice line item validation failed").
+			WithHint("invoice_level_discount must be non-negative").
+			WithReportableDetails(map[string]any{
+				"invoice_level_discount": i.InvoiceLevelDiscount.String(),
+			}).
+			Mark(ierr.ErrValidation)
 	}
 
 	return nil

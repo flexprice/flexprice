@@ -63,7 +63,9 @@ type DiscountResult struct {
 
 // ApplyDiscount calculates and applies the discount in a single operation,
 // returning both the discount amount and final price. This is more efficient than
-func (c *Coupon) ApplyDiscount(originalPrice decimal.Decimal) DiscountResult {
+// separate calculations. The discount is rounded to currency precision immediately
+// to ensure all monetary values respect currency precision at their source.
+func (c *Coupon) ApplyDiscount(originalPrice decimal.Decimal, currency string) DiscountResult {
 	var discount decimal.Decimal
 
 	switch c.Type {
@@ -74,6 +76,9 @@ func (c *Coupon) ApplyDiscount(originalPrice decimal.Decimal) DiscountResult {
 	default:
 		discount = decimal.Zero
 	}
+
+	// Round discount immediately at source to ensure currency precision
+	discount = types.RoundToCurrencyPrecision(discount, currency)
 
 	finalPrice := originalPrice.Sub(discount)
 

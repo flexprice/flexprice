@@ -504,7 +504,6 @@ func (s *creditNoteService) FinalizeCreditNote(ctx context.Context, id string) e
 			if selectedWallet == nil {
 				// Create new wallet using transaction context
 				walletReq := &dto.CreateWalletRequest{
-					Name:           "Subscription Wallet",
 					CustomerID:     inv.CustomerID,
 					Currency:       inv.Currency,
 					ConversionRate: decimal.NewFromInt(1), // Set default conversion rate to avoid division by zero

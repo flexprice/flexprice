@@ -163,6 +163,9 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 			Mark(ierr.ErrDatabase)
 	}
 
+	// Convert to domain wallet model
+	w := req.ToWallet(ctx)
+
 	for _, w := range existingWallets {
 		if w.WalletStatus == types.WalletStatusActive && w.Currency == req.Currency && w.WalletType == req.WalletType {
 			return nil, ierr.NewError("customer already has an active wallet with the same currency and wallet type").
@@ -176,9 +179,6 @@ func (s *walletService) CreateWallet(ctx context.Context, req *dto.CreateWalletR
 				Mark(ierr.ErrAlreadyExists)
 		}
 	}
-
-	// Convert to domain wallet model
-	w := req.ToWallet(ctx)
 
 	// create a DB transaction
 	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
@@ -2130,12 +2130,14 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 	}
 
 	// Find or create a suitable wallet for the proration credit
+	// Use postpaid wallet since proration credits should be usable for payments
+	// and only postpaid wallets can be used for payments
 
 	var selectedWallet *dto.WalletResponse
 	for _, w := range existingWallets {
 		if w.WalletStatus == types.WalletStatusActive &&
 			types.IsMatchingCurrency(w.Currency, currency) &&
-			w.WalletType == types.WalletTypePrePaid {
+			w.WalletType == types.WalletTypePostPaid {
 			selectedWallet = w
 			break
 		}
@@ -2153,7 +2155,7 @@ func (s *walletService) TopUpWalletForProratedCharge(ctx context.Context, custom
 			CustomerID:     customerID,
 			Currency:       currency,
 			ConversionRate: decimal.NewFromInt(1), // 1:1 conversion rate for credits
-			WalletType:     types.WalletTypePrePaid,
+			WalletType:     types.WalletTypePostPaid,
 			Metadata: types.Metadata{
 				"created_for": "proration_credit",
 				"source":      "subscription_change",

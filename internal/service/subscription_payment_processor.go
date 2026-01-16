@@ -573,7 +573,7 @@ func (s *subscriptionPaymentProcessor) processCreditsPayment(
 	}
 
 	amountPaid, err := walletPaymentService.ProcessInvoicePaymentWithWallets(ctx, domainInvoice, WalletPaymentOptions{
-		Strategy:           PromotionalFirstStrategy,
+		Strategy:           BalanceOptimizedStrategy,
 		MaxWalletsToUse:    5,
 		AdditionalMetadata: metadata,
 	})
@@ -920,7 +920,7 @@ func (s *subscriptionPaymentProcessor) checkAvailableCredits(
 	// Get wallets suitable for payment
 	walletPaymentService := NewWalletPaymentService(*s.ServiceParams)
 	wallets, err := walletPaymentService.GetWalletsForPayment(ctx, invoicingCustomerID, currency, WalletPaymentOptions{
-		Strategy:        PromotionalFirstStrategy,
+		Strategy:        BalanceOptimizedStrategy,
 		MaxWalletsToUse: 5,
 	})
 	if err != nil {

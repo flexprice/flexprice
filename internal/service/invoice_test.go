@@ -1169,39 +1169,20 @@ func (s *InvoiceServiceSuite) setupWallets() {
 	})
 
 	// Create test wallets for the test customer
-	// 1. Promotional wallet with $50
-	promoWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
+	// Single postpaid wallet with combined balance ($150 = $50 + $100 from previous setup)
+	postpaidWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
 		CustomerID:     s.testData.customer.ID,
 		Currency:       "usd",
-		WalletType:     types.WalletTypePromotional,
+		WalletType:     types.WalletTypePostPaid,
 		ConversionRate: decimal.NewFromInt(1),
 		Config:         types.GetDefaultWalletConfig(),
 	})
 	s.NoError(err)
 
-	// Top up the promotional wallet
-	_, err = walletService.TopUpWallet(s.GetContext(), promoWallet.ID, &dto.TopUpWalletRequest{
-		CreditsToAdd:      decimal.NewFromInt(50),
-		IdempotencyKey:    lo.ToPtr("test_topup_1"),
-		TransactionReason: types.TransactionReasonFreeCredit,
-		Description:       "Test top-up for AttemptPayment",
-	})
-	s.NoError(err)
-
-	// 2. Prepaid wallet with $100
-	prepaidWallet, err := walletService.CreateWallet(s.GetContext(), &dto.CreateWalletRequest{
-		CustomerID:     s.testData.customer.ID,
-		Currency:       "usd",
-		WalletType:     types.WalletTypePrePaid,
-		ConversionRate: decimal.NewFromInt(1),
-		Config:         types.GetDefaultWalletConfig(),
-	})
-	s.NoError(err)
-
-	// Top up the prepaid wallet
-	_, err = walletService.TopUpWallet(s.GetContext(), prepaidWallet.ID, &dto.TopUpWalletRequest{
-		CreditsToAdd:      decimal.NewFromInt(100),
-		IdempotencyKey:    lo.ToPtr("test_topup_2"),
+	// Top up the postpaid wallet with combined balance
+	_, err = walletService.TopUpWallet(s.GetContext(), postpaidWallet.ID, &dto.TopUpWalletRequest{
+		CreditsToAdd:      decimal.NewFromInt(150), // Combined: 50 + 100
+		IdempotencyKey:    lo.ToPtr("test_topup_attempt_payment"),
 		TransactionReason: types.TransactionReasonFreeCredit,
 		Description:       "Test top-up for AttemptPayment",
 	})
@@ -1275,7 +1256,7 @@ func (s *InvoiceServiceSuite) TestAttemptPayment() {
 			},
 			expectedError:        false,
 			expectedPaymentState: types.PaymentStatusPending, // Still pending as it's partially paid
-			expectedAmountPaid:   decimal.NewFromInt(150),    // 50 (promo) + 100 (prepaid)
+			expectedAmountPaid:   decimal.NewFromInt(150),    // Single postpaid wallet with 150 balance
 		},
 		{
 			name: "Invoice not in finalized state",
@@ -1776,5 +1757,20 @@ func (s *InvoiceServiceSuite) TestCreateSubscriptionInvoiceWithoutInvoicingCusto
 		if got.SubscriptionID != nil {
 			s.Equal(subscriptionWithoutInvoicing.ID, *got.SubscriptionID)
 		}
+	}
+}
+
+// createLineItem is a helper function to create a line item with specified amount
+func createLineItem(id string, amount decimal.Decimal) *invoice.InvoiceLineItem {
+	return &invoice.InvoiceLineItem{
+		ID:                    id,
+		InvoiceID:             "inv_test",
+		CustomerID:            "cust_test",
+		Amount:                amount,
+		Quantity:              decimal.NewFromInt(1),
+		Currency:              "usd",
+		EnvironmentID:         "env_test",
+		PrepaidCreditsApplied: decimal.Zero,
+		LineItemDiscount:      decimal.Zero,
 	}
 }
