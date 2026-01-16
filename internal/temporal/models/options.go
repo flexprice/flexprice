@@ -6,6 +6,7 @@ import (
 	"go.temporal.io/api/common/v1"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
+	"go.temporal.io/sdk/interceptor"
 	"go.temporal.io/sdk/worker"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -50,6 +51,8 @@ type WorkerOptions struct {
 	WorkerStopTimeout time.Duration
 	// EnableLoggingInReplay enables logging in replay mode
 	EnableLoggingInReplay bool
+	// Interceptors is a list of interceptors to apply to the worker
+	Interceptors []interceptor.WorkerInterceptor
 }
 
 // DefaultWorkerOptions returns the default worker options
@@ -81,6 +84,7 @@ func (o *WorkerOptions) ToSDKOptions() worker.Options {
 		MaxConcurrentWorkflowTaskExecutionSize: o.MaxConcurrentWorkflowTaskExecutionSize,
 		WorkerStopTimeout:                      o.WorkerStopTimeout,
 		EnableLoggingInReplay:                  o.EnableLoggingInReplay,
+		Interceptors:                           o.Interceptors,
 	}
 }
 

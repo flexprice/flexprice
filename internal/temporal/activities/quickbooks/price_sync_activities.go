@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 const ActivityPrefix = "QuickBooksPriceSyncActivities"
@@ -78,14 +79,18 @@ func (a *QuickBooksPriceSyncActivities) SyncPriceToQuickBooks(ctx context.Contex
 		if ierr.IsNotFound(err) {
 			a.logger.Debugw("QuickBooks connection not configured",
 				"price_id", input.PriceID)
-			// Return error - sync failed because connection doesn't exist
-			return nil, ierr.NewError("QuickBooks connection not configured").
-				WithHint("QuickBooks connection must be configured before syncing prices").
-				WithReportableDetails(map[string]interface{}{
-					"price_id": input.PriceID,
-					"plan_id":  input.PlanID,
-				}).
-				Mark(ierr.ErrNotFound)
+			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
+			return nil, temporal.NewNonRetryableApplicationError(
+				"QuickBooks connection not configured",
+				"ConnectionNotFound",
+				ierr.NewError("QuickBooks connection not configured").
+					WithHint("QuickBooks connection must be configured before syncing prices").
+					WithReportableDetails(map[string]interface{}{
+						"price_id": input.PriceID,
+						"plan_id":  input.PlanID,
+					}).
+					Mark(ierr.ErrNotFound),
+			)
 		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get QuickBooks integration").

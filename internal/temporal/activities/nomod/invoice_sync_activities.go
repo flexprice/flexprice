@@ -3,12 +3,14 @@ package nomod
 import (
 	"context"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 // InvoiceSyncActivities handles Nomod invoice sync activities
@@ -50,6 +52,17 @@ func (a *InvoiceSyncActivities) SyncInvoiceToNomod(
 	// Get Nomod integration with runtime context
 	nomodIntegration, err := a.integrationFactory.GetNomodIntegration(ctx)
 	if err != nil {
+		if ierr.IsNotFound(err) {
+			a.logger.Debugw("Nomod connection not configured",
+				"invoice_id", input.InvoiceID,
+				"customer_id", input.CustomerID)
+			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
+			return temporal.NewNonRetryableApplicationError(
+				"Nomod connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
 		a.logger.Errorw("failed to get Nomod integration",
 			"error", err,
 			"invoice_id", input.InvoiceID,

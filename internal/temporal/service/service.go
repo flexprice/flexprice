@@ -8,12 +8,15 @@ import (
 
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
+	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/temporal/client"
+	temporalInterceptor "github.com/flexprice/flexprice/internal/temporal/interceptor"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/interceptor"
 )
 
 var (
@@ -26,21 +29,23 @@ type temporalService struct {
 	client        client.TemporalClient
 	workerManager worker.TemporalWorkerManager
 	logger        *logger.Logger
+	sentry        *sentry.Service
 }
 
 // NewTemporalService creates a new temporal service instance
-func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger) TemporalService {
+func NewTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service) TemporalService {
 	return &temporalService{
 		client:        client,
 		workerManager: workerManager,
 		logger:        logger,
+		sentry:        sentryService,
 	}
 }
 
 // InitializeGlobalTemporalService initializes the global Temporal service instance
-func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger) {
+func InitializeGlobalTemporalService(client client.TemporalClient, workerManager worker.TemporalWorkerManager, logger *logger.Logger, sentryService *sentry.Service) {
 	globalTemporalOnce.Do(func() {
-		globalTemporalService = NewTemporalService(client, workerManager, logger)
+		globalTemporalService = NewTemporalService(client, workerManager, logger, sentryService)
 	})
 }
 
@@ -213,7 +218,15 @@ func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, wo
 			Mark(errors.ErrValidation)
 	}
 
-	w, err := s.workerManager.GetOrCreateWorker(taskQueue, models.DefaultWorkerOptions())
+	// Create worker options with Sentry interceptor
+	options := models.DefaultWorkerOptions()
+	if s.sentry != nil && s.sentry.IsEnabled() {
+		options.Interceptors = []interceptor.WorkerInterceptor{
+			temporalInterceptor.NewSentryInterceptor(s.sentry),
+		}
+	}
+
+	w, err := s.workerManager.GetOrCreateWorker(taskQueue, options)
 	if err != nil {
 		return errors.WithError(err).
 			WithHint("Failed to create or get worker for task queue").
@@ -236,7 +249,15 @@ func (s *temporalService) RegisterActivity(taskQueue types.TemporalTaskQueue, ac
 			Mark(errors.ErrValidation)
 	}
 
-	w, err := s.workerManager.GetOrCreateWorker(taskQueue, models.DefaultWorkerOptions())
+	// Create worker options with Sentry interceptor
+	options := models.DefaultWorkerOptions()
+	if s.sentry != nil && s.sentry.IsEnabled() {
+		options.Interceptors = []interceptor.WorkerInterceptor{
+			temporalInterceptor.NewSentryInterceptor(s.sentry),
+		}
+	}
+
+	w, err := s.workerManager.GetOrCreateWorker(taskQueue, options)
 	if err != nil {
 		return errors.WithError(err).
 			WithHint("Failed to create or get worker for task queue").

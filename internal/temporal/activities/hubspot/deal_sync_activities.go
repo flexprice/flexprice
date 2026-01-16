@@ -3,10 +3,12 @@ package hubspot
 import (
 	"context"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	"github.com/flexprice/flexprice/internal/types"
+	"go.temporal.io/sdk/temporal"
 )
 
 // DealSyncActivities contains all HubSpot deal sync activities
@@ -44,6 +46,16 @@ func (a *DealSyncActivities) CreateLineItems(
 	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
+		if ierr.IsNotFound(err) {
+			a.logger.Debugw("HubSpot connection not configured",
+				"subscription_id", input.SubscriptionID)
+			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
+			return temporal.NewNonRetryableApplicationError(
+				"HubSpot connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
 		a.logger.Errorw("failed to get HubSpot integration",
 			"error", err,
 			"subscription_id", input.SubscriptionID)
@@ -84,6 +96,17 @@ func (a *DealSyncActivities) UpdateDealAmount(
 	// Get HubSpot integration with proper context
 	hubspotIntegration, err := a.integrationFactory.GetHubSpotIntegration(ctx)
 	if err != nil {
+		if ierr.IsNotFound(err) {
+			a.logger.Debugw("HubSpot connection not configured",
+				"customer_id", input.CustomerID,
+				"deal_id", input.DealID)
+			// Return NON-RETRYABLE error - connection doesn't exist, retrying won't help
+			return temporal.NewNonRetryableApplicationError(
+				"HubSpot connection not configured",
+				"ConnectionNotFound",
+				err,
+			)
+		}
 		a.logger.Errorw("failed to get HubSpot integration",
 			"error", err,
 			"customer_id", input.CustomerID,
