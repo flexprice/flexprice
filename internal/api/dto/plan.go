@@ -150,23 +150,9 @@ type SyncPlanPricesResponse struct {
 }
 
 type SynchronizationSummary struct {
-	// Basic counts
-	SubscriptionsProcessed int `json:"subscriptions_processed"`
-	PricesProcessed        int `json:"prices_processed"`
-	LineItemsCreated       int `json:"line_items_created"`
-	LineItemsTerminated    int `json:"line_items_terminated"`
-	LineItemsSkipped       int `json:"line_items_skipped"`
-	LineItemsFailed        int `json:"line_items_failed"`
-
-	// Detailed breakdown by category
-	SkippedAlreadyTerminated int `json:"skipped_already_terminated"`
-	SkippedOverridden        int `json:"skipped_overridden"`
-	SkippedIncompatible      int `json:"skipped_incompatible"`
-
-	// Price analysis
-	TotalPrices   int `json:"total_prices"`
-	ActivePrices  int `json:"active_prices"`
-	ExpiredPrices int `json:"expired_prices"`
+	SuccessCount   int      `json:"success_count"`
+	FailedCount    int      `json:"failed_count"`
+	FailedPriceIDs []string `json:"failed_price_ids"`
 }
 
 // SubscriptionSyncParams contains all parameters needed for syncing a subscription with plan prices
@@ -180,11 +166,8 @@ type SubscriptionSyncParams struct {
 
 // SubscriptionSyncResult contains the results of syncing a subscription with plan prices
 type SubscriptionSyncResult struct {
-	PricesProcessed                   int
-	LineItemsCreated                  int
-	LineItemsTerminated               int
-	LineItemsSkippedAlreadyTerminated int
-	LineItemsSkippedOverridden        int
-	LineItemsSkippedIncompatible      int
-	LineItemsFailed                   int
+	LineItemsCreated    int
+	LineItemsTerminated int
+	LineItemsFailed     int
+	FailedPriceIDs      []string
 }
