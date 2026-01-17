@@ -371,8 +371,6 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 	// Batch processing configuration
 	const BATCH_SIZE = 100
 	offset := 0
-	successCount := 0
-	failedCount := 0
 	failedPriceIDsMap := make(map[string]bool)
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 
@@ -451,6 +449,8 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 
 		// Collect operations for this batch and execute using service methods
 		batchLineItemsToTerminate := make(map[time.Time][]string) // effectiveFrom -> line item IDs
+		// Map line item ID to price ID for tracking failed terminations
+		lineItemIDToPriceID := make(map[string]string)
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
 
 		// Process each subscription in the batch
@@ -462,6 +462,12 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 			lineItems := lineItemsBySubID[sub.ID]
 			if lineItems == nil {
 				lineItems = []*subscription.SubscriptionLineItem{}
+			}
+
+			// Build map from line item ID to price ID for this subscription (for failure tracking)
+			subLineItemIDToPriceID := make(map[string]string, len(lineItems))
+			for _, item := range lineItems {
+				subLineItemIDToPriceID[item.ID] = item.PriceID
 			}
 
 			// Get subscription prices for this subscription (from batch fetch)
@@ -491,26 +497,27 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 						"error", err,
 						"subscription_id", sub.ID,
 						"count", len(syncResult.LineItemsToCreate))
-					failedCount += len(syncResult.LineItemsToCreate)
+					// Collect failed price IDs from the items that failed to create
+					for _, item := range syncResult.LineItemsToCreate {
+						failedPriceIDsMap[item.PriceID] = true
+					}
 					// Continue processing other subscriptions
 					continue
 				}
 			}
 
 			// Collect line items to terminate, grouped by effective date (will process after all subscriptions)
+			// Also build mapping from line item ID to price ID for failure tracking
 			for _, termination := range syncResult.LineItemsToTerminate {
 				if batchLineItemsToTerminate[termination.EffectiveFrom] == nil {
 					batchLineItemsToTerminate[termination.EffectiveFrom] = make([]string, 0)
 				}
 				batchLineItemsToTerminate[termination.EffectiveFrom] = append(batchLineItemsToTerminate[termination.EffectiveFrom], termination.LineItemID)
-			}
 
-			// Aggregate statistics - derive counts from array lengths
-			successCount += len(syncResult.LineItemsToCreate) + len(syncResult.LineItemsToTerminate)
-
-			// Collect failed price IDs
-			for _, priceID := range syncResult.FailedPriceIDs {
-				failedPriceIDsMap[priceID] = true
+				// Map line item ID to price ID using the line items we already fetched for this subscription
+				if priceID, exists := subLineItemIDToPriceID[termination.LineItemID]; exists {
+					lineItemIDToPriceID[termination.LineItemID] = priceID
+				}
 			}
 		}
 
@@ -526,7 +533,12 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 						"error", err,
 						"count", len(lineItemIDs),
 						"effective_from", effectiveFrom)
-					failedCount += len(lineItemIDs)
+					// Collect failed price IDs from the line items that failed to terminate
+					for _, lineItemID := range lineItemIDs {
+						if priceID, exists := lineItemIDToPriceID[lineItemID]; exists {
+							failedPriceIDsMap[priceID] = true
+						}
+					}
 					// Continue processing other terminations
 					continue
 				}
@@ -553,8 +565,6 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 		PlanID:   id,
 		PlanName: plan.Name,
 		SynchronizationSummary: dto.SynchronizationSummary{
-			SuccessCount:   successCount,
-			FailedCount:    failedCount,
 			FailedPriceIDs: failedPriceIDs,
 		},
 	}

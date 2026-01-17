@@ -151,8 +151,6 @@ type SyncPlanPricesResponse struct {
 }
 
 type SynchronizationSummary struct {
-	SuccessCount   int      `json:"success_count"`
-	FailedCount    int      `json:"failed_count"`
 	FailedPriceIDs []string `json:"failed_price_ids"`
 }
 
