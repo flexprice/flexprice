@@ -2,9 +2,39 @@ package cache
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/getsentry/sentry-go"
 )
+
+// UnmarshalCacheValue attempts to convert a cache value to the specified type.
+// It handles both in-memory cache (which stores actual objects) and Redis cache (which stores JSON strings).
+// Returns the typed value and true if successful, nil and false otherwise.
+func UnmarshalCacheValue[T any](value interface{}) (*T, bool) {
+	if value == nil {
+		return nil, false
+	}
+
+	// Try direct type assertion first (for in-memory cache)
+	if typed, ok := value.(*T); ok {
+		return typed, true
+	}
+
+	// Try type assertion for non-pointer type T (some caches may store values directly)
+	if typed, ok := value.(T); ok {
+		return &typed, true
+	}
+
+	// Try unmarshalling from JSON string (for Redis cache)
+	if str, ok := value.(string); ok {
+		var result T
+		if err := json.Unmarshal([]byte(str), &result); err == nil {
+			return &result, true
+		}
+	}
+
+	return nil, false
+}
 
 // StartCache	Span creates a new span for a cache operation
 // Returns nil if Sentry is not available in the context

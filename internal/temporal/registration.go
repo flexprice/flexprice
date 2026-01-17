@@ -199,6 +199,7 @@ func buildWorkerConfig(
 			billingActivities.CreateDraftInvoicesActivity,
 			billingActivities.UpdateCurrentPeriodActivity,
 			billingActivities.CheckCancellationActivity,
+			billingActivities.ProcessPendingPlanChangesActivity,
 			billingActivities.TriggerInvoiceWorkflowActivity,
 		)
 

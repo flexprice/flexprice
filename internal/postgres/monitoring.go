@@ -76,6 +76,11 @@ func (c *SentryClient) Reader(ctx context.Context) *ent.Client {
 	return c.client.Reader(ctx)
 }
 
+// LockWithWait acquires an advisory lock with wait
+func (c *SentryClient) LockWithWait(ctx context.Context, req LockRequest) error {
+	return c.client.LockWithWait(ctx, req)
+}
+
 // Close closes the database connection
 func (c *SentryClient) Close() error {
 	return c.client.Close()

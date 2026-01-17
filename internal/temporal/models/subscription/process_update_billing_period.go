@@ -353,5 +353,40 @@ func (i *CheckSubscriptionCancellationActivityInput) Validate() error {
 
 // CheckSubscriptionCancellationActivityOutput represents the output for checking subscription cancellation
 type CheckSubscriptionCancellationActivityOutput struct {
-	Success bool `json:"success"`
+	IsCancelled bool `json:"is_cancelled"`
+	Success     bool `json:"success"`
+}
+
+// ProcessPendingPlanChangesActivityInput represents the input for processing pending plan changes
+type ProcessPendingPlanChangesActivityInput struct {
+	SubscriptionID string `json:"subscription_id"`
+	TenantID       string `json:"tenant_id"`
+	EnvironmentID  string `json:"environment_id"`
+	UserID         string `json:"user_id"`
+}
+
+// Validate validates the process pending plan changes activity input
+func (i *ProcessPendingPlanChangesActivityInput) Validate() error {
+	if i.SubscriptionID == "" {
+		return ierr.NewError("subscription_id is required").
+			WithHint("Subscription ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("Environment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ProcessPendingPlanChangesActivityOutput represents the output for processing pending plan changes
+type ProcessPendingPlanChangesActivityOutput struct {
+	Success    bool `json:"success"`
+	WasChanged bool `json:"was_changed"`
 }

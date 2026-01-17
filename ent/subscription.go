@@ -113,6 +113,8 @@ type SubscriptionEdges struct {
 	Pauses []*SubscriptionPause `json:"pauses,omitempty"`
 	// Phases holds the value of the phases edge.
 	Phases []*SubscriptionPhase `json:"phases,omitempty"`
+	// Subscription can have multiple schedules for plan changes, addons, etc.
+	Schedules []*SubscriptionSchedule `json:"schedules,omitempty"`
 	// CreditGrants holds the value of the credit_grants edge.
 	CreditGrants []*CreditGrant `json:"credit_grants,omitempty"`
 	// Subscription can have multiple coupon associations
@@ -123,7 +125,7 @@ type SubscriptionEdges struct {
 	InvoicingCustomer *Customer `json:"invoicing_customer,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [7]bool
+	loadedTypes [8]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -153,10 +155,19 @@ func (e SubscriptionEdges) PhasesOrErr() ([]*SubscriptionPhase, error) {
 	return nil, &NotLoadedError{edge: "phases"}
 }
 
+// SchedulesOrErr returns the Schedules value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) SchedulesOrErr() ([]*SubscriptionSchedule, error) {
+	if e.loadedTypes[3] {
+		return e.Schedules, nil
+	}
+	return nil, &NotLoadedError{edge: "schedules"}
+}
+
 // CreditGrantsOrErr returns the CreditGrants value or an error if the edge
 // was not loaded in eager-loading.
 func (e SubscriptionEdges) CreditGrantsOrErr() ([]*CreditGrant, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[4] {
 		return e.CreditGrants, nil
 	}
 	return nil, &NotLoadedError{edge: "credit_grants"}
@@ -165,7 +176,7 @@ func (e SubscriptionEdges) CreditGrantsOrErr() ([]*CreditGrant, error) {
 // CouponAssociationsOrErr returns the CouponAssociations value or an error if the edge
 // was not loaded in eager-loading.
 func (e SubscriptionEdges) CouponAssociationsOrErr() ([]*CouponAssociation, error) {
-	if e.loadedTypes[4] {
+	if e.loadedTypes[5] {
 		return e.CouponAssociations, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_associations"}
@@ -174,7 +185,7 @@ func (e SubscriptionEdges) CouponAssociationsOrErr() ([]*CouponAssociation, erro
 // CouponApplicationsOrErr returns the CouponApplications value or an error if the edge
 // was not loaded in eager-loading.
 func (e SubscriptionEdges) CouponApplicationsOrErr() ([]*CouponApplication, error) {
-	if e.loadedTypes[5] {
+	if e.loadedTypes[6] {
 		return e.CouponApplications, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_applications"}
@@ -185,7 +196,7 @@ func (e SubscriptionEdges) CouponApplicationsOrErr() ([]*CouponApplication, erro
 func (e SubscriptionEdges) InvoicingCustomerOrErr() (*Customer, error) {
 	if e.InvoicingCustomer != nil {
 		return e.InvoicingCustomer, nil
-	} else if e.loadedTypes[6] {
+	} else if e.loadedTypes[7] {
 		return nil, &NotFoundError{label: customer.Label}
 	}
 	return nil, &NotLoadedError{edge: "invoicing_customer"}
@@ -500,6 +511,11 @@ func (s *Subscription) QueryPauses() *SubscriptionPauseQuery {
 // QueryPhases queries the "phases" edge of the Subscription entity.
 func (s *Subscription) QueryPhases() *SubscriptionPhaseQuery {
 	return NewSubscriptionClient(s.config).QueryPhases(s)
+}
+
+// QuerySchedules queries the "schedules" edge of the Subscription entity.
+func (s *Subscription) QuerySchedules() *SubscriptionScheduleQuery {
+	return NewSubscriptionClient(s.config).QuerySchedules(s)
 }
 
 // QueryCreditGrants queries the "credit_grants" edge of the Subscription entity.

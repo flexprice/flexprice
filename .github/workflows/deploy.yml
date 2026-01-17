@@ -1,9 +1,9 @@
 # .github/workflows/deploy.yml
-name: Deploy to AWS Lambda
+name: Build and push image to Flexprice ECR
 
 on:
   push:
-    branches: [develop]
+    branches: [develop, main]
 
 permissions:
   id-token: write
@@ -15,7 +15,7 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v3
@@ -32,7 +32,7 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push image (with cache)
+      - name: Build & push image (without cache)
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -41,5 +41,3 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

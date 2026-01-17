@@ -203,7 +203,12 @@ func (r *customerRepository) GetByLookupKey(ctx context.Context, lookupKey strin
 	}
 
 	SetSpanSuccess(span)
-	return domainCustomer.FromEnt(c), nil
+
+	customer := domainCustomer.FromEnt(c)
+	// Set cache
+	r.SetCache(ctx, customer)
+
+	return customer, nil
 }
 
 func (r *customerRepository) List(ctx context.Context, filter *types.CustomerFilter) ([]*domainCustomer.Customer, error) {

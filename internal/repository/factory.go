@@ -104,6 +104,10 @@ func NewSubscriptionPhaseRepository(p RepositoryParams) subscription.Subscriptio
 	return entRepo.NewSubscriptionPhaseRepository(p.EntClient, p.Logger, p.Cache)
 }
 
+func NewSubscriptionScheduleRepository(p RepositoryParams) subscription.SubscriptionScheduleRepository {
+	return entRepo.NewSubscriptionScheduleRepository(p.EntClient, p.Logger)
+}
+
 func NewWalletRepository(p RepositoryParams) wallet.Repository {
 	return entRepo.NewWalletRepository(p.EntClient, p.Logger, p.Cache)
 }

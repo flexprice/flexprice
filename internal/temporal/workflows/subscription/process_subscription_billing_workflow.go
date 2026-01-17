@@ -19,6 +19,7 @@ const (
 	ActivityCreateDraftInvoices    = "CreateDraftInvoicesActivity"
 	ActivityUpdateCurrentPeriod    = "UpdateCurrentPeriodActivity"
 	ActivityCheckCancellation      = "CheckCancellationActivity"
+	ActivityProcessPlanChange      = "ProcessPendingPlanChangesActivity"
 	// Activity from invoice package
 	ActivityTriggerInvoiceWorkflow = "TriggerInvoiceWorkflowActivity"
 )
@@ -29,8 +30,9 @@ const (
 // 2. Calculate billing periods up to current time
 // 3. For each period (except the last), create draft invoice
 // 4. Check for cancellation
-// 5. Update subscription to new current period
-// 6. Trigger invoice workflows for processing (fire-and-forget)
+// 5. Process pending plan changes at period end
+// 6. Update subscription to new current period
+// 7. Trigger invoice workflows for processing (fire-and-forget)
 func ProcessSubscriptionBillingWorkflow(
 	ctx workflow.Context,
 	input subscriptionModels.ProcessSubscriptionBillingWorkflowInput,
@@ -211,12 +213,43 @@ func ProcessSubscriptionBillingWorkflow(
 	}
 
 	// ================================================================================
-	// STEP 6: Trigger Invoice Workflows (fire-and-forget)
+	// STEP 6: Process Pending Plan Changes (only if subscription is still active)
+	// ================================================================================
+	if !cancelSubscriptionOutput.IsCancelled {
+		logger.Info("Step 6: Processing pending plan changes",
+			"subscription_id", input.SubscriptionID)
+
+		var planChangeOutput subscriptionModels.ProcessPendingPlanChangesActivityOutput
+		planChangeInput := subscriptionModels.ProcessPendingPlanChangesActivityInput{
+			SubscriptionID: input.SubscriptionID,
+			TenantID:       input.TenantID,
+			EnvironmentID:  input.EnvironmentID,
+			UserID:         input.UserID,
+		}
+
+		err = workflow.ExecuteActivity(ctx, ActivityProcessPlanChange, planChangeInput).Get(ctx, &planChangeOutput)
+		if err != nil {
+			// Log error but don't fail the workflow - plan changes can be retried
+			logger.Warn("Failed to process pending plan changes, but continuing",
+				"error", err,
+				"subscription_id", input.SubscriptionID)
+		} else if planChangeOutput.Success {
+			logger.Info("Processed pending plan changes",
+				"subscription_id", input.SubscriptionID,
+				"was_changed", planChangeOutput.WasChanged)
+		}
+	} else {
+		logger.Info("Step 6: Skipping plan change processing (subscription is cancelled)",
+			"subscription_id", input.SubscriptionID)
+	}
+
+	// ================================================================================
+	// STEP 7: Trigger Invoice Workflows (fire-and-forget)
 	// ================================================================================
 
 	// Only trigger if there are invoices to process
 	if len(createInvoicesOutput.InvoiceIDs) > 0 {
-		logger.Info("Step 6: Triggering invoice workflows",
+		logger.Info("Step 7: Triggering invoice workflows",
 			"subscription_id", input.SubscriptionID,
 			"invoice_count", len(createInvoicesOutput.InvoiceIDs))
 
@@ -241,7 +274,7 @@ func ProcessSubscriptionBillingWorkflow(
 				"failed_count", triggerOutput.FailedCount)
 		}
 	} else {
-		logger.Info("Step 6: No invoices to process, skipping invoice workflow triggers",
+		logger.Info("Step 7: No invoices to process, skipping invoice workflow triggers",
 			"subscription_id", input.SubscriptionID)
 	}
 

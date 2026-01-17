@@ -92,7 +92,6 @@ func main() {
 
 			// Cache
 			cache.Initialize,
-			cache.NewInMemoryCache,
 
 			// Postgres
 			postgres.NewEntClients,
@@ -161,6 +160,7 @@ func main() {
 			repository.NewAddonAssociationRepository,
 			repository.NewSubscriptionLineItemRepository,
 			repository.NewSubscriptionPhaseRepository,
+			repository.NewSubscriptionScheduleRepository,
 			repository.NewSettingsRepository,
 			repository.NewAlertLogsRepository,
 			repository.NewGroupRepository,
@@ -231,12 +231,14 @@ func main() {
 			service.NewAddonService,
 			service.NewSettingsService,
 			service.NewSubscriptionChangeService,
+			service.NewSubscriptionScheduleService,
 			service.NewAlertLogsService,
 			service.NewGroupService,
 			service.NewScheduledTaskService,
 			service.NewWalletPaymentService,
 			service.NewWalletBalanceAlertService,
 			service.NewCustomerPortalService,
+			service.NewDashboardService,
 		),
 	)
 
@@ -302,6 +304,7 @@ func provideHandlers(
 	addonService service.AddonService,
 	settingsService service.SettingsService,
 	subscriptionChangeService service.SubscriptionChangeService,
+	subscriptionScheduleService service.SubscriptionScheduleService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
 	alertLogsService service.AlertLogsService,
 	groupService service.GroupService,
@@ -312,6 +315,7 @@ func provideHandlers(
 	oauthService service.OAuthService,
 	costsheetUsageTrackingService service.CostSheetUsageTrackingService,
 	customerPortalService service.CustomerPortalService,
+	dashboardService service.DashboardService,
 ) api.Handlers {
 	return api.Handlers{
 		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
@@ -327,6 +331,7 @@ func provideHandlers(
 		Subscription:             v1.NewSubscriptionHandler(subscriptionService, logger),
 		SubscriptionPause:        v1.NewSubscriptionPauseHandler(subscriptionService, logger),
 		SubscriptionChange:       v1.NewSubscriptionChangeHandler(subscriptionChangeService, logger),
+		SubscriptionSchedule:     v1.NewSubscriptionScheduleHandler(subscriptionScheduleService),
 		Wallet:                   v1.NewWalletHandler(walletService, logger),
 		Tenant:                   v1.NewTenantHandler(tenantService, logger),
 		Invoice:                  v1.NewInvoiceHandler(invoiceService, logger),
@@ -359,6 +364,7 @@ func provideHandlers(
 		OAuth:                    v1.NewOAuthHandler(oauthService, cfg.OAuth.RedirectURI, logger),
 		CronKafkaLagMonitoring:   cron.NewKafkaLagMonitoringHandler(logger, eventService),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
+		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
 	}
 }
 

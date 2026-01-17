@@ -379,3 +379,164 @@ func (s SubscriptionChangeType) Validate() error {
 	}
 	return nil
 }
+
+// SubscriptionScheduleChangeType represents the type of subscription schedule change
+type SubscriptionScheduleChangeType string
+
+const (
+	SubscriptionScheduleChangeTypePlanChange   SubscriptionScheduleChangeType = "plan_change"
+	SubscriptionScheduleChangeTypeCancellation SubscriptionScheduleChangeType = "cancellation"
+)
+
+var SubscriptionScheduleChangeTypeValues = []SubscriptionScheduleChangeType{
+	SubscriptionScheduleChangeTypePlanChange,
+	SubscriptionScheduleChangeTypeCancellation,
+}
+
+func (s SubscriptionScheduleChangeType) String() string {
+	return string(s)
+}
+
+func (s SubscriptionScheduleChangeType) Validate() error {
+	if s != "" && !lo.Contains(SubscriptionScheduleChangeTypeValues, s) {
+		return ierr.NewError("invalid subscription schedule change type").
+			WithHint("Subscription schedule change type must be plan_change or cancellation").
+			WithReportableDetails(map[string]any{
+				"allowed_values": SubscriptionScheduleChangeTypeValues,
+				"provided_value": s,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ScheduleStatus represents the status of a schedule
+type ScheduleStatus string
+
+const (
+	ScheduleStatusPending   ScheduleStatus = "pending"
+	ScheduleStatusExecuting ScheduleStatus = "executing"
+	ScheduleStatusExecuted  ScheduleStatus = "executed"
+	ScheduleStatusCancelled ScheduleStatus = "cancelled"
+	ScheduleStatusFailed    ScheduleStatus = "failed"
+)
+
+var ScheduleStatusValues = []ScheduleStatus{
+	ScheduleStatusPending,
+	ScheduleStatusExecuting,
+	ScheduleStatusExecuted,
+	ScheduleStatusCancelled,
+	ScheduleStatusFailed,
+}
+
+func (s ScheduleStatus) String() string {
+	return string(s)
+}
+
+func (s ScheduleStatus) Validate() error {
+	if s != "" && !lo.Contains(ScheduleStatusValues, s) {
+		return ierr.NewError("invalid schedule status").
+			WithHint("Schedule status must be pending, executing, executed, cancelled, or failed").
+			WithReportableDetails(map[string]any{
+				"allowed_values": ScheduleStatusValues,
+				"provided_value": s,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// ScheduleType determines when subscription changes take effect (change_at parameter)
+type ScheduleType string
+
+const (
+	ScheduleTypeImmediate ScheduleType = "immediate"
+	ScheduleTypePeriodEnd ScheduleType = "end_of_period"
+)
+
+var ScheduleTypeValues = []ScheduleType{
+	ScheduleTypeImmediate,
+	ScheduleTypePeriodEnd,
+}
+
+func (s ScheduleType) String() string {
+	return string(s)
+}
+
+func (s ScheduleType) Validate() error {
+	if s != "" && !lo.Contains(ScheduleTypeValues, s) {
+		return ierr.NewError("invalid schedule type").
+			WithHint("Schedule type must be 'immediate', 'end_of_period'").
+			WithReportableDetails(map[string]any{
+				"allowed_values": ScheduleTypeValues,
+				"provided_value": s,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// SubscriptionScheduleFilter represents filters for querying subscription schedules
+type SubscriptionScheduleFilter struct {
+	*QueryFilter
+	*TimeRangeFilter
+
+	// ScheduleIDs filters by schedule IDs
+	ScheduleIDs []string `json:"schedule_ids,omitempty" form:"schedule_ids"`
+
+	// SubscriptionIDs filters by subscription IDs
+	SubscriptionIDs []string `json:"subscription_ids,omitempty" form:"subscription_ids"`
+
+	// ScheduleType filters by schedule change type
+	ScheduleType []SubscriptionScheduleChangeType `json:"schedule_type,omitempty" form:"schedule_type"`
+
+	// Status filters by schedule status
+	ScheduleStatus []ScheduleStatus `json:"schedule_status,omitempty" form:"schedule_status"`
+
+	// ScheduledAtStart filters schedules with scheduled_at after this date
+	ScheduledAtStart *time.Time `json:"scheduled_at_start,omitempty" form:"scheduled_at_start"`
+
+	// ScheduledAtEnd filters schedules with scheduled_at before this date
+	ScheduledAtEnd *time.Time `json:"scheduled_at_end,omitempty" form:"scheduled_at_end"`
+
+	// PendingOnly filters to only pending schedules
+	PendingOnly bool `json:"pending_only,omitempty" form:"pending_only"`
+}
+
+// NewSubscriptionScheduleFilter creates a new SubscriptionScheduleFilter with default values
+func NewSubscriptionScheduleFilter() *SubscriptionScheduleFilter {
+	return &SubscriptionScheduleFilter{
+		QueryFilter: NewDefaultQueryFilter(),
+	}
+}
+
+// Validate validates the subscription schedule filter
+func (f SubscriptionScheduleFilter) Validate() error {
+	if f.QueryFilter != nil {
+		if err := f.QueryFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if f.TimeRangeFilter != nil {
+		if err := f.TimeRangeFilter.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate schedule types
+	for _, scheduleType := range f.ScheduleType {
+		if err := scheduleType.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Validate schedule statuses
+	for _, status := range f.ScheduleStatus {
+		if err := status.Validate(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

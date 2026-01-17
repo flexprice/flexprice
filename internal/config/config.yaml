@@ -95,7 +95,7 @@ webhook:
   multiplier: 2.0
   max_elapsed_time: 2m
   tenants:
-    "00000000-0000-0000-0000-000000000000":
+    "tenant_01JJ20ZF9M5GQQXJG2AQSMZCVM":
       enabled: true
       endpoint: "http://localhost:8080/health"
       headers:
@@ -154,6 +154,7 @@ flexprice_s3_exports:
 
 cache:
   enabled: false
+  type: "inmemory"
 
 event_processing:
   topic: "events"
@@ -230,3 +231,14 @@ oauth:
 customer_portal:
   url: "http://localhost:3000"
   token_timeout_hours: 1
+
+# Redis configuration
+redis:
+  host: "localhost" # Redis server hostname
+  port: 6379 # Redis server port
+  password: "" # Redis password (optional)
+  db: 0 # Redis database number
+  use_tls: false # Use TLS for Redis connection
+  pool_size: 10 # Maximum number of connections in the pool
+  timeout: 5s # Timeout for Redis operations
+  key_prefix: "flexprice:local"

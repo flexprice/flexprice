@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 // InMemoryInvoiceStore implements invoice.Repository
@@ -363,6 +364,91 @@ func invoiceSortFn(i, j *invoice.Invoice) bool {
 		return false
 	}
 	return i.CreatedAt.After(j.CreatedAt)
+}
+
+// GetRevenueTrend returns revenue trend data grouped by time windows
+func (s *InMemoryInvoiceStore) GetRevenueTrend(ctx context.Context, windowCount int) ([]types.RevenueTrendWindow, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized}
+	filter.PaymentStatus = []types.PaymentStatus{types.PaymentStatusSucceeded, types.PaymentStatusOverpaid}
+
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group invoices by currency and time window
+	now := time.Now().UTC()
+	windows := make([]types.RevenueTrendWindow, 0)
+
+	// For each window
+	for i := 0; i < windowCount; i++ {
+		// Calculate window start/end (assuming MONTH window size)
+		// Use AddDate to properly handle year boundaries when subtracting months
+		windowStart := now.AddDate(0, -i, 0)
+		windowStart = time.Date(windowStart.Year(), windowStart.Month(), 1, 0, 0, 0, 0, time.UTC)
+		windowEnd := windowStart.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+		// Get unique currencies
+		currencies := make(map[string]bool)
+		for _, inv := range invoices {
+			if inv.Currency != "" {
+				currencies[inv.Currency] = true
+			}
+		}
+
+		// For each currency, calculate revenue in this window
+		for currency := range currencies {
+			totalRevenue := decimal.Zero
+			for _, inv := range invoices {
+				if inv.Currency == currency && inv.FinalizedAt != nil {
+					finalizedTime := *inv.FinalizedAt
+					if (finalizedTime.Equal(windowStart) || finalizedTime.After(windowStart)) &&
+						(finalizedTime.Equal(windowEnd) || finalizedTime.Before(windowEnd)) {
+						totalRevenue = totalRevenue.Add(inv.Total)
+					}
+				}
+			}
+
+			windows = append(windows, types.RevenueTrendWindow{
+				WindowIndex: i,
+				WindowStart: windowStart,
+				WindowEnd:   windowEnd,
+				Revenue:     totalRevenue.String(),
+				Currency:    currency,
+			})
+		}
+	}
+
+	return windows, nil
+}
+
+// GetInvoicePaymentStatus returns invoice payment status counts
+func (s *InMemoryInvoiceStore) GetInvoicePaymentStatus(ctx context.Context) (*types.InvoicePaymentStatus, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	invoices, err := s.List(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	status := &types.InvoicePaymentStatus{
+		Pending:   0,
+		Succeeded: 0,
+		Failed:    0,
+	}
+
+	for _, inv := range invoices {
+		switch inv.PaymentStatus {
+		case types.PaymentStatusPending:
+			status.Pending++
+		case types.PaymentStatusSucceeded:
+			status.Succeeded++
+		case types.PaymentStatusFailed:
+			status.Failed++
+		}
+	}
+
+	return status, nil
 }
 
 // Clear removes all invoices from the store

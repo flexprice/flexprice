@@ -2810,6 +2810,37 @@ func (s *featureUsageTrackingService) fetchCustomers(ctx context.Context, req *d
 
 // mergeAnalyticsData merges additional analytics data into the aggregated data structure
 func (s *featureUsageTrackingService) mergeAnalyticsData(aggregated *AnalyticsData, additional *AnalyticsData) {
+	// Ensure aggregated is not nil
+	if aggregated == nil {
+		return
+	}
+
+	// Initialize maps if they are nil
+	if aggregated.SubscriptionsMap == nil {
+		aggregated.SubscriptionsMap = make(map[string]*subscription.Subscription)
+	}
+	if aggregated.SubscriptionLineItems == nil {
+		aggregated.SubscriptionLineItems = make(map[string]*subscription.SubscriptionLineItem)
+	}
+	if aggregated.Features == nil {
+		aggregated.Features = make(map[string]*feature.Feature)
+	}
+	if aggregated.Meters == nil {
+		aggregated.Meters = make(map[string]*meter.Meter)
+	}
+	if aggregated.Prices == nil {
+		aggregated.Prices = make(map[string]*price.Price)
+	}
+	if aggregated.Plans == nil {
+		aggregated.Plans = make(map[string]*plan.Plan)
+	}
+	if aggregated.Addons == nil {
+		aggregated.Addons = make(map[string]*addon.Addon)
+	}
+	if aggregated.PriceResponses == nil {
+		aggregated.PriceResponses = make(map[string]*dto.PriceResponse)
+	}
+
 	// Merge customers (though in V2 we process multiple customers, we keep track of all)
 	// Note: We don't merge customers as each iteration processes a different customer
 

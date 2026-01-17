@@ -136,6 +136,9 @@ type SubscriptionService interface {
 
 	// Create Draft Invoice for the subscription
 	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error)
+
+	// Mark cancellation schedule as executed (used by cron and Temporal workflows)
+	MarkCancellationScheduleAsExecuted(ctx context.Context, subscriptionID string) error
 }
 
 type PriceUnitService interface {

@@ -42,6 +42,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -1811,6 +1812,43 @@ func init() {
 	subscriptionphaseDescStartDate := subscriptionphaseFields[2].Descriptor()
 	// subscriptionphase.DefaultStartDate holds the default value on creation for the start_date field.
 	subscriptionphase.DefaultStartDate = subscriptionphaseDescStartDate.Default.(func() time.Time)
+	subscriptionscheduleMixin := schema.SubscriptionSchedule{}.Mixin()
+	subscriptionscheduleMixinFields0 := subscriptionscheduleMixin[0].Fields()
+	_ = subscriptionscheduleMixinFields0
+	subscriptionscheduleMixinFields1 := subscriptionscheduleMixin[1].Fields()
+	_ = subscriptionscheduleMixinFields1
+	subscriptionscheduleFields := schema.SubscriptionSchedule{}.Fields()
+	_ = subscriptionscheduleFields
+	// subscriptionscheduleDescTenantID is the schema descriptor for tenant_id field.
+	subscriptionscheduleDescTenantID := subscriptionscheduleMixinFields0[0].Descriptor()
+	// subscriptionschedule.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	subscriptionschedule.TenantIDValidator = subscriptionscheduleDescTenantID.Validators[0].(func(string) error)
+	// subscriptionscheduleDescStatus is the schema descriptor for status field.
+	subscriptionscheduleDescStatus := subscriptionscheduleMixinFields0[1].Descriptor()
+	// subscriptionschedule.DefaultStatus holds the default value on creation for the status field.
+	subscriptionschedule.DefaultStatus = subscriptionscheduleDescStatus.Default.(string)
+	// subscriptionscheduleDescCreatedAt is the schema descriptor for created_at field.
+	subscriptionscheduleDescCreatedAt := subscriptionscheduleMixinFields0[2].Descriptor()
+	// subscriptionschedule.DefaultCreatedAt holds the default value on creation for the created_at field.
+	subscriptionschedule.DefaultCreatedAt = subscriptionscheduleDescCreatedAt.Default.(func() time.Time)
+	// subscriptionscheduleDescUpdatedAt is the schema descriptor for updated_at field.
+	subscriptionscheduleDescUpdatedAt := subscriptionscheduleMixinFields0[3].Descriptor()
+	// subscriptionschedule.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	subscriptionschedule.DefaultUpdatedAt = subscriptionscheduleDescUpdatedAt.Default.(func() time.Time)
+	// subscriptionschedule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	subscriptionschedule.UpdateDefaultUpdatedAt = subscriptionscheduleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// subscriptionscheduleDescEnvironmentID is the schema descriptor for environment_id field.
+	subscriptionscheduleDescEnvironmentID := subscriptionscheduleMixinFields1[0].Descriptor()
+	// subscriptionschedule.DefaultEnvironmentID holds the default value on creation for the environment_id field.
+	subscriptionschedule.DefaultEnvironmentID = subscriptionscheduleDescEnvironmentID.Default.(string)
+	// subscriptionscheduleDescSubscriptionID is the schema descriptor for subscription_id field.
+	subscriptionscheduleDescSubscriptionID := subscriptionscheduleFields[1].Descriptor()
+	// subscriptionschedule.SubscriptionIDValidator is a validator for the "subscription_id" field. It is called by the builders before save.
+	subscriptionschedule.SubscriptionIDValidator = subscriptionscheduleDescSubscriptionID.Validators[0].(func(string) error)
+	// subscriptionscheduleDescScheduleType is the schema descriptor for schedule_type field.
+	subscriptionscheduleDescScheduleType := subscriptionscheduleFields[2].Descriptor()
+	// subscriptionschedule.ScheduleTypeValidator is a validator for the "schedule_type" field. It is called by the builders before save.
+	subscriptionschedule.ScheduleTypeValidator = subscriptionscheduleDescScheduleType.Validators[0].(func(string) error)
 	taskMixin := schema.Task{}.Mixin()
 	taskMixinFields0 := taskMixin[0].Fields()
 	_ = taskMixinFields0

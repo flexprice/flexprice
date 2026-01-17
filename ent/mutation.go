@@ -49,6 +49,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/ent/task"
 	"github.com/flexprice/flexprice/ent/taxapplied"
 	"github.com/flexprice/flexprice/ent/taxassociation"
@@ -106,6 +107,7 @@ const (
 	TypeSubscriptionLineItem     = "SubscriptionLineItem"
 	TypeSubscriptionPause        = "SubscriptionPause"
 	TypeSubscriptionPhase        = "SubscriptionPhase"
+	TypeSubscriptionSchedule     = "SubscriptionSchedule"
 	TypeTask                     = "Task"
 	TypeTaxApplied               = "TaxApplied"
 	TypeTaxAssociation           = "TaxAssociation"
@@ -44865,6 +44867,9 @@ type SubscriptionMutation struct {
 	phases                     map[string]struct{}
 	removedphases              map[string]struct{}
 	clearedphases              bool
+	schedules                  map[string]struct{}
+	removedschedules           map[string]struct{}
+	clearedschedules           bool
 	credit_grants              map[string]struct{}
 	removedcredit_grants       map[string]struct{}
 	clearedcredit_grants       bool
@@ -46786,6 +46791,60 @@ func (m *SubscriptionMutation) ResetPhases() {
 	m.removedphases = nil
 }
 
+// AddScheduleIDs adds the "schedules" edge to the SubscriptionSchedule entity by ids.
+func (m *SubscriptionMutation) AddScheduleIDs(ids ...string) {
+	if m.schedules == nil {
+		m.schedules = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.schedules[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSchedules clears the "schedules" edge to the SubscriptionSchedule entity.
+func (m *SubscriptionMutation) ClearSchedules() {
+	m.clearedschedules = true
+}
+
+// SchedulesCleared reports if the "schedules" edge to the SubscriptionSchedule entity was cleared.
+func (m *SubscriptionMutation) SchedulesCleared() bool {
+	return m.clearedschedules
+}
+
+// RemoveScheduleIDs removes the "schedules" edge to the SubscriptionSchedule entity by IDs.
+func (m *SubscriptionMutation) RemoveScheduleIDs(ids ...string) {
+	if m.removedschedules == nil {
+		m.removedschedules = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.schedules, ids[i])
+		m.removedschedules[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSchedules returns the removed IDs of the "schedules" edge to the SubscriptionSchedule entity.
+func (m *SubscriptionMutation) RemovedSchedulesIDs() (ids []string) {
+	for id := range m.removedschedules {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SchedulesIDs returns the "schedules" edge IDs in the mutation.
+func (m *SubscriptionMutation) SchedulesIDs() (ids []string) {
+	for id := range m.schedules {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSchedules resets all changes to the "schedules" edge.
+func (m *SubscriptionMutation) ResetSchedules() {
+	m.schedules = nil
+	m.clearedschedules = false
+	m.removedschedules = nil
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by ids.
 func (m *SubscriptionMutation) AddCreditGrantIDs(ids ...string) {
 	if m.credit_grants == nil {
@@ -47874,7 +47933,7 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.line_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47883,6 +47942,9 @@ func (m *SubscriptionMutation) AddedEdges() []string {
 	}
 	if m.phases != nil {
 		edges = append(edges, subscription.EdgePhases)
+	}
+	if m.schedules != nil {
+		edges = append(edges, subscription.EdgeSchedules)
 	}
 	if m.credit_grants != nil {
 		edges = append(edges, subscription.EdgeCreditGrants)
@@ -47921,6 +47983,12 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgeSchedules:
+		ids := make([]ent.Value, 0, len(m.schedules))
+		for id := range m.schedules {
+			ids = append(ids, id)
+		}
+		return ids
 	case subscription.EdgeCreditGrants:
 		ids := make([]ent.Value, 0, len(m.credit_grants))
 		for id := range m.credit_grants {
@@ -47949,7 +48017,7 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.removedline_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -47958,6 +48026,9 @@ func (m *SubscriptionMutation) RemovedEdges() []string {
 	}
 	if m.removedphases != nil {
 		edges = append(edges, subscription.EdgePhases)
+	}
+	if m.removedschedules != nil {
+		edges = append(edges, subscription.EdgeSchedules)
 	}
 	if m.removedcredit_grants != nil {
 		edges = append(edges, subscription.EdgeCreditGrants)
@@ -47993,6 +48064,12 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgeSchedules:
+		ids := make([]ent.Value, 0, len(m.removedschedules))
+		for id := range m.removedschedules {
+			ids = append(ids, id)
+		}
+		return ids
 	case subscription.EdgeCreditGrants:
 		ids := make([]ent.Value, 0, len(m.removedcredit_grants))
 		for id := range m.removedcredit_grants {
@@ -48017,7 +48094,7 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.clearedline_items {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -48026,6 +48103,9 @@ func (m *SubscriptionMutation) ClearedEdges() []string {
 	}
 	if m.clearedphases {
 		edges = append(edges, subscription.EdgePhases)
+	}
+	if m.clearedschedules {
+		edges = append(edges, subscription.EdgeSchedules)
 	}
 	if m.clearedcredit_grants {
 		edges = append(edges, subscription.EdgeCreditGrants)
@@ -48052,6 +48132,8 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 		return m.clearedpauses
 	case subscription.EdgePhases:
 		return m.clearedphases
+	case subscription.EdgeSchedules:
+		return m.clearedschedules
 	case subscription.EdgeCreditGrants:
 		return m.clearedcredit_grants
 	case subscription.EdgeCouponAssociations:
@@ -48087,6 +48169,9 @@ func (m *SubscriptionMutation) ResetEdge(name string) error {
 		return nil
 	case subscription.EdgePhases:
 		m.ResetPhases()
+		return nil
+	case subscription.EdgeSchedules:
+		m.ResetSchedules()
 		return nil
 	case subscription.EdgeCreditGrants:
 		m.ResetCreditGrants()
@@ -53257,6 +53342,1357 @@ func (m *SubscriptionPhaseMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionPhase edge %s", name)
+}
+
+// SubscriptionScheduleMutation represents an operation that mutates the SubscriptionSchedule nodes in the graph.
+type SubscriptionScheduleMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *string
+	tenant_id           *string
+	status              *string
+	created_at          *time.Time
+	updated_at          *time.Time
+	created_by          *string
+	updated_by          *string
+	environment_id      *string
+	metadata            *map[string]string
+	schedule_type       *types.SubscriptionScheduleChangeType
+	scheduled_at        *time.Time
+	configuration       *map[string]interface{}
+	executed_at         *time.Time
+	cancelled_at        *time.Time
+	execution_result    *map[string]interface{}
+	error_message       *string
+	clearedFields       map[string]struct{}
+	subscription        *string
+	clearedsubscription bool
+	done                bool
+	oldValue            func(context.Context) (*SubscriptionSchedule, error)
+	predicates          []predicate.SubscriptionSchedule
+}
+
+var _ ent.Mutation = (*SubscriptionScheduleMutation)(nil)
+
+// subscriptionscheduleOption allows management of the mutation configuration using functional options.
+type subscriptionscheduleOption func(*SubscriptionScheduleMutation)
+
+// newSubscriptionScheduleMutation creates new mutation for the SubscriptionSchedule entity.
+func newSubscriptionScheduleMutation(c config, op Op, opts ...subscriptionscheduleOption) *SubscriptionScheduleMutation {
+	m := &SubscriptionScheduleMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeSubscriptionSchedule,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withSubscriptionScheduleID sets the ID field of the mutation.
+func withSubscriptionScheduleID(id string) subscriptionscheduleOption {
+	return func(m *SubscriptionScheduleMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *SubscriptionSchedule
+		)
+		m.oldValue = func(ctx context.Context) (*SubscriptionSchedule, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().SubscriptionSchedule.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withSubscriptionSchedule sets the old SubscriptionSchedule of the mutation.
+func withSubscriptionSchedule(node *SubscriptionSchedule) subscriptionscheduleOption {
+	return func(m *SubscriptionScheduleMutation) {
+		m.oldValue = func(context.Context) (*SubscriptionSchedule, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m SubscriptionScheduleMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m SubscriptionScheduleMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of SubscriptionSchedule entities.
+func (m *SubscriptionScheduleMutation) SetID(id string) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *SubscriptionScheduleMutation) ID() (id string, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *SubscriptionScheduleMutation) IDs(ctx context.Context) ([]string, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []string{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().SubscriptionSchedule.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *SubscriptionScheduleMutation) SetTenantID(s string) {
+	m.tenant_id = &s
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *SubscriptionScheduleMutation) TenantID() (r string, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldTenantID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *SubscriptionScheduleMutation) ResetTenantID() {
+	m.tenant_id = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *SubscriptionScheduleMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *SubscriptionScheduleMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *SubscriptionScheduleMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *SubscriptionScheduleMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *SubscriptionScheduleMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *SubscriptionScheduleMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *SubscriptionScheduleMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *SubscriptionScheduleMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *SubscriptionScheduleMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (m *SubscriptionScheduleMutation) SetCreatedBy(s string) {
+	m.created_by = &s
+}
+
+// CreatedBy returns the value of the "created_by" field in the mutation.
+func (m *SubscriptionScheduleMutation) CreatedBy() (r string, exists bool) {
+	v := m.created_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedBy returns the old "created_by" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldCreatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedBy: %w", err)
+	}
+	return oldValue.CreatedBy, nil
+}
+
+// ClearCreatedBy clears the value of the "created_by" field.
+func (m *SubscriptionScheduleMutation) ClearCreatedBy() {
+	m.created_by = nil
+	m.clearedFields[subscriptionschedule.FieldCreatedBy] = struct{}{}
+}
+
+// CreatedByCleared returns if the "created_by" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) CreatedByCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldCreatedBy]
+	return ok
+}
+
+// ResetCreatedBy resets all changes to the "created_by" field.
+func (m *SubscriptionScheduleMutation) ResetCreatedBy() {
+	m.created_by = nil
+	delete(m.clearedFields, subscriptionschedule.FieldCreatedBy)
+}
+
+// SetUpdatedBy sets the "updated_by" field.
+func (m *SubscriptionScheduleMutation) SetUpdatedBy(s string) {
+	m.updated_by = &s
+}
+
+// UpdatedBy returns the value of the "updated_by" field in the mutation.
+func (m *SubscriptionScheduleMutation) UpdatedBy() (r string, exists bool) {
+	v := m.updated_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedBy returns the old "updated_by" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldUpdatedBy(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedBy: %w", err)
+	}
+	return oldValue.UpdatedBy, nil
+}
+
+// ClearUpdatedBy clears the value of the "updated_by" field.
+func (m *SubscriptionScheduleMutation) ClearUpdatedBy() {
+	m.updated_by = nil
+	m.clearedFields[subscriptionschedule.FieldUpdatedBy] = struct{}{}
+}
+
+// UpdatedByCleared returns if the "updated_by" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) UpdatedByCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldUpdatedBy]
+	return ok
+}
+
+// ResetUpdatedBy resets all changes to the "updated_by" field.
+func (m *SubscriptionScheduleMutation) ResetUpdatedBy() {
+	m.updated_by = nil
+	delete(m.clearedFields, subscriptionschedule.FieldUpdatedBy)
+}
+
+// SetEnvironmentID sets the "environment_id" field.
+func (m *SubscriptionScheduleMutation) SetEnvironmentID(s string) {
+	m.environment_id = &s
+}
+
+// EnvironmentID returns the value of the "environment_id" field in the mutation.
+func (m *SubscriptionScheduleMutation) EnvironmentID() (r string, exists bool) {
+	v := m.environment_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnvironmentID returns the old "environment_id" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldEnvironmentID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnvironmentID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnvironmentID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnvironmentID: %w", err)
+	}
+	return oldValue.EnvironmentID, nil
+}
+
+// ClearEnvironmentID clears the value of the "environment_id" field.
+func (m *SubscriptionScheduleMutation) ClearEnvironmentID() {
+	m.environment_id = nil
+	m.clearedFields[subscriptionschedule.FieldEnvironmentID] = struct{}{}
+}
+
+// EnvironmentIDCleared returns if the "environment_id" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) EnvironmentIDCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldEnvironmentID]
+	return ok
+}
+
+// ResetEnvironmentID resets all changes to the "environment_id" field.
+func (m *SubscriptionScheduleMutation) ResetEnvironmentID() {
+	m.environment_id = nil
+	delete(m.clearedFields, subscriptionschedule.FieldEnvironmentID)
+}
+
+// SetMetadata sets the "metadata" field.
+func (m *SubscriptionScheduleMutation) SetMetadata(value map[string]string) {
+	m.metadata = &value
+}
+
+// Metadata returns the value of the "metadata" field in the mutation.
+func (m *SubscriptionScheduleMutation) Metadata() (r map[string]string, exists bool) {
+	v := m.metadata
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMetadata returns the old "metadata" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldMetadata(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMetadata requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMetadata: %w", err)
+	}
+	return oldValue.Metadata, nil
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (m *SubscriptionScheduleMutation) ClearMetadata() {
+	m.metadata = nil
+	m.clearedFields[subscriptionschedule.FieldMetadata] = struct{}{}
+}
+
+// MetadataCleared returns if the "metadata" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) MetadataCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldMetadata]
+	return ok
+}
+
+// ResetMetadata resets all changes to the "metadata" field.
+func (m *SubscriptionScheduleMutation) ResetMetadata() {
+	m.metadata = nil
+	delete(m.clearedFields, subscriptionschedule.FieldMetadata)
+}
+
+// SetSubscriptionID sets the "subscription_id" field.
+func (m *SubscriptionScheduleMutation) SetSubscriptionID(s string) {
+	m.subscription = &s
+}
+
+// SubscriptionID returns the value of the "subscription_id" field in the mutation.
+func (m *SubscriptionScheduleMutation) SubscriptionID() (r string, exists bool) {
+	v := m.subscription
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionID returns the old "subscription_id" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldSubscriptionID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionID: %w", err)
+	}
+	return oldValue.SubscriptionID, nil
+}
+
+// ResetSubscriptionID resets all changes to the "subscription_id" field.
+func (m *SubscriptionScheduleMutation) ResetSubscriptionID() {
+	m.subscription = nil
+}
+
+// SetScheduleType sets the "schedule_type" field.
+func (m *SubscriptionScheduleMutation) SetScheduleType(tsct types.SubscriptionScheduleChangeType) {
+	m.schedule_type = &tsct
+}
+
+// ScheduleType returns the value of the "schedule_type" field in the mutation.
+func (m *SubscriptionScheduleMutation) ScheduleType() (r types.SubscriptionScheduleChangeType, exists bool) {
+	v := m.schedule_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScheduleType returns the old "schedule_type" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldScheduleType(ctx context.Context) (v types.SubscriptionScheduleChangeType, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScheduleType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScheduleType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScheduleType: %w", err)
+	}
+	return oldValue.ScheduleType, nil
+}
+
+// ResetScheduleType resets all changes to the "schedule_type" field.
+func (m *SubscriptionScheduleMutation) ResetScheduleType() {
+	m.schedule_type = nil
+}
+
+// SetScheduledAt sets the "scheduled_at" field.
+func (m *SubscriptionScheduleMutation) SetScheduledAt(t time.Time) {
+	m.scheduled_at = &t
+}
+
+// ScheduledAt returns the value of the "scheduled_at" field in the mutation.
+func (m *SubscriptionScheduleMutation) ScheduledAt() (r time.Time, exists bool) {
+	v := m.scheduled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScheduledAt returns the old "scheduled_at" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldScheduledAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScheduledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScheduledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScheduledAt: %w", err)
+	}
+	return oldValue.ScheduledAt, nil
+}
+
+// ResetScheduledAt resets all changes to the "scheduled_at" field.
+func (m *SubscriptionScheduleMutation) ResetScheduledAt() {
+	m.scheduled_at = nil
+}
+
+// SetConfiguration sets the "configuration" field.
+func (m *SubscriptionScheduleMutation) SetConfiguration(value map[string]interface{}) {
+	m.configuration = &value
+}
+
+// Configuration returns the value of the "configuration" field in the mutation.
+func (m *SubscriptionScheduleMutation) Configuration() (r map[string]interface{}, exists bool) {
+	v := m.configuration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfiguration returns the old "configuration" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldConfiguration(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfiguration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfiguration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfiguration: %w", err)
+	}
+	return oldValue.Configuration, nil
+}
+
+// ResetConfiguration resets all changes to the "configuration" field.
+func (m *SubscriptionScheduleMutation) ResetConfiguration() {
+	m.configuration = nil
+}
+
+// SetExecutedAt sets the "executed_at" field.
+func (m *SubscriptionScheduleMutation) SetExecutedAt(t time.Time) {
+	m.executed_at = &t
+}
+
+// ExecutedAt returns the value of the "executed_at" field in the mutation.
+func (m *SubscriptionScheduleMutation) ExecutedAt() (r time.Time, exists bool) {
+	v := m.executed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutedAt returns the old "executed_at" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldExecutedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutedAt: %w", err)
+	}
+	return oldValue.ExecutedAt, nil
+}
+
+// ClearExecutedAt clears the value of the "executed_at" field.
+func (m *SubscriptionScheduleMutation) ClearExecutedAt() {
+	m.executed_at = nil
+	m.clearedFields[subscriptionschedule.FieldExecutedAt] = struct{}{}
+}
+
+// ExecutedAtCleared returns if the "executed_at" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) ExecutedAtCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldExecutedAt]
+	return ok
+}
+
+// ResetExecutedAt resets all changes to the "executed_at" field.
+func (m *SubscriptionScheduleMutation) ResetExecutedAt() {
+	m.executed_at = nil
+	delete(m.clearedFields, subscriptionschedule.FieldExecutedAt)
+}
+
+// SetCancelledAt sets the "cancelled_at" field.
+func (m *SubscriptionScheduleMutation) SetCancelledAt(t time.Time) {
+	m.cancelled_at = &t
+}
+
+// CancelledAt returns the value of the "cancelled_at" field in the mutation.
+func (m *SubscriptionScheduleMutation) CancelledAt() (r time.Time, exists bool) {
+	v := m.cancelled_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCancelledAt returns the old "cancelled_at" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldCancelledAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCancelledAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCancelledAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCancelledAt: %w", err)
+	}
+	return oldValue.CancelledAt, nil
+}
+
+// ClearCancelledAt clears the value of the "cancelled_at" field.
+func (m *SubscriptionScheduleMutation) ClearCancelledAt() {
+	m.cancelled_at = nil
+	m.clearedFields[subscriptionschedule.FieldCancelledAt] = struct{}{}
+}
+
+// CancelledAtCleared returns if the "cancelled_at" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) CancelledAtCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldCancelledAt]
+	return ok
+}
+
+// ResetCancelledAt resets all changes to the "cancelled_at" field.
+func (m *SubscriptionScheduleMutation) ResetCancelledAt() {
+	m.cancelled_at = nil
+	delete(m.clearedFields, subscriptionschedule.FieldCancelledAt)
+}
+
+// SetExecutionResult sets the "execution_result" field.
+func (m *SubscriptionScheduleMutation) SetExecutionResult(value map[string]interface{}) {
+	m.execution_result = &value
+}
+
+// ExecutionResult returns the value of the "execution_result" field in the mutation.
+func (m *SubscriptionScheduleMutation) ExecutionResult() (r map[string]interface{}, exists bool) {
+	v := m.execution_result
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionResult returns the old "execution_result" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldExecutionResult(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionResult is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionResult requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionResult: %w", err)
+	}
+	return oldValue.ExecutionResult, nil
+}
+
+// ClearExecutionResult clears the value of the "execution_result" field.
+func (m *SubscriptionScheduleMutation) ClearExecutionResult() {
+	m.execution_result = nil
+	m.clearedFields[subscriptionschedule.FieldExecutionResult] = struct{}{}
+}
+
+// ExecutionResultCleared returns if the "execution_result" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) ExecutionResultCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldExecutionResult]
+	return ok
+}
+
+// ResetExecutionResult resets all changes to the "execution_result" field.
+func (m *SubscriptionScheduleMutation) ResetExecutionResult() {
+	m.execution_result = nil
+	delete(m.clearedFields, subscriptionschedule.FieldExecutionResult)
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (m *SubscriptionScheduleMutation) SetErrorMessage(s string) {
+	m.error_message = &s
+}
+
+// ErrorMessage returns the value of the "error_message" field in the mutation.
+func (m *SubscriptionScheduleMutation) ErrorMessage() (r string, exists bool) {
+	v := m.error_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldErrorMessage returns the old "error_message" field's value of the SubscriptionSchedule entity.
+// If the SubscriptionSchedule object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionScheduleMutation) OldErrorMessage(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldErrorMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldErrorMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldErrorMessage: %w", err)
+	}
+	return oldValue.ErrorMessage, nil
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (m *SubscriptionScheduleMutation) ClearErrorMessage() {
+	m.error_message = nil
+	m.clearedFields[subscriptionschedule.FieldErrorMessage] = struct{}{}
+}
+
+// ErrorMessageCleared returns if the "error_message" field was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) ErrorMessageCleared() bool {
+	_, ok := m.clearedFields[subscriptionschedule.FieldErrorMessage]
+	return ok
+}
+
+// ResetErrorMessage resets all changes to the "error_message" field.
+func (m *SubscriptionScheduleMutation) ResetErrorMessage() {
+	m.error_message = nil
+	delete(m.clearedFields, subscriptionschedule.FieldErrorMessage)
+}
+
+// ClearSubscription clears the "subscription" edge to the Subscription entity.
+func (m *SubscriptionScheduleMutation) ClearSubscription() {
+	m.clearedsubscription = true
+	m.clearedFields[subscriptionschedule.FieldSubscriptionID] = struct{}{}
+}
+
+// SubscriptionCleared reports if the "subscription" edge to the Subscription entity was cleared.
+func (m *SubscriptionScheduleMutation) SubscriptionCleared() bool {
+	return m.clearedsubscription
+}
+
+// SubscriptionIDs returns the "subscription" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SubscriptionID instead. It exists only for internal usage by the builders.
+func (m *SubscriptionScheduleMutation) SubscriptionIDs() (ids []string) {
+	if id := m.subscription; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSubscription resets all changes to the "subscription" edge.
+func (m *SubscriptionScheduleMutation) ResetSubscription() {
+	m.subscription = nil
+	m.clearedsubscription = false
+}
+
+// Where appends a list predicates to the SubscriptionScheduleMutation builder.
+func (m *SubscriptionScheduleMutation) Where(ps ...predicate.SubscriptionSchedule) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the SubscriptionScheduleMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *SubscriptionScheduleMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.SubscriptionSchedule, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *SubscriptionScheduleMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *SubscriptionScheduleMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (SubscriptionSchedule).
+func (m *SubscriptionScheduleMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *SubscriptionScheduleMutation) Fields() []string {
+	fields := make([]string, 0, 16)
+	if m.tenant_id != nil {
+		fields = append(fields, subscriptionschedule.FieldTenantID)
+	}
+	if m.status != nil {
+		fields = append(fields, subscriptionschedule.FieldStatus)
+	}
+	if m.created_at != nil {
+		fields = append(fields, subscriptionschedule.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, subscriptionschedule.FieldUpdatedAt)
+	}
+	if m.created_by != nil {
+		fields = append(fields, subscriptionschedule.FieldCreatedBy)
+	}
+	if m.updated_by != nil {
+		fields = append(fields, subscriptionschedule.FieldUpdatedBy)
+	}
+	if m.environment_id != nil {
+		fields = append(fields, subscriptionschedule.FieldEnvironmentID)
+	}
+	if m.metadata != nil {
+		fields = append(fields, subscriptionschedule.FieldMetadata)
+	}
+	if m.subscription != nil {
+		fields = append(fields, subscriptionschedule.FieldSubscriptionID)
+	}
+	if m.schedule_type != nil {
+		fields = append(fields, subscriptionschedule.FieldScheduleType)
+	}
+	if m.scheduled_at != nil {
+		fields = append(fields, subscriptionschedule.FieldScheduledAt)
+	}
+	if m.configuration != nil {
+		fields = append(fields, subscriptionschedule.FieldConfiguration)
+	}
+	if m.executed_at != nil {
+		fields = append(fields, subscriptionschedule.FieldExecutedAt)
+	}
+	if m.cancelled_at != nil {
+		fields = append(fields, subscriptionschedule.FieldCancelledAt)
+	}
+	if m.execution_result != nil {
+		fields = append(fields, subscriptionschedule.FieldExecutionResult)
+	}
+	if m.error_message != nil {
+		fields = append(fields, subscriptionschedule.FieldErrorMessage)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *SubscriptionScheduleMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case subscriptionschedule.FieldTenantID:
+		return m.TenantID()
+	case subscriptionschedule.FieldStatus:
+		return m.Status()
+	case subscriptionschedule.FieldCreatedAt:
+		return m.CreatedAt()
+	case subscriptionschedule.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case subscriptionschedule.FieldCreatedBy:
+		return m.CreatedBy()
+	case subscriptionschedule.FieldUpdatedBy:
+		return m.UpdatedBy()
+	case subscriptionschedule.FieldEnvironmentID:
+		return m.EnvironmentID()
+	case subscriptionschedule.FieldMetadata:
+		return m.Metadata()
+	case subscriptionschedule.FieldSubscriptionID:
+		return m.SubscriptionID()
+	case subscriptionschedule.FieldScheduleType:
+		return m.ScheduleType()
+	case subscriptionschedule.FieldScheduledAt:
+		return m.ScheduledAt()
+	case subscriptionschedule.FieldConfiguration:
+		return m.Configuration()
+	case subscriptionschedule.FieldExecutedAt:
+		return m.ExecutedAt()
+	case subscriptionschedule.FieldCancelledAt:
+		return m.CancelledAt()
+	case subscriptionschedule.FieldExecutionResult:
+		return m.ExecutionResult()
+	case subscriptionschedule.FieldErrorMessage:
+		return m.ErrorMessage()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *SubscriptionScheduleMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case subscriptionschedule.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case subscriptionschedule.FieldStatus:
+		return m.OldStatus(ctx)
+	case subscriptionschedule.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case subscriptionschedule.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case subscriptionschedule.FieldCreatedBy:
+		return m.OldCreatedBy(ctx)
+	case subscriptionschedule.FieldUpdatedBy:
+		return m.OldUpdatedBy(ctx)
+	case subscriptionschedule.FieldEnvironmentID:
+		return m.OldEnvironmentID(ctx)
+	case subscriptionschedule.FieldMetadata:
+		return m.OldMetadata(ctx)
+	case subscriptionschedule.FieldSubscriptionID:
+		return m.OldSubscriptionID(ctx)
+	case subscriptionschedule.FieldScheduleType:
+		return m.OldScheduleType(ctx)
+	case subscriptionschedule.FieldScheduledAt:
+		return m.OldScheduledAt(ctx)
+	case subscriptionschedule.FieldConfiguration:
+		return m.OldConfiguration(ctx)
+	case subscriptionschedule.FieldExecutedAt:
+		return m.OldExecutedAt(ctx)
+	case subscriptionschedule.FieldCancelledAt:
+		return m.OldCancelledAt(ctx)
+	case subscriptionschedule.FieldExecutionResult:
+		return m.OldExecutionResult(ctx)
+	case subscriptionschedule.FieldErrorMessage:
+		return m.OldErrorMessage(ctx)
+	}
+	return nil, fmt.Errorf("unknown SubscriptionSchedule field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SubscriptionScheduleMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case subscriptionschedule.FieldTenantID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case subscriptionschedule.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case subscriptionschedule.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case subscriptionschedule.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case subscriptionschedule.FieldCreatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedBy(v)
+		return nil
+	case subscriptionschedule.FieldUpdatedBy:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedBy(v)
+		return nil
+	case subscriptionschedule.FieldEnvironmentID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnvironmentID(v)
+		return nil
+	case subscriptionschedule.FieldMetadata:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMetadata(v)
+		return nil
+	case subscriptionschedule.FieldSubscriptionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionID(v)
+		return nil
+	case subscriptionschedule.FieldScheduleType:
+		v, ok := value.(types.SubscriptionScheduleChangeType)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScheduleType(v)
+		return nil
+	case subscriptionschedule.FieldScheduledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScheduledAt(v)
+		return nil
+	case subscriptionschedule.FieldConfiguration:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfiguration(v)
+		return nil
+	case subscriptionschedule.FieldExecutedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutedAt(v)
+		return nil
+	case subscriptionschedule.FieldCancelledAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCancelledAt(v)
+		return nil
+	case subscriptionschedule.FieldExecutionResult:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionResult(v)
+		return nil
+	case subscriptionschedule.FieldErrorMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetErrorMessage(v)
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionSchedule field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *SubscriptionScheduleMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *SubscriptionScheduleMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *SubscriptionScheduleMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown SubscriptionSchedule numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *SubscriptionScheduleMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(subscriptionschedule.FieldCreatedBy) {
+		fields = append(fields, subscriptionschedule.FieldCreatedBy)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldUpdatedBy) {
+		fields = append(fields, subscriptionschedule.FieldUpdatedBy)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldEnvironmentID) {
+		fields = append(fields, subscriptionschedule.FieldEnvironmentID)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldMetadata) {
+		fields = append(fields, subscriptionschedule.FieldMetadata)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldExecutedAt) {
+		fields = append(fields, subscriptionschedule.FieldExecutedAt)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldCancelledAt) {
+		fields = append(fields, subscriptionschedule.FieldCancelledAt)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldExecutionResult) {
+		fields = append(fields, subscriptionschedule.FieldExecutionResult)
+	}
+	if m.FieldCleared(subscriptionschedule.FieldErrorMessage) {
+		fields = append(fields, subscriptionschedule.FieldErrorMessage)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *SubscriptionScheduleMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *SubscriptionScheduleMutation) ClearField(name string) error {
+	switch name {
+	case subscriptionschedule.FieldCreatedBy:
+		m.ClearCreatedBy()
+		return nil
+	case subscriptionschedule.FieldUpdatedBy:
+		m.ClearUpdatedBy()
+		return nil
+	case subscriptionschedule.FieldEnvironmentID:
+		m.ClearEnvironmentID()
+		return nil
+	case subscriptionschedule.FieldMetadata:
+		m.ClearMetadata()
+		return nil
+	case subscriptionschedule.FieldExecutedAt:
+		m.ClearExecutedAt()
+		return nil
+	case subscriptionschedule.FieldCancelledAt:
+		m.ClearCancelledAt()
+		return nil
+	case subscriptionschedule.FieldExecutionResult:
+		m.ClearExecutionResult()
+		return nil
+	case subscriptionschedule.FieldErrorMessage:
+		m.ClearErrorMessage()
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionSchedule nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *SubscriptionScheduleMutation) ResetField(name string) error {
+	switch name {
+	case subscriptionschedule.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case subscriptionschedule.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case subscriptionschedule.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case subscriptionschedule.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case subscriptionschedule.FieldCreatedBy:
+		m.ResetCreatedBy()
+		return nil
+	case subscriptionschedule.FieldUpdatedBy:
+		m.ResetUpdatedBy()
+		return nil
+	case subscriptionschedule.FieldEnvironmentID:
+		m.ResetEnvironmentID()
+		return nil
+	case subscriptionschedule.FieldMetadata:
+		m.ResetMetadata()
+		return nil
+	case subscriptionschedule.FieldSubscriptionID:
+		m.ResetSubscriptionID()
+		return nil
+	case subscriptionschedule.FieldScheduleType:
+		m.ResetScheduleType()
+		return nil
+	case subscriptionschedule.FieldScheduledAt:
+		m.ResetScheduledAt()
+		return nil
+	case subscriptionschedule.FieldConfiguration:
+		m.ResetConfiguration()
+		return nil
+	case subscriptionschedule.FieldExecutedAt:
+		m.ResetExecutedAt()
+		return nil
+	case subscriptionschedule.FieldCancelledAt:
+		m.ResetCancelledAt()
+		return nil
+	case subscriptionschedule.FieldExecutionResult:
+		m.ResetExecutionResult()
+		return nil
+	case subscriptionschedule.FieldErrorMessage:
+		m.ResetErrorMessage()
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionSchedule field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *SubscriptionScheduleMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.subscription != nil {
+		edges = append(edges, subscriptionschedule.EdgeSubscription)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *SubscriptionScheduleMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case subscriptionschedule.EdgeSubscription:
+		if id := m.subscription; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *SubscriptionScheduleMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *SubscriptionScheduleMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *SubscriptionScheduleMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedsubscription {
+		edges = append(edges, subscriptionschedule.EdgeSubscription)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *SubscriptionScheduleMutation) EdgeCleared(name string) bool {
+	switch name {
+	case subscriptionschedule.EdgeSubscription:
+		return m.clearedsubscription
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *SubscriptionScheduleMutation) ClearEdge(name string) error {
+	switch name {
+	case subscriptionschedule.EdgeSubscription:
+		m.ClearSubscription()
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionSchedule unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *SubscriptionScheduleMutation) ResetEdge(name string) error {
+	switch name {
+	case subscriptionschedule.EdgeSubscription:
+		m.ResetSubscription()
+		return nil
+	}
+	return fmt.Errorf("unknown SubscriptionSchedule edge %s", name)
 }
 
 // TaskMutation represents an operation that mutates the Task nodes in the graph.

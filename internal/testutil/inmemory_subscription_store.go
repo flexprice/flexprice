@@ -418,6 +418,52 @@ func (s *InMemorySubscriptionStore) ListSubscriptionsDueForRenewal(ctx context.C
 	return s.ListAll(ctx, filter)
 }
 
+// GetRecentSubscriptionsByPlan returns subscription counts grouped by plan for last 7 days
+func (s *InMemorySubscriptionStore) GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error) {
+	now := time.Now().UTC()
+	sevenDaysAgo := now.AddDate(0, 0, -7)
+
+	// Get all subscriptions created in last 7 days
+	filter := &types.SubscriptionFilter{
+		QueryFilter: types.NewNoLimitQueryFilter(),
+		TimeRangeFilter: &types.TimeRangeFilter{
+			StartTime: lo.ToPtr(sevenDaysAgo),
+			EndTime:   lo.ToPtr(now),
+		},
+	}
+
+	subscriptions, err := s.ListAll(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group by plan
+	planCounts := make(map[string]*types.SubscriptionPlanCount)
+	for _, sub := range subscriptions {
+		if sub.PlanID == "" {
+			continue
+		}
+
+		if pc, exists := planCounts[sub.PlanID]; exists {
+			pc.Count++
+		} else {
+			planCounts[sub.PlanID] = &types.SubscriptionPlanCount{
+				PlanID:   sub.PlanID,
+				PlanName: sub.PlanID, // Use PlanID as PlanName since we don't have plan data in test store
+				Count:    1,
+			}
+		}
+	}
+
+	// Convert map to slice
+	result := make([]types.SubscriptionPlanCount, 0, len(planCounts))
+	for _, pc := range planCounts {
+		result = append(result, *pc)
+	}
+
+	return result, nil
+}
+
 // Clear removes all data from the store
 func (s *InMemorySubscriptionStore) Clear() {
 	// Clear the base subscription store

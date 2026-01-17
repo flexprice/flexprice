@@ -35,6 +35,12 @@ type SubscriptionChangeRequest struct {
 
 	// billing_cycle is the billing cycle for the new subscription
 	BillingCycle types.BillingCycle `json:"billing_cycle" validate:"required" binding:"required"`
+
+	// change_at determines when the change should take effect (optional)
+	// If not provided or null: change executes immediately
+	// If "immediate": change executes immediately (explicit)
+	// If "period_end": change is scheduled for the end of the current billing period
+	ChangeAt *types.ScheduleType `json:"change_at,omitempty"`
 }
 
 // Validate validates the subscription change request
@@ -59,6 +65,13 @@ func (r *SubscriptionChangeRequest) Validate() error {
 	// Validate proration behavior
 	if err := r.ProrationBehavior.Validate(); err != nil {
 		return err
+	}
+
+	// Validate change_at if provided
+	if r.ChangeAt != nil {
+		if err := r.ChangeAt.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -101,10 +114,19 @@ type SubscriptionChangePreviewResponse struct {
 // SubscriptionChangeExecuteResponse represents the result of executing a subscription change
 // @Description Response after successfully executing a subscription plan change
 type SubscriptionChangeExecuteResponse struct {
-	// old_subscription contains the archived subscription details
+	// is_scheduled indicates if the change was scheduled or executed immediately
+	IsScheduled bool `json:"is_scheduled"`
+
+	// schedule_id is the ID of the created schedule (only if is_scheduled=true)
+	ScheduleID *string `json:"schedule_id,omitempty"`
+
+	// scheduled_at is when the change will execute (only if is_scheduled=true)
+	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
+
+	// old_subscription contains the archived subscription details (only if is_scheduled=false)
 	OldSubscription SubscriptionSummary `json:"old_subscription"`
 
-	// new_subscription contains the new subscription details
+	// new_subscription contains the new subscription details (only if is_scheduled=false)
 	NewSubscription SubscriptionSummary `json:"new_subscription"`
 
 	// change_type indicates whether this was an upgrade, downgrade, or lateral change

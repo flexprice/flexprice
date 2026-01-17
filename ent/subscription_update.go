@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/ent/subscriptionpause"
 	"github.com/flexprice/flexprice/ent/subscriptionphase"
+	"github.com/flexprice/flexprice/ent/subscriptionschedule"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/shopspring/decimal"
 )
@@ -529,6 +530,21 @@ func (su *SubscriptionUpdate) AddPhases(s ...*SubscriptionPhase) *SubscriptionUp
 	return su.AddPhaseIDs(ids...)
 }
 
+// AddScheduleIDs adds the "schedules" edge to the SubscriptionSchedule entity by IDs.
+func (su *SubscriptionUpdate) AddScheduleIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddScheduleIDs(ids...)
+	return su
+}
+
+// AddSchedules adds the "schedules" edges to the SubscriptionSchedule entity.
+func (su *SubscriptionUpdate) AddSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.AddScheduleIDs(ids...)
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (su *SubscriptionUpdate) AddCreditGrantIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddCreditGrantIDs(ids...)
@@ -645,6 +661,27 @@ func (su *SubscriptionUpdate) RemovePhases(s ...*SubscriptionPhase) *Subscriptio
 		ids[i] = s[i].ID
 	}
 	return su.RemovePhaseIDs(ids...)
+}
+
+// ClearSchedules clears all "schedules" edges to the SubscriptionSchedule entity.
+func (su *SubscriptionUpdate) ClearSchedules() *SubscriptionUpdate {
+	su.mutation.ClearSchedules()
+	return su
+}
+
+// RemoveScheduleIDs removes the "schedules" edge to SubscriptionSchedule entities by IDs.
+func (su *SubscriptionUpdate) RemoveScheduleIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemoveScheduleIDs(ids...)
+	return su
+}
+
+// RemoveSchedules removes "schedules" edges to SubscriptionSchedule entities.
+func (su *SubscriptionUpdate) RemoveSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return su.RemoveScheduleIDs(ids...)
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
@@ -1012,6 +1049,51 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.SchedulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SchedulesTable,
+			Columns: []string{subscription.SchedulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedSchedulesIDs(); len(nodes) > 0 && !su.mutation.SchedulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SchedulesTable,
+			Columns: []string{subscription.SchedulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.SchedulesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SchedulesTable,
+			Columns: []string{subscription.SchedulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1695,6 +1777,21 @@ func (suo *SubscriptionUpdateOne) AddPhases(s ...*SubscriptionPhase) *Subscripti
 	return suo.AddPhaseIDs(ids...)
 }
 
+// AddScheduleIDs adds the "schedules" edge to the SubscriptionSchedule entity by IDs.
+func (suo *SubscriptionUpdateOne) AddScheduleIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddScheduleIDs(ids...)
+	return suo
+}
+
+// AddSchedules adds the "schedules" edges to the SubscriptionSchedule entity.
+func (suo *SubscriptionUpdateOne) AddSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.AddScheduleIDs(ids...)
+}
+
 // AddCreditGrantIDs adds the "credit_grants" edge to the CreditGrant entity by IDs.
 func (suo *SubscriptionUpdateOne) AddCreditGrantIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddCreditGrantIDs(ids...)
@@ -1811,6 +1908,27 @@ func (suo *SubscriptionUpdateOne) RemovePhases(s ...*SubscriptionPhase) *Subscri
 		ids[i] = s[i].ID
 	}
 	return suo.RemovePhaseIDs(ids...)
+}
+
+// ClearSchedules clears all "schedules" edges to the SubscriptionSchedule entity.
+func (suo *SubscriptionUpdateOne) ClearSchedules() *SubscriptionUpdateOne {
+	suo.mutation.ClearSchedules()
+	return suo
+}
+
+// RemoveScheduleIDs removes the "schedules" edge to SubscriptionSchedule entities by IDs.
+func (suo *SubscriptionUpdateOne) RemoveScheduleIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemoveScheduleIDs(ids...)
+	return suo
+}
+
+// RemoveSchedules removes "schedules" edges to SubscriptionSchedule entities.
+func (suo *SubscriptionUpdateOne) RemoveSchedules(s ...*SubscriptionSchedule) *SubscriptionUpdateOne {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return suo.RemoveScheduleIDs(ids...)
 }
 
 // ClearCreditGrants clears all "credit_grants" edges to the CreditGrant entity.
@@ -2208,6 +2326,51 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(subscriptionphase.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.SchedulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SchedulesTable,
+			Columns: []string{subscription.SchedulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedSchedulesIDs(); len(nodes) > 0 && !suo.mutation.SchedulesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SchedulesTable,
+			Columns: []string{subscription.SchedulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.SchedulesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   subscription.SchedulesTable,
+			Columns: []string{subscription.SchedulesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionschedule.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

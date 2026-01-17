@@ -39,4 +39,8 @@ type Repository interface {
 
 	// GetInvoicesForExport retrieves invoices for export purposes with pagination
 	GetInvoicesForExport(ctx context.Context, tenantID, envID string, startTime, endTime time.Time, limit, offset int) ([]*Invoice, error)
+
+	// Dashboard methods
+	GetRevenueTrend(ctx context.Context, windowCount int) ([]types.RevenueTrendWindow, error)
+	GetInvoicePaymentStatus(ctx context.Context) (*types.InvoicePaymentStatus, error)
 }

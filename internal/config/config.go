@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/Shopify/sarama"
@@ -48,10 +49,12 @@ type Configuration struct {
 	OAuth                      OAuthConfig                      `mapstructure:"oauth" validate:"required"`
 	WalletBalanceAlert         WalletBalanceAlertConfig         `mapstructure:"wallet_balance_alert" validate:"required"`
 	CustomerPortal             CustomerPortalConfig             `mapstructure:"customer_portal" validate:"required"`
+	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
 }
 
 type CacheConfig struct {
-	Enabled bool `mapstructure:"enabled" validate:"required"`
+	Enabled bool   `mapstructure:"enabled" validate:"required"`
+	Type    string `mapstructure:"type" validate:"required"`
 }
 
 type S3Config struct {
@@ -279,6 +282,18 @@ type CostSheetUsageTrackingLazyConfig struct {
 type CustomerPortalConfig struct {
 	URL               string `mapstructure:"url" validate:"required"`
 	TokenTimeoutHours int    `mapstructure:"token_timeout_hours" validate:"required"`
+}
+
+// RedisConfig holds configuration for Redis
+type RedisConfig struct {
+	Host      string        `mapstructure:"host" default:"localhost"`
+	Port      int           `mapstructure:"port" default:"6379"`
+	Password  string        `mapstructure:"password" default:""`
+	DB        int           `mapstructure:"db" default:"0"`
+	UseTLS    bool          `mapstructure:"use_tls" default:"false"`
+	PoolSize  int           `mapstructure:"pool_size" default:"10"`
+	Timeout   time.Duration `mapstructure:"timeout" default:"5s"`
+	KeyPrefix string        `mapstructure:"key_prefix" default:"flexprice"`
 }
 
 func NewConfig() (*Configuration, error) {

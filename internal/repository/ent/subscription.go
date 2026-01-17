@@ -172,8 +172,6 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetSubscriptionStatus(sub.SubscriptionStatus).
 		SetCurrentPeriodStart(sub.CurrentPeriodStart).
 		SetCurrentPeriodEnd(sub.CurrentPeriodEnd).
-		SetNillableCancelledAt(sub.CancelledAt).
-		SetNillableCancelAt(sub.CancelAt).
 		SetPauseStatus(sub.PauseStatus).
 		SetCancelAtPeriodEnd(sub.CancelAtPeriodEnd).
 		SetPaymentBehavior(types.PaymentBehavior(sub.PaymentBehavior)).
@@ -182,8 +180,26 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
-		SetNillableEndDate(sub.EndDate).
 		SetMetadata(sub.Metadata)
+
+	// Handle nullable date fields - explicitly clear if nil
+	if sub.CancelledAt != nil {
+		query.SetCancelledAt(*sub.CancelledAt)
+	} else {
+		query.ClearCancelledAt()
+	}
+
+	if sub.CancelAt != nil {
+		query.SetCancelAt(*sub.CancelAt)
+	} else {
+		query.ClearCancelAt()
+	}
+
+	if sub.EndDate != nil {
+		query.SetEndDate(*sub.EndDate)
+	} else {
+		query.ClearEndDate()
+	}
 
 	if sub.ActivePauseID != nil {
 		query.SetActivePauseID(*sub.ActivePauseID)
@@ -1066,4 +1082,56 @@ func (r *subscriptionRepository) ListByCustomerID(ctx context.Context, customerI
 
 	// Use the existing List method
 	return r.List(ctx, filter)
+}
+
+// GetRecentSubscriptionsByPlan returns subscription counts grouped by plan for last 7 days
+func (r *subscriptionRepository) GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error) {
+	tenantID := types.GetTenantID(ctx)
+	envID := types.GetEnvironmentID(ctx)
+
+	span := StartRepositorySpan(ctx, "subscription", "get_recent_subscriptions_by_plan", map[string]interface{}{
+		"tenant_id":      tenantID,
+		"environment_id": envID,
+	})
+	defer FinishSpan(span)
+
+	query := `
+		SELECT
+			p.id AS plan_id,
+			p.name AS plan_name,
+			COUNT(s.id) AS recent_subscription_count
+		FROM subscriptions s
+		JOIN plans p ON p.id = s.plan_id
+		WHERE s.tenant_id = $1
+			AND s.environment_id = $2
+			AND s.created_at >= NOW() - INTERVAL '7 days'
+			AND s.subscription_status = 'active'
+			AND s.status = 'published'
+		GROUP BY p.id, p.name
+		ORDER BY recent_subscription_count DESC`
+
+	rows, err := r.client.Reader(ctx).QueryContext(ctx, query, tenantID, envID)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to get recent subscriptions by plan").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var results []types.SubscriptionPlanCount
+	for rows.Next() {
+		var result types.SubscriptionPlanCount
+		if err := rows.Scan(&result.PlanID, &result.PlanName, &result.Count); err != nil {
+			SetSpanError(span, err)
+			return nil, ierr.WithError(err).WithHint("failed to scan recent subscriptions row").Mark(ierr.ErrDatabase)
+		}
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("failed to iterate recent subscriptions rows").Mark(ierr.ErrDatabase)
+	}
+
+	SetSpanSuccess(span)
+	return results, nil
 }

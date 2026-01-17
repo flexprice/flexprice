@@ -8,10 +8,12 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/idempotency"
+	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
 	"github.com/samber/lo"
@@ -46,6 +48,9 @@ type WalletService interface {
 
 	// GetWalletBalance Version 2
 	GetWalletBalanceV2(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
+
+	// GetWalletBalanceFromCache retrieves wallet balance from cache
+	GetWalletBalanceFromCache(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
 
 	// TerminateWallet terminates a wallet by closing it and debiting remaining balance
 	TerminateWallet(ctx context.Context, walletID string) error
@@ -1523,83 +1528,95 @@ func (s *walletService) processDebitOperation(ctx context.Context, req *wallet.W
 func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.WalletOperation) error {
 	s.Logger.Debugw("Processing wallet operation", "req", req)
 
-	// Get wallet
-	w, err := s.WalletRepo.GetWalletByID(ctx, req.WalletID)
-	if err != nil {
-		return err
-	}
-
-	// Validate operation
-	if err := s.validateWalletOperation(w, req); err != nil {
-		return err
-	}
-
+	var w *wallet.Wallet
+	var tx *wallet.Transaction
 	var newCreditBalance decimal.Decimal
+	var finalBalance decimal.Decimal
 
-	// For debit operations, find and consume available credits
-	if req.Type == types.TransactionTypeDebit {
-		newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
-		// Process debit operation first
-		err = s.processDebitOperation(ctx, req)
+	err := s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Step 1: Acquire advisory lock for the wallet
+		// This ensures only one operation on this wallet can proceed at a time across all servers
+		if err := s.DB.LockWithWait(ctx, postgres.LockRequest{Key: req.WalletID}); err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to acquire wallet lock").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Step 2: Get wallet inside transaction (after acquiring lock)
+		// This ensures we read the latest committed state
+		var err error
+		w, err = s.WalletRepo.GetWalletByID(ctx, req.WalletID)
 		if err != nil {
 			return err
 		}
-	} else {
-		// Process credit operation
-		newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
-	}
 
-	finalBalance := s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
-
-	// Create transaction record
-	tx := &wallet.Transaction{
-		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
-		WalletID:            req.WalletID,
-		CustomerID:          w.CustomerID,
-		Type:                req.Type,
-		Amount:              req.Amount,
-		CreditAmount:        req.CreditAmount,
-		ReferenceType:       req.ReferenceType,
-		ReferenceID:         req.ReferenceID,
-		Description:         req.Description,
-		Metadata:            req.Metadata,
-		TxStatus:            types.TransactionStatusCompleted,
-		TransactionReason:   req.TransactionReason,
-		ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
-		Priority:            req.Priority,
-		CreditBalanceBefore: w.CreditBalance,
-		CreditBalanceAfter:  newCreditBalance,
-		Currency:            w.Currency,
-		EnvironmentID:       types.GetEnvironmentID(ctx),
-		IdempotencyKey:      req.IdempotencyKey,
-		BaseModel:           types.GetDefaultBaseModel(ctx),
-	}
-
-	// Compute credits available for the transaction
-	tx.CreditsAvailable, err = tx.ComputeCreditsAvailable()
-	if err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to compute credits available").
-			Mark(ierr.ErrInternal)
-	}
-
-	// Set transaction-specific fields based on transaction type
-	if req.Type == types.TransactionTypeCredit {
-		tx.TopupConversionRate = lo.ToPtr(w.TopupConversionRate)
-		if req.ExpiryDate != nil {
-			tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
+		// Step 3: Validate operation
+		if err := s.validateWalletOperation(w, req); err != nil {
+			return err
 		}
-	} else if req.Type == types.TransactionTypeDebit {
-		tx.ConversionRate = lo.ToPtr(w.ConversionRate)
-	}
 
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
+		// Step 4: Process operation-specific logic
+		if req.Type == types.TransactionTypeDebit {
+			newCreditBalance = w.CreditBalance.Sub(req.CreditAmount)
+			// Process debit operation (credit selection and consumption)
+			if err := s.processDebitOperation(ctx, req); err != nil {
+				return err
+			}
+		} else {
+			// Process credit operation
+			newCreditBalance = w.CreditBalance.Add(req.CreditAmount)
+		}
 
+		finalBalance = s.GetCurrencyAmountFromCredits(newCreditBalance, w.ConversionRate)
+
+		// Step 5: Create transaction record
+		tx = &wallet.Transaction{
+			ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_TRANSACTION),
+			WalletID:            req.WalletID,
+			CustomerID:          w.CustomerID,
+			Type:                req.Type,
+			Amount:              req.Amount,
+			CreditAmount:        req.CreditAmount,
+			ReferenceType:       req.ReferenceType,
+			ReferenceID:         req.ReferenceID,
+			Description:         req.Description,
+			Metadata:            req.Metadata,
+			TxStatus:            types.TransactionStatusCompleted,
+			TransactionReason:   req.TransactionReason,
+			ExpiryDate:          types.ParseYYYYMMDDToDate(req.ExpiryDate),
+			Priority:            req.Priority,
+			CreditBalanceBefore: w.CreditBalance,
+			CreditBalanceAfter:  newCreditBalance,
+			Currency:            w.Currency,
+			EnvironmentID:       types.GetEnvironmentID(ctx),
+			IdempotencyKey:      req.IdempotencyKey,
+			BaseModel:           types.GetDefaultBaseModel(ctx),
+		}
+
+		// Compute credits available for the transaction
+		tx.CreditsAvailable, err = tx.ComputeCreditsAvailable()
+		if err != nil {
+			return ierr.WithError(err).
+				WithHint("Failed to compute credits available").
+				Mark(ierr.ErrInternal)
+		}
+
+		// Set transaction-specific fields based on transaction type
+		if req.Type == types.TransactionTypeCredit {
+			tx.TopupConversionRate = lo.ToPtr(w.TopupConversionRate)
+			if req.ExpiryDate != nil {
+				tx.ExpiryDate = types.ParseYYYYMMDDToDate(req.ExpiryDate)
+			}
+		} else if req.Type == types.TransactionTypeDebit {
+			tx.ConversionRate = lo.ToPtr(w.ConversionRate)
+		}
+
+		// Step 6: Create transaction record
 		if err := s.WalletRepo.CreateTransaction(ctx, tx); err != nil {
 			return err
 		}
 
-		// Update wallet balance
+		// Step 7: Update wallet balance atomically
 		if err := s.WalletRepo.UpdateWalletBalance(ctx, req.WalletID, finalBalance, newCreditBalance); err != nil {
 			return err
 		}
@@ -2254,7 +2271,17 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 			periodStart := sub.CurrentPeriodStart
 			periodEnd := sub.CurrentPeriodEnd
 
-			// Get usage data for current period
+			/*
+				// Get usage for subscription using raw events table
+				usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+					SubscriptionID: sub.ID,
+					StartTime:      periodStart,
+					EndTime:        periodEnd,
+				})
+
+			*/
+
+			// Get usage data for current period using feature usage table
 			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
@@ -2264,8 +2291,11 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 				return nil, err
 			}
 
-			// Calculate usage charges
-			usageCharges, usageTotal, err := billingService.CalculateUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			// Calculate usage charges for raw events usage
+			// usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+
+			// Calculate usage charges for feature usage data
+			usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
 			if err != nil {
 				return nil, err
 			}
@@ -2291,6 +2321,147 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 
 	// Convert real-time balance to credit balance
 	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
+
+	s.setWalletRealtimeBalanceToCache(ctx, walletID, realTimeBalance)
+
+	return &dto.WalletBalanceResponse{
+		Wallet:                w,
+		RealTimeBalance:       &realTimeBalance,
+		RealTimeCreditBalance: &realTimeCreditBalance,
+		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
+		CurrentPeriodUsage:    &totalPendingCharges,
+	}, nil
+}
+
+func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
+	if walletID == "" {
+		return nil, ierr.NewError("wallet_id is required").
+			WithHint("Wallet ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Get wallet details
+	w, err := s.WalletRepo.GetWalletByID(ctx, walletID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Safety check: Return zero balance for inactive wallets
+	// This prevents any calculations on invalid wallet states
+	if w.WalletStatus != types.WalletStatusActive {
+		return &dto.WalletBalanceResponse{
+			Wallet:                w,
+			RealTimeBalance:       lo.ToPtr(decimal.Zero),
+			RealTimeCreditBalance: lo.ToPtr(decimal.Zero),
+			BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
+			CurrentPeriodUsage:    lo.ToPtr(decimal.Zero),
+		}, nil
+	}
+
+	// If wallet has no allowed price types (nil or empty), treat as ALL (include usage)
+	shouldIncludeUsage := len(w.Config.AllowedPriceTypes) == 0 ||
+		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeUsage) ||
+		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
+
+	totalPendingCharges := decimal.Zero
+	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, walletID)
+	if cachedBalance != nil {
+		s.Logger.Info("using cached real-time balance",
+			"wallet_id", walletID,
+			"cached_balance", cachedBalance,
+		)
+		realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(*cachedBalance, w.ConversionRate)
+		return &dto.WalletBalanceResponse{
+			Wallet:                w,
+			RealTimeBalance:       cachedBalance,
+			RealTimeCreditBalance: &realTimeCreditBalance,
+			BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
+			CurrentPeriodUsage:    &totalPendingCharges,
+		}, nil
+	}
+	if shouldIncludeUsage {
+
+		// STEP 1: Get all active subscriptions to calculate current usage
+		subscriptionService := NewSubscriptionService(s.ServiceParams)
+		subscriptions, err := subscriptionService.ListByCustomerID(ctx, w.CustomerID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Filter subscriptions by currency
+		filteredSubscriptions := make([]*subscription.Subscription, 0)
+		for _, sub := range subscriptions {
+			if sub.Currency == w.Currency {
+				filteredSubscriptions = append(filteredSubscriptions, sub)
+				s.Logger.Infow("found matching subscription",
+					"subscription_id", sub.ID,
+					"currency", sub.Currency,
+					"period_start", sub.CurrentPeriodStart,
+					"period_end", sub.CurrentPeriodEnd)
+			}
+		}
+
+		billingService := NewBillingService(s.ServiceParams)
+
+		// Calculate total pending charges (usage)
+		for _, sub := range filteredSubscriptions {
+
+			// Get current period
+			periodStart := sub.CurrentPeriodStart
+			periodEnd := sub.CurrentPeriodEnd
+
+			/*
+				// Get usage for subscription using raw events table
+				usage, err := subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+					SubscriptionID: sub.ID,
+					StartTime:      periodStart,
+					EndTime:        periodEnd,
+				})
+
+			*/
+
+			// Get usage data for current period using feature usage table
+			usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
+				SubscriptionID: sub.ID,
+				StartTime:      periodStart,
+				EndTime:        periodEnd,
+			})
+			if err != nil {
+				return nil, err
+			}
+
+			// Calculate usage charges for raw events usage
+			// usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+
+			// Calculate usage charges for feature usage data
+			usageCharges, usageTotal, err := billingService.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+			if err != nil {
+				return nil, err
+			}
+
+			s.Logger.Infow("subscription charges details",
+				"subscription_id", sub.ID,
+				"usage_total", usageTotal,
+				"num_usage_charges", len(usageCharges))
+
+			totalPendingCharges = totalPendingCharges.Add(usageTotal)
+		}
+	}
+
+	// Calculate real-time balance
+	realTimeBalance := w.Balance.Sub(totalPendingCharges)
+
+	s.Logger.Debugw("detailed balance calculation",
+		"wallet_id", w.ID,
+		"current_balance", w.Balance,
+		"pending_charges", totalPendingCharges,
+		"real_time_balance", realTimeBalance,
+		"credit_balance", w.CreditBalance)
+
+	// Convert real-time balance to credit balance
+	realTimeCreditBalance := s.GetCreditsFromCurrencyAmount(realTimeBalance, w.ConversionRate)
+
+	s.setWalletRealtimeBalanceToCache(ctx, walletID, realTimeBalance)
 
 	return &dto.WalletBalanceResponse{
 		Wallet:                w,
@@ -2777,4 +2948,43 @@ func (s *walletService) GetCreditsAvailableBreakdown(ctx context.Context, wallet
 	}
 
 	return breakdown, nil
+}
+
+func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, walletID string, balance decimal.Decimal) {
+	span := cache.StartCacheSpan(ctx, "wallet", "set", map[string]interface{}{
+		"wallet_id": walletID,
+	})
+	defer cache.FinishSpan(span)
+
+	redisCache := cache.NewRedisCache()
+	if redisCache == nil {
+		return
+	}
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	redisCache.ForceCacheSet(ctx, cacheKey, balance.String(), 5*time.Minute)
+}
+
+func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string) *decimal.Decimal {
+	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
+		"wallet_id": walletID,
+	})
+	defer cache.FinishSpan(span)
+
+	redisCache := cache.NewRedisCache()
+	if redisCache == nil {
+		return nil
+	}
+	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+	cachedValue, found := redisCache.ForceCacheGet(ctx, cacheKey)
+	if !found {
+		return nil
+	}
+
+	balance, success := cache.UnmarshalCacheValue[decimal.Decimal](cachedValue)
+
+	if !success {
+		return nil
+	}
+
+	return balance
 }

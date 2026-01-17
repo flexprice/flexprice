@@ -130,6 +130,7 @@ func (s *SubscriptionServiceSuite) setupService() {
 		TaxRateRepo:                s.GetStores().TaxRateRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
 		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
+		SubScheduleRepo:            s.GetStores().SubscriptionScheduleRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		PriceRepo:                  s.GetStores().PriceRepo,
 		EventRepo:                  s.GetStores().EventRepo,

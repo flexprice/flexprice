@@ -58,6 +58,7 @@ type Stores struct {
 	SubscriptionRepo             subscription.Repository
 	SubscriptionLineItemRepo     subscription.LineItemRepository
 	SubscriptionPhaseRepo        subscription.SubscriptionPhaseRepository
+	SubscriptionScheduleRepo     subscription.SubscriptionScheduleRepository
 	EventRepo                    events.Repository
 	PlanRepo                     plan.Repository
 	PriceRepo                    price.Repository
@@ -129,7 +130,7 @@ func (s *BaseServiceTestSuite) SetupSuite() {
 	}
 
 	// Initialize cache
-	cache.Initialize(s.logger)
+	cache.Initialize(cfg, s.logger)
 }
 
 func (s *BaseServiceTestSuite) setupDependencies() {
@@ -192,6 +193,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 		SubscriptionRepo:             NewInMemorySubscriptionStore(),
 		SubscriptionLineItemRepo:     NewInMemorySubscriptionLineItemStore(),
 		SubscriptionPhaseRepo:        NewInMemorySubscriptionPhaseStore(),
+		SubscriptionScheduleRepo:     NewInMemorySubscriptionScheduleStore(),
 		EventRepo:                    NewInMemoryEventStore(),
 		PlanRepo:                     NewInMemoryPlanStore(),
 		PriceRepo:                    NewInMemoryPriceStore(),

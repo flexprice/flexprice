@@ -28,4 +28,7 @@ type Repository interface {
 
 	// Renewal due alert methods
 	ListSubscriptionsDueForRenewal(ctx context.Context) ([]*Subscription, error)
+
+	// Dashboard methods
+	GetRecentSubscriptionsByPlan(ctx context.Context) ([]types.SubscriptionPlanCount, error)
 }

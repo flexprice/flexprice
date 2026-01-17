@@ -1820,6 +1820,76 @@ var (
 			},
 		},
 	}
+	// SubscriptionSchedulesColumns holds the columns for the "subscription_schedules" table.
+	SubscriptionSchedulesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "schedule_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "scheduled_at", Type: field.TypeTime},
+		{Name: "configuration", Type: field.TypeJSON},
+		{Name: "executed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "cancelled_at", Type: field.TypeTime, Nullable: true},
+		{Name: "execution_result", Type: field.TypeJSON, Nullable: true},
+		{Name: "error_message", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// SubscriptionSchedulesTable holds the schema information for the "subscription_schedules" table.
+	SubscriptionSchedulesTable = &schema.Table{
+		Name:       "subscription_schedules",
+		Columns:    SubscriptionSchedulesColumns,
+		PrimaryKey: []*schema.Column{SubscriptionSchedulesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_schedules_subscriptions_schedules",
+				Columns:    []*schema.Column{SubscriptionSchedulesColumns[16]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "subscriptionschedule_subscription_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[16]},
+			},
+			{
+				Name:    "subscriptionschedule_status_schedule_type",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[2], SubscriptionSchedulesColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'pending'",
+				},
+			},
+			{
+				Name:    "subscriptionschedule_scheduled_at_status",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[10], SubscriptionSchedulesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'pending'",
+				},
+			},
+			{
+				Name:    "subscriptionschedule_tenant_id_environment_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[1], SubscriptionSchedulesColumns[7]},
+			},
+			{
+				Name:    "subscriptionschedule_subscription_id_schedule_type",
+				Unique:  true,
+				Columns: []*schema.Column{SubscriptionSchedulesColumns[16], SubscriptionSchedulesColumns[9]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'pending'",
+				},
+			},
+		},
+	}
 	// TasksColumns holds the columns for the "tasks" table.
 	TasksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
@@ -2232,6 +2302,7 @@ var (
 		SubscriptionLineItemsTable,
 		SubscriptionPausesTable,
 		SubscriptionPhasesTable,
+		SubscriptionSchedulesTable,
 		TasksTable,
 		TaxAppliedsTable,
 		TaxAssociationsTable,
@@ -2264,6 +2335,7 @@ func init() {
 	SubscriptionLineItemsTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPausesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	SubscriptionPhasesTable.ForeignKeys[0].RefTable = SubscriptionsTable
+	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[0].RefTable = CouponAssociationsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[1].RefTable = CouponApplicationsTable
 }

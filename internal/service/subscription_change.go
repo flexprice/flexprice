@@ -23,6 +23,9 @@ type SubscriptionChangeService interface {
 
 	// ExecuteSubscriptionChange performs the actual subscription plan change
 	ExecuteSubscriptionChange(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeRequest) (*dto.SubscriptionChangeExecuteResponse, error)
+
+	// ExecuteSubscriptionChangeInternal executes a subscription change immediately (used by scheduled execution)
+	ExecuteSubscriptionChangeInternal(ctx context.Context, subscriptionID string, req dto.SubscriptionChangeRequest) (*dto.SubscriptionChangeExecuteResponse, error)
 }
 
 type subscriptionChangeService struct {
@@ -171,6 +174,29 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChange(
 		return nil, err
 	}
 
+	// BRANCH: Determine execution timing
+	// - If change_at is "period_end": schedule for end of billing period
+	// - If change_at is "immediate" or not provided: execute immediately
+	if req.ChangeAt != nil && *req.ChangeAt == types.ScheduleTypePeriodEnd {
+		return s.scheduleChangeForPeriodEnd(ctx, subscriptionID, req)
+	}
+
+	// IMMEDIATE EXECUTION PATH (when change_at is "immediate")
+	return s.ExecuteSubscriptionChangeInternal(ctx, subscriptionID, req)
+}
+
+// ExecuteSubscriptionChangeInternal executes a subscription change immediately
+// This is the core execution logic used by both immediate API calls and scheduled execution
+func (s *subscriptionChangeService) ExecuteSubscriptionChangeInternal(
+	ctx context.Context,
+	subscriptionID string,
+	req dto.SubscriptionChangeRequest,
+) (*dto.SubscriptionChangeExecuteResponse, error) {
+	logger := s.serviceParams.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.String("target_plan_id", req.TargetPlanID),
+	)
+
 	var response *dto.SubscriptionChangeExecuteResponse
 
 	// Execute the change within a transaction
@@ -211,7 +237,6 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChange(
 
 		// Calculate effective date
 		effectiveDate := time.Now()
-		// effectiveDate := time.Date(2025, 9, 15, 12, 0, 0, 0, time.UTC)
 
 		// Execute the change based on type
 		result, err := s.executeChange(txCtx, currentSub, lineItems, targetPlan, changeType, req, effectiveDate)
@@ -232,6 +257,138 @@ func (s *subscriptionChangeService) ExecuteSubscriptionChange(
 		zap.String("old_subscription_id", response.OldSubscription.ID),
 		zap.String("new_subscription_id", response.NewSubscription.ID),
 	)
+
+	return response, nil
+}
+
+// scheduleChangeForPeriodEnd schedules a plan change to execute at period end
+// This creates a database entry in subscription_schedules table
+// The actual execution happens during period processing (cron or temporal workflow)
+func (s *subscriptionChangeService) scheduleChangeForPeriodEnd(
+	ctx context.Context,
+	subscriptionID string,
+	req dto.SubscriptionChangeRequest,
+) (*dto.SubscriptionChangeExecuteResponse, error) {
+	logger := s.serviceParams.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.String("target_plan_id", req.TargetPlanID),
+		zap.String("change_at", string(*req.ChangeAt)),
+	)
+
+	logger.Info("scheduling subscription change for period end")
+
+	// Get subscription to calculate period end
+	sub, err := s.serviceParams.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to retrieve subscription").
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Validate subscription is active
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil, ierr.NewError("subscription must be active to schedule changes").
+			WithHint("Only active subscriptions can have scheduled plan changes").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check if subscription is scheduled for cancellation at period end
+	// If so, user must cancel the cancellation schedule first
+	cancelSchedule, err := s.serviceParams.SubScheduleRepo.GetPendingBySubscriptionAndType(
+		ctx,
+		subscriptionID,
+		types.SubscriptionScheduleChangeTypeCancellation,
+	)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to check for existing cancellation schedule").
+			Mark(ierr.ErrDatabase)
+	}
+	if cancelSchedule != nil {
+		return nil, ierr.NewError("subscription is scheduled for cancellation at period end").
+			WithHint("Cancel the pending cancellation schedule before scheduling a plan change").
+			WithReportableDetails(map[string]any{
+				"cancellation_schedule_id": cancelSchedule.ID,
+				"scheduled_at":             cancelSchedule.ScheduledAt,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Check for existing pending plan change schedule
+	existing, err := s.serviceParams.SubScheduleRepo.GetPendingBySubscriptionAndType(
+		ctx,
+		subscriptionID,
+		types.SubscriptionScheduleChangeTypePlanChange,
+	)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to check for existing schedules").
+			Mark(ierr.ErrDatabase)
+	}
+	if existing != nil {
+		return nil, ierr.NewError("a plan change is already scheduled for this subscription").
+			WithHint("Cancel the existing scheduled plan change before creating a new one").
+			WithReportableDetails(map[string]any{
+				"existing_schedule_id": existing.ID,
+				"scheduled_at":         existing.ScheduledAt,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Create configuration from request
+	config := &subscription.PlanChangeConfiguration{
+		TargetPlanID:       req.TargetPlanID,
+		ProrationBehavior:  req.ProrationBehavior,
+		BillingCadence:     req.BillingCadence,
+		BillingPeriod:      req.BillingPeriod,
+		BillingPeriodCount: req.BillingPeriodCount,
+		BillingCycle:       req.BillingCycle,
+		ChangeMetadata:     req.Metadata,
+	}
+
+	// Create the schedule entry
+	schedule := &subscription.SubscriptionSchedule{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_SCHEDULE),
+		SubscriptionID: subscriptionID,
+		ScheduleType:   types.SubscriptionScheduleChangeTypePlanChange,
+		ScheduledAt:    sub.CurrentPeriodEnd,
+		Status:         types.ScheduleStatusPending,
+		TenantID:       sub.TenantID,
+		EnvironmentID:  sub.EnvironmentID,
+		CreatedAt:      time.Now().UTC(),
+		UpdatedAt:      time.Now().UTC(),
+		CreatedBy:      types.GetUserID(ctx),
+		UpdatedBy:      types.GetUserID(ctx),
+		StatusColumn:   types.StatusPublished,
+	}
+
+	// Set configuration
+	if err := schedule.SetPlanChangeConfig(config); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to serialize plan change configuration").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Save to database
+	if err := s.serviceParams.SubScheduleRepo.Create(ctx, schedule); err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to create schedule entry").
+			Mark(ierr.ErrDatabase)
+	}
+
+	logger.Info("subscription change scheduled successfully",
+		zap.String("schedule_id", schedule.ID),
+		zap.Time("scheduled_at", schedule.ScheduledAt),
+	)
+
+	// Return response indicating the change was scheduled
+	response := &dto.SubscriptionChangeExecuteResponse{
+		IsScheduled:   true,
+		ScheduleID:    &schedule.ID,
+		ScheduledAt:   &schedule.ScheduledAt,
+		ChangeType:    types.SubscriptionChangeTypeUpgrade, // Will be determined at execution time
+		EffectiveDate: schedule.ScheduledAt,                // Scheduled execution time
+	}
 
 	return response, nil
 }

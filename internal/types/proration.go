@@ -41,14 +41,6 @@ const (
 	BillingModeInArrears BillingMode = "in_arrears"
 )
 
-// ScheduleType determines when subscription changes take effect.
-type ScheduleType string
-
-const (
-	ScheduleTypeImmediate    ScheduleType = "immediate"
-	ScheduleTypePeriodEnd    ScheduleType = "period_end"
-	ScheduleTypeSpecificDate ScheduleType = "specific_date"
-)
 
 // TerminationReason represents why a subscription is being terminated.
 type TerminationReason string

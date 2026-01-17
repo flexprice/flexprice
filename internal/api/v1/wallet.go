@@ -330,7 +330,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	}
 
 	// Get wallet balance
-	balance, err := h.walletService.GetWalletBalance(c.Request.Context(), walletID)
+	balance, err := h.walletService.GetWalletBalanceV2(c.Request.Context(), walletID)
 	if err != nil {
 		h.logger.Error("Failed to get wallet balance", "error", err)
 		c.Error(err)
@@ -353,8 +353,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	c.JSON(http.StatusOK, balance)
 }
 
-// TODONEW: Revamp
-func (h *WalletHandler) GetWalletBalanceV2(c *gin.Context) {
+func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {
 		c.Error(ierr.NewError("wallet_id is required").
@@ -363,11 +362,35 @@ func (h *WalletHandler) GetWalletBalanceV2(c *gin.Context) {
 		return
 	}
 
-	balance, err := h.walletService.GetWalletBalanceV2(c.Request.Context(), walletID)
+	// Parse and validate expand parameter
+	expandParam := c.Query("expand")
+	expand := types.NewExpand(expandParam)
+	if !expand.IsEmpty() {
+		if err := expand.Validate(types.WalletBalanceExpandConfig); err != nil {
+			c.Error(err)
+			return
+		}
+	}
+
+	// Get wallet balance
+	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID)
 	if err != nil {
 		h.logger.Error("Failed to get wallet balance", "error", err)
 		c.Error(err)
 		return
+	}
+
+	// Handle expand: credits_available_breakdown
+	if expand.Has(types.ExpandCreditsAvailableBreakdown) {
+		breakdown, err := h.walletService.GetCreditsAvailableBreakdown(c.Request.Context(), walletID)
+		if err != nil {
+			h.logger.Errorw("failed to get credits available breakdown",
+				"error", err,
+				"wallet_id", walletID)
+			// Don't fail the request, just log the error and continue without breakdown
+		} else {
+			balance.CreditsAvailableBreakdown = breakdown
+		}
 	}
 
 	c.JSON(http.StatusOK, balance)

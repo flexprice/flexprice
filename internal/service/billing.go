@@ -74,6 +74,9 @@ type BillingService interface {
 
 	// GetCustomerUsageSummary returns usage summaries for a customer's features
 	GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
+
+	// CalculateFeatureUsageCharges calculates usage charges for a subscription
+	CalculateFeatureUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
 }
 
 type billingService struct {
@@ -742,7 +745,7 @@ func (s *billingService) calculateRemainingCommitment(
 	return decimal.Max(remainingCommitment, decimal.Zero)
 }
 
-func (s *billingService) CalculateUsageChargesForPreview(
+func (s *billingService) CalculateFeatureUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
@@ -1343,7 +1346,7 @@ func (s *billingService) calculateAllChargesForPreview(
 	}
 
 	// Calculate usage charges
-	usageCharges, usageTotal, err := s.CalculateUsageChargesForPreview(ctx, sub, usage, periodStart, periodEnd)
+	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
 	if err != nil {
 		return nil, err
 	}

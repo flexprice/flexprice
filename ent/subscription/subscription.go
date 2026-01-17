@@ -100,6 +100,8 @@ const (
 	EdgePauses = "pauses"
 	// EdgePhases holds the string denoting the phases edge name in mutations.
 	EdgePhases = "phases"
+	// EdgeSchedules holds the string denoting the schedules edge name in mutations.
+	EdgeSchedules = "schedules"
 	// EdgeCreditGrants holds the string denoting the credit_grants edge name in mutations.
 	EdgeCreditGrants = "credit_grants"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
@@ -131,6 +133,13 @@ const (
 	PhasesInverseTable = "subscription_phases"
 	// PhasesColumn is the table column denoting the phases relation/edge.
 	PhasesColumn = "subscription_id"
+	// SchedulesTable is the table that holds the schedules relation/edge.
+	SchedulesTable = "subscription_schedules"
+	// SchedulesInverseTable is the table name for the SubscriptionSchedule entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionschedule" package.
+	SchedulesInverseTable = "subscription_schedules"
+	// SchedulesColumn is the table column denoting the schedules relation/edge.
+	SchedulesColumn = "subscription_id"
 	// CreditGrantsTable is the table that holds the credit_grants relation/edge.
 	CreditGrantsTable = "credit_grants"
 	// CreditGrantsInverseTable is the table name for the CreditGrant entity.
@@ -516,6 +525,20 @@ func ByPhases(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// BySchedulesCount orders the results by schedules count.
+func BySchedulesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSchedulesStep(), opts...)
+	}
+}
+
+// BySchedules orders the results by schedules terms.
+func BySchedules(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSchedulesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByCreditGrantsCount orders the results by credit_grants count.
 func ByCreditGrantsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -583,6 +606,13 @@ func newPhasesStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PhasesInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PhasesTable, PhasesColumn),
+	)
+}
+func newSchedulesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SchedulesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, SchedulesTable, SchedulesColumn),
 	)
 }
 func newCreditGrantsStep() *sqlgraph.Step {
