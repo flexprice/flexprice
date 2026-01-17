@@ -243,7 +243,9 @@ func (s *PlanSyncTestSuite) TestScenario1_SimplePriceUpdate() {
 	s.NotNil(result)
 
 	// Verify results
-	s.Empty(result.SynchronizationSummary.FailedPriceIDs) // At least 1 terminated + 1 created (no failures)
+	s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
+	s.Equal(1, result.SynchronizationSummary.LineItemsTerminated)
+	s.Equal(1, result.SynchronizationSummary.LineItemsCreated)
 
 	// Verify line items
 	lineItems := s.getLineItems(sub.ID)
@@ -308,7 +310,12 @@ func (s *PlanSyncTestSuite) TestScenario2_PriceOverrideDuringSubscriptionCreatio
 	s.NotNil(result)
 
 	// Verify results
-	s.Empty(result.SynchronizationSummary.FailedPriceIDs) // No line items created or terminated (overridden)
+	s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
+	s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+	s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+	s.Equal(2, result.SynchronizationSummary.LineItemsSkipped)
+	s.Equal(1, result.SynchronizationSummary.SkippedAlreadyTerminated)
+	s.Equal(1, result.SynchronizationSummary.SkippedOverridden)
 
 	// Verify line items - should still have only the original line item with P2
 	lineItems := s.getLineItems(sub.ID)
@@ -375,7 +382,12 @@ func (s *PlanSyncTestSuite) TestScenario3_ManualLineItemUpdateFollowedByPlanPric
 	s.NotNil(result)
 
 	// Verify results
-	s.Empty(result.SynchronizationSummary.FailedPriceIDs) // No line items created or terminated (overridden)
+	s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
+	s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+	s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+	s.Equal(2, result.SynchronizationSummary.LineItemsSkipped)
+	s.Equal(1, result.SynchronizationSummary.SkippedAlreadyTerminated)
+	s.Equal(1, result.SynchronizationSummary.SkippedOverridden)
 
 	// Verify line items - should still have L1 (terminated) and L2 (active)
 	lineItems := s.getLineItems(sub.ID)
@@ -451,7 +463,12 @@ func (s *PlanSyncTestSuite) TestScenario4_ComplexCaseWithLineItemUpdateAndPlanPr
 	s.NotNil(result)
 
 	// Verify results
-	s.Empty(result.SynchronizationSummary.FailedPriceIDs) // No line items created or terminated (overridden)
+	s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
+	s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+	s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+	s.Equal(2, result.SynchronizationSummary.LineItemsSkipped)
+	s.Equal(1, result.SynchronizationSummary.SkippedAlreadyTerminated)
+	s.Equal(1, result.SynchronizationSummary.SkippedOverridden)
 
 	// Verify line items - should still have L1 (terminated) and L2 (active)
 	lineItems := s.getLineItems(sub.ID)
@@ -535,7 +552,12 @@ func (s *PlanSyncTestSuite) TestScenario5_MostComplexCaseWithSubscriptionOverrid
 	s.NotNil(result)
 
 	// Verify results
-	s.Empty(result.SynchronizationSummary.FailedPriceIDs) // No line items created or terminated (overridden)
+	s.Equal(1, result.SynchronizationSummary.SubscriptionsProcessed)
+	s.Equal(0, result.SynchronizationSummary.LineItemsTerminated)
+	s.Equal(0, result.SynchronizationSummary.LineItemsCreated)
+	s.Equal(2, result.SynchronizationSummary.LineItemsSkipped)
+	s.Equal(1, result.SynchronizationSummary.SkippedAlreadyTerminated)
+	s.Equal(1, result.SynchronizationSummary.SkippedOverridden)
 
 	// Verify line items - should still have L1 (terminated) and L2 (active)
 	lineItems := s.getLineItems(sub.ID)

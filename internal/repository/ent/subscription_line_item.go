@@ -300,55 +300,6 @@ func (r *subscriptionLineItemRepository) Delete(ctx context.Context, id string) 
 	return nil
 }
 
-// DeleteBulk deletes multiple subscription line items by setting their EndDate (soft delete)
-func (r *subscriptionLineItemRepository) DeleteBulk(ctx context.Context, ids []string, effectiveFrom time.Time) error {
-	// Start a span for this repository operation
-	span := StartRepositorySpan(ctx, "subscription_line_item", "delete_bulk", map[string]interface{}{
-		"count":     len(ids),
-		"tenant_id": types.GetTenantID(ctx),
-	})
-	defer FinishSpan(span)
-
-	if len(ids) == 0 {
-		return nil
-	}
-
-	r.log.Debugw("bulk deleting subscription line items",
-		"count", len(ids),
-		"tenant_id", types.GetTenantID(ctx),
-	)
-
-	client := r.client.Writer(ctx)
-	_, err := client.SubscriptionLineItem.Update().
-		Where(
-			subscriptionlineitem.IDIn(ids...),
-			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
-			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		).
-		SetEndDate(effectiveFrom).
-		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		Save(ctx)
-
-	if err != nil {
-		SetSpanError(span, err)
-		return ierr.WithError(err).
-			WithHint("Failed to delete subscription line items in bulk").
-			WithReportableDetails(map[string]interface{}{
-				"count": len(ids),
-			}).
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Invalidate cache for all deleted items
-	for _, id := range ids {
-		r.DeleteCache(ctx, id)
-	}
-
-	SetSpanSuccess(span)
-	return nil
-}
-
 // CreateBulk creates multiple subscription line items in bulk
 func (r *subscriptionLineItemRepository) CreateBulk(ctx context.Context, items []*subscription.SubscriptionLineItem) error {
 	if len(items) == 0 {
@@ -663,11 +614,6 @@ func (o SubscriptionLineItemQueryOptions) GetFieldName(field string) string {
 
 // applyEntityQueryOptions applies subscription line item-specific filters to the query
 func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionLineItemFilter, query SubscriptionLineItemQuery) (SubscriptionLineItemQuery, error) {
-	// Apply line item IDs filter if specified
-	if len(f.LineItemIDs) > 0 {
-		query = query.Where(subscriptionlineitem.IDIn(f.LineItemIDs...))
-	}
-
 	// Apply subscription IDs filter if specified
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(subscriptionlineitem.SubscriptionIDIn(f.SubscriptionIDs...))

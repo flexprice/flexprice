@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -75,11 +74,6 @@ func lineItemFilterFn(ctx context.Context, item *subscription.SubscriptionLineIt
 
 	// Filter by billing periods
 	if len(f.BillingPeriods) > 0 && !lo.Contains(f.BillingPeriods, string(item.BillingPeriod)) {
-		return false
-	}
-
-	// Filter by line item IDs
-	if len(f.LineItemIDs) > 0 && !lo.Contains(f.LineItemIDs, item.ID) {
 		return false
 	}
 
@@ -195,38 +189,6 @@ func (s *InMemorySubscriptionLineItemStore) Delete(ctx context.Context, id strin
 			}).
 			Mark(ierr.ErrDatabase)
 	}
-	return nil
-}
-
-// DeleteBulk deletes multiple subscription line items by setting their EndDate (soft delete)
-func (s *InMemorySubscriptionLineItemStore) DeleteBulk(ctx context.Context, ids []string, effectiveFrom time.Time) error {
-	if len(ids) == 0 {
-		return nil
-	}
-
-	// Get all items and update them
-	for _, id := range ids {
-		item, err := s.Get(ctx, id)
-		if err != nil {
-			// Continue processing other items even if one is not found
-			continue
-		}
-
-		// Set EndDate and UpdatedAt
-		item.EndDate = effectiveFrom
-		item.UpdatedAt = time.Now().UTC()
-
-		// Update the item
-		if err := s.Update(ctx, item); err != nil {
-			return ierr.WithError(err).
-				WithHint("Failed to delete subscription line items in bulk").
-				WithReportableDetails(map[string]interface{}{
-					"count": len(ids),
-				}).
-				Mark(ierr.ErrDatabase)
-		}
-	}
-
 	return nil
 }
 

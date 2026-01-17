@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/types"
 )
@@ -23,10 +22,6 @@ type LineItemRepository interface {
 
 	// Delete deletes a subscription line item by ID
 	Delete(ctx context.Context, id string) error
-
-	// DeleteBulk deletes multiple subscription line items by IDs (soft delete via EndDate)
-	// effectiveFrom is the time to set as EndDate for all items
-	DeleteBulk(ctx context.Context, ids []string, effectiveFrom time.Time) error
 
 	// ListBySubscription retrieves all line items for a subscription
 	ListBySubscription(ctx context.Context, sub *Subscription) ([]*SubscriptionLineItem, error)

@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -348,216 +347,133 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 		return nil, err
 	}
 
+	s.Logger.Infow("Found plan", "plan_id", id, "plan_name", plan.Name)
+
 	// Get all plan-scoped prices including expired ones
 	priceService := NewPriceService(s.ServiceParams)
 	priceFilter := types.NewNoLimitPriceFilter().
 		WithEntityIDs([]string{id}).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 		WithStatus(types.StatusPublished).
-		WithAllowExpiredPrices(true).
-		WithPriceType(types.PRICE_TYPE_USAGE)
+		WithAllowExpiredPrices(true)
 
 	pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
 	if err != nil {
-		return nil, err
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list prices for plan").
+			Mark(ierr.ErrDatabase)
 	}
 
 	// Create price map for quick lookups
 	planPriceMap := make(map[string]*domainPrice.Price)
 	for _, priceResp := range pricesResponse.Items {
+		// skip the fixed fee prices
+		if priceResp.Price.Type == types.PRICE_TYPE_FIXED {
+			continue
+		}
+
 		planPriceMap[priceResp.ID] = priceResp.Price
 	}
 
-	// Batch processing configuration
-	const BATCH_SIZE = 100
-	offset := 0
-	failedPriceIDsMap := make(map[string]bool)
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
-
 	// Set up filter for subscriptions
-	subscriptionFilter := types.NewSubscriptionFilter()
+	subscriptionFilter := &types.SubscriptionFilter{}
 	subscriptionFilter.PlanID = id
-	subscriptionFilter.QueryFilter.Limit = lo.ToPtr(BATCH_SIZE)
 	subscriptionFilter.SubscriptionStatus = []types.SubscriptionStatus{
 		types.SubscriptionStatusActive,
 		types.SubscriptionStatusTrialing,
 	}
 
-	// Process subscriptions in batches
-	for {
-		// Update offset for this batch
-		subscriptionFilter.QueryFilter.Offset = lo.ToPtr(offset)
+	// Get all active subscriptions for this plan
+	subs, err := s.SubRepo.ListAll(ctx, subscriptionFilter)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to list subscriptions").
+			Mark(ierr.ErrDatabase)
+	}
 
-		// Fetch batch of subscriptions
-		subs, err := subscriptionService.ListSubscriptions(ctx, subscriptionFilter)
+	s.Logger.Infow("Found active subscriptions using plan", "plan_id", id, "subscription_count", len(subs))
+
+	totalAdded := 0
+	totalUpdated := 0
+	totalSkipped := 0
+	totalFailed := 0
+	totalPricesProcessed := 0
+	totalSkippedAlreadyTerminated := 0
+	totalSkippedOverridden := 0
+	totalSkippedIncompatible := 0
+
+	// Iterate through each subscription
+	for _, sub := range subs {
+		// Get line items for the subscription
+		lineItems, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
 		if err != nil {
-			return nil, err
+			s.Logger.Infow("Failed to get line items for subscription", "subscription_id", sub.ID, "error", err)
+			continue
 		}
 
-		// Break if no more items
-		if len(subs.Items) == 0 {
-			break
-		}
-
-		// Collect subscription IDs for batch fetching
-		subscriptionIDs := make([]string, len(subs.Items))
-		for i, subResp := range subs.Items {
-			subscriptionIDs[i] = subResp.Subscription.ID
-		}
-
-		// Batch fetch line items for all subscriptions in this batch
-		lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
-		lineItemFilter.SubscriptionIDs = subscriptionIDs
-		allLineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
-		if err != nil {
-			s.Logger.Errorw("failed to batch fetch line items",
-				"error", err,
-				"subscription_count", len(subs.Items))
-			// Continue processing with empty line items map - individual subscriptions will be skipped
-			allLineItems = []*subscription.SubscriptionLineItem{}
-		}
-
-		// Group line items by subscription ID (pre-allocate map)
-		lineItemsBySubID := make(map[string][]*subscription.SubscriptionLineItem, len(subs.Items))
-		for _, item := range allLineItems {
-			lineItemsBySubID[item.SubscriptionID] = append(lineItemsBySubID[item.SubscriptionID], item)
-		}
-
-		// Batch fetch subscription prices for all subscriptions in this batch
+		// Get subscription-specific prices (overrides)
 		subPriceFilter := types.NewNoLimitPriceFilter().
-			WithEntityIDs(subscriptionIDs).
+			WithEntityIDs([]string{sub.ID}).
 			WithAllowExpiredPrices(true).
 			WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION)
 
 		subPricesResponse, err := priceService.GetPrices(ctx, subPriceFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to batch fetch subscription prices",
-				"error", err,
-				"subscription_count", len(subs.Items))
-			// Continue processing with empty price map - override detection may not work correctly
-			subPricesResponse = &dto.ListPricesResponse{Items: []*dto.PriceResponse{}}
+			s.Logger.Infow("Failed to get subscription prices", "subscription_id", sub.ID, "error", err)
+			continue
 		}
 
-		// Group prices by subscription ID (pre-allocate maps)
-		subPriceMapBySubID := make(map[string]map[string]*dto.PriceResponse, len(subs.Items))
+		// Create subscription price map for quick lookup
+		subPriceMap := make(map[string]*dto.PriceResponse)
 		for _, priceResp := range subPricesResponse.Items {
-			if subPriceMapBySubID[priceResp.EntityID] == nil {
-				subPriceMapBySubID[priceResp.EntityID] = make(map[string]*dto.PriceResponse)
-			}
-			subPriceMapBySubID[priceResp.EntityID][priceResp.ID] = priceResp
+			subPriceMap[priceResp.ID] = priceResp
 		}
 
-		// Collect operations for this batch and execute using service methods
-		batchLineItemsToTerminate := make(map[time.Time][]string) // effectiveFrom -> line item IDs
-		// Map line item ID to price ID for tracking failed terminations
-		lineItemIDToPriceID := make(map[string]string)
-		subscriptionService := NewSubscriptionService(s.ServiceParams)
-
-		// Process each subscription in the batch
-		for _, subResp := range subs.Items {
-			// Extract the domain subscription object from the response
-			sub := subResp.Subscription
-
-			// Get line items for this subscription (from batch fetch)
-			lineItems := lineItemsBySubID[sub.ID]
-			if lineItems == nil {
-				lineItems = []*subscription.SubscriptionLineItem{}
-			}
-
-			// Build map from line item ID to price ID for this subscription (for failure tracking)
-			subLineItemIDToPriceID := make(map[string]string, len(lineItems))
-			for _, item := range lineItems {
-				subLineItemIDToPriceID[item.ID] = item.PriceID
-			}
-
-			// Get subscription prices for this subscription (from batch fetch)
-			subPriceMap := subPriceMapBySubID[sub.ID]
-			if subPriceMap == nil {
-				subPriceMap = make(map[string]*dto.PriceResponse)
-			}
-
-			// Sync this subscription with plan prices (collects operations, doesn't execute)
-			syncParams := &dto.SubscriptionSyncParams{
-				Context:              ctx,
-				Subscription:         sub,
-				PlanPriceMap:         planPriceMap,
-				LineItems:            lineItems,
-				SubscriptionPriceMap: subPriceMap,
-			}
-
-			syncResult := s.SyncSubscriptionWithPlanPrices(syncParams)
-
-			// Create line items for this subscription using service method
-			if len(syncResult.LineItemsToCreate) > 0 {
-				createBulkReq := dto.CreateBulkSubscriptionLineItemRequest{
-					Items: syncResult.LineItemsToCreate,
-				}
-				if _, err := subscriptionService.AddBulkSubscriptionLineItems(ctx, sub.ID, createBulkReq); err != nil {
-					s.Logger.Errorw("failed to create line items in bulk",
-						"error", err,
-						"subscription_id", sub.ID,
-						"count", len(syncResult.LineItemsToCreate))
-					// Collect failed price IDs from the items that failed to create
-					for _, item := range syncResult.LineItemsToCreate {
-						failedPriceIDsMap[item.PriceID] = true
-					}
-					// Continue processing other subscriptions
-					continue
-				}
-			}
-
-			// Collect line items to terminate, grouped by effective date (will process after all subscriptions)
-			// Also build mapping from line item ID to price ID for failure tracking
-			for _, termination := range syncResult.LineItemsToTerminate {
-				if batchLineItemsToTerminate[termination.EffectiveFrom] == nil {
-					batchLineItemsToTerminate[termination.EffectiveFrom] = make([]string, 0)
-				}
-				batchLineItemsToTerminate[termination.EffectiveFrom] = append(batchLineItemsToTerminate[termination.EffectiveFrom], termination.LineItemID)
-
-				// Map line item ID to price ID using the line items we already fetched for this subscription
-				if priceID, exists := subLineItemIDToPriceID[termination.LineItemID]; exists {
-					lineItemIDToPriceID[termination.LineItemID] = priceID
-				}
-			}
+		// Sync this subscription with plan prices
+		syncParams := &dto.SubscriptionSyncParams{
+			Context:              ctx,
+			Subscription:         sub,
+			PlanPriceMap:         planPriceMap,
+			LineItems:            lineItems,
+			SubscriptionPriceMap: subPriceMap,
 		}
 
-		// Process terminations: group by effective date and use service method
-		for effectiveFrom, lineItemIDs := range batchLineItemsToTerminate {
-			if len(lineItemIDs) > 0 {
-				deleteReq := dto.DeleteBulkSubscriptionLineItemRequest{
-					LineItemIDs:   lineItemIDs,
-					EffectiveFrom: &effectiveFrom,
-				}
-				if _, err := subscriptionService.DeleteBulkSubscriptionLineItems(ctx, deleteReq); err != nil {
-					s.Logger.Errorw("failed to terminate line items in bulk",
-						"error", err,
-						"count", len(lineItemIDs),
-						"effective_from", effectiveFrom)
-					// Collect failed price IDs from the line items that failed to terminate
-					for _, lineItemID := range lineItemIDs {
-						if priceID, exists := lineItemIDToPriceID[lineItemID]; exists {
-							failedPriceIDsMap[priceID] = true
-						}
-					}
-					// Continue processing other terminations
-					continue
-				}
-			}
-		}
+		syncResult := s.SyncSubscriptionWithPlanPrices(syncParams)
 
-		// Break if we got fewer items than batch size (last batch)
-		if len(subs.Items) < BATCH_SIZE || subs.Pagination.Offset >= subs.Pagination.Total {
-			break
-		}
+		// Log results for this subscription
+		s.Logger.Infow("Line item sync completed",
+			"subscription_id", sub.ID,
+			"line_items_created", syncResult.LineItemsCreated,
+			"line_items_terminated", syncResult.LineItemsTerminated,
+			"line_items_skipped_already_terminated", syncResult.LineItemsSkippedAlreadyTerminated,
+			"line_items_skipped_overridden", syncResult.LineItemsSkippedOverridden,
+			"line_items_skipped_incompatible", syncResult.LineItemsSkippedIncompatible,
+			"line_items_failed", syncResult.LineItemsFailed)
 
-		// Increment offset for next batch
-		offset += BATCH_SIZE
+		// Aggregate statistics
+		totalAdded += syncResult.LineItemsCreated
+		totalUpdated += syncResult.LineItemsTerminated
+		totalSkipped += syncResult.LineItemsSkippedAlreadyTerminated +
+			syncResult.LineItemsSkippedOverridden +
+			syncResult.LineItemsSkippedIncompatible
+		totalFailed += syncResult.LineItemsFailed
+		totalPricesProcessed += syncResult.PricesProcessed
+
+		// Aggregate detailed skip counters
+		totalSkippedAlreadyTerminated += syncResult.LineItemsSkippedAlreadyTerminated
+		totalSkippedOverridden += syncResult.LineItemsSkippedOverridden
+		totalSkippedIncompatible += syncResult.LineItemsSkippedIncompatible
 	}
 
-	// Convert failed price IDs map to slice
-	failedPriceIDs := make([]string, 0, len(failedPriceIDsMap))
-	for priceID := range failedPriceIDsMap {
-		failedPriceIDs = append(failedPriceIDs, priceID)
+	// Count active and expired prices
+	activePrices := 0
+	expiredPrices := 0
+	for _, planPrice := range planPriceMap {
+		if planPrice.EndDate == nil {
+			activePrices++
+		} else {
+			expiredPrices++
+		}
 	}
 
 	response := &dto.SyncPlanPricesResponse{
@@ -565,9 +481,27 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 		PlanID:   id,
 		PlanName: plan.Name,
 		SynchronizationSummary: dto.SynchronizationSummary{
-			FailedPriceIDs: failedPriceIDs,
+			SubscriptionsProcessed:   len(subs),
+			PricesProcessed:          totalPricesProcessed,
+			LineItemsCreated:         totalAdded,
+			LineItemsTerminated:      totalUpdated,
+			LineItemsSkipped:         totalSkipped,
+			LineItemsFailed:          totalFailed,
+			SkippedAlreadyTerminated: totalSkippedAlreadyTerminated,
+			SkippedOverridden:        totalSkippedOverridden,
+			SkippedIncompatible:      totalSkippedIncompatible,
+			TotalPrices:              len(planPriceMap),
+			ActivePrices:             activePrices,
+			ExpiredPrices:            expiredPrices,
 		},
 	}
+
+	s.Logger.Infow("Plan sync completed",
+		"total_prices_processed", totalPricesProcessed,
+		"total_line_items_created", totalAdded,
+		"total_line_items_terminated", totalUpdated,
+		"total_line_items_skipped", totalSkipped,
+		"total_line_items_failed", totalFailed)
 
 	return response, nil
 }
@@ -615,6 +549,9 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 // while maintaining proper billing continuity and respecting all price overrides.
 // Time complexity: O(n) where n is the number of plan prices.
 func (s *planService) SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyncParams) *dto.SubscriptionSyncResult {
+	// Initialize subscription service inside the method to avoid import cycle
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+
 	// Build line item lookup maps for efficient price handling
 	// directPriceToLineItemMap: Maps exact price IDs to line items (for direct lookups)
 	// rootPriceToLineItemMap: Maps root price IDs to line items (for override detection)
@@ -638,18 +575,16 @@ func (s *planService) SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyn
 		}
 	}
 
-	// Initialize result with collections for bulk operations
-	result := &dto.SubscriptionSyncResult{
-		FailedPriceIDs:       make([]string, 0),
-		LineItemsToCreate:    make([]dto.CreateSubscriptionLineItemRequest, 0),
-		LineItemsToTerminate: make([]dto.LineItemTermination, 0),
-		SubscriptionID:       params.Subscription.ID,
-	}
+	// Initialize result counters
+	result := &dto.SubscriptionSyncResult{}
 
 	// Process each plan price
 	for priceID, planPrice := range params.PlanPriceMap {
+		result.PricesProcessed++
+
 		// Skip if price currency/billing period doesn't match subscription
 		if !planPrice.IsEligibleForSubscription(params.Subscription.Currency, params.Subscription.BillingPeriod, params.Subscription.BillingPeriodCount) {
+			result.LineItemsSkippedIncompatible++
 			continue
 		}
 
@@ -660,33 +595,43 @@ func (s *planService) SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyn
 		// Handle existing line items for this exact price
 		lineItem, hasExistingLineItem := directPriceToLineItemMap[priceID]
 		if hasExistingLineItem {
+
 			if planPrice.EndDate == nil || !lineItem.EndDate.IsZero() {
 				// Line item exists but doesn't need termination:
 				// - Price is still active (EndDate == nil), OR
 				// - Line item is already terminated (!lineItem.EndDate.IsZero())
+				result.LineItemsSkippedAlreadyTerminated++
 				continue
 			}
 
-			// Line item exists and needs termination - collect for bulk operation
-			result.LineItemsToTerminate = append(result.LineItemsToTerminate, dto.LineItemTermination{
-				LineItemID:    lineItem.ID,
-				EffectiveFrom: lo.FromPtr(planPrice.EndDate),
-			})
+			// Line item exists and needs termination
+			deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: planPrice.EndDate}
+			if _, err := subscriptionService.DeleteSubscriptionLineItem(params.Context, lineItem.ID, deleteReq); err != nil {
+				s.Logger.Errorw("Failed to terminate line item",
+					"subscription_id", params.Subscription.ID,
+					"line_item_id", lineItem.ID,
+					"error", err)
+				result.LineItemsFailed++
+				continue
+			}
+			result.LineItemsTerminated++
 			continue
 		}
 
 		// Handle new line item creation for prices without existing line items
 		if planPrice.EndDate != nil {
 			// Price expired but no line item exists - nothing to do
+			result.LineItemsSkippedAlreadyTerminated++
 			continue
 		}
 
 		if hasOverride {
 			// Price is overridden - skip creation
+			result.LineItemsSkippedOverridden++
 			continue
 		}
 
-		// Build line item request for active price - collect for bulk operation
+		// Create new line item for active price
 		createReq := dto.CreateSubscriptionLineItemRequest{
 			PriceID:   planPrice.ID,
 			StartDate: planPrice.StartDate,
@@ -694,11 +639,18 @@ func (s *planService) SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyn
 				"added_by":     "plan_sync_api",
 				"sync_version": "3.0",
 			},
-			Quantity:             planPrice.GetDefaultQuantity(),
-			SkipEntitlementCheck: true, // We're syncing plan prices, skip entitlement check
+			Quantity: planPrice.GetDefaultQuantity(),
 		}
 
-		result.LineItemsToCreate = append(result.LineItemsToCreate, createReq)
+		if _, err := subscriptionService.AddSubscriptionLineItem(params.Context, params.Subscription.ID, createReq); err != nil {
+			s.Logger.Errorw("Failed to create line item",
+				"subscription_id", params.Subscription.ID,
+				"price_id", priceID,
+				"error", err)
+			result.LineItemsFailed++
+			continue
+		}
+		result.LineItemsCreated++
 	}
 
 	return result
