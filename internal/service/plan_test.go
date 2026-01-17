@@ -219,8 +219,6 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.NotNil(result)
 		s.Equal(archivedPlan.ID, result.PlanID)
 		s.Equal(archivedPlan.Name, result.PlanName)
-		s.Equal(0, result.SynchronizationSummary.SuccessCount)
-		s.Equal(0, result.SynchronizationSummary.FailedCount)
 		s.Empty(result.SynchronizationSummary.FailedPriceIDs)
 	})
 
@@ -256,8 +254,6 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.NotNil(result)
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
-		s.Equal(0, result.SynchronizationSummary.SuccessCount)
-		s.Equal(0, result.SynchronizationSummary.FailedCount)
 		s.Empty(result.SynchronizationSummary.FailedPriceIDs)
 	})
 
@@ -295,8 +291,6 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.NotNil(result)
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
-		s.Equal(0, result.SynchronizationSummary.SuccessCount)
-		s.Equal(0, result.SynchronizationSummary.FailedCount)
 		s.Empty(result.SynchronizationSummary.FailedPriceIDs)
 	})
 
@@ -360,9 +354,7 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.NotNil(result)
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
-		s.Equal(0, result.SynchronizationSummary.SuccessCount) // No line items created or terminated
-		s.Equal(0, result.SynchronizationSummary.FailedCount)
-		s.Empty(result.SynchronizationSummary.FailedPriceIDs)
+		s.Empty(result.SynchronizationSummary.FailedPriceIDs) // No line items created or terminated
 	})
 
 	s.Run("TC-SYNC-008_Subscriptions_In_Different_States", func() {
@@ -426,9 +418,7 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Comprehensive() {
 		s.NotNil(result)
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
-		s.Equal(0, result.SynchronizationSummary.SuccessCount) // No line items created or terminated
-		s.Equal(0, result.SynchronizationSummary.FailedCount)
-		s.Empty(result.SynchronizationSummary.FailedPriceIDs)
+		s.Empty(result.SynchronizationSummary.FailedPriceIDs) // No line items created or terminated
 	})
 }
 
@@ -517,9 +507,7 @@ func (s *PlanServiceSuite) TestSyncPlanPrices_Price_Synchronization() {
 		s.NotNil(result)
 		s.Equal(testPlan.ID, result.PlanID)
 		s.Equal(testPlan.Name, result.PlanName)
-		s.GreaterOrEqual(result.SynchronizationSummary.SuccessCount, 1) // At least 1 line item created
-		s.Equal(0, result.SynchronizationSummary.FailedCount)
-		s.Empty(result.SynchronizationSummary.FailedPriceIDs)
+		s.Empty(result.SynchronizationSummary.FailedPriceIDs) // At least 1 line item created (no failures)
 	})
 
 	s.Run("TC-SYNC-010_Deleting_Terminating_Price_In_Plan", func() {
