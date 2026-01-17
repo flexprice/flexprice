@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
@@ -16,7 +17,7 @@ import (
 func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
 	// Get the subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil  {
+	if err != nil {
 		return nil, err
 	}
 
@@ -120,6 +121,184 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
 }
 
+// AddBulkSubscriptionLineItems adds multiple line items to an existing subscription in bulk
+func (s *subscriptionService) AddBulkSubscriptionLineItems(ctx context.Context, subscriptionID string, req dto.CreateBulkSubscriptionLineItemRequest) (*dto.CreateBulkSubscriptionLineItemResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Get the subscription
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate subscription status
+	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
+		return nil, ierr.NewError("subscription is not active").
+			WithHint("Only active subscriptions can have line items added").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id": subscriptionID,
+				"status":          sub.SubscriptionStatus,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Collect all unique price IDs
+	priceIDs := make([]string, 0, len(req.Items))
+	priceIDSet := make(map[string]bool)
+	for _, item := range req.Items {
+		if !priceIDSet[item.PriceID] {
+			priceIDs = append(priceIDs, item.PriceID)
+			priceIDSet[item.PriceID] = true
+		}
+	}
+
+	// Fetch all prices in bulk (optimized single query)
+	priceService := NewPriceService(s.ServiceParams)
+	priceFilter := types.NewNoLimitPriceFilter().
+		WithPriceIDs(priceIDs).
+		WithStatus(types.StatusPublished).
+		WithExpand(string(types.ExpandMeters))
+
+	pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build price map for O(1) lookup
+	priceMap := make(map[string]*dto.PriceResponse, len(pricesResponse.Items))
+	for _, priceResp := range pricesResponse.Items {
+		priceMap[priceResp.ID] = priceResp
+	}
+
+	// Validate all prices exist
+	for i, item := range req.Items {
+		if _, exists := priceMap[item.PriceID]; !exists {
+			return nil, ierr.NewError("price not found").
+				WithHint(fmt.Sprintf("Price with ID %s not found for line item at index %d", item.PriceID, i)).
+				WithReportableDetails(map[string]interface{}{
+					"price_id": item.PriceID,
+					"index":    i,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+	}
+
+	// Validate all line items before any database operations
+	for i, item := range req.Items {
+		price := priceMap[item.PriceID]
+		if err := item.Validate(price.Price); err != nil {
+			return nil, ierr.WithError(err).
+				WithHint(fmt.Sprintf("Line item at index %d is invalid", i)).
+				WithReportableDetails(map[string]interface{}{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	response := &dto.CreateBulkSubscriptionLineItemResponse{
+		Items: make([]*dto.SubscriptionLineItemResponse, 0, len(req.Items)),
+	}
+
+	// Use transaction for atomicity
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		lineItems := make([]*subscription.SubscriptionLineItem, 0, len(req.Items))
+
+		// Prepare all line items
+		for _, itemReq := range req.Items {
+			price := priceMap[itemReq.PriceID]
+
+			// Initialize line item params
+			params := dto.LineItemParams{
+				Subscription: &dto.SubscriptionResponse{Subscription: sub},
+				Price:        price,
+			}
+
+			// Set entity type and fetch entity if needed
+			if itemReq.SkipEntitlementCheck {
+				switch price.EntityType {
+				case types.PRICE_ENTITY_TYPE_PLAN:
+					planService := NewPlanService(s.ServiceParams)
+					planResponse, err := planService.GetPlan(txCtx, price.EntityID)
+					if err != nil {
+						return err
+					}
+					params.Plan = planResponse
+					params.EntityType = types.SubscriptionLineItemEntityTypePlan
+				case types.PRICE_ENTITY_TYPE_ADDON:
+					addonService := NewAddonService(s.ServiceParams)
+					addonResponse, err := addonService.GetAddon(txCtx, price.EntityID)
+					if err != nil {
+						return err
+					}
+					params.Addon = addonResponse
+					params.EntityType = types.SubscriptionLineItemEntityTypeAddon
+				case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+					subscriptionService := NewSubscriptionService(s.ServiceParams)
+					subscriptionResponse, err := subscriptionService.GetSubscription(txCtx, price.EntityID)
+					if err != nil {
+						return err
+					}
+					params.Subscription = subscriptionResponse
+					params.EntityType = types.SubscriptionLineItemEntityTypePlan
+				default:
+					return ierr.NewError("unsupported entity type").
+						WithHint("Unsupported entity type").
+						WithReportableDetails(map[string]interface{}{
+							"entity_type": price.EntityType,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+
+			// Create the line item
+			lineItem := itemReq.ToSubscriptionLineItem(txCtx, params)
+			lineItems = append(lineItems, lineItem)
+		}
+
+		// Validate commitments for all line items
+		for _, lineItem := range lineItems {
+			var meter *meter.Meter
+			if lineItem.PriceType == types.PRICE_TYPE_USAGE && lineItem.MeterID != "" {
+				meterFilter := types.NewNoLimitMeterFilter()
+				meterFilter.MeterIDs = []string{lineItem.MeterID}
+				meters, err := s.MeterRepo.List(txCtx, meterFilter)
+				if err == nil && len(meters) > 0 {
+					meter = meters[0]
+				}
+			}
+
+			if err := s.validateLineItemCommitment(txCtx, lineItem, meter); err != nil {
+				return err
+			}
+		}
+
+		// Validate subscription-level commitment doesn't conflict
+		if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+			return err
+		}
+
+		// Create line items in bulk
+		if err := s.SubscriptionLineItemRepo.CreateBulk(txCtx, lineItems); err != nil {
+			return err
+		}
+
+		// Add successful line items to response
+		for _, lineItem := range lineItems {
+			lineItemResp := &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}
+			response.Items = append(response.Items, lineItemResp)
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return response, nil
+}
+
 // DeleteSubscriptionLineItem marks a line item as deleted by setting its end date
 func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, lineItemID string, req dto.DeleteSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
 	if err := req.Validate(); err != nil {
@@ -170,6 +349,82 @@ func (s *subscriptionService) DeleteSubscriptionLineItem(ctx context.Context, li
 	}
 
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
+}
+
+// DeleteBulkSubscriptionLineItems marks multiple line items as deleted by setting their end dates
+func (s *subscriptionService) DeleteBulkSubscriptionLineItems(ctx context.Context, req dto.DeleteBulkSubscriptionLineItemRequest) (*dto.DeleteBulkSubscriptionLineItemResponse, error) {
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Determine effective from date
+	var effectiveFrom time.Time
+	if req.EffectiveFrom != nil {
+		effectiveFrom = req.EffectiveFrom.UTC()
+	} else {
+		effectiveFrom = time.Now().UTC()
+	}
+
+	// Get all line items in bulk
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(req.LineItemIDs))
+
+	for _, lineItemID := range req.LineItemIDs {
+		lineItem, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
+		if err != nil {
+			return nil, err
+		}
+		lineItems = append(lineItems, lineItem)
+	}
+
+	// Validate all line items are not already terminated
+	for _, lineItem := range lineItems {
+		if !lineItem.EndDate.IsZero() {
+			return nil, ierr.NewError("line item is already terminated").
+				WithHint("Cannot terminate a line item that has already been terminated").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id": lineItem.ID,
+					"end_date":     lineItem.EndDate,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate effective from date is after start date
+		if effectiveFrom.Before(lineItem.StartDate) {
+			return nil, ierr.NewError("effective from date must be after start date").
+				WithHint("The effective from date must be after the line item's start date").
+				WithReportableDetails(map[string]interface{}{
+					"line_item_id":   lineItem.ID,
+					"start_date":     lineItem.StartDate,
+					"effective_from": effectiveFrom,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	response := &dto.DeleteBulkSubscriptionLineItemResponse{
+		Items: make([]*dto.SubscriptionLineItemResponse, 0, len(lineItems)),
+	}
+
+	// Use transaction for atomicity
+	if err := s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		// Delete line items in bulk using repository
+		if err := s.SubscriptionLineItemRepo.DeleteBulk(txCtx, req.LineItemIDs, effectiveFrom); err != nil {
+			return err
+		}
+
+		// Update line items with EndDate for response
+		for _, lineItem := range lineItems {
+			lineItem.EndDate = effectiveFrom
+			lineItemResp := &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}
+			response.Items = append(response.Items, lineItemResp)
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return response, nil
 }
 
 // UpdateSubscriptionLineItem updates a subscription line item by terminating the existing one and creating a new one

@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
@@ -164,10 +165,16 @@ type SubscriptionSyncParams struct {
 	SubscriptionPriceMap map[string]*PriceResponse
 }
 
+// LineItemTermination contains information about a line item that needs to be terminated
+type LineItemTermination struct {
+	LineItemID    string
+	EffectiveFrom time.Time
+}
+
 // SubscriptionSyncResult contains the results of syncing a subscription with plan prices
 type SubscriptionSyncResult struct {
-	LineItemsCreated    int
-	LineItemsTerminated int
-	LineItemsFailed     int
-	FailedPriceIDs      []string
+	FailedPriceIDs       []string
+	LineItemsToCreate    []CreateSubscriptionLineItemRequest
+	LineItemsToTerminate []LineItemTermination
+	SubscriptionID       string
 }
