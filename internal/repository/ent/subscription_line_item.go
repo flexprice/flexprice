@@ -663,6 +663,11 @@ func (o SubscriptionLineItemQueryOptions) GetFieldName(field string) string {
 
 // applyEntityQueryOptions applies subscription line item-specific filters to the query
 func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SubscriptionLineItemFilter, query SubscriptionLineItemQuery) (SubscriptionLineItemQuery, error) {
+	// Apply line item IDs filter if specified
+	if len(f.LineItemIDs) > 0 {
+		query = query.Where(subscriptionlineitem.IDIn(f.LineItemIDs...))
+	}
+
 	// Apply subscription IDs filter if specified
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(subscriptionlineitem.SubscriptionIDIn(f.SubscriptionIDs...))

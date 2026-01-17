@@ -365,15 +365,34 @@ func (s *subscriptionService) DeleteBulkSubscriptionLineItems(ctx context.Contex
 		effectiveFrom = time.Now().UTC()
 	}
 
-	// Get all line items in bulk
-	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(req.LineItemIDs))
+	// Get all line items in bulk using filter
+	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	lineItemFilter.LineItemIDs = req.LineItemIDs
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		return nil, err
+	}
 
-	for _, lineItemID := range req.LineItemIDs {
-		lineItem, err := s.SubscriptionLineItemRepo.Get(ctx, lineItemID)
-		if err != nil {
-			return nil, err
+	// Validate that all requested line items were found
+	if len(lineItems) != len(req.LineItemIDs) {
+		// Build a map of found IDs for efficient lookup
+		foundIDs := make(map[string]bool, len(lineItems))
+		for _, item := range lineItems {
+			foundIDs[item.ID] = true
 		}
-		lineItems = append(lineItems, lineItem)
+
+		// Find missing IDs
+		for _, id := range req.LineItemIDs {
+			if !foundIDs[id] {
+				return nil, ierr.NewError("line item not found").
+					WithHint(fmt.Sprintf("Line item with ID %s not found", id)).
+					WithReportableDetails(map[string]interface{}{
+						"line_item_id": id,
+					}).
+					Mark(ierr.ErrNotFound)
+			}
+		}
+
 	}
 
 	// Validate all line items are not already terminated
