@@ -8,6 +8,7 @@ type SubscriptionLineItemFilter struct {
 	*TimeRangeFilter
 
 	// Specific filters
+	LineItemIDs        []string                        `json:"line_item_ids,omitempty" form:"line_item_ids"`
 	SubscriptionIDs    []string                        `json:"subscription_ids,omitempty" form:"subscription_ids"`
 	PriceIDs           []string                        `json:"price_ids,omitempty" form:"price_ids"`
 	MeterIDs           []string                        `json:"meter_ids,omitempty" form:"meter_ids"`

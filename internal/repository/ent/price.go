@@ -535,6 +535,11 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.EntityIDIn(f.EntityIDs...))
 	}
 
+	// price type filter
+	if f.PriceType != nil {
+		query = query.Where(price.Type(lo.FromPtr(f.PriceType)))
+	}
+
 	// meter id filter
 	if len(f.MeterIDs) > 0 {
 		query = query.Where(price.MeterIDIn(f.MeterIDs...))
