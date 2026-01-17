@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -516,4 +517,84 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 
 	return newLineItem
+}
+
+// CreateBulkSubscriptionLineItemRequest represents the request to create multiple subscription line items in bulk
+type CreateBulkSubscriptionLineItemRequest struct {
+	Items []CreateSubscriptionLineItemRequest `json:"items" validate:"required,min=1,max=100"`
+}
+
+// CreateBulkSubscriptionLineItemResponse represents the response for bulk subscription line item creation
+type CreateBulkSubscriptionLineItemResponse struct {
+	Items []*SubscriptionLineItemResponse `json:"items"`
+}
+
+// DeleteBulkSubscriptionLineItemRequest represents the request to delete multiple subscription line items in bulk
+type DeleteBulkSubscriptionLineItemRequest struct {
+	LineItemIDs   []string   `json:"line_item_ids" validate:"required,min=1,max=100"`
+	EffectiveFrom *time.Time `json:"effective_from,omitempty"`
+}
+
+// DeleteBulkSubscriptionLineItemResponse represents the response for bulk subscription line item deletion
+type DeleteBulkSubscriptionLineItemResponse struct {
+	Items []*SubscriptionLineItemResponse `json:"items"`
+}
+
+// Validate validates the bulk create subscription line item request
+func (r *CreateBulkSubscriptionLineItemRequest) Validate() error {
+	if len(r.Items) == 0 {
+		return ierr.NewError("at least one line item is required").
+			WithHint("Please provide at least one line item to create").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.Items) > 1000 {
+		return ierr.NewError("too many line items in bulk request").
+			WithHint("Maximum 1000 line items allowed per bulk request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate each individual line item
+	for i, item := range r.Items {
+		if err := item.Validate(nil); err != nil {
+			return ierr.WithError(err).
+				WithHint(fmt.Sprintf("Line item at index %d is invalid", i)).
+				WithReportableDetails(map[string]interface{}{
+					"index": i,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
+	return nil
+}
+
+// Validate validates the bulk delete subscription line item request
+func (r *DeleteBulkSubscriptionLineItemRequest) Validate() error {
+	if len(r.LineItemIDs) == 0 {
+		return ierr.NewError("at least one line item ID is required").
+			WithHint("Please provide at least one line item ID to delete").
+			Mark(ierr.ErrValidation)
+	}
+
+	if len(r.LineItemIDs) > 1000 {
+		return ierr.NewError("too many line item IDs in bulk request").
+			WithHint("Maximum 1000 line item IDs allowed per bulk request").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate effective from date is not in the past if provided
+	// Use a small buffer (30 seconds) to account for microsecond-level timing differences
+	buffer := 30 * time.Second
+	if r.EffectiveFrom != nil && r.EffectiveFrom.Before(time.Now().UTC().Add(-buffer)) {
+		return ierr.NewError("effective_from must be in the future or present").
+			WithHint("Effective from date must be in the future or present").
+			WithReportableDetails(map[string]interface{}{
+				"effective_from": r.EffectiveFrom,
+				"current_time":   time.Now().UTC(),
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
 }
