@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/integration"
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
+	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
@@ -904,4 +905,115 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Webhook processed successfully",
 	})
+}
+
+// @Summary Handle Moyasar webhook events
+// @Description Process incoming Moyasar webhook events for payment status updates
+// @Tags Webhooks
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param environment_id path string true "Environment ID"
+// @Param X-Moyasar-Signature header string false "Moyasar webhook signature"
+// @Success 200 {object} map[string]interface{} "Webhook received (always returns 200)"
+// @Router /webhooks/moyasar/{tenant_id}/{environment_id} [post]
+func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
+	// Always return 200 OK to Moyasar to prevent retries
+	// We log errors internally but don't expose them to Moyasar
+	defer func() {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Webhook received",
+		})
+	}()
+
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
+	// Read the raw request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read request body", "error", err)
+		return
+	}
+
+	// Get Moyasar signature from headers (if present)
+	signature := c.GetHeader("X-Moyasar-Signature")
+
+	// Set context with tenant and environment IDs
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Get Moyasar integration
+	moyasarIntegration, err := h.integrationFactory.GetMoyasarIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Moyasar integration", "error", err)
+		return
+	}
+
+	// Verify webhook signature (if present and webhook secret is configured)
+	if signature != "" {
+		err = moyasarIntegration.Client.VerifyWebhookSignature(ctx, body, signature)
+		if err != nil {
+			h.logger.Errorw("failed to verify Moyasar webhook signature",
+				"error", err,
+				"tenant_id", tenantID,
+				"environment_id", environmentID)
+			return
+		}
+		h.logger.Debugw("Moyasar webhook signature verified",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+	} else {
+		h.logger.Warnw("Moyasar webhook received without signature",
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"note", "Consider configuring webhook secret for security")
+	}
+
+	// Log webhook processing (without sensitive data)
+	h.logger.Infow("processing Moyasar webhook",
+		"environment_id", environmentID,
+		"tenant_id", tenantID,
+		"payload_length", len(body))
+
+	// Parse webhook payload
+	var event moyasarwebhook.MoyasarWebhookEvent
+	err = json.Unmarshal(body, &event)
+	if err != nil {
+		h.logger.Errorw("failed to parse Moyasar webhook payload", "error", err)
+		return
+	}
+
+	// Create service dependencies for webhook handler
+	serviceDeps := &moyasarwebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		DB:                              h.db,
+	}
+
+	// Handle the webhook event
+	err = moyasarIntegration.WebhookHandler.HandleWebhookEvent(ctx, &event, environmentID, serviceDeps)
+	if err != nil {
+		h.logger.Errorw("failed to handle Moyasar webhook event",
+			"error", err,
+			"event_type", event.Type,
+			"environment_id", environmentID)
+		return
+	}
+
+	h.logger.Infow("successfully processed Moyasar webhook",
+		"environment_id", environmentID,
+		"event_type", event.Type)
 }
