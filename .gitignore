@@ -132,7 +132,5 @@ temp/*
 Thumbs.db
 
 server
-
-# custom local files
-lambdas/*
-
+.gocache/
+.gomodcache/
