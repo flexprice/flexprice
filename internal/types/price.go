@@ -335,6 +335,7 @@ type PriceFilter struct {
 	ParentPriceID      *string          `json:"parent_price_id,omitempty" form:"parent_price_id"`
 	MeterIDs           []string         `json:"meter_ids,omitempty" form:"meter_ids"`
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
+	PriceType          *PriceType       `json:"price_type,omitempty" form:"price_type"`
 
 	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
 }
@@ -381,6 +382,13 @@ func (f PriceFilter) Validate() error {
 			return ierr.NewError("plan id can not be empty").
 				WithHint("Plan ID cannot be empty").
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// Validate price type if provided
+	if f.PriceType != nil {
+		if err := f.PriceType.Validate(); err != nil {
+			return err
 		}
 	}
 
@@ -444,6 +452,12 @@ func (f *PriceFilter) WithStatus(status Status) *PriceFilter {
 // WithAllowExpiredPrices sets the allow expired prices flag on the filter
 func (f *PriceFilter) WithAllowExpiredPrices(allowExpiredPrices bool) *PriceFilter {
 	f.AllowExpiredPrices = allowExpiredPrices
+	return f
+}
+
+// WithPriceType sets the price type on the filter
+func (f *PriceFilter) WithPriceType(priceType PriceType) *PriceFilter {
+	f.PriceType = &priceType
 	return f
 }
 
