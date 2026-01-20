@@ -52,12 +52,6 @@ type PlanService interface {
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error
 	SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
-
-	// SyncSubscriptionWithPlanPrices synchronizes a single subscription with plan prices
-	// NOTE: This method is primarily intended for internal use and testing.
-	// For API handlers, use SyncPlanPrices instead which provides comprehensive
-	// synchronization across all subscriptions for a plan.
-	SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyncParams) *dto.SubscriptionSyncResult
 }
 
 type EntityIntegrationMappingService interface {

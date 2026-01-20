@@ -6,12 +6,14 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type PlanService = interfaces.PlanService
@@ -334,179 +336,7 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error) {
-	if id == "" {
-		return nil, ierr.NewError("plan ID is required").
-			WithHint("Plan ID is required").
-			Mark(ierr.ErrValidation)
-	}
-
-	// Get the plan to be synced
-	plan, err := s.PlanRepo.Get(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	s.Logger.Infow("Found plan", "plan_id", id, "plan_name", plan.Name)
-
-	// Get all plan-scoped prices including expired ones
-	priceService := NewPriceService(s.ServiceParams)
-	priceFilter := types.NewNoLimitPriceFilter().
-		WithEntityIDs([]string{id}).
-		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
-		WithStatus(types.StatusPublished).
-		WithAllowExpiredPrices(true)
-
-	pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list prices for plan").
-			Mark(ierr.ErrDatabase)
-	}
-
-	// Create price map for quick lookups
-	planPriceMap := make(map[string]*domainPrice.Price)
-	for _, priceResp := range pricesResponse.Items {
-		// skip the fixed fee prices
-		if priceResp.Price.Type == types.PRICE_TYPE_FIXED {
-			continue
-		}
-
-		planPriceMap[priceResp.ID] = priceResp.Price
-	}
-
-	// Set up filter for subscriptions
-	subscriptionFilter := &types.SubscriptionFilter{}
-	subscriptionFilter.PlanID = id
-	subscriptionFilter.SubscriptionStatus = []types.SubscriptionStatus{
-		types.SubscriptionStatusActive,
-		types.SubscriptionStatusTrialing,
-	}
-
-	// Get all active subscriptions for this plan
-	subs, err := s.SubRepo.ListAll(ctx, subscriptionFilter)
-	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to list subscriptions").
-			Mark(ierr.ErrDatabase)
-	}
-
-	s.Logger.Infow("Found active subscriptions using plan", "plan_id", id, "subscription_count", len(subs))
-
-	totalAdded := 0
-	totalUpdated := 0
-	totalSkipped := 0
-	totalFailed := 0
-	totalPricesProcessed := 0
-	totalSkippedAlreadyTerminated := 0
-	totalSkippedOverridden := 0
-	totalSkippedIncompatible := 0
-
-	// Iterate through each subscription
-	for _, sub := range subs {
-		// Get line items for the subscription
-		lineItems, err := s.SubscriptionLineItemRepo.ListBySubscription(ctx, sub)
-		if err != nil {
-			s.Logger.Infow("Failed to get line items for subscription", "subscription_id", sub.ID, "error", err)
-			continue
-		}
-
-		// Get subscription-specific prices (overrides)
-		subPriceFilter := types.NewNoLimitPriceFilter().
-			WithEntityIDs([]string{sub.ID}).
-			WithAllowExpiredPrices(true).
-			WithEntityType(types.PRICE_ENTITY_TYPE_SUBSCRIPTION)
-
-		subPricesResponse, err := priceService.GetPrices(ctx, subPriceFilter)
-		if err != nil {
-			s.Logger.Infow("Failed to get subscription prices", "subscription_id", sub.ID, "error", err)
-			continue
-		}
-
-		// Create subscription price map for quick lookup
-		subPriceMap := make(map[string]*dto.PriceResponse)
-		for _, priceResp := range subPricesResponse.Items {
-			subPriceMap[priceResp.ID] = priceResp
-		}
-
-		// Sync this subscription with plan prices
-		syncParams := &dto.SubscriptionSyncParams{
-			Context:              ctx,
-			Subscription:         sub,
-			PlanPriceMap:         planPriceMap,
-			LineItems:            lineItems,
-			SubscriptionPriceMap: subPriceMap,
-		}
-
-		syncResult := s.SyncSubscriptionWithPlanPrices(syncParams)
-
-		// Log results for this subscription
-		s.Logger.Infow("Line item sync completed",
-			"subscription_id", sub.ID,
-			"line_items_created", syncResult.LineItemsCreated,
-			"line_items_terminated", syncResult.LineItemsTerminated,
-			"line_items_skipped_already_terminated", syncResult.LineItemsSkippedAlreadyTerminated,
-			"line_items_skipped_overridden", syncResult.LineItemsSkippedOverridden,
-			"line_items_skipped_incompatible", syncResult.LineItemsSkippedIncompatible,
-			"line_items_failed", syncResult.LineItemsFailed)
-
-		// Aggregate statistics
-		totalAdded += syncResult.LineItemsCreated
-		totalUpdated += syncResult.LineItemsTerminated
-		totalSkipped += syncResult.LineItemsSkippedAlreadyTerminated +
-			syncResult.LineItemsSkippedOverridden +
-			syncResult.LineItemsSkippedIncompatible
-		totalFailed += syncResult.LineItemsFailed
-		totalPricesProcessed += syncResult.PricesProcessed
-
-		// Aggregate detailed skip counters
-		totalSkippedAlreadyTerminated += syncResult.LineItemsSkippedAlreadyTerminated
-		totalSkippedOverridden += syncResult.LineItemsSkippedOverridden
-		totalSkippedIncompatible += syncResult.LineItemsSkippedIncompatible
-	}
-
-	// Count active and expired prices
-	activePrices := 0
-	expiredPrices := 0
-	for _, planPrice := range planPriceMap {
-		if planPrice.EndDate == nil {
-			activePrices++
-		} else {
-			expiredPrices++
-		}
-	}
-
-	response := &dto.SyncPlanPricesResponse{
-		Message:  "Plan prices synchronized to subscription line items successfully",
-		PlanID:   id,
-		PlanName: plan.Name,
-		SynchronizationSummary: dto.SynchronizationSummary{
-			SubscriptionsProcessed:   len(subs),
-			PricesProcessed:          totalPricesProcessed,
-			LineItemsCreated:         totalAdded,
-			LineItemsTerminated:      totalUpdated,
-			LineItemsSkipped:         totalSkipped,
-			LineItemsFailed:          totalFailed,
-			SkippedAlreadyTerminated: totalSkippedAlreadyTerminated,
-			SkippedOverridden:        totalSkippedOverridden,
-			SkippedIncompatible:      totalSkippedIncompatible,
-			TotalPrices:              len(planPriceMap),
-			ActivePrices:             activePrices,
-			ExpiredPrices:            expiredPrices,
-		},
-	}
-
-	s.Logger.Infow("Plan sync completed",
-		"total_prices_processed", totalPricesProcessed,
-		"total_line_items_created", totalAdded,
-		"total_line_items_terminated", totalUpdated,
-		"total_line_items_skipped", totalSkipped,
-		"total_line_items_failed", totalFailed)
-
-	return response, nil
-}
-
-// SyncSubscriptionWithPlanPrices synchronizes a single subscription with plan prices
+// SyncPlanPrices synchronizes a single subscription with plan prices
 //
 // SyncPlanPrices - Enhanced Line Item Synchronization Logic (v3.0)
 //
@@ -548,110 +378,143 @@ func (s *planService) SyncPlanPrices(ctx context.Context, id string) (*dto.SyncP
 // The sync ensures subscriptions accurately reflect the current state of plan prices
 // while maintaining proper billing continuity and respecting all price overrides.
 // Time complexity: O(n) where n is the number of plan prices.
-func (s *planService) SyncSubscriptionWithPlanPrices(params *dto.SubscriptionSyncParams) *dto.SubscriptionSyncResult {
-	// Initialize subscription service inside the method to avoid import cycle
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
+func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
 
-	// Build line item lookup maps for efficient price handling
-	// directPriceToLineItemMap: Maps exact price IDs to line items (for direct lookups)
-	// rootPriceToLineItemMap: Maps root price IDs to line items (for override detection)
-	directPriceToLineItemMap := make(map[string]*subscription.SubscriptionLineItem) // exactPriceID -> lineItem
-	rootPriceToLineItemMap := make(map[string]*subscription.SubscriptionLineItem)   // rootPriceID -> lineItem
+	lineItemsFoundForCreation := 0
+	lineItemsCreated := 0
+	lineItemsTerminated := 0
 
-	for _, item := range params.LineItems {
-		// Skip if line item is not active or is not a plan line item
-		if item.EntityType != types.SubscriptionLineItemEntityTypePlan {
-			continue
+	plan, err := s.PlanRepo.Get(ctx, planID)
+	if err != nil {
+		return nil, err
+	}
+
+	planPriceSyncParams := planpricesync.TerminateExpiredPlanPricesLineItemsParams{
+		PlanID: planID,
+		Limit:  1000,
+	}
+
+	// terminate expired plan prices line items
+	for {
+		numTerminated, err := s.PlanPriceSyncRepo.TerminateExpiredPlanPricesLineItems(ctx, planPriceSyncParams)
+		if err != nil {
+			return nil, err
+		}
+		// If no more line items to terminate (or fewer than limit), break the loop
+		if numTerminated == 0 {
+			break
+		}
+		lineItemsTerminated += numTerminated
+	}
+
+	// create new plan prices line items
+	reqParams := planpricesync.ListPlanLineItemsToCreateParams{
+		PlanID: planID,
+		Limit:  1000,
+	}
+
+	for {
+		lineItemDataForCreation, err := s.PlanPriceSyncRepo.ListPlanLineItemsToCreate(ctx, reqParams)
+		if err != nil {
+			return nil, err
 		}
 
-		// Map the actual price ID of the line item for direct lookups
-		directPriceToLineItemMap[item.PriceID] = item
+		if len(lineItemDataForCreation) == 0 {
+			break
+		}
 
-		// Map the root price ID to the same line item for override detection
-		// ParentPriceID is always the root price ID
-		if subPrice, exists := params.SubscriptionPriceMap[item.PriceID]; exists {
-			rootPriceID := subPrice.GetRootPriceID()
-			rootPriceToLineItemMap[rootPriceID] = item
+		lineItemsFoundForCreation += len(lineItemDataForCreation)
+
+		// Collect IDs for bulk fetching
+		priceIds := lo.Uniq(lo.Map(lineItemDataForCreation, func(item planpricesync.PlanLineItemCreationDelta, _ int) string {
+			return item.PriceID
+		}))
+
+		subIds := lo.Uniq(lo.Map(lineItemDataForCreation, func(item planpricesync.PlanLineItemCreationDelta, _ int) string {
+			return item.SubscriptionID
+		}))
+
+		priceFilter := types.NewNoLimitPriceFilter().
+			WithPriceIDs(priceIds).
+			WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+			WithAllowExpiredPrices(true)
+
+		prices, err := s.PriceRepo.List(ctx, priceFilter)
+		if err != nil {
+			return nil, err
+		}
+		priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
+
+		subFilter := types.NewNoLimitSubscriptionFilter()
+		subFilter.SubscriptionIDs = subIds
+		subs, err := s.SubRepo.List(ctx, subFilter)
+		if err != nil {
+			return nil, err
+		}
+		subMap := lo.KeyBy(subs, func(s *subscription.Subscription) string { return s.ID })
+
+		var lineItemsToCreate []*subscription.SubscriptionLineItem
+		for _, delta := range lineItemDataForCreation {
+			price, priceFound := priceMap[delta.PriceID]
+			sub, subFound := subMap[delta.SubscriptionID]
+
+			if !priceFound || !subFound {
+				// Ideally this should never happen
+				return nil, ierr.NewError("price or subscription not found to create plan line item").
+					WithHint("Price or subscription not found to create plan line item").
+					WithReportableDetails(map[string]interface{}{
+						"price_id":        delta.PriceID,
+						"subscription_id": delta.SubscriptionID,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+
+			lineItem := createPlanLineItem(ctx, sub, price, plan)
+			lineItemsToCreate = append(lineItemsToCreate, lineItem)
+		}
+
+		if len(lineItemsToCreate) > 0 {
+			err = s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItemsToCreate)
+			if err != nil {
+				return nil, err
+			}
+			lineItemsCreated += len(lineItemDataForCreation)
 		}
 	}
 
-	// Initialize result counters
-	result := &dto.SubscriptionSyncResult{}
+	return &dto.SyncPlanPricesResponse{
+		PlanID:  planID,
+		Message: "Plan prices synchronized to subscription line items successfully",
+		Summary: dto.SyncPlanPricesSummary{
+			LineItemsFoundForCreation: lineItemsFoundForCreation,
+			LineItemsCreated:          lineItemsCreated,
+			LineItemsTerminated:       lineItemsTerminated,
+		},
+	}, nil
+}
 
-	// Process each plan price
-	for priceID, planPrice := range params.PlanPriceMap {
-		result.PricesProcessed++
+func createPlanLineItem(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	price *domainPrice.Price,
+	plan *plan.Plan,
+) *subscription.SubscriptionLineItem {
 
-		// Skip if price currency/billing period doesn't match subscription
-		if !planPrice.IsEligibleForSubscription(params.Subscription.Currency, params.Subscription.BillingPeriod, params.Subscription.BillingPeriodCount) {
-			result.LineItemsSkippedIncompatible++
-			continue
-		}
-
-		// Check if this plan price has been overridden
-		originalPlanPriceID := planPrice.GetRootPriceID()
-		hasOverride := rootPriceToLineItemMap[originalPlanPriceID] != nil
-
-		// Handle existing line items for this exact price
-		lineItem, hasExistingLineItem := directPriceToLineItemMap[priceID]
-		if hasExistingLineItem {
-
-			if planPrice.EndDate == nil || !lineItem.EndDate.IsZero() {
-				// Line item exists but doesn't need termination:
-				// - Price is still active (EndDate == nil), OR
-				// - Line item is already terminated (!lineItem.EndDate.IsZero())
-				result.LineItemsSkippedAlreadyTerminated++
-				continue
-			}
-
-			// Line item exists and needs termination
-			deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: planPrice.EndDate}
-			if _, err := subscriptionService.DeleteSubscriptionLineItem(params.Context, lineItem.ID, deleteReq); err != nil {
-				s.Logger.Errorw("Failed to terminate line item",
-					"subscription_id", params.Subscription.ID,
-					"line_item_id", lineItem.ID,
-					"error", err)
-				result.LineItemsFailed++
-				continue
-			}
-			result.LineItemsTerminated++
-			continue
-		}
-
-		// Handle new line item creation for prices without existing line items
-		if planPrice.EndDate != nil {
-			// Price expired but no line item exists - nothing to do
-			result.LineItemsSkippedAlreadyTerminated++
-			continue
-		}
-
-		if hasOverride {
-			// Price is overridden - skip creation
-			result.LineItemsSkippedOverridden++
-			continue
-		}
-
-		// Create new line item for active price
-		createReq := dto.CreateSubscriptionLineItemRequest{
-			PriceID:   planPrice.ID,
-			StartDate: planPrice.StartDate,
-			Metadata: map[string]string{
-				"added_by":     "plan_sync_api",
-				"sync_version": "3.0",
-			},
-			Quantity: planPrice.GetDefaultQuantity(),
-		}
-
-		if _, err := subscriptionService.AddSubscriptionLineItem(params.Context, params.Subscription.ID, createReq); err != nil {
-			s.Logger.Errorw("Failed to create line item",
-				"subscription_id", params.Subscription.ID,
-				"price_id", priceID,
-				"error", err)
-			result.LineItemsFailed++
-			continue
-		}
-		result.LineItemsCreated++
+	req := dto.CreateSubscriptionLineItemRequest{
+		PriceID:     price.ID,
+		Quantity:    decimal.Zero,
+		Metadata:    price.Metadata,
+		DisplayName: price.DisplayName,
 	}
 
-	return result
+	lineItemParams := dto.LineItemParams{
+		Subscription: &dto.SubscriptionResponse{Subscription: sub},
+		Price:        &dto.PriceResponse{Price: price},
+		Plan:         &dto.PlanResponse{Plan: plan},
+		EntityType:   types.SubscriptionLineItemEntityTypePlan,
+	}
+
+	lineItem := req.ToSubscriptionLineItem(ctx, lineItemParams)
+
+	return lineItem
 }

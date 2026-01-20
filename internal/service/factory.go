@@ -25,6 +25,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/payment"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	"github.com/flexprice/flexprice/internal/domain/proration"
@@ -104,6 +105,7 @@ type ServiceParams struct {
 	AlertLogsRepo                alertlogs.Repository
 	GroupRepo                    group.Repository
 	ScheduledTaskRepo            scheduledtask.Repository
+	PlanPriceSyncRepo            planpricesync.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -180,6 +182,7 @@ func NewServiceParams(
 	integrationFactory *integration.Factory,
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
 	webhookPubSub pubsub.PubSub,
+	planPriceSyncRepo planpricesync.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -237,5 +240,6 @@ func NewServiceParams(
 		IntegrationFactory:           integrationFactory,
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		WebhookPubSub:                webhookPubSub,
+		PlanPriceSyncRepo:            planPriceSyncRepo,
 	}
 }

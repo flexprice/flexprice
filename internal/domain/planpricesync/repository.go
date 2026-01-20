@@ -29,12 +29,26 @@ type ListPlanLineItemsToCreateParams struct {
 	Limit  int
 }
 
+type TerminateExpiredPlanPricesLineItemsParams struct {
+	PlanID string
+	Limit  int
+}
+
 // Repository defines the interface for plan price sync delta queries.
 //
 // This repo is intentionally scoped to two canonical DB-driven queries:
 // 1) plan-derived line items whose end_date must be set to price.end_date
 // 2) missing (subscription_id, price_id) pairs where a plan-derived line item must be created
 type Repository interface {
+	// TerminateExpiredPlanPricesLineItems terminates plan-derived line items whose end_date must be set to price.end_date.
+	//
+	// Batch:
+	// - If limit <= 0, an implementation-defined default is used.
+	TerminateExpiredPlanPricesLineItems(
+		ctx context.Context,
+		p TerminateExpiredPlanPricesLineItemsParams,
+	) (numTerminated int, err error)
+
 	// ListPlanLineItemsToTerminate returns plan-derived line items whose end_date must be set to price.end_date.
 	//
 	// Batch:
