@@ -136,3 +136,7 @@ server
 # custom local files
 lambdas/*
 
+
+# gocache
+.gocache/
+.gomodcache/
