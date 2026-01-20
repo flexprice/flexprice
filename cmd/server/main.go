@@ -133,6 +133,7 @@ func main() {
 			repository.NewPriceRepository,
 			repository.NewCustomerRepository,
 			repository.NewPlanRepository,
+			repository.NewPlanPriceSyncRepository,
 			repository.NewSubscriptionRepository,
 			repository.NewWalletRepository,
 			repository.NewTenantRepository,
