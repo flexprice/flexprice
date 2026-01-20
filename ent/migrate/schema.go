@@ -1306,6 +1306,8 @@ var (
 		{Name: "lookup_key", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "name", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "invoice_cadence", Type: field.TypeString, Default: "ADVANCE", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "trial_period", Type: field.TypeInt, Default: 0},
 		{Name: "display_order", Type: field.TypeInt, Default: 0},
 	}
 	// PlansTable holds the schema information for the "plans" table.

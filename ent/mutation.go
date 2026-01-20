@@ -36006,6 +36006,9 @@ type PlanMutation struct {
 	lookup_key           *string
 	name                 *string
 	description          *string
+	invoice_cadence      *types.InvoiceCadence
+	trial_period         *int
+	addtrial_period      *int
 	display_order        *int
 	adddisplay_order     *int
 	clearedFields        map[string]struct{}
@@ -36595,6 +36598,98 @@ func (m *PlanMutation) ResetDescription() {
 	delete(m.clearedFields, plan.FieldDescription)
 }
 
+// SetInvoiceCadence sets the "invoice_cadence" field.
+func (m *PlanMutation) SetInvoiceCadence(tc types.InvoiceCadence) {
+	m.invoice_cadence = &tc
+}
+
+// InvoiceCadence returns the value of the "invoice_cadence" field in the mutation.
+func (m *PlanMutation) InvoiceCadence() (r types.InvoiceCadence, exists bool) {
+	v := m.invoice_cadence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceCadence returns the old "invoice_cadence" field's value of the Plan entity.
+// If the Plan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PlanMutation) OldInvoiceCadence(ctx context.Context) (v types.InvoiceCadence, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceCadence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceCadence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceCadence: %w", err)
+	}
+	return oldValue.InvoiceCadence, nil
+}
+
+// ResetInvoiceCadence resets all changes to the "invoice_cadence" field.
+func (m *PlanMutation) ResetInvoiceCadence() {
+	m.invoice_cadence = nil
+}
+
+// SetTrialPeriod sets the "trial_period" field.
+func (m *PlanMutation) SetTrialPeriod(i int) {
+	m.trial_period = &i
+	m.addtrial_period = nil
+}
+
+// TrialPeriod returns the value of the "trial_period" field in the mutation.
+func (m *PlanMutation) TrialPeriod() (r int, exists bool) {
+	v := m.trial_period
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTrialPeriod returns the old "trial_period" field's value of the Plan entity.
+// If the Plan object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PlanMutation) OldTrialPeriod(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTrialPeriod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTrialPeriod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTrialPeriod: %w", err)
+	}
+	return oldValue.TrialPeriod, nil
+}
+
+// AddTrialPeriod adds i to the "trial_period" field.
+func (m *PlanMutation) AddTrialPeriod(i int) {
+	if m.addtrial_period != nil {
+		*m.addtrial_period += i
+	} else {
+		m.addtrial_period = &i
+	}
+}
+
+// AddedTrialPeriod returns the value that was added to the "trial_period" field in this mutation.
+func (m *PlanMutation) AddedTrialPeriod() (r int, exists bool) {
+	v := m.addtrial_period
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTrialPeriod resets all changes to the "trial_period" field.
+func (m *PlanMutation) ResetTrialPeriod() {
+	m.trial_period = nil
+	m.addtrial_period = nil
+}
+
 // SetDisplayOrder sets the "display_order" field.
 func (m *PlanMutation) SetDisplayOrder(i int) {
 	m.display_order = &i
@@ -36739,7 +36834,7 @@ func (m *PlanMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PlanMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 14)
 	if m.tenant_id != nil {
 		fields = append(fields, plan.FieldTenantID)
 	}
@@ -36772,6 +36867,12 @@ func (m *PlanMutation) Fields() []string {
 	}
 	if m.description != nil {
 		fields = append(fields, plan.FieldDescription)
+	}
+	if m.invoice_cadence != nil {
+		fields = append(fields, plan.FieldInvoiceCadence)
+	}
+	if m.trial_period != nil {
+		fields = append(fields, plan.FieldTrialPeriod)
 	}
 	if m.display_order != nil {
 		fields = append(fields, plan.FieldDisplayOrder)
@@ -36806,6 +36907,10 @@ func (m *PlanMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case plan.FieldDescription:
 		return m.Description()
+	case plan.FieldInvoiceCadence:
+		return m.InvoiceCadence()
+	case plan.FieldTrialPeriod:
+		return m.TrialPeriod()
 	case plan.FieldDisplayOrder:
 		return m.DisplayOrder()
 	}
@@ -36839,6 +36944,10 @@ func (m *PlanMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldName(ctx)
 	case plan.FieldDescription:
 		return m.OldDescription(ctx)
+	case plan.FieldInvoiceCadence:
+		return m.OldInvoiceCadence(ctx)
+	case plan.FieldTrialPeriod:
+		return m.OldTrialPeriod(ctx)
 	case plan.FieldDisplayOrder:
 		return m.OldDisplayOrder(ctx)
 	}
@@ -36927,6 +37036,20 @@ func (m *PlanMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetDescription(v)
 		return nil
+	case plan.FieldInvoiceCadence:
+		v, ok := value.(types.InvoiceCadence)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceCadence(v)
+		return nil
+	case plan.FieldTrialPeriod:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTrialPeriod(v)
+		return nil
 	case plan.FieldDisplayOrder:
 		v, ok := value.(int)
 		if !ok {
@@ -36942,6 +37065,9 @@ func (m *PlanMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *PlanMutation) AddedFields() []string {
 	var fields []string
+	if m.addtrial_period != nil {
+		fields = append(fields, plan.FieldTrialPeriod)
+	}
 	if m.adddisplay_order != nil {
 		fields = append(fields, plan.FieldDisplayOrder)
 	}
@@ -36953,6 +37079,8 @@ func (m *PlanMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *PlanMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case plan.FieldTrialPeriod:
+		return m.AddedTrialPeriod()
 	case plan.FieldDisplayOrder:
 		return m.AddedDisplayOrder()
 	}
@@ -36964,6 +37092,13 @@ func (m *PlanMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *PlanMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case plan.FieldTrialPeriod:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTrialPeriod(v)
+		return nil
 	case plan.FieldDisplayOrder:
 		v, ok := value.(int)
 		if !ok {
@@ -37069,6 +37204,12 @@ func (m *PlanMutation) ResetField(name string) error {
 		return nil
 	case plan.FieldDescription:
 		m.ResetDescription()
+		return nil
+	case plan.FieldInvoiceCadence:
+		m.ResetInvoiceCadence()
+		return nil
+	case plan.FieldTrialPeriod:
+		m.ResetTrialPeriod()
 		return nil
 	case plan.FieldDisplayOrder:
 		m.ResetDisplayOrder()

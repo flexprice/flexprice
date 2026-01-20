@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // ID filters vertices based on their ID field.
@@ -113,6 +114,17 @@ func Name(v string) predicate.Plan {
 // Description applies equality check predicate on the "description" field. It's identical to DescriptionEQ.
 func Description(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldEQ(FieldDescription, v))
+}
+
+// InvoiceCadence applies equality check predicate on the "invoice_cadence" field. It's identical to InvoiceCadenceEQ.
+func InvoiceCadence(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldEQ(FieldInvoiceCadence, vc))
+}
+
+// TrialPeriod applies equality check predicate on the "trial_period" field. It's identical to TrialPeriodEQ.
+func TrialPeriod(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldEQ(FieldTrialPeriod, v))
 }
 
 // DisplayOrder applies equality check predicate on the "display_order" field. It's identical to DisplayOrderEQ.
@@ -778,6 +790,130 @@ func DescriptionEqualFold(v string) predicate.Plan {
 // DescriptionContainsFold applies the ContainsFold predicate on the "description" field.
 func DescriptionContainsFold(v string) predicate.Plan {
 	return predicate.Plan(sql.FieldContainsFold(FieldDescription, v))
+}
+
+// InvoiceCadenceEQ applies the EQ predicate on the "invoice_cadence" field.
+func InvoiceCadenceEQ(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldEQ(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceNEQ applies the NEQ predicate on the "invoice_cadence" field.
+func InvoiceCadenceNEQ(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldNEQ(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceIn applies the In predicate on the "invoice_cadence" field.
+func InvoiceCadenceIn(vs ...types.InvoiceCadence) predicate.Plan {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Plan(sql.FieldIn(FieldInvoiceCadence, v...))
+}
+
+// InvoiceCadenceNotIn applies the NotIn predicate on the "invoice_cadence" field.
+func InvoiceCadenceNotIn(vs ...types.InvoiceCadence) predicate.Plan {
+	v := make([]any, len(vs))
+	for i := range v {
+		v[i] = string(vs[i])
+	}
+	return predicate.Plan(sql.FieldNotIn(FieldInvoiceCadence, v...))
+}
+
+// InvoiceCadenceGT applies the GT predicate on the "invoice_cadence" field.
+func InvoiceCadenceGT(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldGT(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceGTE applies the GTE predicate on the "invoice_cadence" field.
+func InvoiceCadenceGTE(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldGTE(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceLT applies the LT predicate on the "invoice_cadence" field.
+func InvoiceCadenceLT(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldLT(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceLTE applies the LTE predicate on the "invoice_cadence" field.
+func InvoiceCadenceLTE(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldLTE(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceContains applies the Contains predicate on the "invoice_cadence" field.
+func InvoiceCadenceContains(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldContains(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceHasPrefix applies the HasPrefix predicate on the "invoice_cadence" field.
+func InvoiceCadenceHasPrefix(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldHasPrefix(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceHasSuffix applies the HasSuffix predicate on the "invoice_cadence" field.
+func InvoiceCadenceHasSuffix(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldHasSuffix(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceEqualFold applies the EqualFold predicate on the "invoice_cadence" field.
+func InvoiceCadenceEqualFold(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldEqualFold(FieldInvoiceCadence, vc))
+}
+
+// InvoiceCadenceContainsFold applies the ContainsFold predicate on the "invoice_cadence" field.
+func InvoiceCadenceContainsFold(v types.InvoiceCadence) predicate.Plan {
+	vc := string(v)
+	return predicate.Plan(sql.FieldContainsFold(FieldInvoiceCadence, vc))
+}
+
+// TrialPeriodEQ applies the EQ predicate on the "trial_period" field.
+func TrialPeriodEQ(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldEQ(FieldTrialPeriod, v))
+}
+
+// TrialPeriodNEQ applies the NEQ predicate on the "trial_period" field.
+func TrialPeriodNEQ(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldNEQ(FieldTrialPeriod, v))
+}
+
+// TrialPeriodIn applies the In predicate on the "trial_period" field.
+func TrialPeriodIn(vs ...int) predicate.Plan {
+	return predicate.Plan(sql.FieldIn(FieldTrialPeriod, vs...))
+}
+
+// TrialPeriodNotIn applies the NotIn predicate on the "trial_period" field.
+func TrialPeriodNotIn(vs ...int) predicate.Plan {
+	return predicate.Plan(sql.FieldNotIn(FieldTrialPeriod, vs...))
+}
+
+// TrialPeriodGT applies the GT predicate on the "trial_period" field.
+func TrialPeriodGT(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldGT(FieldTrialPeriod, v))
+}
+
+// TrialPeriodGTE applies the GTE predicate on the "trial_period" field.
+func TrialPeriodGTE(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldGTE(FieldTrialPeriod, v))
+}
+
+// TrialPeriodLT applies the LT predicate on the "trial_period" field.
+func TrialPeriodLT(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldLT(FieldTrialPeriod, v))
+}
+
+// TrialPeriodLTE applies the LTE predicate on the "trial_period" field.
+func TrialPeriodLTE(v int) predicate.Plan {
+	return predicate.Plan(sql.FieldLTE(FieldTrialPeriod, v))
 }
 
 // DisplayOrderEQ applies the EQ predicate on the "display_order" field.
