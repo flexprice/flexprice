@@ -16,6 +16,7 @@ const (
 	ConnectionMetadataTypeRazorpay  ConnectionMetadataType = "razorpay"
 	ConnectionMetadataTypeChargebee ConnectionMetadataType = "chargebee"
 	ConnectionMetadataTypeNomod     ConnectionMetadataType = "nomod"
+	ConnectionMetadataTypeMoyasar   ConnectionMetadataType = "moyasar"
 )
 
 func (t ConnectionMetadataType) Validate() error {
@@ -27,10 +28,11 @@ func (t ConnectionMetadataType) Validate() error {
 		ConnectionMetadataTypeRazorpay,
 		ConnectionMetadataTypeChargebee,
 		ConnectionMetadataTypeNomod,
+		ConnectionMetadataTypeMoyasar,
 	}
 	if !lo.Contains(allowedTypes, t) {
 		return ierr.NewError("invalid connection metadata type").
-			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot, razorpay, chargebee, nomod").
+			WithHint("Connection metadata type must be one of: stripe, generic, s3, hubspot, razorpay, chargebee, nomod, moyasar").
 			Mark(ierr.ErrValidation)
 	}
 	return nil
@@ -205,6 +207,24 @@ func (n *NomodConnectionMetadata) Validate() error {
 	return nil
 }
 
+// MoyasarConnectionMetadata represents Moyasar-specific connection metadata
+type MoyasarConnectionMetadata struct {
+	PublishableKey string `json:"publishable_key"` // Moyasar Publishable Key (encrypted, for frontend use)
+	SecretKey      string `json:"secret_key"`      // Moyasar Secret Key (encrypted)
+	WebhookSecret  string `json:"webhook_secret"`  // Moyasar Webhook Secret (encrypted, optional)
+}
+
+// Validate validates the Moyasar connection metadata
+func (m *MoyasarConnectionMetadata) Validate() error {
+	if m.SecretKey == "" {
+		return ierr.NewError("secret_key is required").
+			WithHint("Moyasar secret key is required").
+			Mark(ierr.ErrValidation)
+	}
+	// PublishableKey and WebhookSecret are optional
+	return nil
+}
+
 // ConnectionSettings represents general connection settings
 type ConnectionSettings struct {
 	InvoiceSyncEnable *bool `json:"invoice_sync_enable,omitempty"`
@@ -254,6 +274,7 @@ type ConnectionMetadata struct {
 	Chargebee  *ChargebeeConnectionMetadata  `json:"chargebee,omitempty"`
 	QuickBooks *QuickBooksConnectionMetadata `json:"quickbooks,omitempty"`
 	Nomod      *NomodConnectionMetadata      `json:"nomod,omitempty"`
+	Moyasar    *MoyasarConnectionMetadata    `json:"moyasar,omitempty"`
 	Generic    *GenericConnectionMetadata    `json:"generic,omitempty"`
 	Settings   *ConnectionSettings           `json:"settings,omitempty"`
 }
@@ -310,6 +331,13 @@ func (c *ConnectionMetadata) Validate(providerType SecretProvider) error {
 				Mark(ierr.ErrValidation)
 		}
 		return c.Nomod.Validate()
+	case SecretProviderMoyasar:
+		if c.Moyasar == nil {
+			return ierr.NewError("moyasar metadata is required").
+				WithHint("Moyasar metadata is required for moyasar provider").
+				Mark(ierr.ErrValidation)
+		}
+		return c.Moyasar.Validate()
 	default:
 		// For other providers or unknown types, use generic format
 		if c.Generic == nil {

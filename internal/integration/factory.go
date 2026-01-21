@@ -18,6 +18,8 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	"github.com/flexprice/flexprice/internal/integration/hubspot"
 	hubspotwebhook "github.com/flexprice/flexprice/internal/integration/hubspot/webhook"
+	"github.com/flexprice/flexprice/internal/integration/moyasar"
+	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
@@ -449,6 +451,54 @@ func (f *Factory) GetNomodIntegration(ctx context.Context) (*NomodIntegration, e
 	}, nil
 }
 
+// GetMoyasarIntegration returns a complete Moyasar integration setup
+func (f *Factory) GetMoyasarIntegration(ctx context.Context) (*MoyasarIntegration, error) {
+	// Create Moyasar client
+	moyasarClient := moyasar.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+	)
+
+	// Create customer service
+	customerSvc := moyasar.NewCustomerService(
+		moyasarClient,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	// Create invoice sync service
+	invoiceSyncSvc := moyasar.NewInvoiceSyncService(
+		moyasarClient,
+		customerSvc,
+		f.logger,
+	)
+
+	// Create payment service
+	paymentSvc := moyasar.NewPaymentService(
+		moyasarClient,
+		customerSvc,
+		invoiceSyncSvc,
+		f.logger,
+	)
+
+	// Create webhook handler
+	webhookHandler := moyasarwebhook.NewHandler(
+		moyasarClient,
+		paymentSvc,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &MoyasarIntegration{
+		Client:         moyasarClient,
+		CustomerSvc:    customerSvc,
+		PaymentSvc:     paymentSvc,
+		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
 // GetIntegrationByProvider returns the appropriate integration for the given provider type
 func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType types.SecretProvider) (interface{}, error) {
 	switch providerType {
@@ -464,6 +514,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetQuickBooksIntegration(ctx)
 	case types.SecretProviderNomod:
 		return f.GetNomodIntegration(ctx)
+	case types.SecretProviderMoyasar:
+		return f.GetMoyasarIntegration(ctx)
 	default:
 		return nil, ierr.NewError("unsupported integration provider").
 			WithHint("Provider type is not supported").
@@ -483,6 +535,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderChargebee,
 		types.SecretProviderQuickBooks,
 		types.SecretProviderNomod,
+		types.SecretProviderMoyasar,
 	}
 }
 
@@ -554,6 +607,15 @@ type NomodIntegration struct {
 	PaymentSvc     *nomod.PaymentService
 	InvoiceSyncSvc *nomod.InvoiceSyncService
 	WebhookHandler *nomodwebhook.Handler
+}
+
+// MoyasarIntegration contains all Moyasar integration services
+type MoyasarIntegration struct {
+	Client         moyasar.MoyasarClient
+	CustomerSvc    moyasar.MoyasarCustomerService
+	PaymentSvc     *moyasar.PaymentService
+	InvoiceSyncSvc *moyasar.InvoiceSyncService
+	WebhookHandler *moyasarwebhook.Handler
 }
 
 // IntegrationProvider defines the interface for all integration providers

@@ -36,6 +36,7 @@ const (
 	SecretProviderChargebee  SecretProvider = "chargebee"
 	SecretProviderQuickBooks SecretProvider = "quickbooks"
 	SecretProviderNomod      SecretProvider = "nomod"
+	SecretProviderMoyasar    SecretProvider = "moyasar"
 )
 
 func (p SecretProvider) Validate() error {
@@ -48,6 +49,7 @@ func (p SecretProvider) Validate() error {
 		SecretProviderChargebee,
 		SecretProviderQuickBooks,
 		SecretProviderNomod,
+		SecretProviderMoyasar,
 	}
 	if !lo.Contains(allowedSecretProviders, p) {
 		return ierr.NewError("invalid secret provider").
