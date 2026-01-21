@@ -64,11 +64,6 @@ var commands = []Command{
 		Run:         internal.ImportPricing,
 	},
 	{
-		Name:        "sync-plan-prices",
-		Description: "Synchronize plan prices to all active subscriptions",
-		Run:         internal.SyncPlanPrices,
-	},
-	{
 		Name:        "reprocess-events",
 		Description: "Reprocess events",
 		Run:         internal.ReprocessEventsFromEnv,
@@ -122,6 +117,11 @@ var commands = []Command{
 		Name:        "migrate-cga",
 		Description: "Migrate existing Credit Grant Applications to new structure (ensure environment_id is set)",
 		Run:         internal.MigrateCGA,
+	},
+	{
+		Name:        "create-load-test-data",
+		Description: "Create load test data (100k subs, 800 prices)",
+		Run:         internal.CreateLoadTestData,
 	},
 }
 

@@ -389,9 +389,9 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 			p.id AS missing_price_id
 		FROM
 			subs s
-			JOIN plan_prices p ON p.currency = s.currency
-			AND p.billing_period = s.billing_period
-			AND p.billing_period_count = s.billing_period_count
+			JOIN plan_prices p ON lower(p.currency) = s.currency
+				AND p.billing_period = s.billing_period
+				AND p.billing_period_count = s.billing_period_count
 		WHERE
 			-- ever-overridden
 			NOT EXISTS (
