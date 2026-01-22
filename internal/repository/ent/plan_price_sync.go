@@ -143,6 +143,10 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 		userID, // updated_by
 	)
 	if qerr != nil {
+		r.log.Errorw("failed to execute termination query for plan line items",
+			"plan_id", planID,
+			"limit", limit,
+			"error", qerr)
 		SetSpanError(span, qerr)
 		return 0, ierr.WithError(qerr).
 			WithHint("Failed to terminate plan line items").
@@ -157,6 +161,10 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 	if err != nil {
 		// Just log warining or ignore, but strictly we can return error or count as 0 with error
 		// For now let's treat it as DB error but it depends on driver
+		r.log.Errorw("failed to get rows affected for terminated line items",
+			"plan_id", planID,
+			"limit", limit,
+			"error", err)
 		SetSpanError(span, err)
 		return 0, ierr.
 			WithError(err).
@@ -167,6 +175,12 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
+	if rowsAffected > 0 {
+		r.log.Infow("terminated expired plan price line items",
+			"plan_id", planID,
+			"count", int(rowsAffected),
+			"limit", limit)
+	}
 	return int(rowsAffected), nil
 }
 
@@ -253,8 +267,6 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 			AND li.status = '%s'
 			AND li.entity_type = '%s'
 			AND li.end_date IS NULL
-		ORDER BY
-			li.id
 		LIMIT
 			$4
 	`,
@@ -278,6 +290,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 			limit,
 		)
 	if qerr != nil {
+		r.log.Errorw("failed to query plan line items to terminate",
+			"plan_id", planID,
+			"limit", limit,
+			"error", qerr)
 		SetSpanError(span, qerr)
 		return nil, ierr.WithError(qerr).
 			WithHint("Failed to list plan line items to terminate").
@@ -292,6 +308,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 	for rows.Next() {
 		var d planpricesync.PlanLineItemTerminationDelta
 		if scanErr := rows.Scan(&d.LineItemID, &d.SubscriptionID, &d.PriceID, &d.TargetEndDate); scanErr != nil {
+			r.log.Errorw("failed to scan termination delta row",
+				"plan_id", planID,
+				"limit", limit,
+				"error", scanErr)
 			SetSpanError(span, scanErr)
 			return nil, ierr.WithError(scanErr).
 				WithHint("Failed to scan termination delta row").
@@ -300,12 +320,22 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 		items = append(items, d)
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
+		r.log.Errorw("failed to iterate termination delta rows",
+			"plan_id", planID,
+			"limit", limit,
+			"error", rowsErr)
 		SetSpanError(span, rowsErr)
 		return nil, ierr.WithError(rowsErr).
 			WithHint("Failed to iterate termination delta rows").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
+	if len(items) > 0 {
+		r.log.Debugw("listed plan line items to terminate",
+			"plan_id", planID,
+			"count", len(items),
+			"limit", limit)
+	}
 	return items, nil
 }
 
@@ -389,7 +419,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 			p.id AS missing_price_id
 		FROM
 			subs s
-			JOIN plan_prices p ON lower(p.currency) = s.currency
+			JOIN plan_prices p ON lower(p.currency) = lower(s.currency)
 				AND p.billing_period = s.billing_period
 				AND p.billing_period_count = s.billing_period_count
 		WHERE
@@ -421,9 +451,6 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					AND li.price_id = p.id
 					AND li.entity_type = '%s'
 			)
-		ORDER BY
-			s.id,
-			p.id
 		LIMIT
 			$4
 		`,
@@ -448,6 +475,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 		limit,
 	)
 	if qerr != nil {
+		r.log.Errorw("failed to query plan line items to create",
+			"plan_id", planID,
+			"limit", limit,
+			"error", qerr)
 		SetSpanError(span, qerr)
 		return nil, ierr.WithError(qerr).
 			WithHint("Failed to list plan line items to create").
@@ -462,6 +493,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 	for rows.Next() {
 		var subID, priceID string
 		if scanErr := rows.Scan(&subID, &priceID); scanErr != nil {
+			r.log.Errorw("failed to scan creation delta row",
+				"plan_id", planID,
+				"limit", limit,
+				"error", scanErr)
 			SetSpanError(span, scanErr)
 			return nil, ierr.WithError(scanErr).
 				WithHint("Failed to scan creation delta row").
@@ -473,11 +508,21 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 		})
 	}
 	if rowsErr := rows.Err(); rowsErr != nil {
+		r.log.Errorw("failed to iterate creation delta rows",
+			"plan_id", planID,
+			"limit", limit,
+			"error", rowsErr)
 		SetSpanError(span, rowsErr)
 		return nil, ierr.WithError(rowsErr).
 			WithHint("Failed to iterate creation delta rows").
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
+	if len(items) > 0 {
+		r.log.Debugw("listed plan line items to create",
+			"plan_id", planID,
+			"count", len(items),
+			"limit", limit)
+	}
 	return items, nil
 }
