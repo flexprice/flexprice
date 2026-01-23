@@ -413,7 +413,6 @@ func (s *onboardingService) OnboardNewUserWithTenant(ctx context.Context, userID
 	// Create default environments (development, production, sandbox)
 	envTypes := []types.EnvironmentType{
 		types.EnvironmentDevelopment,
-		types.EnvironmentProduction,
 	}
 
 	for _, envType := range envTypes {
