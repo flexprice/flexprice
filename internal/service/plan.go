@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/plan"
@@ -14,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
+	"go.temporal.io/sdk/activity"
 )
 
 type PlanService = interfaces.PlanService
@@ -379,6 +381,8 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 // while maintaining proper billing continuity and respecting all price overrides.
 // Time complexity: O(n) where n is the number of plan prices.
 func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
+	logger := activity.GetLogger(ctx)
+	syncStartTime := time.Now()
 
 	lineItemsFoundForCreation := 0
 	lineItemsCreated := 0
@@ -386,6 +390,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
+		logger.Error("failed to get plan for price synchronization", "plan_id", planID, "error", err)
 		return nil, err
 	}
 
@@ -394,77 +399,98 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		Limit:  1000,
 	}
 
-	// terminate expired plan prices line items
+	terminationStartTime := time.Now()
+	terminationIteration := 0
 	for {
+		terminationIteration++
 		numTerminated, err := s.PlanPriceSyncRepo.TerminateExpiredPlanPricesLineItems(ctx, planPriceSyncParams)
 		if err != nil {
+			logger.Error("failed to terminate expired plan price line items", "plan_id", planID, "error", err)
 			return nil, err
-		}
-		// If no more line items to terminate (or fewer than limit), break the loop
-		if numTerminated == 0 {
-			break
 		}
 		lineItemsTerminated += numTerminated
+		if numTerminated == 0 || numTerminated < planPriceSyncParams.Limit {
+			break
+		}
 	}
+	terminationTotalDuration := time.Since(terminationStartTime)
 
-	// create new plan prices line items
-	reqParams := planpricesync.ListPlanLineItemsToCreateParams{
-		PlanID: planID,
-		Limit:  1000,
-	}
+	creationStartTime := time.Now()
+	cursorSubID := ""
 
+	creationIteration := 0
 	for {
-		lineItemDataForCreation, err := s.PlanPriceSyncRepo.ListPlanLineItemsToCreate(ctx, reqParams)
+		creationIteration++
+
+		queryParams := planpricesync.ListPlanLineItemsToCreateParams{
+			PlanID:     planID,
+			Limit:      1000,
+			AfterSubID: cursorSubID,
+		}
+
+		missingPairs, err := s.PlanPriceSyncRepo.ListPlanLineItemsToCreate(ctx, queryParams)
 		if err != nil {
+			logger.Error("failed to list plan line items to create", "plan_id", planID, "error", err)
 			return nil, err
 		}
 
-		if len(lineItemDataForCreation) == 0 {
+		nextSubID, err := s.PlanPriceSyncRepo.GetLastSubscriptionIDInBatch(ctx, queryParams)
+		if err != nil {
+			logger.Error("failed to get last subscription ID in batch", "plan_id", planID, "error", err)
+			return nil, err
+		}
+
+		if len(missingPairs) == 0 && nextSubID == nil {
 			break
 		}
 
-		lineItemsFoundForCreation += len(lineItemDataForCreation)
+		if len(missingPairs) == 0 {
+			cursorSubID = *nextSubID
+			continue
+		}
 
-		// Collect IDs for bulk fetching
-		priceIds := lo.Uniq(lo.Map(lineItemDataForCreation, func(item planpricesync.PlanLineItemCreationDelta, _ int) string {
-			return item.PriceID
+		lineItemsFoundForCreation += len(missingPairs)
+
+		priceIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string {
+			return pair.PriceID
 		}))
 
-		subIds := lo.Uniq(lo.Map(lineItemDataForCreation, func(item planpricesync.PlanLineItemCreationDelta, _ int) string {
-			return item.SubscriptionID
+		subscriptionIDs := lo.Uniq(lo.Map(missingPairs, func(pair planpricesync.PlanLineItemCreationDelta, _ int) string {
+			return pair.SubscriptionID
 		}))
 
 		priceFilter := types.NewNoLimitPriceFilter().
-			WithPriceIDs(priceIds).
+			WithPriceIDs(priceIDs).
 			WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
 			WithAllowExpiredPrices(true)
 
 		prices, err := s.PriceRepo.List(ctx, priceFilter)
 		if err != nil {
+			logger.Error("failed to fetch prices for line item creation", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
 
 		subFilter := types.NewNoLimitSubscriptionFilter()
-		subFilter.SubscriptionIDs = subIds
+		subFilter.SubscriptionIDs = subscriptionIDs
 		subs, err := s.SubRepo.List(ctx, subFilter)
 		if err != nil {
+			logger.Error("failed to fetch subscriptions for line item creation", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		subMap := lo.KeyBy(subs, func(s *subscription.Subscription) string { return s.ID })
 
 		var lineItemsToCreate []*subscription.SubscriptionLineItem
-		for _, delta := range lineItemDataForCreation {
-			price, priceFound := priceMap[delta.PriceID]
-			sub, subFound := subMap[delta.SubscriptionID]
+		for _, pair := range missingPairs {
+			price, priceFound := priceMap[pair.PriceID]
+			sub, subFound := subMap[pair.SubscriptionID]
 
 			if !priceFound || !subFound {
-				// Ideally this should never happen
 				return nil, ierr.NewError("price or subscription not found to create plan line item").
 					WithHint("Price or subscription not found to create plan line item").
 					WithReportableDetails(map[string]interface{}{
-						"price_id":        delta.PriceID,
-						"subscription_id": delta.SubscriptionID,
+						"price_id":        pair.PriceID,
+						"subscription_id": pair.SubscriptionID,
 					}).
 					Mark(ierr.ErrDatabase)
 			}
@@ -474,15 +500,39 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		}
 
 		if len(lineItemsToCreate) > 0 {
-			err = s.SubscriptionLineItemRepo.CreateBulk(ctx, lineItemsToCreate)
-			if err != nil {
-				return nil, err
+			const bulkInsertBatchSize = 2000
+			totalCreated := 0
+			for i := 0; i < len(lineItemsToCreate); i += bulkInsertBatchSize {
+				end := i + bulkInsertBatchSize
+				if end > len(lineItemsToCreate) {
+					end = len(lineItemsToCreate)
+				}
+				batch := lineItemsToCreate[i:end]
+
+				err = s.SubscriptionLineItemRepo.CreateBulk(ctx, batch)
+				if err != nil {
+					logger.Error("failed to create plan line items in bulk batch",
+						"plan_id", planID,
+						"error", err,
+						"batch_start", i,
+						"batch_end", end,
+						"batch_count", len(batch),
+						"total_count", len(lineItemsToCreate))
+					return nil, err
+				}
+				totalCreated += len(batch)
 			}
-			lineItemsCreated += len(lineItemDataForCreation)
+
+			lineItemsCreated += totalCreated
+		}
+
+		if nextSubID != nil {
+			cursorSubID = *nextSubID
 		}
 	}
+	creationTotalDuration := time.Since(creationStartTime)
 
-	return &dto.SyncPlanPricesResponse{
+	response := &dto.SyncPlanPricesResponse{
 		PlanID:  planID,
 		Message: "Plan prices synchronized to subscription line items successfully",
 		Summary: dto.SyncPlanPricesSummary{
@@ -490,7 +540,17 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 			LineItemsCreated:          lineItemsCreated,
 			LineItemsTerminated:       lineItemsTerminated,
 		},
-	}, nil
+	}
+	totalSyncDuration := time.Since(syncStartTime)
+	logger.Info("completed plan price synchronization",
+		"plan_id", planID,
+		"line_items_found_for_creation", lineItemsFoundForCreation,
+		"line_items_created", lineItemsCreated,
+		"line_items_terminated", lineItemsTerminated,
+		"total_duration_ms", totalSyncDuration.Milliseconds(),
+		"termination_duration_ms", terminationTotalDuration.Milliseconds(),
+		"creation_duration_ms", creationTotalDuration.Milliseconds())
+	return response, nil
 }
 
 func createPlanLineItem(

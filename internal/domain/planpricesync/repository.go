@@ -25,8 +25,9 @@ type ListPlanLineItemsToTerminateParams struct {
 }
 
 type ListPlanLineItemsToCreateParams struct {
-	PlanID string
-	Limit  int
+	PlanID     string
+	Limit      int
+	AfterSubID string // Optional cursor: subscription_id from last row
 }
 
 type TerminateExpiredPlanPricesLineItemsParams struct {
@@ -66,4 +67,15 @@ type Repository interface {
 		ctx context.Context,
 		p ListPlanLineItemsToCreateParams,
 	) (items []PlanLineItemCreationDelta, err error)
+
+	// GetLastSubscriptionIDInBatch returns the last subscription ID from the batch.
+	// This is used to advance the cursor even when there are no missing pairs in the batch.
+	//
+	// Returns:
+	// - nil when cursor can't advance: lastSubID == "" (no more subscriptions) OR lastSubID == afterSubID (cursor didn't advance)
+	// - pointer to subscription ID when can advance: lastSubID != "" && lastSubID != afterSubID
+	GetLastSubscriptionIDInBatch(
+		ctx context.Context,
+		p ListPlanLineItemsToCreateParams,
+	) (lastSubID *string, err error)
 }

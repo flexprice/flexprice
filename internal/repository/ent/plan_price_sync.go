@@ -54,13 +54,6 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 	environmentID := types.GetEnvironmentID(ctx)
 	userID := types.GetUserID(ctx)
 
-	r.log.Debugw("terminating plan line items",
-		"plan_id", planID,
-		"limit", limit,
-		"tenant_id", tenantID,
-		"environment_id", environmentID,
-	)
-
 	span := StartRepositorySpan(ctx, "plan_price_sync", "terminate_expired_plan_prices_line_items", map[string]interface{}{
 		"plan_id": planID,
 		"limit":   limit,
@@ -140,7 +133,7 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 		environmentID,
 		planID,
 		limit,
-		userID, // updated_by
+		userID,
 	)
 	if qerr != nil {
 		r.log.Errorw("failed to execute termination query for plan line items",
@@ -159,8 +152,6 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		// Just log warining or ignore, but strictly we can return error or count as 0 with error
-		// For now let's treat it as DB error but it depends on driver
 		r.log.Errorw("failed to get rows affected for terminated line items",
 			"plan_id", planID,
 			"limit", limit,
@@ -175,12 +166,6 @@ func (r *planPriceSyncRepository) TerminateExpiredPlanPricesLineItems(
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
-	if rowsAffected > 0 {
-		r.log.Infow("terminated expired plan price line items",
-			"plan_id", planID,
-			"count", int(rowsAffected),
-			"limit", limit)
-	}
 	return int(rowsAffected), nil
 }
 
@@ -209,13 +194,6 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
-
-	r.log.Debugw("listing plan line items to terminate",
-		"plan_id", planID,
-		"limit", limit,
-		"tenant_id", tenantID,
-		"environment_id", environmentID,
-	)
 
 	span := StartRepositorySpan(ctx, "plan_price_sync", "list_line_items_to_terminate", map[string]interface{}{
 		"plan_id": planID,
@@ -330,12 +308,6 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToTerminate(
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
-	if len(items) > 0 {
-		r.log.Debugw("listed plan line items to terminate",
-			"plan_id", planID,
-			"count", len(items),
-			"limit", limit)
-	}
 	return items, nil
 }
 
@@ -363,67 +335,72 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
+	cursorSubID := p.AfterSubID
 
-	r.log.Debugw("listing plan line items to create",
-		"plan_id", planID,
-		"limit", limit,
-		"tenant_id", tenantID,
-		"environment_id", environmentID,
-	)
+	hasCursor := cursorSubID != ""
 
 	span := StartRepositorySpan(ctx, "plan_price_sync", "list_plan_line_items_to_create", map[string]interface{}{
-		"plan_id": planID,
-		"limit":   limit,
+		"plan_id":       planID,
+		"limit":         limit,
+		"has_cursor":    hasCursor,
+		"cursor_sub_id": cursorSubID,
 	})
 	defer FinishSpan(span)
 
+	cursorCondition := "AND (p.last_sub_id = '' OR s.id >= p.last_sub_id) "
+
 	query := fmt.Sprintf(`
 		WITH
-			subs AS (
+			params AS (
+				SELECT $5::text AS last_sub_id
+			),
+			subs_batch AS (
 				SELECT
-					id,
-					tenant_id,
-					environment_id,
-					currency,
-					billing_period,
-					billing_period_count
+					s.id,
+					s.tenant_id,
+					s.environment_id,
+					s.currency,
+					s.billing_period,
+					s.billing_period_count
 				FROM
-					subscriptions
+					subscriptions s, params p
 				WHERE
-					tenant_id = $1
-					AND environment_id = $2
-					AND status = '%s'
-					AND plan_id = $3
-					AND subscription_status IN ('%s', '%s')
+					s.tenant_id = $1
+					AND s.environment_id = $2
+					AND s.status = '%s'
+					AND s.plan_id = $3
+					AND s.subscription_status IN ('%s', '%s')
+					%s
+				ORDER BY s.id
+				LIMIT $4
 			),
 			plan_prices AS (
 				SELECT
-					id,
-					tenant_id,
-					environment_id,
-					currency,
-					billing_period,
-					billing_period_count
+					p.id,
+					p.tenant_id,
+					p.environment_id,
+					p.currency,
+					p.billing_period,
+					p.billing_period_count
 				FROM
-					prices
+					prices p
 				WHERE
-					tenant_id = $1
-					AND environment_id = $2
-					AND status = '%s'
-					AND entity_type = '%s'
-					AND entity_id = $3
-					AND type <> '%s'
+					p.tenant_id = $1
+					AND p.environment_id = $2
+					AND p.status = '%s'
+					AND p.entity_type = '%s'
+					AND p.entity_id = $3
+					AND p.type <> '%s'
 			)
 		SELECT
 			s.id AS subscription_id,
 			p.id AS missing_price_id
 		FROM
-			subs s
-			JOIN plan_prices p ON lower(p.currency) = lower(s.currency)
+			subs_batch s
+			JOIN plan_prices p ON p.currency = s.currency
 				AND p.billing_period = s.billing_period
 				AND p.billing_period_count = s.billing_period_count
 		WHERE
-			-- ever-overridden
 			NOT EXISTS (
 				SELECT
 					1
@@ -437,7 +414,6 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					AND sp.entity_id = s.id
 					AND sp.parent_price_id = p.id
 			)
-			-- missing: no plan LI exists at all for (sub, price)
 			AND NOT EXISTS (
 				SELECT
 					1
@@ -451,12 +427,11 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					AND li.price_id = p.id
 					AND li.entity_type = '%s'
 			)
-		LIMIT
-			$4
 		`,
 		string(types.StatusPublished),
 		string(types.SubscriptionStatusActive),
 		string(types.SubscriptionStatusTrialing),
+		cursorCondition,
 		string(types.StatusPublished),
 		string(types.PRICE_ENTITY_TYPE_PLAN),
 		string(types.PRICE_TYPE_FIXED),
@@ -466,13 +441,22 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 		string(types.SubscriptionLineItemEntityTypePlan),
 	)
 
-	rows, qerr := r.client.Reader(ctx).QueryContext(
-		ctx,
-		query,
+	cursorParam := ""
+	if hasCursor {
+		cursorParam = cursorSubID
+	}
+	args := []interface{}{
 		tenantID,
 		environmentID,
 		planID,
 		limit,
+		cursorParam,
+	}
+
+	rows, qerr := r.client.Reader(ctx).QueryContext(
+		ctx,
+		query,
+		args...,
 	)
 	if qerr != nil {
 		r.log.Errorw("failed to query plan line items to create",
@@ -518,11 +502,129 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 			Mark(ierr.ErrDatabase)
 	}
 	SetSpanSuccess(span)
-	if len(items) > 0 {
-		r.log.Debugw("listed plan line items to create",
-			"plan_id", planID,
-			"count", len(items),
-			"limit", limit)
-	}
 	return items, nil
+}
+
+// GetLastSubscriptionIDInBatch returns the last subscription ID from the batch.
+// Returns nil when cursor can't advance: batchLastSubID == "" (no more subscriptions) OR batchLastSubID == cursorSubID (cursor didn't advance).
+// Returns pointer to subscription ID when can advance: batchLastSubID != "" && batchLastSubID != cursorSubID.
+//
+// Why cursorSubID == batchLastSubID means cursor didn't advance:
+// With limit 1000 and max 1000 active prices per plan, a single subscription cannot have more than 1000 missing pairs.
+// If batchLastSubID == cursorSubID, it means we've processed all subscriptions in the batch (up to limit 1000) and the last one
+// matches our cursor, indicating no progress was made and we should stop.
+func (r *planPriceSyncRepository) GetLastSubscriptionIDInBatch(
+	ctx context.Context,
+	p planpricesync.ListPlanLineItemsToCreateParams,
+) (lastSubID *string, err error) {
+	planID := p.PlanID
+	limit := p.Limit
+
+	if planID == "" {
+		return nil, ierr.NewError("plan_id is required").
+			WithReportableDetails(map[string]any{
+				"plan_id": planID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	if limit <= 0 {
+		limit = DEFAULT_LIMIT
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+	cursorSubID := p.AfterSubID
+
+	hasCursor := cursorSubID != ""
+
+	cursorCondition := "AND (p.last_sub_id = '' OR s.id >= p.last_sub_id) "
+
+	query := fmt.Sprintf(`
+		WITH
+			params AS (
+				SELECT $5::text AS last_sub_id
+			),
+			subs_batch AS (
+				SELECT
+					s.id
+				FROM
+					subscriptions s, params p
+				WHERE
+					s.tenant_id = $1
+					AND s.environment_id = $2
+					AND s.status = '%s'
+					AND s.plan_id = $3
+					AND s.subscription_status IN ('%s', '%s')
+					%s
+				ORDER BY s.id
+				LIMIT $4
+			)
+		SELECT
+			COALESCE(MAX(s.id), '') AS last_sub_id
+		FROM
+			subs_batch s
+		`,
+		string(types.StatusPublished),
+		string(types.SubscriptionStatusActive),
+		string(types.SubscriptionStatusTrialing),
+		cursorCondition,
+	)
+
+	cursorParam := ""
+	if hasCursor {
+		cursorParam = cursorSubID
+	}
+	args := []interface{}{
+		tenantID,
+		environmentID,
+		planID,
+		limit,
+		cursorParam,
+	}
+
+	rows, qerr := r.client.Reader(ctx).QueryContext(ctx, query, args...)
+	if qerr != nil {
+		r.log.Errorw("failed to query last subscription ID in batch",
+			"plan_id", planID,
+			"limit", limit,
+			"error", qerr)
+		return nil, ierr.WithError(qerr).
+			WithHint("Failed to get last subscription ID in batch").
+			WithReportableDetails(map[string]any{
+				"plan_id": planID,
+				"limit":   limit,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	var batchLastSubID string
+	if rows.Next() {
+		if scanErr := rows.Scan(&batchLastSubID); scanErr != nil {
+			r.log.Errorw("failed to scan last subscription ID",
+				"plan_id", planID,
+				"limit", limit,
+				"error", scanErr)
+			return nil, ierr.WithError(scanErr).
+				WithHint("Failed to scan last subscription ID").
+				Mark(ierr.ErrDatabase)
+		}
+	} else {
+		batchLastSubID = ""
+	}
+
+	if rowsErr := rows.Err(); rowsErr != nil {
+		r.log.Errorw("failed to iterate rows for last subscription ID",
+			"plan_id", planID,
+			"limit", limit,
+			"error", rowsErr)
+		return nil, ierr.WithError(rowsErr).
+			WithHint("Failed to iterate rows for last subscription ID").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if batchLastSubID == "" || batchLastSubID == cursorSubID {
+		return nil, nil
+	}
+	return &batchLastSubID, nil
 }
