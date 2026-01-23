@@ -331,3 +331,21 @@ func (h *PlanHandler) ListPlansByFilter(c *gin.Context) {
 
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.SyncPlanPrices(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

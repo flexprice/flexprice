@@ -227,6 +227,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.PUT("/:id", handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", handlers.Plan.DeletePlan)
 			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
+			plan.POST("/:id/sync/subscriptions/v2", handlers.Plan.SyncPlanPricesV2)
 
 			// entitlement routes
 			plan.GET("/:id/entitlements", handlers.Plan.GetPlanEntitlements)

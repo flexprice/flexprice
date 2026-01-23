@@ -397,7 +397,7 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 			p.id AS missing_price_id
 		FROM
 			subs_batch s
-			JOIN plan_prices p ON p.currency = s.currency
+			JOIN plan_prices p ON lower(p.currency) = lower(s.currency)
 				AND p.billing_period = s.billing_period
 				AND p.billing_period_count = s.billing_period_count
 		WHERE

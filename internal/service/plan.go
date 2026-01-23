@@ -15,7 +15,6 @@ import (
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
-	"go.temporal.io/sdk/activity"
 )
 
 type PlanService = interfaces.PlanService
@@ -381,7 +380,6 @@ func (s *planService) DeletePlan(ctx context.Context, id string) error {
 // while maintaining proper billing continuity and respecting all price overrides.
 // Time complexity: O(n) where n is the number of plan prices.
 func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.SyncPlanPricesResponse, error) {
-	logger := activity.GetLogger(ctx)
 	syncStartTime := time.Now()
 
 	lineItemsFoundForCreation := 0
@@ -390,7 +388,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
-		logger.Error("failed to get plan for price synchronization", "plan_id", planID, "error", err)
+		s.Logger.Errorw("failed to get plan for price synchronization", "plan_id", planID, "error", err)
 		return nil, err
 	}
 
@@ -405,7 +403,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		terminationIteration++
 		numTerminated, err := s.PlanPriceSyncRepo.TerminateExpiredPlanPricesLineItems(ctx, planPriceSyncParams)
 		if err != nil {
-			logger.Error("failed to terminate expired plan price line items", "plan_id", planID, "error", err)
+			s.Logger.Errorw("failed to terminate expired plan price line items", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		lineItemsTerminated += numTerminated
@@ -430,13 +428,13 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 		missingPairs, err := s.PlanPriceSyncRepo.ListPlanLineItemsToCreate(ctx, queryParams)
 		if err != nil {
-			logger.Error("failed to list plan line items to create", "plan_id", planID, "error", err)
+			s.Logger.Errorw("failed to list plan line items to create", "plan_id", planID, "error", err)
 			return nil, err
 		}
 
 		nextSubID, err := s.PlanPriceSyncRepo.GetLastSubscriptionIDInBatch(ctx, queryParams)
 		if err != nil {
-			logger.Error("failed to get last subscription ID in batch", "plan_id", planID, "error", err)
+			s.Logger.Errorw("failed to get last subscription ID in batch", "plan_id", planID, "error", err)
 			return nil, err
 		}
 
@@ -466,7 +464,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 		prices, err := s.PriceRepo.List(ctx, priceFilter)
 		if err != nil {
-			logger.Error("failed to fetch prices for line item creation", "plan_id", planID, "error", err)
+			s.Logger.Errorw("failed to fetch prices for line item creation", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
@@ -475,7 +473,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		subFilter.SubscriptionIDs = subscriptionIDs
 		subs, err := s.SubRepo.List(ctx, subFilter)
 		if err != nil {
-			logger.Error("failed to fetch subscriptions for line item creation", "plan_id", planID, "error", err)
+			s.Logger.Errorw("failed to fetch subscriptions for line item creation", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		subMap := lo.KeyBy(subs, func(s *subscription.Subscription) string { return s.ID })
@@ -511,7 +509,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 				err = s.SubscriptionLineItemRepo.CreateBulk(ctx, batch)
 				if err != nil {
-					logger.Error("failed to create plan line items in bulk batch",
+					s.Logger.Errorw("failed to create plan line items in bulk batch",
 						"plan_id", planID,
 						"error", err,
 						"batch_start", i,
@@ -542,7 +540,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		},
 	}
 	totalSyncDuration := time.Since(syncStartTime)
-	logger.Info("completed plan price synchronization",
+	s.Logger.Infow("completed plan price synchronization",
 		"plan_id", planID,
 		"line_items_found_for_creation", lineItemsFoundForCreation,
 		"line_items_created", lineItemsCreated,
