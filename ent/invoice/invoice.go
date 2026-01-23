@@ -88,6 +88,8 @@ const (
 	FieldInvoiceNumber = "invoice_number"
 	// FieldBillingSequence holds the string denoting the billing_sequence field in the database.
 	FieldBillingSequence = "billing_sequence"
+	// FieldTotalPrepaidCreditsApplied holds the string denoting the total_prepaid_credits_applied field in the database.
+	FieldTotalPrepaidCreditsApplied = "total_prepaid_credits_applied"
 	// FieldIdempotencyKey holds the string denoting the idempotency_key field in the database.
 	FieldIdempotencyKey = "idempotency_key"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
@@ -151,6 +153,7 @@ var Columns = []string{
 	FieldVersion,
 	FieldInvoiceNumber,
 	FieldBillingSequence,
+	FieldTotalPrepaidCreditsApplied,
 	FieldIdempotencyKey,
 }
 
@@ -207,6 +210,8 @@ var (
 	DefaultTotal decimal.Decimal
 	// DefaultVersion holds the default value on creation for the "version" field.
 	DefaultVersion int
+	// DefaultTotalPrepaidCreditsApplied holds the default value on creation for the "total_prepaid_credits_applied" field.
+	DefaultTotalPrepaidCreditsApplied decimal.Decimal
 )
 
 // OrderOption defines the ordering options for the Invoice queries.
@@ -390,6 +395,11 @@ func ByInvoiceNumber(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingSequence orders the results by the billing_sequence field.
 func ByBillingSequence(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingSequence, opts...).ToFunc()
+}
+
+// ByTotalPrepaidCreditsApplied orders the results by the total_prepaid_credits_applied field.
+func ByTotalPrepaidCreditsApplied(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTotalPrepaidCreditsApplied, opts...).ToFunc()
 }
 
 // ByIdempotencyKey orders the results by the idempotency_key field.

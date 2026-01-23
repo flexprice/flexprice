@@ -457,6 +457,14 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 			continue
 		}
 
+		if w.WalletType != types.WalletTypePrePaid {
+			s.Logger.Infow("skipping wallet for top up because it is not a prepaid wallet",
+				"wallet_id", w.ID,
+				"wallet_type", w.WalletType,
+			)
+			continue
+		}
+
 		// Check conversion_rate if set in grant
 		if grant.ConversionRate != nil {
 			if !w.ConversionRate.Equal(lo.FromPtr(grant.ConversionRate)) {
@@ -479,7 +487,6 @@ func (s *creditGrantService) applyCreditGrantToWallet(ctx context.Context, grant
 		// Create new wallet with conversion rates from grant (if provided)
 		// Wallet will handle defaults: ConversionRate defaults to 1, TopupConversionRate defaults to ConversionRate
 		walletReq := &dto.CreateWalletRequest{
-			Name:       "Subscription Wallet",
 			CustomerID: subscription.CustomerID,
 			Currency:   subscription.Currency,
 			Config: &types.WalletConfig{

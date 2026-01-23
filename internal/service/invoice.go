@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"time"
 
@@ -56,6 +57,8 @@ type InvoiceService interface {
 
 	// Cron methods
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
+
+	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 }
 
 type invoiceService struct {
@@ -265,8 +268,8 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 			return err
 		}
 
-		// Apply coupons first (invoice and line-item)
-		if err := s.applyCouponsToInvoice(ctx, inv, req); err != nil {
+		// Apply credit adjustments and coupons
+		if err := s.applyCreditsAndCouponsToInvoice(ctx, inv, req); err != nil {
 			return err
 		}
 
@@ -323,7 +326,7 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 		}
 		response.WithSubscription(subscription)
 		if subscription.Customer != nil {
-			response.Customer = subscription.Customer
+			response.WithCustomer(subscription.Customer)
 		}
 	}
 
@@ -346,7 +349,7 @@ func (s *invoiceService) GetInvoice(ctx context.Context, id string) (*dto.Invoic
 		return nil, err
 	}
 
-	response.Taxes = appliedTaxes.Items
+	response.WithTaxes(appliedTaxes.Items)
 
 	return response, nil
 }
@@ -1934,12 +1937,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Create invoice response for payment processing
 		invoiceResponse := &dto.InvoiceResponse{
-			ID:              inv.ID,
-			AmountDue:       inv.AmountDue,
-			AmountRemaining: inv.AmountRemaining,
-			CustomerID:      inv.CustomerID,
-			Currency:        inv.Currency,
-			PaymentStatus:   inv.PaymentStatus,
+			Invoice: lo.FromPtr(inv),
 		}
 
 		// Delegate all payment behavior handling to the payment processor
@@ -2007,12 +2005,7 @@ func (s *invoiceService) attemptPaymentForSubscriptionInvoice(ctx context.Contex
 
 		// Create invoice response for payment processing
 		invoiceResponse := &dto.InvoiceResponse{
-			ID:              inv.ID,
-			AmountDue:       inv.AmountDue,
-			AmountRemaining: inv.AmountRemaining,
-			CustomerID:      inv.CustomerID,
-			Currency:        inv.Currency,
-			PaymentStatus:   inv.PaymentStatus,
+			Invoice: lo.FromPtr(inv),
 		}
 
 		amountPaid := paymentProcessor.ProcessCreditsPaymentForInvoice(ctx, invoiceResponse, nil)
@@ -2134,6 +2127,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 	precision := types.GetCurrencyPrecision(inv.Currency)
 	subtotal, _ := inv.Subtotal.Round(precision).Float64()
 	totalDiscount, _ := inv.TotalDiscount.Round(precision).Float64()
+	totalPrepaidCreditsApplied, _ := inv.TotalPrepaidCreditsApplied.Round(precision).Float64()
 	totalTax, _ := inv.TotalTax.Round(precision).Float64()
 	total, _ := inv.Total.Round(precision).Float64()
 	amountPaid, _ := inv.AmountPaid.Round(precision).Float64()
@@ -2149,6 +2143,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		AmountDue:       total,
 		Subtotal:        subtotal,
 		TotalDiscount:   totalDiscount,
+		TotalPrepaidCreditsApplied: totalPrepaidCreditsApplied,
 		TotalTax:        totalTax,
 		BillingReason:   inv.BillingReason,
 		Notes:           "",  // resolved from invoice metadata
@@ -2398,13 +2393,14 @@ func (s *invoiceService) RecalculateInvoiceAmounts(ctx context.Context, invoiceI
 		}
 	}
 
-	// Calculate total adjustment credits
-	inv.AdjustmentAmount = totalAdjustmentAmount
-	inv.RefundedAmount = totalRefundAmount
-	inv.AmountDue = inv.Total.Sub(totalAdjustmentAmount)
+	// Calculate total adjustment credits (with currency-aware rounding)
+	inv.AdjustmentAmount = types.RoundToCurrencyPrecision(totalAdjustmentAmount, inv.Currency)
+	inv.RefundedAmount = types.RoundToCurrencyPrecision(totalRefundAmount, inv.Currency)
+	inv.AmountDue = types.RoundToCurrencyPrecision(inv.Total.Sub(inv.AdjustmentAmount), inv.Currency)
+
 	remaining := inv.AmountDue.Sub(inv.AmountPaid)
 	if remaining.IsPositive() {
-		inv.AmountRemaining = remaining
+		inv.AmountRemaining = types.RoundToCurrencyPrecision(remaining, inv.Currency)
 	} else {
 		inv.AmountRemaining = decimal.Zero
 	}
@@ -2697,45 +2693,6 @@ func (s *invoiceService) RecalculateTaxesOnInvoice(ctx context.Context, inv *inv
 	return nil
 }
 
-// applyCouponsToInvoice applies coupons to an invoice and updates invoice totals
-func (s *invoiceService) applyCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
-	// Use coupon service to apply coupons (empty check is handled by the service)
-	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
-
-	// Apply both invoice-level and line item-level coupons
-	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, inv, req.InvoiceCoupons, req.LineItemCoupons)
-	if err != nil {
-		return err
-	}
-
-	// Update the invoice with calculated discount amounts
-	inv.TotalDiscount = couponResult.TotalDiscountAmount
-
-	// Calculate new total based on subtotal - discount (discount-first approach)
-	// This ensures consistency with tax calculation which uses subtotal - discount
-	// ApplyDiscount already ensures individual discounts don't make prices negative,
-	// and the service applies discounts sequentially, so total discount is already validated
-	newTotal := inv.Subtotal.Sub(couponResult.TotalDiscountAmount)
-	if newTotal.IsNegative() {
-		newTotal = decimal.Zero
-		inv.TotalDiscount = inv.Subtotal
-	}
-
-	inv.Total = newTotal
-
-	// Update AmountDue and AmountRemaining to reflect new total
-	inv.AmountDue = newTotal
-	inv.AmountRemaining = newTotal.Sub(inv.AmountPaid)
-
-	s.Logger.Infow("successfully updated invoice with coupon discounts",
-		"invoice_id", inv.ID,
-		"total_discount", couponResult.TotalDiscountAmount,
-		"invoice_level_coupons", len(req.InvoiceCoupons),
-		"line_item_level_coupons", len(req.LineItemCoupons),
-		"new_total", inv.Total)
-	return nil
-}
-
 // applyTaxesToInvoice applies taxes to an invoice.
 // For one-off invoices, uses prepared tax rates from req.PreparedTaxRates.
 // For subscription invoices, prepares tax rates from subscription associations.
@@ -2771,8 +2728,8 @@ func (s *invoiceService) applyTaxesToInvoice(ctx context.Context, inv *invoice.I
 
 	// Update the invoice with calculated tax amounts
 	inv.TotalTax = taxResult.TotalTaxAmount
-	// Discount-first-then-tax: total = subtotal - discount + tax
-	inv.Total = inv.Subtotal.Sub(inv.TotalDiscount).Add(taxResult.TotalTaxAmount)
+	// Discount-first-then-tax: total = subtotal - prepaid credits - discount + tax
+	inv.Total = inv.Subtotal.Sub(inv.TotalPrepaidCreditsApplied).Sub(inv.TotalDiscount).Add(taxResult.TotalTaxAmount)
 	if inv.Total.IsNegative() {
 		inv.Total = decimal.Zero
 	}
@@ -3461,7 +3418,7 @@ func (s *invoiceService) getAppliedDiscountsForPDF(ctx context.Context, inv *dto
 }
 
 // isSafeUpdateForPaidInvoice checks if the update request contains only safe fields for paid invoices
-func isSafeUpdateForPaidInvoice(req dto.UpdateInvoiceRequest) bool {
+func isSafeUpdateForPaidInvoice(_ dto.UpdateInvoiceRequest) bool {
 	// Currently, UpdateInvoiceRequest only contains InvoicePDFURL and DueDate
 	// Both of these are considered safe for paid invoices
 	// In the future, if more fields are added, they should be categorized here
@@ -3531,6 +3488,183 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 
 	// Sync to Nomod if Nomod connection is enabled (async via Temporal)
 	s.triggerNomodInvoiceSyncWorkflow(ctx, invoice.ID, invoice.CustomerID)
+
+	return nil
+}
+
+// applyCreditsAndCouponsToInvoice applies wallet credits and coupons to invoice, updating totals once
+func (s *invoiceService) applyCreditsAndCouponsToInvoice(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
+	s.Logger.Debugw("applying credit adjustments and coupons to invoice",
+		"invoice_id", inv.ID,
+		"customer_id", inv.CustomerID,
+		"currency", inv.Currency,
+	)
+
+	// Step 1: Apply coupons first (handles computation, persistence, and mutations internally)
+	couponApplicationService := NewCouponApplicationService(s.ServiceParams)
+	couponResult, err := couponApplicationService.ApplyCouponsToInvoice(ctx, dto.ApplyCouponsToInvoiceRequest{
+		Invoice:         inv,
+		InvoiceCoupons:  req.InvoiceCoupons,
+		LineItemCoupons: req.LineItemCoupons,
+	})
+	if err != nil {
+		return err
+	}
+
+	// Update invoice totals
+	inv.TotalDiscount = couponResult.TotalDiscountAmount
+
+	// Step 2: Apply credit adjustments after discounts
+	// Credits are applied to: amount - line_item_discount - invoice_level_discount
+	creditAdjustmentService := NewCreditAdjustmentService(s.ServiceParams)
+	creditResult, err := creditAdjustmentService.ApplyCreditsToInvoice(ctx, inv)
+	if err != nil {
+		return err
+	}
+	inv.TotalPrepaidCreditsApplied = creditResult.TotalPrepaidCreditsApplied
+
+	newTotal := inv.Subtotal.Sub(inv.TotalDiscount).Sub(inv.TotalPrepaidCreditsApplied)
+	if newTotal.IsNegative() {
+		newTotal = decimal.Zero
+	}
+
+	inv.Total = newTotal
+
+	inv.AmountDue = inv.Total
+	inv.AmountRemaining = inv.Total.Sub(inv.AmountPaid)
+
+	s.Logger.Infow("successfully applied credit adjustments and coupons to invoice",
+		"invoice_id", inv.ID,
+		"total_prepaid_applied", inv.TotalPrepaidCreditsApplied,
+		"total_discount", inv.TotalDiscount,
+		"invoice_level_coupons", len(req.InvoiceCoupons),
+		"line_item_level_coupons", len(req.LineItemCoupons),
+		"new_total", inv.Total,
+		"subtotal", inv.Subtotal,
+	)
+
+	return nil
+}
+
+// DistributeInvoiceLevelDiscount proportionally distributes an invoice-level discount across all line items
+// using a precision-preserving algorithm with currency-aware rounding that ensures exact distribution.
+//
+// PURPOSE:
+// When an invoice-level discount (e.g., from an invoice-level coupon) is applied, it must be
+// distributed proportionally across all line items based on their remaining billable amounts
+// (after line-item discounts). This allows tracking how much of the invoice-level discount is
+// attributed to each line item, which is essential for accurate financial reporting, tax calculations,
+// and audit trails.
+//
+// USE CASES:
+// - Invoice-level coupon applications (e.g., "10% off entire invoice")
+// - Invoice-level promotional discounts
+// - Any discount applied at the invoice level that needs to be allocated to line items
+//
+// ALGORITHM: Proportional Distribution with Capping and Consistent Rounding
+//
+// 1. Filter eligible line items: amountAfterLineItemDiscount > 0
+// 2. Calculate total eligible amount (sum of all eligible amounts)
+// 3. Sort items by amount desc, then ID (for consistent rounding behavior)
+// 4. Distribute proportionally to all except last item, capping at line item amount
+// 5. Assign remainder to last item, capping at line item amount
+//
+// This ensures consistent distribution behavior and prevents over-allocation to any line item.
+func (s *invoiceService) DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error {
+	// Early return if no discount to distribute
+	if invoiceDiscountAmount.IsZero() {
+		return nil
+	}
+
+	// Initialize InvoiceLevelDiscount to zero for all line items
+	for _, lineItem := range lineItems {
+		lineItem.InvoiceLevelDiscount = decimal.Zero
+	}
+
+	// Find eligible line items (non-zero amounts after line-item discount)
+	eligibleItems := make([]*invoice.InvoiceLineItem, 0, len(lineItems))
+	for _, lineItem := range lineItems {
+		amountAfterLineItemDiscount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		if amountAfterLineItemDiscount.IsPositive() {
+			eligibleItems = append(eligibleItems, lineItem)
+		}
+	}
+
+	// If no eligible items or discount is zero, return early
+	if len(eligibleItems) == 0 {
+		return nil
+	}
+
+	// Calculate total eligible amount
+	totalEligibleAmount := decimal.Zero
+	for _, lineItem := range eligibleItems {
+		amountAfterLineItemDiscount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+		totalEligibleAmount = totalEligibleAmount.Add(amountAfterLineItemDiscount)
+	}
+
+	// Edge case: Cannot distribute discount if all line items are fully discounted
+	if totalEligibleAmount.IsZero() {
+		s.Logger.Infow("cannot distribute invoice-level discount: all line items already fully discounted",
+			"total_discount", invoiceDiscountAmount,
+			"line_items_count", len(eligibleItems))
+		return nil
+	}
+
+	// Sort items for consistent rounding behavior (by amount descending)
+	// If amounts are equal, order doesn't matter
+	sort.Slice(eligibleItems, func(i, j int) bool {
+		amountI := eligibleItems[i].Amount.Sub(eligibleItems[i].LineItemDiscount)
+		amountJ := eligibleItems[j].Amount.Sub(eligibleItems[j].LineItemDiscount)
+
+		// Sort by amount descending (greater or equal)
+		return amountI.GreaterThanOrEqual(amountJ)
+	})
+
+	// Track remaining discount amount
+	remainingDiscount := invoiceDiscountAmount
+
+	// First pass - apply to all except last item
+	for i, lineItem := range eligibleItems {
+		if i == len(eligibleItems)-1 {
+			break // Skip last item, handled separately
+		}
+
+		// Line item's share of invoice discount = (Line item amount after line item discount / Total invoice amount after line item discounts) × Total invoice-level discount amount
+		amountAfterLineItemDiscount := lineItem.Amount.Sub(lineItem.LineItemDiscount)
+
+		proportion := amountAfterLineItemDiscount.Div(totalEligibleAmount)
+		lineItemShare := proportion.Mul(invoiceDiscountAmount)
+
+		// Round using currency precision
+		lineItemShare = types.RoundToCurrencyPrecision(lineItemShare, lineItem.Currency)
+
+		// Cap at line item amount (cannot exceed the eligible amount)
+		if lineItemShare.GreaterThan(amountAfterLineItemDiscount) {
+			lineItemShare = amountAfterLineItemDiscount
+		}
+
+		lineItem.InvoiceLevelDiscount = lineItemShare
+		remainingDiscount = remainingDiscount.Sub(lineItemShare)
+	}
+
+	// Handle last item (with any rounding adjustment)
+	if len(eligibleItems) > 0 {
+		lastItem := eligibleItems[len(eligibleItems)-1]
+		amountAfterLineItemDiscount := lastItem.Amount.Sub(lastItem.LineItemDiscount)
+
+		// Cap at remaining discount and line item amount
+		lastItemShare := remainingDiscount
+		if lastItemShare.GreaterThan(amountAfterLineItemDiscount) {
+			lastItemShare = amountAfterLineItemDiscount
+		}
+
+		// Ensure non-negative
+		if lastItemShare.IsNegative() {
+			lastItemShare = decimal.Zero
+		}
+
+		lastItem.InvoiceLevelDiscount = lastItemShare
+	}
 
 	return nil
 }

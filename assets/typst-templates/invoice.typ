@@ -16,6 +16,7 @@
   notes: invoice-data.at("notes", default: ""),
   subtotal: invoice-data.at("subtotal", default: 0),
   discount: invoice-data.at("total_discount", default: 0),
+  total-prepaid-credits-applied: invoice-data.at("total_prepaid_credits_applied", default: 0),
   tax: invoice-data.at("total_tax", default: 0),
   billing-period: invoice-data.at("billing_period", default: ""),
   description: invoice-data.at("description", default: ""),

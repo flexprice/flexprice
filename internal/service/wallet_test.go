@@ -561,7 +561,12 @@ func (s *WalletServiceSuite) setupWallet() {
 		ConversionRate:      decimal.NewFromFloat(1.0),
 		TopupConversionRate: decimal.NewFromFloat(1.0),
 		WalletStatus:        types.WalletStatusActive,
-		BaseModel:           types.GetDefaultBaseModel(s.GetContext()),
+		Config: types.WalletConfig{
+			AllowedPriceTypes: []types.WalletConfigPriceType{
+				types.WalletConfigPriceTypeUsage,
+			},
+		},
+		BaseModel: types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().WalletRepo.CreateWallet(s.GetContext(), s.testData.wallet))
 }

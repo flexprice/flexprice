@@ -488,6 +488,20 @@ func (ic *InvoiceCreate) SetNillableBillingSequence(i *int) *InvoiceCreate {
 	return ic
 }
 
+// SetTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field.
+func (ic *InvoiceCreate) SetTotalPrepaidCreditsApplied(d decimal.Decimal) *InvoiceCreate {
+	ic.mutation.SetTotalPrepaidCreditsApplied(d)
+	return ic
+}
+
+// SetNillableTotalPrepaidCreditsApplied sets the "total_prepaid_credits_applied" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableTotalPrepaidCreditsApplied(d *decimal.Decimal) *InvoiceCreate {
+	if d != nil {
+		ic.SetTotalPrepaidCreditsApplied(*d)
+	}
+	return ic
+}
+
 // SetIdempotencyKey sets the "idempotency_key" field.
 func (ic *InvoiceCreate) SetIdempotencyKey(s string) *InvoiceCreate {
 	ic.mutation.SetIdempotencyKey(s)
@@ -636,6 +650,10 @@ func (ic *InvoiceCreate) defaults() {
 	if _, ok := ic.mutation.Version(); !ok {
 		v := invoice.DefaultVersion
 		ic.mutation.SetVersion(v)
+	}
+	if _, ok := ic.mutation.TotalPrepaidCreditsApplied(); !ok {
+		v := invoice.DefaultTotalPrepaidCreditsApplied
+		ic.mutation.SetTotalPrepaidCreditsApplied(v)
 	}
 }
 
@@ -893,6 +911,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.BillingSequence(); ok {
 		_spec.SetField(invoice.FieldBillingSequence, field.TypeInt, value)
 		_node.BillingSequence = &value
+	}
+	if value, ok := ic.mutation.TotalPrepaidCreditsApplied(); ok {
+		_spec.SetField(invoice.FieldTotalPrepaidCreditsApplied, field.TypeOther, value)
+		_node.TotalPrepaidCreditsApplied = &value
 	}
 	if value, ok := ic.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)

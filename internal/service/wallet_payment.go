@@ -16,11 +16,8 @@ import (
 type WalletPaymentStrategy string
 
 const (
-	// PromotionalFirstStrategy prioritizes promotional wallets before prepaid wallets
-	PromotionalFirstStrategy WalletPaymentStrategy = "promotional_first"
-	// PrepaidFirstStrategy prioritizes prepaid wallets before promotional wallets
-	PrepaidFirstStrategy WalletPaymentStrategy = "prepaid_first"
 	// BalanceOptimizedStrategy selects wallets to minimize leftover balances
+	// Since only postpaid wallets can be used for payments, all wallets are of the same type
 	BalanceOptimizedStrategy WalletPaymentStrategy = "balance_optimized"
 )
 
@@ -37,7 +34,7 @@ type WalletPaymentOptions struct {
 // DefaultWalletPaymentOptions returns the default options for wallet payments
 func DefaultWalletPaymentOptions() WalletPaymentOptions {
 	return WalletPaymentOptions{
-		Strategy:           PromotionalFirstStrategy,
+		Strategy:           BalanceOptimizedStrategy,
 		MaxWalletsToUse:    0,
 		AdditionalMetadata: types.Metadata{},
 	}
@@ -50,6 +47,10 @@ type WalletPaymentService interface {
 
 	// GetWalletsForPayment retrieves and filters wallets suitable for payment
 	GetWalletsForPayment(ctx context.Context, customerID string, currency string, options WalletPaymentOptions) ([]*wallet.Wallet, error)
+
+	// GetWalletsForCreditAdjustment retrieves prepaid wallets for credit adjustment
+	// Returns all prepaid wallets regardless of price type restrictions, sorted by balance (highest first)
+	GetWalletsForCreditAdjustment(ctx context.Context, customerID string, currency string) ([]*wallet.Wallet, error)
 }
 
 type walletPaymentService struct {
@@ -132,12 +133,15 @@ func (s *walletPaymentService) GetWalletsForPayment(
 		return nil, err
 	}
 
-	// Filter active wallets with matching currency and positive balance
+	// Filter for POST_PAID wallets only. POST_PAID wallets are used to pay invoices directly.
+	// PRE_PAID wallets are excluded here as they're used for credit adjustments (reducing invoice amounts),
+	// not for actual payment processing. This separation ensures proper accounting.
 	activeWallets := make([]*wallet.Wallet, 0)
 	for _, w := range wallets {
 		if w.WalletStatus == types.WalletStatusActive &&
 			types.IsMatchingCurrency(w.Currency, currency) &&
-			w.Balance.GreaterThan(decimal.Zero) {
+			w.Balance.GreaterThan(decimal.Zero) &&
+			w.WalletType == types.WalletTypePostPaid {
 			activeWallets = append(activeWallets, w)
 		}
 	}
@@ -210,6 +214,47 @@ func (s *walletPaymentService) GetWalletsForPayment(
 		"total_wallets", len(result))
 
 	return result, nil
+}
+
+// GetWalletsForCreditAdjustment retrieves and filters prepaid wallets suitable for credit adjustment
+// Returns all prepaid wallets regardless of price type restrictions, sorted by balance (highest first)
+func (s *walletPaymentService) GetWalletsForCreditAdjustment(
+	ctx context.Context,
+	customerID string,
+	currency string,
+) ([]*wallet.Wallet, error) {
+	// Get all wallets for the customer
+	wallets, err := s.WalletRepo.GetWalletsByCustomerID(ctx, customerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter for PRE_PAID wallets only. PRE_PAID wallets are used for credit adjustments (reducing invoice amounts).
+	// POST_PAID wallets are excluded here as they're used for invoice payments, not credit adjustments.
+	// All PRE_PAID wallets are returned regardless of price type restrictions since adjustments can apply to any line item.
+	activeWallets := make([]*wallet.Wallet, 0)
+	for _, w := range wallets {
+		if w.WalletStatus == types.WalletStatusActive &&
+			types.IsMatchingCurrency(w.Currency, currency) &&
+			w.Balance.GreaterThan(decimal.Zero) &&
+			w.WalletType == types.WalletTypePrePaid {
+			activeWallets = append(activeWallets, w)
+		}
+	}
+
+	if len(activeWallets) == 0 {
+		return activeWallets, nil
+	}
+
+	// Sort by balance (highest first) to minimize wallet usage
+	s.sortWalletsByBalanceDesc(activeWallets)
+
+	s.Logger.Infow("retrieved prepaid wallets for credit adjustment",
+		"customer_id", customerID,
+		"currency", currency,
+		"total_wallets", len(activeWallets))
+
+	return activeWallets, nil
 }
 
 // processWalletPayments processes payments using the provided wallets in order

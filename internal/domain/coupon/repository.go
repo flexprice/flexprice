@@ -10,7 +10,6 @@ import (
 type Repository interface {
 	Create(ctx context.Context, coupon *Coupon) error
 	Get(ctx context.Context, id string) (*Coupon, error)
-	GetBatch(ctx context.Context, ids []string) ([]*Coupon, error)
 	Update(ctx context.Context, coupon *Coupon) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.CouponFilter) ([]*Coupon, error)

@@ -43,4 +43,5 @@ type Repository interface {
 	// Dashboard methods
 	GetRevenueTrend(ctx context.Context, windowCount int) ([]types.RevenueTrendWindow, error)
 	GetInvoicePaymentStatus(ctx context.Context) (*types.InvoicePaymentStatus, error)
+	UpdateLineItem(ctx context.Context, item *InvoiceLineItem) error
 }

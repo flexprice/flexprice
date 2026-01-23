@@ -21,8 +21,15 @@ const (
 type WalletType string
 
 const (
-	WalletTypePromotional WalletType = "PROMOTIONAL"
-	WalletTypePrePaid     WalletType = "PRE_PAID"
+	// WalletTypePrePaid stores credits that reduce invoice amounts during invoice creation/finalization.
+	// Used for credit adjustments, credit note refunds, and purchased credits that adjust invoices.
+	// These wallets are automatically filtered for credit adjustment operations only.
+	WalletTypePrePaid WalletType = "PRE_PAID"
+
+	// WalletTypePostPaid stores credits used to pay invoices during payment processing.
+	// Used for invoice payments via payment method type "credits" and customer-initiated payments.
+	// These wallets are automatically filtered for payment processing operations only.
+	WalletTypePostPaid WalletType = "POST_PAID"
 )
 
 func (t WalletType) Validate() error {
@@ -31,8 +38,8 @@ func (t WalletType) Validate() error {
 	}
 
 	allowedValues := []string{
-		string(WalletTypePromotional),
 		string(WalletTypePrePaid),
+		string(WalletTypePostPaid),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid wallet type").
@@ -59,6 +66,7 @@ const (
 	TransactionReasonCreditExpired           TransactionReason = "CREDIT_EXPIRED"
 	TransactionReasonWalletTermination       TransactionReason = "WALLET_TERMINATION"
 	TransactionReasonManualBalanceDebit      TransactionReason = "MANUAL_BALANCE_DEBIT"
+	TransactionReasonCreditAdjustment        TransactionReason = "CREDIT_ADJUSTMENT"
 )
 
 func (t TransactionReason) Validate() error {
@@ -76,6 +84,7 @@ func (t TransactionReason) Validate() error {
 		string(TransactionReasonCreditExpired),
 		string(TransactionReasonWalletTermination),
 		string(TransactionReasonManualBalanceDebit),
+		string(TransactionReasonCreditAdjustment),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid transaction reason").
@@ -99,6 +108,9 @@ const (
 	WalletTxReferenceTypeExternal WalletTxReferenceType = "EXTERNAL"
 	// WalletTxReferenceTypeRequest is used for auto generated reference IDs
 	WalletTxReferenceTypeRequest WalletTxReferenceType = "REQUEST"
+
+	// WalletTxReferenceTypeInvoice is used for invoice reference IDs
+	WalletTxReferenceTypeInvoice WalletTxReferenceType = "INVOICE"
 )
 
 func (t WalletTxReferenceType) Validate() error {
@@ -109,6 +121,7 @@ func (t WalletTxReferenceType) Validate() error {
 		string(WalletTxReferenceTypePayment),
 		string(WalletTxReferenceTypeExternal),
 		string(WalletTxReferenceTypeRequest),
+		string(WalletTxReferenceTypeInvoice),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid wallet transaction reference type").
@@ -265,7 +278,7 @@ const (
 type WalletConfig struct {
 	// AllowedPriceTypes is a list of price types that are allowed for the wallet
 	// nil means all price types are allowed
-	AllowedPriceTypes []WalletConfigPriceType `json:"allowed_price_types,omitempty"`
+	AllowedPriceTypes []WalletConfigPriceType `json:"-"`
 }
 
 func GetDefaultWalletConfig() *WalletConfig {
