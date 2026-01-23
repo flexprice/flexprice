@@ -2127,6 +2127,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 	precision := types.GetCurrencyPrecision(inv.Currency)
 	subtotal, _ := inv.Subtotal.Round(precision).Float64()
 	totalDiscount, _ := inv.TotalDiscount.Round(precision).Float64()
+	totalPrepaidCreditsApplied, _ := inv.TotalPrepaidCreditsApplied.Round(precision).Float64()
 	totalTax, _ := inv.TotalTax.Round(precision).Float64()
 	total, _ := inv.Total.Round(precision).Float64()
 	amountPaid, _ := inv.AmountPaid.Round(precision).Float64()
@@ -2142,6 +2143,7 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 		AmountDue:       total,
 		Subtotal:        subtotal,
 		TotalDiscount:   totalDiscount,
+		TotalPrepaidCreditsApplied: totalPrepaidCreditsApplied,
 		TotalTax:        totalTax,
 		BillingReason:   inv.BillingReason,
 		Notes:           "",  // resolved from invoice metadata

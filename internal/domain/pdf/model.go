@@ -20,6 +20,7 @@ type InvoiceData struct {
 	AmountDue       float64    `json:"amount_due"`     // Total amount (subtotal - discount + tax)
 	Subtotal        float64    `json:"subtotal"`       // Before discounts and taxes
 	TotalDiscount   float64    `json:"total_discount"` // Total discounts applied
+	TotalPrepaidCreditsApplied float64 `json:"total_prepaid_credits_applied"` // Total prepaid credits applied
 	TotalTax        float64    `json:"total_tax"`      // Total tax amount
 	VAT             float64    `json:"vat"`            // VAT percentage as decimal (0.18 = 18%)
 	Notes           string     `json:"notes"`
