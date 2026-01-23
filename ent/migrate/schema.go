@@ -1409,6 +1409,25 @@ var (
 				Name:    "price_tenant_id_environment_id_group_id",
 				Unique:  false,
 				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[39]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "price_tenant_id_environment_id_entity_type_entity_id",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[34], PricesColumns[35]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "entity_type='PLAN' AND status='published'",
+				},
+			},
+			{
+				Name:    "price_tenant_id_environment_id_entity_id_parent_price_id",
+				Unique:  false,
+				Columns: []*schema.Column{PricesColumns[1], PricesColumns[7], PricesColumns[35], PricesColumns[36]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published' AND entity_type = 'SUBSCRIPTION'",
+				},
 			},
 		},
 	}
@@ -1618,27 +1637,44 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "subscription_tenant_id_environment_id_customer_id_status",
+				Name:    "subscription_tenant_id_environment_id_customer_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[9], SubscriptionsColumns[2]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[9]},
 				Annotation: &entsql.IndexAnnotation{
 					Where: "status = 'published'",
 				},
 			},
 			{
-				Name:    "subscription_tenant_id_environment_id_plan_id_status",
+				Name:    "subscription_tenant_id_environment_id_plan_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[2]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "subscription_tenant_id_environment_id_subscription_status_status",
+				Name:    "subscription_tenant_id_environment_id_subscription_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[11], SubscriptionsColumns[2]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "subscription_tenant_id_environment_id_current_period_end_subscription_status_status",
+				Name:    "subscription_tenant_id_environment_id_current_period_end_subscription_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[17], SubscriptionsColumns[11], SubscriptionsColumns[2]},
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[17], SubscriptionsColumns[11]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "subscription_tenant_id_environment_id_plan_id_currency_billing_period_billing_period_count",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionsColumns[1], SubscriptionsColumns[7], SubscriptionsColumns[10], SubscriptionsColumns[12], SubscriptionsColumns[24], SubscriptionsColumns[25]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published' AND subscription_status IN ('active', 'trialing')",
+				},
 			},
 		},
 	}
@@ -1695,29 +1731,52 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id_status",
+				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[34], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[34]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "subscriptionlineitem_tenant_id_environment_id_customer_id_status",
+				Name:    "subscriptionlineitem_tenant_id_environment_id_customer_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[8], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[8]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "subscriptionlineitem_tenant_id_environment_id_entity_id_entity_type_status",
+				Name:    "subscriptionlineitem_tenant_id_environment_id_entity_id_entity_type",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[9], SubscriptionLineItemsColumns[10], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[9], SubscriptionLineItemsColumns[10]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "subscriptionlineitem_tenant_id_environment_id_price_id_status",
+				Name:    "subscriptionlineitem_tenant_id_environment_id_price_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[12], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 			{
-				Name:    "subscriptionlineitem_tenant_id_environment_id_meter_id_status",
+				Name:    "subscriptionlineitem_tenant_id_environment_id_meter_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[14], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[14]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
+			},
+			{
+				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id_price_id",
+				Unique:  false,
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[34], SubscriptionLineItemsColumns[12]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published' AND entity_type = 'plan'",
+				},
 			},
 			{
 				Name:    "subscriptionlineitem_start_date_end_date",
@@ -1725,9 +1784,12 @@ var (
 				Columns: []*schema.Column{SubscriptionLineItemsColumns[24], SubscriptionLineItemsColumns[25]},
 			},
 			{
-				Name:    "subscriptionlineitem_subscription_id_status",
+				Name:    "subscriptionlineitem_subscription_id",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[34], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[34]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "status = 'published'",
+				},
 			},
 		},
 	}

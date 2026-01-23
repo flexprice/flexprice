@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
@@ -189,12 +190,24 @@ func (SubscriptionLineItem) Edges() []ent.Edge {
 // Indexes of the SubscriptionLineItem.
 func (SubscriptionLineItem) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("tenant_id", "environment_id", "subscription_id", "status"),
-		index.Fields("tenant_id", "environment_id", "customer_id", "status"),
-		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type", "status"),
-		index.Fields("tenant_id", "environment_id", "price_id", "status"),
-		index.Fields("tenant_id", "environment_id", "meter_id", "status"),
+		// Partial indexes for published status (most common query pattern)
+		index.Fields("tenant_id", "environment_id", "subscription_id").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+		index.Fields("tenant_id", "environment_id", "customer_id").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+		index.Fields("tenant_id", "environment_id", "entity_id", "entity_type").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+		index.Fields("tenant_id", "environment_id", "price_id").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+		index.Fields("tenant_id", "environment_id", "meter_id").
+			Annotations(entsql.IndexWhere("status = 'published'")),
+		// Performance index for plan lookups with published status (merged with subscription_id index)
+		index.Fields("tenant_id", "environment_id", "subscription_id", "price_id").
+			Annotations(entsql.IndexWhere("status = 'published' AND entity_type = 'plan'")),
+		// Date range index (no status filter needed)
 		index.Fields("start_date", "end_date"),
-		index.Fields("subscription_id", "status"),
+		// Subscription-level index for published items
+		index.Fields("subscription_id").
+			Annotations(entsql.IndexWhere("status = 'published'")),
 	}
 }
