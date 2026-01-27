@@ -3265,7 +3265,8 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 	}
 
 	// Query feature_usage table directly by event IDs
-	featureUsageRecords, err := s.featureUsageRepo.GetFeatureUsageByEventIDs(ctx, params.EventIDs)
+	// Note: external_customer_id is empty here as we're querying multiple events that may belong to different customers
+	featureUsageRecords, err := s.featureUsageRepo.GetFeatureUsageByEventIDs(ctx, params.EventIDs, "")
 	if err != nil {
 		return nil, err
 	}
@@ -3559,8 +3560,8 @@ func (s *featureUsageTrackingService) DebugEvent(ctx context.Context, eventID st
 			Mark(ierr.ErrDatabase)
 	}
 
-	// Step 2: Check feature_usage for processed events
-	processedEvents, err := s.featureUsageRepo.GetFeatureUsageByEventIDs(ctx, []string{eventID})
+	// Step 2: Check feature_usage for processed events, filtering by external_customer_id
+	processedEvents, err := s.featureUsageRepo.GetFeatureUsageByEventIDs(ctx, []string{eventID}, event.ExternalCustomerID)
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to get event from feature_usage table").

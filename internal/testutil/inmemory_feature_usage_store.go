@@ -135,7 +135,7 @@ func (s *InMemoryFeatureUsageStore) GetUsageForMaxMetersWithBuckets(ctx context.
 	}, nil
 }
 
-func (s *InMemoryFeatureUsageStore) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*events.FeatureUsage, error) {
+func (s *InMemoryFeatureUsageStore) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string, externalCustomerID string) ([]*events.FeatureUsage, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

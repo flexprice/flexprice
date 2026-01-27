@@ -2244,7 +2244,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 }
 
 // GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs
-func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*events.FeatureUsage, error) {
+func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string, externalCustomerID string) ([]*events.FeatureUsage, error) {
 	if len(eventIDs) == 0 {
 		return nil, nil
 	}
@@ -2277,6 +2277,12 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 	}
 
 	query = strings.Replace(query, "IN (?)", "IN ("+strings.Join(placeholders, ",")+")", 1)
+
+	// Add external_customer_id filter if provided
+	if externalCustomerID != "" {
+		query += " AND external_customer_id = ?"
+		args = append(args, externalCustomerID)
+	}
 
 	rows, err := r.store.GetConn().Query(ctx, query, args...)
 	if err != nil {
