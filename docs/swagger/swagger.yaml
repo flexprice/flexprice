@@ -126,6 +126,12 @@ definitions:
     properties:
       addon_id:
         type: string
+      line_item_commitments:
+        additionalProperties:
+          $ref: '#/definitions/dto.LineItemCommitmentConfig'
+        description: LineItemCommitments allows setting commitment configuration per
+          addon line item (keyed by price_id)
+        type: object
       metadata:
         additionalProperties: true
         type: object
@@ -141,6 +147,12 @@ definitions:
     properties:
       addon_id:
         type: string
+      line_item_commitments:
+        additionalProperties:
+          $ref: '#/definitions/dto.LineItemCommitmentConfig'
+        description: LineItemCommitments allows setting commitment configuration per
+          addon line item (keyed by price_id)
+        type: object
       metadata:
         additionalProperties: true
         type: object
@@ -378,6 +390,34 @@ definitions:
         type: array
     required:
     - events
+    type: object
+  dto.CancelScheduleRequest:
+    description: Request to cancel a subscription schedule (supports two modes)
+    properties:
+      schedule_id:
+        description: schedule_id is the ID of the schedule to cancel (optional if
+          subscription_id and schedule_type are provided)
+        type: string
+      schedule_type:
+        allOf:
+        - $ref: '#/definitions/types.SubscriptionScheduleChangeType'
+        description: schedule_type is the type of schedule to cancel (required if
+          schedule_id is not provided)
+      subscription_id:
+        description: subscription_id is the ID of the subscription (required if schedule_id
+          is not provided)
+        type: string
+    type: object
+  dto.CancelScheduleResponse:
+    description: Confirmation of schedule cancellation
+    properties:
+      message:
+        description: message is a confirmation message
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleStatus'
+        description: status is the new status (should be "cancelled")
     type: object
   dto.CancelSubscriptionRequest:
     properties:
@@ -2234,6 +2274,15 @@ definitions:
           charges in this currency
         type: string
     type: object
+  dto.CustomerLookupResult:
+    properties:
+      customer:
+        $ref: '#/definitions/github_com_flexprice_flexprice_internal_domain_customer.Customer'
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      status:
+        $ref: '#/definitions/types.DebugTrackerStatus'
+    type: object
   dto.CustomerMultiCurrencyInvoiceSummary:
     properties:
       customer_id:
@@ -2320,6 +2369,19 @@ definitions:
         $ref: '#/definitions/types.PaginationResponse'
       period:
         $ref: '#/definitions/dto.BillingPeriodInfo'
+    type: object
+  dto.DebugTracker:
+    properties:
+      customer_lookup:
+        $ref: '#/definitions/dto.CustomerLookupResult'
+      failure_point:
+        $ref: '#/definitions/types.FailurePoint'
+      meter_matching:
+        $ref: '#/definitions/dto.MeterMatchingResult'
+      price_lookup:
+        $ref: '#/definitions/dto.PriceLookupResult'
+      subscription_line_item_lookup:
+        $ref: '#/definitions/dto.SubscriptionLineItemLookupResult'
     type: object
   dto.DeleteCostsheetResponse:
     properties:
@@ -2538,6 +2600,25 @@ definitions:
       updated_by:
         type: string
     type: object
+  dto.FeatureUsageInfo:
+    properties:
+      customer_id:
+        type: string
+      feature_id:
+        type: string
+      meter_id:
+        type: string
+      price_id:
+        type: string
+      processed_at:
+        type: string
+      qty_total:
+        type: string
+      sub_line_item_id:
+        type: string
+      subscription_id:
+        type: string
+    type: object
   dto.FeatureUsageSummary:
     properties:
       current_usage:
@@ -2623,6 +2704,19 @@ definitions:
       total_revenue:
         description: Derived metrics
         type: string
+    type: object
+  dto.GetEventByIDResponse:
+    properties:
+      debug_tracker:
+        $ref: '#/definitions/dto.DebugTracker'
+      event:
+        $ref: '#/definitions/dto.Event'
+      processed_events:
+        items:
+          $ref: '#/definitions/dto.FeatureUsageInfo'
+        type: array
+      status:
+        $ref: '#/definitions/types.EventProcessingStatusType'
     type: object
   dto.GetEventsRequest:
     properties:
@@ -2717,6 +2811,18 @@ definitions:
         type: integer
       total_count:
         type: integer
+    type: object
+  dto.GetPendingSchedulesResponse:
+    description: List of pending schedules for a subscription
+    properties:
+      count:
+        description: count is the number of pending schedules
+        type: integer
+      schedules:
+        description: schedules is the list of pending schedules
+        items:
+          $ref: '#/definitions/dto.SubscriptionScheduleResponse'
+        type: array
     type: object
   dto.GetPreviewInvoiceRequest:
     properties:
@@ -3694,6 +3800,56 @@ definitions:
     - email
     - password
     type: object
+  dto.MatchedMeter:
+    properties:
+      event_name:
+        type: string
+      meter:
+        $ref: '#/definitions/meter.Meter'
+      meter_id:
+        type: string
+    type: object
+  dto.MatchedPrice:
+    properties:
+      meter_id:
+        type: string
+      price:
+        $ref: '#/definitions/price.Price'
+      price_id:
+        type: string
+      status:
+        type: string
+    type: object
+  dto.MatchedSubscriptionLineItem:
+    properties:
+      end_date:
+        type: string
+      is_active_for_event:
+        type: boolean
+      price_id:
+        type: string
+      start_date:
+        type: string
+      sub_line_item_id:
+        type: string
+      subscription_id:
+        type: string
+      subscription_line_item:
+        $ref: '#/definitions/subscription.SubscriptionLineItem'
+      timestamp_within_range:
+        type: boolean
+    type: object
+  dto.MeterMatchingResult:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      matched_meters:
+        items:
+          $ref: '#/definitions/dto.MatchedMeter'
+        type: array
+      status:
+        $ref: '#/definitions/types.DebugTrackerStatus'
+    type: object
   dto.MeterResponse:
     properties:
       aggregation:
@@ -3988,6 +4144,17 @@ definitions:
         type: string
       url:
         type: string
+    type: object
+  dto.PriceLookupResult:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      matched_prices:
+        items:
+          $ref: '#/definitions/dto.MatchedPrice'
+        type: array
+      status:
+        $ref: '#/definitions/types.DebugTrackerStatus'
     type: object
   dto.PriceResponse:
     properties:
@@ -4380,6 +4547,10 @@ definitions:
         - $ref: '#/definitions/dto.InvoiceResponse'
         description: invoice contains the immediate invoice generated for the change
           (if any)
+      is_scheduled:
+        description: is_scheduled indicates if the change was scheduled or executed
+          immediately
+        type: boolean
       metadata:
         additionalProperties:
           type: string
@@ -4388,16 +4559,24 @@ definitions:
       new_subscription:
         allOf:
         - $ref: '#/definitions/dto.SubscriptionSummary'
-        description: new_subscription contains the new subscription details
+        description: new_subscription contains the new subscription details (only
+          if is_scheduled=false)
       old_subscription:
         allOf:
         - $ref: '#/definitions/dto.SubscriptionSummary'
-        description: old_subscription contains the archived subscription details
+        description: old_subscription contains the archived subscription details (only
+          if is_scheduled=false)
       proration_applied:
         allOf:
         - $ref: '#/definitions/dto.ProrationDetails'
         description: proration_applied contains details of the proration that was
           applied
+      schedule_id:
+        description: schedule_id is the ID of the created schedule (only if is_scheduled=true)
+        type: string
+      scheduled_at:
+        description: scheduled_at is when the change will execute (only if is_scheduled=true)
+        type: string
     type: object
   dto.SubscriptionChangePreviewResponse:
     description: Response showing the financial impact of a subscription plan change
@@ -4465,6 +4644,14 @@ definitions:
         description: billing_period_count is the billing period count for the new
           subscription
         type: integer
+      change_at:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleType'
+        description: |-
+          change_at determines when the change should take effect (optional)
+          If not provided or null: change executes immediately
+          If "immediate": change executes immediately (explicit)
+          If "period_end": change is scheduled for the end of the current billing period
       metadata:
         additionalProperties:
           type: string
@@ -4497,6 +4684,17 @@ definitions:
         type: string
       subscription_id:
         type: string
+    type: object
+  dto.SubscriptionLineItemLookupResult:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      matched_line_items:
+        items:
+          $ref: '#/definitions/dto.MatchedSubscriptionLineItem'
+        type: array
+      status:
+        $ref: '#/definitions/types.DebugTrackerStatus'
     type: object
   dto.SubscriptionLineItemResponse:
     properties:
@@ -4862,6 +5060,229 @@ definitions:
       version:
         description: Version is used for optimistic locking
         type: integer
+    type: object
+  dto.SubscriptionResponseV2:
+    properties:
+      active_pause_id:
+        description: |-
+          ActivePauseID references the current active pause configuration
+          This will be null if no pause is active or scheduled
+        type: string
+      billing_anchor:
+        description: |-
+          BillingAnchor is the reference point that aligns future billing cycle dates.
+          It sets the day of week for week intervals, the day of month for month and year intervals,
+          and the month of year for year intervals. The timestamp is in UTC format.
+        type: string
+      billing_cadence:
+        $ref: '#/definitions/types.BillingCadence'
+      billing_cycle:
+        allOf:
+        - $ref: '#/definitions/types.BillingCycle'
+        description: |-
+          BillingCycle is the cycle of the billing anchor.
+          This is used to determine the billing date for the subscription (i.e set the billing anchor)
+          If not set, the default value is anniversary. Possible values are anniversary and calendar.
+          Anniversary billing means the billing anchor will be the start date of the subscription.
+          Calendar billing means the billing anchor will be the appropriate date based on the billing period.
+          For example, if the billing period is month and the start date is 2025-04-15 then in case of
+          calendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.
+      billing_period:
+        $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        default: 1
+        description: BillingPeriodCount is the total number units of the billing period.
+        type: integer
+      cancel_at:
+        description: CancelAt is the date the subscription will be canceled
+        type: string
+      cancel_at_period_end:
+        description: CancelAtPeriodEnd is whether the subscription was canceled at
+          the end of the current period
+        type: boolean
+      cancelled_at:
+        description: CanceledAt is the date the subscription was canceled
+        type: string
+      collection_method:
+        description: CollectionMethod determines how invoices are collected
+        type: string
+      commitment_amount:
+        description: CommitmentAmount is the minimum amount a customer commits to
+          paying for a billing period
+        type: string
+      coupon_associations:
+        description: CouponAssociations are included when "coupon_associations" is
+          in expand parameter
+        items:
+          $ref: '#/definitions/dto.CouponAssociationResponse'
+        type: array
+      created_at:
+        type: string
+      created_by:
+        type: string
+      credit_grants:
+        description: CreditGrants are included when "credit_grants" is in expand parameter
+        items:
+          $ref: '#/definitions/dto.CreditGrantResponse'
+        type: array
+      currency:
+        description: Currency is the currency of the subscription in lowercase 3 digit
+          ISO codes
+        type: string
+      current_period_end:
+        description: |-
+          CurrentPeriodEnd is the end of the current period that the subscription has been invoiced for.
+          At the end of this period, a new invoice will be created.
+        type: string
+      current_period_start:
+        description: |-
+          CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.
+          At the end of this period, a new invoice will be created.
+        type: string
+      customer:
+        allOf:
+        - $ref: '#/definitions/dto.CustomerResponse'
+        description: Customer is expanded only if "customer" is in expand parameter
+      customer_id:
+        description: CustomerID is the identifier for the customer in our system
+        type: string
+      customer_timezone:
+        type: string
+      enable_true_up:
+        type: boolean
+      end_date:
+        description: EndDate is the end date of the subscription
+        type: string
+      environment_id:
+        description: EnvironmentID is the environment identifier for the subscription
+        type: string
+      gateway_payment_method_id:
+        description: GatewayPaymentMethodID is the gateway payment method ID for this
+          subscription
+        type: string
+      id:
+        description: ID is the unique identifier for the subscription
+        type: string
+      invoicing_customer_id:
+        description: |-
+          InvoicingCustomerID is the customer ID to use for invoicing
+          This can differ from the subscription customer (e.g., parent company invoicing for child company)
+        type: string
+      line_items:
+        description: |-
+          LineItems is expanded only if "subscription_line_items" is in expand parameter
+          Each line item can optionally include expanded price data
+        items:
+          $ref: '#/definitions/dto.SubscriptionLineItemResponse'
+        type: array
+      lookup_key:
+        description: LookupKey is the key used to lookup the subscription in our system
+        type: string
+      metadata:
+        $ref: '#/definitions/types.Metadata'
+      overage_factor:
+        description: OverageFactor is a multiplier applied to usage beyond the commitment
+          amount
+        type: string
+      pause_status:
+        $ref: '#/definitions/types.PauseStatus'
+      pauses:
+        description: Pauses are included when subscription has pause status
+        items:
+          $ref: '#/definitions/subscription.SubscriptionPause'
+        type: array
+      payment_behavior:
+        description: PaymentBehavior determines how subscription payments are handled
+        type: string
+      phases:
+        description: Phases are included when "phases" is in expand parameter
+        items:
+          $ref: '#/definitions/dto.SubscriptionPhaseResponse'
+        type: array
+      plan:
+        allOf:
+        - $ref: '#/definitions/dto.PlanResponse'
+        description: Plan is expanded only if "plan" is in expand parameter
+      plan_id:
+        description: PlanID is the identifier for the plan in our system
+        type: string
+      proration_behavior:
+        $ref: '#/definitions/types.ProrationBehavior'
+      start_date:
+        description: StartDate is the start date of the subscription
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      subscription_status:
+        $ref: '#/definitions/types.SubscriptionStatus'
+      tenant_id:
+        type: string
+      trial_end:
+        description: TrialEnd is the end date of the trial period
+        type: string
+      trial_start:
+        description: TrialStart is the start date of the trial period
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      version:
+        description: Version is used for optimistic locking
+        type: integer
+    type: object
+  dto.SubscriptionScheduleResponse:
+    description: Full details of a subscription schedule
+    properties:
+      can_be_cancelled:
+        description: can_be_cancelled indicates if the schedule can be cancelled
+        type: boolean
+      cancelled_at:
+        description: cancelled_at is when the schedule was cancelled
+        type: string
+      configuration:
+        description: configuration contains type-specific configuration (e.g., target_plan_id
+          for plan changes)
+      created_at:
+        description: created_at timestamp
+        type: string
+      days_until_execution:
+        description: days_until_execution is the number of days until execution
+        type: integer
+      error_message:
+        description: error_message contains the error if execution failed
+        type: string
+      executed_at:
+        description: executed_at is when the schedule was executed
+        type: string
+      execution_result:
+        description: execution_result contains type-specific execution result
+      id:
+        description: id of the schedule
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        description: metadata from the schedule
+        type: object
+      schedule_type:
+        allOf:
+        - $ref: '#/definitions/types.SubscriptionScheduleChangeType'
+        description: schedule_type is the type of schedule (plan_change, addon_change,
+          etc.)
+      scheduled_at:
+        description: scheduled_at is when the schedule will execute
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/types.ScheduleStatus'
+        description: status is the current status of the schedule
+      subscription_id:
+        description: subscription_id is the ID of the subscription
+        type: string
+      updated_at:
+        description: updated_at timestamp
+        type: string
     type: object
   dto.SubscriptionSummary:
     properties:
@@ -7066,6 +7487,8 @@ definitions:
         $ref: '#/definitions/types.GenericConnectionMetadata'
       hubspot:
         $ref: '#/definitions/types.HubSpotConnectionMetadata'
+      moyasar:
+        $ref: '#/definitions/types.MoyasarConnectionMetadata'
       nomod:
         $ref: '#/definitions/types.NomodConnectionMetadata'
       quickbooks:
@@ -7268,6 +7691,18 @@ definitions:
     - DataTypeNumber
     - DataTypeDate
     - DataTypeArray
+  types.DebugTrackerStatus:
+    enum:
+    - unprocessed
+    - not_found
+    - found
+    - error
+    type: string
+    x-enum-varnames:
+    - DebugTrackerStatusUnprocessed
+    - DebugTrackerStatusNotFound
+    - DebugTrackerStatusFound
+    - DebugTrackerStatusError
   types.EntitlementEntityType:
     enum:
     - PLAN
@@ -7367,6 +7802,35 @@ definitions:
     - EntityTypePrices
     - EntityTypeCustomers
     - EntityTypeFeatures
+  types.EventProcessingStatusType:
+    enum:
+    - processed
+    - processing
+    - failed
+    type: string
+    x-enum-varnames:
+    - EventProcessingStatusTypeProcessed
+    - EventProcessingStatusTypeProcessing
+    - EventProcessingStatusTypeFailed
+  types.FailurePoint:
+    properties:
+      error:
+        $ref: '#/definitions/errors.ErrorResponse'
+      failure_point_type:
+        $ref: '#/definitions/types.FailurePointType'
+    type: object
+  types.FailurePointType:
+    enum:
+    - customer_lookup
+    - meter_lookup
+    - price_lookup
+    - subscription_line_item_lookup
+    type: string
+    x-enum-varnames:
+    - FailurePointTypeCustomerLookup
+    - FailurePointTypeMeterLookup
+    - FailurePointTypePriceLookup
+    - FailurePointTypeSubscriptionLineItemLookup
   types.FeatureFilter:
     properties:
       end_time:
@@ -7673,6 +8137,18 @@ definitions:
     additionalProperties:
       type: string
     type: object
+  types.MoyasarConnectionMetadata:
+    properties:
+      publishable_key:
+        description: Moyasar Publishable Key (encrypted, for frontend use)
+        type: string
+      secret_key:
+        description: Moyasar Secret Key (encrypted)
+        type: string
+      webhook_secret:
+        description: Moyasar Webhook Secret (encrypted, optional)
+        type: string
+    type: object
   types.NomodConnectionMetadata:
     properties:
       api_key:
@@ -7738,11 +8214,13 @@ definitions:
     - stripe
     - razorpay
     - nomod
+    - moyasar
     type: string
     x-enum-varnames:
     - PaymentGatewayTypeStripe
     - PaymentGatewayTypeRazorpay
     - PaymentGatewayTypeNomod
+    - PaymentGatewayTypeMoyasar
   types.PaymentMethodType:
     enum:
     - CARD
@@ -8038,6 +8516,28 @@ definitions:
           for MinIO)
         type: boolean
     type: object
+  types.ScheduleStatus:
+    enum:
+    - pending
+    - executing
+    - executed
+    - cancelled
+    - failed
+    type: string
+    x-enum-varnames:
+    - ScheduleStatusPending
+    - ScheduleStatusExecuting
+    - ScheduleStatusExecuted
+    - ScheduleStatusCancelled
+    - ScheduleStatusFailed
+  types.ScheduleType:
+    enum:
+    - immediate
+    - end_of_period
+    type: string
+    x-enum-varnames:
+    - ScheduleTypeImmediate
+    - ScheduleTypePeriodEnd
   types.ScheduledTaskEntityType:
     enum:
     - events
@@ -8079,6 +8579,7 @@ definitions:
     - chargebee
     - quickbooks
     - nomod
+    - moyasar
     type: string
     x-enum-varnames:
     - SecretProviderFlexPrice
@@ -8089,6 +8590,7 @@ definitions:
     - SecretProviderChargebee
     - SecretProviderQuickBooks
     - SecretProviderNomod
+    - SecretProviderMoyasar
   types.SecretType:
     enum:
     - private_key
@@ -8223,6 +8725,14 @@ definitions:
     x-enum-varnames:
     - SubscriptionLineItemEntityTypePlan
     - SubscriptionLineItemEntityTypeAddon
+  types.SubscriptionScheduleChangeType:
+    enum:
+    - plan_change
+    - cancellation
+    type: string
+    x-enum-varnames:
+    - SubscriptionScheduleChangeTypePlanChange
+    - SubscriptionScheduleChangeTypeCancellation
   types.SubscriptionStatus:
     enum:
     - active
@@ -8564,6 +9074,7 @@ definitions:
     - WalletTypePrePaid
   types.WindowSize:
     enum:
+    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -8576,6 +9087,7 @@ definitions:
     - MONTH
     type: string
     x-enum-varnames:
+    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9017,6 +9529,7 @@ paths:
         - chargebee
         - quickbooks
         - nomod
+        - moyasar
         in: query
         name: provider_type
         type: string
@@ -9029,6 +9542,7 @@ paths:
         - SecretProviderChargebee
         - SecretProviderQuickBooks
         - SecretProviderNomod
+        - SecretProviderMoyasar
       - in: query
         name: start_time
         type: string
@@ -10347,6 +10861,46 @@ paths:
       summary: Create a customer
       tags:
       - Customers
+    put:
+      consumes:
+      - application/json
+      description: Update a customer by ID (from path parameter) or by id/lookup_key_id
+        (from query parameters)
+      parameters:
+      - description: Customer ID (query parameter)
+        in: query
+        name: id
+        type: string
+      - description: Customer External ID (lookup_key)
+        in: query
+        name: lookup_key_id
+        type: string
+      - description: Customer
+        in: body
+        name: customer
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateCustomerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CustomerResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update a customer
+      tags:
+      - Customers
   /customers/{id}:
     delete:
       consumes:
@@ -10404,42 +10958,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get a customer
-      tags:
-      - Customers
-    put:
-      consumes:
-      - application/json
-      description: Update a customer
-      parameters:
-      - description: Customer ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Customer
-        in: body
-        name: customer
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateCustomerRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.CustomerResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update a customer
       tags:
       - Customers
   /customers/{id}/entitlements:
@@ -10709,6 +11227,10 @@ paths:
       - in: query
         name: expand
         type: string
+      - default: false
+        in: query
+        name: from_cache
+        type: boolean
       - in: query
         name: id
         type: string
@@ -11399,6 +11921,35 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Ingest event
+      tags:
+      - Events
+  /events/{id}:
+    get:
+      description: Retrieve event details and processing status with debug information
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetEventByIDResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get event by ID
       tags:
       - Events
   /events/analytics:
@@ -14635,6 +15186,39 @@ paths:
       summary: Resume a paused subscription
       tags:
       - Subscriptions
+  /subscriptions/{id}/v2:
+    get:
+      description: Get a subscription by ID with optional expand parameters
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')
+        in: query
+        name: expand
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SubscriptionResponseV2'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get subscription V2
+      tags:
+      - Subscriptions
   /subscriptions/addon:
     delete:
       consumes:
@@ -15982,6 +16566,107 @@ paths:
       summary: List users with filters
       tags:
       - Users
+  /v1/subscription-schedules:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves subscription schedules with optional filtering
+      parameters:
+      - description: Filter to pending schedules only
+        in: query
+        name: pending_only
+        type: boolean
+      - description: Filter by subscription ID
+        in: query
+        name: subscription_id
+        type: string
+      - description: Limit results
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetPendingSchedulesResponse'
+      summary: List all subscription schedules
+      tags:
+      - Subscriptions
+  /v1/subscription-schedules/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves details of a specific subscription schedule
+      parameters:
+      - description: Schedule ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.SubscriptionScheduleResponse'
+      summary: Get subscription schedule
+      tags:
+      - Subscriptions
+  /v1/subscriptions/{subscription_id}/schedules:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all schedules for a specific subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.GetPendingSchedulesResponse'
+      summary: List subscription schedules
+      tags:
+      - Subscriptions
+  /v1/subscriptions/schedules/{schedule_id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: 'Cancels a pending subscription schedule. Supports two modes: 1)
+        By schedule ID in path, or 2) By subscription ID + schedule type in request
+        body'
+      parameters:
+      - description: Schedule ID (optional if using request body)
+        in: path
+        name: schedule_id
+        type: string
+      - description: Cancel request (optional if using path parameter)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/dto.CancelScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.CancelScheduleResponse'
+      summary: Cancel subscription schedule
+      tags:
+      - Subscriptions
   /wallets:
     get:
       consumes:
@@ -16554,6 +17239,37 @@ paths:
             additionalProperties: true
             type: object
       summary: Handle HubSpot webhook events
+      tags:
+      - Webhooks
+  /webhooks/moyasar/{tenant_id}/{environment_id}:
+    post:
+      consumes:
+      - application/json
+      description: Process incoming Moyasar webhook events for payment status updates
+      parameters:
+      - description: Tenant ID
+        in: path
+        name: tenant_id
+        required: true
+        type: string
+      - description: Environment ID
+        in: path
+        name: environment_id
+        required: true
+        type: string
+      - description: Moyasar webhook signature
+        in: header
+        name: X-Moyasar-Signature
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Webhook received (always returns 200)
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Handle Moyasar webhook events
       tags:
       - Webhooks
   /webhooks/nomod/{tenant_id}/{environment_id}:

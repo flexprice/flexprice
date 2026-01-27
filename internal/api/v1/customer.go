@@ -116,20 +116,19 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 }
 
 // @Summary Update a customer
-// @Description Update a customer
+// @Description Update a customer by ID (from path parameter) or by id/lookup_key_id (from query parameters)
 // @Tags Customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param id path string true "Customer ID"
+// @Param id query string false "Customer ID (query parameter)"
+// @Param lookup_key_id query string false "Customer External ID (lookup_key)"
 // @Param customer body dto.UpdateCustomerRequest true "Customer"
 // @Success 200 {object} dto.CustomerResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /customers/{id} [put]
+// @Router /customers [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
-	id := c.Param("id")
-
 	var req dto.UpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
@@ -138,7 +137,43 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.UpdateCustomer(c.Request.Context(), id, req)
+	// First check if ID is provided as path parameter
+	customerID := c.Param("id")
+	lookupKeyID := c.Query("lookup_key_id")
+
+	// If no path parameter, check query parameters
+	if customerID == "" {
+		customerID = c.Query("id")
+	}
+
+	// Validate that at least one identifier is provided
+	if customerID == "" && lookupKeyID == "" {
+		c.Error(ierr.NewError("either id (path or query parameter) or lookup_key_id (query parameter) is required").
+			WithHint("Provide id as path parameter (/customers/:id) or as query parameter (?id=...), or provide lookup_key_id as query parameter (?lookup_key_id=...)").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Resolve lookup_key_id to customer_id if provided
+	if lookupKeyID != "" {
+		customer, err := h.service.GetCustomerByLookupKey(c.Request.Context(), lookupKeyID)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		// If both customer_id and lookup_key_id are provided, ensure they refer to the same customer
+		if customerID != "" && customer.ID != customerID {
+			c.Error(ierr.NewError("id and lookup_key_id refer to different customers").
+				WithHint("Providing either id or lookup_key_id is sufficient. But when providing both, ensure both identifiers refer to the same customer.").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		customerID = customer.ID
+	}
+
+	resp, err := h.service.UpdateCustomer(c.Request.Context(), customerID, req)
 	if err != nil {
 		c.Error(err)
 		return

@@ -682,7 +682,8 @@ const docTemplate = `{
                             "razorpay",
                             "chargebee",
                             "quickbooks",
-                            "nomod"
+                            "nomod",
+                            "moyasar"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -693,7 +694,8 @@ const docTemplate = `{
                             "SecretProviderRazorpay",
                             "SecretProviderChargebee",
                             "SecretProviderQuickBooks",
-                            "SecretProviderNomod"
+                            "SecretProviderNomod",
+                            "SecretProviderMoyasar"
                         ],
                         "name": "provider_type",
                         "in": "query"
@@ -2696,6 +2698,67 @@ const docTemplate = `{
                     }
                 }
             },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a customer by ID (from path parameter) or by id/lookup_key_id (from query parameters)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update a customer",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Customer ID (query parameter)",
+                        "name": "id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Customer External ID (lookup_key)",
+                        "name": "lookup_key_id",
+                        "in": "query"
+                    },
+                    {
+                        "description": "Customer",
+                        "name": "customer",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateCustomerRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CustomerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -2956,6 +3019,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "boolean",
+                        "default": false,
+                        "name": "from_cache",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "id",
                         "in": "query"
@@ -3028,62 +3097,6 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.CustomerResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update a customer",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Customers"
-                ],
-                "summary": "Update a customer",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Customer ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Customer",
-                        "name": "customer",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateCustomerRequest"
-                        }
                     }
                 ],
                 "responses": {
@@ -4706,6 +4719,52 @@ const docTemplate = `{
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/events/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Retrieve event details and processing status with debug information",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get event by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetEventByIDResponse"
                         }
                     },
                     "404": {
@@ -9700,6 +9759,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscriptions/{id}/v2": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a subscription by ID with optional expand parameters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription V2",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')",
+                        "name": "expand",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionResponseV2"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/tasks": {
             "get": {
                 "security": [
@@ -11479,6 +11590,158 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/subscription-schedules": {
+            "get": {
+                "description": "Retrieves subscription schedules with optional filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "List all subscription schedules",
+                "parameters": [
+                    {
+                        "type": "boolean",
+                        "description": "Filter to pending schedules only",
+                        "name": "pending_only",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by subscription ID",
+                        "name": "subscription_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit results",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetPendingSchedulesResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/subscription-schedules/{id}": {
+            "get": {
+                "description": "Retrieves details of a specific subscription schedule",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Get subscription schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/subscriptions/schedules/{schedule_id}/cancel": {
+            "post": {
+                "description": "Cancels a pending subscription schedule. Supports two modes: 1) By schedule ID in path, or 2) By subscription ID + schedule type in request body",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Cancel subscription schedule",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Schedule ID (optional if using request body)",
+                        "name": "schedule_id",
+                        "in": "path"
+                    },
+                    {
+                        "description": "Cancel request (optional if using path parameter)",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CancelScheduleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.CancelScheduleResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/subscriptions/{subscription_id}/schedules": {
+            "get": {
+                "description": "Retrieves all schedules for a specific subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "List subscription schedules",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.GetPendingSchedulesResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/wallets": {
             "get": {
                 "security": [
@@ -12356,6 +12619,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhooks/moyasar/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming Moyasar webhook events for payment status updates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle Moyasar webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Moyasar webhook signature",
+                        "name": "X-Moyasar-Signature",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook received (always returns 200)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/nomod/{tenant_id}/{environment_id}": {
             "post": {
                 "description": "Process incoming Nomod webhook events for payment and invoice payments",
@@ -12781,6 +13090,13 @@ const docTemplate = `{
                 "addon_id": {
                     "type": "string"
                 },
+                "line_item_commitments": {
+                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.LineItemCommitmentConfig"
+                    }
+                },
                 "metadata": {
                     "type": "object",
                     "additionalProperties": true
@@ -12801,6 +13117,13 @@ const docTemplate = `{
             "properties": {
                 "addon_id": {
                     "type": "string"
+                },
+                "line_item_commitments": {
+                    "description": "LineItemCommitments allows setting commitment configuration per addon line item (keyed by price_id)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/dto.LineItemCommitmentConfig"
+                    }
                 },
                 "metadata": {
                     "type": "object",
@@ -13156,6 +13479,46 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.IngestEventRequest"
                     }
+                }
+            }
+        },
+        "dto.CancelScheduleRequest": {
+            "description": "Request to cancel a subscription schedule (supports two modes)",
+            "type": "object",
+            "properties": {
+                "schedule_id": {
+                    "description": "schedule_id is the ID of the schedule to cancel (optional if subscription_id and schedule_type are provided)",
+                    "type": "string"
+                },
+                "schedule_type": {
+                    "description": "schedule_type is the type of schedule to cancel (required if schedule_id is not provided)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SubscriptionScheduleChangeType"
+                        }
+                    ]
+                },
+                "subscription_id": {
+                    "description": "subscription_id is the ID of the subscription (required if schedule_id is not provided)",
+                    "type": "string"
+                }
+            }
+        },
+        "dto.CancelScheduleResponse": {
+            "description": "Confirmation of schedule cancellation",
+            "type": "object",
+            "properties": {
+                "message": {
+                    "description": "message is a confirmation message",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "status is the new status (should be \"cancelled\")",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ScheduleStatus"
+                        }
+                    ]
                 }
             }
         },
@@ -15659,6 +16022,20 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CustomerLookupResult": {
+            "type": "object",
+            "properties": {
+                "customer": {
+                    "$ref": "#/definitions/github_com_flexprice_flexprice_internal_domain_customer.Customer"
+                },
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.DebugTrackerStatus"
+                }
+            }
+        },
         "dto.CustomerMultiCurrencyInvoiceSummary": {
             "type": "object",
             "properties": {
@@ -15778,6 +16155,26 @@ const docTemplate = `{
                 },
                 "period": {
                     "$ref": "#/definitions/dto.BillingPeriodInfo"
+                }
+            }
+        },
+        "dto.DebugTracker": {
+            "type": "object",
+            "properties": {
+                "customer_lookup": {
+                    "$ref": "#/definitions/dto.CustomerLookupResult"
+                },
+                "failure_point": {
+                    "$ref": "#/definitions/types.FailurePoint"
+                },
+                "meter_matching": {
+                    "$ref": "#/definitions/dto.MeterMatchingResult"
+                },
+                "price_lookup": {
+                    "$ref": "#/definitions/dto.PriceLookupResult"
+                },
+                "subscription_line_item_lookup": {
+                    "$ref": "#/definitions/dto.SubscriptionLineItemLookupResult"
                 }
             }
         },
@@ -16109,6 +16506,35 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.FeatureUsageInfo": {
+            "type": "object",
+            "properties": {
+                "customer_id": {
+                    "type": "string"
+                },
+                "feature_id": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "processed_at": {
+                    "type": "string"
+                },
+                "qty_total": {
+                    "type": "string"
+                },
+                "sub_line_item_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.FeatureUsageSummary": {
             "type": "object",
             "properties": {
@@ -16233,6 +16659,26 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.GetEventByIDResponse": {
+            "type": "object",
+            "properties": {
+                "debug_tracker": {
+                    "$ref": "#/definitions/dto.DebugTracker"
+                },
+                "event": {
+                    "$ref": "#/definitions/dto.Event"
+                },
+                "processed_events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.FeatureUsageInfo"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/types.EventProcessingStatusType"
+                }
+            }
+        },
         "dto.GetEventsRequest": {
             "type": "object",
             "properties": {
@@ -16354,6 +16800,23 @@ const docTemplate = `{
                 },
                 "total_count": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.GetPendingSchedulesResponse": {
+            "description": "List of pending schedules for a subscription",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "description": "count is the number of pending schedules",
+                    "type": "integer"
+                },
+                "schedules": {
+                    "description": "schedules is the list of pending schedules",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionScheduleResponse"
+                    }
                 }
             }
         },
@@ -17664,6 +18127,83 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.MatchedMeter": {
+            "type": "object",
+            "properties": {
+                "event_name": {
+                    "type": "string"
+                },
+                "meter": {
+                    "$ref": "#/definitions/meter.Meter"
+                },
+                "meter_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MatchedPrice": {
+            "type": "object",
+            "properties": {
+                "meter_id": {
+                    "type": "string"
+                },
+                "price": {
+                    "$ref": "#/definitions/price.Price"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.MatchedSubscriptionLineItem": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "is_active_for_event": {
+                    "type": "boolean"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "sub_line_item_id": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "subscription_line_item": {
+                    "$ref": "#/definitions/subscription.SubscriptionLineItem"
+                },
+                "timestamp_within_range": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.MeterMatchingResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "matched_meters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MatchedMeter"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/types.DebugTrackerStatus"
+                }
+            }
+        },
         "dto.MeterResponse": {
             "type": "object",
             "properties": {
@@ -18057,6 +18597,23 @@ const docTemplate = `{
                 },
                 "url": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.PriceLookupResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "matched_prices": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MatchedPrice"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/types.DebugTrackerStatus"
                 }
             }
         },
@@ -18602,6 +19159,10 @@ const docTemplate = `{
                         }
                     ]
                 },
+                "is_scheduled": {
+                    "description": "is_scheduled indicates if the change was scheduled or executed immediately",
+                    "type": "boolean"
+                },
                 "metadata": {
                     "description": "metadata from the request",
                     "type": "object",
@@ -18610,7 +19171,7 @@ const docTemplate = `{
                     }
                 },
                 "new_subscription": {
-                    "description": "new_subscription contains the new subscription details",
+                    "description": "new_subscription contains the new subscription details (only if is_scheduled=false)",
                     "allOf": [
                         {
                             "$ref": "#/definitions/dto.SubscriptionSummary"
@@ -18618,7 +19179,7 @@ const docTemplate = `{
                     ]
                 },
                 "old_subscription": {
-                    "description": "old_subscription contains the archived subscription details",
+                    "description": "old_subscription contains the archived subscription details (only if is_scheduled=false)",
                     "allOf": [
                         {
                             "$ref": "#/definitions/dto.SubscriptionSummary"
@@ -18632,6 +19193,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/dto.ProrationDetails"
                         }
                     ]
+                },
+                "schedule_id": {
+                    "description": "schedule_id is the ID of the created schedule (only if is_scheduled=true)",
+                    "type": "string"
+                },
+                "scheduled_at": {
+                    "description": "scheduled_at is when the change will execute (only if is_scheduled=true)",
+                    "type": "string"
                 }
             }
         },
@@ -18751,6 +19320,14 @@ const docTemplate = `{
                     "type": "integer",
                     "default": 1
                 },
+                "change_at": {
+                    "description": "change_at determines when the change should take effect (optional)\nIf not provided or null: change executes immediately\nIf \"immediate\": change executes immediately (explicit)\nIf \"period_end\": change is scheduled for the end of the current billing period",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ScheduleType"
+                        }
+                    ]
+                },
                 "metadata": {
                     "description": "metadata contains additional key-value pairs for storing extra information",
                     "type": "object",
@@ -18786,6 +19363,23 @@ const docTemplate = `{
                 },
                 "subscription_id": {
                     "type": "string"
+                }
+            }
+        },
+        "dto.SubscriptionLineItemLookupResult": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "matched_line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.MatchedSubscriptionLineItem"
+                    }
+                },
+                "status": {
+                    "$ref": "#/definitions/types.DebugTrackerStatus"
                 }
             }
         },
@@ -19273,6 +19867,288 @@ const docTemplate = `{
                 "version": {
                     "description": "Version is used for optimistic locking",
                     "type": "integer"
+                }
+            }
+        },
+        "dto.SubscriptionResponseV2": {
+            "type": "object",
+            "properties": {
+                "active_pause_id": {
+                    "description": "ActivePauseID references the current active pause configuration\nThis will be null if no pause is active or scheduled",
+                    "type": "string"
+                },
+                "billing_anchor": {
+                    "description": "BillingAnchor is the reference point that aligns future billing cycle dates.\nIt sets the day of week for week intervals, the day of month for month and year intervals,\nand the month of year for year intervals. The timestamp is in UTC format.",
+                    "type": "string"
+                },
+                "billing_cadence": {
+                    "$ref": "#/definitions/types.BillingCadence"
+                },
+                "billing_cycle": {
+                    "description": "BillingCycle is the cycle of the billing anchor.\nThis is used to determine the billing date for the subscription (i.e set the billing anchor)\nIf not set, the default value is anniversary. Possible values are anniversary and calendar.\nAnniversary billing means the billing anchor will be the start date of the subscription.\nCalendar billing means the billing anchor will be the appropriate date based on the billing period.\nFor example, if the billing period is month and the start date is 2025-04-15 then in case of\ncalendar billing the billing anchor will be 2025-05-01 vs 2025-04-15 for anniversary billing.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingCycle"
+                        }
+                    ]
+                },
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_count": {
+                    "description": "BillingPeriodCount is the total number units of the billing period.",
+                    "type": "integer",
+                    "default": 1
+                },
+                "cancel_at": {
+                    "description": "CancelAt is the date the subscription will be canceled",
+                    "type": "string"
+                },
+                "cancel_at_period_end": {
+                    "description": "CancelAtPeriodEnd is whether the subscription was canceled at the end of the current period",
+                    "type": "boolean"
+                },
+                "cancelled_at": {
+                    "description": "CanceledAt is the date the subscription was canceled",
+                    "type": "string"
+                },
+                "collection_method": {
+                    "description": "CollectionMethod determines how invoices are collected",
+                    "type": "string"
+                },
+                "commitment_amount": {
+                    "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
+                    "type": "string"
+                },
+                "coupon_associations": {
+                    "description": "CouponAssociations are included when \"coupon_associations\" is in expand parameter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CouponAssociationResponse"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "credit_grants": {
+                    "description": "CreditGrants are included when \"credit_grants\" is in expand parameter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreditGrantResponse"
+                    }
+                },
+                "currency": {
+                    "description": "Currency is the currency of the subscription in lowercase 3 digit ISO codes",
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "description": "CurrentPeriodEnd is the end of the current period that the subscription has been invoiced for.\nAt the end of this period, a new invoice will be created.",
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "description": "CurrentPeriodStart is the end of the current period that the subscription has been invoiced for.\nAt the end of this period, a new invoice will be created.",
+                    "type": "string"
+                },
+                "customer": {
+                    "description": "Customer is expanded only if \"customer\" is in expand parameter",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.CustomerResponse"
+                        }
+                    ]
+                },
+                "customer_id": {
+                    "description": "CustomerID is the identifier for the customer in our system",
+                    "type": "string"
+                },
+                "customer_timezone": {
+                    "type": "string"
+                },
+                "enable_true_up": {
+                    "type": "boolean"
+                },
+                "end_date": {
+                    "description": "EndDate is the end date of the subscription",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "EnvironmentID is the environment identifier for the subscription",
+                    "type": "string"
+                },
+                "gateway_payment_method_id": {
+                    "description": "GatewayPaymentMethodID is the gateway payment method ID for this subscription",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "ID is the unique identifier for the subscription",
+                    "type": "string"
+                },
+                "invoicing_customer_id": {
+                    "description": "InvoicingCustomerID is the customer ID to use for invoicing\nThis can differ from the subscription customer (e.g., parent company invoicing for child company)",
+                    "type": "string"
+                },
+                "line_items": {
+                    "description": "LineItems is expanded only if \"subscription_line_items\" is in expand parameter\nEach line item can optionally include expanded price data",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
+                    }
+                },
+                "lookup_key": {
+                    "description": "LookupKey is the key used to lookup the subscription in our system",
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "overage_factor": {
+                    "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
+                    "type": "string"
+                },
+                "pause_status": {
+                    "$ref": "#/definitions/types.PauseStatus"
+                },
+                "pauses": {
+                    "description": "Pauses are included when subscription has pause status",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/subscription.SubscriptionPause"
+                    }
+                },
+                "payment_behavior": {
+                    "description": "PaymentBehavior determines how subscription payments are handled",
+                    "type": "string"
+                },
+                "phases": {
+                    "description": "Phases are included when \"phases\" is in expand parameter",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.SubscriptionPhaseResponse"
+                    }
+                },
+                "plan": {
+                    "description": "Plan is expanded only if \"plan\" is in expand parameter",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.PlanResponse"
+                        }
+                    ]
+                },
+                "plan_id": {
+                    "description": "PlanID is the identifier for the plan in our system",
+                    "type": "string"
+                },
+                "proration_behavior": {
+                    "$ref": "#/definitions/types.ProrationBehavior"
+                },
+                "start_date": {
+                    "description": "StartDate is the start date of the subscription",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_status": {
+                    "$ref": "#/definitions/types.SubscriptionStatus"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "trial_end": {
+                    "description": "TrialEnd is the end date of the trial period",
+                    "type": "string"
+                },
+                "trial_start": {
+                    "description": "TrialStart is the start date of the trial period",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                },
+                "version": {
+                    "description": "Version is used for optimistic locking",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.SubscriptionScheduleResponse": {
+            "description": "Full details of a subscription schedule",
+            "type": "object",
+            "properties": {
+                "can_be_cancelled": {
+                    "description": "can_be_cancelled indicates if the schedule can be cancelled",
+                    "type": "boolean"
+                },
+                "cancelled_at": {
+                    "description": "cancelled_at is when the schedule was cancelled",
+                    "type": "string"
+                },
+                "configuration": {
+                    "description": "configuration contains type-specific configuration (e.g., target_plan_id for plan changes)"
+                },
+                "created_at": {
+                    "description": "created_at timestamp",
+                    "type": "string"
+                },
+                "days_until_execution": {
+                    "description": "days_until_execution is the number of days until execution",
+                    "type": "integer"
+                },
+                "error_message": {
+                    "description": "error_message contains the error if execution failed",
+                    "type": "string"
+                },
+                "executed_at": {
+                    "description": "executed_at is when the schedule was executed",
+                    "type": "string"
+                },
+                "execution_result": {
+                    "description": "execution_result contains type-specific execution result"
+                },
+                "id": {
+                    "description": "id of the schedule",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "metadata from the schedule",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "schedule_type": {
+                    "description": "schedule_type is the type of schedule (plan_change, addon_change, etc.)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.SubscriptionScheduleChangeType"
+                        }
+                    ]
+                },
+                "scheduled_at": {
+                    "description": "scheduled_at is when the schedule will execute",
+                    "type": "string"
+                },
+                "status": {
+                    "description": "status is the current status of the schedule",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ScheduleStatus"
+                        }
+                    ]
+                },
+                "subscription_id": {
+                    "description": "subscription_id is the ID of the subscription",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "description": "updated_at timestamp",
+                    "type": "string"
                 }
             }
         },
@@ -22392,6 +23268,9 @@ const docTemplate = `{
                 "hubspot": {
                     "$ref": "#/definitions/types.HubSpotConnectionMetadata"
                 },
+                "moyasar": {
+                    "$ref": "#/definitions/types.MoyasarConnectionMetadata"
+                },
                 "nomod": {
                     "$ref": "#/definitions/types.NomodConnectionMetadata"
                 },
@@ -22666,6 +23545,21 @@ const docTemplate = `{
                 "DataTypeArray"
             ]
         },
+        "types.DebugTrackerStatus": {
+            "type": "string",
+            "enum": [
+                "unprocessed",
+                "not_found",
+                "found",
+                "error"
+            ],
+            "x-enum-varnames": [
+                "DebugTrackerStatusUnprocessed",
+                "DebugTrackerStatusNotFound",
+                "DebugTrackerStatusFound",
+                "DebugTrackerStatusError"
+            ]
+        },
         "types.EntitlementEntityType": {
             "type": "string",
             "enum": [
@@ -22799,6 +23693,45 @@ const docTemplate = `{
                 "EntityTypePrices",
                 "EntityTypeCustomers",
                 "EntityTypeFeatures"
+            ]
+        },
+        "types.EventProcessingStatusType": {
+            "type": "string",
+            "enum": [
+                "processed",
+                "processing",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "EventProcessingStatusTypeProcessed",
+                "EventProcessingStatusTypeProcessing",
+                "EventProcessingStatusTypeFailed"
+            ]
+        },
+        "types.FailurePoint": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/errors.ErrorResponse"
+                },
+                "failure_point_type": {
+                    "$ref": "#/definitions/types.FailurePointType"
+                }
+            }
+        },
+        "types.FailurePointType": {
+            "type": "string",
+            "enum": [
+                "customer_lookup",
+                "meter_lookup",
+                "price_lookup",
+                "subscription_line_item_lookup"
+            ],
+            "x-enum-varnames": [
+                "FailurePointTypeCustomerLookup",
+                "FailurePointTypeMeterLookup",
+                "FailurePointTypePriceLookup",
+                "FailurePointTypeSubscriptionLineItemLookup"
             ]
         },
         "types.FeatureFilter": {
@@ -23197,6 +24130,23 @@ const docTemplate = `{
                 "type": "string"
             }
         },
+        "types.MoyasarConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "publishable_key": {
+                    "description": "Moyasar Publishable Key (encrypted, for frontend use)",
+                    "type": "string"
+                },
+                "secret_key": {
+                    "description": "Moyasar Secret Key (encrypted)",
+                    "type": "string"
+                },
+                "webhook_secret": {
+                    "description": "Moyasar Webhook Secret (encrypted, optional)",
+                    "type": "string"
+                }
+            }
+        },
         "types.NomodConnectionMetadata": {
             "type": "object",
             "properties": {
@@ -23283,12 +24233,14 @@ const docTemplate = `{
             "enum": [
                 "stripe",
                 "razorpay",
-                "nomod"
+                "nomod",
+                "moyasar"
             ],
             "x-enum-varnames": [
                 "PaymentGatewayTypeStripe",
                 "PaymentGatewayTypeRazorpay",
-                "PaymentGatewayTypeNomod"
+                "PaymentGatewayTypeNomod",
+                "PaymentGatewayTypeMoyasar"
             ]
         },
         "types.PaymentMethodType": {
@@ -23694,6 +24646,34 @@ const docTemplate = `{
                 }
             }
         },
+        "types.ScheduleStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "executing",
+                "executed",
+                "cancelled",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "ScheduleStatusPending",
+                "ScheduleStatusExecuting",
+                "ScheduleStatusExecuted",
+                "ScheduleStatusCancelled",
+                "ScheduleStatusFailed"
+            ]
+        },
+        "types.ScheduleType": {
+            "type": "string",
+            "enum": [
+                "immediate",
+                "end_of_period"
+            ],
+            "x-enum-varnames": [
+                "ScheduleTypeImmediate",
+                "ScheduleTypePeriodEnd"
+            ]
+        },
         "types.ScheduledTaskEntityType": {
             "type": "string",
             "enum": [
@@ -23743,7 +24723,8 @@ const docTemplate = `{
                 "razorpay",
                 "chargebee",
                 "quickbooks",
-                "nomod"
+                "nomod",
+                "moyasar"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
@@ -23753,7 +24734,8 @@ const docTemplate = `{
                 "SecretProviderRazorpay",
                 "SecretProviderChargebee",
                 "SecretProviderQuickBooks",
-                "SecretProviderNomod"
+                "SecretProviderNomod",
+                "SecretProviderMoyasar"
             ]
         },
         "types.SecretType": {
@@ -23942,6 +24924,17 @@ const docTemplate = `{
             "x-enum-varnames": [
                 "SubscriptionLineItemEntityTypePlan",
                 "SubscriptionLineItemEntityTypeAddon"
+            ]
+        },
+        "types.SubscriptionScheduleChangeType": {
+            "type": "string",
+            "enum": [
+                "plan_change",
+                "cancellation"
+            ],
+            "x-enum-varnames": [
+                "SubscriptionScheduleChangeTypePlanChange",
+                "SubscriptionScheduleChangeTypeCancellation"
             ]
         },
         "types.SubscriptionStatus": {
@@ -24425,6 +25418,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -24437,6 +25431,7 @@ const docTemplate = `{
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
