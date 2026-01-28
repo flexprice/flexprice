@@ -25,6 +25,7 @@ const (
 	SettingKeyEnvConfig                SettingKey = "env_config"
 	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
 	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
+	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -36,6 +37,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyEnvConfig,
 		SettingKeyCustomerOnboarding,
 		SettingKeyWalletBalanceAlertConfig,
+		SettingKeyPrepareProcessedEvents,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -107,6 +109,139 @@ type TenantEnvSubscriptionConfig struct {
 	*SubscriptionConfig
 }
 
+// PrepareProcessedEventsConfig is DEPRECATED - settings now use WorkflowConfig
+// This struct is kept only for backward compatibility in ValidateSettingValue
+// The RolloutSubscriptions field is removed - use rollout_to_subscriptions action instead
+type PrepareProcessedEventsConfig struct {
+	FeatureType FeatureType                       `json:"feature_type,omitempty"`
+	Meter       PrepareProcessedEventsMeterConfig `json:"meter"`
+	Price       PrepareProcessedEventsPriceConfig `json:"price"`
+	PlanID      string                            `json:"plan_id,omitempty"`
+}
+
+type PrepareProcessedEventsMeterConfig struct {
+	AggregationType  AggregationType `json:"aggregation_type,omitempty"`
+	AggregationField string          `json:"aggregation_field,omitempty"`
+	ResetUsage       ResetUsage      `json:"reset_usage,omitempty"`
+}
+
+type PrepareProcessedEventsPriceConfig struct {
+	BillingCadence     BillingCadence  `json:"billing_cadence,omitempty"`
+	BillingPeriod      BillingPeriod   `json:"billing_period,omitempty"`
+	BillingModel       BillingModel    `json:"billing_model,omitempty"`
+	Currency           string          `json:"currency,omitempty"`
+	EntityType         PriceEntityType `json:"entity_type,omitempty"`
+	InvoiceCadence     InvoiceCadence  `json:"invoice_cadence,omitempty"`
+	PriceUnitType      PriceUnitType   `json:"price_unit_type,omitempty"`
+	Type               PriceType       `json:"type,omitempty"`
+	Amount             decimal.Decimal `json:"amount,omitempty"`
+	BillingPeriodCount int             `json:"billing_period_count,omitempty"`
+}
+
+// Validate implements SettingConfig interface
+func (c PrepareProcessedEventsConfig) Validate() error {
+	// Follow existing settings pattern:
+	// - Defaults are provided by GetDefaultSettings()
+	// - Validate() only validates provided fields (no mutation, no required plan_id here)
+
+	if c.FeatureType != "" {
+		if err := c.FeatureType.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Meter validation (only when fields are provided)
+	if c.Meter.AggregationType != "" {
+		if !c.Meter.AggregationType.Validate() {
+			return ierr.NewError("invalid aggregation type").
+				WithHint("Provide a valid aggregation type for meter").
+				WithReportableDetails(map[string]any{"aggregation_type": c.Meter.AggregationType}).
+				Mark(ierr.ErrValidation)
+		}
+		if c.Meter.AggregationType.RequiresField() && strings.TrimSpace(c.Meter.AggregationField) == "" {
+			return ierr.NewError("aggregation_field is required for the configured aggregation type").
+				WithHint("Provide aggregation_field (e.g. \"value\")").
+				WithReportableDetails(map[string]any{"aggregation_type": c.Meter.AggregationType}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if c.Meter.ResetUsage != "" {
+		if err := c.Meter.ResetUsage.Validate(); err != nil {
+			return err
+		}
+	}
+
+	// Price validation (only when fields are provided)
+	if c.Price.BillingCadence != "" {
+		if err := c.Price.BillingCadence.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.Price.BillingPeriod != "" {
+		if err := c.Price.BillingPeriod.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.Price.BillingModel != "" {
+		if err := c.Price.BillingModel.Validate(); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(c.Price.Currency) != "" && len(strings.TrimSpace(c.Price.Currency)) != 3 {
+		return ierr.NewError("currency must be a 3-letter code").
+			WithHint("Provide a valid 3-letter currency code (e.g. USD)").
+			WithReportableDetails(map[string]any{"currency": c.Price.Currency}).
+			Mark(ierr.ErrValidation)
+	}
+	if c.Price.EntityType != "" {
+		if err := c.Price.EntityType.Validate(); err != nil {
+			return err
+		}
+		// This workflow only supports PLAN-scoped prices
+		if c.Price.EntityType != PRICE_ENTITY_TYPE_PLAN {
+			return ierr.NewError("entity_type must be PLAN for prepare_processed_events_config").
+				WithHint("Set entity_type to PLAN").
+				WithReportableDetails(map[string]any{"entity_type": c.Price.EntityType}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+	if c.Price.InvoiceCadence != "" {
+		if err := c.Price.InvoiceCadence.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.Price.PriceUnitType != "" {
+		if err := c.Price.PriceUnitType.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.Price.Type != "" {
+		if err := c.Price.Type.Validate(); err != nil {
+			return err
+		}
+	}
+	if c.Price.Amount.IsNegative() {
+		return ierr.NewError("amount cannot be negative").
+			WithHint("Provide a non-negative amount").
+			WithReportableDetails(map[string]any{"amount": c.Price.Amount.String()}).
+			Mark(ierr.ErrValidation)
+	}
+	if c.Price.BillingPeriodCount < 0 {
+		return ierr.NewError("billing_period_count cannot be negative").
+			WithHint("Provide a billing_period_count >= 1").
+			WithReportableDetails(map[string]any{"billing_period_count": c.Price.BillingPeriodCount}).
+			Mark(ierr.ErrValidation)
+	}
+	if c.Price.BillingPeriodCount > 0 && c.Price.BillingPeriodCount < 1 {
+		return ierr.NewError("billing_period_count must be greater than 0").
+			WithHint("Set billing_period_count to 1 or more").
+			WithReportableDetails(map[string]any{"billing_period_count": c.Price.BillingPeriodCount}).
+			Mark(ierr.ErrValidation)
+	}
+
+	return nil
+}
+
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
@@ -151,6 +286,18 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		},
 	}
 
+	// Defaults for prepare_processed_events_config (plan_id intentionally omitted from action)
+	// Use map like customer_onboarding to avoid import cycles
+	defaultPrepareProcessedEventsConfig := map[string]interface{}{
+		"workflow_type": "prepare_processed_events",
+		"actions": []interface{}{
+			map[string]interface{}{
+				"action": "create_feature_and_price",
+				// plan_id must be provided by user - not in defaults
+			},
+		},
+	}
+
 	// Convert typed structs to maps using centralized utility
 	invoiceConfigMap, err := utils.ToMap(defaultInvoiceConfig)
 	if err != nil {
@@ -175,6 +322,9 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Already a map, no conversion needed
+	defaultPrepareProcessedEventsConfigMap := defaultPrepareProcessedEventsConfig
 
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
@@ -206,6 +356,11 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			Key:          SettingKeyWalletBalanceAlertConfig,
 			DefaultValue: defaultWalletBalanceAlertConfigMap,
 			Description:  "Default configuration for wallet balance alert configuration",
+		},
+		SettingKeyPrepareProcessedEvents: {
+			Key:          SettingKeyPrepareProcessedEvents,
+			DefaultValue: defaultPrepareProcessedEventsConfigMap,
+			Description:  "Configuration for preparing processed events (auto-create missing feature/meter/price and optional subscription rollout)",
 		},
 	}, nil
 }
@@ -280,6 +435,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyWalletBalanceAlertConfig:
 		config, err := utils.ToStruct[AlertConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyPrepareProcessedEvents:
+		config, err := utils.ToStruct[PrepareProcessedEventsConfig](value)
 		if err != nil {
 			return err
 		}
