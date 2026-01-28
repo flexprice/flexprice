@@ -162,17 +162,20 @@ cache:
   type: "inmemory"
 
 event_processing:
+  enabled: true
   topic: "events"
   rate_limit: 12
   consumer_group: "flexprice-consumer-local"
 
 event_processing_lazy:
+  enabled: true
   topic: "events_lazy"
   rate_limit: 12
   consumer_group: "v1_event_processing_lazy"
 
 
 event_post_processing:
+  enabled: true
   topic: "events_post_processing"
   rate_limit: 12
   consumer_group: "v1_events_post_processing"
@@ -181,29 +184,42 @@ event_post_processing:
   consumer_group_backfill: "v1_events_post_processing_backfill"
 
 feature_usage_tracking:
+  enabled: true
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service"
+  backfill_enabled: true
+  wallet_alert_push_enabled: true
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
 
 feature_usage_tracking_lazy:
+  enabled: true
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_lazy"
 
+feature_usage_tracking_replay:
+  enabled: true
+  topic: "staging_events_backfill"
+  rate_limit: 1
+  consumer_group: "v1_feature_tracking_service_replay"
+
 costsheet_usage_tracking:
+  enabled: true
   topic: "events"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service"
 
 costsheet_usage_tracking_lazy:
+  enabled: true
   topic: "events_lazy"
   rate_limit: 1
   consumer_group: "v1_costsheet_usage_tracking_service_lazy"
   
 wallet_balance_alert:
+  enabled: true
   topic: "wallet_alert"
   rate_limit: 1
   consumer_group: "v1_wallet_alert_service"

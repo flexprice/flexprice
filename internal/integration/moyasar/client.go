@@ -423,7 +423,7 @@ func (c *Client) CreateInvoice(ctx context.Context, req *CreateInvoiceRequest) (
 	return &invoice, nil
 }
 
-// GetPayment retrieves a payment by IDfrom Moyasar by ID
+// GetPayment retrieves a payment by ID from Moyasar
 func (c *Client) GetPayment(ctx context.Context, paymentID string) (*MoyasarPayment, error) {
 	config, err := c.GetMoyasarConfig(ctx)
 	if err != nil {

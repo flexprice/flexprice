@@ -83,6 +83,11 @@ func (s *eventConsumptionService) RegisterHandler(
 	router *pubsubRouter.Router,
 	cfg *config.Configuration,
 ) {
+	if !cfg.EventProcessing.Enabled {
+		s.Logger.Infow("event consumption handler disabled by configuration")
+		return
+	}
+
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.EventProcessing.RateLimit, time.Second)
 
@@ -106,6 +111,11 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 	router *pubsubRouter.Router,
 	cfg *config.Configuration,
 ) {
+	if !cfg.EventProcessingLazy.Enabled {
+		s.Logger.Infow("event consumption lazy handler disabled by configuration")
+		return
+	}
+
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.EventProcessingLazy.RateLimit, time.Second)
 

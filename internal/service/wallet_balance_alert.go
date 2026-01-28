@@ -160,6 +160,11 @@ func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wal
 
 // RegisterHandler registers a Kafka consumer handler with rate limiting
 func (s *walletBalanceAlertService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.WalletBalanceAlert.Enabled {
+		s.Logger.Infow("wallet balance alert handler disabled by configuration")
+		return
+	}
+
 	// Add throttle middleware for rate limiting
 	throttle := middleware.NewThrottle(cfg.WalletBalanceAlert.RateLimit, time.Second)
 

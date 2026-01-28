@@ -29,7 +29,6 @@ func NewSubscriptionScheduleHandler(scheduleService service.SubscriptionSchedule
 // @Produce json
 // @Param id path string true "Schedule ID"
 // @Success 200 {object} dto.SubscriptionScheduleResponse
-// @Failure 404 {object} dto.ErrorResponse
 // @Router /v1/subscription-schedules/{id} [get]
 func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 	scheduleID := c.Param("schedule_id")
@@ -79,8 +78,6 @@ func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Contex
 // @Param schedule_id path string false "Schedule ID (optional if using request body)"
 // @Param request body dto.CancelScheduleRequest false "Cancel request (optional if using path parameter)"
 // @Success 200 {object} dto.CancelScheduleResponse
-// @Failure 400 {object} dto.ErrorResponse
-// @Failure 404 {object} dto.ErrorResponse
 // @Router /v1/subscriptions/schedules/{schedule_id}/cancel [post]
 func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 	scheduleID := c.Param("schedule_id")

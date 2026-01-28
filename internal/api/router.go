@@ -152,6 +152,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			// Benchmark endpoints for comparing V1 vs V2 event processing performance
 			events.POST("/benchmark/v1", handlers.Events.BenchmarkV1)
 			events.POST("/benchmark/v2", handlers.Events.BenchmarkV2)
+			// Reprocess events endpoint
+			events.POST("/reprocess", handlers.Events.ReprocessEvents)
 		}
 
 		meters := v1Private.Group("/meters")
@@ -194,8 +196,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 
 			customer.POST("", handlers.Customer.CreateCustomer)
 			customer.GET("", handlers.Customer.GetCustomers)
+			customer.PUT("", handlers.Customer.UpdateCustomer) // Supports query params (id or external_customer_id)
 			customer.GET("/:id", handlers.Customer.GetCustomer)
-			customer.PUT("/:id", handlers.Customer.UpdateCustomer)
+			customer.PUT("/:id", handlers.Customer.UpdateCustomer) // Supports path parameter or query params
 			customer.DELETE("/:id", handlers.Customer.DeleteCustomer)
 			customer.GET("/lookup/:lookup_key", handlers.Customer.GetCustomerByLookupKey)    // Legacy route with lookup_key as path parameter
 			customer.GET("/external/:external_id", handlers.Customer.GetCustomerByLookupKey) // New route with external_id as path parameter

@@ -42,6 +42,7 @@ type Configuration struct {
 	EventPostProcessing        EventPostProcessingConfig        `mapstructure:"event_post_processing" validate:"required"`
 	FeatureUsageTracking       FeatureUsageTrackingConfig       `mapstructure:"feature_usage_tracking" validate:"required"`
 	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
+	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
 	FeatureFlag                FeatureFlagConfig                `mapstructure:"feature_flag" validate:"required"`
 	Email                      EmailConfig                      `mapstructure:"email" validate:"required"`
@@ -196,6 +197,7 @@ type BillingConfig struct {
 
 type EventProcessingConfig struct {
 	// Rate limit in messages consumed per second
+	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events"`
 	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_event_processing"`
@@ -206,6 +208,7 @@ type EventProcessingConfig struct {
 
 type EventPostProcessingConfig struct {
 	// Rate limit in messages consumed per second
+	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events_post_processing"`
 	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_events_post_processing"`
@@ -215,6 +218,7 @@ type EventPostProcessingConfig struct {
 }
 
 type EventProcessingLazyConfig struct {
+	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_event_processing_lazy"`
@@ -224,15 +228,19 @@ type EventProcessingLazyConfig struct {
 }
 type FeatureUsageTrackingConfig struct {
 	// Rate limit in messages consumed per second
-	Topic                 string `mapstructure:"topic" default:"events"`
-	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
-	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
-	TopicBackfill         string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
-	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
-	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
+	Enabled                bool   `mapstructure:"enabled" default:"true"`
+	Topic                  string `mapstructure:"topic" default:"events"`
+	RateLimit              int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup          string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
+	TopicBackfill          string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
+	RateLimitBackfill      int64  `mapstructure:"rate_limit_backfill" default:"1"`
+	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
+	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
+	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
 }
 
 type FeatureUsageTrackingLazyConfig struct {
+	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_realtime"`
@@ -241,8 +249,16 @@ type FeatureUsageTrackingLazyConfig struct {
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_lazy_backfill"`
 }
 
+type FeatureUsageTrackingReplayConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"v1_feature_tracking_service_replay"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_replay"`
+}
+
 type WalletBalanceAlertConfig struct {
 	// Rate limit in messages consumed per second
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
 	Topic         string `mapstructure:"topic" default:"wallet_alert"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_wallet_alert_service"`
@@ -273,12 +289,14 @@ type EmailConfig struct {
 	CalendarURL  string `mapstructure:"calendar_url" validate:"omitempty"`
 }
 type CostSheetUsageTrackingConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
 	Topic         string `mapstructure:"topic" default:"events"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service"`
 }
 
 type CostSheetUsageTrackingLazyConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
 	Topic         string `mapstructure:"topic" default:"events_lazy"`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_costsheet_usage_tracking_service_lazy"`

@@ -164,6 +164,11 @@ func (s *eventPostProcessingService) PublishEvent(ctx context.Context, event *ev
 
 // RegisterHandler registers a handler for the post-processing topic with rate limiting
 func (s *eventPostProcessingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.EventPostProcessing.Enabled {
+		s.Logger.Infow("event post-processing handler disabled by configuration")
+		return
+	}
+
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.EventPostProcessing.RateLimit, time.Second)
 

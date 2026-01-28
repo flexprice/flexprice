@@ -147,6 +147,11 @@ func (s *costsheetUsageTrackingService) PublishEvent(ctx context.Context, event 
 
 // RegisterHandler registers a handler for the cost sheet usage tracking topic with rate limiting
 func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.CostSheetUsageTracking.Enabled {
+		s.Logger.Infow("cost sheet usage tracking handler disabled by configuration")
+		return
+	}
+
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.CostSheetUsageTracking.RateLimit, time.Second)
 
@@ -167,6 +172,11 @@ func (s *costsheetUsageTrackingService) RegisterHandler(router *pubsubRouter.Rou
 
 // RegisterHandlerLazy registers a handler for the costsheet usage tracking topic with rate limiting
 func (s *costsheetUsageTrackingService) RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.CostSheetUsageTrackingLazy.Enabled {
+		s.Logger.Infow("cost sheet usage tracking lazy handler disabled by configuration")
+		return
+	}
+
 	// Add throttle middleware to this specific handler
 	throttle := middleware.NewThrottle(cfg.CostSheetUsageTrackingLazy.RateLimit, time.Second)
 

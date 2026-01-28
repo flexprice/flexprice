@@ -116,20 +116,19 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 }
 
 // @Summary Update a customer
-// @Description Update a customer
+// @Description Update a customer by id or external_customer_id
 // @Tags Customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param id path string true "Customer ID"
+// @Param id query string false "Customer ID"
+// @Param external_customer_id query string false "Customer External ID"
 // @Param customer body dto.UpdateCustomerRequest true "Customer"
 // @Success 200 {object} dto.CustomerResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /customers/{id} [put]
+// @Router /customers [put]
 func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
-	id := c.Param("id")
-
 	var req dto.UpdateCustomerRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
@@ -138,7 +137,43 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.UpdateCustomer(c.Request.Context(), id, req)
+	// First check if ID is provided as path parameter
+	customerID := c.Param("id")
+	externalCustomerID := c.Query("external_customer_id")
+
+	// If no path parameter, check query parameters
+	if customerID == "" {
+		customerID = c.Query("id")
+	}
+
+	// Validate that at least one identifier is provided
+	if customerID == "" && externalCustomerID == "" {
+		c.Error(ierr.NewError("either id or external_customer_id is required").
+			WithHint("Provide id as query parameter (?id=...) or provide external_customer_id as query parameter (?external_customer_id=...)").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	// Resolve external_customer_id to customer_id if provided
+	if externalCustomerID != "" {
+		customer, err := h.service.GetCustomerByLookupKey(c.Request.Context(), externalCustomerID)
+		if err != nil {
+			c.Error(err)
+			return
+		}
+
+		// If both customer_id and external_customer_id are provided, ensure they refer to the same customer
+		if customerID != "" && customer.ID != customerID {
+			c.Error(ierr.NewError("id and external_customer_id refer to different customers").
+				WithHint("Providing either id or external_customer_id is sufficient. But when providing both, ensure both identifiers refer to the same customer.").
+				Mark(ierr.ErrValidation))
+			return
+		}
+
+		customerID = customer.ID
+	}
+
+	resp, err := h.service.UpdateCustomer(c.Request.Context(), customerID, req)
 	if err != nil {
 		c.Error(err)
 		return
