@@ -233,9 +233,9 @@ func (s *tenantService) UpdateTenant(ctx context.Context, id string, req dto.Upd
 	}
 	existingTenant.BillingDetails = billingDetails
 
-	// Update the name if it is provided
-	if req.Name != "" {
-		existingTenant.Name = req.Name
+	// Update the name only if it is explicitly provided (not nil), not empty, and different from existing
+	if req.Name != nil && *req.Name != "" && *req.Name != existingTenant.Name {
+		existingTenant.Name = *req.Name
 	}
 
 	if req.Metadata != nil {
