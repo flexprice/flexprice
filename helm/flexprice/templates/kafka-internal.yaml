@@ -1,0 +1,144 @@
+{{- if not .Values.kafka.external.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "flexprice.fullname" . }}-kafka
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+spec:
+  type: {{ .Values.kafka.internal.service.type }}
+  ports:
+    - port: {{ .Values.kafka.internal.service.internalPort }}
+      targetPort: 9092
+      protocol: TCP
+      name: internal
+    - port: {{ .Values.kafka.internal.service.externalPort }}
+      targetPort: 29092
+      protocol: TCP
+      name: external
+    - port: 9093
+      targetPort: 9093
+      protocol: TCP
+      name: controller
+  selector:
+    {{- include "flexprice.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "flexprice.fullname" . }}-kafka
+  labels:
+    {{- include "flexprice.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka
+spec:
+  serviceName: {{ include "flexprice.fullname" . }}-kafka
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "flexprice.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kafka
+  template:
+    metadata:
+      labels:
+        {{- include "flexprice.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kafka
+    spec:
+      containers:
+        - name: kafka
+          image: "{{ .Values.kafka.internal.image.repository }}:{{ .Values.kafka.internal.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.internal.image.pullPolicy }}
+          ports:
+            - name: internal
+              containerPort: 9092
+              protocol: TCP
+            - name: external
+              containerPort: 29092
+              protocol: TCP
+            - name: controller
+              containerPort: 9093
+              protocol: TCP
+          env:
+            - name: CLUSTER_ID
+              value: {{ .Values.kafka.internal.clusterId | quote }}
+            - name: KAFKA_BROKER_ID
+              value: {{ .Values.kafka.internal.brokerId | quote | default "0" }}
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              {{- if eq (int .Values.kafka.internal.replicas) 1 }}
+              value: "{{ .Values.kafka.internal.brokerId | default "0" }}@localhost:9093"
+              {{- else }}
+              value: "{{ .Values.kafka.internal.brokerId | default "0" }}@{{ include "flexprice.fullname" . }}-kafka:9093"
+              {{- end }}
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "INTERNAL"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "INTERNAL://{{ include "flexprice.fullname" . }}-kafka:{{ .Values.kafka.internal.service.internalPort }},EXTERNAL://{{ include "flexprice.fullname" . }}-kafka:{{ .Values.kafka.internal.service.externalPort }}"
+            - name: KAFKA_LISTENERS
+              value: "INTERNAL://0.0.0.0:9092,EXTERNAL://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "1"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "1"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "false"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/kafka/data
+          resources:
+            {{- toYaml .Values.kafka.internal.resources | nindent 12 }}
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 120  # Increased from 60
+            periodSeconds: 30         # Increased from 10
+            timeoutSeconds: 10        # Increased from 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  kafka-metadata-quorum --bootstrap-controller localhost:9093 describe --status || \
+                  kafka-broker-api-versions --bootstrap-server localhost:9092
+            initialDelaySeconds: 60   # Increased from 30
+            periodSeconds: 10
+            timeoutSeconds: 10        # Increased from 3
+            failureThreshold: 5       # Increased from 3
+            successThreshold: 1
+          startupProbe:              # Add a startup probe
+            tcpSocket:
+              port: 9092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30     # 30 * 10 = 300 seconds max startup time
+            successThreshold: 1
+  {{- if .Values.kafka.internal.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        {{- if .Values.kafka.internal.persistence.storageClass }}
+        storageClassName: {{ .Values.kafka.internal.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.kafka.internal.persistence.size }}
+  {{- end }}
+{{- end }}
+
