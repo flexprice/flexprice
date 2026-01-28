@@ -40,6 +40,7 @@ import (
 
 	_ "github.com/flexprice/flexprice/docs/swagger"
 	"github.com/flexprice/flexprice/internal/domain/proration"
+	ee "github.com/flexprice/flexprice/internal/ee/service"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/security"
 	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
@@ -240,6 +241,15 @@ func main() {
 			service.NewWalletBalanceAlertService,
 			service.NewCustomerPortalService,
 			service.NewDashboardService,
+
+			// Enterprise (ee) services
+			ee.NewEnterpriseParams,
+			ee.NewCreditNoteService,
+			ee.NewCreditGrantService,
+			ee.NewWalletService,
+			ee.NewPrepaidCreditsService,
+			ee.NewBillingTimezoneService,
+			ee.NewInvoiceGracePeriodService,
 		),
 	)
 
