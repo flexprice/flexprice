@@ -2301,6 +2301,56 @@ var (
 			},
 		},
 	}
+	// WorkflowExecutionsColumns holds the columns for the "workflow_executions" table.
+	WorkflowExecutionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "varchar(26)"}},
+		{Name: "tenant_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "status", Type: field.TypeString, Default: "published", SchemaType: map[string]string{"postgres": "varchar(20)"}},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "created_by", Type: field.TypeString, Nullable: true},
+		{Name: "updated_by", Type: field.TypeString, Nullable: true},
+		{Name: "environment_id", Type: field.TypeString, Nullable: true, Default: "", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "workflow_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "run_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(255)"}},
+		{Name: "workflow_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "task_queue", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "start_time", Type: field.TypeTime},
+		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
+	}
+	// WorkflowExecutionsTable holds the schema information for the "workflow_executions" table.
+	WorkflowExecutionsTable = &schema.Table{
+		Name:       "workflow_executions",
+		Columns:    WorkflowExecutionsColumns,
+		PrimaryKey: []*schema.Column{WorkflowExecutionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "idx_workflow_executions_workflow_run_unique",
+				Unique:  true,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[8], WorkflowExecutionsColumns[9]},
+			},
+			{
+				Name:    "idx_workflow_executions_tenant_env_type",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[10]},
+			},
+			{
+				Name:    "idx_workflow_executions_tenant_env_queue",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[11]},
+			},
+			{
+				Name:    "idx_workflow_executions_start_time",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[12]},
+			},
+			{
+				Name:    "idx_workflow_executions_tenant_env_time",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[12]},
+			},
+		},
+	}
 	// CouponAssociationCouponApplicationsColumns holds the columns for the "coupon_association_coupon_applications" table.
 	CouponAssociationCouponApplicationsColumns = []*schema.Column{
 		{Name: "coupon_association_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -2373,6 +2423,7 @@ var (
 		UsersTable,
 		WalletsTable,
 		WalletTransactionsTable,
+		WorkflowExecutionsTable,
 		CouponAssociationCouponApplicationsTable,
 	}
 )

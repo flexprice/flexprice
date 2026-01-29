@@ -104,6 +104,8 @@ type Tx struct {
 	Wallet *WalletClient
 	// WalletTransaction is the client for interacting with the WalletTransaction builders.
 	WalletTransaction *WalletTransactionClient
+	// WorkflowExecution is the client for interacting with the WorkflowExecution builders.
+	WorkflowExecution *WorkflowExecutionClient
 
 	// lazily loaded.
 	client     *Client
@@ -280,6 +282,7 @@ func (tx *Tx) init() {
 	tx.User = NewUserClient(tx.config)
 	tx.Wallet = NewWalletClient(tx.config)
 	tx.WalletTransaction = NewWalletTransactionClient(tx.config)
+	tx.WorkflowExecution = NewWorkflowExecutionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.
