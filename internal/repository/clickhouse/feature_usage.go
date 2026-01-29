@@ -552,7 +552,6 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		AND customer_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0
 	`, strings.Join(selectColumns, ",\n\t\t\t"))
 
 	// Add filters for feature_ids
@@ -851,7 +850,7 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
+	`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1038,7 +1037,7 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, requestWindowExpr)
+	`, bucketWindowExpr, requestWindowExpr)
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1256,7 +1255,7 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
+	`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1443,7 +1442,7 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, requestWindowExpr)
+	`, bucketWindowExpr, requestWindowExpr)
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1666,7 +1665,6 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		AND customer_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0
 	`, strings.Join(selectColumns, ",\n\t\t\t"))
 
 	// Add filters for the specific analytics item
@@ -1839,7 +1837,6 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			AND tenant_id = ?
 			AND "timestamp" >= ?
 			AND "timestamp" < ?
-			AND sign != 0
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
 	`
 
