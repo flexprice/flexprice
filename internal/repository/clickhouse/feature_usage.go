@@ -532,8 +532,8 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		selectColumns = append(selectColumns, strings.Join(groupByColumnAliases, ", ")) // group by columns with aliases
 	}
 	selectColumns = append(selectColumns,
-		"SUM(qty_total * sign) AS total_usage",
-		"MAX(qty_total * sign) AS max_usage",
+		"SUM(qty_total) AS total_usage",
+		"MAX(qty_total) AS max_usage",
 		"argMax(qty_total, timestamp) AS latest_usage",
 		"COUNT(DISTINCT unique_hash) AS count_unique_usage",
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
@@ -839,7 +839,7 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		SELECT
 			%s as bucket_start,
 			%s,
-			max(qty_total * sign) as bucket_max,
+			max(qty_total) as bucket_max,
 			argMax(qty_total, timestamp) as bucket_latest,
 			count(DISTINCT unique_hash) as bucket_count_unique,
 			count(DISTINCT id) as event_count
@@ -1026,7 +1026,7 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 		SELECT
 			%s as bucket_start,
 			%s as window_start,
-			max(qty_total * sign) as bucket_max,
+			max(qty_total) as bucket_max,
 			argMax(qty_total, timestamp) as bucket_latest,
 			count(DISTINCT unique_hash) as bucket_count_unique,
 			count(DISTINCT id) as event_count
@@ -1244,7 +1244,7 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 		SELECT
 			%s as bucket_start,
 			%s,
-			sum(qty_total * sign) as bucket_sum,
+			sum(qty_total) as bucket_sum,
 			argMax(qty_total, timestamp) as bucket_latest,
 			count(DISTINCT unique_hash) as bucket_count_unique,
 			count(DISTINCT id) as event_count
@@ -1431,7 +1431,7 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 		SELECT
 			%s as bucket_start,
 			%s as window_start,
-			sum(qty_total * sign) as bucket_sum,
+			sum(qty_total) as bucket_sum,
 			argMax(qty_total, timestamp) as bucket_latest,
 			count(DISTINCT unique_hash) as bucket_count_unique,
 			count(DISTINCT id) as event_count
@@ -1648,8 +1648,8 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	// Build the select columns for time-series query - fetch all aggregation types
 	selectColumns := []string{
 		fmt.Sprintf("%s AS window_time", timeWindowExpr),
-		"SUM(qty_total * sign) AS total_usage",
-		"MAX(qty_total * sign) AS max_usage",
+		"SUM(qty_total) AS total_usage",
+		"MAX(qty_total) AS max_usage",
 		"argMax(qty_total, timestamp) AS latest_usage",
 		"COUNT(DISTINCT unique_hash) AS count_unique_usage",
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
@@ -1787,7 +1787,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 
 		// Set Cost to zero since it's not calculated in this query
 		point.Cost = decimal.Zero
-		// Usage is already set from the query (SUM(qty_total * sign))
+		// Usage is already set from the query (SUM(qty_total))
 
 		points = append(points, point)
 	}
@@ -1824,11 +1824,11 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			feature_id,
 			meter_id,
 			price_id,
-			sum(qty_total * sign)              AS sum_total,
-			max(qty_total * sign)              AS max_total,
+			sum(qty_total)              AS sum_total,
+			max(qty_total)              AS max_total,
 			count(DISTINCT id)                 AS count_distinct_ids,
 			count(DISTINCT unique_hash)        AS count_unique_qty,
-			argMax(qty_total * sign, "timestamp") AS latest_qty
+			argMax(qty_total, "timestamp") AS latest_qty
 		FROM feature_usage
 		WHERE 
 			subscription_id = ?
@@ -1940,7 +1940,6 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 		  AND environment_id = ?
 		  AND timestamp >= ?
 		  AND timestamp < ?
-		  AND sign = 1
 		ORDER BY timestamp DESC
 		LIMIT ? OFFSET ?
 	`
@@ -2137,7 +2136,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		WITH %s AS (
 			SELECT
 				%s as bucket_start,
-				%s(qty_total * sign) as %s
+				%s(qty_total) as %s
 			FROM feature_usage
 			PREWHERE tenant_id = '%s'
 				AND environment_id = '%s'
