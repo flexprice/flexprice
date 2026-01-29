@@ -341,7 +341,7 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.SyncPlanPricesV2(c.Request.Context(), id)
+	resp, err := h.service.SyncPlanPrices(c.Request.Context(), id)
 	if err != nil {
 		c.Error(err)
 		return

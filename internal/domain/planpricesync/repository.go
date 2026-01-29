@@ -16,7 +16,7 @@ type PlanLineItemTerminationDelta struct {
 // PlanLineItemCreationDelta is a plan-sync delta row for creating a new line item.
 type PlanLineItemCreationDelta struct {
 	SubscriptionID string
-	PriceID        string
+	PriceID        string // plan price ID to use for the new line item
 }
 
 type ListPlanLineItemsToTerminateParams struct {
@@ -60,6 +60,7 @@ type Repository interface {
 	) (items []PlanLineItemTerminationDelta, err error)
 
 	// ListPlanLineItemsToCreate returns missing (subscription_id, price_id) pairs for a plan.
+	// price_id is the plan price ID (prices.entity_type=PLAN), not parent_price_id.
 	//
 	// Batch:
 	// - If limit <= 0, an implementation-defined default is used.

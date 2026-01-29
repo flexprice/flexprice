@@ -558,11 +558,21 @@ func createPlanLineItem(
 	plan *plan.Plan,
 ) *subscription.SubscriptionLineItem {
 
+	// Merge price metadata with plan-sync tracking metadata for backtracking and analysis
+	metadata := make(map[string]string)
+	for k, v := range price.Metadata {
+		metadata[k] = v
+	}
+	metadata["added_by"] = "plan_sync_api"
+	metadata["sync_version"] = "4.0"
+
 	req := dto.CreateSubscriptionLineItemRequest{
 		PriceID:     price.ID,
 		Quantity:    decimal.Zero,
-		Metadata:    price.Metadata,
+		Metadata:    metadata,
 		DisplayName: price.DisplayName,
+		StartDate:   price.StartDate,
+		EndDate:     price.EndDate,
 	}
 
 	lineItemParams := dto.LineItemParams{

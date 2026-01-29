@@ -34,7 +34,7 @@ type SyncPlanPricesInput struct {
 
 // SyncPlanPrices syncs plan prices
 // This method will be registered as "SyncPlanPrices" in Temporal
-func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPricesInput) (*dto.SyncPlanPricesV2Response, error) {
+func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPricesInput) (*dto.SyncPlanPricesResponse, error) {
 
 	// Validate input parameters
 	if input.PlanID == "" {
@@ -53,7 +53,7 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	result, err := a.planService.SyncPlanPricesV2(ctx, input.PlanID)
+	result, err := a.planService.SyncPlanPrices(ctx, input.PlanID)
 	if err != nil {
 		return nil, err
 	}
