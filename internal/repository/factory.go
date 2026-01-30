@@ -40,7 +40,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
-	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	clickhouseRepo "github.com/flexprice/flexprice/internal/repository/clickhouse"
@@ -236,8 +235,4 @@ func NewScheduledTaskRepository(p RepositoryParams) scheduledtask.Repository {
 
 func NewCostSheetUsageRepository(p RepositoryParams) events.CostSheetUsageRepository {
 	return clickhouseRepo.NewCostSheetUsageRepository(p.ClickHouseDB, p.Logger)
-}
-
-func NewWorkflowExecutionRepository(p RepositoryParams) workflowexecution.Repository {
-	return entRepo.NewWorkflowExecutionRepository(p.EntClient, p.Logger)
 }

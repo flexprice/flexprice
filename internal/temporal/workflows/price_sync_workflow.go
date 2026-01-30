@@ -7,8 +7,6 @@ import (
 	"github.com/flexprice/flexprice/internal/api/dto"
 	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -25,18 +23,6 @@ func PriceSyncWorkflow(ctx workflow.Context, in models.PriceSyncWorkflowInput) (
 	if err := in.Validate(); err != nil {
 		return nil, err
 	}
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowPriceSync,
-		TaskQueue:     string(types.TemporalTaskQueuePrice),
-		TenantID:      in.TenantID,
-		EnvironmentID: in.EnvironmentID,
-		UserID:        in.UserID,
-		Metadata: map[string]interface{}{
-			"plan_id": in.PlanID,
-		},
-	})
 
 	// Create activity input with context
 	activityInput := planActivities.SyncPlanPricesInput{

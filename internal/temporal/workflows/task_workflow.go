@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -26,18 +24,6 @@ func TaskProcessingWorkflow(ctx workflow.Context, input models.TaskProcessingWor
 
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting task processing workflow", "task_id", input.TaskID)
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowTaskProcessing,
-		TaskQueue:     string(types.TemporalTaskQueueTask),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        "",
-		Metadata: map[string]interface{}{
-			"task_id": input.TaskID,
-		},
-	})
 
 	// Define activity options with extended timeouts for large file processing
 	ao := workflow.ActivityOptions{

@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -34,18 +32,6 @@ func HubSpotQuoteSyncWorkflow(ctx workflow.Context, input models.HubSpotQuoteSyn
 		return err
 	}
 
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowHubSpotQuoteSync,
-		TaskQueue:     string(types.TemporalTaskQueueTask),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        "", // System workflow, no specific user
-		Metadata: map[string]interface{}{
-			"subscription_id": input.SubscriptionID,
-		},
-	})
-
 	// Configure activity options
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,
@@ -71,3 +57,4 @@ func HubSpotQuoteSyncWorkflow(ctx workflow.Context, input models.HubSpotQuoteSyn
 
 	return nil
 }
+

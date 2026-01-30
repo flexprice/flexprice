@@ -57,7 +57,6 @@ import (
 	"github.com/flexprice/flexprice/ent/user"
 	"github.com/flexprice/flexprice/ent/wallet"
 	"github.com/flexprice/flexprice/ent/wallettransaction"
-	"github.com/flexprice/flexprice/ent/workflowexecution"
 )
 
 // ent aliases to avoid import conflicts in user's code.
@@ -163,7 +162,6 @@ func checkColumn(table, column string) error {
 			user.Table:                     user.ValidColumn,
 			wallet.Table:                   wallet.ValidColumn,
 			wallettransaction.Table:        wallettransaction.ValidColumn,
-			workflowexecution.Table:        workflowexecution.ValidColumn,
 		})
 	})
 	return columnCheck(table, column)
