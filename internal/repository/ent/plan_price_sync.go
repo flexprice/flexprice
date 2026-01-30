@@ -381,7 +381,8 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					p.environment_id,
 					p.currency,
 					p.billing_period,
-					p.billing_period_count
+					p.billing_period_count,
+					p.parent_price_id
 				FROM
 					prices p
 				WHERE
@@ -412,7 +413,10 @@ func (r *planPriceSyncRepository) ListPlanLineItemsToCreate(
 					AND sp.status = '%s'
 					AND sp.entity_type = '%s'
 					AND sp.entity_id = s.id
-					AND sp.parent_price_id = p.id
+					AND (
+						sp.parent_price_id = p.id
+						OR (p.parent_price_id IS NOT NULL AND sp.parent_price_id = p.parent_price_id)
+					)
 			)
 			AND NOT EXISTS (
 				SELECT

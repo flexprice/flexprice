@@ -269,3 +269,8 @@ redis:
   pool_size: 10 # Maximum number of connections in the pool
   timeout: 5s # Timeout for Redis operations
   key_prefix: "flexprice:local"
+
+# Raw events reprocessing configuration
+raw_events_reprocessing:
+  enabled: true
+  output_topic: "prod_events_v4"

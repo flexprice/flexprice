@@ -53,6 +53,12 @@ type ProcessedEventRepository interface {
 	GetDetailedUsageAnalytics(ctx context.Context, params *UsageAnalyticsParams) ([]*DetailedUsageAnalytic, error)
 }
 
+// RawEventRepository defines operations for raw events
+type RawEventRepository interface {
+	// FindRawEvents finds raw events with filtering and keyset pagination
+	FindRawEvents(ctx context.Context, params *FindRawEventsParams) ([]*RawEvent, error)
+}
+
 // Additional types needed for the new methods
 
 // PeriodFeatureTotal represents aggregated usage for a feature in a period

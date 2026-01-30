@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"sync"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -46,6 +49,7 @@ type featureImportScript struct {
 	featureService service.FeatureService
 	priceService   service.PriceService
 	summary        FeatureImportSummary
+	summaryMu      sync.Mutex
 	tenantID       string
 	environmentID  string
 	planID         string
@@ -220,7 +224,9 @@ func (s *featureImportScript) processRow(ctx context.Context, row FeatureRow) er
 		// Feature exists, use it
 		feature = existingFeature
 		meterID = feature.Feature.MeterID
+		s.summaryMu.Lock()
 		s.summary.FeaturesSkipped++
+		s.summaryMu.Unlock()
 		s.log.Infow("Feature already exists, skipping creation", "feature_name", row.FeatureName, "feature_id", feature.Feature.ID, "meter_id", meterID)
 	} else {
 		// Create aggregation object
@@ -258,7 +264,9 @@ func (s *featureImportScript) processRow(ctx context.Context, row FeatureRow) er
 		}
 
 		meterID = feature.Feature.MeterID
+		s.summaryMu.Lock()
 		s.summary.FeaturesCreated++
+		s.summaryMu.Unlock()
 		s.log.Infow("Created feature", "feature_name", row.FeatureName, "event_name", row.EventName, "meter_id", meterID)
 	}
 
@@ -269,10 +277,14 @@ func (s *featureImportScript) processRow(ctx context.Context, row FeatureRow) er
 	}
 
 	if priceExists {
+		s.summaryMu.Lock()
 		s.summary.PricesSkipped++
+		s.summaryMu.Unlock()
 		s.log.Infow("Price already exists, skipping creation", "feature_name", row.FeatureName, "meter_id", meterID, "plan_id", s.planID)
 		return nil
 	}
+
+	startDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Create price
 	priceReq := dto.CreatePriceRequest{
@@ -290,6 +302,7 @@ func (s *featureImportScript) processRow(ctx context.Context, row FeatureRow) er
 		InvoiceCadence:       types.InvoiceCadenceArrear,
 		DisplayName:          row.FeatureName,
 		SkipEntityValidation: false,
+		StartDate:            &startDate,
 	}
 
 	_, err = s.priceService.CreatePrice(ctx, priceReq)
@@ -297,7 +310,9 @@ func (s *featureImportScript) processRow(ctx context.Context, row FeatureRow) er
 		return fmt.Errorf("failed to create price: %w", err)
 	}
 
+	s.summaryMu.Lock()
 	s.summary.PricesCreated++
+	s.summaryMu.Unlock()
 	s.log.Infow("Created price", "feature_name", row.FeatureName, "meter_id", meterID, "plan_id", s.planID, "amount", row.PricePerUnit)
 	return nil
 }
@@ -358,23 +373,57 @@ func ImportFeatures() error {
 		return fmt.Errorf("failed to parse feature CSV: %w", err)
 	}
 
+	// Get worker count from environment variable (default: 10)
+	workerCount := 10
+	if workerCountStr := os.Getenv("WORKER_COUNT"); workerCountStr != "" {
+		if count, err := strconv.Atoi(workerCountStr); err == nil && count > 0 {
+			workerCount = count
+		}
+	}
+
 	script.log.Infow("Starting feature import",
 		"file", filePath,
 		"row_count", len(featureRows),
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
-		"plan_id", planID)
+		"plan_id", planID,
+		"worker_count", workerCount)
 
-	// Process each row
-	for i, row := range featureRows {
-		script.log.Infow("Processing row", "index", i, "feature_name", row.FeatureName, "event_name", row.EventName)
-		err := script.processRow(ctx, row)
-		if err != nil {
-			script.log.Errorw("Failed to process row", "index", i, "feature_name", row.FeatureName, "error", err)
-			script.summary.Errors = append(script.summary.Errors, fmt.Sprintf("Row %d (%s): %v", i, row.FeatureName, err))
-			// Continue with the next row
-		}
+	// Create channels for job distribution
+	type job struct {
+		index int
+		row   FeatureRow
 	}
+
+	jobs := make(chan job, len(featureRows))
+	var wg sync.WaitGroup
+
+	// Start worker goroutines
+	for w := 1; w <= workerCount; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			for j := range jobs {
+				script.log.Infow("Processing row", "worker", workerID, "index", j.index, "feature_name", j.row.FeatureName, "event_name", j.row.EventName)
+				err := script.processRow(ctx, j.row)
+				if err != nil {
+					script.log.Errorw("Failed to process row", "worker", workerID, "index", j.index, "feature_name", j.row.FeatureName, "error", err)
+					script.summaryMu.Lock()
+					script.summary.Errors = append(script.summary.Errors, fmt.Sprintf("Row %d (%s): %v", j.index, j.row.FeatureName, err))
+					script.summaryMu.Unlock()
+				}
+			}
+		}(w)
+	}
+
+	// Send jobs to workers
+	for i, row := range featureRows {
+		jobs <- job{index: i, row: row}
+	}
+	close(jobs)
+
+	// Wait for all workers to complete
+	wg.Wait()
 
 	// Print summary
 	script.printSummary()

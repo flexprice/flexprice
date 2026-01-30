@@ -610,3 +610,57 @@ func (r *InternalReprocessEventsRequest) Validate() error {
 
 	return nil
 }
+
+// ReprocessRawEventsRequest represents the request to reprocess raw events
+type ReprocessRawEventsRequest struct {
+	ExternalCustomerID string `json:"external_customer_id" example:"customer456"`
+	EventName          string `json:"event_name" example:"api_request"`
+	StartDate          string `json:"start_date" validate:"required" binding:"required" example:"2024-01-01T00:00:00Z"`
+	EndDate            string `json:"end_date" example:"2024-01-31T23:59:59Z"` // Optional - defaults to current time
+	BatchSize          int    `json:"batch_size" example:"1000"`
+}
+
+// Validate validates the reprocess raw events request
+func (r *ReprocessRawEventsRequest) Validate() error {
+	if err := validator.ValidateRequest(r); err != nil {
+		return err
+	}
+
+	// Validate start_date format (RFC3339)
+	parsedStartDate, err := time.Parse(time.RFC3339, r.StartDate)
+	if err != nil {
+		return ierr.NewError("invalid start_date format").
+			WithHint("Start date must be in RFC3339 format (e.g., 2006-01-02T15:04:05Z07:00)").
+			Mark(ierr.ErrValidation)
+	}
+
+	// If end_date is not provided, default to current time
+	if r.EndDate == "" {
+		r.EndDate = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	// Validate end_date format (RFC3339)
+	parsedEndDate, err := time.Parse(time.RFC3339, r.EndDate)
+	if err != nil {
+		return ierr.NewError("invalid end_date format").
+			WithHint("End date must be in RFC3339 format (e.g., 2006-01-02T15:04:05Z07:00)").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate start_date < end_date
+	startDate := parsedStartDate
+	endDate := parsedEndDate
+
+	if startDate.After(endDate) {
+		return ierr.NewError("start_date must be before end_date").
+			WithHint("Start date must be before end date").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate batch size (default to 1000 if not provided or invalid)
+	if r.BatchSize <= 0 {
+		r.BatchSize = 1000 // Default batch size
+	}
+
+	return nil
+}

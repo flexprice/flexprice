@@ -69,6 +69,10 @@ func NewFeatureUsageRepository(p RepositoryParams) events.FeatureUsageRepository
 	return clickhouseRepo.NewFeatureUsageRepository(p.ClickHouseDB, p.Logger)
 }
 
+func NewRawEventRepository(p RepositoryParams) events.RawEventRepository {
+	return clickhouseRepo.NewRawEventRepository(p.ClickHouseDB, p.Logger)
+}
+
 func NewMeterRepository(p RepositoryParams) meter.Repository {
 	return entRepo.NewMeterRepository(p.EntClient, p.Logger, p.Cache)
 }
