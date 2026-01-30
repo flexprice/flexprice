@@ -40,6 +40,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/tenant"
 	"github.com/flexprice/flexprice/internal/domain/user"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
+	"github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -68,6 +69,7 @@ type ServiceParams struct {
 	CostSheetUsageRepo           events.CostSheetUsageRepository
 	ProcessedEventRepo           events.ProcessedEventRepository
 	FeatureUsageRepo             events.FeatureUsageRepository
+	RawEventRepo                 events.RawEventRepository
 	MeterRepo                    meter.Repository
 	PriceRepo                    price.Repository
 	PriceUnitRepo                priceunit.Repository
@@ -106,6 +108,7 @@ type ServiceParams struct {
 	GroupRepo                    group.Repository
 	ScheduledTaskRepo            scheduledtask.Repository
 	PlanPriceSyncRepo            planpricesync.Repository
+	WorkflowExecutionRepo        workflowexecution.Repository
 
 	// Publishers
 	EventPublisher   publisher.EventPublisher
@@ -137,6 +140,7 @@ func NewServiceParams(
 	costSheetUsageRepo events.CostSheetUsageRepository,
 	processedEventRepo events.ProcessedEventRepository,
 	featureUsageRepo events.FeatureUsageRepository,
+	rawEventRepo events.RawEventRepository,
 	meterRepo meter.Repository,
 	priceRepo price.Repository,
 	priceUnitRepo priceunit.Repository,
@@ -183,6 +187,7 @@ func NewServiceParams(
 	walletBalanceAlertPubSub types.WalletBalanceAlertPubSub,
 	webhookPubSub pubsub.PubSub,
 	planPriceSyncRepo planpricesync.Repository,
+	workflowExecutionRepo workflowexecution.Repository,
 ) ServiceParams {
 	return ServiceParams{
 		Logger:                       logger,
@@ -195,6 +200,7 @@ func NewServiceParams(
 		CostSheetUsageRepo:           costSheetUsageRepo,
 		ProcessedEventRepo:           processedEventRepo,
 		FeatureUsageRepo:             featureUsageRepo,
+		RawEventRepo:                 rawEventRepo,
 		MeterRepo:                    meterRepo,
 		PriceRepo:                    priceRepo,
 		PriceUnitRepo:                priceUnitRepo,
@@ -241,5 +247,6 @@ func NewServiceParams(
 		WalletBalanceAlertPubSub:     walletBalanceAlertPubSub,
 		WebhookPubSub:                webhookPubSub,
 		PlanPriceSyncRepo:            planPriceSyncRepo,
+		WorkflowExecutionRepo:        workflowExecutionRepo,
 	}
 }

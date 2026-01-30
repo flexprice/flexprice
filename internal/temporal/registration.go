@@ -15,6 +15,7 @@ import (
 	qbActivities "github.com/flexprice/flexprice/internal/temporal/activities/quickbooks"
 	subscriptionActivities "github.com/flexprice/flexprice/internal/temporal/activities/subscription"
 	taskActivities "github.com/flexprice/flexprice/internal/temporal/activities/task"
+	workflowActivities "github.com/flexprice/flexprice/internal/temporal/activities/workflow"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/workflows"
 	eventsWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/events"
@@ -33,6 +34,13 @@ type WorkerConfig struct {
 
 // RegisterWorkflowsAndActivities registers all workflows and activities with the temporal service
 func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalService, params service.ServiceParams) error {
+	// Create workflow tracking activity (follows standard activity pattern)
+	workflowTrackingActivities := workflowActivities.NewWorkflowTrackingActivities(
+		params,
+		params.WorkflowExecutionRepo,
+		params.Logger,
+	)
+
 	// Create activity instances with dependencies
 	planService := service.NewPlanService(params)
 	planActivities := planActivities.NewPlanActivities(planService)
@@ -130,9 +138,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 	reprocessEventsActivities := eventsActivities.NewReprocessEventsActivities(featureUsageTrackingService)
 
+	// Reprocess raw events activities
+	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
+	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService)
+
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -144,6 +156,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 // buildWorkerConfig creates a worker configuration for a specific task queue
 func buildWorkerConfig(
 	taskQueue types.TemporalTaskQueue,
+	workflowTrackingActivities *workflowActivities.WorkflowTrackingActivities,
 	planActivities *planActivities.PlanActivities,
 	taskActivities *taskActivities.TaskActivities,
 	taskActivity *exportActivities.TaskActivity,
@@ -160,9 +173,13 @@ func buildWorkerConfig(
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
 	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
+	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
-	activitiesList := []interface{}{}
+	// Add tracking activity to all task queues
+	activitiesList := []interface{}{
+		workflowTrackingActivities.TrackWorkflowStart,
+	}
 
 	switch taskQueue {
 	case types.TemporalTaskQueueTask:
@@ -252,9 +269,11 @@ func buildWorkerConfig(
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,
 			eventsWorkflows.ReprocessEventsWorkflow,
+			eventsWorkflows.ReprocessRawEventsWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			reprocessEventsActivities.ReprocessEvents,
+			reprocessRawEventsActivities.ReprocessRawEvents,
 		)
 	}
 	return WorkerConfig{

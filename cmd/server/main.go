@@ -30,6 +30,7 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal"
 	"github.com/flexprice/flexprice/internal/temporal/client"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	"github.com/flexprice/flexprice/internal/temporal/queries"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/temporal/worker"
 	"github.com/flexprice/flexprice/internal/types"
@@ -168,6 +169,8 @@ func main() {
 			repository.NewGroupRepository,
 			repository.NewScheduledTaskRepository,
 			repository.NewPriceUnitRepository,
+			repository.NewWorkflowExecutionRepository,
+			repository.NewRawEventRepository,
 
 			// PubSub
 			pubsubRouter.NewRouter,
@@ -206,6 +209,7 @@ func main() {
 			service.NewEventPostProcessingService,
 			service.NewEventConsumptionService,
 			service.NewFeatureUsageTrackingService,
+			service.NewRawEventsReprocessingService,
 			service.NewCostSheetUsageTrackingService,
 			service.NewPriceService,
 			service.NewPriceUnitService,
@@ -241,6 +245,7 @@ func main() {
 			service.NewWalletBalanceAlertService,
 			service.NewCustomerPortalService,
 			service.NewDashboardService,
+			service.NewWorkflowExecutionService,
 
 			// Enterprise (ee) services
 			ee.NewEnterpriseParams,
@@ -261,6 +266,7 @@ func main() {
 			provideTemporalClient,
 			provideTemporalWorkerManager,
 			provideTemporalService,
+			provideWorkflowQuerier,
 
 			// API components
 			provideHandlers,
@@ -317,6 +323,7 @@ func provideHandlers(
 	subscriptionChangeService service.SubscriptionChangeService,
 	subscriptionScheduleService service.SubscriptionScheduleService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
+	rawEventsReprocessingService service.RawEventsReprocessingService,
 	alertLogsService service.AlertLogsService,
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
@@ -327,9 +334,11 @@ func provideHandlers(
 	costsheetUsageTrackingService service.CostSheetUsageTrackingService,
 	customerPortalService service.CustomerPortalService,
 	dashboardService service.DashboardService,
+	workflowQuerier *queries.WorkflowQuerier,
+	workflowExecutionService *service.WorkflowExecutionService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -376,6 +385,7 @@ func provideHandlers(
 		CronKafkaLagMonitoring:   cron.NewKafkaLagMonitoringHandler(logger, eventService),
 		CustomerPortal:           v1.NewCustomerPortalHandler(customerPortalService, logger),
 		Dashboard:                v1.NewDashboardHandler(dashboardService, logger),
+		Workflow:                 v1.NewWorkflowHandler(workflowExecutionService, temporalService, workflowQuerier, logger),
 	}
 }
 
@@ -430,6 +440,10 @@ func provideTemporalService(temporalClient client.TemporalClient, workerManager 
 	}
 
 	return service
+}
+
+func provideWorkflowQuerier(temporalClient client.TemporalClient, log *logger.Logger) *queries.WorkflowQuerier {
+	return queries.NewWorkflowQuerier(temporalClient.GetRawClient(), log)
 }
 
 func startServer(

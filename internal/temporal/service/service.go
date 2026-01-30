@@ -409,6 +409,28 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 				return externalCustomerID
 			}
 		}
+	case types.TemporalReprocessRawEventsWorkflow:
+		// Extract context ID from ReprocessRawEventsWorkflowInput
+		// Format: external_customer_id-event_name (if event_name provided) or just external_customer_id
+		if input, ok := params.(eventsModels.ReprocessRawEventsWorkflowInput); ok {
+			if input.ExternalCustomerID != "" {
+				if input.EventName != "" {
+					return fmt.Sprintf("%s-%s", input.ExternalCustomerID, input.EventName)
+				}
+				return input.ExternalCustomerID
+			}
+		}
+		// Also handle map input for reprocess raw events
+		if paramsMap, ok := params.(map[string]interface{}); ok {
+			externalCustomerID, _ := paramsMap["external_customer_id"].(string)
+			eventName, _ := paramsMap["event_name"].(string)
+			if externalCustomerID != "" {
+				if eventName != "" {
+					return fmt.Sprintf("%s-%s", externalCustomerID, eventName)
+				}
+				return externalCustomerID
+			}
+		}
 	}
 	return ""
 }
@@ -459,6 +481,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildProcessInvoiceInput(ctx, tenantID, environmentID, params)
 	case types.TemporalReprocessEventsWorkflow:
 		return s.buildReprocessEventsInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalReprocessRawEventsWorkflow:
+		return s.buildReprocessRawEventsInput(ctx, tenantID, environmentID, userID, params)
 	default:
 		return nil, errors.NewError("unsupported workflow type").
 			WithHintf("Workflow type %s is not supported", workflowType.String()).
@@ -914,6 +938,81 @@ func (s *temporalService) buildReprocessEventsInput(_ context.Context, tenantID,
 
 	return nil, errors.NewError("invalid input for reprocess events workflow").
 		WithHint("Provide ReprocessEventsWorkflowInput or map with external_customer_id, event_name, start_date, and end_date").
+		Mark(errors.ErrValidation)
+}
+
+// buildReprocessRawEventsInput builds input for reprocess raw events workflow
+func (s *temporalService) buildReprocessRawEventsInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(eventsModels.ReprocessRawEventsWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		// Validate the input
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	// Handle map input
+	if paramsMap, ok := params.(map[string]interface{}); ok {
+		externalCustomerID, _ := paramsMap["external_customer_id"].(string)
+		eventName, _ := paramsMap["event_name"].(string)
+
+		var startDate, endDate time.Time
+		if sd, ok := paramsMap["start_date"].(time.Time); ok {
+			startDate = sd
+		} else if sdStr, ok := paramsMap["start_date"].(string); ok {
+			var err error
+			startDate, err = time.Parse(time.RFC3339, sdStr)
+			if err != nil {
+				return nil, errors.NewError("invalid start_date format").
+					WithHint("Start date must be in RFC3339 format (e.g., 2006-01-02T15:04:05Z07:00)").
+					Mark(errors.ErrValidation)
+			}
+		}
+
+		if ed, ok := paramsMap["end_date"].(time.Time); ok {
+			endDate = ed
+		} else if edStr, ok := paramsMap["end_date"].(string); ok {
+			var err error
+			endDate, err = time.Parse(time.RFC3339, edStr)
+			if err != nil {
+				return nil, errors.NewError("invalid end_date format").
+					WithHint("End date must be in RFC3339 format (e.g., 2006-01-02T15:04:05Z07:00)").
+					Mark(errors.ErrValidation)
+			}
+		}
+
+		// Extract batch size (default to 1000 if not provided)
+		batchSize := 1000
+		if bs, ok := paramsMap["batch_size"].(int); ok && bs > 0 {
+			batchSize = bs
+		} else if bsFloat, ok := paramsMap["batch_size"].(float64); ok && bsFloat > 0 {
+			batchSize = int(bsFloat)
+		}
+
+		input := eventsModels.ReprocessRawEventsWorkflowInput{
+			ExternalCustomerID: externalCustomerID, // Optional - can be empty for raw events
+			EventName:          eventName,          // Optional - can be empty
+			StartDate:          startDate,
+			EndDate:            endDate,
+			BatchSize:          batchSize,
+			TenantID:           tenantID,
+			EnvironmentID:      environmentID,
+			UserID:             userID,
+		}
+
+		// Validate the input
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for reprocess raw events workflow").
+		WithHint("Provide ReprocessRawEventsWorkflowInput or map with start_date and end_date").
 		Mark(errors.ErrValidation)
 }
 

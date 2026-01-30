@@ -68,6 +68,7 @@ const (
 	TemporalProcessSubscriptionBillingWorkflow  TemporalWorkflowType = "ProcessSubscriptionBillingWorkflow"
 	TemporalProcessInvoiceWorkflow              TemporalWorkflowType = "ProcessInvoiceWorkflow"
 	TemporalReprocessEventsWorkflow             TemporalWorkflowType = "ReprocessEventsWorkflow"
+	TemporalReprocessRawEventsWorkflow          TemporalWorkflowType = "ReprocessRawEventsWorkflow"
 )
 
 // String returns the string representation of the workflow type
@@ -94,6 +95,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalProcessSubscriptionBillingWorkflow,  // "ProcessSubscriptionBillingWorkflow"
 		TemporalProcessInvoiceWorkflow,              // "ProcessInvoiceWorkflow"
 		TemporalReprocessEventsWorkflow,             // "ReprocessEventsWorkflow"
+		TemporalReprocessRawEventsWorkflow,          // "ReprocessRawEventsWorkflow"
 	}
 	if lo.Contains(allowedWorkflows, w) {
 		return nil
@@ -121,7 +123,7 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 		return TemporalTaskQueueInvoice
 	case TemporalCustomerOnboardingWorkflow:
 		return TemporalTaskQueueWorkflows
-	case TemporalReprocessEventsWorkflow:
+	case TemporalReprocessEventsWorkflow, TemporalReprocessRawEventsWorkflow:
 		return TemporalTaskQueueReprocessEvents
 	default:
 		return TemporalTaskQueueTask // Default fallback
@@ -175,6 +177,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 	case TemporalTaskQueueReprocessEvents:
 		return []TemporalWorkflowType{
 			TemporalReprocessEventsWorkflow,
+			TemporalReprocessRawEventsWorkflow,
 		}
 	default:
 		return []TemporalWorkflowType{}
