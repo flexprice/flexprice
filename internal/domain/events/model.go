@@ -95,11 +95,48 @@ type ReprocessEventsParams struct {
 	BatchSize          int       // Number of events to process per batch (default 100)
 }
 
-// ReprocessEventsResult contains the result of event reprocessing
-type ReprocessEventsResult struct {
-	TotalEventsFound     int // Total number of events found
-	TotalEventsPublished int // Total number of events published for reprocessing
-	ProcessedBatches     int // Number of batches processed
+// RawEvent represents a raw event from the raw_events table
+type RawEvent struct {
+	ID                 string    `json:"id" ch:"id"`
+	TenantID           string    `json:"tenant_id" ch:"tenant_id"`
+	EnvironmentID      string    `json:"environment_id" ch:"environment_id"`
+	ExternalCustomerID string    `json:"external_customer_id" ch:"external_customer_id"`
+	EventName          string    `json:"event_name" ch:"event_name"`
+	Source             *string   `json:"source" ch:"source"`
+	Payload            string    `json:"payload" ch:"payload"`
+	Field1             *string   `json:"field1" ch:"field1"`
+	Field2             *string   `json:"field2" ch:"field2"`
+	Field3             *string   `json:"field3" ch:"field3"`
+	Field4             *string   `json:"field4" ch:"field4"`
+	Field5             *string   `json:"field5" ch:"field5"`
+	Field6             *string   `json:"field6" ch:"field6"`
+	Field7             *string   `json:"field7" ch:"field7"`
+	Field8             *string   `json:"field8" ch:"field8"`
+	Field9             *string   `json:"field9" ch:"field9"`
+	Field10            *string   `json:"field10" ch:"field10"`
+	Timestamp          time.Time `json:"timestamp" ch:"timestamp,timezone('UTC')"`
+	IngestedAt         time.Time `json:"ingested_at" ch:"ingested_at,timezone('UTC')"`
+	Version            uint64    `json:"version" ch:"version"`
+	Sign               int8      `json:"sign" ch:"sign"`
+}
+
+// FindRawEventsParams contains parameters for finding raw events
+type FindRawEventsParams struct {
+	ExternalCustomerID string    // Optional filter by external customer ID
+	EventName          string    // Optional filter by event name
+	StartTime          time.Time // Optional filter by start time
+	EndTime            time.Time // Optional filter by end time
+	BatchSize          int       // Number of events to return per batch
+	Offset             int       // Offset for pagination (OFFSET/LIMIT approach)
+}
+
+// ReprocessRawEventsParams contains parameters for raw event reprocessing
+type ReprocessRawEventsParams struct {
+	ExternalCustomerID string    // Filter by external customer ID (optional)
+	EventName          string    // Filter by event name (optional)
+	StartTime          time.Time // Filter by start time (optional)
+	EndTime            time.Time // Filter by end time (optional)
+	BatchSize          int       // Number of events to process per batch (default 1000)
 }
 
 // NewEvent creates a new event with defaults

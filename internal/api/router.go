@@ -154,6 +154,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/benchmark/v2", handlers.Events.BenchmarkV2)
 			// Reprocess events endpoint
 			events.POST("/reprocess", handlers.Events.ReprocessEvents)
+			// Reprocess raw events endpoint
+			events.POST("/raw/reprocess", handlers.Events.ReprocessRawEvents)
 			// Internal reprocess events endpoint (no external_customer_id required)
 			events.POST("/reprocess/internal", handlers.Events.ReprocessEventsInternal)
 		}
