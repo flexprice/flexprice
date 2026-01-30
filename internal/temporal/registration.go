@@ -138,9 +138,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 	)
 	reprocessEventsActivities := eventsActivities.NewReprocessEventsActivities(featureUsageTrackingService)
 
+	// Reprocess raw events activities
+	rawEventsReprocessingService := service.NewRawEventsReprocessingService(params)
+	reprocessRawEventsActivities := eventsActivities.NewReprocessRawEventsActivities(rawEventsReprocessingService)
+
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -169,6 +173,7 @@ func buildWorkerConfig(
 	billingActivities *subscriptionActivities.BillingActivities,
 	invoiceActs *invoiceActivities.InvoiceActivities,
 	reprocessEventsActivities *eventsActivities.ReprocessEventsActivities,
+	reprocessRawEventsActivities *eventsActivities.ReprocessRawEventsActivities,
 ) WorkerConfig {
 	workflowsList := []interface{}{}
 	// Add tracking activity to all task queues
@@ -264,9 +269,11 @@ func buildWorkerConfig(
 	case types.TemporalTaskQueueReprocessEvents:
 		workflowsList = append(workflowsList,
 			eventsWorkflows.ReprocessEventsWorkflow,
+			eventsWorkflows.ReprocessRawEventsWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			reprocessEventsActivities.ReprocessEvents,
+			reprocessRawEventsActivities.ReprocessRawEvents,
 		)
 	}
 	return WorkerConfig{

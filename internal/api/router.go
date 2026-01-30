@@ -157,6 +157,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			events.POST("/reprocess", handlers.Events.ReprocessEvents)
 			// Internal reprocess events endpoint (no external_customer_id required)
 			events.POST("/reprocess/internal", handlers.Events.ReprocessEventsInternal)
+			// Reprocess raw events endpoint
+			events.POST("/raw/reprocess", handlers.Events.ReprocessRawEvents)
 		}
 
 		meters := v1Private.Group("/meters")
