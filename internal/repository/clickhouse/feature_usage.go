@@ -29,6 +29,37 @@ func NewFeatureUsageRepository(store *clickhouse.ClickHouseStore, logger *logger
 	}
 }
 
+// dedupedFeatureUsageFrom wraps feature_usage with a DISTINCT ON subquery to achieve query-time deduplication.
+//
+// clause must start with "WHERE", "PREWHERE", or be empty. Use placeholders as needed (e.g. "?").
+// The deduplication key matches the table ORDER BY key; the winner is selected by version DESC.
+func (r *FeatureUsageRepository) dedupedFeatureUsageFrom(clause string) string {
+	clause = strings.TrimSpace(clause)
+	if clause != "" && !strings.HasPrefix(clause, "WHERE ") && !strings.HasPrefix(clause, "PREWHERE ") {
+		// Be forgiving: treat the clause as a WHERE body.
+		clause = "WHERE " + clause
+	}
+
+	return fmt.Sprintf(`(
+		SELECT DISTINCT ON (%s) *
+		FROM feature_usage
+		%s
+		ORDER BY %s
+	) AS feature_usage_dedup`, r.getDeduplicationKey(), clause, r.getDeduplicationOrderBy())
+}
+
+// getDeduplicationKey returns the columns used to identify a logical row in feature_usage.
+// This matches the table's ORDER BY key (excluding version).
+func (r *FeatureUsageRepository) getDeduplicationKey() string {
+	return "tenant_id, environment_id, customer_id, period_id, feature_id, timestamp, sub_line_item_id, id"
+}
+
+// getDeduplicationOrderBy returns the ordering used to pick a single winner per deduplication key.
+// We append version DESC so DISTINCT ON keeps the newest version (ReplacingMergeTree(version) semantics).
+func (r *FeatureUsageRepository) getDeduplicationOrderBy() string {
+	return "tenant_id, environment_id, customer_id, period_id, feature_id, timestamp, sub_line_item_id, id, version DESC"
+}
+
 // InsertProcessedEvent inserts a single processed event
 func (r *FeatureUsageRepository) InsertProcessedEvent(ctx context.Context, event *events.FeatureUsage) error {
 	query := `
@@ -543,17 +574,20 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		selectColumns = append(selectColumns, "groupUniqArray(source) AS sources")
 	}
 
-	aggregateQuery := fmt.Sprintf(`
-		SELECT 
-			%s
-		FROM feature_usage
+	whereClause := `
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
 		AND sign != 0
-	`, strings.Join(selectColumns, ",\n\t\t\t"))
+	`
+
+	aggregateQuery := fmt.Sprintf(`
+		SELECT 
+			%s
+		FROM %s
+	`, strings.Join(selectColumns, ",\n\t\t\t"), r.dedupedFeatureUsageFrom(whereClause))
 
 	// Add filters for feature_ids
 	filterParams := []interface{}{}
@@ -563,7 +597,7 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 			placeholders[i] = "?"
 			filterParams = append(filterParams, params.FeatureIDs[i])
 		}
-		aggregateQuery += " AND feature_id IN (" + strings.Join(placeholders, ", ") + ")"
+		whereClause += " AND feature_id IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 
 	if len(maxBucketFeatures) > 0 {
@@ -578,7 +612,7 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 			placeholders[i] = "?"
 			filterParams = append(filterParams, maxBucketFeatureIDs[i])
 		}
-		aggregateQuery += " AND feature_id NOT IN (" + strings.Join(placeholders, ", ") + ")"
+		whereClause += " AND feature_id NOT IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 
 	// Add filters for sources
@@ -588,7 +622,7 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 			placeholders[i] = "?"
 			filterParams = append(filterParams, params.Sources[i])
 		}
-		aggregateQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		whereClause += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
 	}
 
 	// add properties filters
@@ -596,14 +630,14 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {
-					aggregateQuery += " AND JSONExtractString(properties, ?) = ?"
+					whereClause += " AND JSONExtractString(properties, ?) = ?"
 					filterParams = append(filterParams, property, values[0])
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
 						placeholders[i] = "?"
 					}
-					aggregateQuery += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					whereClause += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
 					filterParams = append(filterParams, property)
 					// Now append all values after the property
 					for _, v := range values {
@@ -616,6 +650,13 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 
 	// Add all filter parameters after the standard parameters
 	queryParams = append(queryParams, filterParams...)
+
+	// Rebuild the FROM clause using the final whereClause (including optional filters)
+	aggregateQuery = fmt.Sprintf(`
+		SELECT 
+			%s
+		FROM %s
+	`, strings.Join(selectColumns, ",\n\t\t\t"), r.dedupedFeatureUsageFrom(whereClause))
 
 	// Add group by clause
 	if len(groupByColumns) > 0 {
@@ -835,23 +876,15 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 	// 1. Find the max value within each bucket (grouped by requested fields)
 	// 2. Aggregate across all buckets to get totals
 
-	// Build inner query with filters
-	innerQuery := fmt.Sprintf(`
-		SELECT
-			%s as bucket_start,
-			%s,
-			max(qty_total * sign) as bucket_max,
-			argMax(qty_total, timestamp) as bucket_latest,
-			count(DISTINCT unique_hash) as bucket_count_unique,
-			count(DISTINCT id) as event_count
-		FROM feature_usage
+	whereClause := `
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
+		AND sign != 0
+	`
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -868,7 +901,7 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		for i := range params.Sources {
 			placeholders[i] = "?"
 		}
-		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		whereClause += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
 		for _, source := range params.Sources {
 			queryParams = append(queryParams, source)
 		}
@@ -879,14 +912,14 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {
-					innerQuery += " AND JSONExtractString(properties, ?) = ?"
+					whereClause += " AND JSONExtractString(properties, ?) = ?"
 					queryParams = append(queryParams, property, values[0])
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
 						placeholders[i] = "?"
 					}
-					innerQuery += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					whereClause += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
 					queryParams = append(queryParams, property)
 					// Now append all values after the property
 					for _, v := range values {
@@ -896,6 +929,17 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			}
 		}
 	}
+
+	// Build inner query with deduplication
+	innerQuery := fmt.Sprintf(`
+		SELECT
+			%s as bucket_start,
+			%s,
+			max(qty_total * sign) as bucket_max,
+			argMax(qty_total, timestamp) as bucket_latest,
+			count(DISTINCT unique_hash) as bucket_count_unique,
+			count(DISTINCT id) as event_count
+		FROM %s`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "), r.dedupedFeatureUsageFrom(whereClause))
 
 	// Complete the inner query with GROUP BY
 	innerQuery += fmt.Sprintf(" GROUP BY %s", strings.Join(groupByColumns, ", "))
@@ -1022,23 +1066,15 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 	// 2. Then aggregate those bucket maxes within the request window (params.WindowSize)
 	// This version filters by the specific group's attributes (source, properties, etc.)
 
-	// Build inner query with filters
-	innerQuery := fmt.Sprintf(`
-		SELECT
-			%s as bucket_start,
-			%s as window_start,
-			max(qty_total * sign) as bucket_max,
-			argMax(qty_total, timestamp) as bucket_latest,
-			count(DISTINCT unique_hash) as bucket_count_unique,
-			count(DISTINCT id) as event_count
-		FROM feature_usage
+	whereClause := `
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, requestWindowExpr)
+		AND sign != 0
+	`
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1051,25 +1087,25 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 
 	// Add filter for this specific group's source
 	if group.Source != "" {
-		innerQuery += " AND source = ?"
+		whereClause += " AND source = ?"
 		queryParams = append(queryParams, group.Source)
 	}
 
 	// Add filter for this specific group's price_id
 	if group.PriceID != "" {
-		innerQuery += " AND price_id = ?"
+		whereClause += " AND price_id = ?"
 		queryParams = append(queryParams, group.PriceID)
 	}
 
 	// Add filter for this specific group's meter_id
 	if group.MeterID != "" {
-		innerQuery += " AND meter_id = ?"
+		whereClause += " AND meter_id = ?"
 		queryParams = append(queryParams, group.MeterID)
 	}
 
 	// Add filter for this specific group's sub_line_item_id
 	if group.SubLineItemID != "" {
-		innerQuery += " AND sub_line_item_id = ?"
+		whereClause += " AND sub_line_item_id = ?"
 		queryParams = append(queryParams, group.SubLineItemID)
 	}
 
@@ -1077,7 +1113,7 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 	if len(group.Properties) > 0 {
 		for propertyName, propertyValue := range group.Properties {
 			if propertyValue != "" {
-				innerQuery += " AND JSONExtractString(properties, ?) = ?"
+				whereClause += " AND JSONExtractString(properties, ?) = ?"
 				queryParams = append(queryParams, propertyName, propertyValue)
 			}
 		}
@@ -1088,14 +1124,14 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {
-					innerQuery += " AND JSONExtractString(properties, ?) = ?"
+					whereClause += " AND JSONExtractString(properties, ?) = ?"
 					queryParams = append(queryParams, property, values[0])
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
 						placeholders[i] = "?"
 					}
-					innerQuery += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					whereClause += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
 					queryParams = append(queryParams, property)
 					// Now append all values after the property
 					for _, v := range values {
@@ -1105,6 +1141,17 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 			}
 		}
 	}
+
+	// Build inner query with deduplication
+	innerQuery := fmt.Sprintf(`
+		SELECT
+			%s as bucket_start,
+			%s as window_start,
+			max(qty_total * sign) as bucket_max,
+			argMax(qty_total, timestamp) as bucket_latest,
+			count(DISTINCT unique_hash) as bucket_count_unique,
+			count(DISTINCT id) as event_count
+		FROM %s`, bucketWindowExpr, requestWindowExpr, r.dedupedFeatureUsageFrom(whereClause))
 
 	// Complete the query with GROUP BY and ORDER BY
 	// Return bucket-level points with window metadata for service-layer merging
@@ -1240,23 +1287,15 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 	// 1. Sum values within each bucket (grouped by requested fields)
 	// 2. Aggregate across all buckets to get totals
 
-	// Build inner query with filters
-	innerQuery := fmt.Sprintf(`
-		SELECT
-			%s as bucket_start,
-			%s,
-			sum(qty_total * sign) as bucket_sum,
-			argMax(qty_total, timestamp) as bucket_latest,
-			count(DISTINCT unique_hash) as bucket_count_unique,
-			count(DISTINCT id) as event_count
-		FROM feature_usage
+	whereClause := `
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
+		AND sign != 0
+	`
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1273,7 +1312,7 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 		for i := range params.Sources {
 			placeholders[i] = "?"
 		}
-		innerQuery += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
+		whereClause += " AND source IN (" + strings.Join(placeholders, ", ") + ")"
 		for _, source := range params.Sources {
 			queryParams = append(queryParams, source)
 		}
@@ -1284,14 +1323,14 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {
-					innerQuery += " AND JSONExtractString(properties, ?) = ?"
+					whereClause += " AND JSONExtractString(properties, ?) = ?"
 					queryParams = append(queryParams, property, values[0])
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
 						placeholders[i] = "?"
 					}
-					innerQuery += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					whereClause += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
 					queryParams = append(queryParams, property)
 					// Now append all values after the property
 					for _, v := range values {
@@ -1301,6 +1340,17 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 			}
 		}
 	}
+
+	// Build inner query with deduplication
+	innerQuery := fmt.Sprintf(`
+		SELECT
+			%s as bucket_start,
+			%s,
+			sum(qty_total * sign) as bucket_sum,
+			argMax(qty_total, timestamp) as bucket_latest,
+			count(DISTINCT unique_hash) as bucket_count_unique,
+			count(DISTINCT id) as event_count
+		FROM %s`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "), r.dedupedFeatureUsageFrom(whereClause))
 
 	// Complete the inner query with GROUP BY
 	innerQuery += fmt.Sprintf(" GROUP BY %s", strings.Join(groupByColumns, ", "))
@@ -1427,23 +1477,15 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 	// 2. Then aggregate those bucket sums within the request window (params.WindowSize)
 	// This version filters by the specific group's attributes (source, properties, etc.)
 
-	// Build inner query with filters
-	innerQuery := fmt.Sprintf(`
-		SELECT
-			%s as bucket_start,
-			%s as window_start,
-			sum(qty_total * sign) as bucket_sum,
-			argMax(qty_total, timestamp) as bucket_latest,
-			count(DISTINCT unique_hash) as bucket_count_unique,
-			count(DISTINCT id) as event_count
-		FROM feature_usage
+	whereClause := `
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
 		AND feature_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
-		AND sign != 0`, bucketWindowExpr, requestWindowExpr)
+		AND sign != 0
+	`
 
 	queryParams := []interface{}{
 		params.TenantID,
@@ -1456,25 +1498,25 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 
 	// Add filter for this specific group's source
 	if group.Source != "" {
-		innerQuery += " AND source = ?"
+		whereClause += " AND source = ?"
 		queryParams = append(queryParams, group.Source)
 	}
 
 	// Add filter for this specific group's price_id
 	if group.PriceID != "" {
-		innerQuery += " AND price_id = ?"
+		whereClause += " AND price_id = ?"
 		queryParams = append(queryParams, group.PriceID)
 	}
 
 	// Add filter for this specific group's meter_id
 	if group.MeterID != "" {
-		innerQuery += " AND meter_id = ?"
+		whereClause += " AND meter_id = ?"
 		queryParams = append(queryParams, group.MeterID)
 	}
 
 	// Add filter for this specific group's sub_line_item_id
 	if group.SubLineItemID != "" {
-		innerQuery += " AND sub_line_item_id = ?"
+		whereClause += " AND sub_line_item_id = ?"
 		queryParams = append(queryParams, group.SubLineItemID)
 	}
 
@@ -1482,7 +1524,7 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 	if len(group.Properties) > 0 {
 		for propertyName, propertyValue := range group.Properties {
 			if propertyValue != "" {
-				innerQuery += " AND JSONExtractString(properties, ?) = ?"
+				whereClause += " AND JSONExtractString(properties, ?) = ?"
 				queryParams = append(queryParams, propertyName, propertyValue)
 			}
 		}
@@ -1493,14 +1535,14 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {
-					innerQuery += " AND JSONExtractString(properties, ?) = ?"
+					whereClause += " AND JSONExtractString(properties, ?) = ?"
 					queryParams = append(queryParams, property, values[0])
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
 						placeholders[i] = "?"
 					}
-					innerQuery += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					whereClause += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
 					queryParams = append(queryParams, property)
 					// Now append all values after the property
 					for _, v := range values {
@@ -1510,6 +1552,17 @@ func (r *FeatureUsageRepository) getSumBucketPointsForGroup(ctx context.Context,
 			}
 		}
 	}
+
+	// Build inner query with deduplication
+	innerQuery := fmt.Sprintf(`
+		SELECT
+			%s as bucket_start,
+			%s as window_start,
+			sum(qty_total * sign) as bucket_sum,
+			argMax(qty_total, timestamp) as bucket_latest,
+			count(DISTINCT unique_hash) as bucket_count_unique,
+			count(DISTINCT id) as event_count
+		FROM %s`, bucketWindowExpr, requestWindowExpr, r.dedupedFeatureUsageFrom(whereClause))
 
 	// Complete the query with GROUP BY and ORDER BY
 	// Return bucket-level points with window metadata for service-layer merging
@@ -1656,18 +1709,14 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		"COUNT(DISTINCT id) AS event_count", // Count distinct event IDs, not rows
 	}
 
-	// Build the query
-	query := fmt.Sprintf(`
-		SELECT 
-			%s
-		FROM feature_usage
+	whereClause := `
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND customer_id = ?
 		AND timestamp >= ?
 		AND timestamp < ?
 		AND sign != 0
-	`, strings.Join(selectColumns, ",\n\t\t\t"))
+	`
 
 	// Add filters for the specific analytics item
 	queryParams := []interface{}{
@@ -1680,7 +1729,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 
 	// Add feature_id filter if present in analytics
 	if analytics.FeatureID != "" {
-		query += " AND feature_id = ?"
+		whereClause += " AND feature_id = ?"
 		queryParams = append(queryParams, analytics.FeatureID)
 	}
 
@@ -1688,7 +1737,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	// This ensures that when the same feature has multiple prices (price override),
 	// each price gets its own time-series points
 	if analytics.PriceID != "" {
-		query += " AND price_id = ?"
+		whereClause += " AND price_id = ?"
 		queryParams = append(queryParams, analytics.PriceID)
 	}
 
@@ -1696,13 +1745,13 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	// This ensures that when the same feature has multiple prices (price override),
 	// each subscription line item gets its own time-series points
 	if analytics.SubLineItemID != "" {
-		query += " AND sub_line_item_id = ?"
+		whereClause += " AND sub_line_item_id = ?"
 		queryParams = append(queryParams, analytics.SubLineItemID)
 	}
 
 	// Add source filter if present in analytics
 	if analytics.Source != "" {
-		query += " AND source = ?"
+		whereClause += " AND source = ?"
 		queryParams = append(queryParams, analytics.Source)
 	}
 
@@ -1710,7 +1759,7 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	if analytics.Properties != nil {
 		for propertyName, value := range analytics.Properties {
 			if value != "" {
-				query += " AND JSONExtractString(properties, ?) = ?"
+				whereClause += " AND JSONExtractString(properties, ?) = ?"
 				queryParams = append(queryParams, propertyName, value)
 			}
 		}
@@ -1722,14 +1771,14 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		for property, values := range params.PropertyFilters {
 			if len(values) > 0 {
 				if len(values) == 1 {
-					query += " AND JSONExtractString(properties, ?) = ?"
+					whereClause += " AND JSONExtractString(properties, ?) = ?"
 					filterParamsForTimeSeries = append(filterParamsForTimeSeries, property, values[0])
 				} else {
 					placeholders := make([]string, len(values))
 					for i := range values {
 						placeholders[i] = "?"
 					}
-					query += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
+					whereClause += " AND JSONExtractString(properties, ?) IN (" + strings.Join(placeholders, ",") + ")"
 					filterParamsForTimeSeries = append(filterParamsForTimeSeries, property)
 					// Now append all values after the property
 					for _, v := range values {
@@ -1740,6 +1789,13 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 		}
 	}
 	queryParams = append(queryParams, filterParamsForTimeSeries...)
+
+	// Build the query with deduplication
+	query := fmt.Sprintf(`
+		SELECT 
+			%s
+		FROM %s
+	`, strings.Join(selectColumns, ",\n\t\t\t"), r.dedupedFeatureUsageFrom(whereClause))
 
 	// Group by the time window and order by time
 	query += fmt.Sprintf(" GROUP BY %s ORDER BY window_time", timeWindowExpr)
@@ -1820,28 +1876,30 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 	})
 	defer FinishSpan(span)
 
-	query := `
+	whereClause := `
+		WHERE subscription_id = ?
+		AND external_customer_id = ?
+		AND environment_id = ?
+		AND tenant_id = ?
+		AND timestamp >= ?
+		AND timestamp < ?
+		AND sign != 0
+	`
+
+	query := fmt.Sprintf(`
 		SELECT 
 			sub_line_item_id,
 			feature_id,
 			meter_id,
 			price_id,
-			sum(qty_total * sign)              AS sum_total,
-			max(qty_total * sign)              AS max_total,
-			count(DISTINCT id)                 AS count_distinct_ids,
-			count(DISTINCT unique_hash)        AS count_unique_qty,
-			argMax(qty_total * sign, "timestamp") AS latest_qty
-		FROM feature_usage
-		WHERE 
-			subscription_id = ?
-			AND external_customer_id = ?
-			AND environment_id = ?
-			AND tenant_id = ?
-			AND "timestamp" >= ?
-			AND "timestamp" < ?
-			AND sign != 0
+			sum(qty_total * sign)                 AS sum_total,
+			max(qty_total * sign)                 AS max_total,
+			count(DISTINCT id)                    AS count_distinct_ids,
+			count(DISTINCT unique_hash)           AS count_unique_qty,
+			argMax(qty_total * sign, timestamp)   AS latest_qty
+		FROM %s
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
-	`
+	`, r.dedupedFeatureUsageFrom(whereClause))
 
 	log.Printf("Executing query: %s", query)
 	log.Printf("Params: %v", []interface{}{subscriptionID, externalCustomerID, environmentID, tenantID, startTime, endTime})
@@ -1917,7 +1975,15 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 	})
 	defer FinishSpan(span)
 
-	query := `
+	whereClause := `
+		WHERE tenant_id = ?
+		  AND environment_id = ?
+		  AND timestamp >= ?
+		  AND timestamp < ?
+		  AND sign = 1
+	`
+
+	query := fmt.Sprintf(`
 		SELECT 
 			id,
 			tenant_id,
@@ -1938,15 +2004,10 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 			unique_hash,
 			qty_total,
 			sign
-		FROM feature_usage
-		WHERE tenant_id = ?
-		  AND environment_id = ?
-		  AND timestamp >= ?
-		  AND timestamp < ?
-		  AND sign = 1
+		FROM %s
 		ORDER BY timestamp DESC
 		LIMIT ? OFFSET ?
-	`
+	`, r.dedupedFeatureUsageFrom(whereClause))
 
 	rows, err := r.store.GetConn().Query(ctx, query, tenantID, environmentID, startTime, endTime, batchSize, offset)
 	if err != nil {
@@ -2134,6 +2195,27 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName = "bucket_sum"
 	}
 
+	prewhereClause := fmt.Sprintf(`
+		PREWHERE tenant_id = '%s'
+			AND environment_id = '%s'
+			%s
+			%s
+			%s
+			%s
+			%s
+			%s
+			%s
+	`, types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		externalCustomerFilter,
+		featureFilter,
+		priceFilter,
+		meterFilter,
+		subLineItemFilter,
+		filterConditions,
+		timeConditions,
+	)
+
 	// First aggregate values per bucket using the appropriate function,
 	// then sum all bucket values to get the total
 	return fmt.Sprintf(`
@@ -2141,16 +2223,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			SELECT
 				%s as bucket_start,
 				%s(qty_total * sign) as %s
-			FROM feature_usage
-			PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
-				%s
-				%s
-				%s
-				%s
-				%s
-				%s
-				%s
+			FROM %s
 			GROUP BY bucket_start
 			ORDER BY bucket_start
 		)
@@ -2164,15 +2237,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketTableName,
 		bucketWindow,
 		aggFunc, bucketColumnName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
-		externalCustomerFilter,
-		featureFilter,
-		priceFilter,
-		meterFilter,
-		subLineItemFilter,
-		filterConditions,
-		timeConditions,
+		r.dedupedFeatureUsageFrom(prewhereClause),
 		bucketColumnName, bucketTableName,
 		bucketColumnName,
 		bucketTableName)

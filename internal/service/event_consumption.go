@@ -27,6 +27,9 @@ type EventConsumptionService interface {
 	// Register message handler with the router
 	RegisterHandlerLazy(router *pubsubRouter.Router, cfg *config.Configuration)
 
+	// Register replay handler with the router
+	RegisterHandlerReplay(router *pubsubRouter.Router, cfg *config.Configuration)
+
 	// Process a raw event payload (used for AWS Lambda and direct processing)
 	ProcessRawEvent(ctx context.Context, payload []byte) error
 }
@@ -35,6 +38,7 @@ type eventConsumptionService struct {
 	ServiceParams
 	pubSub                 pubsub.PubSub
 	lazyPubSub             pubsub.PubSub
+	replayPubSub           pubsub.PubSub
 	eventRepo              events.Repository
 	sentryService          *sentry.Service
 	eventPostProcessingSvc EventPostProcessingService
@@ -75,6 +79,18 @@ func NewEventConsumptionService(
 		return nil
 	}
 	ev.lazyPubSub = lazyPubSub
+
+	replayPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.EventProcessingReplay.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatalw("failed to create replay pubsub", "error", err)
+		return nil
+	}
+	ev.replayPubSub = replayPubSub
+
 	return ev
 }
 
@@ -134,6 +150,41 @@ func (s *eventConsumptionService) RegisterHandlerLazy(
 	)
 }
 
+// RegisterHandlerReplay registers the event consumption replay handler with the router
+func (s *eventConsumptionService) RegisterHandlerReplay(
+	router *pubsubRouter.Router,
+	cfg *config.Configuration,
+) {
+	if !cfg.EventProcessingReplay.Enabled {
+		s.Logger.Infow("event consumption replay handler disabled by configuration")
+		return
+	}
+
+	// Check if replay topic is configured
+	if cfg.EventProcessingReplay.Topic == "" {
+		s.Logger.Warnw("replay topic not set, skipping replay handler")
+		return
+	}
+
+	// Add throttle middleware to this specific handler
+	replayThrottle := middleware.NewThrottle(cfg.EventProcessingReplay.RateLimit, time.Second)
+
+	// Add the handler
+	router.AddNoPublishHandler(
+		"event_consumption_replay_handler",
+		cfg.EventProcessingReplay.Topic,
+		s.replayPubSub,
+		s.processMessage,
+		replayThrottle.Middleware,
+	)
+
+	s.Logger.Infow("registered event consumption replay handler",
+		"topic", cfg.EventProcessingReplay.Topic,
+		"rate_limit", cfg.EventProcessingReplay.RateLimit,
+		"pubsub_type", "kafka",
+	)
+}
+
 // processMessage processes a single event message from Kafka
 func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 
@@ -147,16 +198,6 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 	)
-
-	// Create a background context with tenant ID
-	ctx := context.Background()
-	if tenantID != "" {
-		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
-	}
-
-	if environmentID != "" {
-		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
-	}
 
 	// Unmarshal the event
 	var event events.Event
@@ -173,6 +214,24 @@ func (s *eventConsumptionService) processMessage(msg *message.Message) error {
 			return fmt.Errorf("non-retriable unmarshal error: %w", err)
 		}
 		return err
+	}
+
+	if tenantID == "" && event.TenantID != "" {
+		tenantID = event.TenantID
+	}
+
+	if environmentID == "" && event.EnvironmentID != "" {
+		environmentID = event.EnvironmentID
+	}
+
+	// Create a background context with tenant ID
+	ctx := context.Background()
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
 	}
 
 	s.Logger.Debugw("processing event",

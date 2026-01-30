@@ -173,7 +173,7 @@ func BulkReprocessEvents(params BulkReprocessEventsParams) error {
 				// 	continue
 				// }
 
-				if err := script.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams); err != nil {
+				if _, err := script.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams); err != nil {
 					script.log.Errorw("Failed to reprocess events for feature usage tracking",
 						"customerID", customer.ID,
 						"externalCustomerID", customer.ExternalID,

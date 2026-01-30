@@ -52,6 +52,7 @@ type PlanService interface {
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error
 	SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
+	SyncPlanPricesV2(ctx context.Context, id string) (*dto.SyncPlanPricesV2Response, error)
 }
 
 type EntityIntegrationMappingService interface {

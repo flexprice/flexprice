@@ -6,6 +6,8 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/creditgrant"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/validator"
@@ -150,4 +152,51 @@ type SyncPlanPricesSummary struct {
 	LineItemsFoundForCreation int `json:"line_items_found_for_creation"`
 	LineItemsCreated          int `json:"line_items_created"`
 	LineItemsTerminated       int `json:"line_items_terminated"`
+}
+
+// SubscriptionSyncResult contains the results of syncing a subscription with plan prices
+type SubscriptionSyncResult struct {
+	PricesProcessed                   int
+	LineItemsCreated                  int
+	LineItemsTerminated               int
+	LineItemsSkippedAlreadyTerminated int
+	LineItemsSkippedOverridden        int
+	LineItemsSkippedIncompatible      int
+	LineItemsFailed                   int
+}
+
+type SyncPlanPricesV2Response struct {
+	Message                string                 `json:"message"`
+	PlanID                 string                 `json:"plan_id"`
+	PlanName               string                 `json:"plan_name"`
+	SynchronizationSummary SynchronizationSummary `json:"synchronization_summary"`
+}
+
+type SynchronizationSummary struct {
+	// Basic counts
+	SubscriptionsProcessed int `json:"subscriptions_processed"`
+	PricesProcessed        int `json:"prices_processed"`
+	LineItemsCreated       int `json:"line_items_created"`
+	LineItemsTerminated    int `json:"line_items_terminated"`
+	LineItemsSkipped       int `json:"line_items_skipped"`
+	LineItemsFailed        int `json:"line_items_failed"`
+
+	// Detailed breakdown by category
+	SkippedAlreadyTerminated int `json:"skipped_already_terminated"`
+	SkippedOverridden        int `json:"skipped_overridden"`
+	SkippedIncompatible      int `json:"skipped_incompatible"`
+
+	// Price analysis
+	TotalPrices   int `json:"total_prices"`
+	ActivePrices  int `json:"active_prices"`
+	ExpiredPrices int `json:"expired_prices"`
+}
+
+// SubscriptionSyncParams contains all parameters needed for syncing a subscription with plan prices
+type SubscriptionSyncParams struct {
+	Context              context.Context
+	Subscription         *subscription.Subscription
+	PlanPriceMap         map[string]*price.Price
+	LineItems            []*subscription.SubscriptionLineItem
+	SubscriptionPriceMap map[string]*PriceResponse
 }

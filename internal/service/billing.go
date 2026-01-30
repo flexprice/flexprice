@@ -241,6 +241,13 @@ func (s *billingService) CalculateUsageCharges(
 		meterMap[m.ID] = m
 	}
 
+	// Get customer for usage request (once, outside the loop)
+	customer, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -262,13 +269,6 @@ func (s *billingService) CalculateUsageCharges(
 				"price_id", item.PriceID)
 			continue
 		}
-
-		// Get customer for usage request
-		customer, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
-		if err != nil {
-			return nil, decimal.Zero, err
-		}
-		eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
 		// Process each matching charge individually (normal and overage charges)
 		for _, matchingCharge := range matchingCharges {
@@ -802,6 +802,13 @@ func (s *billingService) CalculateFeatureUsageCharges(
 		meterMap[m.ID] = m
 	}
 
+	// Get customer for usage request (once, outside the loop)
+	customer, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
+	if err != nil {
+		return nil, decimal.Zero, err
+	}
+	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
+
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -823,13 +830,6 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				"price_id", item.PriceID)
 			continue
 		}
-
-		// Get customer for usage request
-		customer, err := s.CustomerRepo.Get(ctx, sub.CustomerID)
-		if err != nil {
-			return nil, decimal.Zero, err
-		}
-		eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
 		// Get meter from pre-fetched map (needed for bucketed meter check)
 		meter, meterOk := meterMap[item.MeterID]

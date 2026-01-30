@@ -62,9 +62,7 @@ func (a *ReprocessEventsActivities) ReprocessEvents(ctx context.Context, input m
 	}
 
 	// Call the service method to reprocess events
-	// Note: The service method logs statistics but doesn't return them
-	// We'll track basic success/failure here
-	err := a.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams)
+	result, err := a.featureUsageTrackingService.ReprocessEvents(ctx, reprocessParams)
 	if err != nil {
 		logger.Error("Failed to reprocess events",
 			"external_customer_id", input.ExternalCustomerID,
@@ -81,16 +79,15 @@ func (a *ReprocessEventsActivities) ReprocessEvents(ctx context.Context, input m
 
 	logger.Info("Completed reprocess events activity",
 		"external_customer_id", input.ExternalCustomerID,
-		"event_name", input.EventName)
+		"event_name", input.EventName,
+		"total_events_found", result.TotalEventsFound,
+		"total_events_published", result.TotalEventsPublished,
+		"processed_batches", result.ProcessedBatches)
 
-	// Return success result
-	// Note: The actual statistics (total events found, published, batches) are logged
-	// by the service but not returned. For now, we return a success indicator.
-	// If detailed statistics are needed, the service method would need to be modified
-	// to return a result struct instead of just an error.
-	response.TotalEventsFound = 0     // Service doesn't return this
-	response.TotalEventsPublished = 0 // Service doesn't return this
-	response.ProcessedBatches = 0     // Service doesn't return this
+	// Populate response from service result
+	response.TotalEventsFound = result.TotalEventsFound
+	response.TotalEventsPublished = result.TotalEventsPublished
+	response.ProcessedBatches = result.ProcessedBatches
 
 	return response, nil
 }

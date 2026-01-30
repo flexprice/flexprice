@@ -37,6 +37,7 @@ type Configuration struct {
 	Cache                      CacheConfig                      `validate:"required"`
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
+	EventProcessingReplay      EventProcessingReplayConfig      `mapstructure:"event_processing_replay" validate:"required"`
 	CostSheetUsageTracking     CostSheetUsageTrackingConfig     `mapstructure:"costsheet_usage_tracking" validate:"required"`
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	EventPostProcessing        EventPostProcessingConfig        `mapstructure:"event_post_processing" validate:"required"`
@@ -226,6 +227,13 @@ type EventProcessingLazyConfig struct {
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_lazy_backfill"`
 	RateLimitBackfill     int64  `mapstructure:"rate_limit_backfill" default:"1"`
 	ConsumerGroupBackfill string `mapstructure:"consumer_group_backfill" default:"v1_event_processing_lazy_backfill"`
+}
+
+type EventProcessingReplayConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"true"`
+	Topic         string `mapstructure:"topic" default:"v1_event_processing_replay"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
 type FeatureUsageTrackingConfig struct {
 	// Rate limit in messages consumed per second

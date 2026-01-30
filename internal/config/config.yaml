@@ -173,6 +173,12 @@ event_processing_lazy:
   rate_limit: 12
   consumer_group: "v1_event_processing_lazy"
 
+event_processing_replay:
+  enabled: true
+  topic: "events_backfill"
+  rate_limit: 1
+  consumer_group: "v1_event_processing_replay"
+
 
 event_post_processing:
   enabled: true
@@ -202,7 +208,7 @@ feature_usage_tracking_lazy:
 
 feature_usage_tracking_replay:
   enabled: true
-  topic: "staging_events_backfill"
+  topic: "events_backfill"
   rate_limit: 1
   consumer_group: "v1_feature_tracking_service_replay"
 

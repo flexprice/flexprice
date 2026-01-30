@@ -2318,6 +2318,17 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		}
 	}
 
+	// Account for unpaid invoices (same as GetWalletBalance)
+	invoiceService := NewInvoiceService(s.ServiceParams)
+	resp, err := invoiceService.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: w.CustomerID,
+		Currency:   w.Currency,
+	})
+	if err != nil {
+		return nil, err
+	}
+	totalPendingCharges = totalPendingCharges.Add(resp.TotalUnpaidUsageCharges)
+
 	// Calculate real-time balance
 	realTimeBalance := w.Balance.Sub(totalPendingCharges)
 
@@ -2339,6 +2350,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 		RealTimeCreditBalance: &realTimeCreditBalance,
 		BalanceUpdatedAt:      lo.ToPtr(w.UpdatedAt),
 		CurrentPeriodUsage:    &totalPendingCharges,
+		UnpaidInvoicesAmount:  lo.ToPtr(resp.TotalUnpaidUsageCharges),
 	}, nil
 }
 

@@ -607,6 +607,28 @@ func (h *EventsHandler) ReprocessEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+func (h *EventsHandler) ReprocessEventsInternal(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req dto.InternalReprocessEventsRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	result, err := h.featureUsageTrackingService.TriggerReprocessEventsWorkflowInternal(ctx, &req)
+	if err != nil {
+		h.log.Error("Failed to trigger internal reprocess events workflow", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 	ctx := c.Request.Context()
 	var req dto.ReprocessRawEventsRequest

@@ -918,12 +918,6 @@ func (s *temporalService) buildReprocessEventsInput(_ context.Context, tenantID,
 			batchSize = int(bsFloat)
 		}
 
-		if externalCustomerID == "" {
-			return nil, errors.NewError("external_customer_id is required").
-				WithHint("Provide map with external_customer_id").
-				Mark(errors.ErrValidation)
-		}
-
 		input := eventsModels.ReprocessEventsWorkflowInput{
 			ExternalCustomerID: externalCustomerID,
 			EventName:          eventName, // Optional - can be empty

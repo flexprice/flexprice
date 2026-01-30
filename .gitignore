@@ -140,3 +140,7 @@ lambdas/*
 # gocache
 .gocache/
 .gomodcache/
+
+
+# bash scripts logs
+scripts/bash/logs/* 

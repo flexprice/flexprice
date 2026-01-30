@@ -57,10 +57,13 @@ type FeatureUsageTrackingService interface {
 	GetDetailedUsageAnalyticsV2(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
 
 	// Reprocess events for a specific customer or with other filters
-	ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error
+	ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) (*events.ReprocessEventsResult, error)
 
 	// TriggerReprocessEventsWorkflow triggers a Temporal workflow to reprocess events asynchronously
 	TriggerReprocessEventsWorkflow(ctx context.Context, req *dto.ReprocessEventsRequest) (*workflowModels.TemporalWorkflowResult, error)
+
+	// TriggerReprocessEventsWorkflowInternal triggers a Temporal workflow to reprocess events asynchronously (internal - no external_customer_id required)
+	TriggerReprocessEventsWorkflowInternal(ctx context.Context, req *dto.InternalReprocessEventsRequest) (*workflowModels.TemporalWorkflowResult, error)
 
 	// Get HuggingFace Inference
 	GetHuggingFaceBillingData(ctx context.Context, req *dto.GetHuggingFaceBillingDataRequest) (*dto.GetHuggingFaceBillingDataResponse, error)
@@ -2817,7 +2820,7 @@ func (s *featureUsageTrackingService) getCorrectUsageValueForPoint(point events.
 }
 
 // ReprocessEvents triggers reprocessing of events for a customer or with other filters
-func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error {
+func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) (*events.ReprocessEventsResult, error) {
 	s.Logger.Infow("starting event reprocessing for feature usage tracking",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
@@ -2858,7 +2861,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 		// Find unprocessed events
 		unprocessedEvents, err := s.eventRepo.FindUnprocessedEventsFromFeatureUsage(ctx, findParams)
 		if err != nil {
-			return ierr.WithError(err).
+			return nil, ierr.WithError(err).
 				WithHint("Failed to find unprocessed events").
 				WithReportableDetails(map[string]interface{}{
 					"external_customer_id": params.ExternalCustomerID,
@@ -2923,7 +2926,11 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 		"total_events_published", totalEventsPublished,
 	)
 
-	return nil
+	return &events.ReprocessEventsResult{
+		TotalEventsFound:     totalEventsFound,
+		TotalEventsPublished: totalEventsPublished,
+		ProcessedBatches:     processedBatches,
+	}, nil
 }
 
 // TriggerReprocessEventsWorkflow triggers a Temporal workflow to reprocess events asynchronously
@@ -2972,6 +2979,64 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflow(ctx context
 	}
 
 	s.Logger.Infow("reprocess events workflow started successfully",
+		"external_customer_id", req.ExternalCustomerID,
+		"event_name", req.EventName,
+		"workflow_id", workflowRun.GetID(),
+		"run_id", workflowRun.GetRunID())
+
+	return &workflowModels.TemporalWorkflowResult{
+		Message:    "reprocess events workflow started successfully",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+	}, nil
+}
+
+// TriggerReprocessEventsWorkflowInternal triggers a Temporal workflow to reprocess events asynchronously (internal - no external_customer_id required)
+func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflowInternal(ctx context.Context, req *dto.InternalReprocessEventsRequest) (*workflowModels.TemporalWorkflowResult, error) {
+	// Validate request (includes date format and relationship validation)
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Build workflow input
+	workflowInput := map[string]interface{}{
+		"external_customer_id": req.ExternalCustomerID, // Optional - can be empty
+		"event_name":           req.EventName,
+		"start_date":           req.StartDate,
+		"end_date":             req.EndDate,
+		"batch_size":           req.BatchSize,
+	}
+
+	// Get global temporal service
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return nil, ierr.NewError("temporal service not available").
+			WithHint("Reprocess events workflow requires Temporal service").
+			Mark(ierr.ErrInternal)
+	}
+
+	// Execute workflow
+	workflowRun, err := temporalSvc.ExecuteWorkflow(
+		ctx,
+		types.TemporalReprocessEventsWorkflow,
+		workflowInput,
+	)
+
+	if err != nil {
+		s.Logger.Errorw("failed to start internal reprocess events workflow",
+			"error", err,
+			"external_customer_id", req.ExternalCustomerID,
+			"event_name", req.EventName)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to start internal reprocess events workflow").
+			WithReportableDetails(map[string]interface{}{
+				"external_customer_id": req.ExternalCustomerID,
+				"event_name":           req.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	s.Logger.Infow("internal reprocess events workflow started successfully",
 		"external_customer_id", req.ExternalCustomerID,
 		"event_name", req.EventName,
 		"workflow_id", workflowRun.GetID(),

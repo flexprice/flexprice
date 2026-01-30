@@ -20,11 +20,7 @@ type ReprocessEventsWorkflowInput struct {
 
 // Validate validates the reprocess events workflow input
 func (i *ReprocessEventsWorkflowInput) Validate() error {
-	if i.ExternalCustomerID == "" {
-		return ierr.NewError("external_customer_id is required").
-			WithHint("External customer ID is required").
-			Mark(ierr.ErrValidation)
-	}
+	// external_customer_id is optional - allows reprocessing all events
 	if i.StartDate.IsZero() {
 		return ierr.NewError("start_date is required").
 			WithHint("Start date is required").
