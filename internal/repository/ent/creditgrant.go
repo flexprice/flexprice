@@ -563,6 +563,11 @@ func (o CreditGrantQueryOptions) applyEntityQueryOptions(_ context.Context, f *t
 		return query
 	}
 
+	// Apply IDs filter if specified
+	if len(f.IDs) > 0 {
+		query = query.Where(creditgrant.IDIn(f.IDs...))
+	}
+
 	// Apply plan IDs filter if specified
 	if len(f.PlanIDs) > 0 {
 		query = query.Where(creditgrant.PlanIDIn(f.PlanIDs...))

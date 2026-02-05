@@ -378,6 +378,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			creditGrant.GET("/:id", handlers.CreditGrant.GetCreditGrant)
 			creditGrant.PUT("/:id", handlers.CreditGrant.UpdateCreditGrant)
 			creditGrant.DELETE("/:id", handlers.CreditGrant.DeleteCreditGrant)
+			creditGrant.POST("/cancel", handlers.CreditGrant.CancelFutureSubscriptionGrants)
 		}
 
 		payments := v1Private.Group("/payments")
