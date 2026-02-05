@@ -1104,10 +1104,10 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 	filter := types.NewNoLimitCreditGrantFilter()
 	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
-
+	
 	// If specific credit grant IDs are provided, add them to the filter
 	if len(req.CreditGrantIDs) > 0 {
-		filter.IDs = req.CreditGrantIDs
+		filter.CreditGrantIDs = req.CreditGrantIDs
 	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)

@@ -196,7 +196,7 @@ func (h *CreditGrantHandler) DeleteCreditGrant(c *gin.Context) {
 // @Success 200 {object} dto.SuccessResponse
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
-// @Router /creditgrants/cancel-future [post]
+// @Router /creditgrants/cancel [post]
 func (h *CreditGrantHandler) CancelFutureSubscriptionGrants(c *gin.Context) {
 	var req dto.CancelFutureSubscriptionGrantsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

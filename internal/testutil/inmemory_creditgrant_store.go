@@ -246,9 +246,9 @@ func creditGrantFilterFn(ctx context.Context, cg *creditgrant.CreditGrant, filte
 		}
 	}
 
-	// Check IDs filter
-	if len(f.IDs) > 0 {
-		if !lo.Contains(f.IDs, cg.ID) {
+	// Check credit grant IDs filter
+	if len(f.CreditGrantIDs) > 0 {
+		if !lo.Contains(f.CreditGrantIDs, cg.ID) {
 			return false
 		}
 	}

@@ -173,7 +173,7 @@ type CreditGrantFilter struct {
 	*TimeRangeFilter
 
 	// Specific filters for credit grants
-	IDs             []string          `form:"ids" json:"ids,omitempty"`
+	CreditGrantIDs  []string          `form:"credit_grant_ids" json:"credit_grant_ids,omitempty"`
 	PlanIDs         []string          `form:"plan_ids" json:"plan_ids,omitempty"`
 	SubscriptionIDs []string          `form:"subscription_ids" json:"subscription_ids,omitempty"`
 	Scope           *CreditGrantScope `form:"scope" json:"scope,omitempty"`
