@@ -29,9 +29,9 @@ type CreateCreditGrantRequest struct {
 	ExpirationDurationUnit *types.CreditGrantExpiryDurationUnit `json:"expiration_duration_unit,omitempty"`
 	Priority               *int                                 `json:"priority,omitempty"`
 	Metadata               types.Metadata                       `json:"metadata,omitempty"`
-	CreditGrantAnchor      *time.Time                           `json:"-"`
-	StartDate              *time.Time                           `json:"-"`
-	EndDate                *time.Time                           `json:"-"`
+	CreditGrantAnchor      *time.Time                           `json:"credit_grant_anchor,omitempty"`
+	StartDate              *time.Time                           `json:"start_date,omitempty"`
+	EndDate                *time.Time                           `json:"end_date,omitempty"`
 
 	// amount in the currency =  number of credits * conversion_rate
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
@@ -441,6 +441,7 @@ func (r *CreateCreditGrantApplicationRequest) ToCreditGrantApplication(ctx conte
 type CancelFutureSubscriptionGrantsRequest struct {
 	SubscriptionID string     `json:"subscription_id" binding:"required"`
 	EffectiveDate  *time.Time `json:"effective_date,omitempty"`
+	CreditGrantIDs []string   `json:"credit_grant_ids,omitempty"` // Optional: specific grant IDs to cancel. If empty/not provided, cancels all grants
 }
 
 // Validate validates the cancel future subscription grants request

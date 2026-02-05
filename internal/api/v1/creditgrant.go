@@ -185,3 +185,33 @@ func (h *CreditGrantHandler) DeleteCreditGrant(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "credit grant deleted successfully"})
 }
+
+// @Summary Cancel future subscription credit grants
+// @Description Cancel future credit grants for a subscription by setting their end date and archiving them. If credit_grant_ids is provided, only those specific grants are cancelled. If not provided or empty, all grants for the subscription are cancelled.
+// @Tags CreditGrants
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body dto.CancelFutureSubscriptionGrantsRequest true "Cancel future grants request"
+// @Success 200 {object} dto.SuccessResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /creditgrants/cancel [post]
+func (h *CreditGrantHandler) CancelFutureSubscriptionGrants(c *gin.Context) {
+	var req dto.CancelFutureSubscriptionGrantsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := h.service.CancelFutureSubscriptionGrants(c.Request.Context(), req); err != nil {
+		h.log.Error("Failed to cancel future subscription grants", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "future subscription credit grants cancelled successfully"})
+}

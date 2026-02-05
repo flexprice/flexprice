@@ -246,6 +246,13 @@ func creditGrantFilterFn(ctx context.Context, cg *creditgrant.CreditGrant, filte
 		}
 	}
 
+	// Check credit grant IDs filter
+	if len(f.CreditGrantIDs) > 0 {
+		if !lo.Contains(f.CreditGrantIDs, cg.ID) {
+			return false
+		}
+	}
+
 	// Check plan IDs filter
 	if len(f.PlanIDs) > 0 {
 		if cg.PlanID == nil || !lo.Contains(f.PlanIDs, *cg.PlanID) {

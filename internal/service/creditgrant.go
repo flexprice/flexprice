@@ -1100,15 +1100,26 @@ func (s *creditGrantService) CancelFutureSubscriptionGrants(ctx context.Context,
 		effective = req.EffectiveDate.UTC()
 	}
 
-	// Get all credit grants for this subscription
+	// Get credit grants for this subscription
 	filter := types.NewNoLimitCreditGrantFilter()
 	filter.SubscriptionIDs = []string{req.SubscriptionID}
 	filter.WithStatus(types.StatusPublished)
+
+	// If specific credit grant IDs are provided, add them to the filter
+	if len(req.CreditGrantIDs) > 0 {
+		filter.CreditGrantIDs = req.CreditGrantIDs
+	}
 
 	creditGrants, err := s.CreditGrantRepo.List(ctx, filter)
 	if err != nil {
 		s.Logger.Errorw("Failed to fetch credit grants for subscription", "subscription_id", req.SubscriptionID, "error", err)
 		return err
+	}
+
+	// If no grants found, return early with appropriate message
+	if len(creditGrants) == 0 {
+		s.Logger.Infow("No credit grants found to cancel", "subscription_id", req.SubscriptionID, "credit_grant_ids", req.CreditGrantIDs)
+		return nil
 	}
 
 	if err := s.DB.WithTx(ctx, func(ctx context.Context) error {
