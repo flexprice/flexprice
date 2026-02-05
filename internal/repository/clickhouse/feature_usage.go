@@ -2134,6 +2134,14 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName = "bucket_sum"
 	}
 
+	// Build WITH FILL clause if HasWindowedCommitment is enabled
+	// This ensures all time windows are generated even if no events occurred,
+	// allowing commitment/reservation logic to be applied to every window
+	withFillClause := ""
+	if params.HasWindowedCommitment {
+		withFillClause = r.buildWithFillClause(params.UsageParams.WindowSize, params.UsageParams.StartTime, params.UsageParams.EndTime)
+	}
+
 	// First aggregate values per bucket using the appropriate function,
 	// then sum all bucket values to get the total
 	return fmt.Sprintf(`
@@ -2152,7 +2160,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 				%s
 				%s
 			GROUP BY bucket_start
-			ORDER BY bucket_start
+			ORDER BY bucket_start %s
 		)
 		SELECT
 			(SELECT sum(%s) FROM %s) as total,
@@ -2173,9 +2181,109 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		subLineItemFilter,
 		filterConditions,
 		timeConditions,
+		withFillClause,
 		bucketColumnName, bucketTableName,
 		bucketColumnName,
 		bucketTableName)
+}
+
+// buildWithFillClause generates the WITH FILL clause for ClickHouse ORDER BY
+// to fill missing time windows with zeros for commitment calculations
+func (r *FeatureUsageRepository) buildWithFillClause(windowSize types.WindowSize, startTime, endTime time.Time) string {
+	// Format times for ClickHouse
+	startTimeStr := startTime.Format("2006-01-02 15:04:05")
+	endTimeStr := endTime.Format("2006-01-02 15:04:05")
+
+	// Determine the STEP interval based on window size
+	stepInterval := r.getStepIntervalForFill(windowSize)
+	fromExpr := r.getFromExprForFill(windowSize, startTimeStr)
+	toExpr := r.getToExprForFill(windowSize, endTimeStr)
+
+	return fmt.Sprintf("WITH FILL FROM %s TO %s STEP %s", fromExpr, toExpr, stepInterval)
+}
+
+// getStepIntervalForFill returns the STEP INTERVAL clause for WITH FILL based on window size
+func (r *FeatureUsageRepository) getStepIntervalForFill(windowSize types.WindowSize) string {
+	switch windowSize {
+	case types.WindowSizeMinute:
+		return "INTERVAL 1 MINUTE"
+	case types.WindowSize15Min:
+		return "INTERVAL 15 MINUTE"
+	case types.WindowSize30Min:
+		return "INTERVAL 30 MINUTE"
+	case types.WindowSizeHour:
+		return "INTERVAL 1 HOUR"
+	case types.WindowSize3Hour:
+		return "INTERVAL 3 HOUR"
+	case types.WindowSize6Hour:
+		return "INTERVAL 6 HOUR"
+	case types.WindowSize12Hour:
+		return "INTERVAL 12 HOUR"
+	case types.WindowSizeDay:
+		return "INTERVAL 1 DAY"
+	case types.WindowSizeWeek:
+		return "INTERVAL 7 DAY"
+	case types.WindowSizeMonth:
+		return "INTERVAL 1 MONTH"
+	default:
+		return "INTERVAL 1 HOUR"
+	}
+}
+
+// getFromExprForFill returns the FROM expression for WITH FILL aligned to window boundaries
+func (r *FeatureUsageRepository) getFromExprForFill(windowSize types.WindowSize, startTimeStr string) string {
+	switch windowSize {
+	case types.WindowSizeMinute:
+		return fmt.Sprintf("toStartOfMinute(toDateTime('%s'))", startTimeStr)
+	case types.WindowSize15Min:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 15 MINUTE)", startTimeStr)
+	case types.WindowSize30Min:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 30 MINUTE)", startTimeStr)
+	case types.WindowSizeHour:
+		return fmt.Sprintf("toStartOfHour(toDateTime('%s'))", startTimeStr)
+	case types.WindowSize3Hour:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 3 HOUR)", startTimeStr)
+	case types.WindowSize6Hour:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 6 HOUR)", startTimeStr)
+	case types.WindowSize12Hour:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 12 HOUR)", startTimeStr)
+	case types.WindowSizeDay:
+		return fmt.Sprintf("toStartOfDay(toDateTime('%s'))", startTimeStr)
+	case types.WindowSizeWeek:
+		return fmt.Sprintf("toStartOfWeek(toDateTime('%s'))", startTimeStr)
+	case types.WindowSizeMonth:
+		return fmt.Sprintf("toStartOfMonth(toDateTime('%s'))", startTimeStr)
+	default:
+		return fmt.Sprintf("toStartOfHour(toDateTime('%s'))", startTimeStr)
+	}
+}
+
+// getToExprForFill returns the TO expression for WITH FILL aligned to window boundaries
+func (r *FeatureUsageRepository) getToExprForFill(windowSize types.WindowSize, endTimeStr string) string {
+	switch windowSize {
+	case types.WindowSizeMinute:
+		return fmt.Sprintf("toStartOfMinute(toDateTime('%s'))", endTimeStr)
+	case types.WindowSize15Min:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 15 MINUTE)", endTimeStr)
+	case types.WindowSize30Min:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 30 MINUTE)", endTimeStr)
+	case types.WindowSizeHour:
+		return fmt.Sprintf("toStartOfHour(toDateTime('%s'))", endTimeStr)
+	case types.WindowSize3Hour:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 3 HOUR)", endTimeStr)
+	case types.WindowSize6Hour:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 6 HOUR)", endTimeStr)
+	case types.WindowSize12Hour:
+		return fmt.Sprintf("toStartOfInterval(toDateTime('%s'), INTERVAL 12 HOUR)", endTimeStr)
+	case types.WindowSizeDay:
+		return fmt.Sprintf("toStartOfDay(toDateTime('%s'))", endTimeStr)
+	case types.WindowSizeWeek:
+		return fmt.Sprintf("toStartOfWeek(toDateTime('%s'))", endTimeStr)
+	case types.WindowSizeMonth:
+		return fmt.Sprintf("toStartOfMonth(toDateTime('%s'))", endTimeStr)
+	default:
+		return fmt.Sprintf("toStartOfHour(toDateTime('%s'))", endTimeStr)
+	}
 }
 
 // GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs
