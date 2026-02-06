@@ -1128,15 +1128,16 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								Mark(ierr.ErrNotFound)
 						}
 
-						// Fetch bucketed usage values
+						// Fetch bucketed usage values (WITH FILL in query so all windows returned)
 						usageRequest := &dto.GetUsageByMeterRequest{
-							MeterID:            item.MeterID,
-							PriceID:            item.PriceID,
-							ExternalCustomerID: customer.ExternalID,
-							StartTime:          item.GetPeriodStart(periodStart),
-							EndTime:            item.GetPeriodEnd(periodEnd),
-							WindowSize:         meter.Aggregation.BucketSize,
-							BillingAnchor:      &sub.BillingAnchor,
+							MeterID:               item.MeterID,
+							PriceID:               item.PriceID,
+							ExternalCustomerID:    customer.ExternalID,
+							StartTime:             item.GetPeriodStart(periodStart),
+							EndTime:               item.GetPeriodEnd(periodEnd),
+							WindowSize:            meter.Aggregation.BucketSize,
+							BillingAnchor:         &sub.BillingAnchor,
+							HasWindowedCommitment: true,
 						}
 
 						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
@@ -1144,14 +1145,11 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							return nil, decimal.Zero, err
 						}
 
-						// Fill missing windows with zeros to ensure commitment is applied to every window
-						// even when no events occurred in that window
-						bucketedValues := s.fillMissingWindows(
-							usageResult.Results,
-							item.GetPeriodStart(periodStart),
-							item.GetPeriodEnd(periodEnd),
-							meter.Aggregation.BucketSize,
-						)
+						// Query layer fills missing windows; extract values in order for commitment
+						bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
+						for i, r := range usageResult.Results {
+							bucketedValues[i] = r.Value
+						}
 
 						// Apply window-based commitment
 						adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(
@@ -2746,117 +2744,4 @@ func (s *billingService) calculateNeverResetUsage(
 		"billable_quantity", billableQuantity)
 
 	return billableQuantity, nil
-}
-
-// fillMissingWindows generates all time windows for the given period and fills missing ones with zeros.
-// This ensures that windowed commitment/reservation is applied to every window, even when no events occurred.
-func (s *billingService) fillMissingWindows(
-	results []events.UsageResult,
-	startTime, endTime time.Time,
-	windowSize types.WindowSize,
-) []decimal.Decimal {
-	// Build a map of existing window values
-	existingValues := make(map[time.Time]decimal.Decimal)
-	for _, result := range results {
-		existingValues[result.WindowSize] = result.Value
-	}
-
-	// Generate all expected windows
-	allWindows := s.generateAllWindows(startTime, endTime, windowSize)
-
-	// Create result slice with values for all windows (zero if missing)
-	bucketedValues := make([]decimal.Decimal, len(allWindows))
-	for i, windowStart := range allWindows {
-		if val, exists := existingValues[windowStart]; exists {
-			bucketedValues[i] = val
-		} else {
-			bucketedValues[i] = decimal.Zero // Fill missing window with zero
-		}
-	}
-
-	s.Logger.Debugw("filled missing windows for commitment",
-		"start_time", startTime,
-		"end_time", endTime,
-		"window_size", windowSize,
-		"existing_windows", len(results),
-		"total_windows", len(allWindows),
-		"filled_windows", len(allWindows)-len(results))
-
-	return bucketedValues
-}
-
-// generateAllWindows generates all window start times for the given period based on window size
-func (s *billingService) generateAllWindows(startTime, endTime time.Time, windowSize types.WindowSize) []time.Time {
-	var windows []time.Time
-	current := s.alignToWindowStart(startTime, windowSize)
-
-	for current.Before(endTime) {
-		windows = append(windows, current)
-		current = s.addWindowDuration(current, windowSize)
-	}
-
-	return windows
-}
-
-// alignToWindowStart aligns a time to the start of its window
-func (s *billingService) alignToWindowStart(t time.Time, windowSize types.WindowSize) time.Time {
-	switch windowSize {
-	case types.WindowSizeMinute:
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, t.Location())
-	case types.WindowSize15Min:
-		minute := (t.Minute() / 15) * 15
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), minute, 0, 0, t.Location())
-	case types.WindowSize30Min:
-		minute := (t.Minute() / 30) * 30
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), minute, 0, 0, t.Location())
-	case types.WindowSizeHour:
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
-	case types.WindowSize3Hour:
-		hour := (t.Hour() / 3) * 3
-		return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
-	case types.WindowSize6Hour:
-		hour := (t.Hour() / 6) * 6
-		return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
-	case types.WindowSize12Hour:
-		hour := (t.Hour() / 12) * 12
-		return time.Date(t.Year(), t.Month(), t.Day(), hour, 0, 0, 0, t.Location())
-	case types.WindowSizeDay:
-		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
-	case types.WindowSizeWeek:
-		// Go to start of week (Sunday)
-		weekday := int(t.Weekday())
-		return time.Date(t.Year(), t.Month(), t.Day()-weekday, 0, 0, 0, 0, t.Location())
-	case types.WindowSizeMonth:
-		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
-	default:
-		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
-	}
-}
-
-// addWindowDuration adds one window duration to the given time
-func (s *billingService) addWindowDuration(t time.Time, windowSize types.WindowSize) time.Time {
-	switch windowSize {
-	case types.WindowSizeMinute:
-		return t.Add(time.Minute)
-	case types.WindowSize15Min:
-		return t.Add(15 * time.Minute)
-	case types.WindowSize30Min:
-		return t.Add(30 * time.Minute)
-	case types.WindowSizeHour:
-		return t.Add(time.Hour)
-	case types.WindowSize3Hour:
-		return t.Add(3 * time.Hour)
-	case types.WindowSize6Hour:
-		return t.Add(6 * time.Hour)
-	case types.WindowSize12Hour:
-		return t.Add(12 * time.Hour)
-	case types.WindowSizeDay:
-		return t.AddDate(0, 0, 1)
-	case types.WindowSizeWeek:
-		return t.AddDate(0, 0, 7)
-	case types.WindowSizeMonth:
-		return t.AddDate(0, 1, 0)
-	default:
-		return t.Add(time.Hour)
-	}
 }
