@@ -2136,29 +2136,29 @@ func (s *invoiceService) getInvoiceDataForPDFGen(
 
 	// Convert to InvoiceData
 	data := &pdf.InvoiceData{
-		ID:              inv.ID,
-		InvoiceNumber:   invoiceNum,
-		InvoiceStatus:   string(inv.InvoiceStatus),
-		Currency:        types.GetCurrencySymbol(inv.Currency),
-		Precision:       types.GetCurrencyPrecision(inv.Currency),
-		AmountDue:       total,
-		Subtotal:        subtotal,
-		TotalDiscount:   totalDiscount,
+		ID:                         inv.ID,
+		InvoiceNumber:              invoiceNum,
+		InvoiceStatus:              string(inv.InvoiceStatus),
+		Currency:                   types.GetCurrencySymbol(inv.Currency),
+		Precision:                  types.GetCurrencyPrecision(inv.Currency),
+		AmountDue:                  total,
+		Subtotal:                   subtotal,
+		TotalDiscount:              totalDiscount,
 		TotalPrepaidCreditsApplied: totalPrepaidCreditsApplied,
-		TotalTax:        totalTax,
-		BillingReason:   inv.BillingReason,
-		Notes:           "",  // resolved from invoice metadata
-		VAT:             0.0, // resolved from invoice metadata
-		Biller:          s.getBillerInfo(tenant),
-		PeriodStart:     pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
-		PeriodEnd:       pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
-		Recipient:       s.getRecipientInfo(customer),
-		BillingPeriod:   lo.FromPtrOr(inv.BillingPeriod, ""),
-		Description:     inv.Description,
-		AmountPaid:      amountPaid,
-		AmountRemaining: amountRemaining,
-		PaymentStatus:   string(inv.PaymentStatus),
-		InvoiceType:     string(inv.InvoiceType),
+		TotalTax:                   totalTax,
+		BillingReason:              inv.BillingReason,
+		Notes:                      "",  // resolved from invoice metadata
+		VAT:                        0.0, // resolved from invoice metadata
+		Biller:                     s.getBillerInfo(tenant),
+		PeriodStart:                pdf.CustomTime{Time: lo.FromPtr(inv.PeriodStart)},
+		PeriodEnd:                  pdf.CustomTime{Time: lo.FromPtr(inv.PeriodEnd)},
+		Recipient:                  s.getRecipientInfo(customer),
+		BillingPeriod:              lo.FromPtrOr(inv.BillingPeriod, ""),
+		Description:                inv.Description,
+		AmountPaid:                 amountPaid,
+		AmountRemaining:            amountRemaining,
+		PaymentStatus:              string(inv.PaymentStatus),
+		InvoiceType:                string(inv.InvoiceType),
 	}
 
 	// Convert dates
@@ -2614,7 +2614,20 @@ func (s *invoiceService) RecalculateInvoice(ctx context.Context, id string, fina
 			}
 		}
 
-		// STEP 6: Update the invoice
+		// Attach new line items to inv so credits/coupons apply to them
+		inv.LineItems = newLineItems
+
+		// STEP 6: Update the invoice with subtotal/totals from billing
+		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
+			return err
+		}
+
+		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
+		newInvoiceReq.SubscriptionID = inv.SubscriptionID
+		newInvoiceReq.CustomerID = inv.CustomerID
+		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, lo.FromPtr(newInvoiceReq)); err != nil {
+			return err
+		}
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
 			return err
 		}

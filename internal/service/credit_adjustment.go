@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
@@ -268,11 +269,11 @@ func (s *creditAdjustmentService) ApplyCreditsToInvoice(ctx context.Context, inv
 			}
 
 			// Generate unique idempotency key for this wallet operation
-			// This ensures uniqueness per invoice-wallet pair and prevents double-debits on retries
 			generator := idempotency.NewGenerator()
 			idempotencyKey := generator.GenerateKey(idempotency.ScopeWalletCreditAdjustment, map[string]interface{}{
 				"invoice_id": inv.ID,
 				"wallet_id":  walletID,
+				"ts":         time.Now().UnixNano(),
 			})
 
 			walletDebitOperation := &wallet.WalletOperation{
