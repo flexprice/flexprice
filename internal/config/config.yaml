@@ -165,7 +165,7 @@ event_processing:
   enabled: true
   topic: "events"
   rate_limit: 12
-  consumer_group: "flexprice-consumer-local"
+  consumer_group: "flexprice-consumer-local-v1"
 
 event_processing_lazy:
   enabled: true
@@ -178,6 +178,13 @@ event_processing_replay:
   topic: "events_backfill"
   rate_limit: 1
   consumer_group: "v1_event_processing_replay"
+
+event_processing_bulk:
+  enabled: true
+  topic: "staging_events"
+  rate_limit: 10
+  consumer_group: "flexprice-consumer-local-v2abc"
+
 
 
 event_post_processing:
@@ -199,6 +206,12 @@ feature_usage_tracking:
   topic_backfill: "events_post_processing_backfill"
   rate_limit_backfill: 1
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
+
+feature_usage_tracking_bulk:
+  enabled: true
+  topic: "staging_events"
+  rate_limit: 10
+  consumer_group: "v1_feature_tracking_service_bulk"
 
 feature_usage_tracking_lazy:
   enabled: true
@@ -270,15 +283,14 @@ redis:
   timeout: 5s # Timeout for Redis operations
   key_prefix: "flexprice:local"
 
-# Raw events reprocessing configuration
-raw_events_reprocessing:
-  enabled: true
-  output_topic: "prod_events_v4"
-
 # Raw event consumption configuration (batch processing from Bento)
 raw_event_consumption:
   enabled: true
   topic: "staging_events_backfill"      # INPUT: Reads batches from here
   output_topic: "staging_events"                 # OUTPUT: Publishes transformed events to here
+  bulk_events:
+    enabled: true                      # Enable bulk event processing mode
+    batch_size: 100                     # Number of events per bulk message
+    output_topic: "staging_events" # OUTPUT: Publishes bulk event batches to here
   rate_limit: 10
-  consumer_group: "v1_raw_event_processing_v4"
+  consumer_group: "flexprice-consumer-local-v2xyz"

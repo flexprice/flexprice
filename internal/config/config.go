@@ -38,10 +38,12 @@ type Configuration struct {
 	EventProcessing            EventProcessingConfig            `mapstructure:"event_processing" validate:"required"`
 	EventProcessingLazy        EventProcessingLazyConfig        `mapstructure:"event_processing_lazy" validate:"required"`
 	EventProcessingReplay      EventProcessingReplayConfig      `mapstructure:"event_processing_replay" validate:"required"`
+	EventProcessingBulk        EventProcessingBulkConfig        `mapstructure:"event_processing_bulk" validate:"required"`
 	CostSheetUsageTracking     CostSheetUsageTrackingConfig     `mapstructure:"costsheet_usage_tracking" validate:"required"`
 	CostSheetUsageTrackingLazy CostSheetUsageTrackingLazyConfig `mapstructure:"costsheet_usage_tracking_lazy" validate:"required"`
 	EventPostProcessing        EventPostProcessingConfig        `mapstructure:"event_post_processing" validate:"required"`
 	FeatureUsageTracking       FeatureUsageTrackingConfig       `mapstructure:"feature_usage_tracking" validate:"required"`
+	FeatureUsageTrackingBulk   FeatureUsageTrackingBulkConfig   `mapstructure:"feature_usage_tracking_bulk" validate:"required"`
 	FeatureUsageTrackingLazy   FeatureUsageTrackingLazyConfig   `mapstructure:"feature_usage_tracking_lazy" validate:"required"`
 	FeatureUsageTrackingReplay FeatureUsageTrackingReplayConfig `mapstructure:"feature_usage_tracking_replay" validate:"required"`
 	EnvAccess                  EnvAccessConfig                  `mapstructure:"env_access" json:"env_access" validate:"omitempty"`
@@ -52,7 +54,6 @@ type Configuration struct {
 	WalletBalanceAlert         WalletBalanceAlertConfig         `mapstructure:"wallet_balance_alert" validate:"required"`
 	CustomerPortal             CustomerPortalConfig             `mapstructure:"customer_portal" validate:"required"`
 	Redis                      RedisConfig                      `mapstructure:"redis" validate:"required"`
-	RawEventsReprocessing      RawEventsReprocessingConfig      `mapstructure:"raw_events_reprocessing" validate:"required"`
 	RawEventConsumption        RawEventConsumptionConfig        `mapstructure:"raw_event_consumption" validate:"required"`
 }
 
@@ -236,6 +237,14 @@ type EventProcessingReplayConfig struct {
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
+
+type EventProcessingBulkConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"false"`
+	Topic         string `mapstructure:"topic" default:"bulk_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_bulk"`
+}
+
 type FeatureUsageTrackingConfig struct {
 	// Rate limit in messages consumed per second
 	Enabled                bool   `mapstructure:"enabled" default:"true"`
@@ -247,6 +256,13 @@ type FeatureUsageTrackingConfig struct {
 	ConsumerGroupBackfill  string `mapstructure:"consumer_group_backfill" default:"v1_feature_tracking_service_backfill"`
 	BackfillEnabled        bool   `mapstructure:"backfill_enabled" default:"false"`
 	WalletAlertPushEnabled bool   `mapstructure:"wallet_alert_push_enabled" default:"true"`
+}
+
+type FeatureUsageTrackingBulkConfig struct {
+	Enabled       bool   `mapstructure:"enabled" default:"false"`
+	Topic         string `mapstructure:"topic" default:"bulk_events"`
+	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_feature_tracking_service_bulk"`
 }
 
 type FeatureUsageTrackingLazyConfig struct {
@@ -274,17 +290,19 @@ type WalletBalanceAlertConfig struct {
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_wallet_alert_service"`
 }
 
-type RawEventsReprocessingConfig struct {
-	Enabled     bool   `mapstructure:"enabled" default:"true"`
-	OutputTopic string `mapstructure:"output_topic" default:"prod_events_v4"`
+type BulkEventsConfig struct {
+	Enabled     bool   `mapstructure:"enabled" default:"false"`
+	BatchSize   int    `mapstructure:"batch_size" default:"100"`
+	OutputTopic string `mapstructure:"output_topic" default:"bulk_events"`
 }
 
 type RawEventConsumptionConfig struct {
-	Enabled       bool   `mapstructure:"enabled" default:"true"`
-	Topic         string `mapstructure:"topic" default:"raw_events"`
-	OutputTopic   string `mapstructure:"output_topic" default:"events"`
-	RateLimit     int64  `mapstructure:"rate_limit" default:"10"`
-	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_raw_event_processing"`
+	Enabled       bool             `mapstructure:"enabled" default:"true"`
+	Topic         string           `mapstructure:"topic" default:"raw_events"`
+	OutputTopic   string           `mapstructure:"output_topic" default:"events"`
+	BulkEvents    BulkEventsConfig `mapstructure:"bulk_events"`
+	RateLimit     int64            `mapstructure:"rate_limit" default:"10"`
+	ConsumerGroup string           `mapstructure:"consumer_group" default:"v1_raw_event_processing"`
 }
 
 type EnvAccessConfig struct {

@@ -18,22 +18,22 @@ import (
 )
 
 type EventsHandler struct {
-	eventService                 service.EventService
-	eventPostProcessingService   service.EventPostProcessingService
-	featureUsageTrackingService  service.FeatureUsageTrackingService
-	rawEventsReprocessingService service.RawEventsReprocessingService
-	config                       *config.Configuration
-	log                          *logger.Logger
+	eventService                service.EventService
+	eventPostProcessingService  service.EventPostProcessingService
+	featureUsageTrackingService service.FeatureUsageTrackingService
+	rawEventsService            service.RawEventsService
+	config                      *config.Configuration
+	log                         *logger.Logger
 }
 
-func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsReprocessingService service.RawEventsReprocessingService, config *config.Configuration, log *logger.Logger) *EventsHandler {
+func NewEventsHandler(eventService service.EventService, eventPostProcessingService service.EventPostProcessingService, featureUsageTrackingService service.FeatureUsageTrackingService, rawEventsService service.RawEventsService, config *config.Configuration, log *logger.Logger) *EventsHandler {
 	return &EventsHandler{
-		eventService:                 eventService,
-		eventPostProcessingService:   eventPostProcessingService,
-		featureUsageTrackingService:  featureUsageTrackingService,
-		rawEventsReprocessingService: rawEventsReprocessingService,
-		config:                       config,
-		log:                          log,
+		eventService:                eventService,
+		eventPostProcessingService:  eventPostProcessingService,
+		featureUsageTrackingService: featureUsageTrackingService,
+		rawEventsService:            rawEventsService,
+		config:                      config,
+		log:                         log,
 	}
 }
 
@@ -647,7 +647,7 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 		return
 	}
 
-	result, err := h.rawEventsReprocessingService.TriggerReprocessRawEventsWorkflow(ctx, &service.ReprocessRawEventsRequest{
+	result, err := h.rawEventsService.TriggerReprocessRawEventsWorkflow(ctx, &service.ReprocessRawEventsRequest{
 		ExternalCustomerID: req.ExternalCustomerID,
 		EventName:          req.EventName,
 		StartDate:          req.StartDate,

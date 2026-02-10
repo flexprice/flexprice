@@ -50,6 +50,9 @@ type FeatureUsageTrackingService interface {
 	// Register replay handler with the router
 	RegisterHandlerReplay(router *pubsubRouter.Router, cfg *config.Configuration)
 
+	// Register bulk event handler with the router
+	RegisterHandlerBulk(router *pubsubRouter.Router, cfg *config.Configuration)
+
 	// GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
 	GetDetailedUsageAnalytics(ctx context.Context, req *dto.GetUsageAnalyticsRequest) (*dto.GetUsageAnalyticsResponse, error)
 
@@ -86,6 +89,7 @@ type featureUsageTrackingService struct {
 	backfillPubSub   pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
 	lazyPubSub       pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
 	replayPubSub     pubsub.PubSub // Dedicated Kafka PubSub for replay processing
+	bulkPubSub       pubsub.PubSub // Dedicated Kafka PubSub for bulk processing
 	eventRepo        events.Repository
 	featureUsageRepo events.FeatureUsageRepository
 }
@@ -147,6 +151,17 @@ func NewFeatureUsageTrackingService(
 		return nil
 	}
 	ev.replayPubSub = replayPubSub
+
+	bulkPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.FeatureUsageTrackingBulk.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatalw("failed to create bulk pubsub", "error", err)
+		return nil
+	}
+	ev.bulkPubSub = bulkPubSub
 
 	return ev
 }
@@ -316,6 +331,31 @@ func (s *featureUsageTrackingService) RegisterHandlerReplay(router *pubsubRouter
 	)
 }
 
+// RegisterHandlerBulk registers the bulk event handler with the router
+func (s *featureUsageTrackingService) RegisterHandlerBulk(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.FeatureUsageTrackingBulk.Enabled {
+		s.Logger.Infow("feature usage tracking bulk handler disabled by configuration")
+		return
+	}
+
+	// Add throttle middleware to this specific handler
+	throttle := middleware.NewThrottle(cfg.FeatureUsageTrackingBulk.RateLimit, time.Second)
+
+	// Add the handler
+	router.AddNoPublishHandler(
+		"feature_usage_tracking_bulk_handler",
+		cfg.FeatureUsageTrackingBulk.Topic,
+		s.bulkPubSub,
+		s.processBulkMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Infow("registered feature usage tracking bulk handler",
+		"topic", cfg.FeatureUsageTrackingBulk.Topic,
+		"rate_limit", cfg.FeatureUsageTrackingBulk.RateLimit,
+	)
+}
+
 // Process a single event message for feature usage tracking
 func (s *featureUsageTrackingService) processMessage(msg *message.Message) error {
 	// Extract tenant ID from message metadata
@@ -400,6 +440,116 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 		"tenant_id", tenantID,
 		"environment_id", environmentID,
 	)
+
+	return nil
+}
+
+// processBulkMessage processes a bulk batch of events from Kafka
+func (s *featureUsageTrackingService) processBulkMessage(msg *message.Message) error {
+	partitionKey := msg.Metadata.Get("partition_key")
+	tenantID := msg.Metadata.Get("tenant_id")
+	environmentID := msg.Metadata.Get("environment_id")
+	bulkBatchSize := msg.Metadata.Get("bulk_batch_size")
+
+	s.Logger.Debugw("processing bulk event batch from message queue",
+		"message_uuid", msg.UUID,
+		"partition_key", partitionKey,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"bulk_batch_size", bulkBatchSize,
+	)
+
+	// Unmarshal the bulk batch
+	var batch BulkEventBatch
+	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
+		s.Logger.Errorw("failed to unmarshal bulk event batch",
+			"error", err,
+			"message_uuid", msg.UUID,
+		)
+		return nil // Don't retry on unmarshal errors
+	}
+
+	// Use tenant/environment from batch if not in metadata
+	if tenantID == "" && batch.TenantID != "" {
+		tenantID = batch.TenantID
+	}
+
+	if environmentID == "" && batch.EnvironmentID != "" {
+		environmentID = batch.EnvironmentID
+	}
+
+	// Create a background context with tenant ID
+	ctx := context.Background()
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
+	if tenantID == "" {
+		s.Logger.Errorw("tenant id is required for feature usage tracking bulk batch",
+			"message_uuid", msg.UUID,
+			"batch_size", len(batch.Events),
+		)
+		return nil // Don't retry on invalid tenant id
+	}
+
+	if environmentID == "" {
+		s.Logger.Errorw("environment id is required for feature usage tracking bulk batch",
+			"message_uuid", msg.UUID,
+			"batch_size", len(batch.Events),
+		)
+		return nil // Don't retry on invalid environment id
+	}
+
+	s.Logger.Infow("processing bulk event batch",
+		"batch_size", len(batch.Events),
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+	)
+
+	// Process each event in the batch individually
+	successCount := 0
+	errorCount := 0
+	skipCount := 0
+
+	for i, event := range batch.Events {
+		// Process the event using existing logic
+		if err := s.processEvent(ctx, event); err != nil {
+			errorCount++
+			s.Logger.Errorw("failed to process event in bulk batch",
+				"error", err,
+				"event_id", event.ID,
+				"event_name", event.EventName,
+				"batch_position", i+1,
+			)
+			// Continue processing other events even if one fails
+			continue
+		}
+
+		successCount++
+		s.Logger.Debugw("successfully processed event in bulk batch",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"batch_position", i+1,
+		)
+	}
+
+	s.Logger.Infow("bulk event batch processing complete",
+		"batch_size", len(batch.Events),
+		"success_count", successCount,
+		"error_count", errorCount,
+		"skip_count", skipCount,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+	)
+
+	// Return error if any event failed so Kafka can retry the entire batch
+	if errorCount > 0 {
+		return fmt.Errorf("failed to process %d out of %d events in bulk batch, retrying entire batch", errorCount, len(batch.Events))
+	}
 
 	return nil
 }
