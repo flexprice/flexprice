@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -34,19 +32,6 @@ func MoyasarInvoiceSyncWorkflow(ctx workflow.Context, input models.MoyasarInvoic
 		logger.Error("Invalid workflow input", "error", err)
 		return err
 	}
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowMoyasarInvoiceSync,
-		TaskQueue:     string(types.TemporalTaskQueueTask),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        "", // System workflow, no specific user
-		Metadata: map[string]interface{}{
-			"invoice_id":  input.InvoiceID,
-			"customer_id": input.CustomerID,
-		},
-	})
 
 	activityOptions := workflow.ActivityOptions{
 		StartToCloseTimeout: 5 * time.Minute,

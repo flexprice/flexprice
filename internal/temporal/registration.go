@@ -183,6 +183,7 @@ func buildWorkerConfig(
 	// Add tracking activity to all task queues
 	activitiesList := []interface{}{
 		workflowTrackingActivities.TrackWorkflowStart,
+		workflowTrackingActivities.TrackWorkflowEnd,
 	}
 
 	switch taskQueue {

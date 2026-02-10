@@ -4,8 +4,6 @@ import (
 	"time"
 
 	models "github.com/flexprice/flexprice/internal/temporal/models/events"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -30,19 +28,6 @@ func ReprocessEventsWorkflow(ctx workflow.Context, input models.ReprocessEventsW
 		"event_name", input.EventName,
 		"start_date", input.StartDate,
 		"end_date", input.EndDate)
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowReprocessEvents,
-		TaskQueue:     string(types.TemporalTaskQueueReprocessEvents),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        input.UserID,
-		Metadata: map[string]interface{}{
-			"external_customer_id": input.ExternalCustomerID,
-			"event_name":           input.EventName,
-		},
-	})
 
 	// Define activity options with extended timeouts for large batch processing
 	// Activity timeout set to 10 hours to allow for long-running reprocessing

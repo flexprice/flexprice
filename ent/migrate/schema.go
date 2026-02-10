@@ -2292,6 +2292,11 @@ var (
 				Columns: []*schema.Column{WorkflowExecutionsColumns[12]},
 			},
 			{
+				Name:    "idx_workflow_executions_end_time",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[13]},
+			},
+			{
 				Name:    "idx_workflow_executions_tenant_env_time",
 				Unique:  false,
 				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[12]},

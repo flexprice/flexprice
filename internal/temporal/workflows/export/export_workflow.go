@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/activities/export"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -44,18 +43,6 @@ func ExecuteExportWorkflow(ctx workflow.Context, input ExecuteExportWorkflowInpu
 		"scheduled_task_id", input.ScheduledTaskID,
 		"tenant_id", input.TenantID,
 		"env_id", input.EnvID)
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  "ExecuteExportWorkflow",
-		TaskQueue:     string(types.TemporalTaskQueueExport),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvID,
-		UserID:        input.UserID,
-		Metadata: map[string]interface{}{
-			"scheduled_task_id": input.ScheduledTaskID,
-		},
-	})
 
 	// Activity options for lightweight operations (fetching config, updating status)
 	lightweightActivityOptions := workflow.ActivityOptions{

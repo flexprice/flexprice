@@ -234,11 +234,16 @@ func (s *temporalService) RegisterWorkflow(taskQueue types.TemporalTaskQueue, wo
 			Mark(errors.ErrValidation)
 	}
 
-	// Create worker options with Sentry interceptor
+	// Create worker options with Sentry and Workflow Tracking interceptors
 	options := models.DefaultWorkerOptions()
 	if s.sentry != nil && s.sentry.IsEnabled() {
 		options.Interceptors = []interceptor.WorkerInterceptor{
 			temporalInterceptor.NewSentryInterceptor(s.sentry),
+			temporalInterceptor.NewWorkflowTrackingInterceptor(),
+		}
+	} else {
+		options.Interceptors = []interceptor.WorkerInterceptor{
+			temporalInterceptor.NewWorkflowTrackingInterceptor(),
 		}
 	}
 
@@ -265,11 +270,16 @@ func (s *temporalService) RegisterActivity(taskQueue types.TemporalTaskQueue, ac
 			Mark(errors.ErrValidation)
 	}
 
-	// Create worker options with Sentry interceptor
+	// Create worker options with Sentry and Workflow Tracking interceptors
 	options := models.DefaultWorkerOptions()
 	if s.sentry != nil && s.sentry.IsEnabled() {
 		options.Interceptors = []interceptor.WorkerInterceptor{
 			temporalInterceptor.NewSentryInterceptor(s.sentry),
+			temporalInterceptor.NewWorkflowTrackingInterceptor(),
+		}
+	} else {
+		options.Interceptors = []interceptor.WorkerInterceptor{
+			temporalInterceptor.NewWorkflowTrackingInterceptor(),
 		}
 	}
 

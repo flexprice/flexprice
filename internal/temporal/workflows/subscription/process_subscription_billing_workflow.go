@@ -6,8 +6,6 @@ import (
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	"github.com/flexprice/flexprice/internal/temporal/searchattr"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -51,18 +49,6 @@ func ProcessSubscriptionBillingWorkflow(
 		logger.Error("Invalid workflow input", "error", err)
 		return nil, err
 	}
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowProcessSubscriptionBilling,
-		TaskQueue:     string(types.TemporalTaskQueueSubscription),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        "",
-		Metadata: map[string]interface{}{
-			"subscription_id": input.SubscriptionID,
-		},
-	})
 
 	// Upsert workflow search attributes for better discoverability
 	searchattr.UpsertWorkflowSearchAttributes(ctx, map[string]interface{}{
