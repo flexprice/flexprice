@@ -511,6 +511,10 @@ func (o PriceQueryOptions) GetFieldName(field string) string {
 		return price.FieldLookupKey
 	case "amount":
 		return price.FieldAmount
+	case "display_name":
+		return price.FieldDisplayName
+	case "value":
+		return price.FieldAmount
 	default:
 		return field
 	}
@@ -568,6 +572,13 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	// Apply start date less than filter if specified
 	if f.StartDateLT != nil {
 		query = query.Where(price.StartDateLT(*f.StartDateLT))
+	}
+
+	if f.DisplayNameContains != "" {
+		query = query.Where(price.DisplayNameContainsFold(f.DisplayNameContains))
+	}
+	if f.AmountEQ != nil {
+		query = query.Where(price.AmountEQ(*f.AmountEQ))
 	}
 
 	return query

@@ -337,6 +337,10 @@ type PriceFilter struct {
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
 
 	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
+
+	// Simple search filters
+	DisplayNameContains string           `json:"display_name_contains,omitempty" form:"display_name_contains"`
+	AmountEQ            *decimal.Decimal `json:"amount_eq,omitempty" form:"amount_eq"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values

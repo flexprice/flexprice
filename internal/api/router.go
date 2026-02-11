@@ -181,6 +181,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 			price.GET("/lookup/:lookup_key", handlers.Price.GetByLookupKey)
+			price.POST("/search", handlers.Price.ListPricesByFilter)
 
 			priceUnit := price.Group("/units")
 			{
