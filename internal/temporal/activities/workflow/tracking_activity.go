@@ -58,6 +58,8 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 		TenantID:      input.TenantID,
 		EnvironmentID: input.EnvironmentID,
 		CreatedBy:     input.CreatedBy,
+		Entity:        input.Entity,
+		EntityID:      input.EntityID,
 		Metadata:      input.Metadata,
 	})
 

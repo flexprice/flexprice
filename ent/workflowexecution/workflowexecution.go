@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 const (
@@ -37,6 +38,16 @@ const (
 	FieldTaskQueue = "task_queue"
 	// FieldStartTime holds the string denoting the start_time field in the database.
 	FieldStartTime = "start_time"
+	// FieldEndTime holds the string denoting the end_time field in the database.
+	FieldEndTime = "end_time"
+	// FieldDurationMs holds the string denoting the duration_ms field in the database.
+	FieldDurationMs = "duration_ms"
+	// FieldWorkflowStatus holds the string denoting the workflow_status field in the database.
+	FieldWorkflowStatus = "workflow_status"
+	// FieldEntity holds the string denoting the entity field in the database.
+	FieldEntity = "entity"
+	// FieldEntityID holds the string denoting the entity_id field in the database.
+	FieldEntityID = "entity_id"
 	// FieldMetadata holds the string denoting the metadata field in the database.
 	FieldMetadata = "metadata"
 	// Table holds the table name of the workflowexecution in the database.
@@ -58,6 +69,11 @@ var Columns = []string{
 	FieldWorkflowType,
 	FieldTaskQueue,
 	FieldStartTime,
+	FieldEndTime,
+	FieldDurationMs,
+	FieldWorkflowStatus,
+	FieldEntity,
+	FieldEntityID,
 	FieldMetadata,
 }
 
@@ -92,6 +108,8 @@ var (
 	WorkflowTypeValidator func(string) error
 	// TaskQueueValidator is a validator for the "task_queue" field. It is called by the builders before save.
 	TaskQueueValidator func(string) error
+	// DefaultWorkflowStatus holds the default value on creation for the "workflow_status" field.
+	DefaultWorkflowStatus types.WorkflowExecutionStatus
 	// DefaultID holds the default value on creation for the "id" field.
 	DefaultID func() string
 )
@@ -162,4 +180,29 @@ func ByTaskQueue(opts ...sql.OrderTermOption) OrderOption {
 // ByStartTime orders the results by the start_time field.
 func ByStartTime(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStartTime, opts...).ToFunc()
+}
+
+// ByEndTime orders the results by the end_time field.
+func ByEndTime(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEndTime, opts...).ToFunc()
+}
+
+// ByDurationMs orders the results by the duration_ms field.
+func ByDurationMs(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDurationMs, opts...).ToFunc()
+}
+
+// ByWorkflowStatus orders the results by the workflow_status field.
+func ByWorkflowStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWorkflowStatus, opts...).ToFunc()
+}
+
+// ByEntity orders the results by the entity field.
+func ByEntity(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntity, opts...).ToFunc()
+}
+
+// ByEntityID orders the results by the entity_id field.
+func ByEntityID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEntityID, opts...).ToFunc()
 }

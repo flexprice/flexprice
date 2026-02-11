@@ -65969,26 +65969,32 @@ func (m *WalletTransactionMutation) ResetEdge(name string) error {
 // WorkflowExecutionMutation represents an operation that mutates the WorkflowExecution nodes in the graph.
 type WorkflowExecutionMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	workflow_id    *string
-	run_id         *string
-	workflow_type  *string
-	task_queue     *string
-	start_time     *time.Time
-	metadata       *map[string]interface{}
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*WorkflowExecution, error)
-	predicates     []predicate.WorkflowExecution
+	op              Op
+	typ             string
+	id              *string
+	tenant_id       *string
+	status          *string
+	created_at      *time.Time
+	updated_at      *time.Time
+	created_by      *string
+	updated_by      *string
+	environment_id  *string
+	workflow_id     *string
+	run_id          *string
+	workflow_type   *string
+	task_queue      *string
+	start_time      *time.Time
+	end_time        *time.Time
+	duration_ms     *int64
+	addduration_ms  *int64
+	workflow_status *types.WorkflowExecutionStatus
+	entity          *string
+	entity_id       *string
+	metadata        *map[string]interface{}
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*WorkflowExecution, error)
+	predicates      []predicate.WorkflowExecution
 }
 
 var _ ent.Mutation = (*WorkflowExecutionMutation)(nil)
@@ -66566,6 +66572,259 @@ func (m *WorkflowExecutionMutation) ResetStartTime() {
 	m.start_time = nil
 }
 
+// SetEndTime sets the "end_time" field.
+func (m *WorkflowExecutionMutation) SetEndTime(t time.Time) {
+	m.end_time = &t
+}
+
+// EndTime returns the value of the "end_time" field in the mutation.
+func (m *WorkflowExecutionMutation) EndTime() (r time.Time, exists bool) {
+	v := m.end_time
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEndTime returns the old "end_time" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldEndTime(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEndTime is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEndTime requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEndTime: %w", err)
+	}
+	return oldValue.EndTime, nil
+}
+
+// ClearEndTime clears the value of the "end_time" field.
+func (m *WorkflowExecutionMutation) ClearEndTime() {
+	m.end_time = nil
+	m.clearedFields[workflowexecution.FieldEndTime] = struct{}{}
+}
+
+// EndTimeCleared returns if the "end_time" field was cleared in this mutation.
+func (m *WorkflowExecutionMutation) EndTimeCleared() bool {
+	_, ok := m.clearedFields[workflowexecution.FieldEndTime]
+	return ok
+}
+
+// ResetEndTime resets all changes to the "end_time" field.
+func (m *WorkflowExecutionMutation) ResetEndTime() {
+	m.end_time = nil
+	delete(m.clearedFields, workflowexecution.FieldEndTime)
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (m *WorkflowExecutionMutation) SetDurationMs(i int64) {
+	m.duration_ms = &i
+	m.addduration_ms = nil
+}
+
+// DurationMs returns the value of the "duration_ms" field in the mutation.
+func (m *WorkflowExecutionMutation) DurationMs() (r int64, exists bool) {
+	v := m.duration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationMs returns the old "duration_ms" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldDurationMs(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationMs: %w", err)
+	}
+	return oldValue.DurationMs, nil
+}
+
+// AddDurationMs adds i to the "duration_ms" field.
+func (m *WorkflowExecutionMutation) AddDurationMs(i int64) {
+	if m.addduration_ms != nil {
+		*m.addduration_ms += i
+	} else {
+		m.addduration_ms = &i
+	}
+}
+
+// AddedDurationMs returns the value that was added to the "duration_ms" field in this mutation.
+func (m *WorkflowExecutionMutation) AddedDurationMs() (r int64, exists bool) {
+	v := m.addduration_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDurationMs clears the value of the "duration_ms" field.
+func (m *WorkflowExecutionMutation) ClearDurationMs() {
+	m.duration_ms = nil
+	m.addduration_ms = nil
+	m.clearedFields[workflowexecution.FieldDurationMs] = struct{}{}
+}
+
+// DurationMsCleared returns if the "duration_ms" field was cleared in this mutation.
+func (m *WorkflowExecutionMutation) DurationMsCleared() bool {
+	_, ok := m.clearedFields[workflowexecution.FieldDurationMs]
+	return ok
+}
+
+// ResetDurationMs resets all changes to the "duration_ms" field.
+func (m *WorkflowExecutionMutation) ResetDurationMs() {
+	m.duration_ms = nil
+	m.addduration_ms = nil
+	delete(m.clearedFields, workflowexecution.FieldDurationMs)
+}
+
+// SetWorkflowStatus sets the "workflow_status" field.
+func (m *WorkflowExecutionMutation) SetWorkflowStatus(tes types.WorkflowExecutionStatus) {
+	m.workflow_status = &tes
+}
+
+// WorkflowStatus returns the value of the "workflow_status" field in the mutation.
+func (m *WorkflowExecutionMutation) WorkflowStatus() (r types.WorkflowExecutionStatus, exists bool) {
+	v := m.workflow_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkflowStatus returns the old "workflow_status" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldWorkflowStatus(ctx context.Context) (v types.WorkflowExecutionStatus, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkflowStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkflowStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkflowStatus: %w", err)
+	}
+	return oldValue.WorkflowStatus, nil
+}
+
+// ResetWorkflowStatus resets all changes to the "workflow_status" field.
+func (m *WorkflowExecutionMutation) ResetWorkflowStatus() {
+	m.workflow_status = nil
+}
+
+// SetEntity sets the "entity" field.
+func (m *WorkflowExecutionMutation) SetEntity(s string) {
+	m.entity = &s
+}
+
+// Entity returns the value of the "entity" field in the mutation.
+func (m *WorkflowExecutionMutation) Entity() (r string, exists bool) {
+	v := m.entity
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntity returns the old "entity" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldEntity(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntity: %w", err)
+	}
+	return oldValue.Entity, nil
+}
+
+// ClearEntity clears the value of the "entity" field.
+func (m *WorkflowExecutionMutation) ClearEntity() {
+	m.entity = nil
+	m.clearedFields[workflowexecution.FieldEntity] = struct{}{}
+}
+
+// EntityCleared returns if the "entity" field was cleared in this mutation.
+func (m *WorkflowExecutionMutation) EntityCleared() bool {
+	_, ok := m.clearedFields[workflowexecution.FieldEntity]
+	return ok
+}
+
+// ResetEntity resets all changes to the "entity" field.
+func (m *WorkflowExecutionMutation) ResetEntity() {
+	m.entity = nil
+	delete(m.clearedFields, workflowexecution.FieldEntity)
+}
+
+// SetEntityID sets the "entity_id" field.
+func (m *WorkflowExecutionMutation) SetEntityID(s string) {
+	m.entity_id = &s
+}
+
+// EntityID returns the value of the "entity_id" field in the mutation.
+func (m *WorkflowExecutionMutation) EntityID() (r string, exists bool) {
+	v := m.entity_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEntityID returns the old "entity_id" field's value of the WorkflowExecution entity.
+// If the WorkflowExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkflowExecutionMutation) OldEntityID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEntityID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEntityID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEntityID: %w", err)
+	}
+	return oldValue.EntityID, nil
+}
+
+// ClearEntityID clears the value of the "entity_id" field.
+func (m *WorkflowExecutionMutation) ClearEntityID() {
+	m.entity_id = nil
+	m.clearedFields[workflowexecution.FieldEntityID] = struct{}{}
+}
+
+// EntityIDCleared returns if the "entity_id" field was cleared in this mutation.
+func (m *WorkflowExecutionMutation) EntityIDCleared() bool {
+	_, ok := m.clearedFields[workflowexecution.FieldEntityID]
+	return ok
+}
+
+// ResetEntityID resets all changes to the "entity_id" field.
+func (m *WorkflowExecutionMutation) ResetEntityID() {
+	m.entity_id = nil
+	delete(m.clearedFields, workflowexecution.FieldEntityID)
+}
+
 // SetMetadata sets the "metadata" field.
 func (m *WorkflowExecutionMutation) SetMetadata(value map[string]interface{}) {
 	m.metadata = &value
@@ -66649,7 +66908,7 @@ func (m *WorkflowExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *WorkflowExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 18)
 	if m.tenant_id != nil {
 		fields = append(fields, workflowexecution.FieldTenantID)
 	}
@@ -66686,6 +66945,21 @@ func (m *WorkflowExecutionMutation) Fields() []string {
 	if m.start_time != nil {
 		fields = append(fields, workflowexecution.FieldStartTime)
 	}
+	if m.end_time != nil {
+		fields = append(fields, workflowexecution.FieldEndTime)
+	}
+	if m.duration_ms != nil {
+		fields = append(fields, workflowexecution.FieldDurationMs)
+	}
+	if m.workflow_status != nil {
+		fields = append(fields, workflowexecution.FieldWorkflowStatus)
+	}
+	if m.entity != nil {
+		fields = append(fields, workflowexecution.FieldEntity)
+	}
+	if m.entity_id != nil {
+		fields = append(fields, workflowexecution.FieldEntityID)
+	}
 	if m.metadata != nil {
 		fields = append(fields, workflowexecution.FieldMetadata)
 	}
@@ -66721,6 +66995,16 @@ func (m *WorkflowExecutionMutation) Field(name string) (ent.Value, bool) {
 		return m.TaskQueue()
 	case workflowexecution.FieldStartTime:
 		return m.StartTime()
+	case workflowexecution.FieldEndTime:
+		return m.EndTime()
+	case workflowexecution.FieldDurationMs:
+		return m.DurationMs()
+	case workflowexecution.FieldWorkflowStatus:
+		return m.WorkflowStatus()
+	case workflowexecution.FieldEntity:
+		return m.Entity()
+	case workflowexecution.FieldEntityID:
+		return m.EntityID()
 	case workflowexecution.FieldMetadata:
 		return m.Metadata()
 	}
@@ -66756,6 +67040,16 @@ func (m *WorkflowExecutionMutation) OldField(ctx context.Context, name string) (
 		return m.OldTaskQueue(ctx)
 	case workflowexecution.FieldStartTime:
 		return m.OldStartTime(ctx)
+	case workflowexecution.FieldEndTime:
+		return m.OldEndTime(ctx)
+	case workflowexecution.FieldDurationMs:
+		return m.OldDurationMs(ctx)
+	case workflowexecution.FieldWorkflowStatus:
+		return m.OldWorkflowStatus(ctx)
+	case workflowexecution.FieldEntity:
+		return m.OldEntity(ctx)
+	case workflowexecution.FieldEntityID:
+		return m.OldEntityID(ctx)
 	case workflowexecution.FieldMetadata:
 		return m.OldMetadata(ctx)
 	}
@@ -66851,6 +67145,41 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 		}
 		m.SetStartTime(v)
 		return nil
+	case workflowexecution.FieldEndTime:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEndTime(v)
+		return nil
+	case workflowexecution.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationMs(v)
+		return nil
+	case workflowexecution.FieldWorkflowStatus:
+		v, ok := value.(types.WorkflowExecutionStatus)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkflowStatus(v)
+		return nil
+	case workflowexecution.FieldEntity:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntity(v)
+		return nil
+	case workflowexecution.FieldEntityID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEntityID(v)
+		return nil
 	case workflowexecution.FieldMetadata:
 		v, ok := value.(map[string]interface{})
 		if !ok {
@@ -66865,13 +67194,21 @@ func (m *WorkflowExecutionMutation) SetField(name string, value ent.Value) error
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *WorkflowExecutionMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addduration_ms != nil {
+		fields = append(fields, workflowexecution.FieldDurationMs)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *WorkflowExecutionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case workflowexecution.FieldDurationMs:
+		return m.AddedDurationMs()
+	}
 	return nil, false
 }
 
@@ -66880,6 +67217,13 @@ func (m *WorkflowExecutionMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *WorkflowExecutionMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case workflowexecution.FieldDurationMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDurationMs(v)
+		return nil
 	}
 	return fmt.Errorf("unknown WorkflowExecution numeric field %s", name)
 }
@@ -66896,6 +67240,18 @@ func (m *WorkflowExecutionMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(workflowexecution.FieldEnvironmentID) {
 		fields = append(fields, workflowexecution.FieldEnvironmentID)
+	}
+	if m.FieldCleared(workflowexecution.FieldEndTime) {
+		fields = append(fields, workflowexecution.FieldEndTime)
+	}
+	if m.FieldCleared(workflowexecution.FieldDurationMs) {
+		fields = append(fields, workflowexecution.FieldDurationMs)
+	}
+	if m.FieldCleared(workflowexecution.FieldEntity) {
+		fields = append(fields, workflowexecution.FieldEntity)
+	}
+	if m.FieldCleared(workflowexecution.FieldEntityID) {
+		fields = append(fields, workflowexecution.FieldEntityID)
 	}
 	if m.FieldCleared(workflowexecution.FieldMetadata) {
 		fields = append(fields, workflowexecution.FieldMetadata)
@@ -66922,6 +67278,18 @@ func (m *WorkflowExecutionMutation) ClearField(name string) error {
 		return nil
 	case workflowexecution.FieldEnvironmentID:
 		m.ClearEnvironmentID()
+		return nil
+	case workflowexecution.FieldEndTime:
+		m.ClearEndTime()
+		return nil
+	case workflowexecution.FieldDurationMs:
+		m.ClearDurationMs()
+		return nil
+	case workflowexecution.FieldEntity:
+		m.ClearEntity()
+		return nil
+	case workflowexecution.FieldEntityID:
+		m.ClearEntityID()
 		return nil
 	case workflowexecution.FieldMetadata:
 		m.ClearMetadata()
@@ -66969,6 +67337,21 @@ func (m *WorkflowExecutionMutation) ResetField(name string) error {
 		return nil
 	case workflowexecution.FieldStartTime:
 		m.ResetStartTime()
+		return nil
+	case workflowexecution.FieldEndTime:
+		m.ResetEndTime()
+		return nil
+	case workflowexecution.FieldDurationMs:
+		m.ResetDurationMs()
+		return nil
+	case workflowexecution.FieldWorkflowStatus:
+		m.ResetWorkflowStatus()
+		return nil
+	case workflowexecution.FieldEntity:
+		m.ResetEntity()
+		return nil
+	case workflowexecution.FieldEntityID:
+		m.ResetEntityID()
 		return nil
 	case workflowexecution.FieldMetadata:
 		m.ResetMetadata()

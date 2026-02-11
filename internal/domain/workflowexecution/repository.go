@@ -16,10 +16,17 @@ type Repository interface {
 
 // ListFilter defines filters for listing workflow executions
 type ListFilter struct {
-	TenantID      string
-	EnvironmentID string
-	WorkflowType  string
-	TaskQueue     string
-	PageSize      int
-	Page          int
+	TenantID       string
+	EnvironmentID  string
+	WorkflowID     string // Filter by specific workflow ID
+	WorkflowType   string
+	TaskQueue      string
+	WorkflowStatus string // e.g. Running, Completed, Failed
+
+	// Entity columns for efficient filtering (replaces metadata JSONB filter)
+	Entity   string // Filter by entity type (e.g. plan, invoice, subscription)
+	EntityID string // Filter by entity ID (e.g. plan_01ABC, inv_xyz)
+
+	PageSize int
+	Page     int
 }

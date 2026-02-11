@@ -7,6 +7,12 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// ShouldTrackWorkflow returns false if the workflow type (by name) is excluded from tracking.
+// Delegates to types.ShouldTrackWorkflowType so exclusion uses the canonical TemporalWorkflowType enums.
+func ShouldTrackWorkflow(workflowTypeName string) bool {
+	return types.ShouldTrackWorkflowType(types.TemporalWorkflowType(workflowTypeName))
+}
+
 // TrackWorkflowStartInput contains the parameters for tracking a workflow start
 type TrackWorkflowStartInput struct {
 	WorkflowType  string
@@ -14,6 +20,8 @@ type TrackWorkflowStartInput struct {
 	TenantID      string
 	EnvironmentID string
 	UserID        string
+	Entity        string // e.g. plan, invoice, subscription (for efficient filtering)
+	EntityID      string // e.g. plan ID, invoice ID
 	Metadata      map[string]interface{}
 }
 
@@ -26,6 +34,8 @@ type TrackWorkflowStartActivityInput struct {
 	TenantID      string
 	EnvironmentID string
 	CreatedBy     string
+	Entity        string // e.g. plan, invoice, subscription
+	EntityID      string // e.g. plan ID, invoice ID
 	Metadata      map[string]interface{}
 }
 
@@ -54,6 +64,8 @@ func ExecuteTrackWorkflowStart(ctx workflow.Context, input TrackWorkflowStartInp
 		TenantID:      input.TenantID,
 		EnvironmentID: input.EnvironmentID,
 		CreatedBy:     input.UserID,
+		Entity:        input.Entity,
+		EntityID:      input.EntityID,
 		Metadata:      input.Metadata,
 	}
 

@@ -9,6 +9,7 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type workflowExecutionRepository struct {
@@ -46,6 +47,12 @@ func (r *workflowExecutionRepository) Create(ctx context.Context, exec *ent.Work
 		SetUpdatedAt(exec.UpdatedAt).
 		SetUpdatedBy(exec.UpdatedBy)
 
+	if exec.Entity != nil {
+		createQuery = createQuery.SetEntity(*exec.Entity)
+	}
+	if exec.EntityID != nil {
+		createQuery = createQuery.SetEntityID(*exec.EntityID)
+	}
 	if exec.Metadata != nil {
 		createQuery = createQuery.SetMetadata(exec.Metadata)
 	}
@@ -109,6 +116,15 @@ func (r *workflowExecutionRepository) List(ctx context.Context, filter *domainWo
 	}
 	if filter.TaskQueue != "" {
 		query = query.Where(workflowexecution.TaskQueue(filter.TaskQueue))
+	}
+	if filter.WorkflowStatus != "" {
+		query = query.Where(workflowexecution.WorkflowStatus(types.WorkflowExecutionStatus(filter.WorkflowStatus)))
+	}
+	if filter.Entity != "" {
+		query = query.Where(workflowexecution.EntityEQ(filter.Entity))
+	}
+	if filter.EntityID != "" {
+		query = query.Where(workflowexecution.EntityIDEQ(filter.EntityID))
 	}
 
 	// Get total count
