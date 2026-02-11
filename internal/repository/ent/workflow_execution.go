@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
 	domainWorkflowExecution "github.com/flexprice/flexprice/internal/domain/workflowexecution"
