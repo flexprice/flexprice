@@ -204,12 +204,12 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		return getSettingByKey[types.EnvConfig](s, ctx, key)
 	case types.SettingKeyCustomerOnboarding:
 		return getSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key)
-	case types.SettingKeyWalletBalanceAlertConfig:
-		return getSettingByKey[types.AlertConfig](s, ctx, key)
 	case types.SettingKeyPrepareProcessedEvents:
 		return getSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key)
 	case types.SettingKeyCustomAnalytics:
 		return getSettingByKey[types.CustomAnalyticsConfig](s, ctx, key)
+	case types.SettingKeyWalletBalanceAlertConfig:
+		return getSettingByKey[types.AlertSettings](s, ctx, key)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
@@ -244,12 +244,12 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.EnvConfig](s, ctx, key, req)
 	case types.SettingKeyCustomerOnboarding:
 		return updateSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key, req)
-	case types.SettingKeyWalletBalanceAlertConfig:
-		return updateSettingByKey[types.AlertConfig](s, ctx, key, req)
 	case types.SettingKeyPrepareProcessedEvents:
 		return updateSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key, req)
 	case types.SettingKeyCustomAnalytics:
 		return updateSettingByKey[types.CustomAnalyticsConfig](s, ctx, key, req)
+	case types.SettingKeyWalletBalanceAlertConfig:
+		return updateSettingByKey[*types.AlertSettings](s, ctx, key, req)
 	default:
 		return nil, ierr.NewErrorf("unknown setting key: %s", key).
 			WithHintf("Unknown setting key: %s", key).
