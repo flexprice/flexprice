@@ -338,11 +338,8 @@ type PriceFilter struct {
 
 	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
 
-	// Simple search filters
-	DisplayNameContains string           `json:"display_name_contains,omitempty" form:"display_name_contains"`
-	AmountGT            *decimal.Decimal `json:"amount_gt,omitempty" form:"amount_gt"`
-	AmountEQ            *decimal.Decimal `json:"amount_eq,omitempty" form:"amount_eq"`
-	AmountLT            *decimal.Decimal `json:"amount_lt,omitempty" form:"amount_lt"`
+	// DSL filters
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
