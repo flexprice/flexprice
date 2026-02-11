@@ -577,8 +577,14 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 	if f.DisplayNameContains != "" {
 		query = query.Where(price.DisplayNameContainsFold(f.DisplayNameContains))
 	}
+	if f.AmountGt != nil {
+		query = query.Where(price.AmountGT(*f.AmountGt))
+	}
 	if f.AmountEQ != nil {
 		query = query.Where(price.AmountEQ(*f.AmountEQ))
+	}
+	if f.AmountLt != nil {
+		query = query.Where(price.AmountLT(*f.AmountLt))
 	}
 
 	return query

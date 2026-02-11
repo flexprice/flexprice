@@ -340,7 +340,9 @@ type PriceFilter struct {
 
 	// Simple search filters
 	DisplayNameContains string           `json:"display_name_contains,omitempty" form:"display_name_contains"`
+	AmountGt            *decimal.Decimal `json:"amount_gt,omitempty" form:"amount_gt"`
 	AmountEQ            *decimal.Decimal `json:"amount_eq,omitempty" form:"amount_eq"`
+	AmountLt            *decimal.Decimal `json:"amount_lt,omitempty" form:"amount_lt"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
