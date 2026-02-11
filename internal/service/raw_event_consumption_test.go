@@ -37,7 +37,7 @@ func (m *MockPubSub) Close() error {
 }
 
 // Helper function to create a test service
-func createTestRawEventConsumptionService(bulkEnabled bool, batchSize int) (*rawEventConsumptionService, *MockPubSub) {
+func createTestRawEventConsumptionService(bulkEnabled bool, batchSize int) (*rawEventsService, *MockPubSub) {
 	zapLogger, _ := zap.NewDevelopment()
 	testLogger := &logger.Logger{SugaredLogger: zapLogger.Sugar()}
 
@@ -63,7 +63,7 @@ func createTestRawEventConsumptionService(bulkEnabled bool, batchSize int) (*raw
 		},
 	}
 
-	service := &rawEventConsumptionService{
+	service := &rawEventsService{
 		ServiceParams: ServiceParams{
 			Config: cfg,
 			Logger: testLogger,
