@@ -13,6 +13,8 @@ type ReprocessEventsWorkflowInput struct {
 	StartDate          time.Time `json:"start_date"`
 	EndDate            time.Time `json:"end_date"`
 	BatchSize          int       `json:"batch_size"`
+	ForceReprocess     bool      `json:"force_reprocess"`
+	RunStartTime       time.Time `json:"run_start_time"`
 	TenantID           string    `json:"tenant_id"`
 	EnvironmentID      string    `json:"environment_id"`
 	UserID             string    `json:"user_id"`

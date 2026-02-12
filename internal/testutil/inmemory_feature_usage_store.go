@@ -144,3 +144,30 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageByEventIDs(ctx context.Contex
 
 	return result, nil
 }
+
+func (s *InMemoryFeatureUsageStore) DeleteByReprocessScopeBeforeCheckpoint(ctx context.Context, params *events.DeleteFeatureUsageScopeParams) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for id, usage := range s.usage {
+		if params.GetEventsParams.ExternalCustomerID != "" && usage.ExternalCustomerID != params.GetEventsParams.ExternalCustomerID {
+			continue
+		}
+		if params.GetEventsParams.EventName != "" && usage.EventName != params.GetEventsParams.EventName {
+			continue
+		}
+		if !params.GetEventsParams.StartTime.IsZero() && usage.Timestamp.Before(params.GetEventsParams.StartTime) {
+			continue
+		}
+		if !params.GetEventsParams.EndTime.IsZero() && usage.Timestamp.After(params.GetEventsParams.EndTime) {
+			continue
+		}
+		if usage.ProcessedAt.IsZero() || !usage.ProcessedAt.Before(params.RunStartTime) {
+			continue
+		}
+
+		delete(s.usage, id)
+	}
+
+	return nil
+}

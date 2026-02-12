@@ -718,6 +718,8 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 				StartDate:          startTime,
 				EndDate:            endTime,
 				BatchSize:          reprocessBatchSize,
+				EventName:          eventName,
+				ForceReprocess:     true,
 			}
 			workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsWorkflow, workflowInput)
 			if err != nil {

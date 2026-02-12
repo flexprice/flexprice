@@ -17,6 +17,10 @@ const (
 
 // ReprocessEventsWorkflow reprocesses events for feature usage tracking
 func ReprocessEventsWorkflow(ctx workflow.Context, input models.ReprocessEventsWorkflowInput) (*models.ReprocessEventsWorkflowResult, error) {
+	if input.RunStartTime.IsZero() {
+		input.RunStartTime = workflow.Now(ctx).UTC()
+	}
+
 	// Validate input
 	if err := input.Validate(); err != nil {
 		return nil, err

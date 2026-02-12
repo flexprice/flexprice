@@ -34,6 +34,15 @@ type FeatureUsageRepository interface {
 
 	// GetFeatureUsageByEventIDs gets feature usage records by event IDs
 	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*FeatureUsage, error)
+
+	// DeleteByReprocessScopeBeforeCheckpoint cleans old rows for a scope using processed_at checkpoint fence.
+	DeleteByReprocessScopeBeforeCheckpoint(ctx context.Context, params *DeleteFeatureUsageScopeParams) error
+}
+
+// DeleteFeatureUsageScopeParams defines cleanup scope for reprocessing.
+type DeleteFeatureUsageScopeParams struct {
+	GetEventsParams *GetEventsParams
+	RunStartTime    time.Time
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation

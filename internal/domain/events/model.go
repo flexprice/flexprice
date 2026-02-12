@@ -93,6 +93,8 @@ type ReprocessEventsParams struct {
 	StartTime          time.Time // Filter by start time (optional)
 	EndTime            time.Time // Filter by end time (optional)
 	BatchSize          int       // Number of events to process per batch (default 100)
+	ForceReprocess     bool      // If true, fetches events directly from events table (bypasses processed check)
+	RunStartTime       time.Time // Immutable checkpoint for this run (UTC)
 }
 
 // ReprocessEventsResult contains the result of event reprocessing

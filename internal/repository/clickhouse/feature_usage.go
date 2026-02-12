@@ -459,6 +459,40 @@ func (r *FeatureUsageRepository) IsDuplicate(ctx context.Context, subscriptionID
 	return exists == 1, nil
 }
 
+// DeleteByReprocessScopeBeforeCheckpoint cleans up old feature usage rows fenced by processed_at.
+func (r *FeatureUsageRepository) DeleteByReprocessScopeBeforeCheckpoint(ctx context.Context, params *events.DeleteFeatureUsageScopeParams) error {
+	query := `
+		DELETE FROM feature_usage
+		WHERE tenant_id = ?
+		AND environment_id = ?
+		AND external_customer_id = ?
+		AND timestamp >= ?
+		AND timestamp <= ?
+		AND processed_at < ?
+	`
+	args := []interface{}{
+		types.GetTenantID(ctx),
+		types.GetEnvironmentID(ctx),
+		params.GetEventsParams.ExternalCustomerID,
+		params.GetEventsParams.StartTime,
+		params.GetEventsParams.EndTime,
+		params.RunStartTime,
+	}
+
+	if params.GetEventsParams.EventName != "" {
+		query += " AND event_name = ?"
+		args = append(args, params.GetEventsParams.EventName)
+	}
+
+	if err := r.store.GetConn().Exec(ctx, query, args...); err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to submit feature usage cleanup delete mutation").
+			Mark(ierr.ErrDatabase)
+	}
+
+	return nil
+}
+
 // GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
 func (r *FeatureUsageRepository) GetDetailedUsageAnalytics(ctx context.Context, params *events.UsageAnalyticsParams, maxBucketFeatures map[string]*events.MaxBucketFeatureInfo, sumBucketFeatures map[string]*events.SumBucketFeatureInfo) ([]*events.DetailedUsageAnalytic, error) {
 	span := StartRepositorySpan(ctx, "processed_event", "get_detailed_usage_analytics", map[string]interface{}{
