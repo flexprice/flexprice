@@ -15,13 +15,13 @@ const RawEventsActivityPrefix = "RawEventsActivities"
 
 // ReprocessRawEventsActivities contains all raw event reprocessing activities
 type ReprocessRawEventsActivities struct {
-	rawEventsReprocessingService service.RawEventsReprocessingService
+	rawEventsService service.RawEventsService
 }
 
 // NewReprocessRawEventsActivities creates a new ReprocessRawEventsActivities instance
-func NewReprocessRawEventsActivities(rawEventsReprocessingService service.RawEventsReprocessingService) *ReprocessRawEventsActivities {
+func NewReprocessRawEventsActivities(rawEventsService service.RawEventsService) *ReprocessRawEventsActivities {
 	return &ReprocessRawEventsActivities{
-		rawEventsReprocessingService: rawEventsReprocessingService,
+		rawEventsService: rawEventsService,
 	}
 }
 
@@ -65,7 +65,7 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 	}
 
 	// Call the service method to reprocess raw events
-	result, err := a.rawEventsReprocessingService.ReprocessRawEvents(ctx, reprocessParams)
+	result, err := a.rawEventsService.ReprocessRawEvents(ctx, reprocessParams)
 	if err != nil {
 		logger.Error("Failed to reprocess raw events",
 			"external_customer_id", input.ExternalCustomerID,

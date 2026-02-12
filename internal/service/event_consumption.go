@@ -30,6 +30,9 @@ type EventConsumptionService interface {
 	// Register replay handler with the router
 	RegisterHandlerReplay(router *pubsubRouter.Router, cfg *config.Configuration)
 
+	// Register bulk event handler with the router
+	RegisterHandlerBulk(router *pubsubRouter.Router, cfg *config.Configuration)
+
 	// Process a raw event payload (used for AWS Lambda and direct processing)
 	ProcessRawEvent(ctx context.Context, payload []byte) error
 }
@@ -39,6 +42,7 @@ type eventConsumptionService struct {
 	pubSub                 pubsub.PubSub
 	lazyPubSub             pubsub.PubSub
 	replayPubSub           pubsub.PubSub
+	bulkPubSub             pubsub.PubSub
 	eventRepo              events.Repository
 	sentryService          *sentry.Service
 	eventPostProcessingSvc EventPostProcessingService
@@ -90,6 +94,17 @@ func NewEventConsumptionService(
 		return nil
 	}
 	ev.replayPubSub = replayPubSub
+
+	bulkPubSub, err := kafka.NewPubSubFromConfig(
+		params.Config,
+		params.Logger,
+		params.Config.EventProcessingBulk.ConsumerGroup,
+	)
+	if err != nil {
+		params.Logger.Fatalw("failed to create bulk pubsub", "error", err)
+		return nil
+	}
+	ev.bulkPubSub = bulkPubSub
 
 	return ev
 }
@@ -182,6 +197,34 @@ func (s *eventConsumptionService) RegisterHandlerReplay(
 		"topic", cfg.EventProcessingReplay.Topic,
 		"rate_limit", cfg.EventProcessingReplay.RateLimit,
 		"pubsub_type", "kafka",
+	)
+}
+
+// RegisterHandlerBulk registers the bulk event consumption handler with the router
+func (s *eventConsumptionService) RegisterHandlerBulk(
+	router *pubsubRouter.Router,
+	cfg *config.Configuration,
+) {
+	if !cfg.EventProcessingBulk.Enabled {
+		s.Logger.Infow("bulk event consumption handler disabled by configuration")
+		return
+	}
+
+	// Add throttle middleware to this specific handler
+	throttle := middleware.NewThrottle(cfg.EventProcessingBulk.RateLimit, time.Second)
+
+	// Add the handler
+	router.AddNoPublishHandler(
+		"event_consumption_bulk_handler",
+		cfg.EventProcessingBulk.Topic,
+		s.bulkPubSub,
+		s.processBulkMessage,
+		throttle.Middleware,
+	)
+
+	s.Logger.Infow("registered bulk event consumption handler",
+		"topic", cfg.EventProcessingBulk.Topic,
+		"rate_limit", cfg.EventProcessingBulk.RateLimit,
 	)
 }
 
@@ -401,4 +444,147 @@ func (s *eventConsumptionService) shouldRetryError(err error) bool {
 
 	// Retry all other errors (database issues, network issues, etc.)
 	return true
+}
+
+// processBulkMessage processes a bulk batch of events from Kafka
+func (s *eventConsumptionService) processBulkMessage(msg *message.Message) error {
+	partitionKey := msg.Metadata.Get("partition_key")
+	tenantID := msg.Metadata.Get("tenant_id")
+	environmentID := msg.Metadata.Get("environment_id")
+	bulkBatchSize := msg.Metadata.Get("bulk_batch_size")
+
+	s.Logger.Debugw("processing bulk event batch from message queue",
+		"message_uuid", msg.UUID,
+		"partition_key", partitionKey,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"bulk_batch_size", bulkBatchSize,
+	)
+
+	// Unmarshal the bulk batch
+	var batch BulkEventBatch
+	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
+		s.Logger.Errorw("failed to unmarshal bulk event batch",
+			"error", err,
+			"payload", string(msg.Payload),
+		)
+		s.sentryService.CaptureException(err)
+
+		// Return error for non-retriable parse errors
+		if !s.shouldRetryError(err) {
+			return fmt.Errorf("non-retriable unmarshal error: %w", err)
+		}
+		return err
+	}
+
+	// Use tenant/environment from batch if not in metadata
+	if tenantID == "" && batch.TenantID != "" {
+		tenantID = batch.TenantID
+	}
+
+	if environmentID == "" && batch.EnvironmentID != "" {
+		environmentID = batch.EnvironmentID
+	}
+
+	// Create a background context with tenant ID
+	ctx := context.Background()
+	if tenantID != "" {
+		ctx = context.WithValue(ctx, types.CtxTenantID, tenantID)
+	}
+
+	if environmentID != "" {
+		ctx = context.WithValue(ctx, types.CtxEnvironmentID, environmentID)
+	}
+
+	s.Logger.Infow("processing bulk event batch",
+		"batch_size", len(batch.Events),
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+	)
+
+	// Prepare events to insert
+	eventsToInsert := make([]*events.Event, 0, len(batch.Events))
+
+	// Add all events from the batch
+	for _, event := range batch.Events {
+		eventsToInsert = append(eventsToInsert, event)
+
+		// Create billing event for each event if configured
+		if s.Config.Billing.TenantID != "" {
+			billingEvent := events.NewEvent(
+				"tenant_event", // Standardized event name for billing
+				s.Config.Billing.TenantID,
+				event.TenantID, // Use original tenant ID as external customer ID
+				map[string]interface{}{
+					"original_event_id":   event.ID,
+					"original_event_name": event.EventName,
+					"original_timestamp":  event.Timestamp,
+					"tenant_id":           event.TenantID,
+					"source":              event.Source,
+				},
+				time.Now(),
+				"", // Customer ID will be looked up by external ID
+				"", // Generate new ID
+				"system",
+				s.Config.Billing.EnvironmentID,
+			)
+			eventsToInsert = append(eventsToInsert, billingEvent)
+		}
+	}
+
+	s.Logger.Debugw("prepared events for bulk insertion",
+		"original_batch_size", len(batch.Events),
+		"total_events_to_insert", len(eventsToInsert),
+		"billing_events_added", len(eventsToInsert)-len(batch.Events),
+	)
+
+	// Insert all events into ClickHouse in bulk
+	if err := s.eventRepo.BulkInsertEvents(ctx, eventsToInsert); err != nil {
+		s.Logger.Errorw("failed to bulk insert events",
+			"error", err,
+			"batch_size", len(batch.Events),
+			"total_events", len(eventsToInsert),
+		)
+
+		// Return error for retry
+		return ierr.WithError(err).
+			WithHint("Failed to bulk insert events into ClickHouse").
+			Mark(ierr.ErrSystem)
+	}
+
+	// Publish events to post-processing service if needed
+	// Only for the tenants that are forced to v1
+	if s.Config.FeatureFlag.ForceV1ForTenant != "" {
+		for _, event := range batch.Events {
+			if event.TenantID == s.Config.FeatureFlag.ForceV1ForTenant {
+				if err := s.eventPostProcessingSvc.PublishEvent(ctx, event, false); err != nil {
+					s.Logger.Errorw("failed to publish event to post-processing service",
+						"error", err,
+						"event_id", event.ID,
+						"event_name", event.EventName,
+					)
+
+					// Return error for retry
+					return ierr.WithError(err).
+						WithHint("Failed to publish event for post-processing").
+						Mark(ierr.ErrSystem)
+				}
+			}
+		}
+	}
+
+	// Calculate average lag
+	var totalLag int64
+	for _, event := range batch.Events {
+		totalLag += time.Since(event.Timestamp).Milliseconds()
+	}
+	avgLag := totalLag / int64(len(batch.Events))
+
+	s.Logger.Infow("successfully processed bulk event batch",
+		"batch_size", len(batch.Events),
+		"total_events_inserted", len(eventsToInsert),
+		"avg_lag_ms", avgLag,
+	)
+
+	return nil
 }
