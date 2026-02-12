@@ -180,7 +180,7 @@ event_processing_replay:
   consumer_group: "v1_event_processing_replay"
 
 event_processing_bulk:
-  enabled: true
+  enabled: false
   topic: "staging_events"
   rate_limit: 10
   consumer_group: "flexprice-consumer-local-v2abc"
@@ -208,7 +208,7 @@ feature_usage_tracking:
   consumer_group_backfill: "v1_feature_tracking_service_backfill"
 
 feature_usage_tracking_bulk:
-  enabled: true
+  enabled: false
   topic: "staging_events"
   rate_limit: 10
   consumer_group: "v1_feature_tracking_service_bulk"
@@ -289,7 +289,7 @@ raw_event_consumption:
   topic: "staging_events_backfill"      # INPUT: Reads batches from here
   output_topic: "staging_events"                 # OUTPUT: Publishes transformed events to here
   bulk_events:
-    enabled: true                      # Enable bulk event processing mode
+    enabled: false                     # Enable bulk event processing mode
     batch_size: 100                     # Number of events per bulk message
     output_topic: "staging_events" # OUTPUT: Publishes bulk event batches to here
   rate_limit: 10
