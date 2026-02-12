@@ -119,13 +119,12 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		r.Config = types.GetDefaultWalletConfig()
 	}
 	// Set default allowed price types if not already configured
-	if r.Config.AllowedPriceTypes == nil {
-		switch r.WalletType {
-		case types.WalletTypePrePaid:
-			r.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}
-		case types.WalletTypePostPaid:
-			r.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}
-		}
+	// this is done to ensure that the wallet is created with the correct allowed price types
+	switch r.WalletType {
+	case types.WalletTypePrePaid:
+		r.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeUsage}
+	case types.WalletTypePostPaid:
+		r.Config.AllowedPriceTypes = []types.WalletConfigPriceType{types.WalletConfigPriceTypeAll}
 	}
 
 	if r.ConversionRate.LessThanOrEqual(decimal.NewFromInt(0)) {
