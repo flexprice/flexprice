@@ -707,7 +707,14 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 				CountTotal:         false,
 			})
 			if getEventsErr != nil {
-				return getEventsErr
+				s.Logger.Warnw("failed to get events for plan reprocess pre-check",
+					"price_id", priceID,
+					"external_customer_id", extID,
+					"event_name", eventName,
+					"start_time", startTime,
+					"end_time", endTime,
+					"error", getEventsErr)
+				continue
 			}
 			if len(eventsList) == 0 {
 				continue // no events for this customer, move to next
