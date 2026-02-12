@@ -19,13 +19,16 @@ type CreateWalletRequest struct {
 	CustomerID string `json:"customer_id,omitempty"`
 
 	// external_customer_id is the customer id in the external system
-	ExternalCustomerID string              `json:"external_customer_id,omitempty"`
-	Name               string              `json:"-"`
-	Currency           string              `json:"currency" binding:"required"`
-	Description        string              `json:"description,omitempty"`
-	Metadata           types.Metadata      `json:"metadata,omitempty"`
-	WalletType         types.WalletType    `json:"wallet_type"`
-	Config             *types.WalletConfig `json:"config,omitempty"`
+	ExternalCustomerID string           `json:"external_customer_id,omitempty"`
+	Name               string           `json:"-"`
+	Currency           string           `json:"currency" binding:"required"`
+	Description        string           `json:"description,omitempty"`
+	Metadata           types.Metadata   `json:"metadata,omitempty"`
+	WalletType         types.WalletType `json:"wallet_type"`
+
+	// config is the configuration for the wallet (optional)
+	// currently config only have allowed_price_types field which isnt used by api, but is used by service
+	Config *types.WalletConfig `json:"-"`
 
 	// amount in the currency =  number of credits * conversion_rate
 	// ex if conversion_rate is 1, then 1 USD = 1 credit
