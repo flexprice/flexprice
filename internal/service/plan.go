@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
@@ -611,6 +612,28 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 	}
 	priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
 
+	// Build meter_id -> event_name map for involved prices in one fetch.
+	meterIDs := lo.Uniq(lo.FilterMap(prices, func(p *domainPrice.Price, _ int) (string, bool) {
+		if p == nil || p.MeterID == "" {
+			return "", false
+		}
+		return p.MeterID, true
+	}))
+	meterService := NewMeterService(s.MeterRepo)
+	var meterIDToEventName map[string]string = make(map[string]string)
+
+	meterFilter := types.NewNoLimitMeterFilter()
+	meterFilter.MeterIDs = meterIDs
+	meterFilter.Status = lo.ToPtr(types.StatusPublished)
+	metersResponse, meterErr := meterService.GetMeters(ctx, meterFilter)
+	if meterErr != nil {
+		return meterErr
+	}
+
+	for _, meterResp := range metersResponse.Items {
+		meterIDToEventName[meterResp.ID] = meterResp.EventName
+	}
+
 	// Single CustomerRepo.List for all unique customer IDs across all prices (avoids N DB calls)
 	allCustomerIDs := lo.Uniq(lo.FlatMap(lo.Values(priceToCustomerIDs), func(ids []string, _ int) []string { return ids }))
 	if len(allCustomerIDs) == 0 {
@@ -658,6 +681,14 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 			continue
 		}
 
+		eventName, ok := meterIDToEventName[price.MeterID]
+		if !ok || eventName == "" {
+			s.Logger.Warnw("skipping reprocess events for price due to missing meter-event mapping",
+				"price_id", priceID,
+				"meter_id", price.MeterID)
+			continue
+		}
+
 		for _, cid := range customerIDs {
 			extID, ok := customerIDToExternalID[cid]
 			if !ok || extID == "" {
@@ -666,6 +697,22 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 			if temporalSvc == nil {
 				continue
 			}
+
+			eventsList, _, getEventsErr := s.EventRepo.GetEvents(ctx, &events.GetEventsParams{
+				ExternalCustomerID: extID,
+				EventName:          eventName,
+				StartTime:          startTime,
+				EndTime:            endTime,
+				PageSize:           1, // we only need to check if events exist in the time window
+				CountTotal:         false,
+			})
+			if getEventsErr != nil {
+				return getEventsErr
+			}
+			if len(eventsList) == 0 {
+				return nil // no events to reprocess
+			}
+
 			workflowInput := eventsWorkflowModels.ReprocessEventsWorkflowInput{
 				ExternalCustomerID: extID,
 				StartDate:          startTime,
