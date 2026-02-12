@@ -71,9 +71,11 @@ func (r *walletRepository) CreateWallet(ctx context.Context, w *walletdomain.Wal
 		SetUpdatedBy(w.UpdatedBy).
 		SetUpdatedAt(w.UpdatedAt).
 		SetEnvironmentID(w.EnvironmentID).
-		SetAlertEnabled(w.AlertEnabled).
-		SetNillableAlertConfig(w.AlertConfig).
 		SetAlertState(types.AlertState(w.AlertState))
+
+	if w.AlertSettings != nil {
+		walletBuilder.SetAlertSettings(*w.AlertSettings)
+	}
 
 	if w.AutoTopup != nil {
 		walletBuilder.SetAutoTopup(w.AutoTopup)
@@ -891,13 +893,12 @@ func (r *walletRepository) UpdateWallet(ctx context.Context, id string, w *walle
 	if w.Config.AllowedPriceTypes != nil {
 		update.SetConfig(w.Config)
 	}
-	if w.AlertConfig != nil {
-		update.SetNillableAlertConfig(w.AlertConfig)
+	if w.AlertSettings != nil {
+		update.SetAlertSettings(*w.AlertSettings)
 	}
 	if w.AlertState != "" {
 		update.SetAlertState(types.AlertState(w.AlertState))
 	}
-	update.SetAlertEnabled(w.AlertEnabled)
 	update.SetUpdatedAt(time.Now().UTC())
 	update.SetUpdatedBy(types.GetUserID(ctx))
 
@@ -972,11 +973,6 @@ func (r *walletRepository) GetWalletsByFilter(ctx context.Context, filter *types
 	// Apply status filter
 	if filter.Status != nil {
 		query = query.Where(wallet.WalletStatusEQ(*filter.Status))
-	}
-
-	// Apply alert enabled filter
-	if filter.AlertEnabled != nil {
-		query = query.Where(wallet.AlertEnabledEQ(*filter.AlertEnabled))
 	}
 
 	// Apply wallet IDs filter

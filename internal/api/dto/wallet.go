@@ -53,12 +53,9 @@ type CreateWalletRequest struct {
 	// ex 2025-01-01 00:00:00 UTC
 	InitialCreditsExpiryDateUTC *time.Time `json:"initial_credits_expiry_date_utc,omitempty"`
 
-	// alert_enabled is the flag to enable alerts for the wallet
-	// defaults to true, can be explicitly set to false to disable alerts
-	AlertEnabled bool `json:"alert_enabled,omitempty"`
-
-	// alert_config is the alert configuration for the wallet (optional)
-	AlertConfig *AlertConfig `json:"alert_config,omitempty"`
+	// alert_settings is the alert settings for the wallet (optional)
+	// If not provided, tenant level alert settings will be used
+	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
 
 	// auto top-up object
 	AutoTopup *types.AutoTopup `json:"auto_topup,omitempty"`
@@ -70,24 +67,14 @@ type CreateWalletRequest struct {
 	PriceUnit *string `json:"price_unit,omitempty"`
 }
 
-type AlertConfig struct {
-	Threshold *Threshold `json:"threshold,omitempty"`
-}
-
-type Threshold struct {
-	Type  string          `json:"type"` //amount
-	Value decimal.Decimal `json:"value" swaggertype:"string"`
-}
-
 // UpdateWalletRequest represents the request to update a wallet
 type UpdateWalletRequest struct {
-	Name         *string             `json:"-"`
-	Description  *string             `json:"description,omitempty"`
-	Metadata     *types.Metadata     `json:"metadata,omitempty"`
-	AutoTopup    *types.AutoTopup    `json:"auto_topup,omitempty"`
-	Config       *types.WalletConfig `json:"config,omitempty"`
-	AlertEnabled *bool               `json:"alert_enabled,omitempty"`
-	AlertConfig  *AlertConfig        `json:"alert_config,omitempty"`
+	Name          *string              `json:"-"`
+	Description   *string              `json:"description,omitempty"`
+	Metadata      *types.Metadata      `json:"metadata,omitempty"`
+	AutoTopup     *types.AutoTopup     `json:"auto_topup,omitempty"`
+	Config        *types.WalletConfig  `json:"config,omitempty"`
+	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
 }
 
 func (r *UpdateWalletRequest) Validate() error {
@@ -146,17 +133,6 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		}
 	}
 
-	// Convert AlertConfig to types.AlertConfig
-	var alertConfig *types.AlertConfig
-	if r.AlertConfig != nil {
-		alertConfig = &types.AlertConfig{
-			Threshold: &types.WalletAlertThreshold{
-				Type:  types.AlertThresholdType(r.AlertConfig.Threshold.Type),
-				Value: r.AlertConfig.Threshold.Value,
-			},
-		}
-	}
-
 	return &wallet.Wallet{
 		ID:                  types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET),
 		CustomerID:          r.CustomerID,
@@ -173,9 +149,8 @@ func (r *CreateWalletRequest) ToWallet(ctx context.Context) *wallet.Wallet {
 		WalletType:          r.WalletType,
 		Config:              lo.FromPtr(r.Config),
 		ConversionRate:      r.ConversionRate,
-		AlertEnabled:        true, // Always enabled by default
-		AlertConfig:         alertConfig,
-		AlertState:          string(types.AlertStateOk), // Always starts in "ok" state
+		AlertSettings:       r.AlertSettings,
+		AlertState:          types.AlertStateOk, // Always starts in "ok" state
 		TopupConversionRate: lo.FromPtr(r.TopupConversionRate),
 	}
 }
@@ -238,22 +213,10 @@ func (r *CreateWalletRequest) Validate() error {
 		}
 	}
 
-	// Validate alert config if provided
-	if r.AlertConfig != nil {
-		if r.AlertConfig.Threshold == nil {
-			return ierr.NewError("alert_config.threshold is required").
-				WithHint("Threshold must be provided when alert config is set").
-				Mark(ierr.ErrValidation)
-		}
-		if r.AlertConfig.Threshold.Type == "" {
-			return ierr.NewError("alert_config.threshold.type is required").
-				WithHint("Threshold type must be provided when alert config is set").
-				Mark(ierr.ErrValidation)
-		}
-		if r.AlertConfig.Threshold.Value.IsZero() {
-			return ierr.NewError("alert_config.threshold.value must be greater than 0").
-				WithHint("Threshold value must be provided when alert config is set").
-				Mark(ierr.ErrValidation)
+	// Validate alert settings if provided
+	if r.AlertSettings != nil {
+		if err := r.AlertSettings.Validate(); err != nil {
+			return err
 		}
 	}
 

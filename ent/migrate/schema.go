@@ -2146,8 +2146,7 @@ var (
 		{Name: "conversion_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
 		{Name: "topup_conversion_rate", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
 		{Name: "config", Type: field.TypeJSON, Nullable: true},
-		{Name: "alert_config", Type: field.TypeJSON, Nullable: true},
-		{Name: "alert_enabled", Type: field.TypeBool, Nullable: true, Default: true},
+		{Name: "alert_settings", Type: field.TypeJSON, Nullable: true},
 		{Name: "alert_state", Type: field.TypeString, Nullable: true, Default: "ok", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// WalletsTable holds the schema information for the "wallets" table.
