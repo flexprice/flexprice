@@ -710,7 +710,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 				return getEventsErr
 			}
 			if len(eventsList) == 0 {
-				return nil // no events to reprocess
+				continue // no events for this customer, move to next
 			}
 
 			workflowInput := eventsWorkflowModels.ReprocessEventsWorkflowInput{
@@ -720,6 +720,9 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 				BatchSize:          reprocessBatchSize,
 				EventName:          eventName,
 				ForceReprocess:     true,
+				TenantID:           types.GetTenantID(ctx),
+				EnvironmentID:      types.GetEnvironmentID(ctx),
+				UserID:             types.GetUserID(ctx),
 			}
 			workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsWorkflow, workflowInput)
 			if err != nil {
