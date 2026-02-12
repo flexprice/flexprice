@@ -2,13 +2,16 @@ package ent
 
 import (
 	"context"
+	"strings"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
 	domainWorkflowExecution "github.com/flexprice/flexprice/internal/domain/workflowexecution"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 type workflowExecutionRepository struct {
@@ -46,6 +49,12 @@ func (r *workflowExecutionRepository) Create(ctx context.Context, exec *ent.Work
 		SetUpdatedAt(exec.UpdatedAt).
 		SetUpdatedBy(exec.UpdatedBy)
 
+	if exec.Entity != nil {
+		createQuery = createQuery.SetEntity(*exec.Entity)
+	}
+	if exec.EntityID != nil {
+		createQuery = createQuery.SetEntityID(*exec.EntityID)
+	}
 	if exec.Metadata != nil {
 		createQuery = createQuery.SetMetadata(exec.Metadata)
 	}
@@ -110,6 +119,15 @@ func (r *workflowExecutionRepository) List(ctx context.Context, filter *domainWo
 	if filter.TaskQueue != "" {
 		query = query.Where(workflowexecution.TaskQueue(filter.TaskQueue))
 	}
+	if filter.WorkflowStatus != "" {
+		query = query.Where(workflowexecution.WorkflowStatus(types.WorkflowExecutionStatus(filter.WorkflowStatus)))
+	}
+	if filter.Entity != "" {
+		query = query.Where(workflowexecution.EntityEQ(filter.Entity))
+	}
+	if filter.EntityID != "" {
+		query = query.Where(workflowexecution.EntityIDEQ(filter.EntityID))
+	}
 
 	// Get total count
 	total, err := query.Count(ctx)
@@ -120,25 +138,86 @@ func (r *workflowExecutionRepository) List(ctx context.Context, filter *domainWo
 	}
 
 	// Apply pagination
-	pageSize := filter.PageSize
-	if pageSize <= 0 {
-		pageSize = 50
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = filter.PageSize // legacy alias
 	}
-	if pageSize > 100 {
-		pageSize = 100
+	if limit <= 0 {
+		limit = 50
 	}
-
-	page := filter.Page
-	if page <= 0 {
-		page = 1
+	if limit > 100 {
+		limit = 100
 	}
 
-	offset := (page - 1) * pageSize
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	// Legacy alias: page/page_size -> offset
+	if offset == 0 && filter.Limit <= 0 && filter.PageSize > 0 {
+		page := filter.Page
+		if page <= 0 {
+			page = 1
+		}
+		offset = (page - 1) * limit
+	}
+
+	// Sorting (allowlist)
+	sortField := strings.ToLower(strings.TrimSpace(filter.Sort))
+	if sortField == "" {
+		sortField = "start_time"
+	}
+	order := strings.ToLower(strings.TrimSpace(filter.Order))
+	if order == "" {
+		order = "desc"
+	}
+	if order != "asc" && order != "desc" {
+		order = "desc"
+	}
+
+	sortFieldToOrderBuilder := map[string]func(...sql.OrderTermOption) workflowexecution.OrderOption{
+		"start_time":      workflowexecution.ByStartTime,
+		"end_time":        workflowexecution.ByEndTime,
+		"close_time":      workflowexecution.ByEndTime, // alias
+		"created_at":      workflowexecution.ByCreatedAt,
+		"updated_at":      workflowexecution.ByUpdatedAt,
+		"workflow_id":     workflowexecution.ByWorkflowID,
+		"run_id":          workflowexecution.ByRunID,
+		"workflow_type":   workflowexecution.ByWorkflowType,
+		"task_queue":      workflowexecution.ByTaskQueue,
+		"workflow_status": workflowexecution.ByWorkflowStatus,
+		"entity":          workflowexecution.ByEntity,
+		"entity_id":       workflowexecution.ByEntityID,
+	}
+
+	builder, ok := sortFieldToOrderBuilder[sortField]
+	if !ok {
+		builder = workflowexecution.ByStartTime
+		sortField = "start_time"
+	}
+
+	var dir sql.OrderTermOption
+	if order == "asc" {
+		dir = sql.OrderAsc()
+	} else {
+		dir = sql.OrderDesc()
+	}
+
+	orderBys := []workflowexecution.OrderOption{builder(dir)}
+
+	// Stable tie-breakers for consistent pagination
+	if sortField != "start_time" {
+		orderBys = append(orderBys, workflowexecution.ByStartTime(sql.OrderDesc()))
+	}
+	orderBys = append(orderBys,
+		workflowexecution.ByWorkflowID(sql.OrderDesc()),
+		workflowexecution.ByRunID(sql.OrderDesc()),
+	)
 
 	// Get paginated results
 	executions, err := query.
-		Order(ent.Desc(workflowexecution.FieldStartTime)).
-		Limit(pageSize).
+		Order(orderBys...).
+		Limit(limit).
 		Offset(offset).
 		All(ctx)
 

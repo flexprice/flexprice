@@ -2308,6 +2308,10 @@ func init() {
 	workflowexecutionDescTaskQueue := workflowexecutionFields[4].Descriptor()
 	// workflowexecution.TaskQueueValidator is a validator for the "task_queue" field. It is called by the builders before save.
 	workflowexecution.TaskQueueValidator = workflowexecutionDescTaskQueue.Validators[0].(func(string) error)
+	// workflowexecutionDescWorkflowStatus is the schema descriptor for workflow_status field.
+	workflowexecutionDescWorkflowStatus := workflowexecutionFields[8].Descriptor()
+	// workflowexecution.DefaultWorkflowStatus holds the default value on creation for the workflow_status field.
+	workflowexecution.DefaultWorkflowStatus = types.WorkflowExecutionStatus(workflowexecutionDescWorkflowStatus.Default.(string))
 	// workflowexecutionDescID is the schema descriptor for id field.
 	workflowexecutionDescID := workflowexecutionFields[0].Descriptor()
 	// workflowexecution.DefaultID holds the default value on creation for the id field.
