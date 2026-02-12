@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // WorkflowExecutionCreate is the builder for creating a WorkflowExecution entity.
@@ -140,6 +141,76 @@ func (wec *WorkflowExecutionCreate) SetStartTime(t time.Time) *WorkflowExecution
 	return wec
 }
 
+// SetEndTime sets the "end_time" field.
+func (wec *WorkflowExecutionCreate) SetEndTime(t time.Time) *WorkflowExecutionCreate {
+	wec.mutation.SetEndTime(t)
+	return wec
+}
+
+// SetNillableEndTime sets the "end_time" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableEndTime(t *time.Time) *WorkflowExecutionCreate {
+	if t != nil {
+		wec.SetEndTime(*t)
+	}
+	return wec
+}
+
+// SetDurationMs sets the "duration_ms" field.
+func (wec *WorkflowExecutionCreate) SetDurationMs(i int64) *WorkflowExecutionCreate {
+	wec.mutation.SetDurationMs(i)
+	return wec
+}
+
+// SetNillableDurationMs sets the "duration_ms" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableDurationMs(i *int64) *WorkflowExecutionCreate {
+	if i != nil {
+		wec.SetDurationMs(*i)
+	}
+	return wec
+}
+
+// SetWorkflowStatus sets the "workflow_status" field.
+func (wec *WorkflowExecutionCreate) SetWorkflowStatus(tes types.WorkflowExecutionStatus) *WorkflowExecutionCreate {
+	wec.mutation.SetWorkflowStatus(tes)
+	return wec
+}
+
+// SetNillableWorkflowStatus sets the "workflow_status" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableWorkflowStatus(tes *types.WorkflowExecutionStatus) *WorkflowExecutionCreate {
+	if tes != nil {
+		wec.SetWorkflowStatus(*tes)
+	}
+	return wec
+}
+
+// SetEntity sets the "entity" field.
+func (wec *WorkflowExecutionCreate) SetEntity(s string) *WorkflowExecutionCreate {
+	wec.mutation.SetEntity(s)
+	return wec
+}
+
+// SetNillableEntity sets the "entity" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableEntity(s *string) *WorkflowExecutionCreate {
+	if s != nil {
+		wec.SetEntity(*s)
+	}
+	return wec
+}
+
+// SetEntityID sets the "entity_id" field.
+func (wec *WorkflowExecutionCreate) SetEntityID(s string) *WorkflowExecutionCreate {
+	wec.mutation.SetEntityID(s)
+	return wec
+}
+
+// SetNillableEntityID sets the "entity_id" field if the given value is not nil.
+func (wec *WorkflowExecutionCreate) SetNillableEntityID(s *string) *WorkflowExecutionCreate {
+	if s != nil {
+		wec.SetEntityID(*s)
+	}
+	return wec
+}
+
 // SetMetadata sets the "metadata" field.
 func (wec *WorkflowExecutionCreate) SetMetadata(m map[string]interface{}) *WorkflowExecutionCreate {
 	wec.mutation.SetMetadata(m)
@@ -211,6 +282,10 @@ func (wec *WorkflowExecutionCreate) defaults() {
 		v := workflowexecution.DefaultEnvironmentID
 		wec.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := wec.mutation.WorkflowStatus(); !ok {
+		v := workflowexecution.DefaultWorkflowStatus
+		wec.mutation.SetWorkflowStatus(v)
+	}
 	if _, ok := wec.mutation.ID(); !ok {
 		v := workflowexecution.DefaultID()
 		wec.mutation.SetID(v)
@@ -270,6 +345,9 @@ func (wec *WorkflowExecutionCreate) check() error {
 	}
 	if _, ok := wec.mutation.StartTime(); !ok {
 		return &ValidationError{Name: "start_time", err: errors.New(`ent: missing required field "WorkflowExecution.start_time"`)}
+	}
+	if _, ok := wec.mutation.WorkflowStatus(); !ok {
+		return &ValidationError{Name: "workflow_status", err: errors.New(`ent: missing required field "WorkflowExecution.workflow_status"`)}
 	}
 	return nil
 }
@@ -353,6 +431,26 @@ func (wec *WorkflowExecutionCreate) createSpec() (*WorkflowExecution, *sqlgraph.
 	if value, ok := wec.mutation.StartTime(); ok {
 		_spec.SetField(workflowexecution.FieldStartTime, field.TypeTime, value)
 		_node.StartTime = value
+	}
+	if value, ok := wec.mutation.EndTime(); ok {
+		_spec.SetField(workflowexecution.FieldEndTime, field.TypeTime, value)
+		_node.EndTime = &value
+	}
+	if value, ok := wec.mutation.DurationMs(); ok {
+		_spec.SetField(workflowexecution.FieldDurationMs, field.TypeInt64, value)
+		_node.DurationMs = &value
+	}
+	if value, ok := wec.mutation.WorkflowStatus(); ok {
+		_spec.SetField(workflowexecution.FieldWorkflowStatus, field.TypeString, value)
+		_node.WorkflowStatus = value
+	}
+	if value, ok := wec.mutation.Entity(); ok {
+		_spec.SetField(workflowexecution.FieldEntity, field.TypeString, value)
+		_node.Entity = &value
+	}
+	if value, ok := wec.mutation.EntityID(); ok {
+		_spec.SetField(workflowexecution.FieldEntityID, field.TypeString, value)
+		_node.EntityID = &value
 	}
 	if value, ok := wec.mutation.Metadata(); ok {
 		_spec.SetField(workflowexecution.FieldMetadata, field.TypeJSON, value)

@@ -34,6 +34,8 @@ type CreateWorkflowExecutionInput struct {
 	TenantID      string
 	EnvironmentID string
 	CreatedBy     string
+	Entity        string // e.g. plan, invoice, subscription (stored in column for efficient filtering)
+	EntityID      string // e.g. plan ID, invoice ID
 	Metadata      map[string]interface{}
 }
 
@@ -61,7 +63,7 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 			Mark(ierr.ErrValidation)
 	}
 
-	// Create workflow execution entity
+	// Create workflow execution entity (workflow_status defaults to Running at start)
 	now := time.Now().UTC()
 	exec := &ent.WorkflowExecution{
 		WorkflowID:    input.WorkflowID,
@@ -77,6 +79,10 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 		Status:        string(types.StatusPublished),
 		CreatedAt:     now,
 		UpdatedAt:     now,
+
+		Entity:         stringPtr(input.Entity),
+		EntityID:       stringPtr(input.EntityID),
+		WorkflowStatus: types.WorkflowExecutionStatusRunning,
 	}
 
 	if err := s.workflowExecRepo.Create(ctx, exec); err != nil {
@@ -88,23 +94,46 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 
 // ListWorkflowExecutionsFilters represents filters for listing workflow executions
 type ListWorkflowExecutionsFilters struct {
-	TenantID      string
-	EnvironmentID string
-	WorkflowType  string
-	TaskQueue     string
-	PageSize      int
-	Page          int
+	TenantID       string
+	EnvironmentID  string
+	WorkflowID     string // Filter by specific workflow ID
+	WorkflowType   string
+	TaskQueue      string
+	WorkflowStatus string // e.g. Running, Completed, Failed
+
+	// Metadata filters - specific fields
+	Entity   string // Filter by entity type in metadata (e.g. "plan", "customer")
+	EntityID string // Filter by entity_id in metadata (e.g. "plan_01ABC123")
+
+	// Sorting
+	Sort  string // e.g. start_time, end_time, created_at
+	Order string // asc | desc
+
+	// Pagination (limit/offset style, like other /search endpoints)
+	Limit  int
+	Offset int
+
+	PageSize int
+	Page     int
 }
 
 // ListWorkflowExecutions retrieves a paginated list of workflow executions
 func (s *WorkflowExecutionService) ListWorkflowExecutions(ctx context.Context, filters *ListWorkflowExecutionsFilters) ([]*ent.WorkflowExecution, int64, error) {
 	repoFilter := &workflowexecution.ListFilter{
-		TenantID:      filters.TenantID,
-		EnvironmentID: filters.EnvironmentID,
-		WorkflowType:  filters.WorkflowType,
-		TaskQueue:     filters.TaskQueue,
-		PageSize:      filters.PageSize,
-		Page:          filters.Page,
+		TenantID:       filters.TenantID,
+		EnvironmentID:  filters.EnvironmentID,
+		WorkflowID:     filters.WorkflowID,
+		WorkflowType:   filters.WorkflowType,
+		TaskQueue:      filters.TaskQueue,
+		WorkflowStatus: filters.WorkflowStatus,
+		Entity:         filters.Entity,
+		EntityID:       filters.EntityID,
+		Sort:           filters.Sort,
+		Order:          filters.Order,
+		Limit:          filters.Limit,
+		Offset:         filters.Offset,
+		PageSize:       filters.PageSize,
+		Page:           filters.Page,
 	}
 
 	executions, total, err := s.workflowExecRepo.List(ctx, repoFilter)
@@ -131,4 +160,12 @@ func CalculateTotalPages(total int64, pageSize int) int {
 		return 0
 	}
 	return int(math.Ceil(float64(total) / float64(pageSize)))
+}
+
+// stringPtr returns a pointer to s, or nil if s is empty (for optional ent fields).
+func stringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

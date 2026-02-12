@@ -4,8 +4,6 @@ import (
 	"time"
 
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -25,18 +23,6 @@ func ScheduleSubscriptionBillingWorkflow(ctx workflow.Context, input subscriptio
 	}
 
 	logger := workflow.GetLogger(ctx)
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowScheduleSubscriptionBilling,
-		TaskQueue:     string(types.TemporalTaskQueueSubscription),
-		TenantID:      "",
-		EnvironmentID: "",
-		UserID:        "",
-		Metadata: map[string]interface{}{
-			"batch_size": input.BatchSize,
-		},
-	})
 
 	// Define activity options with extended timeouts for large batch processing
 	ao := workflow.ActivityOptions{

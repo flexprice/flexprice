@@ -2258,6 +2258,11 @@ var (
 		{Name: "workflow_type", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "task_queue", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(100)"}},
 		{Name: "start_time", Type: field.TypeTime},
+		{Name: "end_time", Type: field.TypeTime, Nullable: true},
+		{Name: "duration_ms", Type: field.TypeInt64, Nullable: true},
+		{Name: "workflow_status", Type: field.TypeString, Default: "Unknown", SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "entity", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(100)"}},
+		{Name: "entity_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(255)"}},
 		{Name: "metadata", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 	}
 	// WorkflowExecutionsTable holds the schema information for the "workflow_executions" table.
@@ -2287,9 +2292,24 @@ var (
 				Columns: []*schema.Column{WorkflowExecutionsColumns[12]},
 			},
 			{
+				Name:    "idx_workflow_executions_end_time",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[13]},
+			},
+			{
 				Name:    "idx_workflow_executions_tenant_env_time",
 				Unique:  false,
 				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[12]},
+			},
+			{
+				Name:    "idx_workflow_executions_tenant_env_status",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[15]},
+			},
+			{
+				Name:    "idx_workflow_executions_tenant_env_entity",
+				Unique:  false,
+				Columns: []*schema.Column{WorkflowExecutionsColumns[1], WorkflowExecutionsColumns[7], WorkflowExecutionsColumns[16], WorkflowExecutionsColumns[17]},
 			},
 		},
 	}

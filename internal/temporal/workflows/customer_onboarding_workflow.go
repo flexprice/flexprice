@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/temporal/models"
-	"github.com/flexprice/flexprice/internal/temporal/tracking"
-	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -30,19 +28,6 @@ func CustomerOnboardingWorkflow(ctx workflow.Context, input models.CustomerOnboa
 	logger.Info("Starting customer onboarding workflow",
 		"customer_id", input.CustomerID,
 		"action_count", len(input.WorkflowConfig.Actions))
-
-	// Track workflow execution start
-	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
-		WorkflowType:  WorkflowCustomerOnboarding,
-		TaskQueue:     string(types.TemporalTaskQueueWorkflows),
-		TenantID:      input.TenantID,
-		EnvironmentID: input.EnvironmentID,
-		UserID:        input.UserID,
-		Metadata: map[string]interface{}{
-			"customer_id":  input.CustomerID,
-			"action_count": len(input.WorkflowConfig.Actions),
-		},
-	})
 
 	// Define activity options
 	ao := workflow.ActivityOptions{

@@ -2,6 +2,8 @@ package ent
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/workflowexecution"
@@ -9,6 +11,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
+	"github.com/flexprice/flexprice/internal/types"
+
+	"entgo.io/ent/dialect/sql"
 )
 
 type workflowExecutionRepository struct {
@@ -42,10 +47,17 @@ func (r *workflowExecutionRepository) Create(ctx context.Context, exec *ent.Work
 		SetEnvironmentID(exec.EnvironmentID).
 		SetCreatedBy(exec.CreatedBy).
 		SetStatus(exec.Status).
+		SetWorkflowStatus(exec.WorkflowStatus).
 		SetCreatedAt(exec.CreatedAt).
 		SetUpdatedAt(exec.UpdatedAt).
 		SetUpdatedBy(exec.UpdatedBy)
 
+	if exec.Entity != nil {
+		createQuery = createQuery.SetEntity(*exec.Entity)
+	}
+	if exec.EntityID != nil {
+		createQuery = createQuery.SetEntityID(*exec.EntityID)
+	}
 	if exec.Metadata != nil {
 		createQuery = createQuery.SetMetadata(exec.Metadata)
 	}
@@ -104,11 +116,23 @@ func (r *workflowExecutionRepository) List(ctx context.Context, filter *domainWo
 	if filter.EnvironmentID != "" {
 		query = query.Where(workflowexecution.EnvironmentID(filter.EnvironmentID))
 	}
+	if filter.WorkflowID != "" {
+		query = query.Where(workflowexecution.WorkflowID(filter.WorkflowID))
+	}
 	if filter.WorkflowType != "" {
 		query = query.Where(workflowexecution.WorkflowType(filter.WorkflowType))
 	}
 	if filter.TaskQueue != "" {
 		query = query.Where(workflowexecution.TaskQueue(filter.TaskQueue))
+	}
+	if filter.WorkflowStatus != "" {
+		query = query.Where(workflowexecution.WorkflowStatus(types.WorkflowExecutionStatus(filter.WorkflowStatus)))
+	}
+	if filter.Entity != "" {
+		query = query.Where(workflowexecution.EntityEQ(filter.Entity))
+	}
+	if filter.EntityID != "" {
+		query = query.Where(workflowexecution.EntityIDEQ(filter.EntityID))
 	}
 
 	// Get total count
@@ -120,25 +144,86 @@ func (r *workflowExecutionRepository) List(ctx context.Context, filter *domainWo
 	}
 
 	// Apply pagination
-	pageSize := filter.PageSize
-	if pageSize <= 0 {
-		pageSize = 50
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = filter.PageSize // legacy alias
 	}
-	if pageSize > 100 {
-		pageSize = 100
+	if limit <= 0 {
+		limit = 50
 	}
-
-	page := filter.Page
-	if page <= 0 {
-		page = 1
+	if limit > 100 {
+		limit = 100
 	}
 
-	offset := (page - 1) * pageSize
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	// Legacy alias: page/page_size -> offset
+	if offset == 0 && filter.Limit <= 0 && filter.PageSize > 0 {
+		page := filter.Page
+		if page <= 0 {
+			page = 1
+		}
+		offset = (page - 1) * limit
+	}
+
+	// Sorting (allowlist)
+	sortField := strings.ToLower(strings.TrimSpace(filter.Sort))
+	if sortField == "" {
+		sortField = "start_time"
+	}
+	order := strings.ToLower(strings.TrimSpace(filter.Order))
+	if order == "" {
+		order = "desc"
+	}
+	if order != "asc" && order != "desc" {
+		order = "desc"
+	}
+
+	sortFieldToOrderBuilder := map[string]func(...sql.OrderTermOption) workflowexecution.OrderOption{
+		"start_time":      workflowexecution.ByStartTime,
+		"end_time":        workflowexecution.ByEndTime,
+		"close_time":      workflowexecution.ByEndTime, // alias
+		"created_at":      workflowexecution.ByCreatedAt,
+		"updated_at":      workflowexecution.ByUpdatedAt,
+		"workflow_id":     workflowexecution.ByWorkflowID,
+		"run_id":          workflowexecution.ByRunID,
+		"workflow_type":   workflowexecution.ByWorkflowType,
+		"task_queue":      workflowexecution.ByTaskQueue,
+		"workflow_status": workflowexecution.ByWorkflowStatus,
+		"entity":          workflowexecution.ByEntity,
+		"entity_id":       workflowexecution.ByEntityID,
+	}
+
+	builder, ok := sortFieldToOrderBuilder[sortField]
+	if !ok {
+		builder = workflowexecution.ByStartTime
+		sortField = "start_time"
+	}
+
+	var dir sql.OrderTermOption
+	if order == "asc" {
+		dir = sql.OrderAsc()
+	} else {
+		dir = sql.OrderDesc()
+	}
+
+	orderBys := []workflowexecution.OrderOption{builder(dir)}
+
+	// Stable tie-breakers for consistent pagination
+	if sortField != "start_time" {
+		orderBys = append(orderBys, workflowexecution.ByStartTime(sql.OrderDesc()))
+	}
+	orderBys = append(orderBys,
+		workflowexecution.ByWorkflowID(sql.OrderDesc()),
+		workflowexecution.ByRunID(sql.OrderDesc()),
+	)
 
 	// Get paginated results
 	executions, err := query.
-		Order(ent.Desc(workflowexecution.FieldStartTime)).
-		Limit(pageSize).
+		Order(orderBys...).
+		Limit(limit).
 		Offset(offset).
 		All(ctx)
 
@@ -167,6 +252,76 @@ func (r *workflowExecutionRepository) Delete(ctx context.Context, id string) err
 			WithHint("Failed to delete workflow execution").
 			Mark(ierr.ErrDatabase)
 	}
+
+	return nil
+}
+
+func (r *workflowExecutionRepository) UpdateStatus(
+	ctx context.Context,
+	workflowID string,
+	runID string,
+	status types.WorkflowExecutionStatus,
+	errorMessage string,
+	endTime *time.Time,
+	durationMs *int64,
+) error {
+	client := r.client.Writer(ctx)
+
+	r.log.Debugw("updating workflow execution status",
+		"workflow_id", workflowID,
+		"run_id", runID,
+		"status", status,
+		"has_end_time", endTime != nil,
+		"has_duration", durationMs != nil,
+	)
+
+	// Find the workflow execution
+	exec, err := r.Get(ctx, workflowID, runID)
+	if err != nil {
+		return err
+	}
+
+	// Build update query
+	updateQuery := client.WorkflowExecution.
+		UpdateOne(exec).
+		SetWorkflowStatus(status).
+		SetUpdatedAt(exec.UpdatedAt) // Will be auto-updated by the hook
+
+	// Set end time if provided
+	if endTime != nil {
+		updateQuery = updateQuery.SetEndTime(*endTime)
+	}
+
+	// Set duration if provided
+	if durationMs != nil {
+		updateQuery = updateQuery.SetDurationMs(*durationMs)
+	}
+
+	// Store error message in metadata if provided
+	if errorMessage != "" {
+		metadata := exec.Metadata
+		if metadata == nil {
+			metadata = make(map[string]interface{})
+		}
+		metadata["error"] = errorMessage
+		updateQuery = updateQuery.SetMetadata(metadata)
+	}
+
+	// Execute update
+	_, err = updateQuery.Save(ctx)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHintf("Failed to update workflow execution status: %s/%s", workflowID, runID).
+			Mark(ierr.ErrDatabase)
+	}
+
+	r.log.Infow("successfully updated workflow execution status",
+		"workflow_id", workflowID,
+		"run_id", runID,
+		"status", status,
+		"end_time", endTime,
+		"duration_ms", durationMs,
+	)
 
 	return nil
 }

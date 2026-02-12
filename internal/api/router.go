@@ -181,6 +181,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			price.PUT("/:id", handlers.Price.UpdatePrice)
 			price.DELETE("/:id", handlers.Price.DeletePrice)
 			price.GET("/lookup/:lookup_key", handlers.Price.GetByLookupKey)
+			price.POST("/search", handlers.Price.ListPricesByFilter)
 
 			priceUnit := price.Group("/units")
 			{
@@ -665,7 +666,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	// Workflow monitoring routes
 	workflows := v1Private.Group("/workflows")
 	{
-		workflows.GET("", handlers.Workflow.ListWorkflows)
+		workflows.POST("/search", handlers.Workflow.ListWorkflows)
 		workflows.POST("/batch", handlers.Workflow.GetWorkflowsBatch)
 		workflows.GET("/:workflow_id/:run_id/summary", handlers.Workflow.GetWorkflowSummary)
 		workflows.GET("/:workflow_id/:run_id/timeline", handlers.Workflow.GetWorkflowTimeline)

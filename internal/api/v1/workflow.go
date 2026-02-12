@@ -3,9 +3,11 @@ package v1
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -23,6 +25,34 @@ type WorkflowHandler struct {
 	log                 *logger.Logger
 }
 
+func normalizeWorkflowStatus(in string) string {
+	s := strings.TrimSpace(in)
+	if s == "" {
+		return ""
+	}
+	switch strings.ToLower(s) {
+	case "running":
+		return string(types.WorkflowExecutionStatusRunning)
+	case "completed":
+		return string(types.WorkflowExecutionStatusCompleted)
+	case "failed":
+		return string(types.WorkflowExecutionStatusFailed)
+	case "canceled", "cancelled":
+		return string(types.WorkflowExecutionStatusCanceled)
+	case "terminated":
+		return string(types.WorkflowExecutionStatusTerminated)
+	case "continuedasnew", "continued_as_new", "continued-as-new":
+		return string(types.WorkflowExecutionStatusContinuedAsNew)
+	case "timedout", "timed_out", "timed-out":
+		return string(types.WorkflowExecutionStatusTimedOut)
+	case "unknown":
+		return string(types.WorkflowExecutionStatusUnknown)
+	default:
+		// Return original to avoid rejecting future/new statuses.
+		return s
+	}
+}
+
 func NewWorkflowHandler(
 	workflowExecService *service.WorkflowExecutionService,
 	temporalService temporalservice.TemporalService,
@@ -38,10 +68,12 @@ func NewWorkflowHandler(
 }
 
 func (h *WorkflowHandler) ListWorkflows(c *gin.Context) {
-	var req dto.ListWorkflowsRequest
-	if err := c.ShouldBindQuery(&req); err != nil {
+	// NOTE: This endpoint is used as POST /workflows/search (body-based filters),
+	// consistent with other /search APIs in this codebase.
+	var req dto.SearchWorkflowsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.Error(ierr.WithError(err).
-			WithHint("Invalid query parameters").
+			WithHint("Invalid filter parameters").
 			Mark(ierr.ErrValidation))
 		return
 	}
@@ -57,22 +89,42 @@ func (h *WorkflowHandler) ListWorkflows(c *gin.Context) {
 		return
 	}
 
-	// Set default page size
-	if req.PageSize <= 0 {
-		req.PageSize = 50
+	// Pagination (match /search semantics: limit/offset are primary; page/page_size are aliases)
+	limit := req.Limit
+	offset := req.Offset
+
+	if limit <= 0 {
+		limit = req.PageSize // alias
 	}
-	if req.Page <= 0 {
-		req.Page = 1
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	// If client provided page/page_size but not offset, derive offset.
+	if req.Offset == 0 && req.Limit <= 0 && req.PageSize > 0 {
+		page := req.Page
+		if page <= 0 {
+			page = 1
+		}
+		offset = (page - 1) * limit
 	}
 
 	// Query database for workflow executions
 	filters := &service.ListWorkflowExecutionsFilters{
-		TenantID:      tenantID,
-		EnvironmentID: environmentID,
-		WorkflowType:  req.WorkflowType,
-		TaskQueue:     req.TaskQueue,
-		PageSize:      req.PageSize,
-		Page:          req.Page,
+		TenantID:       tenantID,
+		EnvironmentID:  environmentID,
+		WorkflowID:     req.WorkflowID,
+		WorkflowType:   req.WorkflowType,
+		TaskQueue:      req.TaskQueue,
+		WorkflowStatus: normalizeWorkflowStatus(req.WorkflowStatus),
+		Entity:         req.Entity,
+		EntityID:       req.EntityID,
+		Sort:           req.Sort,
+		Order:          req.Order,
+		Limit:          limit,
+		Offset:         offset,
 	}
 
 	executions, total, err := h.workflowExecService.ListWorkflowExecutions(c.Request.Context(), filters)
@@ -89,18 +141,27 @@ func (h *WorkflowHandler) ListWorkflows(c *gin.Context) {
 			RunID:        exec.RunID,
 			WorkflowType: exec.WorkflowType,
 			TaskQueue:    exec.TaskQueue,
+			Status:       string(exec.WorkflowStatus),
+			Entity:       lo.FromPtr(exec.Entity),
+			EntityID:     lo.FromPtr(exec.EntityID),
 			StartTime:    exec.StartTime,
+			CloseTime:    exec.EndTime,
+			DurationMs:   exec.DurationMs,
 			CreatedBy:    exec.CreatedBy,
 		}
 	}
 
-	totalPages := service.CalculateTotalPages(total, req.PageSize)
+	totalPages := service.CalculateTotalPages(total, limit)
+	page := 1
+	if limit > 0 {
+		page = (offset / limit) + 1
+	}
 
 	response := &dto.ListWorkflowsResponse{
 		Workflows:  workflowDTOs,
 		Total:      total,
-		Page:       req.Page,
-		PageSize:   req.PageSize,
+		Page:       page,
+		PageSize:   limit,
 		TotalPages: totalPages,
 	}
 
