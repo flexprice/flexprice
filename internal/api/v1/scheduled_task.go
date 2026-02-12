@@ -29,6 +29,7 @@ func NewScheduledTaskHandler(
 // @Summary Create a scheduled task
 // @Description Create a new scheduled task for data export
 // @Tags ScheduledTasks
+// @ID post_tasks_scheduled
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -60,6 +61,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 // @Summary Get a scheduled task
 // @Description Get a scheduled task by ID
 // @Tags ScheduledTasks
+// @ID get_tasks_scheduled_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -85,6 +87,7 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 // @Summary List scheduled tasks
 // @Description Get a list of scheduled tasks with optional filters
 // @Tags ScheduledTasks
+// @ID get_tasks_scheduled
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -137,6 +140,7 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 // @Summary Update a scheduled task
 // @Description Update a scheduled task by ID - Only enabled field can be changed (pause/resume)
 // @Tags ScheduledTasks
+// @ID put_tasks_scheduled_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -172,6 +176,7 @@ func (h *ScheduledTaskHandler) UpdateScheduledTask(c *gin.Context) {
 // @Summary Delete a scheduled task
 // @Description Archive a scheduled task by ID (soft delete) - Sets status to archived and deletes from Temporal
 // @Tags ScheduledTasks
+// @ID delete_tasks_scheduled_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -201,6 +206,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 // @Summary Trigger force run
 // @Description Trigger a force run export immediately for a scheduled task with optional custom time range
 // @Tags ScheduledTasks
+// @ID post_tasks_scheduled_by_id_run
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -254,6 +260,7 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 // @Summary Schedule update billing period
 // @Description Schedule an update billing period workflow
 // @Tags ScheduledTasks
+// @ID post_tasks_scheduled_schedule_update_billing_period
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

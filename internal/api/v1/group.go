@@ -23,6 +23,7 @@ func NewGroupHandler(service service.GroupService, log *logger.Logger) *GroupHan
 // @Summary Create a group
 // @Description Create a new group for organizing entities (prices, plans, customers, etc.)
 // @Tags Groups
+// @ID post_groups
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -52,6 +53,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 // @Summary Get a group
 // @Description Get a group by ID
 // @Tags Groups
+// @ID get_groups_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -76,6 +78,7 @@ func (h *GroupHandler) GetGroup(c *gin.Context) {
 // @Summary Delete a group
 // @Description Delete a group and remove all entity associations
 // @Tags Groups
+// @ID delete_groups_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -100,6 +103,7 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 // @Summary Get groups
 // @Description Get groups with optional filtering via query parameters
 // @Tags Groups
+// @ID post_groups_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

@@ -28,6 +28,7 @@ func NewSecretHandler(service service.SecretService, logger *logger.Logger) *Sec
 // @Summary List API keys
 // @Description Get a paginated list of API keys
 // @Tags secrets
+// @ID get_secrets_api_keys
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -67,6 +68,7 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 // @Summary Create a new API key
 // @Description Create a new API key. Provide 'service_account_id' in body to create API key for a service account, otherwise creates for authenticated user.
 // @Tags secrets
+// @ID post_secrets_api_keys
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -102,6 +104,7 @@ func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 // @Summary Delete an API key
 // @Description Delete an API key by ID
 // @Tags secrets
+// @ID delete_secrets_api_keys_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -125,6 +128,7 @@ func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 // @Summary Create or update an integration
 // @Description Create or update integration credentials
 // @Tags Integrations
+// @ID post_secrets_integrations_create_by_provider
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -160,6 +164,7 @@ func (h *SecretHandler) CreateIntegration(c *gin.Context) {
 // @Summary Get integration details
 // @Description Get details of a specific integration
 // @Tags Integrations
+// @ID get_secrets_integrations_by_provider_by_provider
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -190,6 +195,7 @@ func (h *SecretHandler) GetIntegration(c *gin.Context) {
 // @Summary Delete an integration
 // @Description Delete integration credentials
 // @Tags Integrations
+// @ID delete_secrets_integrations_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -214,6 +220,7 @@ func (h *SecretHandler) DeleteIntegration(c *gin.Context) {
 // @Summary List linked integrations
 // @Description Get a list of unique providers which have a valid linked integration secret
 // @Tags Integrations
+// @ID get_secrets_integrations_linked
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

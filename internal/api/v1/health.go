@@ -20,7 +20,7 @@ func NewHealthHandler(
 }
 
 // @Summary Health check
-// @Description Health check
+// @Description Returns service health and readiness information for runtime monitoring.
 // @Tags Health
 // @Accept json
 // @Produce json

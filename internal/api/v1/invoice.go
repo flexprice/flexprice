@@ -30,6 +30,7 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, logger *logger.Log
 // @Summary Create a new one off invoice
 // @Description Create a new one off invoice with the provided details
 // @Tags Invoices
+// @ID post_invoices
 // @Accept json
 // @Security ApiKeyAuth
 // @Produce json
@@ -60,6 +61,7 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 // @Summary Get an invoice by ID
 // @Description Get detailed information about an invoice
 // @Tags Invoices
+// @ID get_invoices_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -101,6 +103,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 // @Summary List invoices
 // @Description List invoices with optional filtering
 // @Tags Invoices
+// @ID get_invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -142,6 +145,7 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 // @Summary Finalize an invoice
 // @Description Finalize a draft invoice
 // @Tags Invoices
+// @ID post_invoices_by_id_finalize
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -170,6 +174,7 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 // @Summary Void an invoice
 // @Description Void an invoice that hasn't been paid
 // @Tags Invoices
+// @ID post_invoices_by_id_void
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -213,6 +218,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 // @Summary Update invoice payment status
 // @Description Update the payment status of an invoice
 // @Tags Invoices
+// @ID put_invoices_by_id_payment
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -266,8 +272,9 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 
 // GetPreviewInvoice godoc
 // @Summary Get a preview invoice
-// @Description Get a preview invoice
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Invoices
+// @ID post_invoices_preview
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -296,8 +303,9 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 
 // GetCustomerInvoiceSummary godoc
 // @Summary Get a customer invoice summary
-// @Description Get a customer invoice summary
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Invoices
+// @ID get_customers_by_id_invoices_summary
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -323,6 +331,7 @@ func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 // @Summary Attempt payment for an invoice
 // @Description Attempt to pay an invoice using customer's available wallets
 // @Tags Invoices
+// @ID post_invoices_by_id_payment_attempt
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -355,6 +364,7 @@ func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 // @Summary Get PDF for an invoice
 // @Description Retrieve the PDF document for a specific invoice by its ID
 // @Tags Invoices
+// @ID get_invoices_by_id_pdf
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Param url query bool false "Return presigned URL from s3 instead of PDF"
@@ -395,6 +405,7 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 // @Summary Recalculate invoice totals and line items
 // @Description Recalculate totals and line items for a draft invoice, useful when subscription line items or usage data has changed
 // @Tags Invoices
+// @ID post_invoices_by_id_recalculate
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -431,6 +442,7 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 // @Description Update invoice details like PDF URL and due date.
 // Works for draft, finalized, and paid invoices. Only safe fields like PDF URL and due date can be updated for paid invoices.
 // @Tags Invoices
+// @ID put_invoices_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -467,8 +479,9 @@ func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
 
 // ListInvoicesByFilter godoc
 // @Summary List invoices by filter
-// @Description List invoices by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Invoices
+// @ID post_invoices_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -505,6 +518,7 @@ func (h *InvoiceHandler) ListInvoicesByFilter(c *gin.Context) {
 // @Summary Trigger communication webhook for an invoice
 // @Description Triggers a communication webhook event containing all information about the invoice
 // @Tags Invoices
+// @ID post_invoices_by_id_comms_trigger
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

@@ -31,8 +31,9 @@ func NewCustomerHandler(
 }
 
 // @Summary Create a customer
-// @Description Create a customer
+// @Description Validates input and creates a new resource in the current tenant/environment context.
 // @Tags Customers
+// @ID post_customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -60,8 +61,9 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 }
 
 // @Summary Get a customer
-// @Description Get a customer
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Customers
+// @ID get_customers_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -83,8 +85,9 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 }
 
 // @Summary Get customers
-// @Description Get customers
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Customers
+// @ID get_customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -118,6 +121,7 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 // @Summary Update a customer
 // @Description Update a customer by id or external_customer_id
 // @Tags Customers
+// @ID put_customers
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -183,8 +187,9 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 }
 
 // @Summary Delete a customer
-// @Description Delete a customer
+// @Description Deletes the target resource and returns the operation result for the current tenant/environment context.
 // @Tags Customers
+// @ID delete_customers_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -206,8 +211,9 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 }
 
 // @Summary Get a customer by external id
-// @Description Get a customer by external id
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Customers
+// @ID get_customers_external_by_external_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -240,8 +246,9 @@ func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
 }
 
 // @Summary Get customer entitlements
-// @Description Get customer entitlements
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Customers
+// @ID get_customers_by_id_entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -276,6 +283,7 @@ func (h *CustomerHandler) GetCustomerEntitlements(c *gin.Context) {
 // @Summary Get customer usage summary
 // @Description Get customer usage summary by customer_id or customer_lookup_key (external_customer_id)
 // @Tags Customers
+// @ID get_customers_usage
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -358,8 +366,9 @@ func (h *CustomerHandler) GetCustomerUsageSummary(c *gin.Context) {
 }
 
 // @Summary List customers by filter
-// @Description List customers by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Customers
+// @ID post_customers_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -393,6 +402,7 @@ func (h *CustomerHandler) ListCustomersByFilter(c *gin.Context) {
 // @Summary Get upcoming credit grant applications
 // @Description Get upcoming credit grant applications for a customer
 // @Tags Customers
+// @ID get_customers_by_id_grants_upcoming
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Customer ID"

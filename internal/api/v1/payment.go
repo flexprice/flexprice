@@ -25,6 +25,7 @@ func NewPaymentHandler(service service.PaymentService, processor service.Payment
 // @Summary Create a new payment
 // @Description Create a new payment with the specified configuration
 // @Tags Payments
+// @ID post_payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -54,8 +55,9 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 }
 
 // @Summary Get a payment by ID
-// @Description Get a payment by ID
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Payments
+// @ID get_payments_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -86,6 +88,7 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 // @Summary Update a payment
 // @Description Update a payment with the specified configuration
 // @Tags Payments
+// @ID put_payments_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -126,6 +129,7 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 // @Summary List payments
 // @Description List payments with the specified filter
 // @Tags Payments
+// @ID get_payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -159,8 +163,9 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 }
 
 // @Summary Delete a payment
-// @Description Delete a payment
+// @Description Deletes the target resource and returns the operation result for the current tenant/environment context.
 // @Tags Payments
+// @ID delete_payments_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -188,8 +193,9 @@ func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 }
 
 // @Summary Process a payment
-// @Description Process a payment
+// @Description Executes the requested processing workflow and returns the resulting operation state.
 // @Tags Payments
+// @ID post_payments_by_id_process
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

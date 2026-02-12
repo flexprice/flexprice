@@ -27,8 +27,9 @@ func NewTenantHandler(
 }
 
 // @Summary Create a new tenant
-// @Description Create a new tenant
+// @Description Validates input and creates a new resource in the current tenant/environment context.
 // @Tags Tenants
+// @ID post_tenants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -56,8 +57,9 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 }
 
 // @Summary Get tenant by ID
-// @Description Get tenant by ID
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Tenants
+// @ID get_tenants_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -81,6 +83,7 @@ func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 // @Summary Update a tenant
 // @Description Update a tenant's details including name and billing information
 // @Tags Tenants
+// @ID put_tenants_update
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -113,6 +116,7 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 // @Summary Get billing usage for the current tenant
 // @Description Get the subscription and usage details for the current tenant
 // @Tags Tenants
+// @ID get_tenant_billing
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

@@ -25,8 +25,9 @@ func NewTaxHandler(service service.TaxService, logger *logger.Logger) *TaxHandle
 }
 
 // @Summary Create a tax rate
-// @Description Create a tax rate
+// @Description Validates input and creates a new resource in the current tenant/environment context.
 // @Tags Tax Rates
+// @ID post_taxes_rates
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -54,8 +55,9 @@ func (h *TaxHandler) CreateTaxRate(c *gin.Context) {
 }
 
 // @Summary Get a tax rate
-// @Description Get a tax rate
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Tax Rates
+// @ID get_taxes_rates_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -74,8 +76,9 @@ func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 }
 
 // @Summary Get tax rates
-// @Description Get tax rates
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Tax Rates
+// @ID get_taxes_rates
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -102,8 +105,9 @@ func (h *TaxHandler) ListTaxRates(c *gin.Context) {
 }
 
 // @Summary Update a tax rate
-// @Description Update a tax rate
+// @Description Validates input and updates the target resource in the current tenant/environment context.
 // @Tags Tax Rates
+// @ID put_taxes_rates_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -134,8 +138,9 @@ func (h *TaxHandler) UpdateTaxRate(c *gin.Context) {
 }
 
 // @Summary Delete a tax rate
-// @Description Delete a tax rate
+// @Description Deletes the target resource and returns the operation result for the current tenant/environment context.
 // @Tags Tax Rates
+// @ID delete_taxes_rates_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -159,6 +164,7 @@ func (h *TaxHandler) DeleteTaxRate(c *gin.Context) {
 // @Summary Create Tax Association
 // @Description Create a new tax association
 // @Tags Tax Associations
+// @ID post_taxes_associations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -188,6 +194,7 @@ func (h *TaxHandler) CreateTaxAssociation(c *gin.Context) {
 // @Summary Get Tax Association
 // @Description Get a tax association by ID
 // @Tags Tax Associations
+// @ID get_taxes_associations_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -211,6 +218,7 @@ func (h *TaxHandler) GetTaxAssociation(c *gin.Context) {
 // @Summary Update tax association
 // @Description Update a tax association by ID
 // @Tags Tax Associations
+// @ID put_taxes_associations_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -243,6 +251,7 @@ func (h *TaxHandler) UpdateTaxAssociation(c *gin.Context) {
 // @Summary Delete tax association
 // @Description Delete a tax association by ID
 // @Tags Tax Associations
+// @ID delete_taxes_associations_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -262,8 +271,9 @@ func (h *TaxHandler) DeleteTaxAssociation(c *gin.Context) {
 }
 
 // @Summary List tax associations
-// @Description List tax associations
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Tax Associations
+// @ID get_taxes_associations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

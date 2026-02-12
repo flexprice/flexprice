@@ -27,6 +27,7 @@ func NewPriceUnitHandler(service service.PriceUnitService, log *logger.Logger) *
 // @Summary Create a new price unit
 // @Description Create a new price unit with the provided details
 // @Tags Price Units
+// @ID post_prices_units
 // @Accept json
 // @Security ApiKeyAuth
 // @Produce json
@@ -62,6 +63,7 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 // @Summary List price units
 // @Description Get a paginated list of price units with optional filtering
 // @Tags Price Units
+// @ID get_prices_units
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -115,6 +117,7 @@ func (h *PriceUnitHandler) ListPriceUnits(c *gin.Context) {
 // @Summary Update a price unit
 // @Description Update an existing price unit with the provided details. Only name and metadata can be updated.
 // @Tags Price Units
+// @ID put_prices_units_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -161,6 +164,7 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 // @Summary Delete a price unit
 // @Description Delete an existing price unit.
 // @Tags Price Units
+// @ID delete_prices_units_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -204,8 +208,9 @@ func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 
 // GetPriceUnit handles getting a price unit by ID
 // @Summary Get a price unit by ID
-// @Description Get a price unit by ID
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Price Units
+// @ID get_prices_units_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -248,8 +253,9 @@ func (h *PriceUnitHandler) GetPriceUnit(c *gin.Context) {
 
 // GetPriceUnitByCode handles getting a price unit by code
 // @Summary Get a price unit by code
-// @Description Get a price unit by code
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Price Units
+// @ID get_prices_units_code_by_code
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -292,8 +298,9 @@ func (h *PriceUnitHandler) GetPriceUnitByCode(c *gin.Context) {
 }
 
 // @Summary List price units by filter
-// @Description List price units by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Price Units
+// @ID post_prices_units_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

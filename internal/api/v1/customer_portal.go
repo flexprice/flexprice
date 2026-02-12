@@ -33,6 +33,7 @@ func NewCustomerPortalHandler(
 // @Summary Create a customer portal session
 // @Description Generate a dashboard URL/token for a customer to access their billing information
 // @Tags CustomerPortal
+// @ID get_portal_by_external_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

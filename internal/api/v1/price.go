@@ -27,6 +27,7 @@ func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHan
 // @Summary Create a new price
 // @Description Create a new price with the specified configuration. Supports both regular and price unit configurations.
 // @Tags Prices
+// @ID post_prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -56,6 +57,7 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 // @Summary Create multiple prices in bulk
 // @Description Create multiple prices with the specified configurations. Supports both regular and price unit configurations.
 // @Tags Prices
+// @ID post_prices_bulk
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -85,6 +87,7 @@ func (h *PriceHandler) CreateBulkPrice(c *gin.Context) {
 // @Summary Get a price by ID
 // @Description Get a price by ID with expanded meter and price unit information
 // @Tags Prices
+// @ID get_prices_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -114,6 +117,7 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 // @Summary Get prices
 // @Description Get prices with the specified filter
 // @Tags Prices
+// @ID get_prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -147,6 +151,7 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 // @Summary Update a price
 // @Description Update a price with the specified configuration
 // @Tags Prices
+// @ID put_prices_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -183,8 +188,9 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 }
 
 // @Summary Delete a price
-// @Description Delete a price
+// @Description Deletes the target resource and returns the operation result for the current tenant/environment context.
 // @Tags Prices
+// @ID delete_prices_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -220,8 +226,9 @@ func (h *PriceHandler) DeletePrice(c *gin.Context) {
 }
 
 // @Summary Get price by lookup key
-// @Description Get price by lookup key
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Prices
+// @ID get_prices_lookup_by_lookup_key
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

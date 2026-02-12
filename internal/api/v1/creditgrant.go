@@ -23,6 +23,7 @@ func NewCreditGrantHandler(service service.CreditGrantService, log *logger.Logge
 // @Summary Create a new credit grant
 // @Description Create a new credit grant with the specified configuration
 // @Tags CreditGrants
+// @ID post_creditgrants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -52,8 +53,9 @@ func (h *CreditGrantHandler) CreateCreditGrant(c *gin.Context) {
 }
 
 // @Summary Get a credit grant by ID
-// @Description Get a credit grant by ID
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags CreditGrants
+// @ID get_creditgrants_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -84,6 +86,7 @@ func (h *CreditGrantHandler) GetCreditGrant(c *gin.Context) {
 // @Summary Get credit grants
 // @Description Get credit grants with the specified filter
 // @Tags CreditGrants
+// @ID get_creditgrants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -120,6 +123,7 @@ func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 // @Summary Update a credit grant
 // @Description Update a credit grant with the specified configuration
 // @Tags CreditGrants
+// @ID put_creditgrants_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -160,6 +164,7 @@ func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 // @Summary Delete a credit grant
 // @Description Delete a credit grant. Plan-scoped grants are archived; subscription-scoped grants have their end date set (optional body with effective_date). Request body is optional.
 // @Tags CreditGrants
+// @ID delete_creditgrants_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

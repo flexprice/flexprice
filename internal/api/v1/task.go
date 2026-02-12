@@ -35,6 +35,7 @@ func NewTaskHandler(
 // @Summary Create a new task
 // @Description Create a new task for processing files asynchronously
 // @Tags Tasks
+// @ID post_tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -77,6 +78,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 // @Summary Get a task
 // @Description Get a task by ID
 // @Tags Tasks
+// @ID get_tasks_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -107,6 +109,7 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 // @Summary List tasks
 // @Description List tasks with optional filtering
 // @Tags Tasks
+// @ID get_tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -140,6 +143,7 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 // @Summary Update task status
 // @Description Update a task's status
 // @Tags Tasks
+// @ID put_tasks_by_id_status
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -179,6 +183,7 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 // @Summary Get task processing result
 // @Description Get the result of a task processing workflow
 // @Tags Tasks
+// @ID get_tasks_result
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -213,6 +218,7 @@ func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 // @Summary Download task export file
 // @Description Generate a presigned URL for downloading an exported file (supports both Flexprice-managed and customer-owned S3)
 // @Tags Tasks
+// @ID get_tasks_by_id_download
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

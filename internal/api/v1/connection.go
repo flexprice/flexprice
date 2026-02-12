@@ -48,6 +48,7 @@ func (h *ConnectionHandler) CreateConnection(c *gin.Context) {
 // @Summary Get a connection
 // @Description Get a connection by ID
 // @Tags Connections
+// @ID get_connections_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -72,6 +73,7 @@ func (h *ConnectionHandler) GetConnection(c *gin.Context) {
 // @Summary Get connections
 // @Description Get a list of connections
 // @Tags Connections
+// @ID get_connections
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -105,6 +107,7 @@ func (h *ConnectionHandler) GetConnections(c *gin.Context) {
 // @Summary Update a connection
 // @Description Update a connection by ID
 // @Tags Connections
+// @ID put_connections_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -138,6 +141,7 @@ func (h *ConnectionHandler) UpdateConnection(c *gin.Context) {
 // @Summary Delete a connection
 // @Description Delete a connection by ID
 // @Tags Connections
+// @ID delete_connections_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -160,8 +164,9 @@ func (h *ConnectionHandler) DeleteConnection(c *gin.Context) {
 }
 
 // @Summary List connections by filter
-// @Description List connections by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Connections
+// @ID post_connections_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

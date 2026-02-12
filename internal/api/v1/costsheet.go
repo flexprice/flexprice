@@ -30,6 +30,7 @@ func NewCostsheetHandler(service service.CostsheetService, log *logger.Logger) *
 // @Summary Create a new costsheet
 // @Description Create a new costsheet with the specified name
 // @Tags Costs
+// @ID post_costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -62,6 +63,7 @@ func (h *CostsheetHandler) CreateCostsheet(c *gin.Context) {
 // @Summary Get a costsheet by ID
 // @Description Get a costsheet by ID with optional price expansion
 // @Tags Costs
+// @ID get_costs_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -94,6 +96,7 @@ func (h *CostsheetHandler) GetCostsheet(c *gin.Context) {
 // @Summary Update a costsheet
 // @Description Update a costsheet with the specified configuration
 // @Tags Costs
+// @ID put_costs_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -136,6 +139,7 @@ func (h *CostsheetHandler) UpdateCostsheet(c *gin.Context) {
 // @Summary Delete a costsheet
 // @Description Soft delete a costsheet by setting its status to deleted
 // @Tags Costs
+// @ID delete_costs_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -167,6 +171,7 @@ func (h *CostsheetHandler) DeleteCostsheet(c *gin.Context) {
 // @Summary List costsheets by filter
 // @Description List costsheet records by filter with POST body
 // @Tags Costs
+// @ID post_costs_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -206,6 +211,7 @@ func (h *CostsheetHandler) ListCostsheetByFilter(c *gin.Context) {
 // @Summary Get active costsheet for tenant
 // @Description Get the active costsheet for the current tenant
 // @Tags Costs
+// @ID get_costs_active
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

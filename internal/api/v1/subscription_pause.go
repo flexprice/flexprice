@@ -27,6 +27,7 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 // @Summary Pause a subscription
 // @Description Pause a subscription with the specified parameters
 // @Tags Subscriptions
+// @ID post_subscriptions_by_id_pause
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -91,6 +92,7 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 // @Summary Resume a paused subscription
 // @Description Resume a paused subscription with the specified parameters
 // @Tags Subscriptions
+// @ID post_subscriptions_by_id_resume
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -152,8 +154,9 @@ func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 }
 
 // @Summary List all pauses for a subscription
-// @Description List all pauses for a subscription
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Subscriptions
+// @ID get_subscriptions_by_id_pauses
 // @Produce json
 // @Param id path string true "Subscription ID"
 // @Success 200 {array} dto.ListSubscriptionPausesResponse

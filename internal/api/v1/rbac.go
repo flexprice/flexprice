@@ -27,6 +27,7 @@ func NewRBACHandler(rbacService *rbac.RBACService, userService service.UserServi
 // @Summary List all RBAC roles
 // @Description Returns all available roles with their permissions, names, and descriptions
 // @Tags RBAC
+// @ID get_rbac_roles
 // @Accept json
 // @Produce json
 // @Success 200 {object} map[string]interface{} "List of roles"
@@ -45,6 +46,7 @@ func (h *RBACHandler) ListRoles(c *gin.Context) {
 // @Summary Get a specific RBAC role
 // @Description Returns details of a specific role including permissions, name, and description
 // @Tags RBAC
+// @ID get_rbac_roles_by_id
 // @Accept json
 // @Produce json
 // @Param id path string true "Role ID"

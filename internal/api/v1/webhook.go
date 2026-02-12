@@ -114,6 +114,7 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 // @Summary Handle Stripe webhook events
 // @Description Process incoming Stripe webhook events for payment status updates and customer creation
 // @Tags Webhooks
+// @ID post_webhooks_stripe_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"
@@ -240,6 +241,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 // @Summary Handle HubSpot webhook events
 // @Description Process incoming HubSpot webhook events for deal closed won and customer creation
 // @Tags Webhooks
+// @ID post_webhooks_hubspot_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"
@@ -409,6 +411,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 // @Summary Handle Razorpay webhook events
 // @Description Process incoming Razorpay webhook events for payment capture and failure
 // @Tags Webhooks
+// @ID post_webhooks_razorpay_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"
@@ -520,6 +523,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 // @Summary Handle Chargebee webhook events
 // @Description Process incoming Chargebee webhook events for payment status updates
 // @Tags Webhooks
+// @ID post_webhooks_chargebee_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"
@@ -659,6 +663,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 // @Summary Handle QuickBooks webhook events
 // @Description Process incoming QuickBooks webhook events for payment sync
 // @Tags Webhooks
+// @ID post_webhooks_quickbooks_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"
@@ -762,6 +767,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 // @Summary Handle Nomod webhook events
 // @Description Process incoming Nomod webhook events for payment and invoice payments
 // @Tags Webhooks
+// @ID post_webhooks_nomod_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"
@@ -910,6 +916,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 // @Summary Handle Moyasar webhook events
 // @Description Process incoming Moyasar webhook events for payment status updates
 // @Tags Webhooks
+// @ID post_webhooks_moyasar_by_tenant_id_by_environment_id
 // @Accept json
 // @Produce json
 // @Param tenant_id path string true "Tenant ID"

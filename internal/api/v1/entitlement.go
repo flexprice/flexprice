@@ -23,6 +23,7 @@ func NewEntitlementHandler(service service.EntitlementService, log *logger.Logge
 // @Summary Create a new entitlement
 // @Description Create a new entitlement with the specified configuration
 // @Tags Entitlements
+// @ID post_entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -54,6 +55,7 @@ func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 // @Summary Create multiple entitlements in bulk
 // @Description Create multiple entitlements with the specified configurations
 // @Tags Entitlements
+// @ID post_entitlements_bulk
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -83,8 +85,9 @@ func (h *EntitlementHandler) CreateBulkEntitlement(c *gin.Context) {
 }
 
 // @Summary Get an entitlement by ID
-// @Description Get an entitlement by ID
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Entitlements
+// @ID get_entitlements_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -115,6 +118,7 @@ func (h *EntitlementHandler) GetEntitlement(c *gin.Context) {
 // @Summary Get entitlements
 // @Description Get entitlements with the specified filter
 // @Tags Entitlements
+// @ID get_entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -151,6 +155,7 @@ func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 // @Summary Update an entitlement
 // @Description Update an entitlement with the specified configuration
 // @Tags Entitlements
+// @ID put_entitlements_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -189,8 +194,9 @@ func (h *EntitlementHandler) UpdateEntitlement(c *gin.Context) {
 }
 
 // @Summary Delete an entitlement
-// @Description Delete an entitlement
+// @Description Deletes the target resource and returns the operation result for the current tenant/environment context.
 // @Tags Entitlements
+// @ID delete_entitlements_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -219,8 +225,9 @@ func (h *EntitlementHandler) DeleteEntitlement(c *gin.Context) {
 
 // ListEntitlementsByFilter godoc
 // @Summary List entitlements by filter
-// @Description List entitlements by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Entitlements
+// @ID post_entitlements_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

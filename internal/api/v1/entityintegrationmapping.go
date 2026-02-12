@@ -33,6 +33,7 @@ func NewEntityIntegrationMappingHandler(
 // @Summary Create entity integration mapping
 // @Description Create a new entity integration mapping
 // @Tags Entity Integration Mappings
+// @ID post_entity_integration_mappings
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -67,6 +68,7 @@ func (h *EntityIntegrationMappingHandler) CreateEntityIntegrationMapping(c *gin.
 // @Summary Get entity integration mapping
 // @Description Retrieve a specific entity integration mapping by ID
 // @Tags Entity Integration Mappings
+// @ID get_entity_integration_mappings_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -100,6 +102,7 @@ func (h *EntityIntegrationMappingHandler) GetEntityIntegrationMapping(c *gin.Con
 // @Summary Delete entity integration mapping
 // @Description Delete an entity integration mapping
 // @Tags Entity Integration Mappings
+// @ID delete_entity_integration_mappings_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -133,6 +136,7 @@ func (h *EntityIntegrationMappingHandler) DeleteEntityIntegrationMapping(c *gin.
 // @Summary List entity integration mappings
 // @Description Retrieve a list of entity integration mappings with optional filtering
 // @Tags Entity Integration Mappings
+// @ID get_entity_integration_mappings
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

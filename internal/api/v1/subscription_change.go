@@ -31,6 +31,7 @@ func NewSubscriptionChangeHandler(
 // @Summary Preview subscription plan change
 // @Description Preview the impact of changing a subscription's plan, including proration calculations
 // @Tags Subscriptions
+// @ID post_subscriptions_by_id_change_preview
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -86,6 +87,7 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 // @Summary Execute subscription plan change
 // @Description Execute a subscription plan change, including proration and invoice generation
 // @Tags Subscriptions
+// @ID post_subscriptions_by_id_change_execute
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

@@ -40,6 +40,7 @@ func NewEventsHandler(eventService service.EventService, eventPostProcessingServ
 // @Summary Ingest event
 // @Description Ingest a new event into the system
 // @Tags Events
+// @ID post_events
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -77,6 +78,7 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 // @Summary Bulk Ingest events
 // @Description Ingest bulk events into the system
 // @Tags Events
+// @ID post_events_bulk
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -109,6 +111,7 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 // @Summary Get usage by meter
 // @Description Retrieve aggregated usage statistics using meter configuration
 // @Tags Events
+// @ID post_events_usage_meter
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageByMeterRequest true "Request body"
@@ -150,6 +153,7 @@ func (h *EventsHandler) GetUsageByMeter(c *gin.Context) {
 // @Summary Get usage statistics
 // @Description Retrieve aggregated usage statistics for events
 // @Tags Events
+// @ID post_events_usage
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageRequest true "Request body"
@@ -276,6 +280,7 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 // @Summary List raw events
 // @Description Retrieve raw events with pagination and filtering
 // @Tags Events
+// @ID post_events_query
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetEventsRequest true "Request body"
@@ -315,6 +320,7 @@ func (h *EventsHandler) QueryEvents(c *gin.Context) {
 // @Summary Get usage analytics
 // @Description Retrieve comprehensive usage analytics with filtering, grouping, and time-series data
 // @Tags Events
+// @ID post_events_analytics
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageAnalyticsRequest true "Request body"
@@ -436,6 +442,7 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 // @Summary Get monitoring data
 // @Description Retrieve monitoring data for events including consumer lag and event metrics (last 24 hours by default)
 // @Tags Events
+// @ID get_events_monitoring
 // @Produce json
 // @Security ApiKeyAuth
 // @Param start_time query time.Time false "Start time (ISO 8601) - defaults to 24 hours ago"
@@ -469,6 +476,7 @@ func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 // @Summary Get hugging face inference data
 // @Description Retrieve hugging face inference data for events
 // @Tags Events
+// @ID post_events_huggingface_inference
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.GetHuggingFaceBillingDataResponse
@@ -557,6 +565,7 @@ func (h *EventsHandler) BenchmarkV2(c *gin.Context) {
 // @Summary Get event by ID
 // @Description Retrieve event details and processing status with debug information
 // @Tags Events
+// @ID get_events_by_id
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Event ID"

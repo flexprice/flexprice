@@ -30,6 +30,7 @@ func NewWalletHandler(walletService service.WalletService, logger *logger.Logger
 // @Summary Create a new wallet
 // @Description Create a new wallet for a customer
 // @Tags Wallets
+// @ID post_wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -62,6 +63,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 // @Summary Get wallets by customer ID
 // @Description Get all wallets for a customer
 // @Tags Wallets
+// @ID get_customers_by_id_wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -119,6 +121,7 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 // @Summary Get Customer Wallets
 // @Description Get all wallets for a customer by lookup key or id
 // @Tags Wallets
+// @ID get_customers_wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -180,6 +183,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 // @Summary Get wallet by ID
 // @Description Get a wallet by its ID
 // @Tags Wallets
+// @ID get_wallets_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -212,6 +216,7 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 // @Summary Get wallet transactions
 // @Description Get transactions for a wallet with pagination
 // @Tags Wallets
+// @ID get_wallets_by_id_transactions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -258,6 +263,7 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 // @Summary Top up wallet
 // @Description Add credits to a wallet
 // @Tags Wallets
+// @ID post_wallets_by_id_top_up
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -300,6 +306,7 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 // @Summary Get wallet balance
 // @Description Get real-time balance of a wallet
 // @Tags Wallets
+// @ID get_wallets_by_id_balance_real_time
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -408,6 +415,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 // @Summary Terminate a wallet
 // @Description Terminates a wallet by closing it and debiting remaining balance
 // @Tags Wallets
+// @ID post_wallets_by_id_terminate
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -440,6 +448,7 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 // @Summary Update a wallet
 // @Description Update a wallet's details including auto top-up configuration
 // @Tags Wallets
+// @ID put_wallets_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -503,8 +512,9 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 // ListWalletTransactionsByFilter godoc
 // @Summary List wallet transactions by filter
-// @Description List wallet transactions by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Wallets
+// @ID post_wallets_transactions_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -547,6 +557,7 @@ func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
 // @Summary List wallets
 // @Description List wallets with optional filtering
 // @Tags Wallets
+// @ID get_wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -622,8 +633,9 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 
 // ListWalletsByFilter godoc
 // @Summary List wallets by filter
-// @Description List wallets by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Wallets
+// @ID post_wallets_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

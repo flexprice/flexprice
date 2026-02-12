@@ -40,6 +40,7 @@ func NewPlanHandler(
 // @Summary Create a new plan
 // @Description Create a new plan with the specified configuration
 // @Tags Plans
+// @ID post_plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -69,6 +70,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 // @Summary Get a plan
 // @Description Get a plan by ID
 // @Tags Plans
+// @ID get_plans_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -99,6 +101,7 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 // @Summary Get plans
 // @Description Get plans with optional filtering
 // @Tags Plans
+// @ID get_plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -132,6 +135,7 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 // @Summary Update a plan
 // @Description Update a plan by ID
 // @Tags Plans
+// @ID put_plans_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -171,6 +175,7 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 // @Summary Delete a plan
 // @Description Delete a plan by ID
 // @Tags Plans
+// @ID delete_plans_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -201,6 +206,7 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 // @Summary Get plan entitlements
 // @Description Get all entitlements for a plan
 // @Tags Entitlements
+// @ID get_plans_by_id_entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -231,6 +237,7 @@ func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 // @Summary Get plan credit grants
 // @Description Get all credit grants for a plan
 // @Tags CreditGrants
+// @ID get_plans_by_id_creditgrants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -261,6 +268,7 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 // @Summary Synchronize plan prices
 // @Description Synchronize current plan prices with all existing active subscriptions
 // @Tags Plans
+// @ID post_plans_by_id_sync_subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -302,8 +310,9 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 }
 
 // @Summary List plans by filter
-// @Description List plans by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Plans
+// @ID post_plans_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

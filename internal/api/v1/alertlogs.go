@@ -40,6 +40,7 @@ func NewAlertLogsHandler(
 // @Summary List alert logs by filter
 // @Description List alert logs by filter with optional expand for customer, wallet, and feature
 // @Tags Alert Logs
+// @ID post_alert_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

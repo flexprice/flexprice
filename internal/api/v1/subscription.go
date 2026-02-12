@@ -26,6 +26,7 @@ func NewSubscriptionHandler(service service.SubscriptionService, log *logger.Log
 // @Summary Create subscription
 // @Description Create a new subscription
 // @Tags Subscriptions
+// @ID post_subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -57,6 +58,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 // @Summary Get subscription
 // @Description Get a subscription by ID
 // @Tags Subscriptions
+// @ID get_subscriptions_by_id
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
@@ -86,6 +88,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 // @Summary Get subscription V2
 // @Description Get a subscription by ID with optional expand parameters
 // @Tags Subscriptions
+// @ID get_subscriptions_by_id_v2
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
@@ -120,6 +123,7 @@ func (h *SubscriptionHandler) GetSubscriptionV2(c *gin.Context) {
 // @Summary List subscriptions
 // @Description Get subscriptions with optional filtering
 // @Tags Subscriptions
+// @ID get_subscriptions
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.SubscriptionFilter false "Filter"
@@ -150,6 +154,7 @@ func (h *SubscriptionHandler) GetSubscriptions(c *gin.Context) {
 // @Summary Cancel subscription
 // @Description Cancel a subscription with enhanced proration support
 // @Tags Subscriptions
+// @ID post_subscriptions_by_id_cancel
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -191,6 +196,7 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 // @Summary Activate draft subscription
 // @Description Activate a draft subscription with a new start date
 // @Tags Subscriptions
+// @ID post_subscriptions_by_id_activate
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -231,6 +237,7 @@ func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 // @Summary Get usage by subscription
 // @Description Get usage for a subscription
 // @Tags Subscriptions
+// @ID post_subscriptions_usage
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -261,8 +268,9 @@ func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 
 // ListSubscriptionsByFilter godoc
 // @Summary List subscriptions by filter
-// @Description List subscriptions by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Subscriptions
+// @ID post_subscriptions_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -302,6 +310,7 @@ func (h *SubscriptionHandler) ListSubscriptionsByFilter(c *gin.Context) {
 // @Summary Add addon to subscription
 // @Description Add an addon to a subscription
 // @Tags Subscriptions
+// @ID post_subscriptions_addon
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -333,6 +342,7 @@ func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 // @Summary Remove addon from subscription
 // @Description Remove an addon from a subscription
 // @Tags Subscriptions
+// @ID delete_subscriptions_addon
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -363,6 +373,7 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 // @Summary Get subscription entitlements
 // @Description Get all entitlements for a subscription
 // @Tags Subscriptions
+// @ID get_subscriptions_by_id_entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -404,6 +415,7 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 // @Summary Update subscription line item
 // @Description Update a subscription line item by terminating the existing one and creating a new one
 // @Tags Subscriptions
+// @ID put_subscriptions_lineitems_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -444,6 +456,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 // @Summary Delete subscription line item
 // @Description Delete a subscription line item by setting its end date
 // @Tags Subscriptions
+// @ID delete_subscriptions_lineitems_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -484,6 +497,7 @@ func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 // @Summary Get upcoming credit grant applications
 // @Description Get upcoming credit grant applications for a subscription
 // @Tags Subscriptions
+// @ID get_subscriptions_by_id_grants_upcoming
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
@@ -519,6 +533,7 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 // @Summary Get active addon associations
 // @Description Get active addon associations for a subscription
 // @Tags Subscriptions
+// @ID get_subscriptions_by_id_addons_associations
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"

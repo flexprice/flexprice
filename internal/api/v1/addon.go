@@ -28,6 +28,7 @@ func NewAddonHandler(service service.AddonService, entitlementService service.En
 // @Summary Create addon
 // @Description Create a new addon
 // @Tags Addons
+// @ID post_addons
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -59,6 +60,7 @@ func (h *AddonHandler) CreateAddon(c *gin.Context) {
 // @Summary Get addon
 // @Description Get an addon by ID
 // @Tags Addons
+// @ID get_addons_by_id
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Addon ID"
@@ -88,6 +90,7 @@ func (h *AddonHandler) GetAddon(c *gin.Context) {
 // @Summary Get addon by lookup key
 // @Description Get an addon by lookup key
 // @Tags Addons
+// @ID get_addons_lookup_by_lookup_key
 // @Produce json
 // @Security ApiKeyAuth
 // @Param lookup_key path string true "Addon Lookup Key"
@@ -117,6 +120,7 @@ func (h *AddonHandler) GetAddonByLookupKey(c *gin.Context) {
 // @Summary List addons
 // @Description Get addons with optional filtering
 // @Tags Addons
+// @ID get_addons
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.AddonFilter false "Filter"
@@ -147,6 +151,7 @@ func (h *AddonHandler) GetAddons(c *gin.Context) {
 // @Summary Update addon
 // @Description Update an existing addon
 // @Tags Addons
+// @ID put_addons_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -187,6 +192,7 @@ func (h *AddonHandler) UpdateAddon(c *gin.Context) {
 // @Summary Delete addon
 // @Description Delete an addon
 // @Tags Addons
+// @ID delete_addons_by_id
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Addon ID"
@@ -213,8 +219,9 @@ func (h *AddonHandler) DeleteAddon(c *gin.Context) {
 }
 
 // @Summary List addons by filter
-// @Description List addons by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Addons
+// @ID post_addons_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -254,6 +261,7 @@ func (h *AddonHandler) ListAddonsByFilter(c *gin.Context) {
 // @Summary Get addon entitlements
 // @Description Get all entitlements for an addon
 // @Tags Entitlements
+// @ID get_addons_by_id_entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

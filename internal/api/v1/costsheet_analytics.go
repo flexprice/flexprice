@@ -37,6 +37,7 @@ func NewRevenueAnalyticsHandler(
 // @Summary Get combined revenue and cost analytics
 // @Description Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.
 // @Tags Costs
+// @ID post_costs_analytics
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -69,6 +70,7 @@ func (h *RevenueAnalyticsHandler) GetDetailedCostAnalytics(c *gin.Context) {
 // @Summary Get combined revenue and cost analytics
 // @Description Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.
 // @Tags Costs
+// @ID post_costs_analytics_v2
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

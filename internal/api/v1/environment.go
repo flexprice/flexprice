@@ -21,8 +21,9 @@ func NewEnvironmentHandler(service service.EnvironmentService, log *logger.Logge
 }
 
 // @Summary Create an environment
-// @Description Create an environment
+// @Description Validates input and creates a new resource in the current tenant/environment context.
 // @Tags Environments
+// @ID post_environments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -50,8 +51,9 @@ func (h *EnvironmentHandler) CreateEnvironment(c *gin.Context) {
 }
 
 // @Summary Get an environment
-// @Description Get an environment
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Environments
+// @ID get_environments_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -74,8 +76,9 @@ func (h *EnvironmentHandler) GetEnvironment(c *gin.Context) {
 }
 
 // @Summary Get environments
-// @Description Get environments
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Environments
+// @ID get_environments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -103,8 +106,9 @@ func (h *EnvironmentHandler) GetEnvironments(c *gin.Context) {
 }
 
 // @Summary Update an environment
-// @Description Update an environment
+// @Description Validates input and updates the target resource in the current tenant/environment context.
 // @Tags Environments
+// @ID put_environments_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth

@@ -26,8 +26,9 @@ func NewFeatureHandler(featureService service.FeatureService, log *logger.Logger
 
 // CreateFeature godoc
 // @Summary Create a new feature
-// @Description Create a new feature
+// @Description Validates input and creates a new resource in the current tenant/environment context.
 // @Tags Features
+// @ID post_features
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -56,8 +57,9 @@ func (h *FeatureHandler) CreateFeature(c *gin.Context) {
 
 // GetFeature godoc
 // @Summary Get a feature by ID
-// @Description Get a feature by ID
+// @Description Returns the requested resource if it exists and is accessible in the current tenant/environment context.
 // @Tags Features
+// @ID get_features_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -89,6 +91,7 @@ func (h *FeatureHandler) GetFeature(c *gin.Context) {
 // @Summary List features
 // @Description List features with optional filtering
 // @Tags Features
+// @ID get_features
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -123,6 +126,7 @@ func (h *FeatureHandler) ListFeatures(c *gin.Context) {
 // @Summary Update a feature
 // @Description Update a feature by ID
 // @Tags Features
+// @ID put_features_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -163,6 +167,7 @@ func (h *FeatureHandler) UpdateFeature(c *gin.Context) {
 // @Summary Delete a feature
 // @Description Delete a feature by ID
 // @Tags Features
+// @ID delete_features_by_id
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -191,8 +196,9 @@ func (h *FeatureHandler) DeleteFeature(c *gin.Context) {
 
 // ListFeaturesByFilter godoc
 // @Summary List features by filter
-// @Description List features by filter
+// @Description Returns a filtered, paginated list for this endpoint based on the provided query criteria.
 // @Tags Features
+// @ID post_features_search
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
