@@ -462,7 +462,7 @@ func (r *FeatureUsageRepository) IsDuplicate(ctx context.Context, subscriptionID
 // DeleteByReprocessScopeBeforeCheckpoint cleans up old feature usage rows fenced by processed_at.
 func (r *FeatureUsageRepository) DeleteByReprocessScopeBeforeCheckpoint(ctx context.Context, params *events.DeleteFeatureUsageScopeParams) error {
 	query := `
-		DELETE FROM feature_usage
+		ALTER TABLE feature_usage DELETE
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND external_customer_id = ?
