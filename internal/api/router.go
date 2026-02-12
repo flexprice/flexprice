@@ -665,7 +665,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 	// Workflow monitoring routes
 	workflows := v1Private.Group("/workflows")
 	{
-		workflows.GET("", handlers.Workflow.ListWorkflows)
+		workflows.POST("/search", handlers.Workflow.ListWorkflows)
 		workflows.POST("/batch", handlers.Workflow.GetWorkflowsBatch)
 		workflows.GET("/:workflow_id/:run_id/summary", handlers.Workflow.GetWorkflowSummary)
 		workflows.GET("/:workflow_id/:run_id/timeline", handlers.Workflow.GetWorkflowTimeline)

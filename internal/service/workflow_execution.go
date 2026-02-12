@@ -104,6 +104,14 @@ type ListWorkflowExecutionsFilters struct {
 	Entity   string // Filter by entity type in metadata (e.g. "plan", "customer")
 	EntityID string // Filter by entity_id in metadata (e.g. "plan_01ABC123")
 
+	// Sorting
+	Sort  string // e.g. start_time, end_time, created_at
+	Order string // asc | desc
+
+	// Pagination (limit/offset style, like other /search endpoints)
+	Limit  int
+	Offset int
+
 	PageSize int
 	Page     int
 }
@@ -119,6 +127,10 @@ func (s *WorkflowExecutionService) ListWorkflowExecutions(ctx context.Context, f
 		WorkflowStatus: filters.WorkflowStatus,
 		Entity:         filters.Entity,
 		EntityID:       filters.EntityID,
+		Sort:           filters.Sort,
+		Order:          filters.Order,
+		Limit:          filters.Limit,
+		Offset:         filters.Offset,
 		PageSize:       filters.PageSize,
 		Page:           filters.Page,
 	}
