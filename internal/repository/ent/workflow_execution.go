@@ -12,6 +12,8 @@ import (
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
 	"github.com/flexprice/flexprice/internal/types"
+
+	"entgo.io/ent/dialect/sql"
 )
 
 type workflowExecutionRepository struct {
