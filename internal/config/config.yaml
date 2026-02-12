@@ -285,7 +285,7 @@ redis:
 
 # Raw event consumption configuration (batch processing from Bento)
 raw_event_consumption:
-  enabled: true
+  enabled: false
   topic: "staging_events_backfill"      # INPUT: Reads batches from here
   output_topic: "staging_events"                 # OUTPUT: Publishes transformed events to here
   bulk_events:
