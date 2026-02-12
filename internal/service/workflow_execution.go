@@ -94,23 +94,46 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 
 // ListWorkflowExecutionsFilters represents filters for listing workflow executions
 type ListWorkflowExecutionsFilters struct {
-	TenantID      string
-	EnvironmentID string
-	WorkflowType  string
-	TaskQueue     string
-	PageSize      int
-	Page          int
+	TenantID       string
+	EnvironmentID  string
+	WorkflowID     string // Filter by specific workflow ID
+	WorkflowType   string
+	TaskQueue      string
+	WorkflowStatus string // e.g. Running, Completed, Failed
+
+	// Metadata filters - specific fields
+	Entity   string // Filter by entity type in metadata (e.g. "plan", "customer")
+	EntityID string // Filter by entity_id in metadata (e.g. "plan_01ABC123")
+
+	// Sorting
+	Sort  string // e.g. start_time, end_time, created_at
+	Order string // asc | desc
+
+	// Pagination (limit/offset style, like other /search endpoints)
+	Limit  int
+	Offset int
+
+	PageSize int
+	Page     int
 }
 
 // ListWorkflowExecutions retrieves a paginated list of workflow executions
 func (s *WorkflowExecutionService) ListWorkflowExecutions(ctx context.Context, filters *ListWorkflowExecutionsFilters) ([]*ent.WorkflowExecution, int64, error) {
 	repoFilter := &workflowexecution.ListFilter{
-		TenantID:      filters.TenantID,
-		EnvironmentID: filters.EnvironmentID,
-		WorkflowType:  filters.WorkflowType,
-		TaskQueue:     filters.TaskQueue,
-		PageSize:      filters.PageSize,
-		Page:          filters.Page,
+		TenantID:       filters.TenantID,
+		EnvironmentID:  filters.EnvironmentID,
+		WorkflowID:     filters.WorkflowID,
+		WorkflowType:   filters.WorkflowType,
+		TaskQueue:      filters.TaskQueue,
+		WorkflowStatus: filters.WorkflowStatus,
+		Entity:         filters.Entity,
+		EntityID:       filters.EntityID,
+		Sort:           filters.Sort,
+		Order:          filters.Order,
+		Limit:          filters.Limit,
+		Offset:         filters.Offset,
+		PageSize:       filters.PageSize,
+		Page:           filters.Page,
 	}
 
 	executions, total, err := s.workflowExecRepo.List(ctx, repoFilter)

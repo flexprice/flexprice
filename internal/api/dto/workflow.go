@@ -47,19 +47,27 @@ type WorkflowTimelineItemDTO struct {
 	EventType string     `json:"event_type,omitempty"`
 }
 
-// ListWorkflowsRequest represents the request parameters for listing workflows
-type ListWorkflowsRequest struct {
-	WorkflowID     string `form:"workflow_id"` // Filter by specific workflow ID
-	WorkflowType   string `form:"workflow_type"`
-	TaskQueue      string `form:"task_queue"`
-	WorkflowStatus string `form:"workflow_status"` // e.g. Running, Completed, Failed
+// SearchWorkflowsRequest represents the request body for searching workflows (POST /workflows/search).
+// Mirrors ListWorkflowsRequest but takes params in JSON body like other /search endpoints.
+type SearchWorkflowsRequest struct {
+	WorkflowID     string `json:"workflow_id,omitempty"`
+	WorkflowType   string `json:"workflow_type,omitempty"`
+	TaskQueue      string `json:"task_queue,omitempty"`
+	WorkflowStatus string `json:"workflow_status,omitempty"` // e.g. Running, Completed, Failed
 
 	// Entity column filters (efficient; not metadata JSONB)
-	Entity   string `form:"entity"`    // e.g. plan, invoice, subscription
-	EntityID string `form:"entity_id"` // e.g. plan_01ABC123
+	Entity   string `json:"entity,omitempty"`    // e.g. plan, invoice, subscription
+	EntityID string `json:"entity_id,omitempty"` // e.g. plan_01ABC123
 
-	PageSize int `form:"page_size"`
-	Page     int `form:"page"`
+	// Sorting (optional)
+	Sort  string `json:"sort,omitempty"`  // e.g. start_time, end_time, created_at
+	Order string `json:"order,omitempty"` // asc | desc
+
+	// Pagination (primary: limit/offset like other /search endpoints; page/page_size are aliases)
+	PageSize int `json:"page_size,omitempty"` // alias for limit
+	Page     int `json:"page,omitempty"`      // alias for offset via (page-1)*page_size
+	Limit    int `json:"limit,omitempty"`
+	Offset   int `json:"offset,omitempty"`
 }
 
 // ListWorkflowsResponse represents the response for listing workflows

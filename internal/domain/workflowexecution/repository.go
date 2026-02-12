@@ -27,6 +27,14 @@ type ListFilter struct {
 	Entity   string // Filter by entity type (e.g. plan, invoice, subscription)
 	EntityID string // Filter by entity ID (e.g. plan_01ABC, inv_xyz)
 
+	// Sorting
+	Sort  string // e.g. start_time, end_time, created_at
+	Order string // asc | desc
+
+	// Pagination (limit/offset style)
+	Limit  int
+	Offset int
+
 	PageSize int
 	Page     int
 }
