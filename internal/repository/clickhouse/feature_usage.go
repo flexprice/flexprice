@@ -465,7 +465,6 @@ func (r *FeatureUsageRepository) DeleteByReprocessScopeBeforeCheckpoint(ctx cont
 		ALTER TABLE feature_usage DELETE
 		WHERE tenant_id = ?
 		AND environment_id = ?
-		AND external_customer_id = ?
 		AND timestamp >= ?
 		AND timestamp <= ?
 		AND processed_at < ?
@@ -473,10 +472,14 @@ func (r *FeatureUsageRepository) DeleteByReprocessScopeBeforeCheckpoint(ctx cont
 	args := []interface{}{
 		types.GetTenantID(ctx),
 		types.GetEnvironmentID(ctx),
-		params.GetEventsParams.ExternalCustomerID,
 		params.GetEventsParams.StartTime,
 		params.GetEventsParams.EndTime,
 		params.RunStartTime,
+	}
+
+	if params.GetEventsParams.ExternalCustomerID != "" {
+		query += " AND external_customer_id = ?"
+		args = append(args, params.GetEventsParams.ExternalCustomerID)
 	}
 
 	if params.GetEventsParams.EventName != "" {
