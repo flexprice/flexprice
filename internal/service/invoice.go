@@ -1739,6 +1739,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 	unpaidAmount := decimal.Zero
 	unpaidUsageCharges := decimal.Zero
 	unpaidFixedCharges := decimal.Zero
+	totalInvoiceAmountPaid := decimal.Zero
 
 	filter := types.NewNoLimitInvoiceFilter()
 	filter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
@@ -1767,6 +1768,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 		unpaidInvoices = append(unpaidInvoices, inv)
 		unpaidAmount = unpaidAmount.Add(inv.AmountRemaining)
+		totalInvoiceAmountPaid = totalInvoiceAmountPaid.Add(inv.AmountPaid)
 
 		for _, item := range inv.LineItems {
 			if lo.FromPtr(item.PriceType) == string(types.PRICE_TYPE_USAGE) {
@@ -1782,6 +1784,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 		TotalUnpaidAmount:       unpaidAmount,
 		TotalUnpaidUsageCharges: unpaidUsageCharges,
 		TotalUnpaidFixedCharges: unpaidFixedCharges,
+		TotalPaidInvoiceAmount:  totalInvoiceAmountPaid,
 	}, nil
 }
 

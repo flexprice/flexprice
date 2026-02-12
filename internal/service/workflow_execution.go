@@ -63,7 +63,7 @@ func (s *WorkflowExecutionService) CreateWorkflowExecution(ctx context.Context, 
 			Mark(ierr.ErrValidation)
 	}
 
-	// Create workflow execution entity (workflow_status defaults to Running at start)
+	// Create workflow execution entity
 	now := time.Now().UTC()
 	exec := &ent.WorkflowExecution{
 		WorkflowID:     input.WorkflowID,

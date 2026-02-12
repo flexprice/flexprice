@@ -1122,4 +1122,7 @@ type GetUnpaidInvoicesToBePaidResponse struct {
 
 	// total_unpaid_fixed_charges is the total amount of unpaid fixed charges to be paid
 	TotalUnpaidFixedCharges decimal.Decimal `json:"total_unpaid_fixed_charges" swaggertype:"string"`
+
+	// total paid invoice amount
+	TotalPaidInvoiceAmount decimal.Decimal `json:"total_paid_invoice_amount" swaggertype:"string"`
 }

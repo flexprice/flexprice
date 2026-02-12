@@ -281,22 +281,11 @@ func (Price) Edges() []ent.Edge {
 // Indexes of the Price.
 func (Price) Indexes() []ent.Index {
 	return []ent.Index{
-		// Unique lookup key index for published prices
 		index.Fields("tenant_id", "environment_id", "lookup_key").
 			Unique().
-			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != '' AND end_date IS NULL")),
-		// General tenant/environment index (no status filter for admin queries)
+			Annotations(entsql.IndexWhere("status = 'published' AND lookup_key IS NOT NULL AND lookup_key != ''")),
 		index.Fields("tenant_id", "environment_id"),
-		// Date range index
 		index.Fields("start_date", "end_date"),
-		// Group index for published prices (most common use case)
-		index.Fields("tenant_id", "environment_id", "group_id").
-			Annotations(entsql.IndexWhere("status = 'published'")),
-		// Performance index for plan published lookups (merged - removed status from fields since it's in WHERE)
-		index.Fields("tenant_id", "environment_id", "entity_type", "entity_id").
-			Annotations(entsql.IndexWhere("entity_type='PLAN' AND status='published'")),
-		// Performance index for subscription override prices
-		index.Fields("tenant_id", "environment_id", "entity_id", "parent_price_id").
-			Annotations(entsql.IndexWhere("status = 'published' AND entity_type = 'SUBSCRIPTION'")),
+		index.Fields("tenant_id", "environment_id", "group_id"),
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
+	"github.com/flexprice/flexprice/internal/temporal/tracking"
+	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -38,6 +40,18 @@ func ProcessInvoiceWorkflow(
 		logger.Error("Invalid workflow input", "error", err)
 		return nil, err
 	}
+
+	// Track workflow execution start
+	tracking.ExecuteTrackWorkflowStart(ctx, tracking.TrackWorkflowStartInput{
+		WorkflowType:  WorkflowProcessInvoice,
+		TaskQueue:     string(types.TemporalTaskQueueInvoice),
+		TenantID:      input.TenantID,
+		EnvironmentID: input.EnvironmentID,
+		UserID:        "",
+		Metadata: map[string]interface{}{
+			"invoice_id": input.InvoiceID,
+		},
+	})
 
 	// Define activity options
 	activityOptions := workflow.ActivityOptions{

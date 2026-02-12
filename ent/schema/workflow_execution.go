@@ -120,9 +120,6 @@ func (WorkflowExecution) Indexes() []ent.Index {
 		// Index on start_time for time-based filtering
 		index.Fields("start_time").
 			StorageKey("idx_workflow_executions_start_time"),
-		// Index on end_time for completion time filtering
-		index.Fields("end_time").
-			StorageKey("idx_workflow_executions_end_time"),
 		// Composite index for tenant and environment filtering
 		index.Fields("tenant_id", "environment_id", "start_time").
 			StorageKey("idx_workflow_executions_tenant_env_time"),

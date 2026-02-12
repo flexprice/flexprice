@@ -2,10 +2,8 @@ package workflowexecution
 
 import (
 	"context"
-	"time"
 
 	"github.com/flexprice/flexprice/ent"
-	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Repository defines the interface for workflow execution data access
@@ -14,7 +12,6 @@ type Repository interface {
 	Get(ctx context.Context, workflowID, runID string) (*ent.WorkflowExecution, error)
 	List(ctx context.Context, filter *ListFilter) ([]*ent.WorkflowExecution, int, error)
 	Delete(ctx context.Context, id string) error
-	UpdateStatus(ctx context.Context, workflowID, runID string, status types.WorkflowExecutionStatus, errorMessage string, endTime *time.Time, durationMs *int64) error
 }
 
 // ListFilter defines filters for listing workflow executions

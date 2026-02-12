@@ -403,6 +403,15 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 
 	results, err := client.Entitlement.CreateBulk(builders...).Save(ctx)
 	if err != nil {
+		SetSpanError(span, err)
+		if ent.IsConstraintError(err) {
+			return nil, ierr.WithError(err).
+				WithHint("An entitlement with the same entity and feature already exists; duplicate (entity_id, feature_id) in request or in database").
+				WithReportableDetails(map[string]interface{}{
+					"count": len(entitlements),
+				}).
+				Mark(ierr.ErrAlreadyExists)
+		}
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create entitlements in bulk").
 			WithReportableDetails(map[string]interface{}{

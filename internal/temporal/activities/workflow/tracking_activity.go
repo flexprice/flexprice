@@ -33,19 +33,7 @@ func NewWorkflowTrackingActivities(
 // TrackWorkflowStart performs the workflow tracking activity
 // This is registered as a local activity and saves workflow metadata to the database
 // It uses the TrackWorkflowStartActivityInput type from the tracking package
-// This function is panic-safe and will never crash the workflow
 func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, input tracking.TrackWorkflowStartActivityInput) error {
-	// CRITICAL: Panic recovery to ensure tracking failures never crash workflows
-	defer func() {
-		if r := recover(); r != nil {
-			a.logger.Error("Panic recovered in TrackWorkflowStart - workflow will continue",
-				"panic", r,
-				"workflow_id", input.WorkflowID,
-				"run_id", input.RunID)
-			// Workflow continues despite panic
-		}
-	}()
-
 	// Set context values for proper multi-tenancy
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
@@ -84,56 +72,6 @@ func (a *WorkflowTrackingActivities) TrackWorkflowStart(ctx context.Context, inp
 	a.logger.Info("Successfully tracked workflow start",
 		"workflow_id", input.WorkflowID,
 		"run_id", input.RunID)
-
-	return nil
-}
-
-// TrackWorkflowEnd performs the workflow end tracking activity
-// This is registered as a local activity and updates workflow status in the database
-// It uses the TrackWorkflowEndActivityInput type from the tracking package
-// This function is panic-safe and will never crash the workflow
-func (a *WorkflowTrackingActivities) TrackWorkflowEnd(ctx context.Context, input tracking.TrackWorkflowEndActivityInput) error {
-	// CRITICAL: Panic recovery to ensure tracking failures never crash workflows
-	defer func() {
-		if r := recover(); r != nil {
-			a.logger.Error("Panic recovered in TrackWorkflowEnd - workflow will continue",
-				"panic", r,
-				"workflow_id", input.WorkflowID,
-				"run_id", input.RunID)
-			// Workflow continues despite panic
-		}
-	}()
-
-	a.logger.Info("Tracking workflow end",
-		"workflow_id", input.WorkflowID,
-		"run_id", input.RunID,
-		"status", input.WorkflowStatus,
-		"has_end_time", input.EndTime != nil,
-		"has_duration", input.DurationMs != nil)
-
-	// Update workflow execution status in database
-	err := a.workflowExecRepo.UpdateStatus(
-		ctx,
-		input.WorkflowID,
-		input.RunID,
-		input.WorkflowStatus,
-		input.ErrorMessage,
-		input.EndTime,
-		input.DurationMs,
-	)
-
-	if err != nil {
-		a.logger.Error("Failed to update workflow status", "error", err)
-		// Don't fail the workflow if tracking fails - just log the error
-		return nil
-	}
-
-	a.logger.Info("Successfully tracked workflow end",
-		"workflow_id", input.WorkflowID,
-		"run_id", input.RunID,
-		"status", input.WorkflowStatus,
-		"end_time", input.EndTime,
-		"duration_ms", input.DurationMs)
 
 	return nil
 }
