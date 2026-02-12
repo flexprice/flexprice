@@ -198,20 +198,12 @@ func (Subscription) Edges() []ent.Edge {
 // Indexes of the Subscription.
 func (Subscription) Indexes() []ent.Index {
 	return []ent.Index{
-		// Partial indexes for published status (most common query pattern)
-		index.Fields("tenant_id", "environment_id", "customer_id").
+		// Common query patterns from repository layer
+		index.Fields("tenant_id", "environment_id", "customer_id", "status").
 			Annotations(entsql.IndexWhere("status = 'published'")),
-		// General plan_id index for queries that don't filter by subscription_status
-		index.Fields("tenant_id", "environment_id", "plan_id").
-			Annotations(entsql.IndexWhere("status = 'published'")),
-		index.Fields("tenant_id", "environment_id", "subscription_status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
-		// For billing period updates (merged with subscription_status)
-		index.Fields("tenant_id", "environment_id", "current_period_end", "subscription_status").
-			Annotations(entsql.IndexWhere("status = 'published'")),
-		// Performance index for plan lookups with billing dimensions (covers active/trialing queries)
-		// This index can also serve queries that only need plan_id + subscription_status
-		index.Fields("tenant_id", "environment_id", "plan_id", "currency", "billing_period", "billing_period_count").
-			Annotations(entsql.IndexWhere("status = 'published' AND subscription_status IN ('active', 'trialing')")),
+		index.Fields("tenant_id", "environment_id", "plan_id", "status"),
+		index.Fields("tenant_id", "environment_id", "subscription_status", "status"),
+		// For billing period updates
+		index.Fields("tenant_id", "environment_id", "current_period_end", "subscription_status", "status"),
 	}
 }

@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/price"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainPrice "github.com/flexprice/flexprice/internal/domain/price"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -188,7 +190,13 @@ func (r *priceRepository) List(ctx context.Context, filter *types.PriceFilter) (
 	query := client.Price.Query()
 
 	// Apply entity-specific filters
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to apply price filters").
+			Mark(ierr.ErrValidation)
+	}
 
 	// Apply common query options
 	query = ApplyQueryOptions(ctx, query, filter, r.queryOpts)
@@ -217,8 +225,14 @@ func (r *priceRepository) Count(ctx context.Context, filter *types.PriceFilter) 
 
 	query := client.Price.Query()
 
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return 0, ierr.WithError(err).
+			WithHint("Failed to apply price filters").
+			Mark(ierr.ErrValidation)
+	}
 	query = ApplyBaseFilters(ctx, query, filter, r.queryOpts)
-	query = r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
 
 	count, err := query.Count(ctx)
 	if err != nil {
@@ -509,17 +523,22 @@ func (o PriceQueryOptions) GetFieldName(field string) string {
 		return price.FieldUpdatedAt
 	case "lookup_key":
 		return price.FieldLookupKey
-	case "amount":
+	case "amount", "value":
 		return price.FieldAmount
+	case "display_name":
+		return price.FieldDisplayName
 	default:
-		return field
+		// unknown field
+		return ""
 	}
 }
 
-func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PriceFilter, query PriceQuery) PriceQuery {
+func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PriceFilter, query PriceQuery) (PriceQuery, error) {
 	if f == nil {
-		return query
+		return query, nil
 	}
+
+	var err error
 
 	// Apply price IDs filter if specified
 	if len(f.PriceIDs) > 0 {
@@ -570,7 +589,28 @@ func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.P
 		query = query.Where(price.StartDateLT(*f.StartDateLT))
 	}
 
-	return query
+	if f.Filters != nil {
+		query, err = dsl.ApplyFilters[PriceQuery, predicate.Price](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.Price { return predicate.Price(p) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return query, nil
+}
+
+func (o PriceQueryOptions) GetFieldResolver(field string) (string, error) {
+	fieldName := o.GetFieldName(field)
+	if fieldName == "" {
+		return "", ierr.NewErrorf("unknown field name '%s' in price query", field).
+			Mark(ierr.ErrValidation)
+	}
+	return fieldName, nil
 }
 
 func (r *priceRepository) GetByPlanID(ctx context.Context, planID string) ([]*domainPrice.Price, error) {

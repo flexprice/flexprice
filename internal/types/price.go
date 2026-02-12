@@ -337,6 +337,9 @@ type PriceFilter struct {
 	AllowExpiredPrices bool             `json:"allow_expired_prices,omitempty" form:"allow_expired_prices" default:"false"`
 
 	StartDateLT *time.Time `json:"start_date_lt,omitempty" form:"start_date_lt"`
+
+	// DSL filters
+	Filters []*FilterCondition `json:"filters,omitempty" form:"filters"`
 }
 
 // NewPriceFilter creates a new PriceFilter with default values
