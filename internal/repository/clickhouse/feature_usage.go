@@ -72,7 +72,8 @@ func buildConditionalAggregationColumns(aggTypes []types.AggregationType) []stri
 	if aggSet[types.AggregationCount] {
 		columns = append(columns, "COUNT(DISTINCT id) AS event_count")
 	} else {
-		columns = append(columns, "COUNT(id) AS event_count")
+		// adding this irrespective of the aggregation type to show the total event count
+		columns = append(columns, "COUNT(DISTINCT id) AS event_count")
 	}
 
 	return columns
@@ -105,9 +106,10 @@ func buildConditionalAggregationColumnsForSubscription(aggTypes []types.Aggregat
 
 	// COUNT aggregation (count_distinct_ids) - returns UInt64
 	if aggSet[types.AggregationCount] {
-		columns = append(columns, "count(DISTINCT id) AS count_distinct_ids")
+		columns = append(columns, "COUNT(DISTINCT id) AS count_distinct_ids")
 	} else {
-		columns = append(columns, "COUNT(id) AS count_distinct_ids")
+		// adding this irrespective of the aggregation type to show the total event count
+		columns = append(columns, "COUNT(DISTINCT id) AS count_distinct_ids")
 	}
 
 	// COUNT_UNIQUE aggregation (count_unique_qty) - returns UInt64
