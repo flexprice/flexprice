@@ -236,10 +236,10 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 		return nil, err
 	}
 
-	query := aggregator.GetQuery(ctx, params)
+	query, queryArgs := aggregator.GetQuery(ctx, params)
 	log.Printf("Executing query: %s", query)
 
-	rows, err := r.store.GetConn().Query(ctx, query)
+	rows, err := r.store.GetConn().Query(ctx, query, queryArgs...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
@@ -440,7 +440,7 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 		"query", query,
 		"params", queryParams)
 
-	rows, err := r.store.GetConn().Query(ctx, query, queryParams)
+	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
@@ -625,15 +625,31 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		}
 	}
 
-	// Order by timestamp and ID by default
-	if params.Sort == nil {
-		params.Sort = lo.ToPtr("timestamp")
+	allowedSortColumns := map[string]struct{}{
+		"timestamp":            {},
+		"event_name":           {},
+		"id":                   {},
+		"ingested_at":          {},
+		"external_customer_id": {},
+		"customer_id":          {},
 	}
-	if params.Order == nil {
-		params.Order = lo.ToPtr("DESC")
+	sortColumn := "timestamp"
+	if params.Sort != nil {
+		candidate := strings.ToLower(strings.TrimSpace(*params.Sort))
+		if _, ok := allowedSortColumns[candidate]; ok {
+			sortColumn = candidate
+		}
 	}
 
-	baseQuery += " ORDER BY " + strings.ToLower(*params.Sort) + " " + strings.ToUpper(*params.Order) + ", id DESC"
+	sortOrder := "DESC"
+	if params.Order != nil {
+		candidate := strings.ToUpper(strings.TrimSpace(*params.Order))
+		if candidate == "ASC" || candidate == "DESC" {
+			sortOrder = candidate
+		}
+	}
+
+	baseQuery += " ORDER BY " + sortColumn + " " + sortOrder + ", id DESC"
 
 	// Apply limit and offset for pagination if using offset-based pagination
 	if params.PageSize > 0 {
