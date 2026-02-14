@@ -30,12 +30,11 @@ type WalletWebhookPayload struct {
 
 // WalletAlertInfo contains details about the wallet alert
 type WalletAlertInfo struct {
-	State          string             `json:"state"`
-	Threshold      decimal.Decimal    `json:"threshold"`
-	CurrentBalance decimal.Decimal    `json:"current_balance"`
-	CreditBalance  decimal.Decimal    `json:"credit_balance"`
-	AlertType      string             `json:"alert_type,omitempty"`
-	AlertConfig    *types.AlertConfig `json:"alert_config,omitempty"`
+	State          string               `json:"state"`
+	CurrentBalance decimal.Decimal      `json:"current_balance"`
+	CreditBalance  decimal.Decimal      `json:"credit_balance"`
+	AlertType      string               `json:"alert_type,omitempty"`
+	AlertSettings  *types.AlertSettings `json:"alert_settings,omitempty"`
 }
 
 type TransactionWebhookPayload struct {

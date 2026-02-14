@@ -288,7 +288,7 @@ func (s *walletBalanceAlertService) markProcessed(ctx context.Context, event wal
 func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wallet.WalletBalanceAlertEvent) error {
 	// Check if wallet balance alerts are enabled for this tenant
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
-	config, err := GetSetting[types.AlertConfig](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
+	config, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 	if err != nil {
 		s.Logger.Warnw("failed to get wallet balance alert config, skipping",
 			"error", err,
@@ -298,7 +298,7 @@ func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wall
 		return nil // Skip on error - fail safe
 	}
 
-	if !config.Enabled {
+	if !config.IsAlertEnabled() {
 		s.Logger.Debugw("wallet balance alerts disabled for tenant, skipping",
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,

@@ -50,25 +50,6 @@ func (aet AlertEntityType) Validate() error {
 	return nil
 }
 
-// AlertThresholdType represents the type of threshold for alerts
-type AlertThresholdType string
-
-const (
-	AlertThresholdTypeAmount AlertThresholdType = "amount"
-)
-
-func (att AlertThresholdType) Validate() error {
-	allowedTypes := []AlertThresholdType{
-		AlertThresholdTypeAmount,
-	}
-	if !lo.Contains(allowedTypes, att) {
-		return ierr.NewError("invalid alert threshold type").
-			WithHint("Please provide a valid alert threshold type").
-			Mark(ierr.ErrValidation)
-	}
-	return nil
-}
-
 func (at AlertType) Validate() error {
 	allowedTypes := []AlertType{
 		AlertTypeLowOngoingBalance,
@@ -87,37 +68,6 @@ type AlertInfo struct {
 	AlertSettings *AlertSettings  `json:"alert_settings,omitempty"`
 	ValueAtTime   decimal.Decimal `json:"value_at_time"`
 	Timestamp     time.Time       `json:"timestamp"`
-}
-
-// AlertConfig represents the configuration for wallet alerts
-type AlertConfig struct {
-	Enabled   bool                  `json:"enabled"`
-	Threshold *WalletAlertThreshold `json:"threshold,omitempty"`
-}
-
-// Validate implements SettingConfig interface
-func (c AlertConfig) Validate() error {
-	// If not enabled, no threshold required
-	if !c.Enabled {
-		return nil
-	}
-	// Validate that threshold exists and is valid when enabled
-	if c.Threshold == nil {
-		return ierr.NewError("threshold is required when alerts are enabled").
-			WithHint("Please provide a threshold").
-			Mark(ierr.ErrValidation)
-	}
-	// Validate threshold type
-	if err := c.Threshold.Type.Validate(); err != nil {
-		return err
-	}
-	return nil
-}
-
-// WalletAlertThreshold represents the threshold configuration for wallet alerts
-type WalletAlertThreshold struct {
-	Type  AlertThresholdType `json:"type"` // amount
-	Value decimal.Decimal    `json:"value"`
 }
 
 // AlertLogFilter represents filters for alert log queries

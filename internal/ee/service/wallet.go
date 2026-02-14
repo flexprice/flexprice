@@ -692,25 +692,36 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 }
 
 func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wallet, newCreditBalance decimal.Decimal) error {
-	var thresholdValue decimal.Decimal
-	var alertStatus types.AlertState
-
-	if newCreditBalance.LessThanOrEqual(thresholdValue) {
-		alertStatus = types.AlertStateInAlarm
+	// Get wallet alert settings or use default
+	var alertSettings *types.AlertSettings
+	if w.AlertSettings != nil {
+		alertSettings = w.AlertSettings
 	} else {
-		alertStatus = types.AlertStateOk
-	}
-
-	alertInfo := types.AlertInfo{
-		AlertSettings: &types.AlertSettings{
+		// Use default settings
+		alertSettings = &types.AlertSettings{
 			Critical: &types.AlertThreshold{
-				Threshold: thresholdValue,
+				Threshold: decimal.NewFromFloat(0.0),
 				Condition: types.AlertConditionBelow,
 			},
 			AlertEnabled: lo.ToPtr(true),
-		},
-		ValueAtTime: newCreditBalance,
-		Timestamp:   time.Now().UTC(),
+		}
+	}
+
+	// Determine alert status based on balance vs alert settings
+	alertStatus, err := alertSettings.AlertState(newCreditBalance)
+	if err != nil {
+		s.Logger.Errorw("failed to determine alert status",
+			"error", err,
+			"wallet_id", w.ID,
+			"new_credit_balance", newCreditBalance,
+		)
+		return err
+	}
+
+	alertInfo := types.AlertInfo{
+		AlertSettings: alertSettings,
+		ValueAtTime:   newCreditBalance,
+		Timestamp:     time.Now().UTC(),
 	}
 
 	alertService := service.NewAlertLogsService(s.ServiceParams)
@@ -733,7 +744,7 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 			"error", err,
 			"wallet_id", w.ID,
 			"new_credit_balance", newCreditBalance,
-			"threshold", thresholdValue,
+			"alert_settings", alertSettings,
 			"alert_status", alertStatus,
 		)
 		return err
@@ -742,7 +753,7 @@ func (s *walletService) logCreditBalanceAlert(ctx context.Context, w *wallet.Wal
 	s.Logger.Infow("credit balance alert logged successfully",
 		"wallet_id", w.ID,
 		"new_credit_balance", newCreditBalance,
-		"threshold", thresholdValue,
+		"alert_settings", alertSettings,
 		"alert_status", alertStatus,
 	)
 	return nil

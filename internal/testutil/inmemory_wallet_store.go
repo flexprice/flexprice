@@ -54,11 +54,6 @@ func walletFilterFn(ctx context.Context, w *wallet.Wallet, filter interface{}) b
 			return false
 		}
 
-		// Filter by alert enabled
-		if f.AlertEnabled != nil && w.AlertEnabled != *f.AlertEnabled {
-			return false
-		}
-
 		// Filter by wallet IDs
 		if len(f.WalletIDs) > 0 && !lo.Contains(f.WalletIDs, w.ID) {
 			return false
