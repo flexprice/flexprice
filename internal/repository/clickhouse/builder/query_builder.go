@@ -107,6 +107,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 
 	var filterConditions []string
 	for _, group := range groups {
+		groupArgs := []interface{}{group.ID}
 		var conditions []string
 		for property, values := range group.Filters {
 			if len(values) == 0 {
@@ -115,7 +116,7 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 			var condition string
 			if len(values) == 1 {
 				condition = "JSONExtractString(properties, ?) = ?"
-				qb.args = append(qb.args, property, values[0])
+				groupArgs = append(groupArgs, property, values[0])
 			} else {
 				quotedValues := make([]string, len(values))
 				for i := range values {
@@ -125,9 +126,9 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 					"JSONExtractString(properties, ?) IN (%s)",
 					strings.Join(quotedValues, ","),
 				)
-				qb.args = append(qb.args, property)
+				groupArgs = append(groupArgs, property)
 				for _, v := range values {
-					qb.args = append(qb.args, v)
+					groupArgs = append(groupArgs, v)
 				}
 			}
 			conditions = append(conditions, condition)
@@ -140,15 +141,14 @@ func (qb *QueryBuilder) WithFilterGroups(ctx context.Context, groups []events.Fi
 				group.Priority,
 				strings.Join(conditions, " AND "),
 			))
-			qb.args = append(qb.args, group.ID)
 		} else {
 			// For empty filter groups, use a constant true condition
 			filterConditions = append(filterConditions, fmt.Sprintf(
 				"(?, %d, 1)",
 				group.Priority,
 			))
-			qb.args = append(qb.args, group.ID)
 		}
+		qb.args = append(qb.args, groupArgs...)
 	}
 
 	qb.filterQuery = fmt.Sprintf(`filter_matches AS (

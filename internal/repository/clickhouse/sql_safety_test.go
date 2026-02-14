@@ -15,6 +15,10 @@ func TestParseGroupByPropertyPath(t *testing.T) {
 		{name: "empty after prefix", input: "properties.", want: "", wantOK: false},
 		{name: "invalid quote", input: "properties.org'id", want: "", wantOK: false},
 		{name: "invalid sql payload", input: "properties.org_id);DROP", want: "", wantOK: false},
+		{name: "invalid double dot", input: "properties.a..b", want: "", wantOK: false},
+		{name: "invalid space", input: "properties.has space", want: "", wantOK: false},
+		{name: "invalid leading dot", input: "properties..foo", want: "", wantOK: false},
+		{name: "invalid trailing dot", input: "properties.foo.", want: "", wantOK: false},
 	}
 
 	for _, tt := range tests {
@@ -33,5 +37,9 @@ func TestParseGroupByPropertyPath(t *testing.T) {
 func TestPropertyAlias(t *testing.T) {
 	if got := propertyAlias("account.plan_tier"); got != "prop_account_plan_tier" {
 		t.Fatalf("propertyAlias() got = %q, want %q", got, "prop_account_plan_tier")
+	}
+
+	if got := propertyAlias("bad path"); got != "prop_invalid" {
+		t.Fatalf("propertyAlias() got = %q, want %q", got, "prop_invalid")
 	}
 }

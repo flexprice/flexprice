@@ -6,8 +6,6 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-// StartRepositorySpan creates a new span for a repository operation
-// Returns nil if Sentry is not available in the context
 func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *sentry.Span {
 	_ = ctx
 	_ = repository

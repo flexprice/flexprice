@@ -19,5 +19,8 @@ func parseGroupByPropertyPath(groupBy string) (string, bool) {
 }
 
 func propertyAlias(path string) string {
+	if !propertyPathPattern.MatchString(path) {
+		return "prop_invalid"
+	}
 	return "prop_" + strings.ReplaceAll(path, ".", "_")
 }

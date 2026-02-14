@@ -601,30 +601,6 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		}
 	}
 
-	// Handle pagination and real-time refresh using composite keys
-	if params.IterFirst != nil {
-		baseQuery += " AND (timestamp, id) > (?, ?)"
-		args = append(args, params.IterFirst.Timestamp, params.IterFirst.ID)
-	} else if params.IterLast != nil {
-		baseQuery += " AND (timestamp, id) < (?, ?)"
-		args = append(args, params.IterLast.Timestamp, params.IterLast.ID)
-	}
-
-	// Count total if requested
-	if params.CountTotal {
-		countQuery := "SELECT COUNT(*) FROM (" + baseQuery + ") AS filtered_events"
-		err := r.store.GetConn().QueryRow(ctx, countQuery, args...).Scan(&totalCount)
-		if err != nil {
-			SetSpanError(span, err)
-			return nil, 0, ierr.WithError(err).
-				WithHint("Failed to count events").
-				WithReportableDetails(map[string]interface{}{
-					"event_name": params.EventName,
-				}).
-				Mark(ierr.ErrDatabase)
-		}
-	}
-
 	allowedSortColumns := map[string]struct{}{
 		"timestamp":            {},
 		"event_name":           {},
@@ -648,8 +624,47 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 			sortOrder = candidate
 		}
 	}
+	idSortOrder := "DESC"
+	if sortOrder == "ASC" {
+		idSortOrder = "ASC"
+	}
 
-	baseQuery += " ORDER BY " + sortColumn + " " + sortOrder + ", id DESC"
+	useTimestampKeyset := sortColumn == "timestamp" && sortOrder == "DESC"
+
+	if useTimestampKeyset {
+		if params.IterFirst != nil {
+			baseQuery += " AND (timestamp, id) > (?, ?)"
+			args = append(args, params.IterFirst.Timestamp, params.IterFirst.ID)
+		} else if params.IterLast != nil {
+			baseQuery += " AND (timestamp, id) < (?, ?)"
+			args = append(args, params.IterLast.Timestamp, params.IterLast.ID)
+		}
+	} else if params.IterFirst != nil || params.IterLast != nil {
+		r.logger.Warnw("ignoring cursor pagination for non-timestamp ordering",
+			"sort", sortColumn,
+			"order", sortOrder)
+	}
+
+	// Count total if requested
+	if params.CountTotal {
+		countQuery := "SELECT COUNT(*) FROM (" + baseQuery + ") AS filtered_events"
+		err := r.store.GetConn().QueryRow(ctx, countQuery, args...).Scan(&totalCount)
+		if err != nil {
+			SetSpanError(span, err)
+			return nil, 0, ierr.WithError(err).
+				WithHint("Failed to count events").
+				WithReportableDetails(map[string]interface{}{
+					"event_name": params.EventName,
+				}).
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
+	if sortColumn == "id" {
+		baseQuery += " ORDER BY id " + idSortOrder
+	} else {
+		baseQuery += " ORDER BY " + sortColumn + " " + sortOrder + ", id " + idSortOrder
+	}
 
 	// Apply limit and offset for pagination if using offset-based pagination
 	if params.PageSize > 0 {
