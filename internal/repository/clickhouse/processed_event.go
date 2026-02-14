@@ -546,22 +546,23 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 				}).
 				Mark(ierr.ErrValidation)
 		}
-	}
-
-	// Initialize query parameters with the standard parameters that will be added later
-	// This ensures they're always in the right order
-	queryParams := []interface{}{
-		params.TenantID,
-		params.EnvironmentID,
-		params.CustomerID,
-		params.StartTime,
-		params.EndTime,
+		if strings.HasPrefix(groupBy, "properties.") {
+			if _, ok := parseGroupByPropertyPath(groupBy); !ok {
+				return nil, ierr.NewError("invalid group_by value").
+					WithHint("Property group_by fields must match [A-Za-z0-9_]+(.[A-Za-z0-9_]+)* pattern").
+					WithReportableDetails(map[string]interface{}{
+						"group_by": params.GroupBy,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
 	}
 
 	// Add group by columns based on params.GroupBy
 	groupByColumns := []string{}
 	groupByColumnAliases := []string{}             // for SELECT clause
 	groupByFieldMapping := make(map[string]string) // maps original field to column alias
+	groupBySelectArgs := make([]interface{}, 0)
 
 	// Check if source is in group_by
 	sourceInGroupBy := false
@@ -583,18 +584,25 @@ func (r *ProcessedEventRepository) GetDetailedUsageAnalytics(ctx context.Context
 			groupByColumnAliases = append(groupByColumnAliases, "source")
 			groupByFieldMapping["source"] = "source"
 		case strings.HasPrefix(groupBy, "properties."):
-			// Extract property name from "properties.field_name"
-			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
-				// Create alias like "prop_org_id" for "properties.org_id"
-				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
-				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
-				groupByFieldMapping[groupBy] = alias
-			}
+			propertyName, _ := parseGroupByPropertyPath(groupBy)
+			alias := propertyAlias(propertyName)
+			sqlExpression := fmt.Sprintf("JSONExtractString(properties, ?) AS %s", alias)
+			groupByColumns = append(groupByColumns, alias)
+			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
+			groupByFieldMapping[groupBy] = alias
+			groupBySelectArgs = append(groupBySelectArgs, propertyName)
 		}
 	}
+
+	queryParams := make([]interface{}, 0, len(groupBySelectArgs)+5)
+	queryParams = append(queryParams, groupBySelectArgs...)
+	queryParams = append(queryParams,
+		params.TenantID,
+		params.EnvironmentID,
+		params.CustomerID,
+		params.StartTime,
+		params.EndTime,
+	)
 
 	// Base query for aggregates - always include event count
 	selectColumns := []string{}

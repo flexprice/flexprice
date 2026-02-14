@@ -397,6 +397,16 @@ func (r *CostSheetUsageRepository) GetDetailedUsageAnalytics(ctx context.Context
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if strings.HasPrefix(groupBy, "properties.") {
+			if _, ok := parseGroupByPropertyPath(groupBy); !ok {
+				return nil, ierr.NewError("invalid group_by value").
+					WithHint("Property group_by fields must match [A-Za-z0-9_]+(.[A-Za-z0-9_]+)* pattern").
+					WithReportableDetails(map[string]interface{}{
+						"group_by": params.GroupBy,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
 	}
 
 	var allResults []*events.DetailedUsageAnalytic
@@ -464,19 +474,12 @@ func (r *CostSheetUsageRepository) getOtherFeatureIDs(requestedFeatureIDs []stri
 
 // getStandardAnalytics handles analytics for non-MAX and non-SUM with bucket features
 func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, costSheetID, externalCustomerID string, params *events.UsageAnalyticsParams, maxBucketFeatures map[string]*events.MaxBucketFeatureInfo, sumBucketFeatures map[string]*events.SumBucketFeatureInfo) ([]*events.DetailedUsageAnalytic, error) {
-	queryParams := []interface{}{
-		params.TenantID,
-		params.EnvironmentID,
-		costSheetID,
-		externalCustomerID,
-		params.StartTime,
-		params.EndTime,
-	}
-
 	// Add group by columns
 	groupByColumns := []string{"feature_id", "price_id", "meter_id"}
 	groupByColumnAliases := []string{"feature_id", "price_id", "meter_id"}
 	groupByFieldMapping := make(map[string]string)
+	groupBySelectArgs := make([]interface{}, 0)
+	groupByPropertyOrder := make([]string, 0)
 	groupByFieldMapping["feature_id"] = "feature_id"
 	groupByFieldMapping["price_id"] = "price_id"
 	groupByFieldMapping["meter_id"] = "meter_id"
@@ -487,16 +490,27 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 			continue
 		}
 		if strings.HasPrefix(groupBy, "properties.") {
-			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
-				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
-				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
-				groupByFieldMapping[groupBy] = alias
-			}
+			propertyName, _ := parseGroupByPropertyPath(groupBy)
+			alias := propertyAlias(propertyName)
+			sqlExpression := fmt.Sprintf("JSONExtractString(properties, ?) AS %s", alias)
+			groupByColumns = append(groupByColumns, alias)
+			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
+			groupByFieldMapping[groupBy] = alias
+			groupBySelectArgs = append(groupBySelectArgs, propertyName)
+			groupByPropertyOrder = append(groupByPropertyOrder, propertyName)
 		}
 	}
+
+	queryParams := make([]interface{}, 0, len(groupBySelectArgs)+6)
+	queryParams = append(queryParams, groupBySelectArgs...)
+	queryParams = append(queryParams,
+		params.TenantID,
+		params.EnvironmentID,
+		costSheetID,
+		externalCustomerID,
+		params.StartTime,
+		params.EndTime,
+	)
 
 	// Build select columns
 	selectColumns := []string{}
@@ -613,13 +627,10 @@ func (r *CostSheetUsageRepository) getStandardAnalytics(ctx context.Context, cos
 
 		// Add property fields
 		propertyValues := make(map[string]*string)
-		for groupBy := range groupByFieldMapping {
-			if strings.HasPrefix(groupBy, "properties.") {
-				propertyName := strings.TrimPrefix(groupBy, "properties.")
-				val := new(string)
-				propertyValues[propertyName] = val
-				scanValues = append(scanValues, val)
-			}
+		for _, propertyName := range groupByPropertyOrder {
+			val := new(string)
+			propertyValues[propertyName] = val
+			scanValues = append(scanValues, val)
 		}
 
 		// Add aggregation fields
@@ -733,6 +744,8 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 	groupByColumns := []string{"bucket_start", "feature_id", "price_id", "meter_id"}
 	innerSelectColumns := []string{"feature_id", "price_id", "meter_id"}
 	outerSelectColumns := []string{"feature_id", "price_id", "meter_id"}
+	propertySelectArgs := make([]interface{}, 0)
+	groupByPropertyOrder := make([]string, 0)
 
 	// Add grouping columns
 	for _, groupBy := range params.GroupBy {
@@ -740,10 +753,13 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 			continue
 		}
 		if strings.HasPrefix(groupBy, "properties.") {
-			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
-			outerSelectColumns = append(outerSelectColumns, propertyName)
+			propertyName, _ := parseGroupByPropertyPath(groupBy)
+			alias := propertyAlias(propertyName)
+			groupByColumns = append(groupByColumns, alias)
+			innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, ?) as %s", alias))
+			outerSelectColumns = append(outerSelectColumns, alias)
+			propertySelectArgs = append(propertySelectArgs, propertyName)
+			groupByPropertyOrder = append(groupByPropertyOrder, propertyName)
 		}
 	}
 
@@ -766,7 +782,9 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 		AND timestamp < ?
 		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
-	queryParams := []interface{}{
+	queryParams := make([]interface{}, 0, len(propertySelectArgs)+7)
+	queryParams = append(queryParams, propertySelectArgs...)
+	queryParams = append(queryParams,
 		params.TenantID,
 		params.EnvironmentID,
 		costSheetID,
@@ -774,7 +792,7 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 		featureInfo.FeatureID,
 		params.StartTime,
 		params.EndTime,
-	}
+	)
 
 	// Add property filters
 	if len(params.PropertyFilters) > 0 {
@@ -839,13 +857,10 @@ func (r *CostSheetUsageRepository) getMaxBucketTotals(ctx context.Context, costS
 
 		// Add property fields
 		propertyValues := make(map[string]*string)
-		for _, groupBy := range params.GroupBy {
-			if strings.HasPrefix(groupBy, "properties.") {
-				propertyName := strings.TrimPrefix(groupBy, "properties.")
-				val := new(string)
-				propertyValues[propertyName] = val
-				scanValues = append(scanValues, val)
-			}
+		for _, propertyName := range groupByPropertyOrder {
+			val := new(string)
+			propertyValues[propertyName] = val
+			scanValues = append(scanValues, val)
 		}
 
 		// Add aggregation fields

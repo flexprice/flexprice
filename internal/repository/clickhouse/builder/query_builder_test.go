@@ -16,31 +16,36 @@ import (
 var ctx = context.WithValue(context.Background(), types.CtxTenantID, types.DefaultTenantID)
 
 func TestQueryBuilder_WithBaseFilters(t *testing.T) {
+	startTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	endTime := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+
 	tests := []struct {
 		name     string
 		params   *events.UsageParams
 		wantSQL  string
-		wantArgs map[string]interface{}
+		wantArgs []interface{}
 	}{
 		{
 			name: "base filters with all params",
 			params: &events.UsageParams{
 				EventName:          "audio_transcription",
-				StartTime:          time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndTime:            time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				StartTime:          startTime,
+				EndTime:            endTime,
 				CustomerID:         "cust_123",
 				ExternalCustomerID: "ext_123",
 			},
-			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = 'audio_transcription' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3) AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3) AND external_customer_id = 'ext_123' AND customer_id = 'cust_123' ORDER BY tenant_id, environment_id, timestamp, id DESC))",
+			wantSQL:  "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = ? AND tenant_id = ? AND timestamp >= ? AND timestamp < ? AND external_customer_id = ? AND customer_id = ? ORDER BY tenant_id, environment_id, timestamp, id DESC))",
+			wantArgs: []interface{}{"audio_transcription", types.DefaultTenantID, startTime, endTime, "ext_123", "cust_123"},
 		},
 		{
 			name: "base filters without customer ID",
 			params: &events.UsageParams{
 				EventName: "api_calls",
-				StartTime: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndTime:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				StartTime: startTime,
+				EndTime:   endTime,
 			},
-			wantSQL: "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = 'api_calls' AND tenant_id = '00000000-0000-0000-0000-000000000000' AND timestamp >= toDateTime64('2024-01-01 00:00:00.000', 3) AND timestamp < toDateTime64('2024-01-02 00:00:00.000', 3) ORDER BY tenant_id, environment_id, timestamp, id DESC))",
+			wantSQL:  "WITH base_events AS (SELECT * FROM (SELECT DISTINCT ON (tenant_id, environment_id, timestamp, id) * FROM events WHERE event_name = ? AND tenant_id = ? AND timestamp >= ? AND timestamp < ? ORDER BY tenant_id, environment_id, timestamp, id DESC))",
+			wantArgs: []interface{}{"api_calls", types.DefaultTenantID, startTime, endTime},
 		},
 	}
 
@@ -48,12 +53,13 @@ func TestQueryBuilder_WithBaseFilters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			qb := NewQueryBuilder()
 			qb.WithBaseFilters(ctx, tt.params)
-			sql, _ := qb.Build()
+			sql, args := qb.Build()
 			sql = strings.ReplaceAll(sql, "\n", "")
 			sql = strings.ReplaceAll(sql, "\t", "")
 			expected := strings.ReplaceAll(tt.wantSQL, "\n", "")
 			expected = strings.ReplaceAll(expected, "\t", "")
 			assert.Equal(t, expected, sql)
+			assert.Equal(t, tt.wantArgs, args)
 		})
 	}
 }
@@ -98,12 +104,7 @@ func TestQueryBuilder_WithFilterGroups(t *testing.T) {
 				"matched_events AS",
 				"best_matches AS",
 			},
-			wantFilters: []string{
-				"JSONExtractString(properties, 'test_group') = 'group_0'",
-				"JSONExtractString(properties, 'audio_model') = 'whisper'",
-				"JSONExtractString(properties, 'test_group') = 'group_1'",
-				"JSONExtractString(properties, 'audio_model') = 'deepgram'",
-			},
+			wantFilters: []string{"JSONExtractString(properties, ?) = ?"},
 		},
 		{
 			name: "single filter group",
@@ -127,9 +128,7 @@ func TestQueryBuilder_WithFilterGroups(t *testing.T) {
 				"matched_events AS",
 				"best_matches AS",
 			},
-			wantFilters: []string{
-				"JSONExtractString(properties, 'test_group') = 'group_0'",
-			},
+			wantFilters: []string{"JSONExtractString(properties, ?) = ?"},
 		},
 	}
 
@@ -168,25 +167,25 @@ func TestQueryBuilder_WithAggregation(t *testing.T) {
 			name:         "sum aggregation",
 			aggType:      types.AggregationSum,
 			propertyName: "duration",
-			wantSQL:      "SELECT best_match_group as filter_group_id, SUM(CAST(JSONExtractString(properties, 'duration') AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+			wantSQL:      "SELECT best_match_group as filter_group_id, SUM(CAST(JSONExtractString(properties, ?) AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
 		},
 		{
 			name:         "avg aggregation",
 			aggType:      types.AggregationAvg,
 			propertyName: "response_time",
-			wantSQL:      "SELECT best_match_group as filter_group_id, AVG(CAST(JSONExtractString(properties, 'response_time') AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+			wantSQL:      "SELECT best_match_group as filter_group_id, AVG(CAST(JSONExtractString(properties, ?) AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
 		},
 		{
 			name:         "count unique aggregation",
 			aggType:      types.AggregationCountUnique,
 			propertyName: "region",
-			wantSQL:      "SELECT best_match_group as filter_group_id, COUNT(DISTINCT JSONExtractString(properties, 'region')) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+			wantSQL:      "SELECT best_match_group as filter_group_id, COUNT(DISTINCT JSONExtractString(properties, ?)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
 		},
 		{
 			name:         "count unique aggregation with user property",
 			aggType:      types.AggregationCountUnique,
 			propertyName: "user",
-			wantSQL:      "SELECT best_match_group as filter_group_id, COUNT(DISTINCT JSONExtractString(properties, 'user')) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+			wantSQL:      "SELECT best_match_group as filter_group_id, COUNT(DISTINCT JSONExtractString(properties, ?)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
 		},
 	}
 
@@ -203,19 +202,23 @@ func TestQueryBuilder_WithAggregation(t *testing.T) {
 }
 
 func TestQueryBuilder_CompleteFlow(t *testing.T) {
+	startTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	endTime := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+
 	tests := []struct {
-		name    string
-		params  *events.UsageParams
-		groups  []events.FilterGroup
-		aggType types.AggregationType
-		wantSQL string
+		name     string
+		params   *events.UsageParams
+		groups   []events.FilterGroup
+		aggType  types.AggregationType
+		wantSQL  string
+		wantArgs []interface{}
 	}{
 		{
 			name: "complete flow with multiple filter groups and sum aggregation",
 			params: &events.UsageParams{
 				EventName:          "audio_transcription",
-				StartTime:          time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
-				EndTime:            time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				StartTime:          startTime,
+				EndTime:            endTime,
 				CustomerID:         "cust_123",
 				ExternalCustomerID: "ext_123",
 			},
@@ -237,8 +240,9 @@ func TestQueryBuilder_CompleteFlow(t *testing.T) {
 					},
 				},
 			},
-			aggType: types.AggregationSum,
-			wantSQL: "SELECT best_match_group as filter_group_id, SUM(CAST(JSONExtractString(properties, 'duration') AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+			aggType:  types.AggregationSum,
+			wantSQL:  "SELECT best_match_group as filter_group_id, SUM(CAST(JSONExtractString(properties, ?) AS Float64)) as value FROM best_matches GROUP BY best_match_group ORDER BY best_match_group",
+			wantArgs: []interface{}{"audio_transcription", types.DefaultTenantID, startTime, endTime, "ext_123", "cust_123"},
 		},
 	}
 
@@ -248,8 +252,46 @@ func TestQueryBuilder_CompleteFlow(t *testing.T) {
 			qb.WithBaseFilters(ctx, tt.params)
 			qb.WithFilterGroups(ctx, tt.groups)
 			qb.WithAggregation(ctx, tt.aggType, "duration")
-			sql, _ := qb.Build()
+			sql, args := qb.Build()
 			assert.Contains(t, sql, tt.wantSQL)
+			assert.Contains(t, sql, "timestamp >= ?")
+			assert.Contains(t, sql, "timestamp < ?")
+			assert.NotContains(t, sql, "toDateTime64")
+			assert.GreaterOrEqual(t, len(args), len(tt.wantArgs))
+			for _, arg := range tt.wantArgs {
+				assert.Contains(t, args, arg)
+			}
+			assert.Contains(t, args, "duration")
 		})
 	}
+}
+
+func TestQueryBuilder_InjectionPayloadsStayInArgs(t *testing.T) {
+	payload := "x' OR 1=1 --"
+	startTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	endTime := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+
+	params := &events.UsageParams{
+		EventName:          payload,
+		ExternalCustomerID: payload,
+		CustomerID:         payload,
+		StartTime:          startTime,
+		EndTime:            endTime,
+		Filters: map[string][]string{
+			"plan": {payload, "safe"},
+		},
+	}
+
+	qb := NewQueryBuilder()
+	qb.WithBaseFilters(ctx, params)
+	qb.WithAggregation(ctx, types.AggregationCountUnique, payload)
+	sql, args := qb.Build()
+
+	assert.NotContains(t, sql, payload)
+	assert.Contains(t, sql, "event_name = ?")
+	assert.Contains(t, sql, "external_customer_id = ?")
+	assert.Contains(t, sql, "customer_id = ?")
+	assert.Contains(t, sql, "JSONExtractString(properties, ?) IN (?,?)")
+	assert.Contains(t, sql, "COUNT(DISTINCT JSONExtractString(properties, ?))")
+	assert.Contains(t, args, payload)
 }

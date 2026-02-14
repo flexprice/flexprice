@@ -494,6 +494,16 @@ func (r *FeatureUsageRepository) GetDetailedUsageAnalytics(ctx context.Context, 
 				}).
 				Mark(ierr.ErrValidation)
 		}
+		if strings.HasPrefix(groupBy, "properties.") {
+			if _, ok := parseGroupByPropertyPath(groupBy); !ok {
+				return nil, ierr.NewError("invalid group_by value").
+					WithHint("Property group_by fields must match [A-Za-z0-9_]+(.[A-Za-z0-9_]+)* pattern").
+					WithReportableDetails(map[string]interface{}{
+						"group_by": params.GroupBy,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
 	}
 
 	// Use the maxBucketFeatures and sumBucketFeatures passed from the service layer
@@ -575,21 +585,13 @@ func (r *FeatureUsageRepository) getOtherFeatureIDs(requestedFeatureIDs []string
 
 // getStandardAnalytics handles analytics for non-MAX/SUM with bucket features
 func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, params *events.UsageAnalyticsParams, maxBucketFeatures map[string]*events.MaxBucketFeatureInfo, sumBucketFeatures map[string]*events.SumBucketFeatureInfo, aggTypes []types.AggregationType) ([]*events.DetailedUsageAnalytic, error) {
-	// Initialize query parameters with the standard parameters that will be added later
-	// This ensures they're always in the right order
-	queryParams := []interface{}{
-		params.TenantID,
-		params.EnvironmentID,
-		params.CustomerID,
-		params.StartTime,
-		params.EndTime,
-	}
-
 	// Add group by columns based on params.GroupBy
 	// Always include feature_id, price_id, meter_id, sub_line_item_id for granular tracking
 	groupByColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"}
 	groupByColumnAliases := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"}
 	groupByFieldMapping := make(map[string]string) // maps original field to column alias
+	propertyAliasToName := make(map[string]string)
+	groupBySelectArgs := make([]interface{}, 0)
 	groupByFieldMapping["feature_id"] = "feature_id"
 	groupByFieldMapping["price_id"] = "price_id"
 	groupByFieldMapping["meter_id"] = "meter_id"
@@ -614,18 +616,26 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 			groupByColumnAliases = append(groupByColumnAliases, "source")
 			groupByFieldMapping["source"] = "source"
 		case strings.HasPrefix(groupBy, "properties."):
-			// Extract property name from "properties.field_name"
-			propertyName := strings.TrimPrefix(groupBy, "properties.")
-			if propertyName != "" {
-				// Create alias like "prop_org_id" for "properties.org_id"
-				alias := "prop_" + strings.ReplaceAll(propertyName, ".", "_")
-				sqlExpression := fmt.Sprintf("JSONExtractString(properties, '%s') AS %s", propertyName, alias)
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
-				groupByFieldMapping[groupBy] = alias
-			}
+			propertyName, _ := parseGroupByPropertyPath(groupBy)
+			alias := propertyAlias(propertyName)
+			sqlExpression := fmt.Sprintf("JSONExtractString(properties, ?) AS %s", alias)
+			groupByColumns = append(groupByColumns, alias)
+			groupByColumnAliases = append(groupByColumnAliases, sqlExpression)
+			groupByFieldMapping[groupBy] = alias
+			propertyAliasToName[alias] = propertyName
+			groupBySelectArgs = append(groupBySelectArgs, propertyName)
 		}
 	}
+
+	queryParams := make([]interface{}, 0, len(groupBySelectArgs)+5)
+	queryParams = append(queryParams, groupBySelectArgs...)
+	queryParams = append(queryParams,
+		params.TenantID,
+		params.EnvironmentID,
+		params.CustomerID,
+		params.StartTime,
+		params.EndTime,
+	)
 
 	// Base query for aggregates - build conditional aggregation columns based on aggTypes
 	selectColumns := []string{}
@@ -808,15 +818,8 @@ func (r *FeatureUsageRepository) getStandardAnalytics(ctx context.Context, param
 			case "source":
 				analytics.Source = value
 			default:
-				// For properties fields, extract the property name from the JSONExtractString expression
-				if strings.HasPrefix(groupByCol, "JSONExtractString(properties, '") {
-					// Extract property name from "JSONExtractString(properties, 'property_name')"
-					start := len("JSONExtractString(properties, '")
-					end := strings.Index(groupByCol[start:], "'")
-					if end > 0 {
-						propertyName := groupByCol[start : start+end]
-						analytics.Properties[propertyName] = value
-					}
+				if propertyName, ok := propertyAliasToName[groupByCol]; ok {
+					analytics.Properties[propertyName] = value
 				}
 			}
 			scanIndex++
@@ -904,6 +907,8 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 	groupByColumns := []string{"bucket_start", "feature_id", "price_id", "meter_id", "sub_line_item_id", "source"}
 	innerSelectColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id", "source"} // For inner query (has access to properties column)
 	outerSelectColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"}           // For outer query (only has aliased columns)
+	propertyAliasToName := make(map[string]string)
+	propertySelectArgs := make([]interface{}, 0)
 
 	// Add source to outer select columns only if grouping by source
 	if sourceInGroupBy {
@@ -919,10 +924,13 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			// Already included
 		default:
 			if strings.HasPrefix(groupBy, "properties.") {
-				propertyName := strings.TrimPrefix(groupBy, "properties.")
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
-				outerSelectColumns = append(outerSelectColumns, propertyName) // Just the alias
+				propertyName, _ := parseGroupByPropertyPath(groupBy)
+				alias := propertyAlias(propertyName)
+				groupByColumns = append(groupByColumns, alias)
+				innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, ?) as %s", alias))
+				outerSelectColumns = append(outerSelectColumns, alias)
+				propertyAliasToName[alias] = propertyName
+				propertySelectArgs = append(propertySelectArgs, propertyName)
 			}
 		}
 	}
@@ -950,14 +958,16 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		AND timestamp < ?
 		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
-	queryParams := []interface{}{
+	queryParams := make([]interface{}, 0, len(propertySelectArgs)+7)
+	queryParams = append(queryParams, propertySelectArgs...)
+	queryParams = append(queryParams,
 		params.TenantID,
 		params.EnvironmentID,
 		params.CustomerID,
 		featureInfo.FeatureID,
 		params.StartTime,
 		params.EndTime,
-	}
+	)
 
 	// Add filters for sources to inner query
 	if len(params.Sources) > 0 {
@@ -1091,9 +1101,10 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 			case "source":
 				analytics.Source = value
 			default:
-				// For property columns, the selectCol is just the property name (alias)
 				if value != "" {
-					analytics.Properties[selectCol] = value
+					if propertyName, ok := propertyAliasToName[selectCol]; ok {
+						analytics.Properties[propertyName] = value
+					}
 				}
 			}
 		}
@@ -1309,6 +1320,8 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 	groupByColumns := []string{"bucket_start", "feature_id", "price_id", "meter_id", "sub_line_item_id", "source"}
 	innerSelectColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id", "source"} // For inner query (has access to properties column)
 	outerSelectColumns := []string{"feature_id", "price_id", "meter_id", "sub_line_item_id"}           // For outer query (only has aliased columns)
+	propertyAliasToName := make(map[string]string)
+	propertySelectArgs := make([]interface{}, 0)
 
 	// Add source to outer select columns only if grouping by source
 	if sourceInGroupBy {
@@ -1324,10 +1337,13 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 			// Already included
 		default:
 			if strings.HasPrefix(groupBy, "properties.") {
-				propertyName := strings.TrimPrefix(groupBy, "properties.")
-				groupByColumns = append(groupByColumns, fmt.Sprintf("JSONExtractString(properties, '%s')", propertyName))
-				innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, '%s') as %s", propertyName, propertyName))
-				outerSelectColumns = append(outerSelectColumns, propertyName) // Just the alias
+				propertyName, _ := parseGroupByPropertyPath(groupBy)
+				alias := propertyAlias(propertyName)
+				groupByColumns = append(groupByColumns, alias)
+				innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("JSONExtractString(properties, ?) as %s", alias))
+				outerSelectColumns = append(outerSelectColumns, alias)
+				propertyAliasToName[alias] = propertyName
+				propertySelectArgs = append(propertySelectArgs, propertyName)
 			}
 		}
 	}
@@ -1355,14 +1371,16 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 		AND timestamp < ?
 		AND sign != 0`, bucketWindowExpr, strings.Join(innerSelectColumns, ", "))
 
-	queryParams := []interface{}{
+	queryParams := make([]interface{}, 0, len(propertySelectArgs)+7)
+	queryParams = append(queryParams, propertySelectArgs...)
+	queryParams = append(queryParams,
 		params.TenantID,
 		params.EnvironmentID,
 		params.CustomerID,
 		featureInfo.FeatureID,
 		params.StartTime,
 		params.EndTime,
-	}
+	)
 
 	// Add filters for sources to inner query
 	if len(params.Sources) > 0 {
@@ -1496,9 +1514,10 @@ func (r *FeatureUsageRepository) getSumBucketTotals(ctx context.Context, params 
 			case "source":
 				analytics.Source = value
 			default:
-				// For property columns, the selectCol is just the property name (alias)
 				if value != "" {
-					analytics.Properties[selectCol] = value
+					if propertyName, ok := propertyAliasToName[selectCol]; ok {
+						analytics.Properties[propertyName] = value
+					}
 				}
 			}
 		}
@@ -2135,10 +2154,10 @@ func (r *FeatureUsageRepository) GetUsageForMaxMetersWithBuckets(ctx context.Con
 	})
 	defer FinishSpan(span)
 
-	query := r.getWindowedQuery(ctx, params)
+	query, queryArgs := r.getWindowedQuery(ctx, params)
 	log.Printf("Executing query: %s", query)
 
-	rows, err := r.store.GetConn().Query(ctx, query)
+	rows, err := r.store.GetConn().Query(ctx, query, queryArgs...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
@@ -2184,36 +2203,46 @@ func (r *FeatureUsageRepository) GetUsageForMaxMetersWithBuckets(ctx context.Con
 	return &result, nil
 }
 
-func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) string {
+func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *events.FeatureUsageParams) (string, []interface{}) {
 	bucketWindow := r.formatWindowSize(params.UsageParams.WindowSize, params.UsageParams.BillingAnchor)
 
 	externalCustomerFilter := ""
+	var externalCustomerArgs []interface{}
 	if params.UsageParams.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+		externalCustomerFilter = "AND external_customer_id = ?"
+		externalCustomerArgs = append(externalCustomerArgs, params.UsageParams.ExternalCustomerID)
 	}
 
 	featureFilter := ""
+	var featureArgs []interface{}
 	if params.FeatureID != "" {
-		featureFilter = fmt.Sprintf("AND feature_id = '%s'", params.FeatureID)
+		featureFilter = "AND feature_id = ?"
+		featureArgs = append(featureArgs, params.FeatureID)
 	}
 
 	priceFilter := ""
+	var priceArgs []interface{}
 	if params.PriceID != "" {
-		priceFilter = fmt.Sprintf("AND price_id = '%s'", params.PriceID)
+		priceFilter = "AND price_id = ?"
+		priceArgs = append(priceArgs, params.PriceID)
 	}
 
 	meterFilter := ""
+	var meterArgs []interface{}
 	if params.MeterID != "" {
-		meterFilter = fmt.Sprintf("AND meter_id = '%s'", params.MeterID)
+		meterFilter = "AND meter_id = ?"
+		meterArgs = append(meterArgs, params.MeterID)
 	}
 
 	subLineItemFilter := ""
+	var subLineItemArgs []interface{}
 	if params.SubLineItemID != "" {
-		subLineItemFilter = fmt.Sprintf("AND sub_line_item_id = '%s'", params.SubLineItemID)
+		subLineItemFilter = "AND sub_line_item_id = ?"
+		subLineItemArgs = append(subLineItemArgs, params.SubLineItemID)
 	}
 
-	filterConditions := buildFilterConditions(params.Filters)
-	timeConditions := buildTimeConditions(params.UsageParams)
+	filterConditions, filterArgs := buildFilterConditions(params.Filters)
+	timeConditions, timeArgs := buildTimeConditions(params.UsageParams)
 
 	// Determine aggregation function and naming based on aggregation type
 	// Default to MAX for backward compatibility (if AggregationType is not set)
@@ -2227,16 +2256,14 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName = "bucket_sum"
 	}
 
-	// First aggregate values per bucket using the appropriate function,
-	// then sum all bucket values to get the total
-	return fmt.Sprintf(`
+	query := fmt.Sprintf(`
 		WITH %s AS (
 			SELECT
 				%s as bucket_start,
 				%s(qty_total) as %s
 			FROM feature_usage
-			PREWHERE tenant_id = '%s'
-				AND environment_id = '%s'
+			PREWHERE tenant_id = ?
+				AND environment_id = ?
 				%s
 				%s
 				%s
@@ -2257,8 +2284,6 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketTableName,
 		bucketWindow,
 		aggFunc, bucketColumnName,
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
 		externalCustomerFilter,
 		featureFilter,
 		priceFilter,
@@ -2269,6 +2294,15 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName, bucketTableName,
 		bucketColumnName,
 		bucketTableName)
+	args := []interface{}{types.GetTenantID(ctx), types.GetEnvironmentID(ctx)}
+	args = append(args, externalCustomerArgs...)
+	args = append(args, featureArgs...)
+	args = append(args, priceArgs...)
+	args = append(args, meterArgs...)
+	args = append(args, subLineItemArgs...)
+	args = append(args, filterArgs...)
+	args = append(args, timeArgs...)
+	return query, args
 }
 
 // GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs

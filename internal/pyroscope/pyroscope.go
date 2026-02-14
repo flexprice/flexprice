@@ -90,10 +90,9 @@ func RegisterHooks(lc fx.Lifecycle, svc *Service) {
 
 // Implement pyroscope.Logger interface for better debugging
 func (s *Service) Debugf(format string, args ...interface{}) {
+	_ = format
+	_ = args
 	return // force disable debug logging for now
-	if s.cfg.Logging.Level == "debug" {
-		s.logger.Debugf("[Pyroscope] "+format, args...)
-	}
 }
 
 func (s *Service) Infof(format string, args ...interface{}) {
