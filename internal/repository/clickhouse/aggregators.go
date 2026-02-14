@@ -224,6 +224,9 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		selectClause = "window_size,"
 		windowClause = fmt.Sprintf("%s AS window_size,", windowSize)
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
+		if params.HasWindowedCommitment {
+			groupByClause += " " + BuildWithFillClause(params.WindowSize, params.StartTime, params.EndTime)
+		}
 		windowGroupBy = ", window_size"
 	}
 
@@ -289,6 +292,11 @@ func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	filterConditions := buildFilterConditions(params.Filters)
 	timeConditions := buildTimeConditions(params)
 
+	withFillClause := ""
+	if params.HasWindowedCommitment {
+		withFillClause = " " + BuildWithFillClause(params.BucketSize, params.StartTime, params.EndTime)
+	}
+
 	// Get sum values per bucket, return each bucket's sum separately
 	return fmt.Sprintf(`
 		WITH bucket_sums AS (
@@ -304,14 +312,14 @@ func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 				%s
 				%s
 			GROUP BY bucket_start
-			ORDER BY bucket_start
+			ORDER BY bucket_start%s
 		)
 		SELECT
 			(SELECT sum(bucket_sum) FROM bucket_sums) as total,
 			bucket_start as timestamp,
 			bucket_sum as value
 		FROM bucket_sums
-		ORDER BY bucket_start
+		ORDER BY bucket_start%s
 	`,
 		bucketWindow,
 		params.PropertyName,
@@ -321,7 +329,9 @@ func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
-		timeConditions)
+		timeConditions,
+		withFillClause,
+		withFillClause)
 }
 
 func (a *SumAggregator) GetType() types.AggregationType {
@@ -669,6 +679,9 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		selectClause = "window_size,"
 		windowClause = fmt.Sprintf("%s AS window_size,", windowSize)
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
+		if params.HasWindowedCommitment {
+			groupByClause += " " + BuildWithFillClause(params.WindowSize, params.StartTime, params.EndTime)
+		}
 		windowGroupBy = ", window_size"
 	}
 
@@ -734,6 +747,11 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	filterConditions := buildFilterConditions(params.Filters)
 	timeConditions := buildTimeConditions(params)
 
+	withFillClause := ""
+	if params.HasWindowedCommitment {
+		withFillClause = " " + BuildWithFillClause(params.BucketSize, params.StartTime, params.EndTime)
+	}
+
 	// First get max values per bucket, then get the max across all buckets
 	return fmt.Sprintf(`
 		WITH bucket_maxes AS (
@@ -749,14 +767,14 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 				%s
 				%s
 			GROUP BY bucket_start
-			ORDER BY bucket_start
+			ORDER BY bucket_start%s
 		)
 		SELECT
 			(SELECT sum(bucket_max) FROM bucket_maxes) as total,
 			bucket_start as timestamp,
 			bucket_max as value
 		FROM bucket_maxes
-		ORDER BY bucket_start
+		ORDER BY bucket_start%s
 	`,
 		bucketWindow,
 		params.PropertyName,
@@ -766,7 +784,9 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 		externalCustomerFilter,
 		customerFilter,
 		filterConditions,
-		timeConditions)
+		timeConditions,
+		withFillClause,
+		withFillClause)
 }
 
 func (a *MaxAggregator) GetType() types.AggregationType {

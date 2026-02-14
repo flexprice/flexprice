@@ -122,18 +122,19 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 	}
 
 	getUsageRequest := dto.GetUsageRequest{
-		ExternalCustomerID: req.ExternalCustomerID,
-		CustomerID:         req.CustomerID,
-		EventName:          m.EventName,
-		PropertyName:       m.Aggregation.Field,
-		AggregationType:    m.Aggregation.Type,
-		StartTime:          req.StartTime,
-		WindowSize:         req.WindowSize,
-		EndTime:            req.EndTime,
-		Filters:            req.Filters,
-		PriceID:            req.PriceID,
-		MeterID:            req.MeterID,
-		BillingAnchor:      req.BillingAnchor,
+		ExternalCustomerID:    req.ExternalCustomerID,
+		CustomerID:            req.CustomerID,
+		EventName:             m.EventName,
+		PropertyName:          m.Aggregation.Field,
+		AggregationType:       m.Aggregation.Type,
+		StartTime:             req.StartTime,
+		WindowSize:            req.WindowSize,
+		EndTime:               req.EndTime,
+		Filters:               req.Filters,
+		PriceID:               req.PriceID,
+		MeterID:               req.MeterID,
+		BillingAnchor:         req.BillingAnchor,
+		HasWindowedCommitment: req.HasWindowedCommitment,
 	}
 
 	// Pass the multiplier from meter configuration if it's a SUM_WITH_MULTIPLIER aggregation

@@ -2227,6 +2227,14 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName = "bucket_sum"
 	}
 
+	// Build WITH FILL clause if HasWindowedCommitment is enabled
+	// This ensures all time windows are generated even if no events occurred,
+	// allowing commitment/reservation logic to be applied to every window
+	withFillClause := ""
+	if params.HasWindowedCommitment {
+		withFillClause = r.buildWithFillClause(params.UsageParams.WindowSize, params.UsageParams.StartTime, params.UsageParams.EndTime)
+	}
+
 	// First aggregate values per bucket using the appropriate function,
 	// then sum all bucket values to get the total
 	return fmt.Sprintf(`
@@ -2245,7 +2253,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 				%s
 				%s
 			GROUP BY bucket_start
-			ORDER BY bucket_start
+			ORDER BY bucket_start %s
 		)
 		SELECT
 			(SELECT sum(%s) FROM %s) as total,
@@ -2266,9 +2274,15 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		subLineItemFilter,
 		filterConditions,
 		timeConditions,
+		withFillClause,
 		bucketColumnName, bucketTableName,
 		bucketColumnName,
 		bucketTableName)
+}
+
+// buildWithFillClause delegates to the package-level BuildWithFillClause for WITH FILL in ORDER BY.
+func (r *FeatureUsageRepository) buildWithFillClause(windowSize types.WindowSize, startTime, endTime time.Time) string {
+	return BuildWithFillClause(windowSize, startTime, endTime)
 }
 
 // GetFeatureUsageByEventIDs queries the feature_usage table for events by their IDs

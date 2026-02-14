@@ -863,8 +863,9 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			if meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
-					PriceID: item.PriceID,
-					MeterID: item.MeterID,
+					PriceID:               item.PriceID,
+					MeterID:               item.MeterID,
+					HasWindowedCommitment: item.CommitmentWindowed, // Enable WITH FILL if windowed commitment
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationMax,
@@ -902,8 +903,9 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				// Handle sum with bucket meters - uses optimized feature_usage table
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
-					PriceID: item.PriceID,
-					MeterID: item.MeterID,
+					PriceID:               item.PriceID,
+					MeterID:               item.MeterID,
+					HasWindowedCommitment: item.CommitmentWindowed, // Enable WITH FILL if windowed commitment
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationSum,
@@ -1137,15 +1139,16 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								Mark(ierr.ErrNotFound)
 						}
 
-						// Fetch bucketed usage values
+						// Fetch bucketed usage values (WITH FILL in query so all windows returned)
 						usageRequest := &dto.GetUsageByMeterRequest{
-							MeterID:            item.MeterID,
-							PriceID:            item.PriceID,
-							ExternalCustomerID: customer.ExternalID,
-							StartTime:          item.GetPeriodStart(periodStart),
-							EndTime:            item.GetPeriodEnd(periodEnd),
-							WindowSize:         meter.Aggregation.BucketSize,
-							BillingAnchor:      &sub.BillingAnchor,
+							MeterID:               item.MeterID,
+							PriceID:               item.PriceID,
+							ExternalCustomerID:    customer.ExternalID,
+							StartTime:             item.GetPeriodStart(periodStart),
+							EndTime:               item.GetPeriodEnd(periodEnd),
+							WindowSize:            meter.Aggregation.BucketSize,
+							BillingAnchor:         &sub.BillingAnchor,
+							HasWindowedCommitment: true,
 						}
 
 						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
@@ -1153,10 +1156,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							return nil, decimal.Zero, err
 						}
 
-						// Extract bucket values
+						// Query layer fills missing windows; extract values in order for commitment
 						bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
-						for i, result := range usageResult.Results {
-							bucketedValues[i] = result.Value
+						for i, r := range usageResult.Results {
+							bucketedValues[i] = r.Value
 						}
 
 						// Apply window-based commitment
