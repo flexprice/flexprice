@@ -169,6 +169,13 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Default(false),
 		field.Bool("commitment_windowed").
 			Default(false),
+		field.String("commitment_duration").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			GoType(types.BillingPeriod("")),
 	}
 }
 

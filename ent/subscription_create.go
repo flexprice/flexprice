@@ -408,6 +408,20 @@ func (sc *SubscriptionCreate) SetNillableCommitmentAmount(d *decimal.Decimal) *S
 	return sc
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (sc *SubscriptionCreate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionCreate {
+	sc.mutation.SetCommitmentDuration(tp)
+	return sc
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionCreate {
+	if tp != nil {
+		sc.SetCommitmentDuration(*tp)
+	}
+	return sc
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (sc *SubscriptionCreate) SetOverageFactor(d decimal.Decimal) *SubscriptionCreate {
 	sc.mutation.SetOverageFactor(d)
@@ -857,6 +871,11 @@ func (sc *SubscriptionCreate) check() error {
 			return &ValidationError{Name: "billing_cycle", err: fmt.Errorf(`ent: validator failed for field "Subscription.billing_cycle": %w`, err)}
 		}
 	}
+	if v, ok := sc.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "Subscription.commitment_duration": %w`, err)}
+		}
+	}
 	if _, ok := sc.mutation.PaymentBehavior(); !ok {
 		return &ValidationError{Name: "payment_behavior", err: errors.New(`ent: missing required field "Subscription.payment_behavior"`)}
 	}
@@ -1045,6 +1064,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
 		_node.CommitmentAmount = &value
+	}
+	if value, ok := sc.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
+		_node.CommitmentDuration = &value
 	}
 	if value, ok := sc.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)

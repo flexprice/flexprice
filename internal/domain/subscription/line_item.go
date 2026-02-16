@@ -43,6 +43,7 @@ type SubscriptionLineItem struct {
 	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty"`
 	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
 	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
+	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
 
@@ -135,6 +136,12 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		commitmentType = types.CommitmentType(*e.CommitmentType)
 	}
 
+	var commitmentDuration *types.BillingPeriod
+	if e.CommitmentDuration != nil {
+		cd := types.BillingPeriod(*e.CommitmentDuration)
+		commitmentDuration = &cd
+	}
+
 	return &SubscriptionLineItem{
 		ID:                      e.ID,
 		SubscriptionID:          e.SubscriptionID,
@@ -165,6 +172,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		CommitmentOverageFactor: e.CommitmentOverageFactor,
 		CommitmentTrueUpEnabled: e.CommitmentTrueUpEnabled,
 		CommitmentWindowed:      e.CommitmentWindowed,
+		CommitmentDuration:      commitmentDuration,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

@@ -1598,6 +1598,7 @@ var (
 		{Name: "active_pause_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "billing_cycle", Type: field.TypeString, Default: "anniversary"},
 		{Name: "commitment_amount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,6)"}},
+		{Name: "commitment_duration", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "overage_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(10,6)"}},
 		{Name: "payment_behavior", Type: field.TypeString, Default: "default_active", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "collection_method", Type: field.TypeString, Default: "charge_automatically", SchemaType: map[string]string{"postgres": "varchar(50)"}},
@@ -1615,7 +1616,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[39]},
+				Columns:    []*schema.Column{SubscriptionsColumns[40]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1682,6 +1683,7 @@ var (
 		{Name: "commitment_overage_factor", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(10,4)"}},
 		{Name: "commitment_true_up_enabled", Type: field.TypeBool, Default: false},
 		{Name: "commitment_windowed", Type: field.TypeBool, Default: false},
+		{Name: "commitment_duration", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionLineItemsTable holds the schema information for the "subscription_line_items" table.
@@ -1692,7 +1694,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscription_line_items_subscriptions_line_items",
-				Columns:    []*schema.Column{SubscriptionLineItemsColumns[34]},
+				Columns:    []*schema.Column{SubscriptionLineItemsColumns[35]},
 				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1701,7 +1703,7 @@ var (
 			{
 				Name:    "subscriptionlineitem_tenant_id_environment_id_subscription_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[34], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[1], SubscriptionLineItemsColumns[7], SubscriptionLineItemsColumns[35], SubscriptionLineItemsColumns[2]},
 			},
 			{
 				Name:    "subscriptionlineitem_tenant_id_environment_id_customer_id_status",
@@ -1731,7 +1733,7 @@ var (
 			{
 				Name:    "subscriptionlineitem_subscription_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{SubscriptionLineItemsColumns[34], SubscriptionLineItemsColumns[2]},
+				Columns: []*schema.Column{SubscriptionLineItemsColumns[35], SubscriptionLineItemsColumns[2]},
 			},
 		},
 	}

@@ -444,6 +444,20 @@ func (slic *SubscriptionLineItemCreate) SetNillableCommitmentWindowed(b *bool) *
 	return slic
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (slic *SubscriptionLineItemCreate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemCreate {
+	slic.mutation.SetCommitmentDuration(tp)
+	return slic
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemCreate {
+	if tp != nil {
+		slic.SetCommitmentDuration(*tp)
+	}
+	return slic
+}
+
 // SetID sets the "id" field.
 func (slic *SubscriptionLineItemCreate) SetID(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetID(s)
@@ -627,6 +641,11 @@ func (slic *SubscriptionLineItemCreate) check() error {
 	if _, ok := slic.mutation.CommitmentWindowed(); !ok {
 		return &ValidationError{Name: "commitment_windowed", err: errors.New(`ent: missing required field "SubscriptionLineItem.commitment_windowed"`)}
 	}
+	if v, ok := slic.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
+		}
+	}
 	if len(slic.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionLineItem.subscription"`)}
 	}
@@ -796,6 +815,10 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
 		_node.CommitmentWindowed = value
+	}
+	if value, ok := slic.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
+		_node.CommitmentDuration = &value
 	}
 	if nodes := slic.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

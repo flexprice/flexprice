@@ -84,6 +84,8 @@ const (
 	FieldCommitmentTrueUpEnabled = "commitment_true_up_enabled"
 	// FieldCommitmentWindowed holds the string denoting the commitment_windowed field in the database.
 	FieldCommitmentWindowed = "commitment_windowed"
+	// FieldCommitmentDuration holds the string denoting the commitment_duration field in the database.
+	FieldCommitmentDuration = "commitment_duration"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
 	EdgeSubscription = "subscription"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
@@ -143,6 +145,7 @@ var Columns = []string{
 	FieldCommitmentOverageFactor,
 	FieldCommitmentTrueUpEnabled,
 	FieldCommitmentWindowed,
+	FieldCommitmentDuration,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -361,6 +364,11 @@ func ByCommitmentTrueUpEnabled(opts ...sql.OrderTermOption) OrderOption {
 // ByCommitmentWindowed orders the results by the commitment_windowed field.
 func ByCommitmentWindowed(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCommitmentWindowed, opts...).ToFunc()
+}
+
+// ByCommitmentDuration orders the results by the commitment_duration field.
+func ByCommitmentDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommitmentDuration, opts...).ToFunc()
 }
 
 // BySubscriptionField orders the results by subscription field.

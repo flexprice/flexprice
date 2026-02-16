@@ -1643,29 +1643,29 @@ func init() {
 	// subscription.BillingCycleValidator is a validator for the "billing_cycle" field. It is called by the builders before save.
 	subscription.BillingCycleValidator = subscriptionDescBillingCycle.Validators[0].(func(string) error)
 	// subscriptionDescOverageFactor is the schema descriptor for overage_factor field.
-	subscriptionDescOverageFactor := subscriptionFields[25].Descriptor()
+	subscriptionDescOverageFactor := subscriptionFields[26].Descriptor()
 	// subscription.DefaultOverageFactor holds the default value on creation for the overage_factor field.
 	subscription.DefaultOverageFactor = subscriptionDescOverageFactor.Default.(decimal.Decimal)
 	// subscriptionDescPaymentBehavior is the schema descriptor for payment_behavior field.
-	subscriptionDescPaymentBehavior := subscriptionFields[26].Descriptor()
+	subscriptionDescPaymentBehavior := subscriptionFields[27].Descriptor()
 	// subscription.DefaultPaymentBehavior holds the default value on creation for the payment_behavior field.
 	subscription.DefaultPaymentBehavior = types.PaymentBehavior(subscriptionDescPaymentBehavior.Default.(string))
 	// subscriptionDescCollectionMethod is the schema descriptor for collection_method field.
-	subscriptionDescCollectionMethod := subscriptionFields[27].Descriptor()
+	subscriptionDescCollectionMethod := subscriptionFields[28].Descriptor()
 	// subscription.DefaultCollectionMethod holds the default value on creation for the collection_method field.
 	subscription.DefaultCollectionMethod = types.CollectionMethod(subscriptionDescCollectionMethod.Default.(string))
 	// subscriptionDescCustomerTimezone is the schema descriptor for customer_timezone field.
-	subscriptionDescCustomerTimezone := subscriptionFields[29].Descriptor()
+	subscriptionDescCustomerTimezone := subscriptionFields[30].Descriptor()
 	// subscription.DefaultCustomerTimezone holds the default value on creation for the customer_timezone field.
 	subscription.DefaultCustomerTimezone = subscriptionDescCustomerTimezone.Default.(string)
 	// subscriptionDescProrationBehavior is the schema descriptor for proration_behavior field.
-	subscriptionDescProrationBehavior := subscriptionFields[30].Descriptor()
+	subscriptionDescProrationBehavior := subscriptionFields[31].Descriptor()
 	// subscription.DefaultProrationBehavior holds the default value on creation for the proration_behavior field.
 	subscription.DefaultProrationBehavior = types.ProrationBehavior(subscriptionDescProrationBehavior.Default.(string))
 	// subscription.ProrationBehaviorValidator is a validator for the "proration_behavior" field. It is called by the builders before save.
 	subscription.ProrationBehaviorValidator = subscriptionDescProrationBehavior.Validators[0].(func(string) error)
 	// subscriptionDescEnableTrueUp is the schema descriptor for enable_true_up field.
-	subscriptionDescEnableTrueUp := subscriptionFields[31].Descriptor()
+	subscriptionDescEnableTrueUp := subscriptionFields[32].Descriptor()
 	// subscription.DefaultEnableTrueUp holds the default value on creation for the enable_true_up field.
 	subscription.DefaultEnableTrueUp = subscriptionDescEnableTrueUp.Default.(bool)
 	subscriptionlineitemMixin := schema.SubscriptionLineItem{}.Mixin()
