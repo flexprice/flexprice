@@ -214,6 +214,9 @@ type SubscriptionFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
 
+	// ParentSubscriptionIDs filters by parent subscription IDs
+	ParentSubscriptionIDs []string `json:"parent_subscription_ids,omitempty" form:"parent_subscription_ids"`
+
 	Filters []*FilterCondition `json:"filters,omitempty" form:"filters" validate:"omitempty"`
 	Sort    []*SortCondition   `json:"sort,omitempty" form:"sort" validate:"omitempty"`
 
