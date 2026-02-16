@@ -83,6 +83,46 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Update subscription
+// @Description Update a subscription. parent_subscription_id can be set to another subscription ID, cleared by sending "", or left unchanged if omitted.
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Param request body dto.UpdateSubscriptionRequest true "Update Subscription Request"
+// @Success 200 {object} dto.SubscriptionResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id} [put]
+func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.UpdateSubscriptionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.UpdateSubscription(c.Request.Context(), id, req)
+	if err != nil {
+		h.log.Error("Failed to update subscription", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // @Summary Get subscription V2
 // @Description Get a subscription by ID with optional expand parameters
 // @Tags Subscriptions

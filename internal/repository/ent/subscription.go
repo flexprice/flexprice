@@ -208,6 +208,12 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		query.ClearActivePauseID()
 	}
 
+	if sub.ParentSubscriptionID != nil {
+		query.SetParentSubscriptionID(*sub.ParentSubscriptionID)
+	} else {
+		query.ClearParentSubscriptionID()
+	}
+
 	// Execute update
 	_, err := query.Save(ctx)
 	if err != nil {
