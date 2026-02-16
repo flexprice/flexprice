@@ -90,6 +90,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetEnableTrueUp(sub.EnableTrueUp).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
+		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		Save(ctx)
 
 	if err != nil {
