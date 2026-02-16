@@ -534,6 +534,20 @@ func (sc *SubscriptionCreate) SetNillableInvoicingCustomerID(s *string) *Subscri
 	return sc
 }
 
+// SetParentSubscriptionID sets the "parent_subscription_id" field.
+func (sc *SubscriptionCreate) SetParentSubscriptionID(s string) *SubscriptionCreate {
+	sc.mutation.SetParentSubscriptionID(s)
+	return sc
+}
+
+// SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableParentSubscriptionID(s *string) *SubscriptionCreate {
+	if s != nil {
+		sc.SetParentSubscriptionID(*s)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -1096,6 +1110,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
 		_node.EnableTrueUp = value
+	}
+	if value, ok := sc.mutation.ParentSubscriptionID(); ok {
+		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
+		_node.ParentSubscriptionID = &value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

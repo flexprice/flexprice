@@ -355,6 +355,9 @@ type CreateSubscriptionRequest struct {
 	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 
+	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
+	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
+
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
 }
@@ -664,6 +667,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PlanID == "" {
 		return ierr.NewError("plan_id is required").
 			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.ParentSubscriptionID != nil && lo.FromPtr(r.ParentSubscriptionID) == "" {
+		return ierr.NewError("parent_subscription_id cannot be empty when provided").
+			WithHint("Omit parent_subscription_id or provide a non-empty subscription ID").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1024,6 +1033,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		InvoicingCustomerID:    r.InvoicingCustomerID,
+		ParentSubscriptionID:   r.ParentSubscriptionID,
 	}
 
 	// Set commitment amount, duration, and overage factor if provided

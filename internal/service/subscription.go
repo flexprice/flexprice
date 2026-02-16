@@ -97,6 +97,20 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
+	if req.ParentSubscriptionID != nil && lo.FromPtr(req.ParentSubscriptionID) != "" {
+		parentSub, err := s.SubRepo.Get(ctx, lo.FromPtr(req.ParentSubscriptionID))
+		if err != nil {
+			return nil, err
+		}
+
+		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return nil, ierr.NewError("parent subscription is not active").
+				WithHint("The parent subscription must be active").
+				WithReportableDetails(map[string]interface{}{"parent_subscription_id": *req.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Get and validate plan
 	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
 	if err != nil {

@@ -505,6 +505,26 @@ func (su *SubscriptionUpdate) ClearInvoicingCustomerID() *SubscriptionUpdate {
 	return su
 }
 
+// SetParentSubscriptionID sets the "parent_subscription_id" field.
+func (su *SubscriptionUpdate) SetParentSubscriptionID(s string) *SubscriptionUpdate {
+	su.mutation.SetParentSubscriptionID(s)
+	return su
+}
+
+// SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableParentSubscriptionID(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetParentSubscriptionID(*s)
+	}
+	return su
+}
+
+// ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
+func (su *SubscriptionUpdate) ClearParentSubscriptionID() *SubscriptionUpdate {
+	su.mutation.ClearParentSubscriptionID()
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -946,6 +966,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
+	}
+	if value, ok := su.mutation.ParentSubscriptionID(); ok {
+		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
+	}
+	if su.mutation.ParentSubscriptionIDCleared() {
+		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1778,6 +1804,26 @@ func (suo *SubscriptionUpdateOne) ClearInvoicingCustomerID() *SubscriptionUpdate
 	return suo
 }
 
+// SetParentSubscriptionID sets the "parent_subscription_id" field.
+func (suo *SubscriptionUpdateOne) SetParentSubscriptionID(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetParentSubscriptionID(s)
+	return suo
+}
+
+// SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableParentSubscriptionID(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetParentSubscriptionID(*s)
+	}
+	return suo
+}
+
+// ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
+func (suo *SubscriptionUpdateOne) ClearParentSubscriptionID() *SubscriptionUpdateOne {
+	suo.mutation.ClearParentSubscriptionID()
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -2249,6 +2295,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
+	}
+	if value, ok := suo.mutation.ParentSubscriptionID(); ok {
+		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
+	}
+	if suo.mutation.ParentSubscriptionIDCleared() {
+		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

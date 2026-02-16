@@ -179,6 +179,13 @@ func (Subscription) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Customer ID to use for invoicing (can differ from the subscription customer)"),
+		field.String("parent_subscription_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Parent subscription ID for hierarchy (e.g. child subscription under a parent)"),
 	}
 }
 
