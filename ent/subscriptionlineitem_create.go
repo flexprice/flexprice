@@ -444,6 +444,20 @@ func (slic *SubscriptionLineItemCreate) SetNillableCommitmentWindowed(b *bool) *
 	return slic
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (slic *SubscriptionLineItemCreate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionLineItemCreate {
+	slic.mutation.SetCommitmentDuration(td)
+	return slic
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionLineItemCreate {
+	if td != nil {
+		slic.SetCommitmentDuration(*td)
+	}
+	return slic
+}
+
 // SetID sets the "id" field.
 func (slic *SubscriptionLineItemCreate) SetID(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetID(s)
@@ -796,6 +810,10 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
 		_node.CommitmentWindowed = value
+	}
+	if value, ok := slic.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
+		_node.CommitmentDuration = &value
 	}
 	if nodes := slic.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

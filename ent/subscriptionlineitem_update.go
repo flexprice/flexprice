@@ -468,6 +468,26 @@ func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentWindowed(b *bool) *
 	return sliu
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (sliu *SubscriptionLineItemUpdate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetCommitmentDuration(td)
+	return sliu
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionLineItemUpdate {
+	if td != nil {
+		sliu.SetCommitmentDuration(*td)
+	}
+	return sliu
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (sliu *SubscriptionLineItemUpdate) ClearCommitmentDuration() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearCommitmentDuration()
+	return sliu
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliu *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
 	sliu.mutation.AddCouponAssociationIDs(ids...)
@@ -722,6 +742,12 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if value, ok := sliu.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
+	}
+	if value, ok := sliu.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
+	}
+	if sliu.mutation.CommitmentDurationCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
 	}
 	if sliu.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1225,6 +1251,26 @@ func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentWindowed(b *boo
 	return sliuo
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetCommitmentDuration(td)
+	return sliuo
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionLineItemUpdateOne {
+	if td != nil {
+		sliuo.SetCommitmentDuration(*td)
+	}
+	return sliuo
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentDuration() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearCommitmentDuration()
+	return sliuo
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.AddCouponAssociationIDs(ids...)
@@ -1509,6 +1555,12 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if value, ok := sliuo.mutation.CommitmentWindowed(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentWindowed, field.TypeBool, value)
+	}
+	if value, ok := sliuo.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
+	}
+	if sliuo.mutation.CommitmentDurationCleared() {
+		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
 	}
 	if sliuo.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -81,6 +81,9 @@ type LineItemCommitmentConfig struct {
 
 	// IsWindowCommitment determines if commitment is applied per window (e.g., per day) rather than per billing period
 	IsWindowCommitment *bool `json:"is_window_commitment,omitempty"`
+
+	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
+	CommitmentDuration *types.CommitmentDuration `json:"commitment_duration,omitempty"`
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -295,6 +298,9 @@ type CreateSubscriptionRequest struct {
 
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
+
+	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
+	CommitmentDuration *types.CommitmentDuration `json:"commitment_duration,omitempty"`
 
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
@@ -1020,9 +1026,13 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		InvoicingCustomerID:    r.InvoicingCustomerID,
 	}
 
-	// Set commitment amount and overage factor if provided
+	// Set commitment amount, duration, and overage factor if provided
 	if r.CommitmentAmount != nil {
 		sub.CommitmentAmount = r.CommitmentAmount
+	}
+
+	if r.CommitmentDuration != nil {
+		sub.CommitmentDuration = r.CommitmentDuration
 	}
 
 	if r.OverageFactor != nil {
@@ -1042,12 +1052,13 @@ type SubscriptionLineItemRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
+	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.CommitmentDuration `json:"commitment_duration,omitempty"`
 }
 
 // SubscriptionLineItemResponse represents the response for a subscription line item
@@ -1463,6 +1474,9 @@ func (r *SubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context
 	}
 	lineItem.CommitmentTrueUpEnabled = r.CommitmentTrueUpEnabled
 	lineItem.CommitmentWindowed = r.CommitmentWindowed
+	if r.CommitmentDuration != nil {
+		lineItem.CommitmentDuration = r.CommitmentDuration
+	}
 
 	return lineItem
 }

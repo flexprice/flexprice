@@ -78,6 +78,8 @@ const (
 	FieldBillingCycle = "billing_cycle"
 	// FieldCommitmentAmount holds the string denoting the commitment_amount field in the database.
 	FieldCommitmentAmount = "commitment_amount"
+	// FieldCommitmentDuration holds the string denoting the commitment_duration field in the database.
+	FieldCommitmentDuration = "commitment_duration"
 	// FieldOverageFactor holds the string denoting the overage_factor field in the database.
 	FieldOverageFactor = "overage_factor"
 	// FieldPaymentBehavior holds the string denoting the payment_behavior field in the database.
@@ -204,6 +206,7 @@ var Columns = []string{
 	FieldActivePauseID,
 	FieldBillingCycle,
 	FieldCommitmentAmount,
+	FieldCommitmentDuration,
 	FieldOverageFactor,
 	FieldPaymentBehavior,
 	FieldCollectionMethod,
@@ -441,6 +444,11 @@ func ByBillingCycle(opts ...sql.OrderTermOption) OrderOption {
 // ByCommitmentAmount orders the results by the commitment_amount field.
 func ByCommitmentAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCommitmentAmount, opts...).ToFunc()
+}
+
+// ByCommitmentDuration orders the results by the commitment_duration field.
+func ByCommitmentDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommitmentDuration, opts...).ToFunc()
 }
 
 // ByOverageFactor orders the results by the overage_factor field.

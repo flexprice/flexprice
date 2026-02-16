@@ -408,6 +408,20 @@ func (sc *SubscriptionCreate) SetNillableCommitmentAmount(d *decimal.Decimal) *S
 	return sc
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (sc *SubscriptionCreate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionCreate {
+	sc.mutation.SetCommitmentDuration(td)
+	return sc
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionCreate {
+	if td != nil {
+		sc.SetCommitmentDuration(*td)
+	}
+	return sc
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (sc *SubscriptionCreate) SetOverageFactor(d decimal.Decimal) *SubscriptionCreate {
 	sc.mutation.SetOverageFactor(d)
@@ -1045,6 +1059,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.CommitmentAmount(); ok {
 		_spec.SetField(subscription.FieldCommitmentAmount, field.TypeOther, value)
 		_node.CommitmentAmount = &value
+	}
+	if value, ok := sc.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
+		_node.CommitmentDuration = &value
 	}
 	if value, ok := sc.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)

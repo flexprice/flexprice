@@ -95,6 +95,9 @@ type Subscription struct {
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
 	CommitmentAmount *decimal.Decimal `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
 
+	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on a MONTHLY subscription)
+	CommitmentDuration *types.CommitmentDuration `db:"commitment_duration" json:"commitment_duration,omitempty"`
+
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `db:"overage_factor" json:"overage_factor,omitempty" swaggertype:"string"`
 
@@ -193,6 +196,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		PauseStatus:            types.PauseStatus(sub.PauseStatus),
 		ActivePauseID:          sub.ActivePauseID,
 		CommitmentAmount:       sub.CommitmentAmount,
+		CommitmentDuration:     sub.CommitmentDuration,
 		OverageFactor:          sub.OverageFactor,
 		PaymentBehavior:        string(sub.PaymentBehavior),
 		CollectionMethod:       string(sub.CollectionMethod),

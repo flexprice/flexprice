@@ -127,6 +127,13 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "decimal(20,6)",
 			}),
+		field.String("commitment_duration").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			GoType(types.CommitmentDuration("")),
 		field.Other("overage_factor", decimal.Decimal{}).
 			Optional().
 			Nillable().

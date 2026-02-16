@@ -369,6 +369,26 @@ func (su *SubscriptionUpdate) ClearCommitmentAmount() *SubscriptionUpdate {
 	return su
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (su *SubscriptionUpdate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionUpdate {
+	su.mutation.SetCommitmentDuration(td)
+	return su
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionUpdate {
+	if td != nil {
+		su.SetCommitmentDuration(*td)
+	}
+	return su
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (su *SubscriptionUpdate) ClearCommitmentDuration() *SubscriptionUpdate {
+	su.mutation.ClearCommitmentDuration()
+	return su
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (su *SubscriptionUpdate) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdate {
 	su.mutation.SetOverageFactor(d)
@@ -896,6 +916,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
+	}
+	if value, ok := su.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
+	}
+	if su.mutation.CommitmentDurationCleared() {
+		_spec.ClearField(subscription.FieldCommitmentDuration, field.TypeString)
 	}
 	if value, ok := su.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
@@ -1616,6 +1642,26 @@ func (suo *SubscriptionUpdateOne) ClearCommitmentAmount() *SubscriptionUpdateOne
 	return suo
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (suo *SubscriptionUpdateOne) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionUpdateOne {
+	suo.mutation.SetCommitmentDuration(td)
+	return suo
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionUpdateOne {
+	if td != nil {
+		suo.SetCommitmentDuration(*td)
+	}
+	return suo
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (suo *SubscriptionUpdateOne) ClearCommitmentDuration() *SubscriptionUpdateOne {
+	suo.mutation.ClearCommitmentDuration()
+	return suo
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (suo *SubscriptionUpdateOne) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdateOne {
 	suo.mutation.SetOverageFactor(d)
@@ -2173,6 +2219,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
+	}
+	if value, ok := suo.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
+	}
+	if suo.mutation.CommitmentDurationCleared() {
+		_spec.ClearField(subscription.FieldCommitmentDuration, field.TypeString)
 	}
 	if value, ok := suo.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)

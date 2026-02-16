@@ -45144,6 +45144,7 @@ type SubscriptionMutation struct {
 	active_pause_id            *string
 	billing_cycle              *types.BillingCycle
 	commitment_amount          *decimal.Decimal
+	commitment_duration        *types.CommitmentDuration
 	overage_factor             *decimal.Decimal
 	payment_behavior           *types.PaymentBehavior
 	collection_method          *types.CollectionMethod
@@ -46596,6 +46597,55 @@ func (m *SubscriptionMutation) ResetCommitmentAmount() {
 	delete(m.clearedFields, subscription.FieldCommitmentAmount)
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (m *SubscriptionMutation) SetCommitmentDuration(td types.CommitmentDuration) {
+	m.commitment_duration = &td
+}
+
+// CommitmentDuration returns the value of the "commitment_duration" field in the mutation.
+func (m *SubscriptionMutation) CommitmentDuration() (r types.CommitmentDuration, exists bool) {
+	v := m.commitment_duration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentDuration returns the old "commitment_duration" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldCommitmentDuration(ctx context.Context) (v *types.CommitmentDuration, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentDuration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentDuration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentDuration: %w", err)
+	}
+	return oldValue.CommitmentDuration, nil
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (m *SubscriptionMutation) ClearCommitmentDuration() {
+	m.commitment_duration = nil
+	m.clearedFields[subscription.FieldCommitmentDuration] = struct{}{}
+}
+
+// CommitmentDurationCleared returns if the "commitment_duration" field was cleared in this mutation.
+func (m *SubscriptionMutation) CommitmentDurationCleared() bool {
+	_, ok := m.clearedFields[subscription.FieldCommitmentDuration]
+	return ok
+}
+
+// ResetCommitmentDuration resets all changes to the "commitment_duration" field.
+func (m *SubscriptionMutation) ResetCommitmentDuration() {
+	m.commitment_duration = nil
+	delete(m.clearedFields, subscription.FieldCommitmentDuration)
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (m *SubscriptionMutation) SetOverageFactor(d decimal.Decimal) {
 	m.overage_factor = &d
@@ -47362,7 +47412,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 39)
+	fields := make([]string, 0, 40)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -47455,6 +47505,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	}
 	if m.commitment_amount != nil {
 		fields = append(fields, subscription.FieldCommitmentAmount)
+	}
+	if m.commitment_duration != nil {
+		fields = append(fields, subscription.FieldCommitmentDuration)
 	}
 	if m.overage_factor != nil {
 		fields = append(fields, subscription.FieldOverageFactor)
@@ -47550,6 +47603,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingCycle()
 	case subscription.FieldCommitmentAmount:
 		return m.CommitmentAmount()
+	case subscription.FieldCommitmentDuration:
+		return m.CommitmentDuration()
 	case subscription.FieldOverageFactor:
 		return m.OverageFactor()
 	case subscription.FieldPaymentBehavior:
@@ -47637,6 +47692,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldBillingCycle(ctx)
 	case subscription.FieldCommitmentAmount:
 		return m.OldCommitmentAmount(ctx)
+	case subscription.FieldCommitmentDuration:
+		return m.OldCommitmentDuration(ctx)
 	case subscription.FieldOverageFactor:
 		return m.OldOverageFactor(ctx)
 	case subscription.FieldPaymentBehavior:
@@ -47879,6 +47936,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCommitmentAmount(v)
 		return nil
+	case subscription.FieldCommitmentDuration:
+		v, ok := value.(types.CommitmentDuration)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentDuration(v)
+		return nil
 	case subscription.FieldOverageFactor:
 		v, ok := value.(decimal.Decimal)
 		if !ok {
@@ -48028,6 +48092,9 @@ func (m *SubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(subscription.FieldCommitmentAmount) {
 		fields = append(fields, subscription.FieldCommitmentAmount)
 	}
+	if m.FieldCleared(subscription.FieldCommitmentDuration) {
+		fields = append(fields, subscription.FieldCommitmentDuration)
+	}
 	if m.FieldCleared(subscription.FieldOverageFactor) {
 		fields = append(fields, subscription.FieldOverageFactor)
 	}
@@ -48086,6 +48153,9 @@ func (m *SubscriptionMutation) ClearField(name string) error {
 		return nil
 	case subscription.FieldCommitmentAmount:
 		m.ClearCommitmentAmount()
+		return nil
+	case subscription.FieldCommitmentDuration:
+		m.ClearCommitmentDuration()
 		return nil
 	case subscription.FieldOverageFactor:
 		m.ClearOverageFactor()
@@ -48196,6 +48266,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldCommitmentAmount:
 		m.ResetCommitmentAmount()
+		return nil
+	case subscription.FieldCommitmentDuration:
+		m.ResetCommitmentDuration()
 		return nil
 	case subscription.FieldOverageFactor:
 		m.ResetOverageFactor()
@@ -48523,6 +48596,7 @@ type SubscriptionLineItemMutation struct {
 	commitment_overage_factor  *decimal.Decimal
 	commitment_true_up_enabled *bool
 	commitment_windowed        *bool
+	commitment_duration        *types.CommitmentDuration
 	clearedFields              map[string]struct{}
 	subscription               *string
 	clearedsubscription        bool
@@ -50142,6 +50216,55 @@ func (m *SubscriptionLineItemMutation) ResetCommitmentWindowed() {
 	m.commitment_windowed = nil
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (m *SubscriptionLineItemMutation) SetCommitmentDuration(td types.CommitmentDuration) {
+	m.commitment_duration = &td
+}
+
+// CommitmentDuration returns the value of the "commitment_duration" field in the mutation.
+func (m *SubscriptionLineItemMutation) CommitmentDuration() (r types.CommitmentDuration, exists bool) {
+	v := m.commitment_duration
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCommitmentDuration returns the old "commitment_duration" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldCommitmentDuration(ctx context.Context) (v *types.CommitmentDuration, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCommitmentDuration is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCommitmentDuration requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCommitmentDuration: %w", err)
+	}
+	return oldValue.CommitmentDuration, nil
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (m *SubscriptionLineItemMutation) ClearCommitmentDuration() {
+	m.commitment_duration = nil
+	m.clearedFields[subscriptionlineitem.FieldCommitmentDuration] = struct{}{}
+}
+
+// CommitmentDurationCleared returns if the "commitment_duration" field was cleared in this mutation.
+func (m *SubscriptionLineItemMutation) CommitmentDurationCleared() bool {
+	_, ok := m.clearedFields[subscriptionlineitem.FieldCommitmentDuration]
+	return ok
+}
+
+// ResetCommitmentDuration resets all changes to the "commitment_duration" field.
+func (m *SubscriptionLineItemMutation) ResetCommitmentDuration() {
+	m.commitment_duration = nil
+	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentDuration)
+}
+
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
 func (m *SubscriptionLineItemMutation) ClearSubscription() {
 	m.clearedsubscription = true
@@ -50257,7 +50380,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 35)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -50360,6 +50483,9 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	if m.commitment_windowed != nil {
 		fields = append(fields, subscriptionlineitem.FieldCommitmentWindowed)
 	}
+	if m.commitment_duration != nil {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentDuration)
+	}
 	return fields
 }
 
@@ -50436,6 +50562,8 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.CommitmentTrueUpEnabled()
 	case subscriptionlineitem.FieldCommitmentWindowed:
 		return m.CommitmentWindowed()
+	case subscriptionlineitem.FieldCommitmentDuration:
+		return m.CommitmentDuration()
 	}
 	return nil, false
 }
@@ -50513,6 +50641,8 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldCommitmentTrueUpEnabled(ctx)
 	case subscriptionlineitem.FieldCommitmentWindowed:
 		return m.OldCommitmentWindowed(ctx)
+	case subscriptionlineitem.FieldCommitmentDuration:
+		return m.OldCommitmentDuration(ctx)
 	}
 	return nil, fmt.Errorf("unknown SubscriptionLineItem field %s", name)
 }
@@ -50760,6 +50890,13 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetCommitmentWindowed(v)
 		return nil
+	case subscriptionlineitem.FieldCommitmentDuration:
+		v, ok := value.(types.CommitmentDuration)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCommitmentDuration(v)
+		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)
 }
@@ -50865,6 +51002,9 @@ func (m *SubscriptionLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(subscriptionlineitem.FieldCommitmentOverageFactor) {
 		fields = append(fields, subscriptionlineitem.FieldCommitmentOverageFactor)
 	}
+	if m.FieldCleared(subscriptionlineitem.FieldCommitmentDuration) {
+		fields = append(fields, subscriptionlineitem.FieldCommitmentDuration)
+	}
 	return fields
 }
 
@@ -50938,6 +51078,9 @@ func (m *SubscriptionLineItemMutation) ClearField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldCommitmentOverageFactor:
 		m.ClearCommitmentOverageFactor()
+		return nil
+	case subscriptionlineitem.FieldCommitmentDuration:
+		m.ClearCommitmentDuration()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem nullable field %s", name)
@@ -51048,6 +51191,9 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldCommitmentWindowed:
 		m.ResetCommitmentWindowed()
+		return nil
+	case subscriptionlineitem.FieldCommitmentDuration:
+		m.ResetCommitmentDuration()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)
