@@ -469,15 +469,15 @@ func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentWindowed(b *bool) *
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (sliu *SubscriptionLineItemUpdate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionLineItemUpdate {
-	sliu.mutation.SetCommitmentDuration(td)
+func (sliu *SubscriptionLineItemUpdate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetCommitmentDuration(tp)
 	return sliu
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionLineItemUpdate {
-	if td != nil {
-		sliu.SetCommitmentDuration(*td)
+func (sliu *SubscriptionLineItemUpdate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemUpdate {
+	if tp != nil {
+		sliu.SetCommitmentDuration(*tp)
 	}
 	return sliu
 }
@@ -585,6 +585,11 @@ func (sliu *SubscriptionLineItemUpdate) check() error {
 	if v, ok := sliu.mutation.BillingPeriod(); ok {
 		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
+		}
+	}
+	if v, ok := sliu.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
 		}
 	}
 	if sliu.mutation.SubscriptionCleared() && len(sliu.mutation.SubscriptionIDs()) > 0 {
@@ -1252,15 +1257,15 @@ func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentWindowed(b *boo
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionLineItemUpdateOne {
-	sliuo.mutation.SetCommitmentDuration(td)
+func (sliuo *SubscriptionLineItemUpdateOne) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetCommitmentDuration(tp)
 	return sliuo
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionLineItemUpdateOne {
-	if td != nil {
-		sliuo.SetCommitmentDuration(*td)
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemUpdateOne {
+	if tp != nil {
+		sliuo.SetCommitmentDuration(*tp)
 	}
 	return sliuo
 }
@@ -1381,6 +1386,11 @@ func (sliuo *SubscriptionLineItemUpdateOne) check() error {
 	if v, ok := sliuo.mutation.BillingPeriod(); ok {
 		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
+		}
+	}
+	if v, ok := sliuo.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
 		}
 	}
 	if sliuo.mutation.SubscriptionCleared() && len(sliuo.mutation.SubscriptionIDs()) > 0 {

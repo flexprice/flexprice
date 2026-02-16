@@ -37,13 +37,13 @@ type SubscriptionLineItem struct {
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal          `db:"commitment_amount" json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal          `db:"commitment_quantity" json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType      `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal          `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                      `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
-	CommitmentWindowed      bool                      `db:"commitment_windowed" json:"commitment_windowed"`
-	CommitmentDuration      *types.CommitmentDuration `db:"commitment_duration" json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
+	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
+	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
 
 	Price *price.Price `json:"price,omitempty"`
 
@@ -136,9 +136,9 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		commitmentType = types.CommitmentType(*e.CommitmentType)
 	}
 
-	var commitmentDuration *types.CommitmentDuration
+	var commitmentDuration *types.BillingPeriod
 	if e.CommitmentDuration != nil {
-		cd := types.CommitmentDuration(*e.CommitmentDuration)
+		cd := types.BillingPeriod(*e.CommitmentDuration)
 		commitmentDuration = &cd
 	}
 

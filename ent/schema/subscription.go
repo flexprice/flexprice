@@ -133,7 +133,7 @@ func (Subscription) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable().
-			GoType(types.CommitmentDuration("")),
+			GoType(types.BillingPeriod("")),
 		field.Other("overage_factor", decimal.Decimal{}).
 			Optional().
 			Nillable().

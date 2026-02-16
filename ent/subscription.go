@@ -84,7 +84,7 @@ type Subscription struct {
 	// CommitmentAmount holds the value of the "commitment_amount" field.
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty"`
 	// CommitmentDuration holds the value of the "commitment_duration" field.
-	CommitmentDuration *types.CommitmentDuration `json:"commitment_duration,omitempty"`
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// OverageFactor holds the value of the "overage_factor" field.
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty"`
 	// Determines how subscription payments are handled
@@ -441,8 +441,8 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_duration", values[i])
 			} else if value.Valid {
-				s.CommitmentDuration = new(types.CommitmentDuration)
-				*s.CommitmentDuration = types.CommitmentDuration(value.String)
+				s.CommitmentDuration = new(types.BillingPeriod)
+				*s.CommitmentDuration = types.BillingPeriod(value.String)
 			}
 		case subscription.FieldOverageFactor:
 			if value, ok := values[i].(*sql.NullScanner); !ok {

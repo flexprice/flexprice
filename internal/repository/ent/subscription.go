@@ -77,6 +77,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetBillingCycle(sub.BillingCycle).
 		SetNillableCommitmentAmount(sub.CommitmentAmount).
 		SetNillableOverageFactor(sub.OverageFactor).
+		SetNillableCommitmentDuration(sub.CommitmentDuration).
 		SetStatus(string(sub.Status)).
 		SetCreatedBy(sub.CreatedBy).
 		SetUpdatedBy(sub.UpdatedBy).
@@ -743,6 +744,7 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
 				SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 				SetCommitmentWindowed(item.CommitmentWindowed).
+				SetNillableCommitmentDuration(item.CommitmentDuration).
 				SetMetadata(item.Metadata).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).

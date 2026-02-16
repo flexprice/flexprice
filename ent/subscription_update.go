@@ -370,15 +370,15 @@ func (su *SubscriptionUpdate) ClearCommitmentAmount() *SubscriptionUpdate {
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (su *SubscriptionUpdate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionUpdate {
-	su.mutation.SetCommitmentDuration(td)
+func (su *SubscriptionUpdate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionUpdate {
+	su.mutation.SetCommitmentDuration(tp)
 	return su
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (su *SubscriptionUpdate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionUpdate {
-	if td != nil {
-		su.SetCommitmentDuration(*td)
+func (su *SubscriptionUpdate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionUpdate {
+	if tp != nil {
+		su.SetCommitmentDuration(*tp)
 	}
 	return su
 }
@@ -1643,15 +1643,15 @@ func (suo *SubscriptionUpdateOne) ClearCommitmentAmount() *SubscriptionUpdateOne
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (suo *SubscriptionUpdateOne) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionUpdateOne {
-	suo.mutation.SetCommitmentDuration(td)
+func (suo *SubscriptionUpdateOne) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionUpdateOne {
+	suo.mutation.SetCommitmentDuration(tp)
 	return suo
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (suo *SubscriptionUpdateOne) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionUpdateOne {
-	if td != nil {
-		suo.SetCommitmentDuration(*td)
+func (suo *SubscriptionUpdateOne) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionUpdateOne {
+	if tp != nil {
+		suo.SetCommitmentDuration(*tp)
 	}
 	return suo
 }

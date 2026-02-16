@@ -175,7 +175,7 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable().
-			GoType(types.CommitmentDuration("")),
+			GoType(types.BillingPeriod("")),
 	}
 }
 

@@ -45144,7 +45144,7 @@ type SubscriptionMutation struct {
 	active_pause_id            *string
 	billing_cycle              *types.BillingCycle
 	commitment_amount          *decimal.Decimal
-	commitment_duration        *types.CommitmentDuration
+	commitment_duration        *types.BillingPeriod
 	overage_factor             *decimal.Decimal
 	payment_behavior           *types.PaymentBehavior
 	collection_method          *types.CollectionMethod
@@ -46598,12 +46598,12 @@ func (m *SubscriptionMutation) ResetCommitmentAmount() {
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (m *SubscriptionMutation) SetCommitmentDuration(td types.CommitmentDuration) {
-	m.commitment_duration = &td
+func (m *SubscriptionMutation) SetCommitmentDuration(tp types.BillingPeriod) {
+	m.commitment_duration = &tp
 }
 
 // CommitmentDuration returns the value of the "commitment_duration" field in the mutation.
-func (m *SubscriptionMutation) CommitmentDuration() (r types.CommitmentDuration, exists bool) {
+func (m *SubscriptionMutation) CommitmentDuration() (r types.BillingPeriod, exists bool) {
 	v := m.commitment_duration
 	if v == nil {
 		return
@@ -46614,7 +46614,7 @@ func (m *SubscriptionMutation) CommitmentDuration() (r types.CommitmentDuration,
 // OldCommitmentDuration returns the old "commitment_duration" field's value of the Subscription entity.
 // If the Subscription object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionMutation) OldCommitmentDuration(ctx context.Context) (v *types.CommitmentDuration, err error) {
+func (m *SubscriptionMutation) OldCommitmentDuration(ctx context.Context) (v *types.BillingPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCommitmentDuration is only allowed on UpdateOne operations")
 	}
@@ -47937,7 +47937,7 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		m.SetCommitmentAmount(v)
 		return nil
 	case subscription.FieldCommitmentDuration:
-		v, ok := value.(types.CommitmentDuration)
+		v, ok := value.(types.BillingPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -48596,7 +48596,7 @@ type SubscriptionLineItemMutation struct {
 	commitment_overage_factor  *decimal.Decimal
 	commitment_true_up_enabled *bool
 	commitment_windowed        *bool
-	commitment_duration        *types.CommitmentDuration
+	commitment_duration        *types.BillingPeriod
 	clearedFields              map[string]struct{}
 	subscription               *string
 	clearedsubscription        bool
@@ -50217,12 +50217,12 @@ func (m *SubscriptionLineItemMutation) ResetCommitmentWindowed() {
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (m *SubscriptionLineItemMutation) SetCommitmentDuration(td types.CommitmentDuration) {
-	m.commitment_duration = &td
+func (m *SubscriptionLineItemMutation) SetCommitmentDuration(tp types.BillingPeriod) {
+	m.commitment_duration = &tp
 }
 
 // CommitmentDuration returns the value of the "commitment_duration" field in the mutation.
-func (m *SubscriptionLineItemMutation) CommitmentDuration() (r types.CommitmentDuration, exists bool) {
+func (m *SubscriptionLineItemMutation) CommitmentDuration() (r types.BillingPeriod, exists bool) {
 	v := m.commitment_duration
 	if v == nil {
 		return
@@ -50233,7 +50233,7 @@ func (m *SubscriptionLineItemMutation) CommitmentDuration() (r types.CommitmentD
 // OldCommitmentDuration returns the old "commitment_duration" field's value of the SubscriptionLineItem entity.
 // If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldCommitmentDuration(ctx context.Context) (v *types.CommitmentDuration, err error) {
+func (m *SubscriptionLineItemMutation) OldCommitmentDuration(ctx context.Context) (v *types.BillingPeriod, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCommitmentDuration is only allowed on UpdateOne operations")
 	}
@@ -50891,7 +50891,7 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		m.SetCommitmentWindowed(v)
 		return nil
 	case subscriptionlineitem.FieldCommitmentDuration:
-		v, ok := value.(types.CommitmentDuration)
+		v, ok := value.(types.BillingPeriod)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

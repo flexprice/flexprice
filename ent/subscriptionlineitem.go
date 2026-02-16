@@ -90,7 +90,7 @@ type SubscriptionLineItem struct {
 	// CommitmentWindowed holds the value of the "commitment_windowed" field.
 	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
 	// CommitmentDuration holds the value of the "commitment_duration" field.
-	CommitmentDuration *types.CommitmentDuration `json:"commitment_duration,omitempty"`
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionLineItemQuery when eager-loading is set.
 	Edges        SubscriptionLineItemEdges `json:"edges"`
@@ -393,8 +393,8 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field commitment_duration", values[i])
 			} else if value.Valid {
-				sli.CommitmentDuration = new(types.CommitmentDuration)
-				*sli.CommitmentDuration = types.CommitmentDuration(value.String)
+				sli.CommitmentDuration = new(types.BillingPeriod)
+				*sli.CommitmentDuration = types.BillingPeriod(value.String)
 			}
 		default:
 			sli.selectValues.Set(columns[i], values[i])

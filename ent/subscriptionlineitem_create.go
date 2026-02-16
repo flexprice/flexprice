@@ -445,15 +445,15 @@ func (slic *SubscriptionLineItemCreate) SetNillableCommitmentWindowed(b *bool) *
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (slic *SubscriptionLineItemCreate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionLineItemCreate {
-	slic.mutation.SetCommitmentDuration(td)
+func (slic *SubscriptionLineItemCreate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionLineItemCreate {
+	slic.mutation.SetCommitmentDuration(tp)
 	return slic
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionLineItemCreate {
-	if td != nil {
-		slic.SetCommitmentDuration(*td)
+func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionLineItemCreate {
+	if tp != nil {
+		slic.SetCommitmentDuration(*tp)
 	}
 	return slic
 }
@@ -640,6 +640,11 @@ func (slic *SubscriptionLineItemCreate) check() error {
 	}
 	if _, ok := slic.mutation.CommitmentWindowed(); !ok {
 		return &ValidationError{Name: "commitment_windowed", err: errors.New(`ent: missing required field "SubscriptionLineItem.commitment_windowed"`)}
+	}
+	if v, ok := slic.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
+		}
 	}
 	if len(slic.mutation.SubscriptionIDs()) == 0 {
 		return &ValidationError{Name: "subscription", err: errors.New(`ent: missing required edge "SubscriptionLineItem.subscription"`)}

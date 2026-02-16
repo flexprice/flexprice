@@ -237,7 +237,7 @@ func CommitmentWindowed(v bool) predicate.SubscriptionLineItem {
 }
 
 // CommitmentDuration applies equality check predicate on the "commitment_duration" field. It's identical to CommitmentDurationEQ.
-func CommitmentDuration(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDuration(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldCommitmentDuration, vc))
 }
@@ -2329,19 +2329,19 @@ func CommitmentWindowedNEQ(v bool) predicate.SubscriptionLineItem {
 }
 
 // CommitmentDurationEQ applies the EQ predicate on the "commitment_duration" field.
-func CommitmentDurationEQ(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationEQ(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationNEQ applies the NEQ predicate on the "commitment_duration" field.
-func CommitmentDurationNEQ(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationNEQ(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationIn applies the In predicate on the "commitment_duration" field.
-func CommitmentDurationIn(vs ...types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationIn(vs ...types.BillingPeriod) predicate.SubscriptionLineItem {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
@@ -2350,7 +2350,7 @@ func CommitmentDurationIn(vs ...types.CommitmentDuration) predicate.Subscription
 }
 
 // CommitmentDurationNotIn applies the NotIn predicate on the "commitment_duration" field.
-func CommitmentDurationNotIn(vs ...types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationNotIn(vs ...types.BillingPeriod) predicate.SubscriptionLineItem {
 	v := make([]any, len(vs))
 	for i := range v {
 		v[i] = string(vs[i])
@@ -2359,43 +2359,43 @@ func CommitmentDurationNotIn(vs ...types.CommitmentDuration) predicate.Subscript
 }
 
 // CommitmentDurationGT applies the GT predicate on the "commitment_duration" field.
-func CommitmentDurationGT(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationGT(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldGT(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationGTE applies the GTE predicate on the "commitment_duration" field.
-func CommitmentDurationGTE(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationGTE(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationLT applies the LT predicate on the "commitment_duration" field.
-func CommitmentDurationLT(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationLT(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldLT(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationLTE applies the LTE predicate on the "commitment_duration" field.
-func CommitmentDurationLTE(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationLTE(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationContains applies the Contains predicate on the "commitment_duration" field.
-func CommitmentDurationContains(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationContains(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldContains(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationHasPrefix applies the HasPrefix predicate on the "commitment_duration" field.
-func CommitmentDurationHasPrefix(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationHasPrefix(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationHasSuffix applies the HasSuffix predicate on the "commitment_duration" field.
-func CommitmentDurationHasSuffix(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationHasSuffix(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldCommitmentDuration, vc))
 }
@@ -2411,13 +2411,13 @@ func CommitmentDurationNotNil() predicate.SubscriptionLineItem {
 }
 
 // CommitmentDurationEqualFold applies the EqualFold predicate on the "commitment_duration" field.
-func CommitmentDurationEqualFold(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationEqualFold(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldCommitmentDuration, vc))
 }
 
 // CommitmentDurationContainsFold applies the ContainsFold predicate on the "commitment_duration" field.
-func CommitmentDurationContainsFold(v types.CommitmentDuration) predicate.SubscriptionLineItem {
+func CommitmentDurationContainsFold(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldCommitmentDuration, vc))
 }

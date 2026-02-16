@@ -409,15 +409,15 @@ func (sc *SubscriptionCreate) SetNillableCommitmentAmount(d *decimal.Decimal) *S
 }
 
 // SetCommitmentDuration sets the "commitment_duration" field.
-func (sc *SubscriptionCreate) SetCommitmentDuration(td types.CommitmentDuration) *SubscriptionCreate {
-	sc.mutation.SetCommitmentDuration(td)
+func (sc *SubscriptionCreate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionCreate {
+	sc.mutation.SetCommitmentDuration(tp)
 	return sc
 }
 
 // SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
-func (sc *SubscriptionCreate) SetNillableCommitmentDuration(td *types.CommitmentDuration) *SubscriptionCreate {
-	if td != nil {
-		sc.SetCommitmentDuration(*td)
+func (sc *SubscriptionCreate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionCreate {
+	if tp != nil {
+		sc.SetCommitmentDuration(*tp)
 	}
 	return sc
 }
@@ -869,6 +869,11 @@ func (sc *SubscriptionCreate) check() error {
 	if v, ok := sc.mutation.BillingCycle(); ok {
 		if err := subscription.BillingCycleValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_cycle", err: fmt.Errorf(`ent: validator failed for field "Subscription.billing_cycle": %w`, err)}
+		}
+	}
+	if v, ok := sc.mutation.CommitmentDuration(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "Subscription.commitment_duration": %w`, err)}
 		}
 	}
 	if _, ok := sc.mutation.PaymentBehavior(); !ok {

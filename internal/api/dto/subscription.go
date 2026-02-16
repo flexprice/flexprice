@@ -83,7 +83,7 @@ type LineItemCommitmentConfig struct {
 	IsWindowCommitment *bool `json:"is_window_commitment,omitempty"`
 
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
-	CommitmentDuration *types.CommitmentDuration `json:"commitment_duration,omitempty"`
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -300,7 +300,7 @@ type CreateSubscriptionRequest struct {
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
 	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
-	CommitmentDuration *types.CommitmentDuration `json:"commitment_duration,omitempty"`
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
@@ -1052,13 +1052,13 @@ type SubscriptionLineItemRequest struct {
 	Metadata    map[string]string `json:"metadata,omitempty"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal          `json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal          `json:"commitment_quantity,omitempty"`
-	CommitmentType          types.CommitmentType      `json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal          `json:"commitment_overage_factor,omitempty"`
-	CommitmentTrueUpEnabled bool                      `json:"commitment_true_up_enabled,omitempty"`
-	CommitmentWindowed      bool                      `json:"commitment_windowed,omitempty"`
-	CommitmentDuration      *types.CommitmentDuration `json:"commitment_duration,omitempty"`
+	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
+	CommitmentQuantity      *decimal.Decimal     `json:"commitment_quantity,omitempty"`
+	CommitmentType          types.CommitmentType `json:"commitment_type,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
+	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
+	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 }
 
 // SubscriptionLineItemResponse represents the response for a subscription line item
