@@ -3823,26 +3823,29 @@ func (s *subscriptionService) addAddonToSubscription(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Check if addon is already active on this subscription
-	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
-		EntityID:   sub.ID,
-		EntityType: types.AddonAssociationEntityTypeSubscription,
-		StartDate:  req.StartDate,
-		AddonIds:   []string{req.AddonID},
-	})
-	if err != nil {
-		return nil, err
-	}
+	// Check if addon is already active on this subscription (only for onetime addons)
+	// For multiple_instance addons, allow multiple instances of the same addon
+	if a.Addon.Type == types.AddonTypeOnetime {
+		activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
+			EntityID:   sub.ID,
+			EntityType: types.AddonAssociationEntityTypeSubscription,
+			StartDate:  req.StartDate,
+			AddonIds:   []string{req.AddonID},
+		})
+		if err != nil {
+			return nil, err
+		}
 
-	if activeAddons != nil && len(activeAddons.Items) > 0 {
-		return nil, ierr.NewError("addon is already added to subscription").
-			WithHint("Cannot add addon to subscription that already has an active instance").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": sub.ID,
-				"addon_id":        req.AddonID,
-				"active_addons":   activeAddons,
-			}).
-			Mark(ierr.ErrValidation)
+		if activeAddons != nil && len(activeAddons.Items) > 0 {
+			return nil, ierr.NewError("addon is already added to subscription").
+				WithHint("Cannot add onetime addon to subscription that already has an active instance").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id": sub.ID,
+					"addon_id":        req.AddonID,
+					"active_addons":   activeAddons,
+				}).
+				Mark(ierr.ErrValidation)
+		}
 	}
 
 	// Validate entitlement compatibility if check is not skipped

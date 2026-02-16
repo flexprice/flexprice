@@ -9,18 +9,20 @@ import (
 type AddonType string
 
 const (
-	AddonTypeOnetime AddonType = "onetime"
+	AddonTypeOnetime          AddonType = "onetime"
+	AddonTypeMultipleInstance AddonType = "multiple_instance"
 )
 
 func (at AddonType) Validate() error {
 
 	allowedTypes := []AddonType{
 		AddonTypeOnetime,
+		AddonTypeMultipleInstance,
 	}
 
 	if !lo.Contains(allowedTypes, at) {
 		return ierr.NewError("invalid addon type").
-			WithHint("Addon type must be onetime").
+			WithHint("Addon type must be onetime or multiple_instance").
 			Mark(ierr.ErrValidation)
 	}
 
