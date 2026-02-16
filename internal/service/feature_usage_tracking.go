@@ -32,6 +32,7 @@ import (
 	workflowModels "github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
@@ -3262,6 +3263,17 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 		return response.Items[i].FeatureName < response.Items[j].FeatureName
 	})
 
+	// Build custom analytics if configured
+	customAnalytics, err := s.buildCustomAnalytics(ctx, response)
+	if err != nil {
+		s.Logger.Warnw("failed to build custom analytics",
+			"error", err,
+		)
+		// Continue without custom analytics rather than failing
+	} else if customAnalytics != nil {
+		response.CustomAnalytics = customAnalytics
+	}
+
 	return response, nil
 }
 
@@ -4127,4 +4139,92 @@ func (s *featureUsageTrackingService) runDebugTracker(ctx context.Context, event
 	tracker.FailurePoint = nil
 
 	return tracker
+}
+
+// buildCustomAnalytics builds custom analytics items based on configured rules
+func (s *featureUsageTrackingService) buildCustomAnalytics(
+	ctx context.Context,
+	response *dto.GetUsageAnalyticsResponse,
+) ([]dto.CustomAnalyticItem, error) {
+	// 1. Fetch custom analytics settings for this tenant/environment
+	config, err := s.getCustomAnalyticsConfig(ctx)
+	if err != nil || config == nil {
+		return nil, nil // No custom analytics configured
+	}
+
+	// 2. Apply custom rules to matching items
+	customItems := make([]dto.CustomAnalyticItem, 0, len(config.Rules))
+
+	for _, rule := range config.Rules {
+		// Find matching item by ID
+		for _, item := range response.Items {
+			// Simple ID match - if rule targets this feature, apply the calculation
+			if rule.TargetType == "feature" && item.FeatureID == rule.TargetID {
+				customItem := s.applyCustomRule(rule, item)
+				if customItem != nil {
+					customItems = append(customItems, *customItem)
+				}
+				break // Found the match, move to next rule
+			}
+			// Can add more target types here (meter, event_name) if needed
+		}
+	}
+
+	return customItems, nil
+}
+
+// applyCustomRule applies hardcoded logic based on rule ID (calculation type)
+func (s *featureUsageTrackingService) applyCustomRule(
+	rule types.CustomAnalyticsRule,
+	sourceItem dto.UsageAnalyticItem,
+) *dto.CustomAnalyticItem {
+	// Hardcoded logic based on calculation type
+	switch types.CustomAnalyticsRuleID(rule.ID) {
+	case types.CustomAnalyticsRuleRevenuePerMinute:
+		// Calculate revenue per minute: total_cost / (total_usage / 60000)
+		// First convert usage from milliseconds to minutes
+		usageInMinutes := sourceItem.TotalUsage.Div(decimal.NewFromInt(60000))
+
+		// Avoid division by zero
+		if usageInMinutes.IsZero() {
+			return nil
+		}
+
+		// Calculate revenue per minute
+		revenuePerMinute := sourceItem.TotalCost.Div(usageInMinutes)
+
+		return &dto.CustomAnalyticItem{
+			ID:          rule.ID,
+			Name:        "Revenue per Minute",
+			FeatureName: sourceItem.FeatureName, // Include the feature name from the source item
+			Value:       revenuePerMinute,
+			Type:        rule.TargetType,
+		}
+	default:
+		return nil // Unknown rule ID
+	}
+}
+
+// getCustomAnalyticsConfig fetches custom analytics configuration from settings
+func (s *featureUsageTrackingService) getCustomAnalyticsConfig(ctx context.Context) (*types.CustomAnalyticsConfig, error) {
+	setting, err := s.SettingsRepo.GetByKey(ctx, types.SettingKeyCustomAnalytics)
+	if err != nil {
+		// Setting not found is not an error - just means no custom analytics configured
+		return nil, nil
+	}
+
+	if setting == nil || setting.Value == nil {
+		return nil, nil
+	}
+
+	config, err := utils.ToStruct[types.CustomAnalyticsConfig](setting.Value)
+	if err != nil {
+		s.Logger.Warnw("failed to parse custom analytics config",
+			"error", err,
+			"setting_id", setting.ID,
+		)
+		return nil, err
+	}
+
+	return &config, nil
 }
