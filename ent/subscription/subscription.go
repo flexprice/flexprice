@@ -96,6 +96,8 @@ const (
 	FieldEnableTrueUp = "enable_true_up"
 	// FieldInvoicingCustomerID holds the string denoting the invoicing_customer_id field in the database.
 	FieldInvoicingCustomerID = "invoicing_customer_id"
+	// FieldParentSubscriptionID holds the string denoting the parent_subscription_id field in the database.
+	FieldParentSubscriptionID = "parent_subscription_id"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -215,6 +217,7 @@ var Columns = []string{
 	FieldProrationBehavior,
 	FieldEnableTrueUp,
 	FieldInvoicingCustomerID,
+	FieldParentSubscriptionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -489,6 +492,11 @@ func ByEnableTrueUp(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoicingCustomerID orders the results by the invoicing_customer_id field.
 func ByInvoicingCustomerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoicingCustomerID, opts...).ToFunc()
+}
+
+// ByParentSubscriptionID orders the results by the parent_subscription_id field.
+func ByParentSubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentSubscriptionID, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

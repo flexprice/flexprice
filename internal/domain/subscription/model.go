@@ -127,6 +127,9 @@ type Subscription struct {
 	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
 	InvoicingCustomerID *string `db:"invoicing_customer_id" json:"invoicing_customer_id,omitempty"`
 
+	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
+	ParentSubscriptionID *string `db:"parent_subscription_id" json:"parent_subscription_id,omitempty"`
+
 	types.BaseModel
 }
 
@@ -207,9 +210,10 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		Pauses:              pauses,
 		Phases:              phases,
 		CustomerTimezone:    sub.CustomerTimezone,
-		ProrationBehavior:   types.ProrationBehavior(sub.ProrationBehavior),
-		EnableTrueUp:        sub.EnableTrueUp,
-		InvoicingCustomerID: sub.InvoicingCustomerID,
+		ProrationBehavior:     types.ProrationBehavior(sub.ProrationBehavior),
+		EnableTrueUp:          sub.EnableTrueUp,
+		InvoicingCustomerID:   sub.InvoicingCustomerID,
+		ParentSubscriptionID: sub.ParentSubscriptionID,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

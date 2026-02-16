@@ -90,6 +90,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetEnableTrueUp(sub.EnableTrueUp).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
+		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		Save(ctx)
 
 	if err != nil {
@@ -206,6 +207,12 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		query.SetActivePauseID(*sub.ActivePauseID)
 	} else {
 		query.ClearActivePauseID()
+	}
+
+	if sub.ParentSubscriptionID != nil {
+		query.SetParentSubscriptionID(*sub.ParentSubscriptionID)
+	} else {
+		query.ClearParentSubscriptionID()
 	}
 
 	// Execute update
@@ -587,6 +594,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 	// Apply subscription IDs filter
 	if len(f.SubscriptionIDs) > 0 {
 		query = query.Where(subscription.IDIn(f.SubscriptionIDs...))
+	}
+
+	// Apply parent subscription IDs filter
+	if len(f.ParentSubscriptionIDs) > 0 {
+		query = query.Where(subscription.ParentSubscriptionIDIn(f.ParentSubscriptionIDs...))
 	}
 
 	// Apply customer filter

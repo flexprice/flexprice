@@ -101,6 +101,8 @@ type Subscription struct {
 	EnableTrueUp bool `json:"enable_true_up,omitempty"`
 	// Customer ID to use for invoicing (can differ from the subscription customer)
 	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
+	// Parent subscription ID for hierarchy (e.g. child subscription under a parent)
+	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionQuery when eager-loading is set.
 	Edges        SubscriptionEdges `json:"edges"`
@@ -217,7 +219,7 @@ func (*Subscription) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscription.FieldBillingPeriodCount, subscription.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCommitmentDuration, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldCustomerTimezone, subscription.FieldProrationBehavior, subscription.FieldInvoicingCustomerID:
+		case subscription.FieldID, subscription.FieldTenantID, subscription.FieldStatus, subscription.FieldCreatedBy, subscription.FieldUpdatedBy, subscription.FieldEnvironmentID, subscription.FieldLookupKey, subscription.FieldCustomerID, subscription.FieldPlanID, subscription.FieldSubscriptionStatus, subscription.FieldCurrency, subscription.FieldBillingCadence, subscription.FieldBillingPeriod, subscription.FieldPauseStatus, subscription.FieldActivePauseID, subscription.FieldBillingCycle, subscription.FieldCommitmentDuration, subscription.FieldPaymentBehavior, subscription.FieldCollectionMethod, subscription.FieldGatewayPaymentMethodID, subscription.FieldCustomerTimezone, subscription.FieldProrationBehavior, subscription.FieldInvoicingCustomerID, subscription.FieldParentSubscriptionID:
 			values[i] = new(sql.NullString)
 		case subscription.FieldCreatedAt, subscription.FieldUpdatedAt, subscription.FieldBillingAnchor, subscription.FieldStartDate, subscription.FieldEndDate, subscription.FieldCurrentPeriodStart, subscription.FieldCurrentPeriodEnd, subscription.FieldCancelledAt, subscription.FieldCancelAt, subscription.FieldTrialStart, subscription.FieldTrialEnd:
 			values[i] = new(sql.NullTime)
@@ -494,6 +496,13 @@ func (s *Subscription) assignValues(columns []string, values []any) error {
 				s.InvoicingCustomerID = new(string)
 				*s.InvoicingCustomerID = value.String
 			}
+		case subscription.FieldParentSubscriptionID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field parent_subscription_id", values[i])
+			} else if value.Valid {
+				s.ParentSubscriptionID = new(string)
+				*s.ParentSubscriptionID = value.String
+			}
 		default:
 			s.selectValues.Set(columns[i], values[i])
 		}
@@ -707,6 +716,11 @@ func (s *Subscription) String() string {
 	builder.WriteString(", ")
 	if v := s.InvoicingCustomerID; v != nil {
 		builder.WriteString("invoicing_customer_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := s.ParentSubscriptionID; v != nil {
+		builder.WriteString("parent_subscription_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

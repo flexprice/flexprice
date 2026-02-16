@@ -97,6 +97,20 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 	}
 
+	if req.ParentSubscriptionID != nil && lo.FromPtr(req.ParentSubscriptionID) != "" {
+		parentSub, err := s.SubRepo.Get(ctx, lo.FromPtr(req.ParentSubscriptionID))
+		if err != nil {
+			return nil, err
+		}
+
+		if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+			return nil, ierr.NewError("parent subscription is not active").
+				WithHint("The parent subscription must be active").
+				WithReportableDetails(map[string]interface{}{"parent_subscription_id": *req.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	// Get and validate plan
 	plan, err := s.PlanRepo.Get(ctx, req.PlanID)
 	if err != nil {
@@ -1525,6 +1539,31 @@ func (s *subscriptionService) UpdateSubscription(ctx context.Context, subscripti
 		return nil, ierr.WithError(err).
 			WithHint("Failed to retrieve subscription").
 			Mark(ierr.ErrDatabase)
+	}
+
+	// Handle parent_subscription_id: omit = unchanged, "" = clear, non-empty = set (validate exists and active)
+	if req.ParentSubscriptionID != nil {
+		if lo.FromPtr(req.ParentSubscriptionID) == "" {
+			subscription.ParentSubscriptionID = nil
+		} else {
+			if lo.FromPtr(req.ParentSubscriptionID) == subscriptionID {
+				return nil, ierr.NewError("subscription cannot be its own parent").
+					WithHint("parent_subscription_id must be a different subscription ID").
+					WithReportableDetails(map[string]interface{}{"subscription_id": subscriptionID}).
+					Mark(ierr.ErrValidation)
+			}
+			parentSub, err := s.SubRepo.Get(ctx, lo.FromPtr(req.ParentSubscriptionID))
+			if err != nil {
+				return nil, err
+			}
+			if parentSub.SubscriptionStatus != types.SubscriptionStatusActive {
+				return nil, ierr.NewError("parent subscription must be active").
+					WithHint("The parent subscription must be active").
+					WithReportableDetails(map[string]interface{}{"parent_subscription_id": *req.ParentSubscriptionID, "subscription_status": parentSub.SubscriptionStatus}).
+					Mark(ierr.ErrValidation)
+			}
+			subscription.ParentSubscriptionID = req.ParentSubscriptionID
+		}
 	}
 
 	// Update fields from request

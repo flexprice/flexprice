@@ -45152,6 +45152,7 @@ type SubscriptionMutation struct {
 	customer_timezone          *string
 	proration_behavior         *types.ProrationBehavior
 	enable_true_up             *bool
+	parent_subscription_id     *string
 	clearedFields              map[string]struct{}
 	line_items                 map[string]struct{}
 	removedline_items          map[string]struct{}
@@ -46973,6 +46974,55 @@ func (m *SubscriptionMutation) ResetInvoicingCustomerID() {
 	delete(m.clearedFields, subscription.FieldInvoicingCustomerID)
 }
 
+// SetParentSubscriptionID sets the "parent_subscription_id" field.
+func (m *SubscriptionMutation) SetParentSubscriptionID(s string) {
+	m.parent_subscription_id = &s
+}
+
+// ParentSubscriptionID returns the value of the "parent_subscription_id" field in the mutation.
+func (m *SubscriptionMutation) ParentSubscriptionID() (r string, exists bool) {
+	v := m.parent_subscription_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldParentSubscriptionID returns the old "parent_subscription_id" field's value of the Subscription entity.
+// If the Subscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionMutation) OldParentSubscriptionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldParentSubscriptionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldParentSubscriptionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldParentSubscriptionID: %w", err)
+	}
+	return oldValue.ParentSubscriptionID, nil
+}
+
+// ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
+func (m *SubscriptionMutation) ClearParentSubscriptionID() {
+	m.parent_subscription_id = nil
+	m.clearedFields[subscription.FieldParentSubscriptionID] = struct{}{}
+}
+
+// ParentSubscriptionIDCleared returns if the "parent_subscription_id" field was cleared in this mutation.
+func (m *SubscriptionMutation) ParentSubscriptionIDCleared() bool {
+	_, ok := m.clearedFields[subscription.FieldParentSubscriptionID]
+	return ok
+}
+
+// ResetParentSubscriptionID resets all changes to the "parent_subscription_id" field.
+func (m *SubscriptionMutation) ResetParentSubscriptionID() {
+	m.parent_subscription_id = nil
+	delete(m.clearedFields, subscription.FieldParentSubscriptionID)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by ids.
 func (m *SubscriptionMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -47412,7 +47462,7 @@ func (m *SubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 40)
+	fields := make([]string, 0, 41)
 	if m.tenant_id != nil {
 		fields = append(fields, subscription.FieldTenantID)
 	}
@@ -47533,6 +47583,9 @@ func (m *SubscriptionMutation) Fields() []string {
 	if m.invoicing_customer != nil {
 		fields = append(fields, subscription.FieldInvoicingCustomerID)
 	}
+	if m.parent_subscription_id != nil {
+		fields = append(fields, subscription.FieldParentSubscriptionID)
+	}
 	return fields
 }
 
@@ -47621,6 +47674,8 @@ func (m *SubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.EnableTrueUp()
 	case subscription.FieldInvoicingCustomerID:
 		return m.InvoicingCustomerID()
+	case subscription.FieldParentSubscriptionID:
+		return m.ParentSubscriptionID()
 	}
 	return nil, false
 }
@@ -47710,6 +47765,8 @@ func (m *SubscriptionMutation) OldField(ctx context.Context, name string) (ent.V
 		return m.OldEnableTrueUp(ctx)
 	case subscription.FieldInvoicingCustomerID:
 		return m.OldInvoicingCustomerID(ctx)
+	case subscription.FieldParentSubscriptionID:
+		return m.OldParentSubscriptionID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -47999,6 +48056,13 @@ func (m *SubscriptionMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInvoicingCustomerID(v)
 		return nil
+	case subscription.FieldParentSubscriptionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetParentSubscriptionID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
 }
@@ -48104,6 +48168,9 @@ func (m *SubscriptionMutation) ClearedFields() []string {
 	if m.FieldCleared(subscription.FieldInvoicingCustomerID) {
 		fields = append(fields, subscription.FieldInvoicingCustomerID)
 	}
+	if m.FieldCleared(subscription.FieldParentSubscriptionID) {
+		fields = append(fields, subscription.FieldParentSubscriptionID)
+	}
 	return fields
 }
 
@@ -48165,6 +48232,9 @@ func (m *SubscriptionMutation) ClearField(name string) error {
 		return nil
 	case subscription.FieldInvoicingCustomerID:
 		m.ClearInvoicingCustomerID()
+		return nil
+	case subscription.FieldParentSubscriptionID:
+		m.ClearParentSubscriptionID()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription nullable field %s", name)
@@ -48293,6 +48363,9 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 		return nil
 	case subscription.FieldInvoicingCustomerID:
 		m.ResetInvoicingCustomerID()
+		return nil
+	case subscription.FieldParentSubscriptionID:
+		m.ResetParentSubscriptionID()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription field %s", name)
