@@ -1,0 +1,162 @@
+name: Publish Helm Chart to AWS Public ECR
+
+on:
+  push:
+    branches:
+      - main
+      - memetics19:ft/helm
+    paths:
+      - 'helm/flexprice/**'
+      - '.github/workflows/publish-helm-chart.yml'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Chart version override (e.g., 1.0.0). Leave empty to use Chart.yaml version'
+        required: false
+        type: string
+      force:
+        description: 'Force push even if version exists'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  HELM_REGISTRY: oci://public.ecr.aws/l7n1c1i5/flexprice
+  HELM_REPOSITORY: helm-charts
+
+jobs:
+  publish-chart:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: '3.14.0'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+        continue-on-error: true
+
+      - name: Login to AWS Public ECR
+        id: ecr-login
+        run: |
+          echo "Logging into AWS Public ECR..."
+          # Public ECR requires us-east-1 region
+          aws ecr-public get-login-password --region us-east-1 | \
+          helm registry login --username AWS --password-stdin public.ecr.aws
+          
+          if [ $? -eq 0 ]; then
+            echo "Successfully logged into AWS Public ECR"
+          else
+            echo "::warning::Failed to login to AWS Public ECR, continuing anyway"
+          fi
+
+      - name: Extract Chart Version
+        id: chart-version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            CHART_VERSION="${{ github.event.inputs.version }}"
+          else
+            CHART_VERSION=$(helm show chart helm/flexprice | grep '^version:' | awk '{print $2}' | tr -d '"' || echo "1.0.0")
+          fi
+          echo "version=$CHART_VERSION" >> $GITHUB_OUTPUT
+          echo "Chart version: $CHART_VERSION"
+
+      - name: Extract Chart Name
+        id: chart-name
+        run: |
+          CHART_NAME=$(helm show chart helm/flexprice | grep '^name:' | awk '{print $2}' | tr -d '"' || echo "flexprice")
+          echo "name=$CHART_NAME" >> $GITHUB_OUTPUT
+          echo "Chart name: $CHART_NAME"
+
+      - name: Lint Helm Chart
+        run: |
+          helm lint helm/flexprice
+          helm template flexprice-test helm/flexprice --debug
+
+      - name: Package Helm Chart
+        run: |
+          helm package helm/flexprice --version ${{ steps.chart-version.outputs.version }}
+
+      - name: Check if version already exists
+        id: version-check
+        if: ${{ github.event.inputs.force != 'true' }}
+        run: |
+          CHART_NAME="${{ steps.chart-name.outputs.name }}"
+          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
+          
+          # Try to fetch the chart version from ECR
+          if helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} 2>/dev/null | grep -q "version: $CHART_VERSION"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "::warning::Chart version $CHART_VERSION already exists in registry"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Chart version $CHART_VERSION does not exist, proceeding with publish"
+          fi
+        continue-on-error: true
+
+      - name: Push Helm Chart to AWS Public ECR
+        if: ${{ steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true' }}
+        run: |
+          CHART_NAME="${{ steps.chart-name.outputs.name }}"
+          CHART_VERSION="${{ steps.chart-version.outputs.version }}"
+          CHART_FILE="${CHART_NAME}-${CHART_VERSION}.tgz"
+          
+          echo "Pushing chart: $CHART_FILE"
+          
+          # Push to OCI registry
+          helm push $CHART_FILE ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }} || \
+          helm push $CHART_FILE oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}
+          
+          echo "::notice::Successfully published $CHART_NAME:$CHART_VERSION to ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}"
+          
+          # Output for summary
+          echo "CHART_URL=${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:$CHART_VERSION" >> $GITHUB_ENV
+
+      - name: Verify Published Chart
+        if: ${{ steps.version-check.outputs.exists != 'true' || github.event.inputs.force == 'true' }}
+        run: |
+          helm show chart ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }} || \
+          helm show chart oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}
+
+      - name: Create Summary
+        if: always()
+        run: |
+          echo "## Helm Chart Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Chart Name**: ${{ steps.chart-name.outputs.name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Chart Version**: ${{ steps.chart-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: ${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.version-check.outputs.exists }}" == "true" ] && [ "${{ github.event.inputs.force }}" != "true" ]; then
+            echo "- **Status**: ⚠️ Version already exists (skipped)" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.version-check.outputs.exists }}" != "true" ] || [ "${{ github.event.inputs.force }}" == "true" ]; then
+            echo "- **Status**: ✅ Published successfully" >> $GITHUB_STEP_SUMMARY
+            echo "- **Chart URL**: \`helm pull oci://${{ env.HELM_REGISTRY }}/${{ env.HELM_REPOSITORY }}:${{ steps.chart-version.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload Chart Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart-${{ steps.chart-version.outputs.version }}
+          path: ${{ steps.chart-name.outputs.name }}-${{ steps.chart-version.outputs.version }}.tgz
+          retention-days: 30
+
