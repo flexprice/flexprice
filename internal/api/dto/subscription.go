@@ -81,6 +81,9 @@ type LineItemCommitmentConfig struct {
 
 	// IsWindowCommitment determines if commitment is applied per window (e.g., per day) rather than per billing period
 	IsWindowCommitment *bool `json:"is_window_commitment,omitempty"`
+
+	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
 }
 
 // validateLineItemCommitments validates a map of price_id -> commitment configuration.
@@ -296,6 +299,9 @@ type CreateSubscriptionRequest struct {
 	// CommitmentAmount is the minimum amount a customer commits to paying for a billing period
 	CommitmentAmount *decimal.Decimal `json:"commitment_amount,omitempty" swaggertype:"string"`
 
+	// CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)
+	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
+
 	// OverageFactor is a multiplier applied to usage beyond the commitment amount
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 
@@ -349,6 +355,9 @@ type CreateSubscriptionRequest struct {
 	// If set to "draft", the subscription will be created as a draft (skips invoice creation and payment processing)
 	SubscriptionStatus types.SubscriptionStatus `json:"subscription_status,omitempty"`
 
+	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
+	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
+
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
 }
@@ -376,6 +385,9 @@ type UpdateSubscriptionRequest struct {
 	Status            types.SubscriptionStatus `json:"status"`
 	CancelAt          *time.Time               `json:"cancel_at,omitempty"`
 	CancelAtPeriodEnd bool                     `json:"cancel_at_period_end,omitempty"`
+
+	// ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send "" to clear.
+	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
 }
 
 // CancelSubscriptionRequest represents the enhanced cancellation request
@@ -658,6 +670,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	if r.PlanID == "" {
 		return ierr.NewError("plan_id is required").
 			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if r.ParentSubscriptionID != nil && lo.FromPtr(r.ParentSubscriptionID) == "" {
+		return ierr.NewError("parent_subscription_id cannot be empty when provided").
+			WithHint("Omit parent_subscription_id or provide a non-empty subscription ID").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -1018,11 +1036,16 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		CollectionMethod:       string(collectionMethod),
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		InvoicingCustomerID:    r.InvoicingCustomerID,
+		ParentSubscriptionID:   r.ParentSubscriptionID,
 	}
 
-	// Set commitment amount and overage factor if provided
+	// Set commitment amount, duration, and overage factor if provided
 	if r.CommitmentAmount != nil {
 		sub.CommitmentAmount = r.CommitmentAmount
+	}
+
+	if r.CommitmentDuration != nil {
+		sub.CommitmentDuration = r.CommitmentDuration
 	}
 
 	if r.OverageFactor != nil {
@@ -1048,6 +1071,7 @@ type SubscriptionLineItemRequest struct {
 	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
 	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 }
 
 // SubscriptionLineItemResponse represents the response for a subscription line item
@@ -1463,6 +1487,9 @@ func (r *SubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context
 	}
 	lineItem.CommitmentTrueUpEnabled = r.CommitmentTrueUpEnabled
 	lineItem.CommitmentWindowed = r.CommitmentWindowed
+	if r.CommitmentDuration != nil {
+		lineItem.CommitmentDuration = r.CommitmentDuration
+	}
 
 	return lineItem
 }

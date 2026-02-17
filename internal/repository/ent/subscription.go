@@ -77,6 +77,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetBillingCycle(sub.BillingCycle).
 		SetNillableCommitmentAmount(sub.CommitmentAmount).
 		SetNillableOverageFactor(sub.OverageFactor).
+		SetNillableCommitmentDuration(sub.CommitmentDuration).
 		SetStatus(string(sub.Status)).
 		SetCreatedBy(sub.CreatedBy).
 		SetUpdatedBy(sub.UpdatedBy).
@@ -89,6 +90,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableGatewayPaymentMethodID(sub.GatewayPaymentMethodID).
 		SetEnableTrueUp(sub.EnableTrueUp).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
+		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		Save(ctx)
 
 	if err != nil {
@@ -205,6 +207,12 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		query.SetActivePauseID(*sub.ActivePauseID)
 	} else {
 		query.ClearActivePauseID()
+	}
+
+	if sub.ParentSubscriptionID != nil {
+		query.SetParentSubscriptionID(*sub.ParentSubscriptionID)
+	} else {
+		query.ClearParentSubscriptionID()
 	}
 
 	// Execute update
@@ -588,6 +596,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.IDIn(f.SubscriptionIDs...))
 	}
 
+	// Apply parent subscription IDs filter
+	if len(f.ParentSubscriptionIDs) > 0 {
+		query = query.Where(subscription.ParentSubscriptionIDIn(f.ParentSubscriptionIDs...))
+	}
+
 	// Apply customer filter
 	if f.CustomerID != "" {
 		query = query.Where(subscription.CustomerID(f.CustomerID))
@@ -743,6 +756,7 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
 				SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
 				SetCommitmentWindowed(item.CommitmentWindowed).
+				SetNillableCommitmentDuration(item.CommitmentDuration).
 				SetMetadata(item.Metadata).
 				SetTenantID(item.TenantID).
 				SetEnvironmentID(item.EnvironmentID).

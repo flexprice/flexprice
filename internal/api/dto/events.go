@@ -292,9 +292,10 @@ type GetUsageAnalyticsRequest struct {
 
 // GetUsageAnalyticsResponse represents the response for the usage analytics API
 type GetUsageAnalyticsResponse struct {
-	TotalCost decimal.Decimal     `json:"total_cost" swaggertype:"string"`
-	Currency  string              `json:"currency"`
-	Items     []UsageAnalyticItem `json:"items"`
+	TotalCost       decimal.Decimal      `json:"total_cost" swaggertype:"string"`
+	Currency        string               `json:"currency"`
+	Items           []UsageAnalyticItem  `json:"items"`
+	CustomAnalytics []CustomAnalyticItem `json:"custom_analytics,omitempty"`
 }
 
 // UsageAnalyticItem represents a single analytic item in the response
@@ -327,6 +328,15 @@ type UsageAnalyticItem struct {
 	AddOnID              string                             `json:"add_on_id,omitempty"`
 	PlanID               string                             `json:"plan_id,omitempty"`
 	WindowSize           types.WindowSize                   `json:"window_size,omitempty"` // Window size for bucketed meters (only set if meter is bucketed)
+}
+
+// CustomAnalyticItem represents a custom analytics calculation result
+type CustomAnalyticItem struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`         // Calculation name (e.g., "Revenue per Minute")
+	FeatureName string          `json:"feature_name"` // Name of the feature this applies to
+	Value       decimal.Decimal `json:"value" swaggertype:"string"`
+	Type        string          `json:"type"` // "feature", "meter", "event_name"
 }
 
 // UsageAnalyticPoint represents a point in the time series data

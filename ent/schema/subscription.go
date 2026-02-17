@@ -127,6 +127,13 @@ func (Subscription) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "decimal(20,6)",
 			}),
+		field.String("commitment_duration").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			GoType(types.BillingPeriod("")),
 		field.Other("overage_factor", decimal.Decimal{}).
 			Optional().
 			Nillable().
@@ -172,6 +179,13 @@ func (Subscription) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Customer ID to use for invoicing (can differ from the subscription customer)"),
+		field.String("parent_subscription_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable().
+			Comment("Parent subscription ID for hierarchy (e.g. child subscription under a parent)"),
 	}
 }
 

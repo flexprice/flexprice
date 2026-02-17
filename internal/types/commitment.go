@@ -32,6 +32,7 @@ type CommitmentInfo struct {
 	Type          CommitmentType   `json:"type"`
 	Amount        decimal.Decimal  `json:"amount" swaggertype:"string"`
 	Quantity      decimal.Decimal  `json:"quantity,omitempty" swaggertype:"string"` // Only used for quantity-based commitments
+	Duration      BillingPeriod    `json:"duration,omitempty"`
 	OverageFactor *decimal.Decimal `json:"overage_factor,omitempty" swaggertype:"string"`
 	TrueUpEnabled bool             `json:"true_up_enabled"`
 	IsWindowed    bool             `json:"is_windowed"`

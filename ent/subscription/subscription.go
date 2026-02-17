@@ -78,6 +78,8 @@ const (
 	FieldBillingCycle = "billing_cycle"
 	// FieldCommitmentAmount holds the string denoting the commitment_amount field in the database.
 	FieldCommitmentAmount = "commitment_amount"
+	// FieldCommitmentDuration holds the string denoting the commitment_duration field in the database.
+	FieldCommitmentDuration = "commitment_duration"
 	// FieldOverageFactor holds the string denoting the overage_factor field in the database.
 	FieldOverageFactor = "overage_factor"
 	// FieldPaymentBehavior holds the string denoting the payment_behavior field in the database.
@@ -94,6 +96,8 @@ const (
 	FieldEnableTrueUp = "enable_true_up"
 	// FieldInvoicingCustomerID holds the string denoting the invoicing_customer_id field in the database.
 	FieldInvoicingCustomerID = "invoicing_customer_id"
+	// FieldParentSubscriptionID holds the string denoting the parent_subscription_id field in the database.
+	FieldParentSubscriptionID = "parent_subscription_id"
 	// EdgeLineItems holds the string denoting the line_items edge name in mutations.
 	EdgeLineItems = "line_items"
 	// EdgePauses holds the string denoting the pauses edge name in mutations.
@@ -204,6 +208,7 @@ var Columns = []string{
 	FieldActivePauseID,
 	FieldBillingCycle,
 	FieldCommitmentAmount,
+	FieldCommitmentDuration,
 	FieldOverageFactor,
 	FieldPaymentBehavior,
 	FieldCollectionMethod,
@@ -212,6 +217,7 @@ var Columns = []string{
 	FieldProrationBehavior,
 	FieldEnableTrueUp,
 	FieldInvoicingCustomerID,
+	FieldParentSubscriptionID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -443,6 +449,11 @@ func ByCommitmentAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCommitmentAmount, opts...).ToFunc()
 }
 
+// ByCommitmentDuration orders the results by the commitment_duration field.
+func ByCommitmentDuration(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCommitmentDuration, opts...).ToFunc()
+}
+
 // ByOverageFactor orders the results by the overage_factor field.
 func ByOverageFactor(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldOverageFactor, opts...).ToFunc()
@@ -481,6 +492,11 @@ func ByEnableTrueUp(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoicingCustomerID orders the results by the invoicing_customer_id field.
 func ByInvoicingCustomerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoicingCustomerID, opts...).ToFunc()
+}
+
+// ByParentSubscriptionID orders the results by the parent_subscription_id field.
+func ByParentSubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldParentSubscriptionID, opts...).ToFunc()
 }
 
 // ByLineItemsCount orders the results by line_items count.

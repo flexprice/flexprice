@@ -30,6 +30,7 @@ type CreateSubscriptionLineItemRequest struct {
 	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
 	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -65,6 +66,7 @@ type UpdateSubscriptionLineItemRequest struct {
 	CommitmentOverageFactor *decimal.Decimal     `json:"commitment_overage_factor,omitempty"`
 	CommitmentTrueUpEnabled *bool                `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      *bool                `json:"commitment_windowed,omitempty"`
+	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
 }
 
 // LineItemParams contains all necessary parameters for creating a line item
@@ -378,6 +380,9 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 	}
 	lineItem.CommitmentTrueUpEnabled = r.CommitmentTrueUpEnabled
 	lineItem.CommitmentWindowed = r.CommitmentWindowed
+	if r.CommitmentDuration != nil {
+		lineItem.CommitmentDuration = r.CommitmentDuration
+	}
 
 	return lineItem
 }
@@ -426,7 +431,8 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 		r.HasCommitment() ||
 		r.CommitmentOverageFactor != nil ||
 		r.CommitmentTrueUpEnabled != nil ||
-		r.CommitmentWindowed != nil
+		r.CommitmentWindowed != nil ||
+		r.CommitmentDuration != nil
 }
 
 // ToSubscriptionLineItem converts the update request to a domain subscription line item
@@ -496,6 +502,12 @@ func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		newLineItem.CommitmentWindowed = *r.CommitmentWindowed
 	} else {
 		newLineItem.CommitmentWindowed = existingLineItem.CommitmentWindowed
+	}
+
+	if r.CommitmentDuration != nil {
+		newLineItem.CommitmentDuration = r.CommitmentDuration
+	} else {
+		newLineItem.CommitmentDuration = existingLineItem.CommitmentDuration
 	}
 
 	return newLineItem

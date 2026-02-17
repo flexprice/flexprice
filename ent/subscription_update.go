@@ -369,6 +369,26 @@ func (su *SubscriptionUpdate) ClearCommitmentAmount() *SubscriptionUpdate {
 	return su
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (su *SubscriptionUpdate) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionUpdate {
+	su.mutation.SetCommitmentDuration(tp)
+	return su
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionUpdate {
+	if tp != nil {
+		su.SetCommitmentDuration(*tp)
+	}
+	return su
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (su *SubscriptionUpdate) ClearCommitmentDuration() *SubscriptionUpdate {
+	su.mutation.ClearCommitmentDuration()
+	return su
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (su *SubscriptionUpdate) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdate {
 	su.mutation.SetOverageFactor(d)
@@ -482,6 +502,26 @@ func (su *SubscriptionUpdate) SetNillableInvoicingCustomerID(s *string) *Subscri
 // ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
 func (su *SubscriptionUpdate) ClearInvoicingCustomerID() *SubscriptionUpdate {
 	su.mutation.ClearInvoicingCustomerID()
+	return su
+}
+
+// SetParentSubscriptionID sets the "parent_subscription_id" field.
+func (su *SubscriptionUpdate) SetParentSubscriptionID(s string) *SubscriptionUpdate {
+	su.mutation.SetParentSubscriptionID(s)
+	return su
+}
+
+// SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillableParentSubscriptionID(s *string) *SubscriptionUpdate {
+	if s != nil {
+		su.SetParentSubscriptionID(*s)
+	}
+	return su
+}
+
+// ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
+func (su *SubscriptionUpdate) ClearParentSubscriptionID() *SubscriptionUpdate {
+	su.mutation.ClearParentSubscriptionID()
 	return su
 }
 
@@ -897,6 +937,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if su.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
 	}
+	if value, ok := su.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
+	}
+	if su.mutation.CommitmentDurationCleared() {
+		_spec.ClearField(subscription.FieldCommitmentDuration, field.TypeString)
+	}
 	if value, ok := su.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 	}
@@ -920,6 +966,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if value, ok := su.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
+	}
+	if value, ok := su.mutation.ParentSubscriptionID(); ok {
+		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
+	}
+	if su.mutation.ParentSubscriptionIDCleared() {
+		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1616,6 +1668,26 @@ func (suo *SubscriptionUpdateOne) ClearCommitmentAmount() *SubscriptionUpdateOne
 	return suo
 }
 
+// SetCommitmentDuration sets the "commitment_duration" field.
+func (suo *SubscriptionUpdateOne) SetCommitmentDuration(tp types.BillingPeriod) *SubscriptionUpdateOne {
+	suo.mutation.SetCommitmentDuration(tp)
+	return suo
+}
+
+// SetNillableCommitmentDuration sets the "commitment_duration" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableCommitmentDuration(tp *types.BillingPeriod) *SubscriptionUpdateOne {
+	if tp != nil {
+		suo.SetCommitmentDuration(*tp)
+	}
+	return suo
+}
+
+// ClearCommitmentDuration clears the value of the "commitment_duration" field.
+func (suo *SubscriptionUpdateOne) ClearCommitmentDuration() *SubscriptionUpdateOne {
+	suo.mutation.ClearCommitmentDuration()
+	return suo
+}
+
 // SetOverageFactor sets the "overage_factor" field.
 func (suo *SubscriptionUpdateOne) SetOverageFactor(d decimal.Decimal) *SubscriptionUpdateOne {
 	suo.mutation.SetOverageFactor(d)
@@ -1729,6 +1801,26 @@ func (suo *SubscriptionUpdateOne) SetNillableInvoicingCustomerID(s *string) *Sub
 // ClearInvoicingCustomerID clears the value of the "invoicing_customer_id" field.
 func (suo *SubscriptionUpdateOne) ClearInvoicingCustomerID() *SubscriptionUpdateOne {
 	suo.mutation.ClearInvoicingCustomerID()
+	return suo
+}
+
+// SetParentSubscriptionID sets the "parent_subscription_id" field.
+func (suo *SubscriptionUpdateOne) SetParentSubscriptionID(s string) *SubscriptionUpdateOne {
+	suo.mutation.SetParentSubscriptionID(s)
+	return suo
+}
+
+// SetNillableParentSubscriptionID sets the "parent_subscription_id" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillableParentSubscriptionID(s *string) *SubscriptionUpdateOne {
+	if s != nil {
+		suo.SetParentSubscriptionID(*s)
+	}
+	return suo
+}
+
+// ClearParentSubscriptionID clears the value of the "parent_subscription_id" field.
+func (suo *SubscriptionUpdateOne) ClearParentSubscriptionID() *SubscriptionUpdateOne {
+	suo.mutation.ClearParentSubscriptionID()
 	return suo
 }
 
@@ -2174,6 +2266,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	if suo.mutation.CommitmentAmountCleared() {
 		_spec.ClearField(subscription.FieldCommitmentAmount, field.TypeOther)
 	}
+	if value, ok := suo.mutation.CommitmentDuration(); ok {
+		_spec.SetField(subscription.FieldCommitmentDuration, field.TypeString, value)
+	}
+	if suo.mutation.CommitmentDurationCleared() {
+		_spec.ClearField(subscription.FieldCommitmentDuration, field.TypeString)
+	}
 	if value, ok := suo.mutation.OverageFactor(); ok {
 		_spec.SetField(subscription.FieldOverageFactor, field.TypeOther, value)
 	}
@@ -2197,6 +2295,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if value, ok := suo.mutation.EnableTrueUp(); ok {
 		_spec.SetField(subscription.FieldEnableTrueUp, field.TypeBool, value)
+	}
+	if value, ok := suo.mutation.ParentSubscriptionID(); ok {
+		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
+	}
+	if suo.mutation.ParentSubscriptionIDCleared() {
+		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

@@ -520,7 +520,9 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	if cfg.IsWindowCommitment != nil {
 		lineItem.CommitmentWindowed = *cfg.IsWindowCommitment
 	}
-
+	if cfg.CommitmentDuration != nil {
+		lineItem.CommitmentDuration = cfg.CommitmentDuration
+	}
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
 		return err
 	}

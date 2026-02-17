@@ -26,6 +26,7 @@ const (
 	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
 	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
 	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
+	SettingKeyCustomAnalytics          SettingKey = "custom_analytics_config"
 )
 
 func (s *SettingKey) Validate() error {
@@ -38,6 +39,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyCustomerOnboarding,
 		SettingKeyWalletBalanceAlertConfig,
 		SettingKeyPrepareProcessedEvents,
+		SettingKeyCustomAnalytics,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -242,6 +244,33 @@ func (c PrepareProcessedEventsConfig) Validate() error {
 	return nil
 }
 
+// CustomAnalyticsRuleID represents the type of calculation to perform
+type CustomAnalyticsRuleID string
+
+const (
+	// CustomAnalyticsRuleRevenuePerMinute calculates revenue per minute from millisecond usage
+	// Formula: total_cost / (total_usage / 60000)
+	// Can be applied to any feature that tracks usage in milliseconds
+	CustomAnalyticsRuleRevenuePerMinute CustomAnalyticsRuleID = "revenue-per-minute"
+)
+
+// CustomAnalyticsConfig represents configuration for custom analytics calculations
+type CustomAnalyticsConfig struct {
+	Rules []CustomAnalyticsRule `json:"rules" validate:"dive"`
+}
+
+// CustomAnalyticsRule represents a single custom analytics rule
+type CustomAnalyticsRule struct {
+	ID         string `json:"id" validate:"required"`
+	TargetType string `json:"target_type" validate:"required,oneof=feature meter event_name"`
+	TargetID   string `json:"target_id" validate:"required"`
+}
+
+// Validate implements SettingConfig interface
+func (c CustomAnalyticsConfig) Validate() error {
+	return validator.ValidateRequest(c)
+}
+
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
@@ -363,6 +392,13 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: defaultPrepareProcessedEventsConfigMap,
 			Description:  "Configuration for preparing processed events (auto-create missing feature/meter/price and optional subscription rollout)",
 		},
+		SettingKeyCustomAnalytics: {
+			Key: SettingKeyCustomAnalytics,
+			DefaultValue: map[string]interface{}{
+				"rules": []interface{}{},
+			},
+			Description: "Configuration for custom analytics calculations (e.g., revenue per minute)",
+		},
 	}, nil
 }
 
@@ -443,6 +479,13 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyPrepareProcessedEvents:
 		config, err := utils.ToStruct[PrepareProcessedEventsConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyCustomAnalytics:
+		config, err := utils.ToStruct[CustomAnalyticsConfig](value)
 		if err != nil {
 			return err
 		}
