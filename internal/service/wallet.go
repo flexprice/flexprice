@@ -1644,6 +1644,8 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		)
 	}
 
+	// Ongoing balance alert are not logged here
+
 	return nil
 }
 
