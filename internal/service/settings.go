@@ -205,7 +205,7 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 	case types.SettingKeyCustomerOnboarding:
 		return getSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key)
 	case types.SettingKeyWalletBalanceAlertConfig:
-		return getSettingByKey[types.AlertConfig](s, ctx, key)
+		return getSettingByKey[types.AlertSettings](s, ctx, key)
 	case types.SettingKeyPrepareProcessedEvents:
 		return getSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key)
 	case types.SettingKeyCustomAnalytics:
@@ -245,7 +245,7 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 	case types.SettingKeyCustomerOnboarding:
 		return updateSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key, req)
 	case types.SettingKeyWalletBalanceAlertConfig:
-		return updateSettingByKey[types.AlertConfig](s, ctx, key, req)
+		return updateSettingByKey[*types.AlertSettings](s, ctx, key, req)
 	case types.SettingKeyPrepareProcessedEvents:
 		return updateSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key, req)
 	case types.SettingKeyCustomAnalytics:

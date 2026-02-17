@@ -308,12 +308,12 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		"actions":       []interface{}{},
 	}
 
-	defaultWalletBalanceAlertConfig := AlertConfig{
-		Enabled: false, // Disabled by default
-		Threshold: &WalletAlertThreshold{
-			Type:  AlertThresholdTypeAmount,
-			Value: decimal.NewFromFloat(0.0),
+	defaultWalletBalanceAlertConfig := AlertSettings{
+		Critical: &AlertThreshold{
+			Threshold: decimal.NewFromFloat(0.0),
+			Condition: AlertConditionBelow,
 		},
+		AlertEnabled: lo.ToPtr(false), // Disabled by default, users must explicitly enable
 	}
 
 	// Defaults for prepare_processed_events_config (plan_id intentionally omitted from action)
@@ -471,7 +471,7 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return nil
 
 	case SettingKeyWalletBalanceAlertConfig:
-		config, err := utils.ToStruct[AlertConfig](value)
+		config, err := utils.ToStruct[AlertSettings](value)
 		if err != nil {
 			return err
 		}
