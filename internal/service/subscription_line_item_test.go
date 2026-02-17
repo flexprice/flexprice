@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/suite"
 )
@@ -286,4 +287,197 @@ func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_Success()
 
 	_, err = s.GetStores().SubscriptionLineItemRepo.Get(ctx, resp.SubscriptionLineItem.ID)
 	s.NoError(err)
+}
+
+// TestAddSubscriptionLineItem_DateBoundsValidation asserts that when sub is passed, date-bounds validation runs:
+// line item start_date cannot be before subscription start date; line item end_date cannot be after subscription end date.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_DateBoundsValidation() {
+	ctx := s.GetContext()
+
+	// 1) start_date before subscription start -> validation error
+	startBeforeSub := s.testData.subscription.StartDate.Add(-24 * time.Hour)
+	reqStartBefore := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              s.testData.price.ID,
+		StartDate:            &startBeforeSub,
+		SkipEntitlementCheck: true,
+	}
+	_, err := s.service.AddSubscriptionLineItem(ctx, s.testData.subscription.ID, reqStartBefore)
+	s.Error(err)
+	s.Contains(err.Error(), "line item start_date cannot be before subscription start date")
+
+	// 2) subscription with end date; line item end_date after subscription end -> validation error
+	subEnd := s.testData.subscription.StartDate.Add(30 * 24 * time.Hour)
+	subWithEnd := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          s.testData.subscription.StartDate,
+		EndDate:            &subEnd,
+		CurrentPeriodStart: s.testData.subscription.StartDate,
+		CurrentPeriodEnd:   subEnd,
+		BillingAnchor:      s.testData.subscription.StartDate,
+		Currency:           "usd",
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, subWithEnd, nil))
+
+	lineItemEndAfterSub := subEnd.Add(24 * time.Hour)
+	reqEndAfter := dto.CreateSubscriptionLineItemRequest{
+		PriceID:              s.testData.price.ID,
+		EndDate:              &lineItemEndAfterSub,
+		SkipEntitlementCheck: true,
+	}
+	_, err = s.service.AddSubscriptionLineItem(ctx, subWithEnd.ID, reqEndAfter)
+	s.Error(err)
+	s.Contains(err.Error(), "line item end_date cannot be after subscription end date")
+}
+
+// TestAddSubscriptionLineItem_ValidationErrors covers invalid or out-of-bound values: both/neither price,
+// start after end, date bounds (line item and inline price), negative quantity.
+func (s *SubscriptionLineItemServiceSuite) TestAddSubscriptionLineItem_ValidationErrors() {
+	ctx := s.GetContext()
+	subStart := s.testData.subscription.StartDate
+	subEnd := subStart.Add(30 * 24 * time.Hour)
+	subWithEnd := &subscription.Subscription{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION),
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		StartDate:          subStart,
+		EndDate:            &subEnd,
+		CurrentPeriodStart: subStart,
+		CurrentPeriodEnd:   subEnd,
+		BillingAnchor:      subStart,
+		Currency:           "usd",
+		BillingCycle:       types.BillingCycleAnniversary,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, subWithEnd, nil))
+
+	validInlinePrice := &dto.SubscriptionPriceCreateRequest{
+		Type:               types.PRICE_TYPE_FIXED,
+		PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		Amount:             lo.ToPtr(decimal.NewFromInt(1)),
+		LookupKey:          "validation_test",
+	}
+
+	tests := []struct {
+		name        string
+		subID       string
+		req         dto.CreateSubscriptionLineItemRequest
+		wantErrCont string
+	}{
+		{
+			name:        "both price_id and price",
+			subID:       s.testData.subscription.ID,
+			req:         dto.CreateSubscriptionLineItemRequest{PriceID: s.testData.price.ID, Price: validInlinePrice, SkipEntitlementCheck: true},
+			wantErrCont: "cannot provide both price_id and price",
+		},
+		{
+			name:        "neither price_id nor price",
+			subID:       s.testData.subscription.ID,
+			req:         dto.CreateSubscriptionLineItemRequest{SkipEntitlementCheck: true},
+			wantErrCont: "either price_id or price is required",
+		},
+		{
+			name: "start_date after end_date",
+			subID: s.testData.subscription.ID,
+			req: dto.CreateSubscriptionLineItemRequest{
+				PriceID:              s.testData.price.ID,
+				StartDate:            lo.ToPtr(subStart.Add(48 * time.Hour)),
+				EndDate:              lo.ToPtr(subStart.Add(24 * time.Hour)),
+				SkipEntitlementCheck: true,
+			},
+			wantErrCont: "start_date cannot be after end_date",
+		},
+		{
+			name: "line item start_date before subscription start",
+			subID: s.testData.subscription.ID,
+			req: dto.CreateSubscriptionLineItemRequest{
+				PriceID:              s.testData.price.ID,
+				StartDate:            lo.ToPtr(subStart.Add(-24 * time.Hour)),
+				SkipEntitlementCheck: true,
+			},
+			wantErrCont: "line item start_date cannot be before subscription start date",
+		},
+		{
+			name: "line item end_date after subscription end",
+			subID: subWithEnd.ID,
+			req: dto.CreateSubscriptionLineItemRequest{
+				PriceID:              s.testData.price.ID,
+				EndDate:              lo.ToPtr(subEnd.Add(24 * time.Hour)),
+				SkipEntitlementCheck: true,
+			},
+			wantErrCont: "line item end_date cannot be after subscription end date",
+		},
+		{
+			name: "inline price start_date before subscription start",
+			subID: s.testData.subscription.ID,
+			req: dto.CreateSubscriptionLineItemRequest{
+				Price: &dto.SubscriptionPriceCreateRequest{
+					Type:               types.PRICE_TYPE_FIXED,
+					PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceAdvance,
+					Amount:             lo.ToPtr(decimal.NewFromInt(1)),
+					LookupKey:          "inline_bad_start",
+					StartDate:          lo.ToPtr(subStart.Add(-24 * time.Hour)),
+				},
+				SkipEntitlementCheck: true,
+			},
+			wantErrCont: "price start_date cannot be before subscription start date",
+		},
+		{
+			name: "inline price end_date after subscription end",
+			subID: subWithEnd.ID,
+			req: dto.CreateSubscriptionLineItemRequest{
+				Price: &dto.SubscriptionPriceCreateRequest{
+					Type:               types.PRICE_TYPE_FIXED,
+					PriceUnitType:      types.PRICE_UNIT_TYPE_FIAT,
+					BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+					BillingPeriodCount: 1,
+					BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+					BillingCadence:     types.BILLING_CADENCE_RECURRING,
+					InvoiceCadence:     types.InvoiceCadenceAdvance,
+					Amount:             lo.ToPtr(decimal.NewFromInt(1)),
+					LookupKey:          "inline_bad_end",
+					EndDate:            lo.ToPtr(subEnd.Add(24 * time.Hour)),
+				},
+				SkipEntitlementCheck: true,
+			},
+			wantErrCont: "price end_date cannot be after subscription end date",
+		},
+		{
+			name:  "negative quantity",
+			subID: s.testData.subscription.ID,
+			req: dto.CreateSubscriptionLineItemRequest{
+				PriceID:              s.testData.price.ID,
+				Quantity:             decimal.NewFromInt(-1),
+				SkipEntitlementCheck: true,
+			},
+			wantErrCont: "quantity must be positive",
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			_, err := s.service.AddSubscriptionLineItem(ctx, tt.subID, tt.req)
+			s.Error(err, "expected validation error for: %s", tt.name)
+			s.Contains(err.Error(), tt.wantErrCont, "error should contain: %s", tt.wantErrCont)
+		})
+	}
 }

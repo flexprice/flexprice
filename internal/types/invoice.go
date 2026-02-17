@@ -14,8 +14,9 @@ import (
 type InvoiceLineItemEntityType string
 
 const (
-	InvoiceLineItemEntityTypePlan  InvoiceLineItemEntityType = "plan"
-	InvoiceLineItemEntityTypeAddon InvoiceLineItemEntityType = "addon"
+	InvoiceLineItemEntityTypePlan         InvoiceLineItemEntityType = "plan"
+	InvoiceLineItemEntityTypeAddon        InvoiceLineItemEntityType = "addon"
+	InvoiceLineItemEntityTypeSubscription InvoiceLineItemEntityType = "subscription"
 )
 
 // InvoiceCadence defines when an invoice is generated relative to the billing period
