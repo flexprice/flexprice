@@ -105,6 +105,9 @@ type UsageParams struct {
 	// - Custom business cycles (fiscal months, quarterly periods)
 	// - Multi-tenant billing with different anchor dates per customer
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
+	// HasWindowedCommitment enables WITH FILL in the query to generate all time windows
+	// even when no events occurred, so commitment/reservation can be applied to every window.
+	HasWindowedCommitment bool `json:"has_windowed_commitment,omitempty"`
 }
 
 // UsageSummaryParams defines parameters for querying pre-computed usage
@@ -206,6 +209,10 @@ type FeatureUsageParams struct {
 	PriceID       string `json:"price_id"`
 	MeterID       string `json:"meter_id"`
 	SubLineItemID string `json:"sub_line_item_id"`
+	// HasWindowedCommitment enables WITH FILL in the query to generate all time windows
+	// even when no events occurred. This ensures commitment/reservation logic can be
+	// applied to every window in the billing period.
+	HasWindowedCommitment bool `json:"has_windowed_commitment,omitempty"`
 }
 
 // Cost Usage Params

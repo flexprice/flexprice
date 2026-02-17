@@ -87,6 +87,8 @@ type GetUsageRequest struct {
 	// - "2024-01-15T00:00:00Z" (15th of each month at midnight)
 	// - "2024-02-29T12:00:00Z" (29th of each month at noon - handles leap years)
 	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45.123456789Z"`
+	// HasWindowedCommitment enables WITH FILL in the query so all time windows are returned (missing filled with 0).
+	HasWindowedCommitment bool `form:"has_windowed_commitment" json:"has_windowed_commitment,omitempty"`
 }
 
 type GetUsageByMeterRequest struct {
@@ -117,6 +119,8 @@ type GetUsageByMeterRequest struct {
 	//   - March period: 2024-03-05 14:30:45 to 2024-04-05 14:30:45
 	//   - April period: 2024-04-05 14:30:45 to 2024-05-05 14:30:45
 	BillingAnchor *time.Time `form:"billing_anchor" json:"billing_anchor,omitempty" example:"2024-03-05T14:30:45Z"`
+	// HasWindowedCommitment enables WITH FILL in the query so all time windows are returned (missing filled with 0).
+	HasWindowedCommitment bool `form:"has_windowed_commitment" json:"has_windowed_commitment,omitempty"`
 }
 
 type GetEventsRequest struct {
@@ -218,18 +222,19 @@ func (r *GetUsageRequest) ToUsageParams() *events.UsageParams {
 	}
 
 	return &events.UsageParams{
-		ExternalCustomerID: r.ExternalCustomerID,
-		CustomerID:         r.CustomerID,
-		EventName:          r.EventName,
-		PropertyName:       r.PropertyName,
-		AggregationType:    types.AggregationType(strings.ToUpper(string(r.AggregationType))),
-		StartTime:          r.StartTime,
-		EndTime:            r.EndTime,
-		WindowSize:         r.WindowSize,
-		BucketSize:         r.BucketSize,
-		Filters:            r.Filters,
-		Multiplier:         r.Multiplier,
-		BillingAnchor:      r.BillingAnchor,
+		ExternalCustomerID:    r.ExternalCustomerID,
+		CustomerID:            r.CustomerID,
+		EventName:             r.EventName,
+		PropertyName:          r.PropertyName,
+		AggregationType:       types.AggregationType(strings.ToUpper(string(r.AggregationType))),
+		StartTime:             r.StartTime,
+		EndTime:               r.EndTime,
+		WindowSize:            r.WindowSize,
+		BucketSize:            r.BucketSize,
+		Filters:               r.Filters,
+		Multiplier:            r.Multiplier,
+		BillingAnchor:         r.BillingAnchor,
+		HasWindowedCommitment: r.HasWindowedCommitment,
 	}
 }
 
