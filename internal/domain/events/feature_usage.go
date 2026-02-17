@@ -38,11 +38,12 @@ type FeatureUsageRepository interface {
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation
 type MaxBucketFeatureInfo struct {
-	FeatureID    string
-	MeterID      string
-	BucketSize   types.WindowSize
-	EventName    string
-	PropertyName string
+	FeatureID       string
+	MeterID         string
+	BucketSize      types.WindowSize
+	EventName       string
+	PropertyName    string
+	GroupByProperty string // Property name in event.properties to group by before aggregating
 }
 
 // SumBucketFeatureInfo contains information about a feature that uses SUM with bucket aggregation

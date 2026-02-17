@@ -2022,11 +2022,12 @@ func (s *featureUsageTrackingService) buildBucketFeatures(ctx context.Context, p
 				if m, exists := meterMap[meterID]; exists {
 					if m.IsBucketedMaxMeter() {
 						maxBucketFeatures[f.ID] = &events.MaxBucketFeatureInfo{
-							FeatureID:    f.ID,
-							MeterID:      meterID,
-							BucketSize:   types.WindowSize(m.Aggregation.BucketSize),
-							EventName:    m.EventName,
-							PropertyName: m.Aggregation.Field,
+							FeatureID:       f.ID,
+							MeterID:         meterID,
+							BucketSize:      types.WindowSize(m.Aggregation.BucketSize),
+							EventName:       m.EventName,
+							PropertyName:    m.Aggregation.Field,
+							GroupByProperty: m.Aggregation.GroupBy,
 						}
 					} else if m.IsBucketedSumMeter() {
 						sumBucketFeatures[f.ID] = &events.SumBucketFeatureInfo{
