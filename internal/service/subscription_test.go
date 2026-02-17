@@ -1233,7 +1233,9 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems() {
 
 	s.GreaterOrEqual(len(lineItems), 4, "should have at least plan line items")
 
-	// When the two LineItems (price_id + inline) are present, assert exact params we gave
+	// Assert the two LineItems (price_id + inline) are present and match exact params we gave.
+	// When GetSubscription returns at least 5 line items (plan + the two added via LineItems),
+	// require both to be found; otherwise we skip so the test does not flake when only plan items are returned.
 	var foundPriceIDLineItem bool
 	var foundInlineLineItem bool
 	for _, li := range lineItems {
@@ -1261,8 +1263,7 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems() {
 			}
 		}
 	}
-	// If both extra line items are present (plan + 2 from LineItems), assert we found them and matched exact params above
-	if len(lineItems) >= 6 {
+	if len(lineItems) >= 5 {
 		s.True(foundPriceIDLineItem, "should have a line item for the given price_id (plan price)")
 		s.True(foundInlineLineItem, "should have a subscription-scoped line item from the inline price")
 	}
@@ -1276,69 +1277,53 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 	end := s.testData.now.Add(90 * 24 * time.Hour)
 	planPriceID := s.testData.prices.fixedMonthly.ID
 
-	s.T().Run("line_item_start_date_before_subscription_start", func(t *testing.T) {
-		lineItemStartBeforeSub := start.Add(-24 * time.Hour)
-		req := dto.CreateSubscriptionRequest{
-			CustomerID:         s.testData.customer.ID,
-			PlanID:             s.testData.plan.ID,
-			StartDate:          &start,
-			EndDate:            &end,
-			Currency:           "usd",
-			BillingCadence:      types.BILLING_CADENCE_RECURRING,
-			BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			BillingCycle:       types.BillingCycleAnniversary,
-			LineItems: []dto.CreateSubscriptionLineItemRequest{
-				{PriceID: planPriceID, StartDate: &lineItemStartBeforeSub},
+	tests := []struct {
+		name        string
+		lineItems   []dto.CreateSubscriptionLineItemRequest
+		wantErrCont string
+	}{
+		{
+			name: "line_item_start_date_before_subscription_start",
+			lineItems: []dto.CreateSubscriptionLineItemRequest{
+				{PriceID: planPriceID, StartDate: lo.ToPtr(start.Add(-24 * time.Hour))},
 			},
-		}
-		_, err := s.service.CreateSubscription(ctx, req)
-		s.Error(err)
-		s.Contains(err.Error(), "line item start_date cannot be before subscription start date")
-	})
+			wantErrCont: "line item start_date cannot be before subscription start date",
+		},
+		{
+			name: "line_item_end_date_after_subscription_end",
+			lineItems: []dto.CreateSubscriptionLineItemRequest{
+				{PriceID: planPriceID, EndDate: lo.ToPtr(end.Add(24 * time.Hour))},
+			},
+			wantErrCont: "line item end_date cannot be after subscription end date",
+		},
+		{
+			name: "line_item_start_after_end",
+			lineItems: []dto.CreateSubscriptionLineItemRequest{
+				{PriceID: planPriceID, StartDate: lo.ToPtr(start.Add(48 * time.Hour)), EndDate: lo.ToPtr(start.Add(24 * time.Hour))},
+			},
+			wantErrCont: "start_date cannot be after end_date",
+		},
+	}
 
-	s.T().Run("line_item_end_date_after_subscription_end", func(t *testing.T) {
-		lineItemEndAfterSub := end.Add(24 * time.Hour)
-		req := dto.CreateSubscriptionRequest{
-			CustomerID:         s.testData.customer.ID,
-			PlanID:             s.testData.plan.ID,
-			StartDate:          &start,
-			EndDate:            &end,
-			Currency:           "usd",
-			BillingCadence:      types.BILLING_CADENCE_RECURRING,
-			BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			BillingCycle:       types.BillingCycleAnniversary,
-			LineItems: []dto.CreateSubscriptionLineItemRequest{
-				{PriceID: planPriceID, EndDate: &lineItemEndAfterSub},
-			},
-		}
-		_, err := s.service.CreateSubscription(ctx, req)
-		s.Error(err)
-		s.Contains(err.Error(), "line item end_date cannot be after subscription end date")
-	})
-
-	s.T().Run("line_item_start_after_end", func(t *testing.T) {
-		lineStart := start.Add(48 * time.Hour)
-		lineEnd := start.Add(24 * time.Hour)
-		req := dto.CreateSubscriptionRequest{
-			CustomerID:         s.testData.customer.ID,
-			PlanID:             s.testData.plan.ID,
-			StartDate:          &start,
-			EndDate:            &end,
-			Currency:           "usd",
-			BillingCadence:      types.BILLING_CADENCE_RECURRING,
-			BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
-			BillingPeriodCount: 1,
-			BillingCycle:       types.BillingCycleAnniversary,
-			LineItems: []dto.CreateSubscriptionLineItemRequest{
-				{PriceID: planPriceID, StartDate: &lineStart, EndDate: &lineEnd},
-			},
-		}
-		_, err := s.service.CreateSubscription(ctx, req)
-		s.Error(err)
-		s.Contains(err.Error(), "start_date cannot be after end_date")
-	})
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			req := dto.CreateSubscriptionRequest{
+				CustomerID:         s.testData.customer.ID,
+				PlanID:             s.testData.plan.ID,
+				StartDate:          &start,
+				EndDate:            &end,
+				Currency:           "usd",
+				BillingCadence:      types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
+				BillingPeriodCount: 1,
+				BillingCycle:       types.BillingCycleAnniversary,
+				LineItems:           tt.lineItems,
+			}
+			_, err := s.service.CreateSubscription(ctx, req)
+			s.Error(err)
+			s.Contains(err.Error(), tt.wantErrCont)
+		})
+	}
 }
 
 // Helper function to create invoice service for testing
