@@ -6,35 +6,12 @@ import (
 	"github.com/getsentry/sentry-go"
 )
 
-// StartRepositorySpan creates a new span for a repository operation
-// Returns nil if Sentry is not available in the context
 func StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) *sentry.Span {
-	// Disabled to reduce Sentry span quota usage
+	_ = ctx
+	_ = repository
+	_ = operation
+	_ = params
 	return nil
-
-	// Get the hub from the context
-	hub := sentry.GetHubFromContext(ctx)
-	if hub == nil {
-		return nil
-	}
-
-	// Create a new span for this operation
-	span := sentry.StartSpan(ctx, "repository."+repository+"."+operation)
-	if span != nil {
-		span.Description = "repository." + repository + "." + operation
-		span.Op = "db.clickhouse"
-
-		// Add repository data
-		span.SetData("repository", repository)
-		span.SetData("operation", operation)
-
-		// Add additional parameters
-		for k, v := range params {
-			span.SetData(k, v)
-		}
-	}
-
-	return span
 }
 
 // FinishSpan safely finishes a span, handling nil spans

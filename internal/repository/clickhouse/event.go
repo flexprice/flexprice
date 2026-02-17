@@ -236,10 +236,10 @@ func (r *EventRepository) GetUsage(ctx context.Context, params *events.UsagePara
 		return nil, err
 	}
 
-	query := aggregator.GetQuery(ctx, params)
+	query, queryArgs := aggregator.GetQuery(ctx, params)
 	log.Printf("Executing query: %s", query)
 
-	rows, err := r.store.GetConn().Query(ctx, query)
+	rows, err := r.store.GetConn().Query(ctx, query, queryArgs...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
@@ -440,7 +440,7 @@ func (r *EventRepository) GetUsageWithFilters(ctx context.Context, params *event
 		"query", query,
 		"params", queryParams)
 
-	rows, err := r.store.GetConn().Query(ctx, query, queryParams)
+	rows, err := r.store.GetConn().Query(ctx, query, queryParams...)
 	if err != nil {
 		SetSpanError(span, err)
 		return nil, ierr.WithError(err).
@@ -601,13 +601,48 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		}
 	}
 
-	// Handle pagination and real-time refresh using composite keys
-	if params.IterFirst != nil {
-		baseQuery += " AND (timestamp, id) > (?, ?)"
-		args = append(args, params.IterFirst.Timestamp, params.IterFirst.ID)
-	} else if params.IterLast != nil {
-		baseQuery += " AND (timestamp, id) < (?, ?)"
-		args = append(args, params.IterLast.Timestamp, params.IterLast.ID)
+	allowedSortColumns := map[string]struct{}{
+		"timestamp":            {},
+		"event_name":           {},
+		"id":                   {},
+		"ingested_at":          {},
+		"external_customer_id": {},
+		"customer_id":          {},
+	}
+	sortColumn := "timestamp"
+	if params.Sort != nil {
+		candidate := strings.ToLower(strings.TrimSpace(*params.Sort))
+		if _, ok := allowedSortColumns[candidate]; ok {
+			sortColumn = candidate
+		}
+	}
+
+	sortOrder := "DESC"
+	if params.Order != nil {
+		candidate := strings.ToUpper(strings.TrimSpace(*params.Order))
+		if candidate == "ASC" || candidate == "DESC" {
+			sortOrder = candidate
+		}
+	}
+	idSortOrder := "DESC"
+	if sortOrder == "ASC" {
+		idSortOrder = "ASC"
+	}
+
+	useTimestampKeyset := sortColumn == "timestamp" && sortOrder == "DESC"
+
+	if useTimestampKeyset {
+		if params.IterFirst != nil {
+			baseQuery += " AND (timestamp, id) > (?, ?)"
+			args = append(args, params.IterFirst.Timestamp, params.IterFirst.ID)
+		} else if params.IterLast != nil {
+			baseQuery += " AND (timestamp, id) < (?, ?)"
+			args = append(args, params.IterLast.Timestamp, params.IterLast.ID)
+		}
+	} else if params.IterFirst != nil || params.IterLast != nil {
+		r.logger.Warnw("ignoring cursor pagination for non-timestamp ordering",
+			"sort", sortColumn,
+			"order", sortOrder)
 	}
 
 	// Count total if requested
@@ -625,15 +660,11 @@ func (r *EventRepository) GetEvents(ctx context.Context, params *events.GetEvent
 		}
 	}
 
-	// Order by timestamp and ID by default
-	if params.Sort == nil {
-		params.Sort = lo.ToPtr("timestamp")
+	if sortColumn == "id" {
+		baseQuery += " ORDER BY id " + idSortOrder
+	} else {
+		baseQuery += " ORDER BY " + sortColumn + " " + sortOrder + ", id " + idSortOrder
 	}
-	if params.Order == nil {
-		params.Order = lo.ToPtr("DESC")
-	}
-
-	baseQuery += " ORDER BY " + strings.ToLower(*params.Sort) + " " + strings.ToUpper(*params.Order) + ", id DESC"
 
 	// Apply limit and offset for pagination if using offset-based pagination
 	if params.PageSize > 0 {

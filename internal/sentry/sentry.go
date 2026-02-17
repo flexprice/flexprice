@@ -90,16 +90,10 @@ func (s *Service) CaptureException(err error) {
 
 // AddBreadcrumb adds a breadcrumb to the current scope
 func (s *Service) AddBreadcrumb(category, message string, data map[string]interface{}) {
+	_ = category
+	_ = message
+	_ = data
 	return
-	if !s.IsEnabled() {
-		return
-	}
-	sentry.AddBreadcrumb(&sentry.Breadcrumb{
-		Category: category,
-		Message:  message,
-		Level:    sentry.LevelInfo,
-		Data:     data,
-	})
 }
 
 // Flush waits for queued events to be sent
@@ -112,43 +106,16 @@ func (s *Service) Flush(timeout uint) bool {
 
 // StartDBSpan starts a new database span in the current transaction
 func (s *Service) StartDBSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	_ = operation
+	_ = params
 	return nil, ctx
-
-	if !s.IsEnabled() {
-		return nil, ctx
-	}
-
-	span := sentry.StartSpan(ctx, operation)
-	if span != nil {
-		span.Description = operation
-		span.Op = "db.postgres"
-
-		for k, v := range params {
-			span.SetData(k, v)
-		}
-	}
-
-	return span, span.Context()
 }
 
 // StartClickHouseSpan starts a new ClickHouse span in the current transaction
 func (s *Service) StartClickHouseSpan(ctx context.Context, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	_ = operation
+	_ = params
 	return nil, ctx
-	if !s.cfg.Sentry.Enabled {
-		return nil, ctx
-	}
-
-	span := sentry.StartSpan(ctx, operation)
-	if span != nil {
-		span.Description = operation
-		span.Op = "db.clickhouse"
-
-		for k, v := range params {
-			span.SetData(k, v)
-		}
-	}
-
-	return span, span.Context()
 }
 
 // StartKafkaConsumerSpan starts a new Kafka consumer span in the current transaction
@@ -209,25 +176,9 @@ func (s *Service) MonitorEventProcessing(ctx context.Context, eventName string, 
 
 // StartTransaction creates a new transaction or returns an existing one from context
 func (s *Service) StartTransaction(ctx context.Context, name string, options ...sentry.SpanOption) (*sentry.Span, context.Context) {
+	_ = name
+	_ = options
 	return nil, ctx
-
-	if !s.cfg.Sentry.Enabled {
-		return nil, ctx
-	}
-
-	hub := sentry.GetHubFromContext(ctx)
-	if hub == nil {
-		hub = sentry.CurrentHub().Clone()
-		ctx = sentry.SetHubOnContext(ctx, hub)
-	}
-
-	opts := append([]sentry.SpanOption{
-		sentry.WithOpName(name),
-		sentry.WithTransactionSource(sentry.SourceCustom),
-	}, options...)
-
-	transaction := sentry.StartTransaction(ctx, name, opts...)
-	return transaction, transaction.Context()
 }
 
 // SpanFinisher is a helper that finishes a span when calling Finish()
@@ -244,29 +195,10 @@ func (f *SpanFinisher) Finish() {
 
 // StartRepositorySpan creates a span for a repository operation
 func (s *Service) StartRepositorySpan(ctx context.Context, repository, operation string, params map[string]interface{}) (*sentry.Span, context.Context) {
+	_ = repository
+	_ = operation
+	_ = params
 	return nil, ctx
-
-	if !s.cfg.Sentry.Enabled {
-		return nil, ctx
-	}
-
-	operationName := fmt.Sprintf("repository.%s.%s", repository, operation)
-	span := sentry.StartSpan(ctx, operationName)
-	if span != nil {
-		span.Description = operationName
-		span.Op = "db.repository"
-
-		// Add common repository data
-		span.SetData("repository", repository)
-		span.SetData("operation", operation)
-
-		// Add additional parameters
-		for k, v := range params {
-			span.SetData(k, v)
-		}
-	}
-
-	return span, span.Context()
 }
 
 func (s *Service) GetSpanFromContext(ctx context.Context) *sentry.Span {
