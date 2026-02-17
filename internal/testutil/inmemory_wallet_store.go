@@ -55,7 +55,7 @@ func walletFilterFn(ctx context.Context, w *wallet.Wallet, filter interface{}) b
 		}
 
 		// Filter by alert enabled
-		if f.AlertEnabled != nil && w.AlertEnabled != *f.AlertEnabled {
+		if f.AlertEnabled != nil && w.IsAlertEnabled() != *f.AlertEnabled {
 			return false
 		}
 

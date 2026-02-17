@@ -330,8 +330,9 @@ type ExpireCreditsResult struct {
 // WalletFilter represents the filter options for wallets
 type WalletFilter struct {
 	*QueryFilter
-	WalletIDs []string      `json:"wallet_ids,omitempty" form:"wallet_ids"`
-	Status    *WalletStatus `json:"status,omitempty" form:"status"`
+	WalletIDs    []string      `json:"wallet_ids,omitempty" form:"wallet_ids"`
+	Status       *WalletStatus `json:"status,omitempty" form:"status"`
+	AlertEnabled *bool         `json:"alert_enabled,omitempty" form:"alert_enabled"`
 }
 
 func NewWalletFilter() *WalletFilter {
