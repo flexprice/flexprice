@@ -33,7 +33,7 @@ type FeatureUsageRepository interface {
 	GetUsageForMaxMetersWithBuckets(ctx context.Context, params *FeatureUsageParams) (*AggregationResult, error)
 
 	// GetFeatureUsageByEventIDs gets feature usage records by event IDs
-	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*FeatureUsage, error)
+	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string, externalCustomerID string) ([]*FeatureUsage, error)
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation
