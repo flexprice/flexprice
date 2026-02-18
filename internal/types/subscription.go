@@ -163,6 +163,67 @@ func (c CollectionMethod) Validate() error {
 	return nil
 }
 
+// PaymentTerms represents net payment terms (e.g. "30 NET" = payment due in 30 days).
+// Used to compute invoice due date from period end.
+type PaymentTerms string
+
+const (
+	PaymentTerms15Net PaymentTerms = "15 NET"
+	PaymentTerms30Net PaymentTerms = "30 NET"
+	PaymentTerms45Net PaymentTerms = "45 NET"
+	PaymentTerms60Net PaymentTerms = "60 NET"
+	PaymentTerms75Net PaymentTerms = "75 NET"
+	PaymentTerms90Net PaymentTerms = "90 NET"
+)
+
+// AllPaymentTerms is the list of allowed payment term values.
+var AllPaymentTerms = []PaymentTerms{
+	PaymentTerms15Net, PaymentTerms30Net, PaymentTerms45Net,
+	PaymentTerms60Net, PaymentTerms75Net, PaymentTerms90Net,
+}
+
+func (p PaymentTerms) String() string {
+	return string(p)
+}
+
+// Validate returns an error if the payment terms value is not allowed.
+func (p PaymentTerms) Validate() error {
+	if p == "" {
+		return nil
+	}
+	if !lo.Contains(AllPaymentTerms, p) {
+		return ierr.NewError("invalid payment_terms").
+			WithHint("Payment terms must be one of: 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET").
+			WithReportableDetails(map[string]any{
+				"payment_terms":   p,
+				"allowed_values": AllPaymentTerms,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// PaymentTermsToDueDateDays returns the number of days after period end for the given payment terms.
+// Returns (0, false) if the value is invalid or empty.
+func PaymentTermsToDueDateDays(p PaymentTerms) (int, bool) {
+	switch p {
+	case PaymentTerms15Net:
+		return 15, true
+	case PaymentTerms30Net:
+		return 30, true
+	case PaymentTerms45Net:
+		return 45, true
+	case PaymentTerms60Net:
+		return 60, true
+	case PaymentTerms75Net:
+		return 75, true
+	case PaymentTerms90Net:
+		return 90, true
+	default:
+		return 0, false
+	}
+}
+
 // PauseStatus represents the pause state of a subscription
 type PauseStatus string
 

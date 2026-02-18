@@ -130,6 +130,9 @@ type Subscription struct {
 	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
 	ParentSubscriptionID *string `db:"parent_subscription_id" json:"parent_subscription_id,omitempty"`
 
+	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
+	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
+
 	types.BaseModel
 }
 
@@ -214,6 +217,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		EnableTrueUp:          sub.EnableTrueUp,
 		InvoicingCustomerID:   sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,
+		PaymentTerms:         sub.PaymentTerms,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

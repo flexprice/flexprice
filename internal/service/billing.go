@@ -1845,8 +1845,17 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 			Mark(ierr.ErrValidation)
 	}
 
-	// Prepare invoice due date using tenant's configuration
-	invoiceDueDate := periodEnd.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
+	// Prepare invoice due date: use subscription payment terms if set, else tenant's configuration
+	var invoiceDueDate time.Time
+	if sub.PaymentTerms != nil && *sub.PaymentTerms != "" {
+		if days, ok := types.PaymentTermsToDueDateDays(*sub.PaymentTerms); ok {
+			invoiceDueDate = periodEnd.Add(24 * time.Hour * time.Duration(days))
+		} else {
+			invoiceDueDate = periodEnd.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
+		}
+	} else {
+		invoiceDueDate = periodEnd.Add(24 * time.Hour * time.Duration(*invoiceConfig.DueDateDays))
+	}
 
 	if result == nil {
 		// prepare result for zero amount invoice

@@ -525,6 +525,26 @@ func (su *SubscriptionUpdate) ClearParentSubscriptionID() *SubscriptionUpdate {
 	return su
 }
 
+// SetPaymentTerms sets the "payment_terms" field.
+func (su *SubscriptionUpdate) SetPaymentTerms(tt types.PaymentTerms) *SubscriptionUpdate {
+	su.mutation.SetPaymentTerms(tt)
+	return su
+}
+
+// SetNillablePaymentTerms sets the "payment_terms" field if the given value is not nil.
+func (su *SubscriptionUpdate) SetNillablePaymentTerms(tt *types.PaymentTerms) *SubscriptionUpdate {
+	if tt != nil {
+		su.SetPaymentTerms(*tt)
+	}
+	return su
+}
+
+// ClearPaymentTerms clears the value of the "payment_terms" field.
+func (su *SubscriptionUpdate) ClearPaymentTerms() *SubscriptionUpdate {
+	su.mutation.ClearPaymentTerms()
+	return su
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (su *SubscriptionUpdate) AddLineItemIDs(ids ...string) *SubscriptionUpdate {
 	su.mutation.AddLineItemIDs(ids...)
@@ -972,6 +992,12 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if su.mutation.ParentSubscriptionIDCleared() {
 		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
+	}
+	if value, ok := su.mutation.PaymentTerms(); ok {
+		_spec.SetField(subscription.FieldPaymentTerms, field.TypeString, value)
+	}
+	if su.mutation.PaymentTermsCleared() {
+		_spec.ClearField(subscription.FieldPaymentTerms, field.TypeString)
 	}
 	if su.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1824,6 +1850,26 @@ func (suo *SubscriptionUpdateOne) ClearParentSubscriptionID() *SubscriptionUpdat
 	return suo
 }
 
+// SetPaymentTerms sets the "payment_terms" field.
+func (suo *SubscriptionUpdateOne) SetPaymentTerms(tt types.PaymentTerms) *SubscriptionUpdateOne {
+	suo.mutation.SetPaymentTerms(tt)
+	return suo
+}
+
+// SetNillablePaymentTerms sets the "payment_terms" field if the given value is not nil.
+func (suo *SubscriptionUpdateOne) SetNillablePaymentTerms(tt *types.PaymentTerms) *SubscriptionUpdateOne {
+	if tt != nil {
+		suo.SetPaymentTerms(*tt)
+	}
+	return suo
+}
+
+// ClearPaymentTerms clears the value of the "payment_terms" field.
+func (suo *SubscriptionUpdateOne) ClearPaymentTerms() *SubscriptionUpdateOne {
+	suo.mutation.ClearPaymentTerms()
+	return suo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the SubscriptionLineItem entity by IDs.
 func (suo *SubscriptionUpdateOne) AddLineItemIDs(ids ...string) *SubscriptionUpdateOne {
 	suo.mutation.AddLineItemIDs(ids...)
@@ -2301,6 +2347,12 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 	}
 	if suo.mutation.ParentSubscriptionIDCleared() {
 		_spec.ClearField(subscription.FieldParentSubscriptionID, field.TypeString)
+	}
+	if value, ok := suo.mutation.PaymentTerms(); ok {
+		_spec.SetField(subscription.FieldPaymentTerms, field.TypeString, value)
+	}
+	if suo.mutation.PaymentTermsCleared() {
+		_spec.ClearField(subscription.FieldPaymentTerms, field.TypeString)
 	}
 	if suo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
