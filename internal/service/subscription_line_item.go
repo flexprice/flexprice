@@ -36,31 +36,39 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			Mark(ierr.ErrValidation)
 	}
 
-	// 4. Resolve price and params
-	price, params, resolvedReq, usedInlinePrice, err := s.resolvePriceAndLineItemParams(ctx, sub, req)
+	// 4. Resolve price and params (no DB write for inline price; caller creates price inside tx)
+	price, params, resolvedReq, usedInlinePrice, inlineCreatePriceReq, err := s.resolvePriceAndLineItemParams(ctx, sub, req)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Build line item
-	lineItem := resolvedReq.ToSubscriptionLineItem(ctx, *params)
-	if usedInlinePrice {
-		s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
-	}
-
-	// 6. Validate line item
-	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
-		return nil, err
-	}
-	// Include the new line item in sub.LineItems so validateSubscriptionLevelCommitment can reject
-	// subscription-level commitment when the new line item also has commitment
-	sub.LineItems = append(sub.LineItems, lineItem)
-	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
-		return nil, err
-	}
-
-	// 7. Persist and return
-	if err := s.SubscriptionLineItemRepo.Create(ctx, lineItem); err != nil {
+	// 5–7. Build line item, apply defaults, validate, and persist inside a single transaction
+	// so that inline Price create is rolled back if validations or line item create fail
+	var lineItem *subscription.SubscriptionLineItem
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if usedInlinePrice && inlineCreatePriceReq != nil {
+			createdPrice, createErr := NewPriceService(s.ServiceParams).CreatePrice(txCtx, *inlineCreatePriceReq)
+			if createErr != nil {
+				return createErr
+			}
+			price = createdPrice
+			params.Price = createdPrice
+			resolvedReq.PriceID = createdPrice.ID
+		}
+		lineItem = resolvedReq.ToSubscriptionLineItem(txCtx, *params)
+		if usedInlinePrice {
+			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
+		}
+		if err := s.validateLineItemCommitment(txCtx, lineItem); err != nil {
+			return err
+		}
+		sub.LineItems = append(sub.LineItems, lineItem)
+		if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+			return err
+		}
+		return s.SubscriptionLineItemRepo.Create(txCtx, lineItem)
+	})
+	if err != nil {
 		return nil, err
 	}
 	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
@@ -109,27 +117,25 @@ func (s *subscriptionService) buildLineItemParamsForPrice(ctx context.Context, p
 }
 
 // resolvePriceAndLineItemParams resolves the price and params for a new line item (inline or existing price).
-func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionLineItemRequest) (price *dto.PriceResponse, params *dto.LineItemParams, resolvedReq dto.CreateSubscriptionLineItemRequest, usedInlinePrice bool, err error) {
+// For inline price (req.Price != nil), it does NOT persist the price; it returns inlineCreatePriceReq so the
+// caller can create the price inside a transaction. For existing price, it fetches and validates only (no write).
+func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionLineItemRequest) (price *dto.PriceResponse, params *dto.LineItemParams, resolvedReq dto.CreateSubscriptionLineItemRequest, usedInlinePrice bool, inlineCreatePriceReq *dto.CreatePriceRequest, err error) {
 	priceService := NewPriceService(s.ServiceParams)
 	subResp := &dto.SubscriptionResponse{Subscription: sub}
 
 	if req.Price != nil {
-		// Inline price: create subscription-scoped price, then build params and resolved request
+		// Inline price: validate and prepare create request; caller persists price inside transaction
 		createPriceReq := req.Price.ToCreatePriceRequest(sub)
 		if err := createPriceReq.Validate(); err != nil {
-			return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, err
-		}
-		createdPrice, createErr := priceService.CreatePrice(ctx, createPriceReq)
-		if createErr != nil {
-			return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, createErr
+			return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, err
 		}
 		params = &dto.LineItemParams{
 			Subscription: subResp,
-			Price:        createdPrice,
+			Price:        nil, // set after CreatePrice inside tx
 			EntityType:   types.SubscriptionLineItemEntityTypeSubscription,
 		}
 		resolvedReq = dto.CreateSubscriptionLineItemRequest{
-			PriceID:                 createdPrice.ID,
+			PriceID:                 "", // set to createdPrice.ID inside tx
 			Quantity:                req.Quantity,
 			StartDate:               req.StartDate,
 			EndDate:                 req.EndDate,
@@ -145,25 +151,25 @@ func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context,
 			CommitmentWindowed:      req.CommitmentWindowed,
 			CommitmentDuration:      req.CommitmentDuration,
 		}
-		return createdPrice, params, resolvedReq, true, nil
+		return nil, params, resolvedReq, true, &createPriceReq, nil
 	}
 
 	// Existing price: fetch and validate, then resolve entity params
 	existingPrice, getErr := priceService.GetPrice(ctx, req.PriceID)
 	if getErr != nil {
-		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, getErr
+		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, getErr
 	}
 	if err := req.Validate(existingPrice.Price, sub); err != nil {
-		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, err
+		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, err
 	}
 	params, resolveErr := s.buildLineItemParamsForPrice(ctx, existingPrice, req.SkipEntitlementCheck)
 	if resolveErr != nil {
-		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, resolveErr
+		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, resolveErr
 	}
 	if params.Subscription == nil {
 		params.Subscription = subResp
 	}
-	return existingPrice, params, req, false, nil
+	return existingPrice, params, req, false, nil, nil
 }
 
 // applySubscriptionScopedLineItemDefaults sets entity and display name on a line item created from an inline (subscription-scoped) price.
