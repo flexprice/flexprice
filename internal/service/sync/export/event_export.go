@@ -44,7 +44,7 @@ type FeatureUsageCSV struct {
 	IngestedAt         string `csv:"ingested_at"` // RFC3339 format
 	PeriodID           string `csv:"period_id"`   // Billing period ID (uint64 as string)
 	QtyTotal           string `csv:"qty_total"`   // Total quantity (decimal as string)
-	Cost               string `csv:"cost"`       // price.Amount * quantity (decimal as string)
+	ProvisionalUsageCharges string `csv:"provisional_usage_charges"` // price.Amount * quantity (decimal as string)
 	Properties         string `csv:"properties"`  // Event properties as JSON string
 	UniqueHash         string `csv:"unique_hash"` // Deduplication hash
 }
@@ -196,10 +196,10 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, pr
 			propertiesJSON = []byte("{}")
 		}
 
-		costStr := ""
+		provisionalUsageChargesStr := ""
 		if usage.PriceID != "" && priceByID != nil {
 			if p, ok := priceByID[usage.PriceID]; ok {
-				costStr = p.Amount.Mul(usage.QtyTotal).String()
+				provisionalUsageChargesStr = p.Amount.Mul(usage.QtyTotal).String()
 			}
 		}
 
@@ -220,7 +220,7 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, pr
 			IngestedAt:         usage.IngestedAt.Format(time.RFC3339),
 			PeriodID:           fmt.Sprintf("%d", usage.PeriodID),
 			QtyTotal:           usage.QtyTotal.String(),
-			Cost:               costStr,
+			ProvisionalUsageCharges: provisionalUsageChargesStr,
 			Properties:         string(propertiesJSON),
 			UniqueHash:         usage.UniqueHash,
 		}

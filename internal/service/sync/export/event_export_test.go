@@ -107,9 +107,9 @@ func TestEventExporter_PrepareData_CostColumn(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected 1 CSV record, got %d", len(records))
 	}
-	// cost = 2.5 * 3 = 7.5
-	if records[0].Cost != "7.5" {
-		t.Errorf("expected Cost 7.5, got %q", records[0].Cost)
+	// provisional_usage_charges = 2.5 * 3 = 7.5
+	if records[0].ProvisionalUsageCharges != "7.5" {
+		t.Errorf("expected ProvisionalUsageCharges 7.5, got %q", records[0].ProvisionalUsageCharges)
 	}
 	if records[0].PriceID != priceID {
 		t.Errorf("expected PriceID %q, got %q", priceID, records[0].PriceID)
@@ -183,8 +183,8 @@ func TestEventExporter_PrepareData_CostEmptyWhenPriceIDEmpty(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected 1 CSV record, got %d", len(records))
 	}
-	if records[0].Cost != "" {
-		t.Errorf("expected empty Cost when price_id is empty, got %q", records[0].Cost)
+	if records[0].ProvisionalUsageCharges != "" {
+		t.Errorf("expected empty ProvisionalUsageCharges when price_id is empty, got %q", records[0].ProvisionalUsageCharges)
 	}
 }
 
@@ -255,9 +255,9 @@ func TestEventExporter_PrepareData_CostEmptyWhenPriceNotFound(t *testing.T) {
 	if len(records) != 1 {
 		t.Fatalf("expected 1 CSV record, got %d", len(records))
 	}
-	// Cost should be empty when price is not found (no error, graceful degradation)
-	if records[0].Cost != "" {
-		t.Errorf("expected empty Cost when price not found, got %q", records[0].Cost)
+	// ProvisionalUsageCharges should be empty when price is not found (no error, graceful degradation)
+	if records[0].ProvisionalUsageCharges != "" {
+		t.Errorf("expected empty ProvisionalUsageCharges when price not found, got %q", records[0].ProvisionalUsageCharges)
 	}
 }
 
@@ -293,7 +293,7 @@ func TestEventExporter_CSVHeadersIncludeCost(t *testing.T) {
 		t.Fatalf("expected at least header line")
 	}
 	headers := lines[0]
-	if !strings.Contains(headers, "cost") {
-		t.Errorf("expected CSV headers to include 'cost', got: %s", headers)
+	if !strings.Contains(headers, "provisional_usage_charges") {
+		t.Errorf("expected CSV headers to include 'provisional_usage_charges', got: %s", headers)
 	}
 }
