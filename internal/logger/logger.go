@@ -97,6 +97,35 @@ func GetLoggerWithContext(ctx context.Context) *Logger {
 	return GetLogger().WithContext(ctx)
 }
 
+// sanitizeValue converts error objects to strings for msgpack serialization
+// Also handles nested structures (maps and slices) that may contain errors
+func sanitizeValue(v interface{}) interface{} {
+	// Convert error objects to strings
+	if err, ok := v.(error); ok {
+		return err.Error()
+	}
+
+	// Handle nested maps
+	if m, ok := v.(map[string]interface{}); ok {
+		sanitized := make(map[string]interface{}, len(m))
+		for k, val := range m {
+			sanitized[k] = sanitizeValue(val)
+		}
+		return sanitized
+	}
+
+	// Handle slices/arrays
+	if s, ok := v.([]interface{}); ok {
+		sanitized := make([]interface{}, len(s))
+		for i, val := range s {
+			sanitized[i] = sanitizeValue(val)
+		}
+		return sanitized
+	}
+
+	return v
+}
+
 // sendToFluentd sends structured log data to Fluentd
 func (l *Logger) sendToFluentd(level string, msg string, fields map[string]interface{}) {
 	if l.fluentdLogger == nil {
@@ -110,9 +139,9 @@ func (l *Logger) sendToFluentd(level string, msg string, fields map[string]inter
 		"timestamp": time.Now().UTC().Format(time.RFC3339),
 	}
 
-	// Merge additional fields
+	// Merge additional fields, converting error objects to strings
 	for k, v := range fields {
-		logData[k] = v
+		logData[k] = sanitizeValue(v)
 	}
 
 	// Post to Fluentd asynchronously (non-blocking)
@@ -203,7 +232,8 @@ func (l *Logger) keysAndValuesToMap(keysAndValues ...interface{}) map[string]int
 	for i := 0; i < len(keysAndValues); i += 2 {
 		if i+1 < len(keysAndValues) {
 			if key, ok := keysAndValues[i].(string); ok {
-				fields[key] = keysAndValues[i+1]
+				// Convert error objects to strings for msgpack serialization
+				fields[key] = sanitizeValue(keysAndValues[i+1])
 			}
 		}
 	}
