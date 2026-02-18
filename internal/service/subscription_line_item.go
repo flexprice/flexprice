@@ -52,19 +52,9 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
 		return nil, err
 	}
-	// Reject if subscription has commitment and the new line item also has commitment
-	// (the new line item is not in sub.LineItems yet, so validateSubscriptionLevelCommitment does not see it)
-	if lineItem.HasCommitment() && sub.HasCommitment() {
-		return nil, ierr.NewError("cannot set commitment on both subscription and line item").
-			WithHint("Use either subscription-level commitment or line-item-level commitment, not both").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id":               subscriptionID,
-				"subscription_commitment":       sub.CommitmentAmount,
-				"line_item_commitment_amount":   lineItem.CommitmentAmount,
-				"line_item_commitment_quantity": lineItem.CommitmentQuantity,
-			}).
-			Mark(ierr.ErrValidation)
-	}
+	// Include the new line item in sub.LineItems so validateSubscriptionLevelCommitment can reject
+	// subscription-level commitment when the new line item also has commitment
+	sub.LineItems = append(sub.LineItems, lineItem)
 	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
 		return nil, err
 	}
@@ -597,13 +587,7 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 
 // validateSubscriptionLevelCommitment validates that subscription and line items don't both have commitment
 func (s *subscriptionService) validateSubscriptionLevelCommitment(sub *subscription.Subscription) error {
-	// Check if subscription has commitment
-	subscriptionHasCommitment := sub.CommitmentAmount != nil &&
-		sub.CommitmentAmount.GreaterThan(decimal.Zero) &&
-		sub.OverageFactor != nil &&
-		sub.OverageFactor.GreaterThan(decimal.NewFromInt(1))
-
-	if !subscriptionHasCommitment {
+	if !sub.HasCommitment() {
 		return nil
 	}
 
