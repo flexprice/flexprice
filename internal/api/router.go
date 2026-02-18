@@ -294,6 +294,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			subscription.POST("/:id/change/execute", handlers.SubscriptionChange.ExecuteSubscriptionChange)
 
 			// Subscription line item management
+			subscription.POST("/:id/lineitems", handlers.Subscription.AddSubscriptionLineItem)
 			subscription.PUT("/lineitems/:id", handlers.Subscription.UpdateSubscriptionLineItem)
 			subscription.DELETE("/lineitems/:id", handlers.Subscription.DeleteSubscriptionLineItem)
 

@@ -441,6 +441,47 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// @Summary Create subscription line item
+// @Description Add a new line item to an existing subscription (price_id or inline price)
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Subscription ID"
+// @Param request body dto.CreateSubscriptionLineItemRequest true "Create Line Item Request"
+// @Success 201 {object} dto.SubscriptionLineItemResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /subscriptions/{id}/lineitems [post]
+func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
+	subscriptionID := c.Param("id")
+	if subscriptionID == "" {
+		c.Error(ierr.NewError("subscription ID is required").
+			WithHint("Please provide a valid subscription ID").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.CreateSubscriptionLineItemRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.AddSubscriptionLineItem(c.Request.Context(), subscriptionID, req)
+	if err != nil {
+		h.log.Error("Failed to add subscription line item", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 // @Summary Update subscription line item
 // @Description Update a subscription line item by terminating the existing one and creating a new one
 // @Tags Subscriptions

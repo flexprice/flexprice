@@ -52,6 +52,19 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
 		return nil, err
 	}
+	// Reject if subscription has commitment and the new line item also has commitment
+	// (the new line item is not in sub.LineItems yet, so validateSubscriptionLevelCommitment does not see it)
+	if lineItem.HasCommitment() && sub.HasCommitment() {
+		return nil, ierr.NewError("cannot set commitment on both subscription and line item").
+			WithHint("Use either subscription-level commitment or line-item-level commitment, not both").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":               subscriptionID,
+				"subscription_commitment":       sub.CommitmentAmount,
+				"line_item_commitment_amount":   lineItem.CommitmentAmount,
+				"line_item_commitment_quantity": lineItem.CommitmentQuantity,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
 		return nil, err
 	}
