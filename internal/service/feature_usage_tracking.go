@@ -4160,7 +4160,7 @@ func (s *featureUsageTrackingService) buildCustomAnalytics(
 		for _, item := range response.Items {
 			// Simple ID match - if rule targets this feature, apply the calculation
 			if rule.TargetType == "feature" && item.FeatureID == rule.TargetID {
-				customItem := s.applyCustomRule(rule, item)
+				customItem := s.applyCustomRule(rule, item, response.TotalCost)
 				if customItem != nil {
 					customItems = append(customItems, *customItem)
 				}
@@ -4177,11 +4177,12 @@ func (s *featureUsageTrackingService) buildCustomAnalytics(
 func (s *featureUsageTrackingService) applyCustomRule(
 	rule types.CustomAnalyticsRule,
 	sourceItem dto.UsageAnalyticItem,
+	responseTotalCost decimal.Decimal,
 ) *dto.CustomAnalyticItem {
 	// Hardcoded logic based on calculation type
 	switch types.CustomAnalyticsRuleID(rule.ID) {
 	case types.CustomAnalyticsRuleRevenuePerMinute:
-		// Calculate revenue per minute: total_cost / (total_usage / 60000)
+		// Calculate revenue per minute: (top-level total_cost) / (total_usage / 60000)
 		// First convert usage from milliseconds to minutes
 		usageInMinutes := sourceItem.TotalUsage.Div(decimal.NewFromInt(60000))
 
@@ -4190,8 +4191,8 @@ func (s *featureUsageTrackingService) applyCustomRule(
 			return nil
 		}
 
-		// Calculate revenue per minute
-		revenuePerMinute := sourceItem.TotalCost.Div(usageInMinutes)
+		// Calculate revenue per minute using top-level total cost
+		revenuePerMinute := responseTotalCost.Div(usageInMinutes)
 
 		return &dto.CustomAnalyticItem{
 			ID:          rule.ID,
