@@ -435,7 +435,7 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		PriceID:             r.PriceID,
 		PriceType:           params.Price.Type,
 		Currency:            params.Subscription.Currency,
-		BillingPeriod:       params.Subscription.BillingPeriod,
+		BillingPeriod:       params.Price.BillingPeriod,
 		InvoiceCadence:      params.Price.InvoiceCadence,
 		TrialPeriod:         params.Price.TrialPeriod,
 		EntityType:          params.EntityType,
