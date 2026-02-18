@@ -322,6 +322,9 @@ type CreateSubscriptionRequest struct {
 	// Addons represents addons to be added to the subscription during creation
 	Addons []AddAddonToSubscriptionRequest `json:"addons,omitempty" validate:"omitempty,dive"`
 
+	// LineItems are extra line items to add at creation (each with price_id or price), in addition to plan prices
+	LineItems []CreateSubscriptionLineItemRequest `json:"line_items,omitempty" validate:"omitempty,dive"`
+
 	// Phases represents subscription phases to be created with the subscription
 	Phases []SubscriptionPhaseCreateRequest `json:"phases,omitempty" validate:"omitempty,dive"`
 
@@ -788,6 +791,26 @@ func (r *CreateSubscriptionRequest) Validate() error {
 					Mark(ierr.ErrValidation)
 			}
 			priceIDsSeen[override.PriceID] = true
+		}
+	}
+
+	// Validate line_items if provided (each must have exactly one of price_id or price)
+	const maxLineItems = 100
+	if len(r.LineItems) > maxLineItems {
+		return ierr.NewError("line_items exceeds maximum allowed").
+			WithHint(fmt.Sprintf("At most %d line items can be added at subscription creation", maxLineItems)).
+			WithReportableDetails(map[string]interface{}{
+				"count": len(r.LineItems),
+				"max":   maxLineItems,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	for i, item := range r.LineItems {
+		if err := item.Validate(nil, nil); err != nil {
+			return ierr.WithError(err).
+				WithHint(fmt.Sprintf("Line item validation failed at index %d", i)).
+				WithReportableDetails(map[string]interface{}{"line_item_index": i}).
+				Mark(ierr.ErrValidation)
 		}
 	}
 

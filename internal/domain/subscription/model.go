@@ -142,6 +142,15 @@ func (s *Subscription) GetInvoicingCustomerID() string {
 	return s.CustomerID
 }
 
+// HasCommitment returns true if the subscription has subscription-level commitment configured
+// (commitment amount and overage factor both set and greater than zero/one).
+func (s *Subscription) HasCommitment() bool {
+	return s.CommitmentAmount != nil &&
+		s.CommitmentAmount.GreaterThan(decimal.Zero) &&
+		s.OverageFactor != nil &&
+		s.OverageFactor.GreaterThan(decimal.NewFromInt(1))
+}
+
 func FromEntList(subs []*ent.Subscription) []*Subscription {
 	return lo.Map(subs, func(sub *ent.Subscription, _ int) *Subscription {
 		return GetSubscriptionFromEnt(sub)

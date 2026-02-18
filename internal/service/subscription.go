@@ -181,8 +181,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 
 	for _, priceResponse := range validPrices {
 		lineItemReq := &dto.CreateSubscriptionLineItemRequest{PriceID: priceResponse.Price.ID}
-		// Validate with price for MinQuantity checks
-		if err := lineItemReq.Validate(priceResponse.Price); err != nil {
+		// Validate with price for MinQuantity checks and sub for date bounds
+		if err := lineItemReq.Validate(priceResponse.Price, sub); err != nil {
 			return nil, err
 		}
 		item := lineItemReq.ToSubscriptionLineItem(ctx, dto.LineItemParams{
@@ -302,6 +302,14 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 		if len(req.Addons) > 0 {
 			if err = s.handleSubscriptionAddons(ctx, sub, req.Addons); err != nil {
+				return err
+			}
+		}
+		// Add extra line items (price_id or price) in the same transaction
+		for i := range req.LineItems {
+			itemReq := req.LineItems[i]
+			itemReq.SkipEntitlementCheck = true
+			if _, err = s.AddSubscriptionLineItem(ctx, sub.ID, itemReq); err != nil {
 				return err
 			}
 		}
@@ -883,7 +891,7 @@ func (s *subscriptionService) handleSubscriptionPhases(
 				StartDate:           lo.ToPtr(startDate),
 				EndDate:             phaseReq.EndDate,
 			}
-			if err := req.Validate(priceResp.Price); err != nil {
+			if err := req.Validate(priceResp.Price, sub); err != nil {
 				return err
 			}
 		}

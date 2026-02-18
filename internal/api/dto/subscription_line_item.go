@@ -8,20 +8,91 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/validator"
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
+type SubscriptionPriceCreateRequest struct {
+	Type               types.PriceType          `json:"type" validate:"required"`
+	PriceUnitType      types.PriceUnitType      `json:"price_unit_type" validate:"required"`
+	BillingPeriod      types.BillingPeriod      `json:"billing_period" validate:"required"`
+	BillingPeriodCount int                      `json:"billing_period_count"`
+	BillingModel       types.BillingModel       `json:"billing_model" validate:"required"`
+	BillingCadence     types.BillingCadence     `json:"billing_cadence" validate:"required"`
+	InvoiceCadence     types.InvoiceCadence     `json:"invoice_cadence" validate:"required"`
+	Amount             *decimal.Decimal         `json:"amount,omitempty" swaggertype:"string"`
+	MeterID            string                   `json:"meter_id,omitempty"`
+	FilterValues       map[string][]string      `json:"filter_values,omitempty"`
+	LookupKey          string                   `json:"lookup_key,omitempty"`
+	TrialPeriod        int                      `json:"trial_period"`
+	Description        string                   `json:"description,omitempty"`
+	Metadata           map[string]string        `json:"metadata,omitempty"`
+	TierMode           types.BillingTier        `json:"tier_mode,omitempty"`
+	Tiers              []CreatePriceTier        `json:"tiers,omitempty"`
+	TransformQuantity  *price.TransformQuantity `json:"transform_quantity,omitempty"`
+	PriceUnitConfig    *PriceUnitConfig         `json:"price_unit_config,omitempty"`
+	StartDate          *time.Time               `json:"start_date,omitempty"`
+	EndDate            *time.Time               `json:"end_date,omitempty"`
+	DisplayName        string                   `json:"display_name,omitempty"`
+	MinQuantity        *int64                   `json:"min_quantity,omitempty"`
+}
+
+// ToCreatePriceRequest builds a CreatePriceRequest for subscription-scoped price creation.
+// Currency, EntityType, and EntityID are set from the subscription; if StartDate is not set on the request, it defaults to the subscription's start date.
+func (p *SubscriptionPriceCreateRequest) ToCreatePriceRequest(sub *subscription.Subscription) CreatePriceRequest {
+	startDate := p.StartDate
+	if startDate == nil {
+		subStart := sub.StartDate.UTC()
+		startDate = &subStart
+	}
+	req := CreatePriceRequest{
+		Type:                 p.Type,
+		PriceUnitType:        p.PriceUnitType,
+		BillingPeriod:        p.BillingPeriod,
+		BillingPeriodCount:   p.BillingPeriodCount,
+		BillingModel:         p.BillingModel,
+		BillingCadence:       p.BillingCadence,
+		InvoiceCadence:       p.InvoiceCadence,
+		Amount:               p.Amount,
+		MeterID:              p.MeterID,
+		FilterValues:         p.FilterValues,
+		LookupKey:            p.LookupKey,
+		TrialPeriod:          p.TrialPeriod,
+		Description:          p.Description,
+		Metadata:             p.Metadata,
+		TierMode:             p.TierMode,
+		Tiers:                p.Tiers,
+		TransformQuantity:    p.TransformQuantity,
+		PriceUnitConfig:      p.PriceUnitConfig,
+		StartDate:            startDate,
+		EndDate:              p.EndDate,
+		DisplayName:          p.DisplayName,
+		MinQuantity:          p.MinQuantity,
+		Currency:             sub.Currency,
+		EntityType:           types.PRICE_ENTITY_TYPE_SUBSCRIPTION,
+		EntityID:             sub.ID,
+		SkipEntityValidation: true,
+	}
+	if req.BillingPeriodCount < 1 {
+		req.BillingPeriodCount = 1
+	}
+	return req
+}
+
 // CreateSubscriptionLineItemRequest represents the request to create a subscription line item
 type CreateSubscriptionLineItemRequest struct {
-	PriceID              string            `json:"price_id" validate:"required"`
-	Quantity             decimal.Decimal   `json:"quantity,omitempty"`
-	StartDate            *time.Time        `json:"start_date,omitempty"`
-	EndDate              *time.Time        `json:"end_date,omitempty"`
-	Metadata             map[string]string `json:"metadata,omitempty"`
-	DisplayName          string            `json:"display_name,omitempty"`
-	SubscriptionPhaseID  *string           `json:"subscription_phase_id,omitempty"`
-	SkipEntitlementCheck bool              `json:"-"` // This is used to skip entitlement check when creating a subscription line item
+	// PriceID references an existing price (plan, addon, or subscription-scoped). Exactly one of price_id or price must be set.
+	PriceID string `json:"price_id,omitempty"`
+	// Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.
+	Price                *SubscriptionPriceCreateRequest `json:"price,omitempty"`
+	Quantity             decimal.Decimal                 `json:"quantity,omitempty"`
+	StartDate            *time.Time                      `json:"start_date,omitempty"`
+	EndDate              *time.Time                      `json:"end_date,omitempty"`
+	Metadata             map[string]string               `json:"metadata,omitempty"`
+	DisplayName          string                          `json:"display_name,omitempty"`
+	SubscriptionPhaseID  *string                         `json:"subscription_phase_id,omitempty"`
+	SkipEntitlementCheck bool                            `json:"-"` // This is used to skip entitlement check when creating a subscription line item
 
 	// Commitment fields
 	CommitmentAmount        *decimal.Decimal     `json:"commitment_amount,omitempty"`
@@ -92,21 +163,87 @@ func (r *UpdateSubscriptionLineItemRequest) HasCommitment() bool {
 	return hasAmountCommitment || hasQuantityCommitment
 }
 
-// Validate validates the create subscription line item request
-// price is optional and can be provided for MinQuantity validation
-func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price) error {
-	if r.PriceID == "" {
-		return ierr.NewError("price_id is required").
-			WithHint("Price ID is required").
+// Validate validates the create subscription line item request.
+// price is optional and can be provided for MinQuantity validation when using price_id.
+// sub is optional; when provided, line item and inline price start/end dates are validated to fall within subscription bounds.
+func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *subscription.Subscription) error {
+	// Exactly one of price_id or price must be set
+	hasPriceID := r.PriceID != ""
+	hasPrice := r.Price != nil
+	if hasPriceID && hasPrice {
+		return ierr.NewError("cannot provide both price_id and price").
+			WithHint("Provide either price_id (existing price) or price (inline price), not both.").
+			Mark(ierr.ErrValidation)
+	}
+	if !hasPriceID && !hasPrice {
+		return ierr.NewError("either price_id or price is required").
+			WithHint("Provide either price_id (existing price) or price (inline price).").
 			Mark(ierr.ErrValidation)
 	}
 
 	// Validate start date is not after end date if both are provided
 	if r.StartDate != nil && r.EndDate != nil {
-		if r.StartDate.After(*r.EndDate) {
+		if r.StartDate.After(lo.FromPtr(r.EndDate)) {
 			return ierr.NewError("start_date cannot be after end_date").
 				WithHint("Start date cannot be after end date").
 				Mark(ierr.ErrValidation)
+		}
+	}
+
+	// When subscription is provided, validate line item and inline price dates fall within subscription bounds
+	if sub != nil {
+		subStartUTC := sub.StartDate.UTC()
+		if r.StartDate != nil {
+			startUTC := lo.FromPtr(r.StartDate).UTC()
+			if startUTC.Before(subStartUTC) {
+				return ierr.NewError("line item start_date cannot be before subscription start date").
+					WithHint("start_date must be on or after the subscription's start date.").
+					WithReportableDetails(map[string]interface{}{
+						"start_date":         r.StartDate,
+						"subscription_start": sub.StartDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+		if sub.EndDate != nil && r.EndDate != nil {
+			subEndUTC := lo.FromPtr(sub.EndDate).UTC()
+			endUTC := lo.FromPtr(r.EndDate).UTC()
+			if endUTC.After(subEndUTC) {
+				return ierr.NewError("line item end_date cannot be after subscription end date").
+					WithHint("end_date must be on or before the subscription's end date when the subscription has an end date.").
+					WithReportableDetails(map[string]interface{}{
+						"end_date":         r.EndDate,
+						"subscription_end": sub.EndDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+		if r.Price != nil {
+			if r.Price.StartDate != nil {
+				startUTC := lo.FromPtr(r.Price.StartDate).UTC()
+				if startUTC.Before(subStartUTC) {
+					return ierr.NewError("price start_date cannot be before subscription start date").
+						WithHint("price start_date must be on or after the subscription's start date.").
+						WithReportableDetails(map[string]interface{}{
+							"price_start_date":   r.Price.StartDate,
+							"subscription_start": sub.StartDate,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
+			if sub.EndDate != nil && r.Price.EndDate != nil {
+				subEndUTC := lo.FromPtr(sub.EndDate).UTC()
+				endUTC := lo.FromPtr(r.Price.EndDate).UTC()
+				if endUTC.After(subEndUTC) {
+					return ierr.NewError("price end_date cannot be after subscription end date").
+						WithHint("price end_date must be on or before the subscription's end date when the subscription has an end date.").
+						WithReportableDetails(map[string]interface{}{
+							"price_end_date":   r.Price.EndDate,
+							"subscription_end": sub.EndDate,
+						}).
+						Mark(ierr.ErrValidation)
+				}
+			}
 		}
 	}
 
@@ -122,6 +259,15 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price) error {
 		return err
 	}
 
+	// When using price (inline), full price validation is done in service after injecting subscription context
+
+	if hasPrice {
+		if err := validator.ValidateRequest(r.Price); err != nil {
+			return err
+		}
+	}
+
+	// price_id path: validate against price when provided (e.g. MinQuantity)
 	if price != nil && price.Type == types.PRICE_TYPE_FIXED && price.MinQuantity != nil {
 		finalQuantity := r.Quantity
 		if finalQuantity.IsZero() {
@@ -345,6 +491,11 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		lineItem.Metadata["subscription_id"] = params.Subscription.ID
 		lineItem.Metadata["addon_quantity"] = "1"
 		lineItem.Metadata["addon_status"] = string(types.AddonStatusActive)
+	} else if params.EntityType == types.SubscriptionLineItemEntityTypeSubscription && params.Subscription != nil {
+		lineItem.EntityID = params.Subscription.ID
+		if params.Price != nil && params.Price.DisplayName != "" {
+			lineItem.PlanDisplayName = params.Price.DisplayName
+		}
 	}
 
 	// Set dates: effective start = max(subscription start, price start, request start)

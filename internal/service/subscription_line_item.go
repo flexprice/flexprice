@@ -14,13 +14,18 @@ import (
 
 // AddSubscriptionLineItem adds a new line item to an existing subscription
 func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subscriptionID string, req dto.CreateSubscriptionLineItemRequest) (*dto.SubscriptionLineItemResponse, error) {
-	// Get the subscription
+	// 1. Load subscription
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate subscription status
+	// 2. Validate request (including date bounds when sub is passed)
+	if err := req.Validate(nil, sub); err != nil {
+		return nil, err
+	}
+
+	// 3. Validate subscription status
 	if sub.SubscriptionStatus != types.SubscriptionStatusActive {
 		return nil, ierr.NewError("subscription is not active").
 			WithHint("Only active subscriptions can have line items added").
@@ -31,93 +36,149 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			Mark(ierr.ErrValidation)
 	}
 
-	// Initialize line item params
-	params := dto.LineItemParams{
-		Subscription: &dto.SubscriptionResponse{Subscription: sub},
-	}
-
-	// Get entity details and price with expanded data
-	priceService := NewPriceService(s.ServiceParams)
-	price, err := priceService.GetPrice(ctx, req.PriceID)
+	// 4. Resolve price and params (no DB write for inline price; caller creates price inside tx)
+	price, params, resolvedReq, usedInlinePrice, inlineCreatePriceReq, err := s.resolvePriceAndLineItemParams(ctx, sub, req)
 	if err != nil {
 		return nil, err
 	}
 
-	// Validate with price for MinQuantity checks
-	if err := req.Validate(price.Price); err != nil {
+	// 5–7. Build line item, apply defaults, validate, and persist inside a single transaction
+	// so that inline Price create is rolled back if validations or line item create fail
+	var lineItem *subscription.SubscriptionLineItem
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if usedInlinePrice && inlineCreatePriceReq != nil {
+			createdPrice, createErr := NewPriceService(s.ServiceParams).CreatePrice(txCtx, *inlineCreatePriceReq)
+			if createErr != nil {
+				return createErr
+			}
+			price = createdPrice
+			params.Price = createdPrice
+			resolvedReq.PriceID = createdPrice.ID
+		}
+		lineItem = resolvedReq.ToSubscriptionLineItem(txCtx, *params)
+		if usedInlinePrice {
+			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
+		}
+		if err := s.validateLineItemCommitment(txCtx, lineItem); err != nil {
+			return err
+		}
+		sub.LineItems = append(sub.LineItems, lineItem)
+		if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
+			return err
+		}
+		return s.SubscriptionLineItemRepo.Create(txCtx, lineItem)
+	})
+	if err != nil {
 		return nil, err
 	}
+	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
+}
 
-	// Set the price in params
-	params.Price = price
-
-	// Skip entitlement check if requested
-	if req.SkipEntitlementCheck {
-		switch price.EntityType {
-		case types.PRICE_ENTITY_TYPE_PLAN:
-			planService := NewPlanService(s.ServiceParams)
-			planResponse, err := planService.GetPlan(ctx, price.EntityID)
-			if err != nil {
-				return nil, err
-			}
-			params.Plan = planResponse
-			params.EntityType = types.SubscriptionLineItemEntityTypePlan
-		case types.PRICE_ENTITY_TYPE_ADDON:
-			addonService := NewAddonService(s.ServiceParams)
-			addonResponse, err := addonService.GetAddon(ctx, price.EntityID)
-			if err != nil {
-				return nil, err
-			}
-			params.Addon = addonResponse
-			params.EntityType = types.SubscriptionLineItemEntityTypeAddon
-		case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
-			subscriptionService := NewSubscriptionService(s.ServiceParams)
-			subscriptionResponse, err := subscriptionService.GetSubscription(ctx, price.EntityID)
-			if err != nil {
-				return nil, err
-			}
-			params.Subscription = subscriptionResponse
-			params.EntityType = types.SubscriptionLineItemEntityTypePlan
-		default:
-			return nil, ierr.NewError("unsupported entity type").
-				WithHint("Unsupported entity type").
-				WithReportableDetails(map[string]interface{}{
-					"entity_type": price.EntityType,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-
+// buildLineItemParamsForPrice builds LineItemParams for a price, resolving Plan/Addon/Subscription when skipEntitlementCheck is true.
+func (s *subscriptionService) buildLineItemParamsForPrice(ctx context.Context, price *dto.PriceResponse, skipEntitlementCheck bool) (*dto.LineItemParams, error) {
+	params := &dto.LineItemParams{Price: price}
+	if !skipEntitlementCheck {
+		return params, nil
 	}
-
-	// Create the line item
-	lineItem := req.ToSubscriptionLineItem(ctx, params)
-
-	// Invariant: line item start_date must not be greater than end_date when both are set
-	if !lineItem.StartDate.IsZero() && !lineItem.EndDate.IsZero() && lineItem.StartDate.After(lineItem.EndDate) {
-		return nil, ierr.NewError("line item start date cannot be after end date").
-			WithHint("Start date must be on or before end date.").
+	switch price.EntityType {
+	case types.PRICE_ENTITY_TYPE_PLAN:
+		planService := NewPlanService(s.ServiceParams)
+		planResponse, err := planService.GetPlan(ctx, price.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		params.Plan = planResponse
+		params.EntityType = types.SubscriptionLineItemEntityTypePlan
+	case types.PRICE_ENTITY_TYPE_ADDON:
+		addonService := NewAddonService(s.ServiceParams)
+		addonResponse, err := addonService.GetAddon(ctx, price.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		params.Addon = addonResponse
+		params.EntityType = types.SubscriptionLineItemEntityTypeAddon
+	case types.PRICE_ENTITY_TYPE_SUBSCRIPTION:
+		subService := NewSubscriptionService(s.ServiceParams)
+		subResponse, err := subService.GetSubscription(ctx, price.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		params.Subscription = subResponse
+		params.EntityType = types.SubscriptionLineItemEntityTypeSubscription
+	default:
+		return nil, ierr.NewError("unsupported entity type").
+			WithHint("Unsupported entity type").
 			WithReportableDetails(map[string]interface{}{
-				"start_date": lineItem.StartDate,
-				"end_date":   lineItem.EndDate,
+				"entity_type": price.EntityType,
 			}).
 			Mark(ierr.ErrValidation)
 	}
+	return params, nil
+}
 
-	// Validate line item commitment if configured
-	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
-		return nil, err
+// resolvePriceAndLineItemParams resolves the price and params for a new line item (inline or existing price).
+// For inline price (req.Price != nil), it does NOT persist the price; it returns inlineCreatePriceReq so the
+// caller can create the price inside a transaction. For existing price, it fetches and validates only (no write).
+func (s *subscriptionService) resolvePriceAndLineItemParams(ctx context.Context, sub *subscription.Subscription, req dto.CreateSubscriptionLineItemRequest) (price *dto.PriceResponse, params *dto.LineItemParams, resolvedReq dto.CreateSubscriptionLineItemRequest, usedInlinePrice bool, inlineCreatePriceReq *dto.CreatePriceRequest, err error) {
+	priceService := NewPriceService(s.ServiceParams)
+	subResp := &dto.SubscriptionResponse{Subscription: sub}
+
+	if req.Price != nil {
+		// Inline price: validate and prepare create request; caller persists price inside transaction
+		createPriceReq := req.Price.ToCreatePriceRequest(sub)
+		if err := createPriceReq.Validate(); err != nil {
+			return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, err
+		}
+		params = &dto.LineItemParams{
+			Subscription: subResp,
+			Price:        nil, // set after CreatePrice inside tx
+			EntityType:   types.SubscriptionLineItemEntityTypeSubscription,
+		}
+		resolvedReq = dto.CreateSubscriptionLineItemRequest{
+			PriceID:                 "", // set to createdPrice.ID inside tx
+			Quantity:                req.Quantity,
+			StartDate:               req.StartDate,
+			EndDate:                 req.EndDate,
+			Metadata:                req.Metadata,
+			DisplayName:             req.DisplayName,
+			SubscriptionPhaseID:     req.SubscriptionPhaseID,
+			SkipEntitlementCheck:    true,
+			CommitmentAmount:        req.CommitmentAmount,
+			CommitmentQuantity:      req.CommitmentQuantity,
+			CommitmentType:          req.CommitmentType,
+			CommitmentOverageFactor: req.CommitmentOverageFactor,
+			CommitmentTrueUpEnabled: req.CommitmentTrueUpEnabled,
+			CommitmentWindowed:      req.CommitmentWindowed,
+			CommitmentDuration:      req.CommitmentDuration,
+		}
+		return nil, params, resolvedReq, true, &createPriceReq, nil
 	}
 
-	// Validate subscription-level commitment doesn't conflict
-	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
-		return nil, err
+	// Existing price: fetch and validate, then resolve entity params
+	existingPrice, getErr := priceService.GetPrice(ctx, req.PriceID)
+	if getErr != nil {
+		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, getErr
 	}
-
-	if err := s.SubscriptionLineItemRepo.Create(ctx, lineItem); err != nil {
-		return nil, err
+	if err := req.Validate(existingPrice.Price, sub); err != nil {
+		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, err
 	}
+	params, resolveErr := s.buildLineItemParamsForPrice(ctx, existingPrice, req.SkipEntitlementCheck)
+	if resolveErr != nil {
+		return nil, nil, dto.CreateSubscriptionLineItemRequest{}, false, nil, resolveErr
+	}
+	if params.Subscription == nil {
+		params.Subscription = subResp
+	}
+	return existingPrice, params, req, false, nil, nil
+}
 
-	return &dto.SubscriptionLineItemResponse{SubscriptionLineItem: lineItem}, nil
+// applySubscriptionScopedLineItemDefaults sets entity and display name on a line item created from an inline (subscription-scoped) price.
+func (s *subscriptionService) applySubscriptionScopedLineItemDefaults(lineItem *subscription.SubscriptionLineItem, sub *subscription.Subscription, price *dto.PriceResponse) {
+	lineItem.EntityID = sub.ID
+	lineItem.EntityType = types.SubscriptionLineItemEntityTypeSubscription
+	if lineItem.PlanDisplayName == "" && price != nil && price.DisplayName != "" {
+		lineItem.PlanDisplayName = price.DisplayName
+	}
 }
 
 // DeleteSubscriptionLineItem marks a line item as deleted by setting its end date
@@ -532,13 +593,7 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 
 // validateSubscriptionLevelCommitment validates that subscription and line items don't both have commitment
 func (s *subscriptionService) validateSubscriptionLevelCommitment(sub *subscription.Subscription) error {
-	// Check if subscription has commitment
-	subscriptionHasCommitment := sub.CommitmentAmount != nil &&
-		sub.CommitmentAmount.GreaterThan(decimal.Zero) &&
-		sub.OverageFactor != nil &&
-		sub.OverageFactor.GreaterThan(decimal.NewFromInt(1))
-
-	if !subscriptionHasCommitment {
+	if !sub.HasCommitment() {
 		return nil
 	}
 
