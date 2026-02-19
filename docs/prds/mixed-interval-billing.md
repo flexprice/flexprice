@@ -8,7 +8,7 @@
 
 **Reuse (decide as much as possible):** Use existing **subscription** `billing_period` and `billing_period_count` as the **invoice period** (no subscription schema change). Line item already has `billing_period`; add **`billing_period_count`** on subscription line item only if needed for invoice logic (read path; default 1 when absent). **Do not change line item creation** (subscription creation, add-ons, etc.)—only invoice generation uses per–line-item interval. Use existing **`NextBillingDate`**, **`PreviousBillingDate`**, **`CalculateBillingPeriods`** ([internal/types/date.go](internal/types/date.go)) for all interval math. Use existing **`ClassifyLineItems`** / **`PrepareSubscriptionInvoiceRequest`** / **`CalculateFixedCharges`** ([internal/service/billing.go](internal/service/billing.go)) and extend them for interval-aware inclusion and proration. Use existing proration service and **`InvoiceCadence`** (advance/arrear). No new date helpers; no new billing period enums.
 
-**Implementation scope (this release):** Focus **only on invoice generation**. No changes to subscription creation, plan/price validation, or how line items are created or updated (e.g. which fields are set from price vs subscription). Invoice logic reads each line item’s `billing_period` and `billing_period_count` (default 1 if missing) and applies inclusion and proration accordingly.
+**Implementation scope (this release):** Focus **only on invoice generation** and **only on fixed line items**. No changes to subscription creation, plan/price validation, or how line items are created. Invoice logic reads each line item’s `billing_period` and `billing_period_count` (default 1 if missing) and applies inclusion and proration for **fixed** charges. **Do not change how usage line items are billed** in `internal/service/billing.go`—leave existing usage billing logic untouched; only add or extend logic for **fixed** line items.
 
 ---
 
@@ -22,8 +22,8 @@ This PRD defines requirements for **mixed-interval billing** in FlexPrice: a sin
 
 ### 1.2 Scope
 
-- **In scope:** **Invoice generation only:** subscription-level invoice period; per–line-item interval **read** from line item (`billing_period`, `billing_period_count` default 1); inclusion rules (Algorithm A/B); proration for shorter/equal/longer intervals; edge cases and scenarios that affect invoicing (calendar, timezone, mid-cycle change, cancellation, trials, failed payments, tax).
-- **Out of scope (this release):** **Line item creation and subscription lifecycle:** no changes to how line items are created (subscription creation, add-ons, plan change) or which fields are set (e.g. copying from price vs subscription). No changes to plan/price validation (e.g. `filterValidPricesForSubscription`). Custom intervals (e.g. “every 2 weeks”); revenue recognition implementation (design only); changes to payment provider sync behavior.
+- **In scope:** **Invoice generation for fixed line items only:** subscription-level invoice period; per–line-item interval **read** from line item (`billing_period`, `billing_period_count` default 1); inclusion rules (Algorithm A/B); proration for shorter/equal/longer intervals for **fixed** charges; edge cases and scenarios that affect fixed-charge invoicing (calendar, timezone, mid-cycle change, cancellation, trials, failed payments, tax).
+- **Out of scope (this release):** **Usage (metered) line items**—do not change how usage line items are billed in `billing.go`; existing usage billing logic stays as-is. Interval-aware inclusion/aggregation for usage-based line items is deferred to a later phase. **Line item creation and subscription lifecycle:** no changes to how line items are created or which fields are set. No changes to plan/price validation. Custom intervals; revenue recognition (design only); payment provider sync behavior.
 
 ### 1.3 Definitions
 
@@ -46,6 +46,7 @@ This PRD defines requirements for **mixed-interval billing** in FlexPrice: a sin
 | Proration (mid-period change) | Existing proration service, `applyProrationToLineItem` | Duplicate proration logic |
 | Rounding | `types.RoundToCurrencyPrecision` | New rounding rules |
 | Price filtering | No change to subscription/plan validation in this release | N/A (invoice-only scope) |
+| Usage line item billing | **No change** to how usage line items are billed in `billing.go` | Do not modify usage aggregation or usage charge logic |
 
 ---
 
@@ -74,9 +75,10 @@ Today, FlexPrice assumes a single billing period per subscription for invoicing;
 
 ### 3.2 Non-Goals
 
-1. Custom intervals beyond the existing BillingPeriod enum (e.g. “every 2 weeks”).
-2. Implementing revenue recognition logic (only design considerations).
-3. Changing core payment or invoice finalization flows beyond what’s needed for inclusion and proration.
+1. **Usage (metered) line items** in this release—interval-aware inclusion and aggregation for usage-based line items is deferred to a later phase.
+2. Custom intervals beyond the existing BillingPeriod enum (e.g. “every 2 weeks”).
+3. Implementing revenue recognition logic (only design considerations).
+4. Changing core payment or invoice finalization flows beyond what’s needed for inclusion and proration.
 
 ---
 
@@ -85,7 +87,7 @@ Today, FlexPrice assumes a single billing period per subscription for invoicing;
 1. **As a** product manager, **I want** to define a plan with a monthly platform fee, a weekly compliance fee, and a quarterly support fee **so that** one subscription can bill all three on a single monthly invoice with correct amounts.
 2. **As a** billing operator, **I want** to see one invoice per month that includes prorated weekly charges (e.g. 4.29 weeks), full monthly charges, and the quarterly fee only on every third month **so that** billing is accurate and auditable.
 3. **As a** customer, **I want** to upgrade my plan mid-month **so that** I get a credit for the unused portion of my current plan and a prorated charge for the new plan for the rest of the period, per line item interval.
-4. **As a** support agent, **I want** to cancel a subscription mid-quarter **so that** in-advance items receive a credit for unused time, arrear usage is billed to cancel date, and the quarterly in-arrears fee is prorated for the partial quarter.
+4. **As a** support agent, **I want** to cancel a subscription mid-quarter **so that** in-advance items receive a credit for unused time and the quarterly in-arrears fee is prorated for the partial quarter. *(Arrear usage to cancel date is deferred; this release focuses on fixed line items.)*
 5. **As a** developer, **I want** the billing engine to generate correct invoices when line items have different intervals (e.g. weekly, monthly, quarterly) **so that** a single subscription invoice includes the right prorated amounts per line item. *(Creating such subscriptions/line items is out of scope for this release.)*
 
 ---
@@ -105,18 +107,18 @@ Today, FlexPrice assumes a single billing period per subscription for invoicing;
   - **Shorter than invoice period** (e.g. weekly on monthly): Include on every invoice. Charge = unit price × prorated quantity, where quantity = (days in invoice period) / (days in one item interval). Quantity may be decimal (e.g. 4.29).
   - **Equal to invoice period:** Include every time. Advance charges for current period (or next, per existing logic); arrear for current period. No interval proration.
   - **Longer than invoice period** (e.g. quarterly on monthly): Include only when the invoice period end date is the end of a full line-item interval (e.g. every 3rd monthly invoice). No partial charge for the long interval until that date.
-- **FR-6** Proration for **fixed** charges with shorter interval: use day-based proration. Formula: `quantity = days_in_invoice_period / days_in_line_item_interval`. Use actual calendar days (28–31 for month, 90–92 for quarter).
-- **FR-7** **Usage** (metered) line items: usage is aggregated over the **invoice period** for same-as-invoice-period items. For longer-interval usage items, aggregate over the full longer period when that line item is included (e.g. quarterly usage on the invoice that includes the quarterly line).
-- **FR-8** Advance charges for the **next** subscription period are included on the same invoice (at period end) as today. For shorter-interval advance items, the “next period” advance can be the prorated amount for the next invoice period (same formula as FR-6 for the next period’s days).
+- **FR-6** Proration for **fixed** charges with shorter interval: use day-based proration. Formula: `quantity = days_in_invoice_period / days_in_line_item_interval`. Use actual calendar days (28–31 for month, 90–92 for quarter). *(This release: fixed line items only.)*
+- **FR-7** *(Out of scope for this release.)* **Usage (metered) line items:** do not change how usage line items are billed in `internal/service/billing.go`—leave existing usage billing logic untouched. Usage aggregation over invoice period or line-item interval is deferred. This release implements mixed-interval logic for **fixed** line items only.
+- **FR-8** Advance charges for the **next** subscription period are included on the same invoice (at period end) as today. For shorter-interval **fixed** advance items, the “next period” advance can be the prorated amount for the next invoice period (same formula as FR-6 for the next period’s days).
 
 ### 5.3 Subscription Lifecycle
 
 - **FR-9** *(Out of scope for this release.)* **Subscription creation** is unchanged: no changes to which prices are accepted, how invoice period is set, or how line items are created (e.g. no “copy from price” requirement). When line items already have per-item intervals (e.g. set elsewhere or by a future change), invoice generation will use them.
 - **FR-10** **Mid-cycle plan/quantity change (invoice side):** When generating invoices, proration (credit/charge) uses the **line item’s** interval (as read from the line item) and remaining days in the current interval (or subscription period, whichever is relevant). Existing proration behavior applies per line item; no credit in excess of amount paid for that item. No change to how plan/quantity changes create or update line items.
-- **FR-11** **Cancellation (immediate or at period end):**  
+- **FR-11** **Cancellation (immediate or at period end)** *(fixed line items in scope):*  
   - In-advance items: Issue credit for unused portion (by days remaining in current interval or period).  
   - Arrear fixed: Final charge for the partial period/interval.  
-  - Arrear usage: Final charge for usage up to cancel date.  
+  - Arrear usage: *(Deferred.)* Final charge for usage up to cancel date—usage line items out of scope this release.  
   - Longer-interval in-arrears (e.g. quarterly): Prorated charge for the partial interval (e.g. Jan 10–Mar 12).
 
 ### 5.4 API and Validation
@@ -161,8 +163,8 @@ Then:
 
 | Case        | Include on this invoice?                                                                                                                | How to charge                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Shorter** | **Yes**, every invoice in this period.                                                                                                  | Prorate: quantity = `invoice_period_days / line_item_interval_days` (decimal). Amount = unit price × quantity. For ADVANCE: charge for the *current* invoice period (prorated). For ARREAR: same — charge for usage/period that just ended (prorated).                                                                                                                                                                                                                                     |
-| **Equal**   | **Yes**, every invoice.                                                                                                                 | Use existing logic: ADVANCE → charge for *next* period (or current, per existing behavior); ARREAR → charge for *current* period. Full quantity (e.g. 1) or usage for the period. No interval proration.                                                                                                                                                                                                                                                                                   |
+| **Shorter** | **Yes**, every invoice in this period.                                                                                                  | Prorate: quantity = `invoice_period_days / line_item_interval_days` (decimal). Amount = unit price × quantity. For ADVANCE: charge for the *current* invoice period (prorated). For ARREAR: same—charge for the period that just ended (prorated). *(Fixed line items only this release.)*                                                                                                                                                                                                                                     |
+| **Equal**   | **Yes**, every invoice.                                                                                                                 | Use existing logic: ADVANCE → charge for *next* period (or current, per existing behavior); ARREAR → charge for *current* period. Full quantity (e.g. 1) for **fixed** items. *(Usage for the period is out of scope this release.)* No interval proration.                                                                                                                                                                                                                                                                                   |
 | **Longer**  | **Only if** this invoice’s `invoice_period_end` is the **end of a full line-item interval** that started at or after `line_item_start`. | **Alignment check:** Let `interval_end = line_item_start` + N × `line_item_interval_days` (N = 1, 2, 3, …). If `invoice_period_end` equals (or is the same calendar day as) any such `interval_end`, **include**; otherwise **exclude**. Charge: full amount for that interval (or prorate only if it’s the first partial interval after add). For ARREAR: charge for the interval that just ended. For ADVANCE: charge for the next full interval (if we bill advance at interval start). |
 
 
@@ -180,7 +182,7 @@ Then:
 **Summary: one-line rule per case**
 
 - **Shorter than invoice period** → Always include; charge = unit price × (invoice_period_days / line_item_interval_days), with effective period clipped to line item start/end.
-- **Equal to invoice period** → Always include; full charge or usage for the period; advance/arrear as today.
+- **Equal to invoice period** → Always include; full charge for the period (fixed); advance/arrear as today. *(Usage for the period: later phase.)*
 - **Longer than invoice period** → Include only when `invoice_period_end` is the end of a full line-item interval (from line item start); then charge full (or prorate only for first partial interval).
 
 This is the rule the billing engine must implement to know “whether to include this charge/line item in the current invoice or not.”
@@ -242,13 +244,13 @@ So we include the quarterly line item only on the **3rd** monthly invoice (Apr 1
 | Scenario                                                                                              | Function                      | Use                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | ----------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Is this invoice period end an interval end?** (alignment check for longer-than-invoice items)       | `**NextBillingDate`**         | Loop from `line_item_start`: call `NextBillingDate(currentPeriodStart, anchor, period_count, period, nil)`; if result equals `invoice_period_end` (date), include the line item. Advance `currentPeriodStart` to the result and repeat until result > `invoice_period_end` or match found.                                                                                                                                                      |
-| **What is the start of the interval that ends at this date?** (once we know we’re including the item) | `**PreviousBillingDate`**     | When `invoice_period_end` is an interval end, **interval_start = PreviousBillingDate(invoice_period_end, line_item_period_count, line_item_period)**. Use this for: (1) **Service period** on the invoice line (period_start, period_end) for revenue recognition and display; (2) **Usage aggregation** for that line item (e.g. quarterly usage: aggregate from interval_start to interval_end). Same calendar rules as subscription periods. |
+| **What is the start of the interval that ends at this date?** (once we know we’re including the item) | `**PreviousBillingDate`**     | When `invoice_period_end` is an interval end, **interval_start = PreviousBillingDate(invoice_period_end, line_item_period_count, line_item_period)**. Use this for: (1) **Service period** on the invoice line (period_start, period_end) for revenue recognition and display; (2) **Usage aggregation** *(deferred)* for that line item (e.g. quarterly usage: aggregate from interval_start to interval_end—later phase). Same calendar rules as subscription periods. |
 | **List all interval boundaries** (e.g. preview “when will the next quarterly charge appear?”)         | `**CalculateBillingPeriods`** | Call with `initialPeriodStart = line_item_start`, `anchor`, `periodCount`, `billingPeriod`, and optional `endDate`. Returns `[]Period{Start, End}`; use to show “next N interval ends” or to iterate without writing a custom loop.                                                                                                                                                                                                             |
 
 
 **Implementation note**
 
-Implement a small helper, e.g. **`IsLineItemIntervalEnd(lineItemStart, billingAnchor time.Time, periodCount int, period BillingPeriod, invoicePeriodEnd time.Time) (bool, error)`**, that loops calling `NextBillingDate` as above and returns true iff `invoicePeriodEnd` (date only) equals some interval end. When true, compute **interval start** with **`PreviousBillingDate(invoicePeriodEnd, periodCount, period)`** for the invoice line’s service period and (for usage items) the aggregation window. Reuse existing calendar logic from [internal/types/date.go](internal/types/date.go).
+Implement a small helper, e.g. **`IsLineItemIntervalEnd(lineItemStart, billingAnchor time.Time, periodCount int, period BillingPeriod, invoicePeriodEnd time.Time) (bool, error)`**, that loops calling `NextBillingDate` as above and returns true iff `invoicePeriodEnd` (date only) equals some interval end. When true, compute **interval start** with **`PreviousBillingDate(invoicePeriodEnd, periodCount, period)`** for the invoice line’s service period (and later for usage aggregation window). Reuse existing calendar logic from [internal/types/date.go](internal/types/date.go). *(This release: fixed line items only; usage aggregation deferred.)*
 
 ---
 
@@ -261,12 +263,14 @@ All formulas use **actual calendar days** (no fixed 30-day month). Reuse existin
 | **F1** | Prorated quantity (shorter interval) | `quantity = effective_days / line_item_interval_days` where `effective_days = days(max(line_item_start, period_start), period_end)` and `line_item_interval_days` = 1 (daily), 7 (weekly), or actual days for month/quarter/year from interval type. | Fixed charge for line item with interval shorter than invoice period. |
 | **F2** | Prorated amount (fixed, shorter) | `amount = unit_price × quantity` (quantity from F1). Round with `RoundToCurrencyPrecision(amount, currency)`. | Invoice line amount for shorter-interval fixed item. |
 | **F3** | Interval length in days (for F1) | Use: 1 (DAILY), 7 (WEEKLY), actual days in period for MONTHLY/QUARTERLY/ANNUAL (e.g. 28–31 for month, 90–92 for quarter, 365/366 for year). Prefer existing period boundaries from `NextBillingDate` / `PreviousBillingDate` so interval_days = days(interval_start, interval_end). | Denominator in F1 when line item interval is longer than one day/week. |
-| **F4** | Longer-interval service period | `interval_start = PreviousBillingDate(invoice_period_end, line_item_period_count, line_item_period)`; `interval_end = invoice_period_end` (when aligned). Use for invoice line `period_start` / `period_end` and usage aggregation window. | When line item is included on invoice (alignment = true). |
+| **F4** | Longer-interval service period | `interval_start = PreviousBillingDate(invoice_period_end, line_item_period_count, line_item_period)`; `interval_end = invoice_period_end` (when aligned). Use for invoice line `period_start` / `period_end`. *(Usage aggregation window: later phase.)* | When line item is included on invoice (alignment = true). |
 | **F5** | Partial period (mid-term add or first period) | Same as F1 with `effective_days = days(max(line_item_start, period_start), period_end)`. | Mid-term add; first partial invoice period. |
 
 ---
 
 ## 5.7 Algorithms (implementation reference)
+
+*(This release: apply to **fixed** line items only; usage line items deferred.)*
 
 **Algorithm A: Line item inclusion (per line item, per invoice period)**
 
@@ -334,8 +338,8 @@ flowchart TB
   end
 
   subgraph charge [Charge calculation]
-    FixedCharge["CalculateFixedCharges: unit_price × quantity"]
-    UsageCharge["Usage aggregation over period or interval"]
+    FixedCharge["CalculateFixedCharges: unit_price × quantity (this release: fixed only)"]
+    UsageCharge["Usage aggregation (deferred)"]
     Round["RoundToCurrencyPrecision"]
   end
 
@@ -596,14 +600,14 @@ flowchart TB
 | EC-34 | **Currency rounding**          | Final amounts per line and total rounded to currency precision. Use existing `RoundToCurrencyPrecision`.              | No new rounding rules.                      |
 
 
-### 6.9 Usage-Specific
+### 6.9 Usage-Specific *(deferred – this release: fixed line items only)*
 
 
 | ID    | Edge case                                    | Rule                                                                                                                                                               | Example / Notes                                                                          |
 | ----- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| EC-35 | **Usage line item with longer interval**     | When a usage-based line item has quarterly interval, aggregate usage over the quarter. Include on invoice only when period end aligns with quarter end.            | Quarterly usage: sum(usage in that quarter) × unit price.                                |
-| EC-36 | **Usage reset and interval**                 | If usage resets (e.g. monthly reset), reset date should align with invoice or line-item interval. Document: reset by subscription period vs by line-item interval. | Prefer: reset by subscription invoice period for simplicity.                             |
-| EC-37 | **Multiple meters with different intervals** | Each meter can be tied to a price with its own interval. Same inclusion rules: include when interval aligns; aggregate usage over that interval.                   | Monthly API usage + quarterly storage usage: two line items, different inclusion months. |
+| EC-35 | **Usage line item with longer interval**     | *(Deferred.)* When a usage-based line item has quarterly interval, aggregate usage over the quarter. Include on invoice only when period end aligns with quarter end.            | Quarterly usage: sum(usage in that quarter) × unit price.                                |
+| EC-36 | **Usage reset and interval**                 | *(Deferred.)* If usage resets (e.g. monthly reset), reset date should align with invoice or line-item interval. Document: reset by subscription period vs by line-item interval. | Prefer: reset by subscription invoice period for simplicity.                             |
+| EC-37 | **Multiple meters with different intervals** | *(Deferred.)* Each meter can be tied to a price with its own interval. Same inclusion rules: include when interval aligns; aggregate usage over that interval.                   | Monthly API usage + quarterly storage usage: two line items, different inclusion months. |
 
 
 ### 6.10 Multi-Tenant and Configuration
@@ -631,12 +635,12 @@ flowchart TB
   - Platform: $100 (next month in advance).  
   - Compliance: ~4.43 weeks (31/7) → $70 × 4.43 ≈ $310.  
   - Support: still no (quarter not ended).  
-  - Usage (if any): for Jan 10–Feb 10.
+  - *(Usage for Jan 10–Feb 10: deferred; this release is fixed line items only.)*
 - **Apr 1 invoice (period Mar 10–Apr 10):**  
   - Platform: $100.  
   - Compliance: ~4.43 weeks.  
   - Support: $300 (quarter Jan 10–Apr 10 in arrears).  
-  - Usage: for Mar 10–Apr 10.
+  - *(Usage for Mar 10–Apr 10: deferred.)*
 
 ### 7.2 Scenario B: Mid-cycle upgrade with mixed intervals
 
@@ -649,11 +653,11 @@ flowchart TB
 ### 7.3 Scenario C: Cancel mid-quarter with annual, quarterly, and monthly items
 
 - **Setup:** Subscription started Jan 10. Items: Annual fee $2,400 in advance (already billed Jan 10), Quarterly support $300 in arrears (due Apr 10), Monthly usage. Cancel Mar 12.
-- **Expected:**  
+- **Expected (fixed line items in scope):**  
   - Annual: Credit for ~9.5 months unused (Mar 12–Jan 10 next year).  
   - Quarterly support: Prorate Jan 10–Mar 12: (62/91) × $300 ≈ $204.40 (assuming non–leap year).  
-  - Monthly usage: Charge for usage Mar 1–Mar 12 (or Mar 10–Mar 12 if period is 10th–10th).  
-  - One “cancellation” invoice with credits and final charges.
+  - Monthly usage: *(Deferred.)* Charge for usage to cancel date—usage line items out of scope this release.  
+  - One “cancellation” invoice with credits and final fixed charges.
 
 ### 7.4 Scenario D: First period partial (start mid-month)
 
@@ -829,7 +833,7 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 - **AC-3** On each invoice date, line items with interval shorter than invoice period are included with prorated quantity (days in period / days in interval); amount = unit price × quantity, rounded to currency.
 - **AC-4** Line items with interval longer than invoice period are included only when the period end aligns with the end of their interval; alignment is deterministic from line item start/anchor.
 - **AC-5** When generating invoices for mid-cycle plan/quantity change, proration (credit/charge) uses the line item’s interval and remaining days; total credit per item does not exceed amount previously charged for that item in the period.
-- **AC-6** Immediate cancellation produces one invoice (or credit note + invoice) with: credits for in-advance unused portions, final arrear fixed/usage, and prorated longer-interval arrear.
+- **AC-6** Immediate cancellation produces one invoice (or credit note + invoice) with: credits for in-advance unused portions, final arrear **fixed** charges, and prorated longer-interval arrear. *(Final arrear usage to cancel date: deferred.)*
 - **AC-7** Leap year, month-end (28–31), and quarter length (90–92 days) are handled using actual days.
 - **AC-8** Preview invoice shows prorated amounts and indicates when longer-interval items will next appear.
 - **AC-9** Existing subscriptions (all line items same period as subscription) behave unchanged after deployment.
@@ -838,7 +842,7 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 
 ## 10. Implementation Phases and Actionables
 
-**Scope: invoice generation only. Do not change line item creation (subscription creation, add-ons, plan change) or plan/price validation.**
+**Scope: invoice generation for fixed line items only. Do not change line item creation (subscription creation, add-ons, plan change) or plan/price validation. Do not change how usage line items are billed in `internal/service/billing.go`—only add or extend logic for fixed line items.**
 
 **Phase 1: Data model for invoice read path only (no creation changes)**
 
@@ -847,17 +851,17 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 - [ ] **1.3** *(Omitted.)* Do **not** change `filterValidPricesForSubscription` or subscription creation validation.
 - [ ] **1.4** In **invoice generation code only:** when reading a line item, treat missing or zero `billing_period_count` as 1. No backfill required for creation; backward compatible for existing line items (same interval as subscription → same behavior as today).
 
-**Phase 2: Inclusion and proration (shorter / equal interval)**
+**Phase 2: Inclusion and proration (shorter / equal interval) – fixed line items only**
 
 - [ ] **2.1** Implement **Algorithm A** and **Algorithm B** (Section 5.7) using **NextBillingDate** and **PreviousBillingDate** only. Add helper e.g. `IsLineItemIntervalEnd` in `internal/types/date.go` or billing package.
-- [ ] **2.2** Extend **ClassifyLineItems** ([internal/service/billing.go](internal/service/billing.go)): for each line item compute inclusion (EXCLUDE / INCLUDE_FULL / INCLUDE_PRORATED_SHORTER / INCLUDE_LONGER_ALIGNED) using Algorithm A. Use subscription’s `CurrentPeriodStart`/`CurrentPeriodEnd` and line item’s `billing_period`, `billing_period_count`, `start_date`.
-- [ ] **2.3** In **CalculateFixedCharges**: for line items with INCLUDE_PRORATED_SHORTER, compute quantity by **F1** (effective_days / line_item_interval_days), amount by **F2**. Use **Algorithm C** for effective days when `line_item_start` &gt; period_start. Reuse existing **applyProrationToLineItem** where it applies (mid-period change); add separate path for interval proration.
-- [ ] **2.4** Ensure **equal** interval line items still use existing advance/arrear classification (CurrentPeriodAdvance, CurrentPeriodArrear, NextPeriodAdvance) and existing charge logic.
+- [ ] **2.2** Extend **ClassifyLineItems** ([internal/service/billing.go](internal/service/billing.go)) **for fixed line items only**: for each **fixed** line item compute inclusion (EXCLUDE / INCLUDE_FULL / INCLUDE_PRORATED_SHORTER / INCLUDE_LONGER_ALIGNED) using Algorithm A. Use subscription’s `CurrentPeriodStart`/`CurrentPeriodEnd` and line item’s `billing_period`, `billing_period_count`, `start_date`. **Do not change** how usage line items are classified or billed—leave existing usage paths unchanged.
+- [ ] **2.3** In **CalculateFixedCharges** only: for fixed line items with INCLUDE_PRORATED_SHORTER, compute quantity by **F1** (effective_days / line_item_interval_days), amount by **F2**. Use **Algorithm C** for effective days when `line_item_start` &gt; period_start. Reuse existing **applyProrationToLineItem** where it applies (mid-period change); add separate path for interval proration. **Do not modify** usage charge calculation or aggregation logic.
+- [ ] **2.4** Ensure **equal** interval fixed line items still use existing advance/arrear classification (CurrentPeriodAdvance, CurrentPeriodArrear, NextPeriodAdvance) and existing fixed-charge logic. Usage line items continue to use existing behavior unchanged.
 
-**Phase 3: Longer-interval inclusion and usage**
+**Phase 3: Longer-interval inclusion (fixed line items only)**
 
-- [ ] **3.1** For INCLUDE_LONGER_ALIGNED: compute service period with **PreviousBillingDate** (F4). Set invoice line `period_start` / `period_end` for that line. Charge full amount for the interval (or prorate only first partial interval after mid-term add per EC-15).
-- [ ] **3.2** Usage line items with longer interval: when included, aggregate usage over `interval_start` to `interval_end` (F4). Reuse existing usage aggregation by passing the correct window (e.g. quarterly window when line item is quarterly).
+- [ ] **3.1** For INCLUDE_LONGER_ALIGNED **fixed** line items only: compute service period with **PreviousBillingDate** (F4). Set invoice line `period_start` / `period_end` for that line. Charge full amount for the interval (or prorate only first partial interval after mid-term add per EC-15). **Do not change** any usage aggregation or usage charge logic in billing.go.
+- [ ] **3.2** *(Deferred.)* Usage line items with longer interval: out of scope this release. Existing usage billing in billing.go remains unchanged.
 
 **Phase 4: Mid-cycle change and cancellation**
 
@@ -876,9 +880,10 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 ## 11. Open Questions and Decisions
 
 - **OQ-0** **Line item creation:** This release does not change how line items are created (subscription creation, add-ons, plan change). A future phase may add “copy from price” and relax plan/price validation so new subscriptions can be created with mixed-interval plans; until then, invoice logic will apply whenever line items already have per-item intervals (e.g. from existing schema or manual/API updates).
+- **OQ-0b** **Usage line items:** This release implements mixed-interval inclusion and proration for **fixed** line items only. Do not change how usage line items are billed in `billing.go`; existing usage billing stays as-is. Usage (metered) interval-aware logic is deferred to a later phase.
 - **OQ-1** First partial period: prorate monthly by (actual_days / 30) or (actual_days / days_in_start_month)? Recommend: (actual_days / 30) for predictability.
 - **OQ-2** Weekly advance on monthly invoice: “next period advance” = full next month’s worth of weeks (4.29 × rate) or only first week? Recommend: full next month so one invoice has “current arrear + next advance” in one place.
-- **OQ-3** Usage reset period: always subscription period, or allow per–line-item (e.g. quarterly reset for quarterly usage)? Recommend: subscription period for v1.
+- **OQ-3** *(Deferred – fixed-only scope.)* Usage reset period: always subscription period, or allow per–line-item (e.g. quarterly reset for quarterly usage)? Recommend: subscription period for v1 when usage line items are in scope.
 - **OQ-4** Feature flag: tenant-level, plan-level, or global rollout? Recommend: tenant-level for safe rollout.
 - **OQ-5** Annual subscription with quarterly (or monthly) line item added mid-term: do we generate only one invoice per year (on anniversary), or allow “interim” invoices when a longer-interval line item’s period ends (e.g. quarterly charge on Jun 15 while next sub invoice is Jan 1)? Recommend: define “invoice period” as the only invoice cadence; longer-interval items on annual sub accrue and appear on the next annual invoice with proration, or we support interim invoice dates for annual subs when a line item’s interval ends.
 
@@ -889,5 +894,5 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 - [Advance and Arrear Billing Implementation](advance_arrear_billing_implementation.md)
 - [Subscription Proration and Workflow Implementation](subscription_proration_and_workflow_implementation.md)
 - [Subscription Billing](subscription-billing.md)
-- Internal: `internal/service/billing.go` (ClassifyLineItems, PrepareSubscriptionInvoiceRequest, CalculateFixedCharges)—**primary change area**; `internal/types/date.go` (NextBillingDate, PreviousBillingDate, CalculateBillingPeriods); `internal/service/proration.go` (uses PreviousBillingDate for period start); `ent/schema/subscription_line_item.go` (add `billing_period_count` for invoice read path only). **No changes** to `internal/service/subscription.go` (line item creation, filterValidPricesForSubscription) in this release.
+- Internal: `internal/service/billing.go`—**only extend logic for fixed line items** (e.g. ClassifyLineItems and CalculateFixedCharges for fixed items; inclusion/proration for fixed only). **Do not change** how usage line items are classified, aggregated, or billed; leave all existing usage billing logic in billing.go untouched. `internal/types/date.go` (NextBillingDate, PreviousBillingDate, CalculateBillingPeriods); `internal/service/proration.go`; `ent/schema/subscription_line_item.go` (add `billing_period_count` for read path only). **No changes** to `internal/service/subscription.go` (line item creation, filterValidPricesForSubscription).
 
