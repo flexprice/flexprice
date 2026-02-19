@@ -548,6 +548,20 @@ func (sc *SubscriptionCreate) SetNillableParentSubscriptionID(s *string) *Subscr
 	return sc
 }
 
+// SetPaymentTerms sets the "payment_terms" field.
+func (sc *SubscriptionCreate) SetPaymentTerms(tt types.PaymentTerms) *SubscriptionCreate {
+	sc.mutation.SetPaymentTerms(tt)
+	return sc
+}
+
+// SetNillablePaymentTerms sets the "payment_terms" field if the given value is not nil.
+func (sc *SubscriptionCreate) SetNillablePaymentTerms(tt *types.PaymentTerms) *SubscriptionCreate {
+	if tt != nil {
+		sc.SetPaymentTerms(*tt)
+	}
+	return sc
+}
+
 // SetID sets the "id" field.
 func (sc *SubscriptionCreate) SetID(s string) *SubscriptionCreate {
 	sc.mutation.SetID(s)
@@ -920,6 +934,11 @@ func (sc *SubscriptionCreate) check() error {
 	if _, ok := sc.mutation.EnableTrueUp(); !ok {
 		return &ValidationError{Name: "enable_true_up", err: errors.New(`ent: missing required field "Subscription.enable_true_up"`)}
 	}
+	if v, ok := sc.mutation.PaymentTerms(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "payment_terms", err: fmt.Errorf(`ent: validator failed for field "Subscription.payment_terms": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -1114,6 +1133,10 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 	if value, ok := sc.mutation.ParentSubscriptionID(); ok {
 		_spec.SetField(subscription.FieldParentSubscriptionID, field.TypeString, value)
 		_node.ParentSubscriptionID = &value
+	}
+	if value, ok := sc.mutation.PaymentTerms(); ok {
+		_spec.SetField(subscription.FieldPaymentTerms, field.TypeString, value)
+		_node.PaymentTerms = &value
 	}
 	if nodes := sc.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

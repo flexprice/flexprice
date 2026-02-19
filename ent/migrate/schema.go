@@ -1607,6 +1607,7 @@ var (
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
 		{Name: "enable_true_up", Type: field.TypeBool, Default: false},
 		{Name: "parent_subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_terms", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "invoicing_customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
@@ -1617,7 +1618,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[41]},
+				Columns:    []*schema.Column{SubscriptionsColumns[42]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},

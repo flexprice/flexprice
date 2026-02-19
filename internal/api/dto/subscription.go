@@ -361,6 +361,9 @@ type CreateSubscriptionRequest struct {
 	// ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)
 	ParentSubscriptionID *string `json:"parent_subscription_id,omitempty"`
 
+	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
+	PaymentTerms *types.PaymentTerms `json:"payment_terms,omitempty"`
+
 	// Enable Commitment True Up Fee
 	EnableTrueUp bool `json:"enable_true_up"`
 }
@@ -596,6 +599,12 @@ func (r *CreateSubscriptionRequest) Validate() error {
 	} else {
 		// Validate invoice billing if provided
 		if err := r.InvoiceBilling.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if r.PaymentTerms != nil {
+		if err := (*r.PaymentTerms).Validate(); err != nil {
 			return err
 		}
 	}
@@ -1060,6 +1069,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		GatewayPaymentMethodID: r.GatewayPaymentMethodID,
 		InvoicingCustomerID:    r.InvoicingCustomerID,
 		ParentSubscriptionID:   r.ParentSubscriptionID,
+		PaymentTerms:           r.PaymentTerms,
 	}
 
 	// Set commitment amount, duration, and overage factor if provided
