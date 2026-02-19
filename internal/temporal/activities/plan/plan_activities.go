@@ -36,9 +36,6 @@ type SyncPlanPricesInput struct {
 	EnvironmentID string `json:"environment_id"`
 }
 
-// priceSyncLockKey returns the Redis cache key for the plan-level price sync lock (must match API layer).
-const priceSyncLockKeyPrefix = "price_sync:plan:"
-
 // SyncPlanPrices syncs plan prices
 // This method will be registered as "SyncPlanPrices" in Temporal
 func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPricesInput) (*dto.SyncPlanPricesResponse, error) {
@@ -60,7 +57,7 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	lockKey := priceSyncLockKeyPrefix + input.PlanID
+	lockKey := cache.PrefixPriceSyncLock + input.PlanID
 	defer func() {
 		if redisCache := cache.GetRedisCache(); redisCache != nil {
 			releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

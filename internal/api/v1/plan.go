@@ -275,7 +275,7 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 
 // priceSyncLockKey returns the Redis cache key for the plan-level price sync lock.
 func priceSyncLockKey(planID string) string {
-	return "price_sync:plan:" + planID
+	return cache.PrefixPriceSyncLock + planID
 }
 
 func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
@@ -299,8 +299,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	if redisCache == nil {
 		c.Error(ierr.NewError("price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
-			Mark(ierr.ErrInternal))
-		c.Status(http.StatusServiceUnavailable)
+			Mark(ierr.ErrServiceUnavailable))
 		return
 	}
 	lockKey := priceSyncLockKey(id)
@@ -316,7 +315,6 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		c.Error(ierr.NewError("price sync already in progress for this plan").
 			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
 			Mark(ierr.ErrAlreadyExists))
-		c.Status(http.StatusConflict)
 		return
 	}
 	// Start the price sync workflow (activity will release lock when done)
@@ -377,8 +375,7 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 	if redisCache == nil {
 		c.Error(ierr.NewError("price sync lock unavailable").
 			WithHint("Redis cache is not available. Try again later.").
-			Mark(ierr.ErrInternal))
-		c.Status(http.StatusServiceUnavailable)
+			Mark(ierr.ErrServiceUnavailable))
 		return
 	}
 	lockKey := priceSyncLockKey(id)
@@ -394,7 +391,6 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 		c.Error(ierr.NewError("price sync already in progress for this plan").
 			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
 			Mark(ierr.ErrAlreadyExists))
-		c.Status(http.StatusConflict)
 		return
 	}
 	defer redisCache.Delete(c.Request.Context(), lockKey)
