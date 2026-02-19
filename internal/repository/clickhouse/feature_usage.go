@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -16,6 +17,26 @@ import (
 	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
+
+// validGroupByPropertyPattern matches safe property names (alphanumeric, underscores, dots).
+var validGroupByPropertyPattern = regexp.MustCompile(`^[A-Za-z0-9_.]+$`)
+
+// validateGroupByProperty checks that a GroupByProperty value is safe to interpolate into SQL.
+// It rejects any string that contains characters other than letters, digits, underscores, or dots.
+func validateGroupByProperty(prop string) error {
+	if prop == "" {
+		return nil
+	}
+	if !validGroupByPropertyPattern.MatchString(prop) {
+		return ierr.NewErrorf("invalid group_by property name: %q", prop).
+			WithHint("GroupBy property name must contain only letters, digits, underscores, or dots").
+			WithReportableDetails(map[string]interface{}{
+				"group_by_property": prop,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
 
 type FeatureUsageRepository struct {
 	store  *clickhouse.ClickHouseStore
@@ -951,6 +972,17 @@ func (r *FeatureUsageRepository) getMaxBucketTotals(ctx context.Context, params 
 		outerSelectColumns = append(outerSelectColumns, "source")
 	}
 
+	// Add meter-level group_by property to inner query GROUP BY
+	// This ensures aggregation is applied per unique value of the group_by property within each bucket
+	if featureInfo.GroupByProperty != "" {
+		if err := validateGroupByProperty(featureInfo.GroupByProperty); err != nil {
+			return nil, err
+		}
+		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", featureInfo.GroupByProperty)
+		groupByColumns = append(groupByColumns, groupByExpr)
+		innerSelectColumns = append(innerSelectColumns, fmt.Sprintf("%s as meter_group_by", groupByExpr))
+	}
+
 	// Add grouping columns
 	for _, groupBy := range params.GroupBy {
 		switch groupBy {
@@ -1246,7 +1278,31 @@ func (r *FeatureUsageRepository) getMaxBucketPointsForGroup(ctx context.Context,
 
 	// Complete the query with GROUP BY and ORDER BY
 	// Return bucket-level points with window metadata for service-layer merging
-	innerQuery += " GROUP BY bucket_start, window_start ORDER BY bucket_start"
+	if featureInfo.GroupByProperty != "" {
+		// When group_by is set, add property to GROUP BY and wrap with a SUM across groups
+		if err := validateGroupByProperty(featureInfo.GroupByProperty); err != nil {
+			return nil, err
+		}
+		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", featureInfo.GroupByProperty)
+		innerQuery += fmt.Sprintf(" GROUP BY bucket_start, window_start, %s ORDER BY bucket_start", groupByExpr)
+
+		// Wrap the inner query to sum across groups per bucket
+		innerQuery = fmt.Sprintf(`
+			WITH per_group_points AS (%s)
+			SELECT
+				bucket_start,
+				window_start,
+				sum(bucket_max) as bucket_max,
+				max(bucket_latest) as bucket_latest,
+				sum(bucket_count_unique) as bucket_count_unique,
+				sum(event_count) as event_count
+			FROM per_group_points
+			GROUP BY bucket_start, window_start
+			ORDER BY bucket_start
+		`, innerQuery)
+	} else {
+		innerQuery += " GROUP BY bucket_start, window_start ORDER BY bucket_start"
+	}
 
 	rows, err := r.store.GetConn().Query(ctx, innerQuery, queryParams...)
 	if err != nil {
@@ -2268,6 +2324,66 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName = "bucket_sum"
 	}
 
+	// When group_by is specified, we need a 3-level aggregation:
+	// 1. Inner CTE: aggregate per group per bucket (e.g., MAX per krn per hour)
+	// 2. Middle CTE: SUM across groups per bucket (e.g., SUM of group maxes per hour)
+	// 3. Outer query: return per-bucket values and overall total
+	if params.UsageParams.GroupByProperty != "" && validateGroupByProperty(params.UsageParams.GroupByProperty) == nil {
+		groupByExpr := fmt.Sprintf("JSONExtractString(properties, '%s')", params.UsageParams.GroupByProperty)
+
+		return fmt.Sprintf(`
+			WITH per_group AS (
+				SELECT
+					%s as bucket_start,
+					%s as group_key,
+					%s(qty_total) as group_value
+				FROM feature_usage
+				PREWHERE tenant_id = '%s'
+					AND environment_id = '%s'
+					AND sign != 0
+					%s
+					%s
+					%s
+					%s
+					%s
+					%s
+					%s
+				GROUP BY bucket_start, group_key
+			),
+			%s AS (
+				SELECT
+					bucket_start,
+					sum(group_value) as %s
+				FROM per_group
+				GROUP BY bucket_start
+				ORDER BY bucket_start
+			)
+			SELECT
+				(SELECT sum(%s) FROM %s) as total,
+				bucket_start as timestamp,
+				%s as value
+			FROM %s
+			ORDER BY bucket_start
+		`,
+			bucketWindow,
+			groupByExpr,
+			aggFunc,
+			types.GetTenantID(ctx),
+			types.GetEnvironmentID(ctx),
+			externalCustomerFilter,
+			featureFilter,
+			priceFilter,
+			meterFilter,
+			subLineItemFilter,
+			filterConditions,
+			timeConditions,
+			bucketTableName,
+			bucketColumnName,
+			bucketColumnName, bucketTableName,
+			bucketColumnName,
+			bucketTableName)
+	}
+
 	// First aggregate values per bucket using the appropriate function,
 	// then sum all bucket values to get the total
 	return fmt.Sprintf(`
@@ -2278,6 +2394,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			FROM feature_usage
 			PREWHERE tenant_id = '%s'
 				AND environment_id = '%s'
+				AND sign != 0
 				%s
 				%s
 				%s

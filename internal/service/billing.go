@@ -872,6 +872,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						EndTime:            item.GetPeriodEnd(periodEnd),
 						WindowSize:         meter.Aggregation.BucketSize, // Set monthly window size for custom billing periods
 						BillingAnchor:      &sub.BillingAnchor,
+						GroupByProperty:    meter.Aggregation.GroupBy,
 					},
 				}
 
