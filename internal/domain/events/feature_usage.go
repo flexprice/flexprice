@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -34,6 +35,53 @@ type FeatureUsageRepository interface {
 
 	// GetFeatureUsageByEventIDs gets feature usage records by event IDs
 	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*FeatureUsage, error)
+
+	// DeleteByReprocessScopeBeforeCheckpoint cleans old rows for a scope using processed_at checkpoint fence.
+	DeleteByReprocessScopeBeforeCheckpoint(ctx context.Context, params *DeleteFeatureUsageScopeParams) error
+}
+
+// DeleteFeatureUsageScopeParams defines cleanup scope for reprocessing.
+type DeleteFeatureUsageScopeParams struct {
+	GetEventsParams *GetEventsParams
+	RunStartTime    time.Time
+}
+
+func (p *DeleteFeatureUsageScopeParams) Validate() error {
+	if p.GetEventsParams == nil {
+		return ierr.NewError("get events params is required").
+			WithHint("Get events params is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.RunStartTime.IsZero() {
+		return ierr.NewError("run start time is required").
+			WithHint("Run start time is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.GetEventsParams.StartTime.IsZero() {
+		return ierr.NewError("start time is required").
+			WithHint("Start time is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.GetEventsParams.EndTime.IsZero() {
+		return ierr.NewError("end time is required").
+			WithHint("End time is required").
+			Mark(ierr.ErrValidation)
+	}
+
+	if p.GetEventsParams.StartTime.After(p.GetEventsParams.EndTime) {
+		return ierr.NewError("start time must be before end time").
+			WithHint("Start time must be before end time").
+			Mark(ierr.ErrValidation)
+	}
+	if p.GetEventsParams.ExternalCustomerID == "" {
+		return ierr.NewError("external customer id is required").
+			WithHint("External customer id is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation

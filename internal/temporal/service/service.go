@@ -985,12 +985,29 @@ func (s *temporalService) buildReprocessEventsInput(_ context.Context, tenantID,
 			batchSize = int(bsFloat)
 		}
 
+		forceReprocess, _ := paramsMap["force_reprocess"].(bool)
+
+		var runStartTime time.Time
+		if rst, ok := paramsMap["run_start_time"].(time.Time); ok {
+			runStartTime = rst
+		} else if rstStr, ok := paramsMap["run_start_time"].(string); ok && rstStr != "" {
+			var err error
+			runStartTime, err = time.Parse(time.RFC3339, rstStr)
+			if err != nil {
+				return nil, errors.NewError("invalid run_start_time format").
+					WithHint("Run start time must be in RFC3339 format (e.g., 2006-01-02T15:04:05Z07:00)").
+					Mark(errors.ErrValidation)
+			}
+		}
+
 		input := eventsModels.ReprocessEventsWorkflowInput{
 			ExternalCustomerID: externalCustomerID,
 			EventName:          eventName, // Optional - can be empty
 			StartDate:          startDate,
 			EndDate:            endDate,
 			BatchSize:          batchSize,
+			ForceReprocess:     forceReprocess,
+			RunStartTime:       runStartTime,
 			TenantID:           tenantID,
 			EnvironmentID:      environmentID,
 			UserID:             userID,

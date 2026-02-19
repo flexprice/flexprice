@@ -2832,11 +2832,18 @@ func (s *featureUsageTrackingService) getCorrectUsageValueForPoint(point events.
 
 // ReprocessEvents triggers reprocessing of events for a customer or with other filters
 func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) (*events.ReprocessEventsResult, error) {
+	runStartTime := params.RunStartTime.UTC()
+	if runStartTime.IsZero() {
+		runStartTime = time.Now().UTC()
+	}
+
 	s.Logger.Infow("starting event reprocessing for feature usage tracking",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"start_time", params.StartTime,
 		"end_time", params.EndTime,
+		"force_reprocess", params.ForceReprocess,
+		"run_start_time", runStartTime,
 	)
 
 	// Set default batch size if not provided
@@ -2861,6 +2868,24 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 	var lastID string
 	var lastTimestamp time.Time
 
+	if params.ForceReprocess {
+		deleteScope := &events.DeleteFeatureUsageScopeParams{
+			GetEventsParams: &events.GetEventsParams{
+				ExternalCustomerID: params.ExternalCustomerID,
+				EventName:          params.EventName,
+				StartTime:          params.StartTime,
+				EndTime:            params.EndTime,
+			},
+			RunStartTime: runStartTime,
+		}
+
+		if deleteErr := s.featureUsageRepo.DeleteByReprocessScopeBeforeCheckpoint(ctx, deleteScope); deleteErr != nil {
+			return nil, ierr.WithError(deleteErr).
+				WithHint("Failed to submit feature usage cleanup for reprocess").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
 	// Keep processing batches until we're done
 	for {
 		// Update keyset pagination parameters for next batch
@@ -2869,11 +2894,31 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 			findParams.LastTimestamp = lastTimestamp
 		}
 
-		// Find unprocessed events
-		unprocessedEvents, err := s.eventRepo.FindUnprocessedEventsFromFeatureUsage(ctx, findParams)
+		// Find events to reprocess
+		var unprocessedEvents []*events.Event
+		var err error
+		if params.ForceReprocess {
+			getEventsParams := &events.GetEventsParams{
+				ExternalCustomerID: findParams.ExternalCustomerID,
+				EventName:          findParams.EventName,
+				StartTime:          findParams.StartTime,
+				EndTime:            findParams.EndTime,
+				PageSize:           findParams.BatchSize,
+				CountTotal:         false,
+			}
+			if findParams.LastID != "" && !findParams.LastTimestamp.IsZero() {
+				getEventsParams.IterLast = &events.EventIterator{
+					Timestamp: findParams.LastTimestamp,
+					ID:        findParams.LastID,
+				}
+			}
+			unprocessedEvents, _, err = s.eventRepo.GetEvents(ctx, getEventsParams)
+		} else {
+			unprocessedEvents, err = s.eventRepo.FindUnprocessedEventsFromFeatureUsage(ctx, findParams)
+		}
 		if err != nil {
 			return nil, ierr.WithError(err).
-				WithHint("Failed to find unprocessed events").
+				WithHint("Failed to find events for reprocess").
 				WithReportableDetails(map[string]interface{}{
 					"external_customer_id": params.ExternalCustomerID,
 					"event_name":           params.EventName,
