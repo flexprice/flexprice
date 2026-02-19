@@ -6,7 +6,9 @@
 
 **Why:** Today all plan prices must match the subscription’s single billing period. Product and customers need plans that mix e.g. weekly + monthly + quarterly on one subscription with one invoice per month.
 
-**Reuse (decide as much as possible):** Use existing **subscription** `billing_period` and `billing_period_count` as the **invoice period** (no subscription schema change). Add **`billing_period_count`** to **subscription line item**; line item already has `billing_period`. Store each line item’s **price** interval (copy from price at create). Use existing **`NextBillingDate`**, **`PreviousBillingDate`**, **`CalculateBillingPeriods`** ([internal/types/date.go](internal/types/date.go)) for all interval math. Use existing **`ClassifyLineItems`** / **`PrepareSubscriptionInvoiceRequest`** / **`CalculateFixedCharges`** ([internal/service/billing.go](internal/service/billing.go)) and extend them for interval-aware inclusion and proration. Use existing proration service and **`InvoiceCadence`** (advance/arrear). No new date helpers; no new billing period enums.
+**Reuse (decide as much as possible):** Use existing **subscription** `billing_period` and `billing_period_count` as the **invoice period** (no subscription schema change). Line item already has `billing_period`; add **`billing_period_count`** on subscription line item only if needed for invoice logic (read path; default 1 when absent). **Do not change line item creation** (subscription creation, add-ons, etc.)—only invoice generation uses per–line-item interval. Use existing **`NextBillingDate`**, **`PreviousBillingDate`**, **`CalculateBillingPeriods`** ([internal/types/date.go](internal/types/date.go)) for all interval math. Use existing **`ClassifyLineItems`** / **`PrepareSubscriptionInvoiceRequest`** / **`CalculateFixedCharges`** ([internal/service/billing.go](internal/service/billing.go)) and extend them for interval-aware inclusion and proration. Use existing proration service and **`InvoiceCadence`** (advance/arrear). No new date helpers; no new billing period enums.
+
+**Implementation scope (this release):** Focus **only on invoice generation**. No changes to subscription creation, plan/price validation, or how line items are created or updated (e.g. which fields are set from price vs subscription). Invoice logic reads each line item’s `billing_period` and `billing_period_count` (default 1 if missing) and applies inclusion and proration accordingly.
 
 ---
 
@@ -20,8 +22,8 @@ This PRD defines requirements for **mixed-interval billing** in FlexPrice: a sin
 
 ### 1.2 Scope
 
-- **In scope:** Per–line-item billing interval and **billing_period_count** (on subscription line item); subscription-level invoice period; proration for shorter/longer intervals; inclusion rules; edge cases and complex scenarios (calendar, timezone, mid-cycle change, cancellation, trials, failed payments, tax).
-- **Out of scope (initial release):** Custom intervals (e.g. “every 2 weeks”); revenue recognition implementation (design only); changes to payment provider sync behavior.
+- **In scope:** **Invoice generation only:** subscription-level invoice period; per–line-item interval **read** from line item (`billing_period`, `billing_period_count` default 1); inclusion rules (Algorithm A/B); proration for shorter/equal/longer intervals; edge cases and scenarios that affect invoicing (calendar, timezone, mid-cycle change, cancellation, trials, failed payments, tax).
+- **Out of scope (this release):** **Line item creation and subscription lifecycle:** no changes to how line items are created (subscription creation, add-ons, plan change) or which fields are set (e.g. copying from price vs subscription). No changes to plan/price validation (e.g. `filterValidPricesForSubscription`). Custom intervals (e.g. “every 2 weeks”); revenue recognition implementation (design only); changes to payment provider sync behavior.
 
 ### 1.3 Definitions
 
@@ -43,19 +45,19 @@ This PRD defines requirements for **mixed-interval billing** in FlexPrice: a sin
 | Advance vs arrear | `InvoiceCadence` (ADVANCE/ARREAR), existing `ClassifyLineItems` buckets | New cadence types |
 | Proration (mid-period change) | Existing proration service, `applyProrationToLineItem` | Duplicate proration logic |
 | Rounding | `types.RoundToCurrencyPrecision` | New rounding rules |
-| Price filtering | Extend `filterValidPricesForSubscription` to allow mixed intervals | New validation framework |
+| Price filtering | No change to subscription/plan validation in this release | N/A (invoice-only scope) |
 
 ---
 
 ## 2. Problem Statement
 
-Today, FlexPrice enforces a single billing period per subscription. All plan prices must match the subscription’s `billing_period` and `billing_period_count`. Line items are stamped with the subscription’s period. This prevents:
+Today, FlexPrice assumes a single billing period per subscription for invoicing; line items are typically stamped with the subscription’s period. To support mixed intervals (e.g. weekly + monthly + quarterly on one subscription with one monthly invoice), the **invoice generation** logic must:
 
-- A monthly-invoiced subscription that includes a weekly compliance fee, a monthly platform fee, and a quarterly support fee.
-- Annual recurring fees with monthly usage-based line items on the same subscription.
-- Daily or weekly fixed fees combined with monthly usage on one invoice.
+- Decide which line items to include on each invoice based on each line item’s **interval** relative to the subscription’s **invoice period**.
+- Prorate when the line item’s interval is shorter or longer than the invoice period.
+- Align longer-interval items so they appear only when the invoice period end matches the line item’s interval end.
 
-Customers and product need **one subscription** with **multiple intervals per line item** and **one invoice per (subscription) period** that correctly aggregates and prorates those items.
+**This PRD (this release)** addresses **invoice generation only**. We do not change how line items are created (subscription creation, add-ons, etc.). Once line items carry per-item intervals (from existing fields or a future schema/creation change), the billing engine will correctly include and prorate them on each invoice.
 
 ---
 
@@ -84,18 +86,18 @@ Customers and product need **one subscription** with **multiple intervals per li
 2. **As a** billing operator, **I want** to see one invoice per month that includes prorated weekly charges (e.g. 4.29 weeks), full monthly charges, and the quarterly fee only on every third month **so that** billing is accurate and auditable.
 3. **As a** customer, **I want** to upgrade my plan mid-month **so that** I get a credit for the unused portion of my current plan and a prorated charge for the new plan for the rest of the period, per line item interval.
 4. **As a** support agent, **I want** to cancel a subscription mid-quarter **so that** in-advance items receive a credit for unused time, arrear usage is billed to cancel date, and the quarterly in-arrears fee is prorated for the partial quarter.
-5. **As a** developer, **I want** to create a subscription with an explicit “invoice period” (e.g. monthly) while adding prices with different intervals **so that** the API accepts the combination and invoices correctly.
+5. **As a** developer, **I want** the billing engine to generate correct invoices when line items have different intervals (e.g. weekly, monthly, quarterly) **so that** a single subscription invoice includes the right prorated amounts per line item. *(Creating such subscriptions/line items is out of scope for this release.)*
 
 ---
 
 ## 5. Functional Requirements
 
-### 5.1 Data Model
+### 5.1 Data Model (invoice-generation scope only)
 
 - **FR-1** Subscription retains `billing_period` and `billing_period_count` as the **invoice period** (when invoices are generated). **No schema change** for subscription table; use existing fields.
-- **FR-2** Each subscription line item stores the **price’s** `billing_period` and `billing_period_count`. **Schema change:** add `billing_period_count` to [ent/schema/subscription_line_item.go](ent/schema/subscription_line_item.go) (line item already has `billing_period`). At subscription/line-item creation, **copy from price**, not from subscription. Existing line items without `billing_period_count`: treat as count = 1 for backward compatibility.
-- **FR-3** Plan prices may have different `billing_period` values. At subscription creation, the chosen **invoice period** must be the minimum of all selected line-item intervals, or explicitly provided and validated (e.g. must not be longer than the longest line-item interval for predictable behavior).
-- **FR-4** Existing subscriptions and line items continue to work: if all line items have the same period as the subscription, behavior is unchanged (backward compatible).
+- **FR-2** **For invoice generation:** The billing engine **reads** each line item’s `billing_period` and `billing_period_count` to determine line-item interval. Line item schema may add `billing_period_count` (default 1) so invoice logic can read it; **no change to line item creation**—whatever code creates line items today is left unchanged (e.g. if today line items get subscription’s period, that remains). When `billing_period_count` is missing or zero, treat as 1. Invoice logic uses (item.BillingPeriod, item.BillingPeriodCount or 1) for inclusion and proration.
+- **FR-3** *(Out of scope for this release.)* Plan/price validation and subscription creation rules (e.g. invoice period = minimum of line-item intervals) are **not** changed. Invoice generation assumes line items already exist with some `billing_period` (and optionally `billing_period_count`); it applies inclusion and proration based on those values.
+- **FR-4** Existing subscriptions and line items continue to work: when line item’s interval equals the subscription’s invoice period (e.g. both monthly), behavior is unchanged (backward compatible).
 
 ### 5.2 Invoice Generation
 
@@ -109,8 +111,8 @@ Customers and product need **one subscription** with **multiple intervals per li
 
 ### 5.3 Subscription Lifecycle
 
-- **FR-9** **Subscription creation:** Accept plans with mixed-interval prices. Set subscription invoice period = minimum of selected line-item intervals, or require it explicitly. Create line items with each price’s own `billing_period` and `billing_period_count`.
-- **FR-10** **Mid-cycle plan/quantity change:** Proration (credit/charge) uses the **line item’s** interval and remaining days in the current interval (or subscription period, whichever is relevant). Existing proration behavior applies per line item; no credit in excess of amount paid for that item.
+- **FR-9** *(Out of scope for this release.)* **Subscription creation** is unchanged: no changes to which prices are accepted, how invoice period is set, or how line items are created (e.g. no “copy from price” requirement). When line items already have per-item intervals (e.g. set elsewhere or by a future change), invoice generation will use them.
+- **FR-10** **Mid-cycle plan/quantity change (invoice side):** When generating invoices, proration (credit/charge) uses the **line item’s** interval (as read from the line item) and remaining days in the current interval (or subscription period, whichever is relevant). Existing proration behavior applies per line item; no credit in excess of amount paid for that item. No change to how plan/quantity changes create or update line items.
 - **FR-11** **Cancellation (immediate or at period end):**  
   - In-advance items: Issue credit for unused portion (by days remaining in current interval or period).  
   - Arrear fixed: Final charge for the partial period/interval.  
@@ -820,11 +822,13 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 
 ## 9. Acceptance Criteria (Summary)
 
-- **AC-1** A subscription can be created with a plan that has prices with different `billing_period` values (e.g. weekly, monthly, quarterly) and one chosen invoice period (e.g. monthly).
-- **AC-2** Each line item stores and returns the price’s `billing_period` and `billing_period_count`.
+*(All criteria apply to **invoice generation** only; no requirement to change subscription or line item creation.)*
+
+- **AC-1** When line items have different `billing_period` (and optionally `billing_period_count`) values, invoice generation uses each line item’s interval for inclusion and proration. (No change to how subscriptions or line items are created.)
+- **AC-2** Invoice logic reads each line item’s `billing_period` and `billing_period_count` (default 1 if missing). API responses that return line items may expose these for display (DTOs/Swagger).
 - **AC-3** On each invoice date, line items with interval shorter than invoice period are included with prorated quantity (days in period / days in interval); amount = unit price × quantity, rounded to currency.
-- **AC-4** Line items with interval longer than invoice period are included only when the period end aligns with the end of their interval; alignment is deterministic from subscription start/anchor.
-- **AC-5** Mid-cycle plan/quantity change produces correct proration (credit/charge) per line item using that item’s interval and remaining days; total credit per item does not exceed amount previously charged for that item in the period.
+- **AC-4** Line items with interval longer than invoice period are included only when the period end aligns with the end of their interval; alignment is deterministic from line item start/anchor.
+- **AC-5** When generating invoices for mid-cycle plan/quantity change, proration (credit/charge) uses the line item’s interval and remaining days; total credit per item does not exceed amount previously charged for that item in the period.
 - **AC-6** Immediate cancellation produces one invoice (or credit note + invoice) with: credits for in-advance unused portions, final arrear fixed/usage, and prorated longer-interval arrear.
 - **AC-7** Leap year, month-end (28–31), and quarter length (90–92 days) are handled using actual days.
 - **AC-8** Preview invoice shows prorated amounts and indicates when longer-interval items will next appear.
@@ -834,12 +838,14 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 
 ## 10. Implementation Phases and Actionables
 
-**Phase 1: Data model and backward compatibility**
+**Scope: invoice generation only. Do not change line item creation (subscription creation, add-ons, plan change) or plan/price validation.**
 
-- [ ] **1.1** Add `billing_period_count` to [ent/schema/subscription_line_item.go](ent/schema/subscription_line_item.go) (default 1). Generate Ent code and add migration.
-- [ ] **1.2** At line item creation ([internal/service/subscription.go](internal/service/subscription.go)): set `item.BillingPeriod = price.BillingPeriod` and `item.BillingPeriodCount = price.BillingPeriodCount` (from price, not subscription). Keep existing behavior when price has no count (default 1).
-- [ ] **1.3** Relax [filterValidPricesForSubscription](internal/service/subscription.go): allow prices with different `billing_period`; subscription’s `billing_period` + `billing_period_count` = invoice period. Validate: invoice period is minimum of selected line-item intervals (or explicit and within bounds).
-- [ ] **1.4** Backfill or default: existing line items without `billing_period_count` → treat as 1. Existing line items with `billing_period` == subscription’s → behavior unchanged (same as today).
+**Phase 1: Data model for invoice read path only (no creation changes)**
+
+- [ ] **1.1** If not already present, add `billing_period_count` to [ent/schema/subscription_line_item.go](ent/schema/subscription_line_item.go) (default 1). Generate Ent code and add migration. Purpose: invoice logic reads this to compute line-item interval; existing rows default to 1.
+- [ ] **1.2** *(Omitted.)* Do **not** change line item creation in `internal/service/subscription.go`—no setting of `BillingPeriod`/`BillingPeriodCount` from price at create.
+- [ ] **1.3** *(Omitted.)* Do **not** change `filterValidPricesForSubscription` or subscription creation validation.
+- [ ] **1.4** In **invoice generation code only:** when reading a line item, treat missing or zero `billing_period_count` as 1. No backfill required for creation; backward compatible for existing line items (same interval as subscription → same behavior as today).
 
 **Phase 2: Inclusion and proration (shorter / equal interval)**
 
@@ -869,6 +875,7 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 
 ## 11. Open Questions and Decisions
 
+- **OQ-0** **Line item creation:** This release does not change how line items are created (subscription creation, add-ons, plan change). A future phase may add “copy from price” and relax plan/price validation so new subscriptions can be created with mixed-interval plans; until then, invoice logic will apply whenever line items already have per-item intervals (e.g. from existing schema or manual/API updates).
 - **OQ-1** First partial period: prorate monthly by (actual_days / 30) or (actual_days / days_in_start_month)? Recommend: (actual_days / 30) for predictability.
 - **OQ-2** Weekly advance on monthly invoice: “next period advance” = full next month’s worth of weeks (4.29 × rate) or only first week? Recommend: full next month so one invoice has “current arrear + next advance” in one place.
 - **OQ-3** Usage reset period: always subscription period, or allow per–line-item (e.g. quarterly reset for quarterly usage)? Recommend: subscription period for v1.
@@ -882,5 +889,5 @@ These tests will catch inclusion bugs, proration errors, and alignment bugs for 
 - [Advance and Arrear Billing Implementation](advance_arrear_billing_implementation.md)
 - [Subscription Proration and Workflow Implementation](subscription_proration_and_workflow_implementation.md)
 - [Subscription Billing](subscription-billing.md)
-- Internal: `internal/service/billing.go` (ClassifyLineItems, PrepareSubscriptionInvoiceRequest, CalculateFixedCharges), `internal/service/subscription.go` (filterValidPricesForSubscription, line item creation), `internal/types/date.go` (NextBillingDate, PreviousBillingDate, CalculateBillingPeriods), `internal/service/proration.go` (uses PreviousBillingDate for period start), `ent/schema/subscription_line_item.go`
+- Internal: `internal/service/billing.go` (ClassifyLineItems, PrepareSubscriptionInvoiceRequest, CalculateFixedCharges)—**primary change area**; `internal/types/date.go` (NextBillingDate, PreviousBillingDate, CalculateBillingPeriods); `internal/service/proration.go` (uses PreviousBillingDate for period start); `ent/schema/subscription_line_item.go` (add `billing_period_count` for invoice read path only). **No changes** to `internal/service/subscription.go` (line item creation, filterValidPricesForSubscription) in this release.
 
