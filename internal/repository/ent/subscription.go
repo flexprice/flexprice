@@ -91,6 +91,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetEnableTrueUp(sub.EnableTrueUp).
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
+		SetNillablePaymentTerms(sub.PaymentTerms).
 		Save(ctx)
 
 	if err != nil {
@@ -183,6 +184,13 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 		SetUpdatedAt(now).
 		SetUpdatedBy(types.GetUserID(ctx)).
 		SetMetadata(sub.Metadata)
+
+	// Handle nullable payment_terms - explicitly clear if nil
+	if sub.PaymentTerms != nil {
+		query.SetPaymentTerms(*sub.PaymentTerms)
+	} else {
+		query.ClearPaymentTerms()
+	}
 
 	// Handle nullable date fields - explicitly clear if nil
 	if sub.CancelledAt != nil {
@@ -570,6 +578,10 @@ func (o SubscriptionQueryOptions) GetFieldName(field string) string {
 		return subscription.FieldPlanID
 	case "invoicing_customer_id":
 		return subscription.FieldInvoicingCustomerID
+	case "parent_subscription_id":
+		return subscription.FieldParentSubscriptionID
+	case "payment_terms":
+		return subscription.FieldPaymentTerms
 	default:
 		return field
 	}

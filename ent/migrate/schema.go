@@ -1607,6 +1607,7 @@ var (
 		{Name: "proration_behavior", Type: field.TypeString, Default: "none"},
 		{Name: "enable_true_up", Type: field.TypeBool, Default: false},
 		{Name: "parent_subscription_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "payment_terms", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(20)"}},
 		{Name: "invoicing_customer_id", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// SubscriptionsTable holds the schema information for the "subscriptions" table.
@@ -1617,7 +1618,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "subscriptions_customers_invoicing_customer",
-				Columns:    []*schema.Column{SubscriptionsColumns[41]},
+				Columns:    []*schema.Column{SubscriptionsColumns[42]},
 				RefColumns: []*schema.Column{CustomersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -2149,8 +2150,7 @@ var (
 		{Name: "conversion_rate", Type: field.TypeOther, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
 		{Name: "topup_conversion_rate", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(10,5)"}},
 		{Name: "config", Type: field.TypeJSON, Nullable: true},
-		{Name: "alert_config", Type: field.TypeJSON, Nullable: true},
-		{Name: "alert_enabled", Type: field.TypeBool, Nullable: true, Default: true},
+		{Name: "alert_settings", Type: field.TypeJSON, Nullable: true},
 		{Name: "alert_state", Type: field.TypeString, Nullable: true, Default: "ok", SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// WalletsTable holds the schema information for the "wallets" table.

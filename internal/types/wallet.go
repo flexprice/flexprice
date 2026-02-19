@@ -310,13 +310,6 @@ func (c WalletConfig) Validate() error {
 	return nil
 }
 
-type CheckAlertsRequest struct {
-	TenantIDs []string              `json:"tenant_ids"`
-	EnvIDs    []string              `json:"env_ids"`
-	WalletIDs []string              `json:"wallet_ids"`
-	Threshold *WalletAlertThreshold `json:"threshold,omitempty"`
-}
-
 // CreditExpirySkipReason is the reason a credit grant was skipped during expiry.
 type CreditExpirySkipReason string
 

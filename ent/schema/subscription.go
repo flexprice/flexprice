@@ -186,6 +186,15 @@ func (Subscription) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Parent subscription ID for hierarchy (e.g. child subscription under a parent)"),
+		// Payment terms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
+		field.String("payment_terms").
+			SchemaType(map[string]string{
+				"postgres": "varchar(20)",
+			}).
+			Optional().
+			Nillable().
+			GoType(types.PaymentTerms("")).
+			Comment("Payment terms for invoice due date (e.g. 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET)"),
 	}
 }
 

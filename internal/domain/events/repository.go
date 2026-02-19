@@ -105,6 +105,11 @@ type UsageParams struct {
 	// - Custom business cycles (fiscal months, quarterly periods)
 	// - Multi-tenant billing with different anchor dates per customer
 	BillingAnchor *time.Time `json:"billing_anchor,omitempty"`
+	// GroupByProperty is the property name in event.properties to group by before aggregating.
+	// When set, aggregation is applied per unique value of this property within each bucket,
+	// then the per-group results are summed to produce the bucket total.
+	// Currently only supported for MAX aggregation with bucket_size.
+	GroupByProperty string `json:"group_by_property,omitempty"`
 }
 
 // UsageSummaryParams defines parameters for querying pre-computed usage

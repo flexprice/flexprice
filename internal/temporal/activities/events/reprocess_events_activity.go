@@ -50,7 +50,9 @@ func (a *ReprocessEventsActivities) ReprocessEvents(ctx context.Context, input m
 		"event_name", input.EventName,
 		"start_date", input.StartDate,
 		"end_date", input.EndDate,
-		"batch_size", input.BatchSize)
+		"batch_size", input.BatchSize,
+		"force_reprocess", input.ForceReprocess,
+		"run_start_time", input.RunStartTime)
 
 	// Convert workflow input to service params
 	reprocessParams := &events.ReprocessEventsParams{
@@ -59,6 +61,8 @@ func (a *ReprocessEventsActivities) ReprocessEvents(ctx context.Context, input m
 		StartTime:          input.StartDate,
 		EndTime:            input.EndDate,
 		BatchSize:          input.BatchSize,
+		ForceReprocess:     input.ForceReprocess,
+		RunStartTime:       input.RunStartTime,
 	}
 
 	// Call the service method to reprocess events

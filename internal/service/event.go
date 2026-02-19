@@ -151,6 +151,11 @@ func (s *eventService) GetUsageByMeter(ctx context.Context, req *dto.GetUsageByM
 		getUsageRequest.BucketSize = m.Aggregation.BucketSize
 	}
 
+	// Pass GroupByProperty from meter configuration for aggregation with group_by
+	if m.Aggregation.GroupBy != "" {
+		getUsageRequest.GroupByProperty = m.Aggregation.GroupBy
+	}
+
 	usage, err := s.GetUsage(ctx, &getUsageRequest)
 	if err != nil {
 		return nil, err

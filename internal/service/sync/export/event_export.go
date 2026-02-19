@@ -9,16 +9,19 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/events"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gocarina/gocsv"
+	"github.com/samber/lo"
 )
 
 // EventExporter handles feature usage export operations
 type EventExporter struct {
 	featureUsageRepo   events.FeatureUsageRepository
+	priceRepo         price.Repository
 	integrationFactory *integration.Factory
 	logger             *logger.Logger
 }
@@ -41,6 +44,7 @@ type FeatureUsageCSV struct {
 	IngestedAt         string `csv:"ingested_at"` // RFC3339 format
 	PeriodID           string `csv:"period_id"`   // Billing period ID (uint64 as string)
 	QtyTotal           string `csv:"qty_total"`   // Total quantity (decimal as string)
+	ProvisionalUsageCharges string `csv:"provisional_usage_charges"` // price.Amount * quantity (decimal as string)
 	Properties         string `csv:"properties"`  // Event properties as JSON string
 	UniqueHash         string `csv:"unique_hash"` // Deduplication hash
 }
@@ -48,11 +52,13 @@ type FeatureUsageCSV struct {
 // NewEventExporter creates a new event exporter
 func NewEventExporter(
 	featureUsageRepo events.FeatureUsageRepository,
+	priceRepo price.Repository,
 	integrationFactory *integration.Factory,
 	logger *logger.Logger,
 ) *EventExporter {
 	return &EventExporter{
 		featureUsageRepo:   featureUsageRepo,
+		priceRepo:         priceRepo,
 		integrationFactory: integrationFactory,
 		logger:             logger,
 	}
@@ -107,8 +113,37 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 			"records_in_batch", len(usageData),
 			"total_so_far", totalRecords+len(usageData))
 
+		// Collect unique price IDs from this batch (skip empty)
+		priceIDSet := make(map[string]struct{})
+		for _, u := range usageData {
+			if u.PriceID != "" {
+				priceIDSet[u.PriceID] = struct{}{}
+			}
+		}
+		uniquePriceIDs := lo.Keys(priceIDSet)
+
+		var priceByID map[string]*price.Price
+		if len(uniquePriceIDs) > 0 {
+			prices, listErr := e.priceRepo.List(ctx, types.NewNoLimitPriceFilter().WithPriceIDs(uniquePriceIDs))
+			if listErr != nil {
+				return nil, 0, ierr.WithError(listErr).
+					WithHint("Failed to fetch prices for export batch").
+					WithReportableDetails(map[string]interface{}{
+						"offset":     offset,
+						"price_ids": len(uniquePriceIDs),
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+			priceByID = make(map[string]*price.Price, len(prices))
+			for _, p := range prices {
+				priceByID[p.ID] = p
+			}
+		} else {
+			priceByID = nil
+		}
+
 		// Convert batch to CSV records
-		batchRecords, err := e.convertToCSVRecords(usageData)
+		batchRecords, err := e.convertToCSVRecords(usageData, priceByID)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -148,7 +183,7 @@ func (e *EventExporter) PrepareData(ctx context.Context, request *dto.ExportRequ
 }
 
 // convertToCSVRecords converts FeatureUsage domain models to CSV records
-func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage) ([]*FeatureUsageCSV, error) {
+func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage, priceByID map[string]*price.Price) ([]*FeatureUsageCSV, error) {
 	records := make([]*FeatureUsageCSV, 0, len(usageData))
 
 	for _, usage := range usageData {
@@ -159,6 +194,13 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage) ([
 				"usage_id", usage.ID,
 				"error", err)
 			propertiesJSON = []byte("{}")
+		}
+
+		provisionalUsageChargesStr := ""
+		if usage.PriceID != "" && priceByID != nil {
+			if p, ok := priceByID[usage.PriceID]; ok {
+				provisionalUsageChargesStr = p.Amount.Mul(usage.QtyTotal).String()
+			}
 		}
 
 		record := &FeatureUsageCSV{
@@ -178,6 +220,7 @@ func (e *EventExporter) convertToCSVRecords(usageData []*events.FeatureUsage) ([
 			IngestedAt:         usage.IngestedAt.Format(time.RFC3339),
 			PeriodID:           fmt.Sprintf("%d", usage.PeriodID),
 			QtyTotal:           usage.QtyTotal.String(),
+			ProvisionalUsageCharges: provisionalUsageChargesStr,
 			Properties:         string(propertiesJSON),
 			UniqueHash:         usage.UniqueHash,
 		}

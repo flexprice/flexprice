@@ -67,6 +67,12 @@ type Aggregation struct {
 	// BucketSize is used only for MAX aggregation when windowed aggregation is needed
 	// It defines the size of time windows to calculate max values within
 	BucketSize types.WindowSize `json:"bucket_size,omitempty"`
+
+	// GroupBy is the property name in event.properties to group by before aggregating.
+	// Currently only supported for MAX aggregation with bucket_size.
+	// When set, aggregation is applied per unique value of this property within each bucket,
+	// then the per-group results are summed to produce the bucket total.
+	GroupBy string `json:"group_by,omitempty"`
 }
 
 // FromEnt converts an Ent Meter to a domain Meter
@@ -93,6 +99,7 @@ func FromEnt(e *ent.Meter) *Meter {
 			Field:      e.Aggregation.Field,
 			Multiplier: e.Aggregation.Multiplier,
 			BucketSize: e.Aggregation.BucketSize,
+			GroupBy:    e.Aggregation.GroupBy,
 		},
 		Filters:       filters,
 		ResetUsage:    types.ResetUsage(e.ResetUsage),
@@ -142,6 +149,7 @@ func (m *Meter) ToEntAggregation() schema.MeterAggregation {
 		Field:      m.Aggregation.Field,
 		Multiplier: m.Aggregation.Multiplier,
 		BucketSize: m.Aggregation.BucketSize,
+		GroupBy:    m.Aggregation.GroupBy,
 	}
 }
 
@@ -214,6 +222,17 @@ func (m *Meter) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	}
+	// Validate group_by is only used with MAX aggregation that has bucket_size
+	if m.Aggregation.GroupBy != "" && !m.IsBucketedMaxMeter() {
+		return ierr.NewError("group_by can only be used with MAX aggregation that has bucket_size").
+			WithHint("GroupBy is only valid for MAX aggregation type with a bucket_size configured").
+			WithReportableDetails(map[string]interface{}{
+				"aggregation_type": m.Aggregation.Type,
+				"bucket_size":      m.Aggregation.BucketSize,
+				"group_by":         m.Aggregation.GroupBy,
+			}).
+			Mark(ierr.ErrValidation)
+	}
 
 	for _, filter := range m.Filters {
 		if filter.Key == "" {
@@ -246,6 +265,11 @@ func (m *Meter) IsBucketedSumMeter() bool {
 // HasBucketSize returns true if this meter has a bucket size configured
 func (m *Meter) HasBucketSize() bool {
 	return m.Aggregation.BucketSize != ""
+}
+
+// HasGroupBy returns true if this meter has a group_by property configured
+func (m *Meter) HasGroupBy() bool {
+	return m.Aggregation.GroupBy != ""
 }
 
 // Constructor for creating new meters with defaults

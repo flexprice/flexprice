@@ -121,7 +121,9 @@ func TestCustomAnalytics_ApplyCustomRule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := service.applyCustomRule(tt.rule, tt.sourceItem)
+			// Use source item's cost as response total cost (single-item case)
+			responseTotalCost := tt.sourceItem.TotalCost
+			result := service.applyCustomRule(tt.rule, tt.sourceItem, responseTotalCost)
 
 			if tt.expectNil {
 				assert.Nil(t, result, "Expected nil result")
