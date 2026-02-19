@@ -2,7 +2,6 @@ package v1
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/cache"
@@ -320,8 +319,6 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		c.Status(http.StatusConflict)
 		return
 	}
-	// TODO: remove after testing lock - sleep so a second request gets 409
-	time.Sleep(20 * time.Second)
 	// Start the price sync workflow (activity will release lock when done)
 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
 	if err != nil {
@@ -401,9 +398,6 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 		return
 	}
 	defer redisCache.Delete(c.Request.Context(), lockKey)
-
-	// TODO: remove after testing lock - sleep so a second request gets 409
-	time.Sleep(20 * time.Second)
 
 	resp, err := h.service.SyncPlanPrices(c.Request.Context(), id)
 	if err != nil {
