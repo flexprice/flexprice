@@ -2,8 +2,10 @@ package activities
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/service"
@@ -34,6 +36,9 @@ type SyncPlanPricesInput struct {
 	EnvironmentID string `json:"environment_id"`
 }
 
+// priceSyncLockKey returns the Redis cache key for the plan-level price sync lock (must match API layer).
+const priceSyncLockKeyPrefix = "price_sync:plan:"
+
 // SyncPlanPrices syncs plan prices
 // This method will be registered as "SyncPlanPrices" in Temporal
 func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPricesInput) (*dto.SyncPlanPricesResponse, error) {
@@ -54,6 +59,15 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
+
+	lockKey := priceSyncLockKeyPrefix + input.PlanID
+	defer func() {
+		if redisCache := cache.GetRedisCache(); redisCache != nil {
+			releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			redisCache.Delete(releaseCtx, lockKey)
+		}
+	}()
 
 	result, err := a.planService.SyncPlanPrices(ctx, input.PlanID)
 	if err != nil {

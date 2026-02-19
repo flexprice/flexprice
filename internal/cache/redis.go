@@ -159,6 +159,28 @@ func (c *RedisCache) delete(ctx context.Context, key string) error {
 	return c.client.Del(ctx, key).Err()
 }
 
+// TrySetNX sets key to value with expiration only if the key does not exist (lock acquire).
+// Returns true if the key was set, false if the key already existed. Returns error on Redis failure.
+func (c *RedisCache) TrySetNX(ctx context.Context, key string, value interface{}, expiration time.Duration) (bool, error) {
+	redisKey := c.GetRedisKey(key)
+	var strValue string
+	switch v := value.(type) {
+	case string:
+		strValue = v
+	default:
+		jsonBytes, err := json.Marshal(value)
+		if err != nil {
+			return false, fmt.Errorf("marshal cache value: %w", err)
+		}
+		strValue = string(jsonBytes)
+	}
+	ok, err := c.client.SetNX(ctx, redisKey, strValue, expiration).Result()
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}
+
 // DeleteByPrefix removes all keys with the given prefix
 func (c *RedisCache) DeleteByPrefix(ctx context.Context, prefix string) {
 
