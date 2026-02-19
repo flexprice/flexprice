@@ -738,7 +738,7 @@ func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.Usa
 	// 1. Inner CTE (per_group): max per group per bucket (e.g., MAX per krn per hour)
 	// 2. Middle CTE (bucket_maxes): SUM across groups per bucket (e.g., SUM of group maxes per hour)
 	// 3. Outer query: return per-bucket values and overall total
-	if params.GroupByProperty != "" {
+	if params.GroupByProperty != "" && validateGroupByProperty(params.GroupByProperty) == nil {
 		groupByExpr := fmt.Sprintf("JSONExtractString(assumeNotNull(properties), '%s')", params.GroupByProperty)
 
 		return fmt.Sprintf(`
