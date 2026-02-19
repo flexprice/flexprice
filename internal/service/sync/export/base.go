@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/integration"
@@ -28,6 +29,7 @@ type Exporter interface {
 // ExportService handles export operations for different entity types
 type ExportService struct {
 	featureUsageRepo    events.FeatureUsageRepository
+	priceRepo           price.Repository
 	invoiceRepo         invoice.Repository
 	walletRepo          wallet.Repository
 	walletBalanceGetter WalletBalanceGetter
@@ -40,6 +42,7 @@ type ExportService struct {
 // NewExportService creates a new export service
 func NewExportService(
 	featureUsageRepo events.FeatureUsageRepository,
+	priceRepo price.Repository,
 	invoiceRepo invoice.Repository,
 	connectionRepo connection.Repository,
 	integrationFactory *integration.Factory,
@@ -47,6 +50,7 @@ func NewExportService(
 ) *ExportService {
 	return &ExportService{
 		featureUsageRepo:   featureUsageRepo,
+		priceRepo:          priceRepo,
 		invoiceRepo:        invoiceRepo,
 		walletRepo:         nil, // Will be set when needed
 		connectionRepo:     connectionRepo,
@@ -58,6 +62,7 @@ func NewExportService(
 // NewExportServiceWithWallet creates a new export service with wallet repository
 func NewExportServiceWithWallet(
 	featureUsageRepo events.FeatureUsageRepository,
+	priceRepo price.Repository,
 	invoiceRepo invoice.Repository,
 	walletRepo wallet.Repository,
 	walletBalanceGetter WalletBalanceGetter,
@@ -68,6 +73,7 @@ func NewExportServiceWithWallet(
 ) *ExportService {
 	return &ExportService{
 		featureUsageRepo:    featureUsageRepo,
+		priceRepo:           priceRepo,
 		invoiceRepo:         invoiceRepo,
 		walletRepo:          walletRepo,
 		walletBalanceGetter: walletBalanceGetter,
@@ -194,7 +200,7 @@ func (s *ExportService) uploadToS3(ctx context.Context, request *dto.ExportReque
 func (s *ExportService) getExporter(entityType types.ScheduledTaskEntityType) Exporter {
 	switch entityType {
 	case types.ScheduledTaskEntityTypeEvents:
-		return NewEventExporter(s.featureUsageRepo, s.integrationFactory, s.logger)
+		return NewEventExporter(s.featureUsageRepo, s.priceRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeInvoice:
 		return NewInvoiceExporter(s.invoiceRepo, s.integrationFactory, s.logger)
 	case types.ScheduledTaskEntityTypeCreditTopups:

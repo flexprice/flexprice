@@ -9,6 +9,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	"github.com/flexprice/flexprice/internal/integration"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -19,6 +20,7 @@ import (
 // ExportActivity handles the actual export operations
 type ExportActivity struct {
 	featureUsageRepo    events.FeatureUsageRepository
+	priceRepo           price.Repository
 	invoiceRepo         invoice.Repository
 	walletRepo          wallet.Repository
 	walletBalanceGetter syncExport.WalletBalanceGetter
@@ -31,6 +33,7 @@ type ExportActivity struct {
 // NewExportActivity creates a new export activity
 func NewExportActivity(
 	featureUsageRepo events.FeatureUsageRepository,
+	priceRepo price.Repository,
 	invoiceRepo invoice.Repository,
 	walletRepo wallet.Repository,
 	walletBalanceGetter syncExport.WalletBalanceGetter,
@@ -41,6 +44,7 @@ func NewExportActivity(
 ) *ExportActivity {
 	return &ExportActivity{
 		featureUsageRepo:    featureUsageRepo,
+		priceRepo:           priceRepo,
 		invoiceRepo:         invoiceRepo,
 		walletRepo:          walletRepo,
 		walletBalanceGetter: walletBalanceGetter,
@@ -94,7 +98,7 @@ func (a *ExportActivity) ExportData(ctx context.Context, input ExportDataInput) 
 	}
 
 	// Use the ExportService which handles routing to the correct exporter
-	exportService := syncExport.NewExportServiceWithWallet(a.featureUsageRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.logger)
+	exportService := syncExport.NewExportServiceWithWallet(a.featureUsageRepo, a.priceRepo, a.invoiceRepo, a.walletRepo, a.walletBalanceGetter, a.customerRepo, a.connectionRepo, a.integrationFactory, a.logger)
 	response, err := exportService.Export(ctx, request)
 	if err != nil {
 		a.logger.Errorw("export failed", "error", err, "entity_type", input.EntityType)
