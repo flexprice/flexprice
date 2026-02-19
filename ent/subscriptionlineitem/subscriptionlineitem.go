@@ -60,6 +60,8 @@ const (
 	FieldCurrency = "currency"
 	// FieldBillingPeriod holds the string denoting the billing_period field in the database.
 	FieldBillingPeriod = "billing_period"
+	// FieldBillingPeriodCount holds the string denoting the billing_period_count field in the database.
+	FieldBillingPeriodCount = "billing_period_count"
 	// FieldInvoiceCadence holds the string denoting the invoice_cadence field in the database.
 	FieldInvoiceCadence = "invoice_cadence"
 	// FieldTrialPeriod holds the string denoting the trial_period field in the database.
@@ -133,6 +135,7 @@ var Columns = []string{
 	FieldQuantity,
 	FieldCurrency,
 	FieldBillingPeriod,
+	FieldBillingPeriodCount,
 	FieldInvoiceCadence,
 	FieldTrialPeriod,
 	FieldStartDate,
@@ -185,6 +188,8 @@ var (
 	CurrencyValidator func(string) error
 	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
 	BillingPeriodValidator func(string) error
+	// DefaultBillingPeriodCount holds the default value on creation for the "billing_period_count" field.
+	DefaultBillingPeriodCount int
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
 	DefaultTrialPeriod int
 	// DefaultCommitmentTrueUpEnabled holds the default value on creation for the "commitment_true_up_enabled" field.
@@ -309,6 +314,11 @@ func ByCurrency(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingPeriod orders the results by the billing_period field.
 func ByBillingPeriod(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingPeriod, opts...).ToFunc()
+}
+
+// ByBillingPeriodCount orders the results by the billing_period_count field.
+func ByBillingPeriodCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBillingPeriodCount, opts...).ToFunc()
 }
 
 // ByInvoiceCadence orders the results by the invoice_cadence field.
