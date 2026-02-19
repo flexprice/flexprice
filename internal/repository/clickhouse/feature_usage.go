@@ -462,12 +462,7 @@ func (r *FeatureUsageRepository) IsDuplicate(ctx context.Context, subscriptionID
 // DeleteByReprocessScopeBeforeCheckpoint cleans up old feature usage rows fenced by processed_at.
 func (r *FeatureUsageRepository) DeleteByReprocessScopeBeforeCheckpoint(ctx context.Context, params *events.DeleteFeatureUsageScopeParams) error {
 	if err := params.Validate(); err != nil {
-		return ierr.WithError(err).
-			WithHint("Failed to validate delete feature usage scope params").
-			WithReportableDetails(map[string]interface{}{
-				"params": params,
-			}).
-			Mark(ierr.ErrValidation)
+		return err
 	}
 
 	query := `
