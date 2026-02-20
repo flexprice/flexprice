@@ -550,8 +550,7 @@ func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter query types.WalletFilter false "Filter"
-// @Param expand query string false "Expand fields (e.g., credits_available_breakdown)"
+// @Param filter query types.WalletFilter false "Filter (includes expand, limit, offset, etc)"
 // @Success 200 {object} types.ListResponse[dto.WalletResponse]
 // @Failure 400 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
