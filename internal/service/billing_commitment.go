@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"time"
 
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -237,4 +239,122 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 		"windows_with_true_up", windowsWithTrueUp)
 
 	return totalCharge, info, nil
+}
+
+// FillBucketedUsageForWindowCommitment merges sparse usage results into the full set of
+// expected windows for the period. Missing windows get zero usage so that
+// applyWindowCommitmentToLineItem can apply commitment/true-up per window.
+// Results are assumed to be ordered by WindowSize (bucket start) and to use the same
+// alignment as the bucket helpers. Returns a slice of usage values, one per expected window.
+func FillBucketedUsageForWindowCommitment(
+	periodStart, periodEnd time.Time,
+	bucketSize types.WindowSize,
+	billingAnchor *time.Time,
+	results []events.UsageResult,
+) []decimal.Decimal {
+	expectedStarts := getExpectedBucketStarts(periodStart, periodEnd, bucketSize, billingAnchor)
+	if len(expectedStarts) == 0 {
+		return nil
+	}
+	usageByBucket := make(map[time.Time]decimal.Decimal)
+	for _, r := range results {
+		key := r.WindowSize.UTC().Truncate(time.Second)
+		usageByBucket[key] = r.Value
+	}
+	filled := make([]decimal.Decimal, 0, len(expectedStarts))
+	for _, start := range expectedStarts {
+		key := start.Truncate(time.Second)
+		if v, ok := usageByBucket[key]; ok {
+			filled = append(filled, v)
+		} else {
+			filled = append(filled, decimal.Zero)
+		}
+	}
+	return filled
+}
+
+// getExpectedBucketStarts returns the ordered list of bucket start timestamps that
+// overlap [periodStart, periodEnd), using the same alignment as ClickHouse aggregators.
+func getExpectedBucketStarts(periodStart, periodEnd time.Time, bucketSize types.WindowSize, billingAnchor *time.Time) []time.Time {
+	if bucketSize == "" || !periodEnd.After(periodStart) {
+		return nil
+	}
+	var starts []time.Time
+	t := alignToBucketStart(periodStart, bucketSize, billingAnchor)
+	for t.Before(periodEnd) {
+		starts = append(starts, t)
+		t = addBucketSize(t, bucketSize, billingAnchor)
+	}
+	return starts
+}
+
+func alignToBucketStart(t time.Time, bucketSize types.WindowSize, billingAnchor *time.Time) time.Time {
+	t = t.UTC()
+	switch bucketSize {
+	case types.WindowSizeMinute:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, time.UTC)
+	case types.WindowSize15Min:
+		m := t.Minute() / 15 * 15
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), m, 0, 0, time.UTC)
+	case types.WindowSize30Min:
+		m := t.Minute() / 30 * 30
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), m, 0, 0, time.UTC)
+	case types.WindowSizeHour:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
+	case types.WindowSize3Hour:
+		h := t.Hour() / 3 * 3
+		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
+	case types.WindowSize6Hour:
+		h := t.Hour() / 6 * 6
+		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
+	case types.WindowSize12Hour:
+		h := t.Hour() / 12 * 12
+		return time.Date(t.Year(), t.Month(), t.Day(), h, 0, 0, 0, time.UTC)
+	case types.WindowSizeDay:
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	case types.WindowSizeWeek:
+		weekday := t.Weekday()
+		daysBack := int(weekday)
+		return time.Date(t.Year(), t.Month(), t.Day()-daysBack, 0, 0, 0, 0, time.UTC)
+	case types.WindowSizeMonth:
+		if billingAnchor != nil {
+			anchorDay := billingAnchor.Day()
+			cur := time.Date(t.Year(), t.Month(), anchorDay, 0, 0, 0, 0, time.UTC)
+			if cur.After(t) {
+				cur = time.Date(t.Year(), t.Month()-1, anchorDay, 0, 0, 0, 0, time.UTC)
+			}
+			return cur
+		}
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	default:
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, time.UTC)
+	}
+}
+
+func addBucketSize(t time.Time, bucketSize types.WindowSize, billingAnchor *time.Time) time.Time {
+	t = t.UTC()
+	switch bucketSize {
+	case types.WindowSizeMinute:
+		return t.Add(time.Minute)
+	case types.WindowSize15Min:
+		return t.Add(15 * time.Minute)
+	case types.WindowSize30Min:
+		return t.Add(30 * time.Minute)
+	case types.WindowSizeHour:
+		return t.Add(time.Hour)
+	case types.WindowSize3Hour:
+		return t.Add(3 * time.Hour)
+	case types.WindowSize6Hour:
+		return t.Add(6 * time.Hour)
+	case types.WindowSize12Hour:
+		return t.Add(12 * time.Hour)
+	case types.WindowSizeDay:
+		return t.AddDate(0, 0, 1)
+	case types.WindowSizeWeek:
+		return t.AddDate(0, 0, 7)
+	case types.WindowSizeMonth:
+		return t.AddDate(0, 1, 0)
+	default:
+		return t.Add(time.Hour)
+	}
 }

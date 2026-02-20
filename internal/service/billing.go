@@ -573,10 +573,24 @@ func (s *billingService) CalculateUsageCharges(
 							return nil, decimal.Zero, err
 						}
 
-						// Extract bucket values
-						bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
-						for i, result := range usageResult.Results {
-							bucketedValues[i] = result.Value
+						var bucketedValues []decimal.Decimal
+						if item.CommitmentTrueUpEnabled {
+							// Fill expected windows with zero so true-up applies even when there is no usage in some windows
+							itemPeriodStart := item.GetPeriodStart(periodStart)
+							itemPeriodEnd := item.GetPeriodEnd(periodEnd)
+							bucketedValues = FillBucketedUsageForWindowCommitment(
+								itemPeriodStart, itemPeriodEnd,
+								meter.Aggregation.BucketSize,
+								&sub.BillingAnchor,
+								usageResult.Results,
+							)
+						}
+						if bucketedValues == nil {
+							// No true-up or fill failed: use raw results
+							bucketedValues = make([]decimal.Decimal, len(usageResult.Results))
+							for i, result := range usageResult.Results {
+								bucketedValues[i] = result.Value
+							}
 						}
 
 						// Apply window-based commitment
@@ -1154,10 +1168,24 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							return nil, decimal.Zero, err
 						}
 
-						// Extract bucket values
-						bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
-						for i, result := range usageResult.Results {
-							bucketedValues[i] = result.Value
+						var bucketedValues []decimal.Decimal
+						if item.CommitmentTrueUpEnabled {
+							// Fill expected windows with zero so true-up applies even when there is no usage in some windows
+							itemPeriodStart := item.GetPeriodStart(periodStart)
+							itemPeriodEnd := item.GetPeriodEnd(periodEnd)
+							bucketedValues = FillBucketedUsageForWindowCommitment(
+								itemPeriodStart, itemPeriodEnd,
+								meter.Aggregation.BucketSize,
+								&sub.BillingAnchor,
+								usageResult.Results,
+							)
+						}
+						if bucketedValues == nil {
+							// No true-up or fill failed: use raw results
+							bucketedValues = make([]decimal.Decimal, len(usageResult.Results))
+							for i, result := range usageResult.Results {
+								bucketedValues[i] = result.Value
+							}
 						}
 
 						// Apply window-based commitment
