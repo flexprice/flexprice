@@ -316,6 +316,8 @@ func (s *billingService) CalculateFixedCharges(
 		}
 
 		roundedAmount := types.RoundToCurrencyPrecision(amount, sub.Currency)
+		// Round fixed line item quantity to 2 decimal places for consistent display and storage
+		quantity = quantity.Round(2)
 
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
 			EntityID:        lo.ToPtr(item.EntityID),
