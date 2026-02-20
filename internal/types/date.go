@@ -371,7 +371,6 @@ func LineItemIntervalInInvoicePeriod(lineItemStart, billingAnchor time.Time, per
 		intervalEndUTC := intervalEnd.UTC()
 		periodStartUTC := periodStart.UTC()
 		periodEndUTC := periodEnd.UTC()
-		// Truncate to seconds so subsecond mismatch (e.g. NextBillingDate 0 nanos vs DB .885) doesn't exclude boundary
 		intervalEndSec := intervalEndUTC.Truncate(time.Second)
 		periodStartSec := periodStartUTC.Truncate(time.Second)
 		periodEndSec := periodEndUTC.Truncate(time.Second)
