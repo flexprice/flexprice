@@ -17729,7 +17729,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_info": {
                     "$ref": "#/definitions/types.CommitmentInfo"
@@ -17766,11 +17766,11 @@ const docTemplate = `{
                 },
                 "invoice_level_discount": {
                     "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "line_item_discount": {
                     "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -17792,7 +17792,7 @@ const docTemplate = `{
                 },
                 "prepaid_credits_applied": {
                     "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_id": {
                     "type": "string"
@@ -17804,13 +17804,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "price_unit_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_unit_id": {
                     "type": "string"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -17880,19 +17880,19 @@ const docTemplate = `{
             "properties": {
                 "adjustment_amount": {
                     "description": "adjustment_amount is the total sum of credit notes of type \"adjustment\".\nThese are non-cash reductions applied to the invoice (e.g. goodwill credit, billing correction).",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_due": {
                     "description": "amount_due is the total amount that needs to be paid for this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_paid": {
                     "description": "amount_paid is the amount that has already been paid towards this invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "amount_remaining": {
                     "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)",
-                    "type": "number"
+                    "type": "string"
                 },
                 "billing_period": {
                     "description": "billing_period describes the billing period this invoice covers (e.g., \"January 2024\", \"Q1 2024\")",
@@ -18024,7 +18024,7 @@ const docTemplate = `{
                 },
                 "refunded_amount": {
                     "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -18043,7 +18043,7 @@ const docTemplate = `{
                 },
                 "subtotal": {
                     "description": "subtotal is the sum of all line items before any taxes, discounts, or additional fees",
-                    "type": "number"
+                    "type": "string"
                 },
                 "taxes": {
                     "description": "tax_applied_records contains the tax applied records associated with this invoice",
@@ -18057,19 +18057,19 @@ const docTemplate = `{
                 },
                 "total": {
                     "description": "total is the final amount including taxes, fees, and discounts",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_discount": {
                     "description": "total_discount is the sum of all coupon discounts applied to the invoice",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_prepaid_credits_applied": {
                     "description": "total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_tax": {
                     "description": "total_tax is the sum of all taxes combined at the invoice level.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -22692,7 +22692,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "commitment_info": {
                     "$ref": "#/definitions/types.CommitmentInfo"
@@ -22729,11 +22729,11 @@ const docTemplate = `{
                 },
                 "invoice_level_discount": {
                     "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "line_item_discount": {
                     "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
@@ -22755,7 +22755,7 @@ const docTemplate = `{
                 },
                 "prepaid_credits_applied": {
                     "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_id": {
                     "type": "string"
@@ -22767,13 +22767,13 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "price_unit_amount": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "price_unit_id": {
                     "type": "string"
                 },
                 "quantity": {
-                    "type": "number"
+                    "type": "string"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -26210,6 +26210,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -26219,10 +26220,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -26232,8 +26233,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         }
     },
