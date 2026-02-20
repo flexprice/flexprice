@@ -575,9 +575,13 @@ func (s *billingService) CalculateUsageCharges(
 
 						var bucketedValues []decimal.Decimal
 						if item.CommitmentTrueUpEnabled {
-							// Fill expected windows with zero so true-up applies even when there is no usage in some windows
+							// Fill expected windows with zero so true-up applies even when there is no usage in some windows.
+							// Cap period end at "now" so we only count windows that have already occurred (e.g. no commitment for future windows after cancellation).
 							itemPeriodStart := item.GetPeriodStart(periodStart)
 							itemPeriodEnd := item.GetPeriodEnd(periodEnd)
+							if now := time.Now().UTC(); now.Before(itemPeriodEnd) {
+								itemPeriodEnd = now
+							}
 							bucketedValues = FillBucketedUsageForWindowCommitment(
 								itemPeriodStart, itemPeriodEnd,
 								meter.Aggregation.BucketSize,
@@ -1170,9 +1174,13 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 						var bucketedValues []decimal.Decimal
 						if item.CommitmentTrueUpEnabled {
-							// Fill expected windows with zero so true-up applies even when there is no usage in some windows
+							// Fill expected windows with zero so true-up applies even when there is no usage in some windows.
+							// Cap period end at "now" so we only count windows that have already occurred (e.g. no commitment for future windows after cancellation).
 							itemPeriodStart := item.GetPeriodStart(periodStart)
 							itemPeriodEnd := item.GetPeriodEnd(periodEnd)
+							if now := time.Now().UTC(); now.Before(itemPeriodEnd) {
+								itemPeriodEnd = now
+							}
 							bucketedValues = FillBucketedUsageForWindowCommitment(
 								itemPeriodStart, itemPeriodEnd,
 								meter.Aggregation.BucketSize,
