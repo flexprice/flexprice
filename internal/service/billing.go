@@ -89,6 +89,73 @@ func NewBillingService(params ServiceParams) BillingService {
 	}
 }
 
+// FixedLineItemInclusion is the result of Algorithm A/B for a fixed line item.
+type FixedLineItemInclusion string
+
+const (
+	FixedLineItemInclusionExclude         FixedLineItemInclusion = "EXCLUDE"
+	FixedLineItemInclusionFull            FixedLineItemInclusion = "INCLUDE_FULL"
+	FixedLineItemInclusionProratedShorter FixedLineItemInclusion = "INCLUDE_PRORATED_SHORTER"
+	FixedLineItemInclusionLongerAligned   FixedLineItemInclusion = "INCLUDE_LONGER_ALIGNED"
+)
+
+// computeFixedLineItemInclusion decides whether and how to include a fixed line item on an
+// invoice for the given period (mixed-interval billing).
+//
+// Core logic: compare the line item's billing interval length to the invoice period length.
+// The line item's interval is derived from item.StartDate and its cadence (BillingPeriod +
+// BillingPeriodCount), e.g. one week, one month, one quarter.
+//
+//   - Shorter: Line item interval is noticeably shorter than the invoice period (e.g. weekly
+//     line, monthly invoice). Include with proration (INCLUDE_PRORATED_SHORTER): charge only
+//     for the fraction of the interval that falls inside the invoice period.
+//
+//   - Equal: Line item interval is roughly the same length as the invoice period (within a
+//     small tolerance, e.g. ±3 days to handle 28 vs 31). Include full (INCLUDE_FULL): charge
+//     for the invoice period with standard proration if needed.
+//
+//   - Longer: Line item interval is noticeably longer than the invoice period (e.g. quarterly
+//     line, monthly invoice). Include only when one of the line item's interval boundaries
+//     (interval end) falls inside this invoice period (IsLineItemIntervalEndInPeriod). If
+//     yes → INCLUDE_LONGER_ALIGNED (charge for that full line-item interval; period start/end
+//     come from LineItemIntervalInInvoicePeriod). If no → EXCLUDE (no line this time).
+//
+// Returns: (inclusion type, invoicePeriodDays, lineItemIntervalDays, error).
+func (s *billingService) computeFixedLineItemInclusion(
+	item *subscription.SubscriptionLineItem,
+	_ *subscription.Subscription,
+	periodStart, periodEnd time.Time,
+) (*FixedLineItemInclusion, int, int, error) {
+
+	invoicePeriodDays := types.CalendarDaysBetween(periodStart, periodEnd)
+	lineItemIntervalDays, err := types.LineItemIntervalDays(item.StartDate, item.StartDate, item.BillingPeriodCount, item.BillingPeriod)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+
+	const equalToleranceDays = 3 // treat as same interval when within 3 days (e.g. 28 vs 31)
+
+	// Shorter than invoice period → include with proration.
+	if lineItemIntervalDays < invoicePeriodDays-equalToleranceDays {
+		return lo.ToPtr(FixedLineItemInclusionProratedShorter), invoicePeriodDays, lineItemIntervalDays, nil
+	}
+
+	// Longer than invoice period → include only if a line-item interval end falls in this period.
+	if lineItemIntervalDays > invoicePeriodDays+equalToleranceDays {
+		aligned, err := types.IsLineItemIntervalEndInPeriod(item.StartDate, item.StartDate, item.BillingPeriodCount, item.BillingPeriod, periodStart, periodEnd)
+		if err != nil {
+			return nil, 0, 0, err
+		}
+		if aligned {
+			return lo.ToPtr(FixedLineItemInclusionLongerAligned), invoicePeriodDays, lineItemIntervalDays, nil
+		}
+		return lo.ToPtr(FixedLineItemInclusionExclude), 0, 0, nil
+	}
+
+	// Roughly equal → include full for the invoice period.
+	return lo.ToPtr(FixedLineItemInclusionFull), invoicePeriodDays, lineItemIntervalDays, nil
+}
+
 func (s *billingService) CalculateFixedCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -100,13 +167,10 @@ func (s *billingService) CalculateFixedCharges(
 
 	priceService := NewPriceService(s.ServiceParams)
 
-	// Process fixed charges from line items
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_FIXED {
 			continue
 		}
-
-		// skip if the line item start date is after the period end
 		if item.StartDate.After(periodEnd) {
 			s.Logger.Debugw("skipping fixed charge line item because it starts after the period end",
 				"subscription_id", sub.ID,
@@ -122,21 +186,113 @@ func (s *billingService) CalculateFixedCharges(
 			return nil, fixedCost, err
 		}
 
-		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
-
-		// Apply proration if applicable
-		proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
+		inclusion, _, lineItemIntervalDays, err := s.computeFixedLineItemInclusion(item, sub, periodStart, periodEnd)
 		if err != nil {
-			s.Logger.Warnw("failed to apply proration to line item, using original amount",
-				"error", err,
+			return nil, fixedCost, err
+		}
+		if lo.FromPtr(inclusion) == FixedLineItemInclusionExclude {
+			s.Logger.Debugw("skipping fixed charge line item (mixed-interval EXCLUDE)",
 				"subscription_id", sub.ID,
 				"line_item_id", item.ID,
 				"price_id", item.PriceID)
-			proratedAmount = amount
+			continue
 		}
-		amount = proratedAmount
 
-		// Calculate price unit amount if price unit is available
+		var amount decimal.Decimal
+		var linePeriodStart, linePeriodEnd time.Time
+		var quantity decimal.Decimal
+
+		// Set amount, quantity, and line period per inclusion type (see computeFixedLineItemInclusion).
+		switch lo.FromPtr(inclusion) {
+		case FixedLineItemInclusionProratedShorter:
+			/*
+				INCLUDE_PRORATED_SHORTER: line-item interval shorter than invoice period.
+
+				Formula:
+				  effective_days = EffectiveDaysForProration(line_item_start, period_start, period_end, line_item_end)
+				    → calendar days the line item is active within [period_start, period_end).
+				  quantity = effective_days / line_item_interval_days   (fraction of one interval)
+				  amount   = full_cost × (effective_days / line_item_interval_days)
+
+				Period on invoice: max(line_item_start, period_start) .. period_end (overlap with invoice).
+
+				Example: Weekly line ($10/week), monthly invoice Jan 1–Feb 1 (31 days). Interval = 7 days.
+				  effective_days = 31 (or less if line started/ended in period). quantity = 31/7, amount = 10×(31/7).
+			*/
+			var lineItemEnd *time.Time
+			if !item.EndDate.IsZero() {
+				lineItemEnd = &item.EndDate
+			}
+			effectiveDays := types.EffectiveDaysForProration(item.StartDate, periodStart, periodEnd, lineItemEnd)
+			if lineItemIntervalDays <= 0 {
+				continue
+			}
+			quantity = decimal.NewFromInt(int64(effectiveDays)).Div(decimal.NewFromInt(int64(lineItemIntervalDays)))
+			fullCost := priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			amount = fullCost.Mul(decimal.NewFromInt(int64(effectiveDays))).Div(decimal.NewFromInt(int64(lineItemIntervalDays)))
+			linePeriodStart = item.StartDate
+			if periodStart.After(linePeriodStart) {
+				linePeriodStart = periodStart
+			}
+			linePeriodEnd = periodEnd
+		case FixedLineItemInclusionLongerAligned:
+			/*
+				INCLUDE_LONGER_ALIGNED: line-item interval longer than invoice period.
+
+				Find the line-item interval whose end falls inside this invoice period (LineItemIntervalInInvoicePeriod).
+
+				Formula:
+				  (interval_start, interval_end) = that interval
+				  amount   = full cost for one interval (unit_price × item.Quantity)
+				  quantity = item.Quantity
+
+				Period on invoice: interval_start .. interval_end (the line item's own interval, not the invoice period).
+
+				Example: Quarterly line ($300/quarter), invoice period Feb 1–Mar 1. Interval ending Feb 15 falls in period.
+				  Charge $300 for interval Jan 15–Feb 15; invoice line period = Jan 15–Feb 15.
+			*/
+			intervalStart, intervalEnd, found, err := types.LineItemIntervalInInvoicePeriod(item.StartDate, item.StartDate, item.BillingPeriodCount, item.BillingPeriod, periodStart, periodEnd)
+			if err != nil || !found {
+				if err != nil {
+					s.Logger.Warnw("LineItemIntervalInInvoicePeriod failed for longer-aligned line item, skipping",
+						"error", err,
+						"subscription_id", sub.ID,
+						"line_item_id", item.ID)
+				}
+				continue
+			}
+			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			quantity = item.Quantity
+			linePeriodStart = intervalStart
+			linePeriodEnd = intervalEnd
+		default:
+			/*
+				INCLUDE_FULL (default): line-item interval ~equal to invoice period.
+
+				Formula:
+				  amount   = CalculateCost(price, item.Quantity) then applyProrationToLineItem(..., period_start, period_end)
+				  quantity = item.Quantity
+
+				Period on invoice: period_start .. period_end.
+
+				Example: Monthly line, monthly invoice → full month charge (proration only if mid-cycle start/end).
+			*/
+			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
+			if err != nil {
+				s.Logger.Warnw("failed to apply proration to line item, using original amount",
+					"error", err,
+					"subscription_id", sub.ID,
+					"line_item_id", item.ID,
+					"price_id", item.PriceID)
+				proratedAmount = amount
+			}
+			amount = proratedAmount
+			quantity = item.Quantity
+			linePeriodStart = periodStart
+			linePeriodEnd = periodEnd
+		}
+
 		var priceUnitAmount decimal.Decimal
 		if item.PriceUnit != nil {
 			priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
@@ -148,7 +304,6 @@ func (s *billingService) CalculateFixedCharges(
 					"line_item_id", item.ID)
 				continue
 			}
-
 			priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 			if err != nil {
 				s.Logger.Warnw("failed to convert amount to price unit",
@@ -160,9 +315,6 @@ func (s *billingService) CalculateFixedCharges(
 			}
 		}
 
-		// Round fixed charge amount to currency precision before creating invoice line item
-		// This ensures all line items use proper currency precision from the start
-		// Example: $10.278798 → $10.28 for USD (2 decimals), ¥1023.45 → ¥1023 for JPY (0 decimals)
 		roundedAmount := types.RoundToCurrencyPrecision(amount, sub.Currency)
 
 		fixedCostLineItems = append(fixedCostLineItems, dto.CreateInvoiceLineItemRequest{
@@ -175,9 +327,9 @@ func (s *billingService) CalculateFixedCharges(
 			PriceUnitAmount: lo.ToPtr(priceUnitAmount),
 			DisplayName:     lo.ToPtr(item.DisplayName),
 			Amount:          roundedAmount,
-			Quantity:        item.Quantity,
-			PeriodStart:     lo.ToPtr(periodStart),
-			PeriodEnd:       lo.ToPtr(periodEnd),
+			Quantity:        quantity,
+			PeriodStart:     lo.ToPtr(linePeriodStart),
+			PeriodEnd:       lo.ToPtr(linePeriodEnd),
 			Metadata: types.Metadata{
 				"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
 			},
