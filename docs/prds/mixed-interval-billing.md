@@ -8,7 +8,26 @@
 
 **Reuse (decide as much as possible):** Use existing **subscription** `billing_period` and `billing_period_count` as the **invoice period** (no subscription schema change). Line item already has `billing_period`; add **`billing_period_count`** on subscription line item only if needed for invoice logic (read path; default 1 when absent). **Do not change line item creation** (subscription creation, add-ons, etc.)—only invoice generation uses per–line-item interval. Use existing **`NextBillingDate`**, **`PreviousBillingDate`**, **`CalculateBillingPeriods`** ([internal/types/date.go](internal/types/date.go)) for all interval math. Use existing **`ClassifyLineItems`** / **`PrepareSubscriptionInvoiceRequest`** / **`CalculateFixedCharges`** ([internal/service/billing.go](internal/service/billing.go)) and extend them for interval-aware inclusion and proration. Use existing proration service and **`InvoiceCadence`** (advance/arrear). No new date helpers; no new billing period enums.
 
-**Implementation scope (this release):** Focus **only on invoice generation** and **only on fixed line items**. No changes to subscription creation, plan/price validation, or how line items are created. Invoice logic reads each line item’s `billing_period` and `billing_period_count` (default 1 if missing) and applies inclusion and proration for **fixed** charges. **Do not change how usage line items are billed** in `internal/service/billing.go`—leave existing usage billing logic untouched; only add or extend logic for **fixed** line items.
+**Implementation scope (this release):** Focus **only on invoice generation** and **only on fixed line items**. The PRD defines a single **comprehensive algorithm** (Section 5.9) for fixed charge invoice line items, implemented in **CalculateFixedCharges** in [internal/service/billing.go](internal/service/billing.go). No changes to subscription creation, plan/price validation, or how line items are created. **Do not change how usage line items are billed** in billing.go—only add or extend logic for **fixed** line items.
+
+---
+
+### Quick reference
+
+| Doc | Purpose |
+|-----|--------|
+| [Implementation scope](mixed-interval-billing-implementation-scope.md) | What we build and what we don’t change |
+| [Logic diagram](mixed-interval-billing-logic-diagrams.md) | Single flowchart for CalculateFixedCharges |
+
+**Rule (per line item, per invoice period):**
+
+- **Shorter** than invoice period → include every time; prorate (F1, F2).
+- **Equal** → include every time; full charge (existing logic).
+- **Longer** → include only when invoice period end = line-item interval end (Algorithm B); then full charge (F4).
+
+**Formulas:** F1 = quantity = effective_days / line_item_interval_days. F2 = amount = unit_price × quantity. F3 = line_item_interval_days from NextBillingDate(line_item.StartDate, …). F4 = interval_start = PreviousBillingDate(invoice_period_end, …). F5 = effective_days = days(max(li_start, period_start), period_end). See Section 5.6 for full definitions.
+
+**Where:** All logic lives in **CalculateFixedCharges** ([internal/service/billing.go](internal/service/billing.go)); date helpers in [internal/types/date.go](internal/types/date.go).
 
 ---
 
@@ -304,9 +323,9 @@ _(This release: apply to **fixed** line items only; usage line items deferred.)_
 
 ---
 
-## 5.8 Mermaid diagrams (proposed solution)
+## 5.8 Mermaid diagrams
 
-**Single end-to-end diagram:** For one diagram that shows how everything flows and depends on each other (data model → invoice trigger → Algorithm A → shorter/equal/longer paths → formulas and date helpers → output), see **[mixed-interval-billing-flow.md](mixed-interval-billing-flow.md)**.
+**Single end-to-end diagram:** See **[mixed-interval-billing-logic-diagrams.md](mixed-interval-billing-logic-diagrams.md)** for the full CalculateFixedCharges flowchart (Algorithm A/B, F1/F2/F4, date helpers). The following subsections are optional detail.
 
 ---
 
@@ -501,6 +520,83 @@ flowchart TB
   UseNext["Alignment check: is invoice_period_end an interval end?"] --> next
   UsePrev["Service period: interval_start when including longer-interval item"] --> prev
   UseCalc["Preview: list next N interval boundaries"] --> calc
+```
+
+---
+
+## 5.9 Comprehensive algorithm: fixed charge invoice line items (CalculateFixedCharges)
+
+This section is the **single source of truth** for how fixed charge invoice line items are produced. The main function that implements this behavior is **`CalculateFixedCharges`** in [internal/service/billing.go](internal/service/billing.go). Usage line items are unchanged; this algorithm applies to **fixed** line items only.
+
+### 5.9.1 Scope and responsibility
+
+- **Inputs:** `(ctx, sub, periodStart, periodEnd)` and optional `*LineItemClassification`. When classification is present, it must include `FixedLineItemInclusion map[line_item_id]inclusion` for fixed items (produced by ClassifyLineItems using Algorithm A and B).
+- **Output:** Slice of `CreateInvoiceLineItemRequest` for fixed charges (each with Amount, Quantity, PeriodStart, PeriodEnd, and other fields) and total fixed amount. No change to usage charge output.
+
+### 5.9.2 Per–line-item steps (pseudocode)
+
+For each line item in `sub.LineItems`:
+
+1. **Filter:** Consider only `PriceType == FIXED`. Skip if `item.StartDate > periodEnd`. If `item.EndDate` is set and `item.EndDate < periodStart`, skip.
+2. **Inclusion:** If `classification != nil` and `FixedLineItemInclusion[item.ID] == EXCLUDE`, skip. If classification is nil, treat the item as **INCLUDE_FULL** (backward compatible).
+3. **Resolve price:** Call GetPrice (or equivalent) for `item.PriceID`; on error, return error.
+4. **Branch by inclusion:**
+   - **INCLUDE_PRORATED_SHORTER:**  
+     - `effective_days` = Algorithm C: days from `max(line_item_start, period_start)` to `period_end` (use `EffectiveDaysForProration`).  
+     - `line_item_interval_days` = from `LineItemIntervalDays(item.StartDate, anchor, item.BillingPeriodCount, item.BillingPeriod)` (F3).  
+     - `quantity` = `effective_days / line_item_interval_days` (decimal).  
+     - `amount` = `unit_price × quantity × item.Quantity` (F1, F2).  
+     - Line `period_start` = effective start (max of line_item_start, period_start); `period_end` = period_end.
+   - **INCLUDE_LONGER_ALIGNED:**  
+     - `interval_start` = `PreviousBillingDate(period_end, line_item_period_count, line_item_period)`; `interval_end` = period_end (F4).  
+     - `amount` = full amount for the interval (e.g. `unit_price × item.Quantity`).  
+     - Line `period_start` = interval_start; `period_end` = interval_end.
+   - **INCLUDE_FULL:**  
+     - `amount` = CalculateCost(price, item.Quantity); apply existing **applyProrationToLineItem**; line `period_start`/`period_end` = periodStart, periodEnd.
+5. **Round:** `amount` = `RoundToCurrencyPrecision(amount, currency)`.
+6. **Build line:** Compute price unit amount if needed; build `CreateInvoiceLineItemRequest` with Amount, Quantity, PeriodStart, PeriodEnd; append to result and add amount to total.
+
+### 5.9.3 References
+
+- **Inclusion** is computed in **ClassifyLineItems** using **Algorithm A** (Section 5.7) and **Algorithm B** for longer-than-invoice items. ClassifyLineItems populates `FixedLineItemInclusion` for each fixed line item.
+- **Effective days** use **Algorithm C** and **EffectiveDaysForProration** in [internal/types/date.go](internal/types/date.go).
+- **Formulas** F1–F5 (Section 5.6) and date helpers: **NextBillingDate**, **PreviousBillingDate**, **IsLineItemIntervalEnd**, **LineItemIntervalDays**, **CalendarDaysBetween**, **EffectiveDaysForProration** in [internal/types/date.go](internal/types/date.go).
+
+### 5.9.4 Flow inside CalculateFixedCharges
+
+```mermaid
+flowchart TB
+  ForEach["For each line item in sub.LineItems"]
+  FixedOnly["PriceType == FIXED?"]
+  SkipNonFixed["Skip"]
+  ActiveCheck["StartDate > periodEnd OR EndDate < periodStart?"]
+  SkipInactive["Skip"]
+  InclusionCheck["classification != nil and FixedLineItemInclusion[id] == EXCLUDE?"]
+  SkipExclude["Skip"]
+  GetPrice["GetPrice(item.PriceID)"]
+  Branch["Branch by inclusion"]
+  ShorterPath["INCLUDE_PRORATED_SHORTER: F1/F2, effective_days, period = effective start to period_end"]
+  LongerPath["INCLUDE_LONGER_ALIGNED: F4, full amount, period = interval_start to period_end"]
+  FullPath["INCLUDE_FULL: CalculateCost + applyProrationToLineItem, period = periodStart to periodEnd"]
+  Round["RoundToCurrencyPrecision"]
+  Append["Append line, add to total"]
+
+  ForEach --> FixedOnly
+  FixedOnly -->|No| SkipNonFixed
+  FixedOnly -->|Yes| ActiveCheck
+  ActiveCheck -->|Yes| SkipInactive
+  ActiveCheck -->|No| InclusionCheck
+  InclusionCheck -->|Yes| SkipExclude
+  InclusionCheck -->|No| GetPrice
+  GetPrice --> Branch
+  Branch --> ShorterPath
+  Branch --> LongerPath
+  Branch --> FullPath
+  ShorterPath --> Round
+  LongerPath --> Round
+  FullPath --> Round
+  Round --> Append
+  Append --> ForEach
 ```
 
 ---
@@ -818,12 +914,12 @@ _(All criteria apply to **invoice generation** only; no requirement to change su
 
 - [ ] **2.1** Implement **Algorithm A** and **Algorithm B** (Section 5.7) using **NextBillingDate** and **PreviousBillingDate** only. Add helper e.g. `IsLineItemIntervalEnd` in `internal/types/date.go` or billing package.
 - [ ] **2.2** Extend **ClassifyLineItems** ([internal/service/billing.go](internal/service/billing.go)) **for fixed line items only**: for each **fixed** line item compute inclusion (EXCLUDE / INCLUDE_FULL / INCLUDE_PRORATED_SHORTER / INCLUDE_LONGER_ALIGNED) using Algorithm A. Use subscription’s `CurrentPeriodStart`/`CurrentPeriodEnd` and line item’s `billing_period`, `billing_period_count`, `start_date`. **Do not change** how usage line items are classified or billed—leave existing usage paths unchanged.
-- [ ] **2.3** In **CalculateFixedCharges** only: for fixed line items with INCLUDE_PRORATED_SHORTER, compute quantity by **F1** (effective_days / line_item_interval_days), amount by **F2**. Use **Algorithm C** for effective days when `line_item_start` &gt; period_start. Reuse existing **applyProrationToLineItem** where it applies (mid-period change); add separate path for interval proration. **Do not modify** usage charge calculation or aggregation logic.
+- [ ] **2.3** Implement the **comprehensive algorithm** in **Section 5.9** in [internal/service/billing.go](internal/service/billing.go) inside **CalculateFixedCharges** (or a function it calls when classification is present). For fixed line items with INCLUDE_PRORATED_SHORTER use F1/F2 and Algorithm C; for INCLUDE_FULL use existing applyProrationToLineItem. **Do not modify** usage charge calculation or aggregation logic.
 - [ ] **2.4** Ensure **equal** interval fixed line items still use existing advance/arrear classification (CurrentPeriodAdvance, CurrentPeriodArrear, NextPeriodAdvance) and existing fixed-charge logic. Usage line items continue to use existing behavior unchanged.
 
 **Phase 3: Longer-interval inclusion (fixed line items only)**
 
-- [ ] **3.1** For INCLUDE_LONGER_ALIGNED **fixed** line items only: compute service period with **PreviousBillingDate** (F4). Set invoice line `period_start` / `period_end` for that line. Charge full amount for the interval (or prorate only first partial interval after mid-term add per EC-15). **Do not change** any usage aggregation or usage charge logic in billing.go.
+- [ ] **3.1** Implement the **comprehensive algorithm** in **Section 5.9** for INCLUDE_LONGER_ALIGNED **fixed** line items: compute service period with **PreviousBillingDate** (F4). Set invoice line `period_start` / `period_end` for that line. Charge full amount for the interval (or prorate only first partial interval after mid-term add per EC-15). **Do not change** any usage aggregation or usage charge logic in billing.go.
 - [ ] **3.2** _(Deferred.)_ Usage line items with longer interval: out of scope this release. Existing usage billing in billing.go remains unchanged.
 
 **Phase 4: Mid-cycle change and cancellation**
@@ -857,4 +953,5 @@ _(All criteria apply to **invoice generation** only; no requirement to change su
 - [Advance and Arrear Billing Implementation](advance_arrear_billing_implementation.md)
 - [Subscription Proration and Workflow Implementation](subscription_proration_and_workflow_implementation.md)
 - [Subscription Billing](subscription-billing.md)
-- Internal: `internal/service/billing.go`—**only extend logic for fixed line items** (e.g. ClassifyLineItems and CalculateFixedCharges for fixed items; inclusion/proration for fixed only). **Do not change** how usage line items are classified, aggregated, or billed; leave all existing usage billing logic in billing.go untouched. `internal/types/date.go` (NextBillingDate, PreviousBillingDate, CalculateBillingPeriods); `internal/service/proration.go`; `ent/schema/subscription_line_item.go` (add `billing_period_count` for read path only). **No changes** to `internal/service/subscription.go` (line item creation, filterValidPricesForSubscription).
+- **Canonical spec for fixed charge invoice line items:** **Section 5.9** (Comprehensive algorithm). The main function that produces those line items is **CalculateFixedCharges** in [internal/service/billing.go](internal/service/billing.go).
+- Internal: `internal/service/billing.go`—**only extend logic for fixed line items** (ClassifyLineItems and CalculateFixedCharges per Section 5.9; inclusion/proration for fixed only). **Do not change** how usage line items are classified, aggregated, or billed. `internal/types/date.go` (NextBillingDate, PreviousBillingDate, IsLineItemIntervalEnd, LineItemIntervalDays, CalendarDaysBetween, EffectiveDaysForProration, CalculateBillingPeriods); `internal/service/proration.go`; `ent/schema/subscription_line_item.go`. **No changes** to `internal/service/subscription.go` (line item creation, filterValidPricesForSubscription).
