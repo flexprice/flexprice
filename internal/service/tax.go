@@ -507,6 +507,46 @@ func (s *taxService) CreateTaxAssociation(ctx context.Context, req *dto.CreateTa
 		return nil, err
 	}
 
+	// Resolve external_customer_id if provided
+	if req.ExternalCustomerID != "" {
+		customer, err := s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
+		if err != nil {
+			s.Logger.Errorw("failed to resolve external customer ID",
+				"error", err,
+				"external_customer_id", req.ExternalCustomerID)
+			return nil, ierr.WithError(err).
+				WithHintf("Customer with external ID '%s' not found", req.ExternalCustomerID).
+				WithReportableDetails(map[string]interface{}{
+					"external_customer_id": req.ExternalCustomerID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		// If both entity_id and external_customer_id are provided, validate they match
+		if req.EntityID != "" && req.EntityID != customer.ID {
+			s.Logger.Errorw("entity_id and external_customer_id point to different customers",
+				"entity_id", req.EntityID,
+				"external_customer_id", req.ExternalCustomerID,
+				"resolved_customer_id", customer.ID)
+			return nil, ierr.NewError("entity_id and external_customer_id point to different customers").
+				WithHint("When both entity_id and external_customer_id are provided, they must point to the same customer").
+				WithReportableDetails(map[string]interface{}{
+					"entity_id":            req.EntityID,
+					"external_customer_id": req.ExternalCustomerID,
+					"resolved_customer_id": customer.ID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Set entity_type to customer and entity_id to resolved customer ID
+		req.EntityType = types.TaxRateEntityTypeCustomer
+		req.EntityID = customer.ID
+
+		s.Logger.Debugw("resolved external customer ID to internal customer ID",
+			"external_customer_id", req.ExternalCustomerID,
+			"customer_id", customer.ID)
+	}
+
 	// validate tax rate exists and is valid
 	taxRate, err := s.TaxRateRepo.GetByCode(ctx, req.TaxRateCode)
 	if err != nil {
@@ -668,6 +708,46 @@ func (s *taxService) ListTaxAssociations(ctx context.Context, filter *types.TaxA
 	// Validate filter
 	if err := filter.Validate(); err != nil {
 		return nil, err
+	}
+
+	// Resolve external_customer_id if provided
+	if filter.ExternalCustomerID != "" {
+		customer, err := s.CustomerRepo.GetByLookupKey(ctx, filter.ExternalCustomerID)
+		if err != nil {
+			s.Logger.Errorw("failed to resolve external customer ID",
+				"error", err,
+				"external_customer_id", filter.ExternalCustomerID)
+			return nil, ierr.WithError(err).
+				WithHintf("Customer with external ID '%s' not found", filter.ExternalCustomerID).
+				WithReportableDetails(map[string]interface{}{
+					"external_customer_id": filter.ExternalCustomerID,
+				}).
+				Mark(ierr.ErrNotFound)
+		}
+
+		// If both entity_id and external_customer_id are provided, validate they match
+		if filter.EntityID != "" && filter.EntityID != customer.ID {
+			s.Logger.Errorw("entity_id and external_customer_id point to different customers",
+				"entity_id", filter.EntityID,
+				"external_customer_id", filter.ExternalCustomerID,
+				"resolved_customer_id", customer.ID)
+			return nil, ierr.NewError("entity_id and external_customer_id point to different customers").
+				WithHint("When both entity_id and external_customer_id are provided, they must point to the same customer").
+				WithReportableDetails(map[string]interface{}{
+					"entity_id":            filter.EntityID,
+					"external_customer_id": filter.ExternalCustomerID,
+					"resolved_customer_id": customer.ID,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Set entity_type to customer and entity_id to resolved customer ID
+		filter.EntityType = types.TaxRateEntityTypeCustomer
+		filter.EntityID = customer.ID
+
+		s.Logger.Debugw("resolved external customer ID to internal customer ID",
+			"external_customer_id", filter.ExternalCustomerID,
+			"customer_id", customer.ID)
 	}
 
 	s.Logger.Debugw("listing tax associations",
