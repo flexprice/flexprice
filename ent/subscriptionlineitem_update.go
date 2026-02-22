@@ -287,6 +287,27 @@ func (sliu *SubscriptionLineItemUpdate) SetNillableBillingPeriod(tp *types.Billi
 	return sliu
 }
 
+// SetBillingPeriodCount sets the "billing_period_count" field.
+func (sliu *SubscriptionLineItemUpdate) SetBillingPeriodCount(i int) *SubscriptionLineItemUpdate {
+	sliu.mutation.ResetBillingPeriodCount()
+	sliu.mutation.SetBillingPeriodCount(i)
+	return sliu
+}
+
+// SetNillableBillingPeriodCount sets the "billing_period_count" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableBillingPeriodCount(i *int) *SubscriptionLineItemUpdate {
+	if i != nil {
+		sliu.SetBillingPeriodCount(*i)
+	}
+	return sliu
+}
+
+// AddBillingPeriodCount adds i to the "billing_period_count" field.
+func (sliu *SubscriptionLineItemUpdate) AddBillingPeriodCount(i int) *SubscriptionLineItemUpdate {
+	sliu.mutation.AddBillingPeriodCount(i)
+	return sliu
+}
+
 // SetTrialPeriod sets the "trial_period" field.
 func (sliu *SubscriptionLineItemUpdate) SetTrialPeriod(i int) *SubscriptionLineItemUpdate {
 	sliu.mutation.ResetTrialPeriod()
@@ -688,6 +709,12 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	if value, ok := sliu.mutation.BillingPeriod(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriod, field.TypeString, value)
 	}
+	if value, ok := sliu.mutation.BillingPeriodCount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
+	}
+	if value, ok := sliu.mutation.AddedBillingPeriodCount(); ok {
+		_spec.AddField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
+	}
 	if sliu.mutation.InvoiceCadenceCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldInvoiceCadence, field.TypeString)
 	}
@@ -1072,6 +1099,27 @@ func (sliuo *SubscriptionLineItemUpdateOne) SetNillableBillingPeriod(tp *types.B
 	if tp != nil {
 		sliuo.SetBillingPeriod(*tp)
 	}
+	return sliuo
+}
+
+// SetBillingPeriodCount sets the "billing_period_count" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetBillingPeriodCount(i int) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ResetBillingPeriodCount()
+	sliuo.mutation.SetBillingPeriodCount(i)
+	return sliuo
+}
+
+// SetNillableBillingPeriodCount sets the "billing_period_count" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableBillingPeriodCount(i *int) *SubscriptionLineItemUpdateOne {
+	if i != nil {
+		sliuo.SetBillingPeriodCount(*i)
+	}
+	return sliuo
+}
+
+// AddBillingPeriodCount adds i to the "billing_period_count" field.
+func (sliuo *SubscriptionLineItemUpdateOne) AddBillingPeriodCount(i int) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.AddBillingPeriodCount(i)
 	return sliuo
 }
 
@@ -1505,6 +1553,12 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if value, ok := sliuo.mutation.BillingPeriod(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriod, field.TypeString, value)
+	}
+	if value, ok := sliuo.mutation.BillingPeriodCount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
+	}
+	if value, ok := sliuo.mutation.AddedBillingPeriodCount(); ok {
+		_spec.AddField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
 	}
 	if sliuo.mutation.InvoiceCadenceCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldInvoiceCadence, field.TypeString)
