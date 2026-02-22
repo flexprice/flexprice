@@ -246,13 +246,18 @@ func (s *BillingServiceSuite) setupTestData() {
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchive))
 
 	s.testData.now = time.Now().UTC()
+	// Use CurrentPeriodEnd as BillingAnchor so the next period is a full month (same day-of-month),
+	// ensuring next-period advance charges (e.g. fixed price) are included when billing at period end.
+	currentPeriodStart := s.testData.now.Add(-48 * time.Hour)
+	currentPeriodEnd := s.testData.now.Add(6 * 24 * time.Hour)
 	s.testData.subscription = &subscription.Subscription{
 		ID:                 "sub_123",
 		PlanID:             s.testData.plan.ID,
 		CustomerID:         s.testData.customer.ID,
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
-		CurrentPeriodStart: s.testData.now.Add(-48 * time.Hour),
-		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingAnchor:      currentPeriodEnd,
+		CurrentPeriodStart: currentPeriodStart,
+		CurrentPeriodEnd:   currentPeriodEnd,
 		Currency:           "usd",
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,

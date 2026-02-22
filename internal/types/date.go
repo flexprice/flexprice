@@ -381,7 +381,9 @@ func LineItemIntervalInInvoicePeriod(lineItemStart, billingAnchor time.Time, per
 		if !intervalEndUTC.Before(periodEndUTC) {
 			return time.Time{}, time.Time{}, false, nil
 		}
-		if intervalEndUTC.After(now) {
+		// Only skip future intervals when the invoice period is in the past (avoids excluding
+		// next-period advance charges when billing at period end).
+		if intervalEndUTC.After(now) && !periodEndUTC.After(now) {
 			return time.Time{}, time.Time{}, false, nil
 		}
 		current = intervalEnd
