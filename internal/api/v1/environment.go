@@ -21,6 +21,7 @@ func NewEnvironmentHandler(service service.EnvironmentService, log *logger.Logge
 }
 
 // @Summary Create an environment
+// @ID createEnvironment
 // @Description Create an environment
 // @Tags Environments
 // @Accept json
@@ -50,6 +51,7 @@ func (h *EnvironmentHandler) CreateEnvironment(c *gin.Context) {
 }
 
 // @Summary Get an environment
+// @ID getEnvironment
 // @Description Get an environment
 // @Tags Environments
 // @Accept json
@@ -74,6 +76,7 @@ func (h *EnvironmentHandler) GetEnvironment(c *gin.Context) {
 }
 
 // @Summary Get environments
+// @ID listEnvironments
 // @Description Get environments
 // @Tags Environments
 // @Accept json
@@ -103,6 +106,7 @@ func (h *EnvironmentHandler) GetEnvironments(c *gin.Context) {
 }
 
 // @Summary Update an environment
+// @ID updateEnvironment
 // @Description Update an environment
 // @Tags Environments
 // @Accept json

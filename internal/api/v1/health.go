@@ -20,6 +20,7 @@ func NewHealthHandler(
 }
 
 // @Summary Health check
+// @ID healthCheck
 // @Description Health check
 // @Tags Health
 // @Accept json

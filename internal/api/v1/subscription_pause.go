@@ -25,6 +25,7 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 }
 
 // @Summary Pause a subscription
+// @ID pauseSubscription
 // @Description Pause a subscription with the specified parameters
 // @Tags Subscriptions
 // @Accept json
@@ -89,6 +90,7 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 }
 
 // @Summary Resume a paused subscription
+// @ID resumeSubscription
 // @Description Resume a paused subscription with the specified parameters
 // @Tags Subscriptions
 // @Accept json
@@ -152,6 +154,7 @@ func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 }
 
 // @Summary List all pauses for a subscription
+// @ID listSubscriptionPauses
 // @Description List all pauses for a subscription
 // @Tags Subscriptions
 // @Produce json

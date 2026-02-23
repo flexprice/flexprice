@@ -31,6 +31,7 @@ func NewCustomerHandler(
 }
 
 // @Summary Create a customer
+// @ID createCustomer
 // @Description Create a customer
 // @Tags Customers
 // @Accept json
@@ -60,6 +61,7 @@ func (h *CustomerHandler) CreateCustomer(c *gin.Context) {
 }
 
 // @Summary Get a customer
+// @ID getCustomer
 // @Description Get a customer
 // @Tags Customers
 // @Accept json
@@ -83,6 +85,7 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 }
 
 // @Summary Get customers
+// @ID listCustomers
 // @Description Get customers
 // @Tags Customers
 // @Accept json
@@ -116,6 +119,7 @@ func (h *CustomerHandler) GetCustomers(c *gin.Context) {
 }
 
 // @Summary Update a customer
+// @ID updateCustomer
 // @Description Update a customer by id or external_customer_id
 // @Tags Customers
 // @Accept json
@@ -183,6 +187,7 @@ func (h *CustomerHandler) UpdateCustomer(c *gin.Context) {
 }
 
 // @Summary Delete a customer
+// @ID deleteCustomer
 // @Description Delete a customer
 // @Tags Customers
 // @Accept json
@@ -206,6 +211,7 @@ func (h *CustomerHandler) DeleteCustomer(c *gin.Context) {
 }
 
 // @Summary Get a customer by external id
+// @ID getCustomerByExternalId
 // @Description Get a customer by external id
 // @Tags Customers
 // @Accept json
@@ -240,6 +246,7 @@ func (h *CustomerHandler) GetCustomerByLookupKey(c *gin.Context) {
 }
 
 // @Summary Get customer entitlements
+// @ID getCustomerEntitlements
 // @Description Get customer entitlements
 // @Tags Customers
 // @Accept json
@@ -274,6 +281,7 @@ func (h *CustomerHandler) GetCustomerEntitlements(c *gin.Context) {
 }
 
 // @Summary Get customer usage summary
+// @ID getCustomerUsageSummary
 // @Description Get customer usage summary by customer_id or customer_lookup_key (external_customer_id)
 // @Tags Customers
 // @Accept json
@@ -358,6 +366,7 @@ func (h *CustomerHandler) GetCustomerUsageSummary(c *gin.Context) {
 }
 
 // @Summary List customers by filter
+// @ID listCustomersByFilter
 // @Description List customers by filter
 // @Tags Customers
 // @Accept json
@@ -391,6 +400,7 @@ func (h *CustomerHandler) ListCustomersByFilter(c *gin.Context) {
 }
 
 // @Summary Get upcoming credit grant applications
+// @ID getCustomerUpcomingGrants
 // @Description Get upcoming credit grant applications for a customer
 // @Tags Customers
 // @Produce json

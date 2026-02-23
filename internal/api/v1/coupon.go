@@ -25,6 +25,7 @@ func NewCouponHandler(couponService service.CouponService, logger *logger.Logger
 }
 
 // @Summary Create a new coupon
+// @ID createCoupon
 // @Description Creates a new coupon
 // @Tags Coupons
 // @Accept json
@@ -58,6 +59,7 @@ func (h *CouponHandler) CreateCoupon(c *gin.Context) {
 }
 
 // @Summary Get a coupon by ID
+// @ID getCouponById
 // @Description Retrieves a coupon by ID
 // @Tags Coupons
 // @Accept json
@@ -91,6 +93,7 @@ func (h *CouponHandler) GetCoupon(c *gin.Context) {
 }
 
 // @Summary Update a coupon
+// @ID updateCoupon
 // @Description Updates an existing coupon
 // @Tags Coupons
 // @Accept json
@@ -133,6 +136,7 @@ func (h *CouponHandler) UpdateCoupon(c *gin.Context) {
 }
 
 // @Summary Delete a coupon
+// @ID deleteCoupon
 // @Description Deletes a coupon
 // @Tags Coupons
 // @Accept json
@@ -166,6 +170,7 @@ func (h *CouponHandler) DeleteCoupon(c *gin.Context) {
 }
 
 // @Summary List coupons with filtering
+// @ID listCoupons
 // @Description Lists coupons with filtering
 // @Tags Coupons
 // @Accept json

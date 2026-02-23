@@ -24,6 +24,7 @@ func NewCreditNoteHandler(creditNoteService service.CreditNoteService, logger *l
 }
 
 // @Summary Create a new credit note
+// @ID createCreditNote
 // @Description Creates a new credit note
 // @Tags Credit Notes
 // @Accept json
@@ -57,6 +58,7 @@ func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 }
 
 // @Summary Get a credit note by ID
+// @ID getCreditNoteById
 // @Description Retrieves a credit note by ID
 // @Tags Credit Notes
 // @Accept json
@@ -90,6 +92,7 @@ func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 }
 
 // @Summary List credit notes with filtering
+// @ID listCreditNotes
 // @Description Lists credit notes with filtering
 // @Tags Credit Notes
 // @Accept json
@@ -127,6 +130,7 @@ func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 }
 
 // @Summary Void a credit note
+// @ID voidCreditNote
 // @Description Voids a credit note
 // @Tags Credit Notes
 // @Accept json
@@ -160,6 +164,7 @@ func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
 }
 
 // @Summary Process a draft credit note
+// @ID processCreditNote
 // @Description Processes a draft credit note
 // @Tags Credit Notes
 // @Accept json

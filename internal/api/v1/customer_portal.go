@@ -31,6 +31,7 @@ func NewCustomerPortalHandler(
 
 // CreateSession creates a dashboard session for a customer
 // @Summary Create a customer portal session
+// @ID createCustomerPortalSession
 // @Description Generate a dashboard URL/token for a customer to access their billing information
 // @Tags CustomerPortal
 // @Accept json

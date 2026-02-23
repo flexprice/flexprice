@@ -31,6 +31,7 @@ func NewEntityIntegrationMappingHandler(
 
 // CreateEntityIntegrationMapping godoc
 // @Summary Create entity integration mapping
+// @ID createEntityIntegrationMapping
 // @Description Create a new entity integration mapping
 // @Tags Entity Integration Mappings
 // @Accept json
@@ -65,6 +66,7 @@ func (h *EntityIntegrationMappingHandler) CreateEntityIntegrationMapping(c *gin.
 
 // GetEntityIntegrationMapping godoc
 // @Summary Get entity integration mapping
+// @ID getEntityIntegrationMapping
 // @Description Retrieve a specific entity integration mapping by ID
 // @Tags Entity Integration Mappings
 // @Accept json
@@ -98,6 +100,7 @@ func (h *EntityIntegrationMappingHandler) GetEntityIntegrationMapping(c *gin.Con
 
 // DeleteEntityIntegrationMapping godoc
 // @Summary Delete entity integration mapping
+// @ID deleteEntityIntegrationMapping
 // @Description Delete an entity integration mapping
 // @Tags Entity Integration Mappings
 // @Accept json
@@ -131,6 +134,7 @@ func (h *EntityIntegrationMappingHandler) DeleteEntityIntegrationMapping(c *gin.
 
 // ListEntityIntegrationMappings godoc
 // @Summary List entity integration mappings
+// @ID listEntityIntegrationMappings
 // @Description Retrieve a list of entity integration mappings with optional filtering
 // @Tags Entity Integration Mappings
 // @Accept json

@@ -23,6 +23,7 @@ func NewSubscriptionScheduleHandler(scheduleService service.SubscriptionSchedule
 
 // GetSchedule retrieves a specific schedule
 // @Summary Get subscription schedule
+// @ID getSubscriptionSchedule
 // @Description Retrieves details of a specific subscription schedule
 // @Tags Subscriptions
 // @Accept json
@@ -45,6 +46,7 @@ func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 
 // ListSchedulesForSubscription lists all schedules for a subscription
 // @Summary List subscription schedules
+// @ID listSubscriptionSchedules
 // @Description Retrieves all schedules for a specific subscription
 // @Tags Subscriptions
 // @Accept json
@@ -71,6 +73,7 @@ func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Contex
 
 // CancelSchedule cancels a pending schedule
 // @Summary Cancel subscription schedule
+// @ID cancelSubscriptionSchedule
 // @Description Cancels a pending subscription schedule. Supports two modes: 1) By schedule ID in path, or 2) By subscription ID + schedule type in request body
 // @Tags Subscriptions
 // @Accept json
@@ -135,6 +138,7 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 
 // ListSchedules lists schedules with filtering
 // @Summary List all subscription schedules
+// @ID listAllSubscriptionSchedules
 // @Description Retrieves subscription schedules with optional filtering
 // @Tags Subscriptions
 // @Accept json

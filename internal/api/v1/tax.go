@@ -25,6 +25,7 @@ func NewTaxHandler(service service.TaxService, logger *logger.Logger) *TaxHandle
 }
 
 // @Summary Create a tax rate
+// @ID createTaxRate
 // @Description Create a tax rate
 // @Tags Tax Rates
 // @Accept json
@@ -54,6 +55,7 @@ func (h *TaxHandler) CreateTaxRate(c *gin.Context) {
 }
 
 // @Summary Get a tax rate
+// @ID getTaxRate
 // @Description Get a tax rate
 // @Tags Tax Rates
 // @Accept json
@@ -74,6 +76,7 @@ func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 }
 
 // @Summary Get tax rates
+// @ID getTaxRates
 // @Description Get tax rates
 // @Tags Tax Rates
 // @Accept json
@@ -102,6 +105,7 @@ func (h *TaxHandler) ListTaxRates(c *gin.Context) {
 }
 
 // @Summary Update a tax rate
+// @ID updateTaxRate
 // @Description Update a tax rate
 // @Tags Tax Rates
 // @Accept json
@@ -134,6 +138,7 @@ func (h *TaxHandler) UpdateTaxRate(c *gin.Context) {
 }
 
 // @Summary Delete a tax rate
+// @ID deleteTaxRate
 // @Description Delete a tax rate
 // @Tags Tax Rates
 // @Accept json
@@ -157,6 +162,7 @@ func (h *TaxHandler) DeleteTaxRate(c *gin.Context) {
 }
 
 // @Summary Create Tax Association
+// @ID createTaxAssociation
 // @Description Create a new tax association
 // @Tags Tax Associations
 // @Accept json
@@ -186,6 +192,7 @@ func (h *TaxHandler) CreateTaxAssociation(c *gin.Context) {
 }
 
 // @Summary Get Tax Association
+// @ID getTaxAssociation
 // @Description Get a tax association by ID
 // @Tags Tax Associations
 // @Accept json
@@ -209,6 +216,7 @@ func (h *TaxHandler) GetTaxAssociation(c *gin.Context) {
 }
 
 // @Summary Update tax association
+// @ID updateTaxAssociation
 // @Description Update a tax association by ID
 // @Tags Tax Associations
 // @Accept json
@@ -241,6 +249,7 @@ func (h *TaxHandler) UpdateTaxAssociation(c *gin.Context) {
 }
 
 // @Summary Delete tax association
+// @ID deleteTaxAssociation
 // @Description Delete a tax association by ID
 // @Tags Tax Associations
 // @Accept json
@@ -262,6 +271,7 @@ func (h *TaxHandler) DeleteTaxAssociation(c *gin.Context) {
 }
 
 // @Summary List tax associations
+// @ID listTaxAssociations
 // @Description List tax associations
 // @Tags Tax Associations
 // @Accept json

@@ -21,6 +21,7 @@ func NewCreditGrantHandler(service service.CreditGrantService, log *logger.Logge
 }
 
 // @Summary Create a new credit grant
+// @ID createCreditGrant
 // @Description Create a new credit grant with the specified configuration
 // @Tags CreditGrants
 // @Accept json
@@ -52,6 +53,7 @@ func (h *CreditGrantHandler) CreateCreditGrant(c *gin.Context) {
 }
 
 // @Summary Get a credit grant by ID
+// @ID getCreditGrantById
 // @Description Get a credit grant by ID
 // @Tags CreditGrants
 // @Accept json
@@ -82,6 +84,7 @@ func (h *CreditGrantHandler) GetCreditGrant(c *gin.Context) {
 }
 
 // @Summary Get credit grants
+// @ID getCreditGrants
 // @Description Get credit grants with the specified filter
 // @Tags CreditGrants
 // @Accept json
@@ -118,6 +121,7 @@ func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 }
 
 // @Summary Update a credit grant
+// @ID updateCreditGrant
 // @Description Update a credit grant with the specified configuration
 // @Tags CreditGrants
 // @Accept json
@@ -158,6 +162,7 @@ func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 }
 
 // @Summary Delete a credit grant
+// @ID deleteCreditGrant
 // @Description Delete a credit grant. Plan-scoped grants are archived; subscription-scoped grants have their end date set (optional body with effective_date). Request body is optional.
 // @Tags CreditGrants
 // @Accept json

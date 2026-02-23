@@ -28,6 +28,7 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, logger *logger.Log
 
 // CreateOneOffInvoice godoc
 // @Summary Create a new one off invoice
+// @ID createInvoice
 // @Description Create a new one off invoice with the provided details
 // @Tags Invoices
 // @Accept json
@@ -58,6 +59,7 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 
 // GetInvoice godoc
 // @Summary Get an invoice by ID
+// @ID getInvoiceById
 // @Description Get detailed information about an invoice
 // @Tags Invoices
 // @Accept json
@@ -99,6 +101,7 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 
 // ListInvoices godoc
 // @Summary List invoices
+// @ID listInvoices
 // @Description List invoices with optional filtering
 // @Tags Invoices
 // @Accept json
@@ -140,6 +143,7 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 
 // FinalizeInvoice godoc
 // @Summary Finalize an invoice
+// @ID finalizeInvoice
 // @Description Finalize a draft invoice
 // @Tags Invoices
 // @Accept json
@@ -168,6 +172,7 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 
 // VoidInvoice godoc
 // @Summary Void an invoice
+// @ID voidInvoice
 // @Description Void an invoice that hasn't been paid
 // @Tags Invoices
 // @Accept json
@@ -211,6 +216,7 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 
 // UpdatePaymentStatus godoc
 // @Summary Update invoice payment status
+// @ID updateInvoicePaymentStatus
 // @Description Update the payment status of an invoice
 // @Tags Invoices
 // @Accept json
@@ -266,6 +272,7 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 
 // GetPreviewInvoice godoc
 // @Summary Get a preview invoice
+// @ID getInvoicePreview
 // @Description Get a preview invoice
 // @Tags Invoices
 // @Accept json
@@ -296,6 +303,7 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 
 // GetCustomerInvoiceSummary godoc
 // @Summary Get a customer invoice summary
+// @ID getCustomerInvoiceSummary
 // @Description Get a customer invoice summary
 // @Tags Invoices
 // @Accept json
@@ -321,6 +329,7 @@ func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 
 // AttemptPayment godoc
 // @Summary Attempt payment for an invoice
+// @ID attemptInvoicePayment
 // @Description Attempt to pay an invoice using customer's available wallets
 // @Tags Invoices
 // @Accept json
@@ -353,6 +362,7 @@ func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 
 // GetInvoicePDF godoc
 // @Summary Get PDF for an invoice
+// @ID getInvoicePdf
 // @Description Retrieve the PDF document for a specific invoice by its ID
 // @Tags Invoices
 // @Security ApiKeyAuth
@@ -393,6 +403,7 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 
 // RecalculateInvoice godoc
 // @Summary Recalculate invoice totals and line items
+// @ID recalculateInvoice
 // @Description Recalculate totals and line items for a draft invoice, useful when subscription line items or usage data has changed
 // @Tags Invoices
 // @Accept json
@@ -428,6 +439,7 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 
 // UpdateInvoice godoc
 // @Summary Update an invoice
+// @ID updateInvoice
 // @Description Update invoice details like PDF URL and due date.
 // Works for draft, finalized, and paid invoices. Only safe fields like PDF URL and due date can be updated for paid invoices.
 // @Tags Invoices
@@ -467,6 +479,7 @@ func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
 
 // ListInvoicesByFilter godoc
 // @Summary List invoices by filter
+// @ID listInvoicesByFilter
 // @Description List invoices by filter
 // @Tags Invoices
 // @Accept json
@@ -503,6 +516,7 @@ func (h *InvoiceHandler) ListInvoicesByFilter(c *gin.Context) {
 
 // TriggerCommunication godoc
 // @Summary Trigger communication webhook for an invoice
+// @ID triggerInvoiceCommsWebhook
 // @Description Triggers a communication webhook event containing all information about the invoice
 // @Tags Invoices
 // @Accept json

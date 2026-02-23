@@ -22,6 +22,7 @@ type UserHandler struct {
 }
 
 // @Summary Get user info
+// @ID getUserInfo
 // @Description Get the current user's information
 // @Tags Users
 // @Accept json
@@ -42,6 +43,7 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 }
 
 // @Summary Create service account
+// @ID createUser
 // @Description Create a new service account with required roles. Only service accounts can be created via this endpoint.
 // @Tags Users
 // @Accept json
@@ -73,6 +75,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 }
 
 // @Summary List users with filters
+// @ID listUsersByFilter
 // @Description Search and filter users by type (user/service_account), roles, etc.
 // @Tags Users
 // @Accept json
