@@ -332,6 +332,46 @@ func (h *PlanHandler) ListPlansByFilter(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Clone a plan
+// @Description Clone an existing plan, copying its active prices, published entitlements, and published credit grants into a new plan with a distinct name and lookup_key
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Source Plan ID"
+// @Param request body dto.ClonePlanRequest true "Clone configuration"
+// @Success 201 {object} dto.PlanResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /plans/{id}/clone [post]
+func (h *PlanHandler) ClonePlan(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ClonePlanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.ClonePlan(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {

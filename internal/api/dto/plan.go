@@ -192,6 +192,34 @@ type SynchronizationSummary struct {
 	ExpiredPrices int `json:"expired_prices"`
 }
 
+// ClonePlanRequest represents the request to clone a plan
+type ClonePlanRequest struct {
+	// Name is required and must be different from the source plan's name
+	Name string `json:"name" validate:"required"`
+	// LookupKey is required and must be unique across published plans
+	LookupKey string `json:"lookup_key" validate:"required"`
+	// Description overrides the source plan's description when provided
+	Description *string `json:"description,omitempty"`
+	// DisplayOrder overrides the source plan's display order when provided
+	DisplayOrder *int `json:"display_order,omitempty"`
+	// Metadata overrides the source plan's metadata when provided
+	Metadata types.Metadata `json:"metadata,omitempty"`
+}
+
+func (r *ClonePlanRequest) Validate() error {
+	if r.Name == "" {
+		return errors.NewError("name is required for cloned plan").
+			WithHint("Please provide a unique name for the cloned plan").
+			Mark(errors.ErrValidation)
+	}
+	if r.LookupKey == "" {
+		return errors.NewError("lookup_key is required for cloned plan").
+			WithHint("Please provide a unique lookup_key for the cloned plan").
+			Mark(errors.ErrValidation)
+	}
+	return nil
+}
+
 // SubscriptionSyncParams contains all parameters needed for syncing a subscription with plan prices
 type SubscriptionSyncParams struct {
 	Context              context.Context
