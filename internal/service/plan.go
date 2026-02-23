@@ -804,7 +804,11 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 
 	// GetByLookupKey only matches published plans, so a successful lookup means the
 	// key is already taken — covers both "same as source" and "taken by another plan".
-	if existing, _ := s.PlanRepo.GetByLookupKey(ctx, req.LookupKey); existing != nil {
+	existing, err := s.PlanRepo.GetByLookupKey(ctx, req.LookupKey)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	if existing != nil {
 		return nil, ierr.NewError("a published plan with this lookup_key already exists").
 			WithHint("Please choose a different lookup_key for the cloned plan").
 			WithReportableDetails(map[string]interface{}{
@@ -877,94 +881,43 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		}
 
 		for _, p := range sourcePrices {
-			newPrice := &domainPrice.Price{
-				ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
-				Amount:                 p.Amount,
-				DisplayAmount:          p.DisplayAmount,
-				Currency:               p.Currency,
-				PriceUnitType:          p.PriceUnitType,
-				PriceUnitID:            p.PriceUnitID,
-				PriceUnit:              p.PriceUnit,
-				PriceUnitAmount:        p.PriceUnitAmount,
-				DisplayPriceUnitAmount: p.DisplayPriceUnitAmount,
-				ConversionRate:         p.ConversionRate,
-				Type:                   p.Type,
-				BillingPeriod:          p.BillingPeriod,
-				BillingPeriodCount:     p.BillingPeriodCount,
-				BillingModel:           p.BillingModel,
-				DisplayName:            p.DisplayName,
-				MinQuantity:            p.MinQuantity,
-				BillingCadence:         p.BillingCadence,
-				InvoiceCadence:         p.InvoiceCadence,
-				TrialPeriod:            p.TrialPeriod,
-				TierMode:               p.TierMode,
-				Tiers:                  p.Tiers,
-				PriceUnitTiers:         p.PriceUnitTiers,
-				MeterID:                p.MeterID,
-				Description:            p.Description,
-				TransformQuantity:      p.TransformQuantity,
-				Metadata:               p.Metadata,
-				EnvironmentID:          p.EnvironmentID,
-				EntityType:             types.PRICE_ENTITY_TYPE_PLAN,
-				EntityID:               newPlan.ID,
-				// LookupKey: not copied — price lookup keys must be globally unique, avoids conflicts
-				StartDate: p.StartDate,
-				EndDate:   p.EndDate,
-				BaseModel: types.GetDefaultBaseModel(ctx),
-			}
-			if err := s.PriceRepo.Create(ctx, newPrice); err != nil {
+			// Shallow-copy all fields then override identity/lineage fields so new
+			// fields added to Price are automatically carried over.
+			newPrice := *p
+			newPrice.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
+			newPrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
+			newPrice.EntityID = newPlan.ID
+			newPrice.LookupKey = "" // price lookup keys are globally unique — do not copy
+			newPrice.BaseModel = types.GetDefaultBaseModel(ctx)
+			if err := s.PriceRepo.Create(ctx, &newPrice); err != nil {
 				return err
 			}
-			newPrices = append(newPrices, newPrice)
+			newPrices = append(newPrices, &newPrice)
 		}
 
 		for _, e := range sourceEntitlements {
-			newEnt := &domainEntitlement.Entitlement{
-				ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT),
-				EntityType:       types.ENTITLEMENT_ENTITY_TYPE_PLAN,
-				EntityID:         newPlan.ID,
-				FeatureID:        e.FeatureID,
-				FeatureType:      e.FeatureType,
-				IsEnabled:        e.IsEnabled,
-				UsageLimit:       e.UsageLimit,
-				UsageResetPeriod: e.UsageResetPeriod,
-				IsSoftLimit:      e.IsSoftLimit,
-				StaticValue:      e.StaticValue,
-				EnvironmentID:    e.EnvironmentID,
-				DisplayOrder:     e.DisplayOrder,
-				BaseModel:        types.GetDefaultBaseModel(ctx),
-			}
-			if _, err := s.EntitlementRepo.Create(ctx, newEnt); err != nil {
+			newEnt := *e
+			newEnt.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)
+			newEnt.EntityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
+			newEnt.EntityID = newPlan.ID
+			newEnt.BaseModel = types.GetDefaultBaseModel(ctx)
+			if _, err := s.EntitlementRepo.Create(ctx, &newEnt); err != nil {
 				return err
 			}
-			newEntitlements = append(newEntitlements, newEnt)
+			newEntitlements = append(newEntitlements, &newEnt)
 		}
 
 		for _, cg := range sourceGrants {
 			newPlanID := newPlan.ID
-			newCG := &domainCreditGrant.CreditGrant{
-				ID:                     types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT),
-				Name:                   cg.Name,
-				Scope:                  types.CreditGrantScopePlan,
-				PlanID:                 &newPlanID,
-				Credits:                cg.Credits,
-				Cadence:                cg.Cadence,
-				Period:                 cg.Period,
-				PeriodCount:            cg.PeriodCount,
-				ExpirationType:         cg.ExpirationType,
-				ExpirationDuration:     cg.ExpirationDuration,
-				ExpirationDurationUnit: cg.ExpirationDurationUnit,
-				Priority:               cg.Priority,
-				Metadata:               cg.Metadata,
-				ConversionRate:         cg.ConversionRate,
-				TopupConversionRate:    cg.TopupConversionRate,
-				EnvironmentID:          cg.EnvironmentID,
-				BaseModel:              types.GetDefaultBaseModel(ctx),
-			}
-			if _, err := s.CreditGrantRepo.Create(ctx, newCG); err != nil {
+			newCG := *cg
+			newCG.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)
+			newCG.Scope = types.CreditGrantScopePlan
+			newCG.PlanID = &newPlanID
+			newCG.BaseModel = types.GetDefaultBaseModel(ctx)
+			if _, err := s.CreditGrantRepo.Create(ctx, &newCG); err != nil {
 				return err
 			}
-			newGrants = append(newGrants, newCG)
+			newGrants = append(newGrants, &newCG)
 		}
 
 		return nil

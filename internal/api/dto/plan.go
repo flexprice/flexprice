@@ -195,9 +195,9 @@ type SynchronizationSummary struct {
 // ClonePlanRequest represents the request to clone a plan
 type ClonePlanRequest struct {
 	// Name is required and must be different from the source plan's name
-	Name string `json:"name" validate:"required"`
+	Name string `json:"name"`
 	// LookupKey is required and must be unique across published plans
-	LookupKey string `json:"lookup_key" validate:"required"`
+	LookupKey string `json:"lookup_key"`
 	// Description overrides the source plan's description when provided
 	Description *string `json:"description,omitempty"`
 	// DisplayOrder overrides the source plan's display order when provided

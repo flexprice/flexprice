@@ -333,7 +333,7 @@ func (h *PlanHandler) ListPlansByFilter(c *gin.Context) {
 }
 
 // @Summary Clone a plan
-// @Description Clone an existing plan, copying its active prices, published entitlements, and published credit grants into a new plan with a distinct name and lookup_key
+// @Description Clone an existing plan, copying its active prices, published entitlements, and published credit grants
 // @Tags Plans
 // @Accept json
 // @Produce json
