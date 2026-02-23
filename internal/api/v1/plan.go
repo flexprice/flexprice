@@ -259,21 +259,6 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Synchronize plan prices
-// @Description Synchronize current plan prices with all existing active subscriptions
-// @Tags Plans
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Plan ID"
-// @Success 200 {object} models.TemporalWorkflowResult
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 422 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /plans/{id}/sync/subscriptions [post]
-
-// priceSyncLockKey returns the Redis cache key for the plan-level price sync lock.
 func priceSyncLockKey(planID string) string {
 	return cache.PrefixPriceSyncLock + planID
 }
