@@ -36,6 +36,7 @@ type BillingServiceSuite struct {
 		}
 		prices struct {
 			fixed          *price.Price
+			fixedDaily     *price.Price
 			apiCalls       *price.Price
 			storageArchive *price.Price
 		}
@@ -226,6 +227,23 @@ func (s *BillingServiceSuite) setupTestData() {
 		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.fixed))
+
+	// Fixed Daily - for testing daily line item quantity (e.g. Feb 22–Mar 22 = 28 days)
+	s.testData.prices.fixedDaily = &price.Price{
+		ID:                 "price_fixed_daily",
+		Amount:             decimal.NewFromInt(1), // 1 per day
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_DAILY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.fixedDaily))
 
 	// Archive Storage - Fixed fee with ARREAR invoice cadence (for testing fixed arrear)
 	s.testData.prices.storageArchive = &price.Price{
@@ -613,6 +631,60 @@ func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {
 			}
 		})
 	}
+}
+
+func (s *BillingServiceSuite) TestCalculateFixedCharges_DailyLineItem_Feb22ToMar22_Quantity28() {
+	ctx := s.GetContext()
+	utc := time.UTC
+	// Invoice period Feb 22–Mar 22 (28 days in non-leap 2025)
+	periodStart := time.Date(2025, time.February, 22, 0, 0, 0, 0, utc)
+	periodEnd := time.Date(2025, time.March, 22, 0, 0, 0, 0, utc)
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_daily_test",
+		PlanID:             s.testData.plan.ID,
+		CustomerID:         s.testData.customer.ID,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingAnchor:      periodEnd,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	sub.LineItems = []*subscription.SubscriptionLineItem{
+		{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:     sub.ID,
+			CustomerID:         sub.CustomerID,
+			EntityID:           s.testData.plan.ID,
+			EntityType:         types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:    s.testData.plan.Name,
+			PriceID:            s.testData.prices.fixedDaily.ID,
+			PriceType:          types.PRICE_TYPE_FIXED,
+			DisplayName:        "Daily Fixed",
+			Quantity:           decimal.NewFromInt(1),
+			Currency:           sub.Currency,
+			BillingPeriod:     types.BILLING_PERIOD_DAILY,
+			BillingPeriodCount: 1,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			StartDate:          periodStart,
+			BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+		},
+	}
+
+	lineItems, _, err := s.service.CalculateFixedCharges(ctx, sub, periodStart, periodEnd)
+	s.NoError(err)
+	s.Require().NotEmpty(lineItems, "expected at least one fixed line item")
+
+	var dailyLine *dto.CreateInvoiceLineItemRequest
+	for i := range lineItems {
+		if lo.FromPtr(lineItems[i].PriceID) == s.testData.prices.fixedDaily.ID {
+			dailyLine = &lineItems[i]
+			break
+		}
+	}
+	s.Require().NotNil(dailyLine, "daily fixed line item should be present")
+	s.True(dailyLine.Quantity.Equal(decimal.NewFromInt(28)),
+		"daily line item for Feb 22–Mar 22 should have quantity 28, got %s", dailyLine.Quantity.String())
 }
 
 // Helper methods for specific validations
