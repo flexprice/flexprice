@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -271,6 +272,12 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 // @Failure 422 {object} ierr.ErrorResponse
 // @Failure 500 {object} ierr.ErrorResponse
 // @Router /plans/{id}/sync/subscriptions [post]
+
+// priceSyncLockKey returns the Redis cache key for the plan-level price sync lock.
+func priceSyncLockKey(planID string) string {
+	return cache.PrefixPriceSyncLock + planID
+}
+
 func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 
 	id := c.Param("id")
@@ -287,7 +294,30 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	// Start the price sync workflow using the unified method
+	// Acquire plan-level lock (Redis SetNX, 2h TTL)
+	redisCache := cache.GetRedisCache()
+	if redisCache == nil {
+		c.Error(ierr.NewError("price sync lock unavailable").
+			WithHint("Redis cache is not available. Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+	lockKey := priceSyncLockKey(id)
+	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	if err != nil {
+		h.log.Errorw("price sync lock acquire failed", "plan_id", id, "error", err)
+		c.Error(ierr.NewError("failed to acquire price sync lock").
+			WithHint("Try again later.").
+			Mark(ierr.ErrInternal))
+		return
+	}
+	if !acquired {
+		c.Error(ierr.NewError("price sync already in progress for this plan").
+			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			Mark(ierr.ErrAlreadyExists))
+		return
+	}
+	// Start the price sync workflow (activity will release lock when done)
 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
 	if err != nil {
 		c.Error(err)
@@ -340,6 +370,30 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 			Mark(ierr.ErrValidation))
 		return
 	}
+	// Acquire plan-level lock (Redis SetNX, 2h TTL)
+	redisCache := cache.GetRedisCache()
+	if redisCache == nil {
+		c.Error(ierr.NewError("price sync lock unavailable").
+			WithHint("Redis cache is not available. Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+	lockKey := priceSyncLockKey(id)
+	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	if err != nil {
+		h.log.Errorw("price sync lock acquire failed", "plan_id", id, "error", err)
+		c.Error(ierr.NewError("failed to acquire price sync lock").
+			WithHint("Try again later.").
+			Mark(ierr.ErrInternal))
+		return
+	}
+	if !acquired {
+		c.Error(ierr.NewError("price sync already in progress for this plan").
+			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			Mark(ierr.ErrAlreadyExists))
+		return
+	}
+	defer redisCache.Delete(c.Request.Context(), lockKey)
 
 	resp, err := h.service.SyncPlanPrices(c.Request.Context(), id)
 	if err != nil {
