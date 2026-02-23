@@ -311,7 +311,7 @@ func CalendarDaysBetween(start, end time.Time) int {
 	if !e.After(s) {
 		return 0
 	}
-	return int(e.Sub(s).Hours()/24) + 1 // round up to nearest day
+	return int(e.Sub(s).Hours() / 24)
 }
 
 // LineItemIntervalDays returns the length in calendar days of one billing interval for a line item,
