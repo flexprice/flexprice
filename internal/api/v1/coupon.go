@@ -24,20 +24,20 @@ func NewCouponHandler(couponService service.CouponService, logger *logger.Logger
 	}
 }
 
-// @Summary Create a new coupon
+// @Summary Create coupon
 // @ID createCoupon
-// @Description Creates a new coupon
+// @Description Use when creating a discount (e.g. promo code or referral). Ideal for percent or fixed value, with optional validity and usage limits.
 // @Tags Coupons
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param coupon body dto.CreateCouponRequest true "Coupon request"
 // @Success 201 {object} dto.CouponResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /coupons [post]
 // @Security ApiKeyAuth
 func (h *CouponHandler) CreateCoupon(c *gin.Context) {
@@ -58,22 +58,18 @@ func (h *CouponHandler) CreateCoupon(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// @Summary Get a coupon by ID
-// @ID getCouponById
-// @Description Retrieves a coupon by ID
+// @Summary Get coupon
+// @ID getCoupon
+// @Description Use when you need to load a single coupon (e.g. for display or to validate a code).
 // @Tags Coupons
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Coupon ID"
 // @Success 200 {object} dto.CouponResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /coupons/{id} [get]
-// @Security ApiKeyAuth
 func (h *CouponHandler) GetCoupon(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -92,9 +88,9 @@ func (h *CouponHandler) GetCoupon(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Update a coupon
+// @Summary Update coupon
 // @ID updateCoupon
-// @Description Updates an existing coupon
+// @Description Use when changing coupon config (e.g. value, validity, or usage limits).
 // @Tags Coupons
 // @Accept json
 // @Produce json
@@ -102,11 +98,11 @@ func (h *CouponHandler) GetCoupon(c *gin.Context) {
 // @Param id path string true "Coupon ID"
 // @Param coupon body dto.UpdateCouponRequest true "Coupon update request"
 // @Success 200 {object} dto.CouponResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /coupons/{id} [put]
 // @Security ApiKeyAuth
 func (h *CouponHandler) UpdateCoupon(c *gin.Context) {
@@ -135,20 +131,20 @@ func (h *CouponHandler) UpdateCoupon(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Delete a coupon
+// @Summary Delete coupon
 // @ID deleteCoupon
-// @Description Deletes a coupon
+// @Description Use when retiring a coupon (e.g. campaign ended). Returns 200 with success message.
 // @Tags Coupons
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Coupon ID"
 // @Success 200 {object} map[string]string
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /coupons/{id} [delete]
 // @Security ApiKeyAuth
 func (h *CouponHandler) DeleteCoupon(c *gin.Context) {
@@ -169,25 +165,43 @@ func (h *CouponHandler) DeleteCoupon(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Coupon deleted successfully"})
 }
 
-// @Summary List coupons with filtering
-// @ID listCoupons
-// @Description Lists coupons with filtering
+func (h *CouponHandler) ListCoupons(c *gin.Context) {
+	var filter types.CouponFilter
+	if err := c.ShouldBindQuery(&filter); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if filter.GetLimit() == 0 {
+		filter.Limit = lo.ToPtr(types.GetDefaultFilter().Limit)
+	}
+
+	response, err := h.couponService.ListCoupons(c.Request.Context(), &filter)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// @Summary Query coupons
+// @ID queryCoupon
+// @Description Use when listing or searching coupons (e.g. promo management). Returns a paginated list; supports filtering and sorting.
 // @Tags Coupons
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter query types.CouponFilter true "Filter options"
+// @Param filter body types.CouponFilter true "Filter"
 // @Success 200 {object} dto.ListCouponsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /coupons [get]
-// @Security ApiKeyAuth
-func (h *CouponHandler) ListCouponsByFilter(c *gin.Context) {
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /coupons/search [post]
+func (h *CouponHandler) QueryCoupons(c *gin.Context) {
 	var filter types.CouponFilter
-	if err := c.ShouldBindQuery(&filter); err != nil {
+	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))

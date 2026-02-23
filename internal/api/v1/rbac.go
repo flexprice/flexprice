@@ -26,7 +26,7 @@ func NewRBACHandler(rbacService *rbac.RBACService, userService service.UserServi
 // ListRoles returns all available roles with their metadata
 // @Summary List all RBAC roles
 // @ID listRbacRoles
-// @Description Returns all available roles with their permissions, names, and descriptions
+// @Description Use when building role pickers or permission UIs. Returns all roles with permissions and descriptions.
 // @Tags RBAC
 // @Accept json
 // @Produce json
@@ -45,7 +45,7 @@ func (h *RBACHandler) ListRoles(c *gin.Context) {
 // GetRole returns a specific role by ID
 // @Summary Get a specific RBAC role
 // @ID getRbacRole
-// @Description Returns details of a specific role including permissions, name, and description
+// @Description Use when you need to show or edit a single role (e.g. role detail page). Includes permissions, name, and description.
 // @Tags RBAC
 // @Accept json
 // @Produce json

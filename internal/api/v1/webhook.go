@@ -113,7 +113,7 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 
 // @Summary Handle Stripe webhook events
 // @ID handleStripeWebhook
-// @Description Process incoming Stripe webhook events for payment status updates and customer creation
+// @Description Use as the Stripe webhook endpoint URL. Receives payment and customer events from Stripe to keep FlexPrice in sync (e.g. payment succeeded, customer created).
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -240,7 +240,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 
 // @Summary Handle HubSpot webhook events
 // @ID handleHubspotWebhook
-// @Description Process incoming HubSpot webhook events for deal closed won and customer creation
+// @Description Use as the HubSpot webhook endpoint URL. Receives deal and customer events (e.g. deal closed won) to create or update customers in FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -410,7 +410,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 
 // @Summary Handle Razorpay webhook events
 // @ID handleRazorpayWebhook
-// @Description Process incoming Razorpay webhook events for payment capture and failure
+// @Description Use as the Razorpay webhook endpoint URL. Receives payment capture and failure events to update invoice or payment status in FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -522,7 +522,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 
 // @Summary Handle Chargebee webhook events
 // @ID handleChargebeeWebhook
-// @Description Process incoming Chargebee webhook events for payment status updates
+// @Description Use as the Chargebee webhook endpoint URL. Receives payment and subscription events from Chargebee to sync status into FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -662,7 +662,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 
 // @Summary Handle QuickBooks webhook events
 // @ID handleQuickbooksWebhook
-// @Description Process incoming QuickBooks webhook events for payment sync
+// @Description Use as the QuickBooks webhook endpoint URL. Receives payment events from QuickBooks to sync payment status into FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -766,7 +766,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 
 // @Summary Handle Nomod webhook events
 // @ID handleNomodWebhook
-// @Description Process incoming Nomod webhook events for payment and invoice payments
+// @Description Use as the Nomod webhook endpoint URL. Receives payment and invoice events from Nomod to keep FlexPrice in sync.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -915,7 +915,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 
 // @Summary Handle Moyasar webhook events
 // @ID handleMoyasarWebhook
-// @Description Process incoming Moyasar webhook events for payment status updates
+// @Description Use as the Moyasar webhook endpoint URL. Receives payment events from Moyasar to update payment status in FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json

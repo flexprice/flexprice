@@ -36,20 +36,19 @@ func NewAlertLogsHandler(
 	}
 }
 
-// ListAlertLogsByFilter godoc
-// @Summary List alert logs by filter
-// @ID listAlertLogsByFilter
-// @Description List alert logs by filter with optional expand for customer, wallet, and feature
-// @Tags Alert Logs
+// @Summary Query alert logs
+// @ID queryAlertLog
+// @Description Use when viewing or searching alert history (e.g. support triage or customer-facing alert log). Returns a paginated list; supports filtering by type, customer, subscription.
+// @Tags Alerts
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.AlertLogFilter true "Filter"
 // @Success 200 {object} dto.ListAlertLogsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /alert/search [post]
-func (h *AlertLogsHandler) ListAlertLogsByFilter(c *gin.Context) {
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /alerts/search [post]
+func (h *AlertLogsHandler) QueryAlertLogs(c *gin.Context) {
 	var filter types.AlertLogFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

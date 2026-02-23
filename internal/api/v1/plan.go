@@ -38,17 +38,17 @@ func NewPlanHandler(
 	}
 }
 
-// @Summary Create a new plan
+// @Summary Create plan
 // @ID createPlan
-// @Description Create a new plan with the specified configuration
+// @Description Use when defining a new pricing plan (e.g. Free, Pro, Enterprise). Attach prices and entitlements; customers subscribe to plans.
 // @Tags Plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param plan body dto.CreatePlanRequest true "Plan configuration"
 // @Success 201 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans [post]
 func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	var req dto.CreatePlanRequest
@@ -68,18 +68,17 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a plan
+// @Summary Get plan
 // @ID getPlan
-// @Description Get a plan by ID
+// @Description Use when you need to load a single plan (e.g. for display or to create a subscription).
 // @Tags Plans
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id} [get]
 func (h *PlanHandler) GetPlan(c *gin.Context) {
 	id := c.Param("id")
@@ -99,19 +98,7 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get plans
-// @ID getPlans
-// @Description Get plans with optional filtering
-// @Tags Plans
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.PlanFilter false "Filter"
-// @Success 200 {object} dto.ListPlansResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /plans [get]
-func (h *PlanHandler) GetPlans(c *gin.Context) {
+func (h *PlanHandler) ListPlans(c *gin.Context) {
 	var filter types.PlanFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -133,9 +120,9 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a plan
+// @Summary Update plan
 // @ID updatePlan
-// @Description Update a plan by ID
+// @Description Use when changing plan details (e.g. name, interval, or metadata). Partial update supported.
 // @Tags Plans
 // @Accept json
 // @Produce json
@@ -143,9 +130,9 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 // @Param id path string true "Plan ID"
 // @Param plan body dto.UpdatePlanRequest true "Plan update"
 // @Success 200 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id} [put]
 func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	id := c.Param("id")
@@ -173,18 +160,18 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a plan
+// @Summary Delete plan
 // @ID deletePlan
-// @Description Delete a plan by ID
+// @Description Use when retiring a plan (e.g. end-of-life). Existing subscriptions may be affected. Returns 200 with success message.
 // @Tags Plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id} [delete]
 func (h *PlanHandler) DeletePlan(c *gin.Context) {
 	id := c.Param("id")
@@ -206,16 +193,15 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 
 // @Summary Get plan entitlements
 // @ID getPlanEntitlements
-// @Description Get all entitlements for a plan
+// @Description Use when checking what a plan includes (e.g. feature list or limits for display or gating).
 // @Tags Entitlements
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id}/entitlements [get]
 func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 	id := c.Param("id")
@@ -237,16 +223,15 @@ func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 
 // @Summary Get plan credit grants
 // @ID getPlanCreditGrants
-// @Description Get all credit grants for a plan
-// @Tags CreditGrants
-// @Accept json
+// @Description Use when listing credits attached to a plan (e.g. included prepaid or promo credits).
+// @Tags Credit Grants
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.ListCreditGrantsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id}/creditgrants [get]
 func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 	id := c.Param("id")
@@ -268,7 +253,7 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 
 // @Summary Synchronize plan prices
 // @ID syncPlanPrices
-// @Description Synchronize current plan prices with all existing active subscriptions
+// @Description Use when you have changed plan prices and need to push them to all active subscriptions (e.g. global price update). Returns workflow ID.
 // @Tags Plans
 // @Accept json
 // @Produce json
@@ -310,19 +295,19 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 	})
 }
 
-// @Summary List plans by filter
-// @ID listPlansByFilter
-// @Description List plans by filter
+// @Summary Query plans
+// @ID queryPlan
+// @Description Use when listing or searching plans (e.g. plan picker or admin catalog). Returns a paginated list; supports filtering and sorting.
 // @Tags Plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.PlanFilter true "Filter"
 // @Success 200 {object} dto.ListPlansResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/search [post]
-func (h *PlanHandler) ListPlansByFilter(c *gin.Context) {
+func (h *PlanHandler) QueryPlans(c *gin.Context) {
 	var filter types.PlanFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

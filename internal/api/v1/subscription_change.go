@@ -30,7 +30,7 @@ func NewSubscriptionChangeHandler(
 
 // @Summary Preview subscription plan change
 // @ID previewSubscriptionChange
-// @Description Preview the impact of changing a subscription's plan, including proration calculations
+// @Description Use when showing a customer the cost of a plan change before they confirm (e.g. upgrade/downgrade preview with proration).
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -38,9 +38,9 @@ func NewSubscriptionChangeHandler(
 // @Param id path string true "Subscription ID"
 // @Param request body dto.SubscriptionChangeRequest true "Subscription change preview request"
 // @Success 200 {object} dto.SubscriptionChangePreviewResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/change/preview [post]
 func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 	subscriptionID := c.Param("id")
@@ -86,7 +86,7 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 
 // @Summary Execute subscription plan change
 // @ID executeSubscriptionChange
-// @Description Execute a subscription plan change, including proration and invoice generation
+// @Description Use when applying a plan change (e.g. upgrade or downgrade). Executes proration and generates invoice or credit as needed.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -94,9 +94,9 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param request body dto.SubscriptionChangeRequest true "Subscription change request"
 // @Success 200 {object} dto.SubscriptionChangeExecuteResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/change/execute [post]
 func (h *SubscriptionChangeHandler) ExecuteSubscriptionChange(c *gin.Context) {
 	subscriptionID := c.Param("id")

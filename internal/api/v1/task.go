@@ -34,15 +34,15 @@ func NewTaskHandler(
 
 // @Summary Create a new task
 // @ID createTask
-// @Description Create a new task for processing files asynchronously
+// @Description Use when submitting a file or job for async processing (e.g. export or import). Returns task ID to poll for status and result.
 // @Tags Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param task body dto.CreateTaskRequest true "Task configuration"
 // @Success 202 {object} dto.TaskResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks [post]
 func (h *TaskHandler) CreateTask(c *gin.Context) {
 	var req dto.CreateTaskRequest
@@ -77,16 +77,16 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 
 // @Summary Get a task
 // @ID getTask
-// @Description Get a task by ID
+// @Description Use when checking task status or progress (e.g. polling after create). Returns task by ID.
 // @Tags Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Task ID"
 // @Success 200 {object} dto.TaskResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/{id} [get]
 func (h *TaskHandler) GetTask(c *gin.Context) {
 	id := c.Param("id")
@@ -108,15 +108,15 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 
 // @Summary List tasks
 // @ID listTasks
-// @Description List tasks with optional filtering
+// @Description Use when listing or searching async tasks (e.g. admin queue view). Returns list with optional filtering.
 // @Tags Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.TaskFilter false "Filter"
 // @Success 200 {object} dto.ListTasksResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks [get]
 func (h *TaskHandler) ListTasks(c *gin.Context) {
 	var filter types.TaskFilter
@@ -142,7 +142,7 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 
 // @Summary Update task status
 // @ID updateTaskStatus
-// @Description Update a task's status
+// @Description Use when updating task status (e.g. marking complete or failed from a worker). Typically called by backend processors.
 // @Tags Tasks
 // @Accept json
 // @Produce json
@@ -150,9 +150,9 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 // @Param id path string true "Task ID"
 // @Param status body dto.UpdateTaskStatusRequest true "Status update"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/{id}/status [put]
 func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 	id := c.Param("id")
@@ -182,16 +182,16 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 
 // @Summary Get task processing result
 // @ID getTaskResult
-// @Description Get the result of a task processing workflow
+// @Description Use when fetching the outcome of a completed task (e.g. export URL or error message). Call after task status is complete.
 // @Tags Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param workflow_id query string true "Workflow ID"
 // @Success 200 {object} models.TemporalWorkflowResult
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/result [get]
 func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 	workflowID := c.Query("workflow_id")
@@ -217,16 +217,16 @@ func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 
 // @Summary Download task export file
 // @ID downloadTaskExport
-// @Description Generate a presigned URL for downloading an exported file (supports both Flexprice-managed and customer-owned S3)
+// @Description Use when letting a user download an exported file (e.g. report or data export). Returns a presigned URL; supports FlexPrice or customer-owned S3.
 // @Tags Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Task ID"
 // @Success 200 {object} map[string]string
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/{id}/download [get]
 func (h *TaskHandler) DownloadTaskFile(c *gin.Context) {
 	id := c.Param("id")

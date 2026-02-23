@@ -28,15 +28,15 @@ func NewTenantHandler(
 
 // @Summary Create a new tenant
 // @ID createTenant
-// @Description Create a new tenant
+// @Description Use when provisioning a new tenant (e.g. new org or workspace). Tenants are top-level isolation boundaries.
 // @Tags Tenants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.CreateTenantRequest true "Create tenant request"
-// @Success 201 {object} dto.TenantResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 201 {object} dto.TenantResponse "Created tenant"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tenants [post]
 func (h *TenantHandler) CreateTenant(c *gin.Context) {
 	var req dto.CreateTenantRequest
@@ -56,17 +56,17 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get tenant by ID
-// @ID getTenantById
-// @Description Get tenant by ID
+// @Summary Get tenant
+// @ID getTenant
+// @Description Use when you need to load a single tenant (e.g. for display or to check billing). Typically used in admin or multi-tenant contexts.
 // @Tags Tenants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tenant ID"
-// @Success 200 {object} dto.TenantResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.TenantResponse "Tenant details"
+// @Failure 404 {object} ierr.ErrorResponse "Tenant not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tenants/{id} [get]
 func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 	id := c.Param("id")
@@ -82,16 +82,16 @@ func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 
 // @Summary Update a tenant
 // @ID updateTenant
-// @Description Update a tenant's details including name and billing information
+// @Description Use when changing tenant details (e.g. name or billing info). Request body contains the fields to update.
 // @Tags Tenants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.UpdateTenantRequest true "Update tenant request"
-// @Success 200 {object} dto.TenantResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.TenantResponse "Updated tenant"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Tenant not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tenants/update [put]
 func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 	tenantID := c.Request.Context().Value(types.CtxTenantID).(string)
@@ -115,15 +115,15 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 
 // @Summary Get billing usage for the current tenant
 // @ID getTenantBillingUsage
-// @Description Get the subscription and usage details for the current tenant
+// @Description Use when showing the current tenant's billing usage (e.g. admin billing page or usage caps). Returns subscription and usage for the tenant.
 // @Tags Tenants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Success 200 {object} dto.TenantBillingUsage
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.TenantBillingUsage "Tenant billing usage"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Tenant not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tenant/billing [get]
 func (h *TenantHandler) GetTenantBillingUsage(c *gin.Context) {
 	usage, err := h.service.GetBillingUsage(c.Request.Context())

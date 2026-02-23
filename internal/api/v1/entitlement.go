@@ -20,17 +20,17 @@ func NewEntitlementHandler(service service.EntitlementService, log *logger.Logge
 	return &EntitlementHandler{service: service, log: log}
 }
 
-// @Summary Create a new entitlement
+// @Summary Create entitlement
 // @ID createEntitlement
-// @Description Create a new entitlement with the specified configuration
+// @Description Use when attaching a feature (and its limit) to a plan or addon (e.g. "10 seats" or "1000 API calls"). Defines what the plan/addon includes.
 // @Tags Entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param entitlement body dto.CreateEntitlementRequest true "Entitlement configuration"
 // @Success 201 {object} dto.EntitlementResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entitlements [post]
 func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 	var req dto.CreateEntitlementRequest
@@ -52,17 +52,17 @@ func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Create multiple entitlements in bulk
+// @Summary Create entitlements in bulk
 // @ID createEntitlementsBulk
-// @Description Create multiple entitlements with the specified configurations
+// @Description Use when attaching many features to a plan or addon at once (e.g. initial plan setup or import). Bulk version of create entitlement.
 // @Tags Entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param entitlements body dto.CreateBulkEntitlementRequest true "Bulk entitlement configuration"
 // @Success 201 {object} dto.CreateBulkEntitlementResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entitlements/bulk [post]
 func (h *EntitlementHandler) CreateBulkEntitlement(c *gin.Context) {
 	var req dto.CreateBulkEntitlementRequest
@@ -84,17 +84,16 @@ func (h *EntitlementHandler) CreateBulkEntitlement(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get an entitlement by ID
-// @ID getEntitlementById
-// @Description Get an entitlement by ID
+// @Summary Get entitlement
+// @ID getEntitlement
+// @Description Use when you need to load a single entitlement (e.g. to display or edit a feature limit).
 // @Tags Entitlements
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Entitlement ID"
 // @Success 200 {object} dto.EntitlementResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entitlements/{id} [get]
 func (h *EntitlementHandler) GetEntitlement(c *gin.Context) {
 	id := c.Param("id")
@@ -115,18 +114,6 @@ func (h *EntitlementHandler) GetEntitlement(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get entitlements
-// @ID getEntitlements
-// @Description Get entitlements with the specified filter
-// @Tags Entitlements
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.EntitlementFilter true "Filter"
-// @Success 200 {object} dto.ListEntitlementsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /entitlements [get]
 func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 	var filter types.EntitlementFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -152,9 +139,9 @@ func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update an entitlement
+// @Summary Update entitlement
 // @ID updateEntitlement
-// @Description Update an entitlement with the specified configuration
+// @Description Use when changing an entitlement (e.g. increasing or decreasing a limit). Request body contains the fields to update.
 // @Tags Entitlements
 // @Accept json
 // @Produce json
@@ -162,8 +149,8 @@ func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 // @Param id path string true "Entitlement ID"
 // @Param entitlement body dto.UpdateEntitlementRequest true "Entitlement configuration"
 // @Success 200 {object} dto.EntitlementResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entitlements/{id} [put]
 func (h *EntitlementHandler) UpdateEntitlement(c *gin.Context) {
 	id := c.Param("id")
@@ -193,17 +180,17 @@ func (h *EntitlementHandler) UpdateEntitlement(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete an entitlement
+// @Summary Delete entitlement
 // @ID deleteEntitlement
-// @Description Delete an entitlement
+// @Description Use when removing a feature from a plan or addon (e.g. deprecating a capability). Returns 200 with success message.
 // @Tags Entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Entitlement ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entitlements/{id} [delete]
 func (h *EntitlementHandler) DeleteEntitlement(c *gin.Context) {
 	id := c.Param("id")
@@ -223,20 +210,19 @@ func (h *EntitlementHandler) DeleteEntitlement(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "entitlement deleted successfully"})
 }
 
-// ListEntitlementsByFilter godoc
-// @Summary List entitlements by filter
-// @ID listEntitlementsByFilter
-// @Description List entitlements by filter
+// @Summary Query entitlements
+// @ID queryEntitlement
+// @Description Use when listing or searching entitlements (e.g. plan editor or audit). Returns a paginated list; supports filtering by plan, addon, feature.
 // @Tags Entitlements
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.EntitlementFilter true "Filter"
 // @Success 200 {object} dto.ListEntitlementsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entitlements/search [post]
-func (h *EntitlementHandler) ListEntitlementsByFilter(c *gin.Context) {
+func (h *EntitlementHandler) QueryEntitlements(c *gin.Context) {
 	var filter types.EntitlementFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
