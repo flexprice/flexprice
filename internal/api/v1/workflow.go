@@ -25,7 +25,19 @@ func NewWorkflowHandler(workflowService service.WorkflowService, log *logger.Log
 	}
 }
 
-func (h *WorkflowHandler) ListWorkflows(c *gin.Context) {
+// @Summary Query workflows
+// @ID queryWorkflow
+// @Description Use when listing or auditing workflow runs (e.g. ops dashboard or debugging). Returns a paginated list; supports filtering by workflow type and status.
+// @Tags Workflows
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param filter body types.WorkflowExecutionFilter true "Filter"
+// @Success 200 {object} dto.ListWorkflowsResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /workflows/search [post]
+func (h *WorkflowHandler) QueryWorkflows(c *gin.Context) {
 	var filter types.WorkflowExecutionFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

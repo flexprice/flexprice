@@ -26,17 +26,17 @@ func NewScheduledTaskHandler(
 	}
 }
 
-// @Summary Create a scheduled task
+// @Summary Create scheduled task
 // @ID createScheduledTask
-// @Description Create a new scheduled task for data export
-// @Tags ScheduledTasks
+// @Description Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param scheduled_task body dto.CreateScheduledTaskRequest true "Scheduled Task"
 // @Success 201 {object} dto.ScheduledTaskResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled [post]
 func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 	var req dto.CreateScheduledTaskRequest
@@ -58,18 +58,18 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a scheduled task
+// @Summary Get scheduled task
 // @ID getScheduledTask
-// @Description Get a scheduled task by ID
-// @Tags ScheduledTasks
+// @Description Use when you need to load a single scheduled task (e.g. to show details in a UI or check its configuration).
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Scheduled Task ID"
 // @Success 200 {object} dto.ScheduledTaskResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled/{id} [get]
 func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 	id := c.Param("id")
@@ -86,8 +86,8 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 
 // @Summary List scheduled tasks
 // @ID listScheduledTasks
-// @Description Get a list of scheduled tasks with optional filters
-// @Tags ScheduledTasks
+// @Description Use when listing or managing scheduled tasks in an admin UI. Returns a list; supports filtering by status, type, and pagination.
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -98,8 +98,8 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 // @Param interval query string false "Filter by interval"
 // @Param enabled query bool false "Filter by enabled status"
 // @Success 200 {object} dto.ListScheduledTasksResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled [get]
 func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 	var filter types.QueryFilter
@@ -139,8 +139,8 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 
 // @Summary Update a scheduled task
 // @ID updateScheduledTask
-// @Description Update a scheduled task by ID - Only enabled field can be changed (pause/resume)
-// @Tags ScheduledTasks
+// @Description Use when pausing or resuming a scheduled task. Only the enabled field can be changed.
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -175,8 +175,8 @@ func (h *ScheduledTaskHandler) UpdateScheduledTask(c *gin.Context) {
 
 // @Summary Delete a scheduled task
 // @ID deleteScheduledTask
-// @Description Archive a scheduled task by ID (soft delete) - Sets status to archived and deletes from Temporal
-// @Tags ScheduledTasks
+// @Description Use when removing a scheduled task from the active roster. Archives the task and removes it from the scheduler (soft delete).
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -205,17 +205,17 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 
 // @Summary Trigger force run
 // @ID triggerScheduledTaskRun
-// @Description Trigger a force run export immediately for a scheduled task with optional custom time range
-// @Tags ScheduledTasks
+// @Description Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Scheduled Task ID"
 // @Param request body dto.TriggerForceRunRequest false "Optional start and end time for custom range"
 // @Success 200 {object} dto.TriggerForceRunResponse "Returns workflow details and time range"
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled/{id}/run [post]
 func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 	id := c.Param("id")
@@ -259,15 +259,15 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 
 // @Summary Schedule update billing period
 // @ID scheduleUpdateBillingPeriod
-// @Description Schedule an update billing period workflow
-// @Tags ScheduledTasks
+// @Description Use when you need to trigger a billing-period update workflow (e.g. to recalculate or sync billing windows).
+// @Tags Scheduled Tasks
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body object true "Schedule Update Billing Period Request"
 // @Success 200 {object} object
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /tasks/scheduled/schedule-update-billing-period [post]
 func (h *ScheduledTaskHandler) ScheduleUpdateBillingPeriod(c *gin.Context) {
 

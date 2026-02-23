@@ -25,17 +25,17 @@ func NewFeatureHandler(featureService service.FeatureService, log *logger.Logger
 }
 
 // CreateFeature godoc
-// @Summary Create a new feature
+// @Summary Create feature
 // @ID createFeature
-// @Description Create a new feature
+// @Description Use when defining a new feature or capability to gate or meter (e.g. feature flags or usage-based limits). Ideal for boolean or usage features.
 // @Tags Features
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param feature body dto.CreateFeatureRequest true "Feature to create"
 // @Success 201 {object} dto.FeatureResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /features [post]
 func (h *FeatureHandler) CreateFeature(c *gin.Context) {
 	var req dto.CreateFeatureRequest
@@ -55,20 +55,6 @@ func (h *FeatureHandler) CreateFeature(c *gin.Context) {
 	c.JSON(http.StatusCreated, feature)
 }
 
-// GetFeature godoc
-// @Summary Get a feature by ID
-// @ID getFeatureById
-// @Description Get a feature by ID
-// @Tags Features
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Feature ID"
-// @Success 200 {object} dto.FeatureResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /features/{id} [get]
 func (h *FeatureHandler) GetFeature(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -87,19 +73,6 @@ func (h *FeatureHandler) GetFeature(c *gin.Context) {
 	c.JSON(http.StatusOK, feature)
 }
 
-// ListFeatures godoc
-// @Summary List features
-// @ID listFeatures
-// @Description List features with optional filtering
-// @Tags Features
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.FeatureFilter true "Filter"
-// @Success 200 {object} dto.ListFeaturesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /features [get]
 func (h *FeatureHandler) ListFeatures(c *gin.Context) {
 	var filter types.FeatureFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -123,9 +96,9 @@ func (h *FeatureHandler) ListFeatures(c *gin.Context) {
 }
 
 // UpdateFeature godoc
-// @Summary Update a feature
+// @Summary Update feature
 // @ID updateFeature
-// @Description Update a feature by ID
+// @Description Use when changing feature definition (e.g. name, type, or meter). Request body contains the fields to update.
 // @Tags Features
 // @Accept json
 // @Produce json
@@ -133,9 +106,9 @@ func (h *FeatureHandler) ListFeatures(c *gin.Context) {
 // @Param id path string true "Feature ID"
 // @Param feature body dto.UpdateFeatureRequest true "Feature update data"
 // @Success 200 {object} dto.FeatureResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /features/{id} [put]
 func (h *FeatureHandler) UpdateFeature(c *gin.Context) {
 	id := c.Param("id")
@@ -164,18 +137,18 @@ func (h *FeatureHandler) UpdateFeature(c *gin.Context) {
 }
 
 // DeleteFeature godoc
-// @Summary Delete a feature
+// @Summary Delete feature
 // @ID deleteFeature
-// @Description Delete a feature by ID
+// @Description Use when retiring a feature (e.g. deprecated capability). Returns 200 with success message.
 // @Tags Features
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Feature ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /features/{id} [delete]
 func (h *FeatureHandler) DeleteFeature(c *gin.Context) {
 	id := c.Param("id")
@@ -194,20 +167,19 @@ func (h *FeatureHandler) DeleteFeature(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "feature deleted successfully"})
 }
 
-// ListFeaturesByFilter godoc
-// @Summary List features by filter
-// @ID listFeaturesByFilter
-// @Description List features by filter
+// @Summary Query features
+// @ID queryFeature
+// @Description Use when listing or searching features (e.g. catalog or entitlement setup). Returns a paginated list; supports filtering and sorting.
 // @Tags Features
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.FeatureFilter true "Filter"
 // @Success 200 {object} dto.ListFeaturesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /features/search [post]
-func (h *FeatureHandler) ListFeaturesByFilter(c *gin.Context) {
+func (h *FeatureHandler) QueryFeatures(c *gin.Context) {
 	var filter types.FeatureFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

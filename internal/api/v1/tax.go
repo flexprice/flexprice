@@ -26,15 +26,15 @@ func NewTaxHandler(service service.TaxService, logger *logger.Logger) *TaxHandle
 
 // @Summary Create a tax rate
 // @ID createTaxRate
-// @Description Create a tax rate
+// @Description Use when defining a new tax rate (e.g. VAT or sales tax) for use in invoices. Attach to customers or products via tax associations.
 // @Tags Tax Rates
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param tax_rate body dto.CreateTaxRateRequest true "Tax rate to create"
 // @Success 201 {object} dto.TaxRateResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates [post]
 func (h *TaxHandler) CreateTaxRate(c *gin.Context) {
 	var req dto.CreateTaxRateRequest
@@ -56,15 +56,15 @@ func (h *TaxHandler) CreateTaxRate(c *gin.Context) {
 
 // @Summary Get a tax rate
 // @ID getTaxRate
-// @Description Get a tax rate
+// @Description Use when you need to load a single tax rate (e.g. for display or when creating an association).
 // @Tags Tax Rates
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax rate ID"
 // @Success 200 {object} dto.TaxRateResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates/{id} [get]
 func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 	taxRates, err := h.service.GetTaxRate(c.Request.Context(), c.Param("id"))
@@ -77,15 +77,15 @@ func (h *TaxHandler) GetTaxRate(c *gin.Context) {
 
 // @Summary Get tax rates
 // @ID getTaxRates
-// @Description Get tax rates
+// @Description Use when listing tax rates (e.g. tax config UI). Returns tax rates with optional filters.
 // @Tags Tax Rates
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.TaxRateFilter true "Filter"
 // @Success 200 {object} []dto.TaxRateResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates [get]
 func (h *TaxHandler) ListTaxRates(c *gin.Context) {
 	var filter types.TaxRateFilter
@@ -106,7 +106,7 @@ func (h *TaxHandler) ListTaxRates(c *gin.Context) {
 
 // @Summary Update a tax rate
 // @ID updateTaxRate
-// @Description Update a tax rate
+// @Description Use when changing a tax rate (e.g. rate value or name). Request body contains the fields to update.
 // @Tags Tax Rates
 // @Accept json
 // @Produce json
@@ -114,8 +114,8 @@ func (h *TaxHandler) ListTaxRates(c *gin.Context) {
 // @Param id path string true "Tax rate ID"
 // @Param tax_rate body dto.UpdateTaxRateRequest true "Tax rate to update"
 // @Success 200 {object} dto.TaxRateResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates/{id} [put]
 func (h *TaxHandler) UpdateTaxRate(c *gin.Context) {
 	var req dto.UpdateTaxRateRequest
@@ -139,15 +139,15 @@ func (h *TaxHandler) UpdateTaxRate(c *gin.Context) {
 
 // @Summary Delete a tax rate
 // @ID deleteTaxRate
-// @Description Delete a tax rate
+// @Description Use when retiring a tax rate (e.g. no longer applicable). Fails if still referenced by associations.
 // @Tags Tax Rates
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax rate ID"
 // @Success 204 {object} nil
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/rates/{id} [delete]
 func (h *TaxHandler) DeleteTaxRate(c *gin.Context) {
 	id := c.Param("id")
@@ -163,15 +163,15 @@ func (h *TaxHandler) DeleteTaxRate(c *gin.Context) {
 
 // @Summary Create Tax Association
 // @ID createTaxAssociation
-// @Description Create a new tax association
+// @Description Use when linking a tax rate to an entity (e.g. customer, product, or region) so that rate applies on invoices.
 // @Tags Tax Associations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param tax_config body dto.CreateTaxAssociationRequest true "Tax Config Request"
 // @Success 200 {object} dto.TaxAssociationResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/associations [post]
 func (h *TaxHandler) CreateTaxAssociation(c *gin.Context) {
 	var req dto.CreateTaxAssociationRequest
@@ -193,15 +193,15 @@ func (h *TaxHandler) CreateTaxAssociation(c *gin.Context) {
 
 // @Summary Get Tax Association
 // @ID getTaxAssociation
-// @Description Get a tax association by ID
+// @Description Use when you need to load a single tax association (e.g. for display or editing).
 // @Tags Tax Associations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax Config ID"
 // @Success 200 {object} dto.TaxAssociationResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/associations/{id} [get]
 func (h *TaxHandler) GetTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
@@ -217,7 +217,7 @@ func (h *TaxHandler) GetTaxAssociation(c *gin.Context) {
 
 // @Summary Update tax association
 // @ID updateTaxAssociation
-// @Description Update a tax association by ID
+// @Description Use when changing a tax association (e.g. switch rate or entity). Request body contains the fields to update.
 // @Tags Tax Associations
 // @Accept json
 // @Produce json
@@ -225,8 +225,8 @@ func (h *TaxHandler) GetTaxAssociation(c *gin.Context) {
 // @Param id path string true "Tax Config ID"
 // @Param tax_config body dto.TaxAssociationUpdateRequest true "Tax Config Request"
 // @Success 200 {object} dto.TaxAssociationResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/associations/{id} [put]
 func (h *TaxHandler) UpdateTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
@@ -250,15 +250,15 @@ func (h *TaxHandler) UpdateTaxAssociation(c *gin.Context) {
 
 // @Summary Delete tax association
 // @ID deleteTaxAssociation
-// @Description Delete a tax association by ID
+// @Description Use when removing a tax association (e.g. entity no longer subject to that rate).
 // @Tags Tax Associations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Tax Config ID"
 // @Success 200 {object} dto.TaxAssociationResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/associations/{id} [delete]
 func (h *TaxHandler) DeleteTaxAssociation(c *gin.Context) {
 	id := c.Param("id")
@@ -272,7 +272,7 @@ func (h *TaxHandler) DeleteTaxAssociation(c *gin.Context) {
 
 // @Summary List tax associations
 // @ID listTaxAssociations
-// @Description List tax associations
+// @Description Use when listing tax associations (e.g. tax config or audit). Returns list with optional filtering.
 // @Tags Tax Associations
 // @Accept json
 // @Produce json
@@ -282,8 +282,8 @@ func (h *TaxHandler) DeleteTaxAssociation(c *gin.Context) {
 // @Param external_customer_id query string false "External Customer ID"
 // @Param tax_rate_id query string false "Tax Rate ID"
 // @Success 200 {object} dto.ListTaxAssociationsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /taxes/associations [get]
 func (h *TaxHandler) ListTaxAssociations(c *gin.Context) {
 	var filter types.TaxAssociationFilter

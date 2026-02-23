@@ -27,18 +27,18 @@ func NewCostsheetHandler(service service.CostsheetService, log *logger.Logger) *
 	}
 }
 
-// @Summary Create a new costsheet
+// @Summary Create costsheet
 // @ID createCostsheet
-// @Description Create a new costsheet with the specified name
+// @Description Use when setting up a new pricing configuration (e.g. a new product or region). Costsheets group prices and define the default for the environment.
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param costsheet body dto.CreateCostsheetRequest true "Costsheet configuration"
-// @Success 201 {object} dto.CreateCostsheetResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 409 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 201 {object} dto.CreateCostsheetResponse "Created costsheet"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 409 {object} ierr.ErrorResponse "Conflict"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs [post]
 func (h *CostsheetHandler) CreateCostsheet(c *gin.Context) {
 	var req dto.CreateCostsheetRequest
@@ -60,19 +60,18 @@ func (h *CostsheetHandler) CreateCostsheet(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a costsheet by ID
-// @ID getCostsheetById
-// @Description Get a costsheet by ID with optional price expansion
+// @Summary Get costsheet
+// @ID getCostsheet
+// @Description Use when you need to load a single costsheet (e.g. for editing or display). Supports optional expand for related prices.
 // @Tags Costs
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Costsheet ID"
 // @Param expand query string false "Comma-separated list of fields to expand (e.g., 'prices')"
-// @Success 200 {object} dto.GetCostsheetResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.GetCostsheetResponse "Costsheet details"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Costsheet not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/{id} [get]
 func (h *CostsheetHandler) GetCostsheet(c *gin.Context) {
 	id := c.Param("id")
@@ -93,20 +92,20 @@ func (h *CostsheetHandler) GetCostsheet(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a costsheet
+// @Summary Update costsheet
 // @ID updateCostsheet
-// @Description Update a costsheet with the specified configuration
+// @Description Use when changing costsheet name or metadata.
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Costsheet ID"
 // @Param costsheet body dto.UpdateCostsheetRequest true "Costsheet configuration"
-// @Success 200 {object} dto.UpdateCostsheetResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 409 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.UpdateCostsheetResponse "Updated costsheet"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Costsheet not found"
+// @Failure 409 {object} ierr.ErrorResponse "Conflict"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/{id} [put]
 func (h *CostsheetHandler) UpdateCostsheet(c *gin.Context) {
 	id := c.Param("id")
@@ -136,18 +135,18 @@ func (h *CostsheetHandler) UpdateCostsheet(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a costsheet
+// @Summary Delete costsheet
 // @ID deleteCostsheet
-// @Description Soft delete a costsheet by setting its status to deleted
+// @Description Use when retiring a costsheet (e.g. end-of-life product). Soft-deletes; status set to deleted.
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Costsheet ID"
-// @Success 200 {object} dto.DeleteCostsheetResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.DeleteCostsheetResponse "Costsheet deleted"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Costsheet not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/{id} [delete]
 func (h *CostsheetHandler) DeleteCostsheet(c *gin.Context) {
 	id := c.Param("id")
@@ -168,19 +167,19 @@ func (h *CostsheetHandler) DeleteCostsheet(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary List costsheets by filter
-// @ID listCostsheetsByFilter
-// @Description List costsheet records by filter with POST body
+// @Summary Query costsheets
+// @ID queryCostsheet
+// @Description Use when listing or searching costsheets (e.g. admin catalog). Returns a paginated list; supports filtering and sorting.
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body domainCostsheet.Filter true "Filter"
-// @Success 200 {object} dto.ListCostsheetResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.ListCostsheetResponse "Paginated costsheets"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/search [post]
-func (h *CostsheetHandler) ListCostsheetByFilter(c *gin.Context) {
+func (h *CostsheetHandler) QueryCostsheets(c *gin.Context) {
 	var filter domainCostsheet.Filter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -208,16 +207,15 @@ func (h *CostsheetHandler) ListCostsheetByFilter(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get active costsheet for tenant
+// @Summary Get active costsheet
 // @ID getActiveCostsheet
-// @Description Get the active costsheet for the current tenant
+// @Description Use when you need the tenant's default pricing configuration (e.g. for checkout or plan display). Returns the active costsheet for the environment.
 // @Tags Costs
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Success 200 {object} dto.CostsheetResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.CostsheetResponse "Active costsheet"
+// @Failure 404 {object} ierr.ErrorResponse "No active costsheet"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/active [get]
 func (h *CostsheetHandler) GetActiveCostsheetForTenant(c *gin.Context) {
 	resp, err := h.service.GetActiveCostsheetForTenant(c.Request.Context())

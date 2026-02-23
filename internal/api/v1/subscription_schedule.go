@@ -24,7 +24,7 @@ func NewSubscriptionScheduleHandler(scheduleService service.SubscriptionSchedule
 // GetSchedule retrieves a specific schedule
 // @Summary Get subscription schedule
 // @ID getSubscriptionSchedule
-// @Description Retrieves details of a specific subscription schedule
+// @Description Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -47,7 +47,7 @@ func (h *SubscriptionScheduleHandler) GetSchedule(c *gin.Context) {
 // ListSchedulesForSubscription lists all schedules for a subscription
 // @Summary List subscription schedules
 // @ID listSubscriptionSchedules
-// @Description Retrieves all schedules for a specific subscription
+// @Description Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -74,7 +74,7 @@ func (h *SubscriptionScheduleHandler) ListSchedulesForSubscription(c *gin.Contex
 // CancelSchedule cancels a pending schedule
 // @Summary Cancel subscription schedule
 // @ID cancelSubscriptionSchedule
-// @Description Cancels a pending subscription schedule. Supports two modes: 1) By schedule ID in path, or 2) By subscription ID + schedule type in request body
+// @Description Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -139,7 +139,7 @@ func (h *SubscriptionScheduleHandler) CancelSchedule(c *gin.Context) {
 // ListSchedules lists schedules with filtering
 // @Summary List all subscription schedules
 // @ID listAllSubscriptionSchedules
-// @Description Retrieves subscription schedules with optional filtering
+// @Description Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
