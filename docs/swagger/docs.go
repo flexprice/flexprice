@@ -30,6 +30,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "List addons",
+                "operationId": "get_addons",
                 "parameters": [
                     {
                         "type": "array",
@@ -151,6 +152,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Create addon",
+                "operationId": "post_addons",
                 "parameters": [
                     {
                         "description": "Addon Request",
@@ -199,6 +201,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Get addon by lookup key",
+                "operationId": "get_addons_lookup_by_lookup_key",
                 "parameters": [
                     {
                         "type": "string",
@@ -237,7 +240,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List addons by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -248,6 +251,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "List addons by filter",
+                "operationId": "post_addons_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -296,6 +300,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Get addon",
+                "operationId": "get_addons_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -343,6 +348,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Update addon",
+                "operationId": "put_addons_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -396,6 +402,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Delete addon",
+                "operationId": "delete_addons_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -445,6 +452,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get addon entitlements",
+                "operationId": "get_addons_by_id_entitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -500,6 +508,7 @@ const docTemplate = `{
                     "Alert Logs"
                 ],
                 "summary": "List alert logs by filter",
+                "operationId": "post_alert_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -546,6 +555,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Login",
+                "operationId": "post_auth_login",
                 "parameters": [
                     {
                         "description": "Login request",
@@ -586,6 +596,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Sign up",
+                "operationId": "post_auth_signup",
                 "parameters": [
                     {
                         "description": "Sign up request",
@@ -631,6 +642,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Get connections",
+                "operationId": "get_connections",
                 "parameters": [
                     {
                         "type": "array",
@@ -682,7 +694,8 @@ const docTemplate = `{
                             "razorpay",
                             "chargebee",
                             "quickbooks",
-                            "nomod"
+                            "nomod",
+                            "moyasar"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -693,7 +706,8 @@ const docTemplate = `{
                             "SecretProviderRazorpay",
                             "SecretProviderChargebee",
                             "SecretProviderQuickBooks",
-                            "SecretProviderNomod"
+                            "SecretProviderNomod",
+                            "SecretProviderMoyasar"
                         ],
                         "name": "provider_type",
                         "in": "query"
@@ -748,7 +762,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List connections by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -759,6 +773,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "List connections by filter",
+                "operationId": "post_connections_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -810,6 +825,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Get a connection",
+                "operationId": "get_connections_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -863,6 +879,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Update a connection",
+                "operationId": "put_connections_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -925,6 +942,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Delete a connection",
+                "operationId": "delete_connections_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -977,6 +995,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Create a new costsheet",
+                "operationId": "post_costs",
                 "parameters": [
                     {
                         "description": "Costsheet configuration",
@@ -1034,6 +1053,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get active costsheet for tenant",
+                "operationId": "get_costs_active",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1074,6 +1094,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get combined revenue and cost analytics",
+                "operationId": "post_costs_analytics",
                 "parameters": [
                     {
                         "description": "Combined analytics request (start_time/end_time optional - defaults to last 7 days)",
@@ -1125,6 +1146,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get combined revenue and cost analytics",
+                "operationId": "post_costs_analytics_v2",
                 "parameters": [
                     {
                         "description": "Combined analytics request (start_time/end_time optional - defaults to last 7 days)",
@@ -1176,6 +1198,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "List costsheets by filter",
+                "operationId": "post_costs_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -1227,6 +1250,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get a costsheet by ID",
+                "operationId": "get_costs_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -1286,6 +1310,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Update a costsheet",
+                "operationId": "put_costs_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -1354,6 +1379,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Delete a costsheet",
+                "operationId": "delete_costs_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -1412,6 +1438,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "List coupons with filtering",
+                "operationId": "get_coupons",
                 "parameters": [
                     {
                         "type": "array",
@@ -1524,6 +1551,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Create a new coupon",
+                "operationId": "post_coupons",
                 "parameters": [
                     {
                         "description": "Coupon request",
@@ -1596,6 +1624,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Get a coupon by ID",
+                "operationId": "get_coupons_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -1664,6 +1693,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Update a coupon",
+                "operationId": "put_coupons_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -1741,6 +1771,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Delete a coupon",
+                "operationId": "delete_coupons_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -1811,7 +1842,17 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Get credit grants",
+                "operationId": "get_creditgrants",
                 "parameters": [
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "credit_grant_ids",
+                        "in": "query"
+                    },
                     {
                         "type": "string",
                         "name": "end_time",
@@ -1940,6 +1981,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Create a new credit grant",
+                "operationId": "post_creditgrants",
                 "parameters": [
                     {
                         "description": "Credit Grant configuration",
@@ -1980,7 +2022,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a credit grant by ID",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1991,6 +2033,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Get a credit grant by ID",
+                "operationId": "get_creditgrants_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -2038,6 +2081,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Update a credit grant",
+                "operationId": "put_creditgrants_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -2083,7 +2127,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a credit grant",
+                "description": "Delete a credit grant. Plan-scoped grants are archived; subscription-scoped grants have their end date set (optional body with effective_date). Request body is optional.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2094,6 +2138,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Delete a credit grant",
+                "operationId": "delete_creditgrants_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -2101,6 +2146,14 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Optional: effective_date for subscription-scoped grants",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DeleteCreditGrantRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -2146,6 +2199,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "List credit notes with filtering",
+                "operationId": "get_creditnotes",
                 "parameters": [
                     {
                         "type": "array",
@@ -2305,6 +2359,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Create a new credit note",
+                "operationId": "post_creditnotes",
                 "parameters": [
                     {
                         "description": "Credit note request",
@@ -2377,6 +2432,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Get a credit note by ID",
+                "operationId": "get_creditnotes_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -2447,6 +2503,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Process a draft credit note",
+                "operationId": "post_creditnotes_by_id_finalize",
                 "parameters": [
                     {
                         "type": "string",
@@ -2517,6 +2574,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Void a credit note",
+                "operationId": "post_creditnotes_by_id_void",
                 "parameters": [
                     {
                         "type": "string",
@@ -2573,7 +2631,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get customers",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2584,6 +2642,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customers",
+                "operationId": "get_customers",
                 "parameters": [
                     {
                         "type": "array",
@@ -2713,6 +2772,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Update a customer",
+                "operationId": "put_customers",
                 "parameters": [
                     {
                         "type": "string",
@@ -2763,7 +2823,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a customer",
+                "description": "Validates input and creates a new resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2774,6 +2834,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Create a customer",
+                "operationId": "post_customers",
                 "parameters": [
                     {
                         "description": "Customer",
@@ -2814,7 +2875,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer by external id",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2825,6 +2886,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get a customer by external id",
+                "operationId": "get_customers_external_by_external_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -2869,7 +2931,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List customers by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2880,6 +2942,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "List customers by filter",
+                "operationId": "post_customers_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -2931,6 +2994,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customer usage summary",
+                "operationId": "get_customers_usage",
                 "parameters": [
                     {
                         "type": "string",
@@ -3010,10 +3074,17 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get Customer Wallets",
+                "operationId": "get_customers_wallets",
                 "parameters": [
                     {
                         "type": "string",
                         "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "name": "from_cache",
                         "in": "query"
                     },
                     {
@@ -3071,7 +3142,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3082,6 +3153,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get a customer",
+                "operationId": "get_customers_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -3118,7 +3190,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a customer",
+                "description": "Deletes the target resource and returns the operation result for the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3129,6 +3201,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Delete a customer",
+                "operationId": "delete_customers_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -3164,7 +3237,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get customer entitlements",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3175,6 +3248,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customer entitlements",
+                "operationId": "get_customers_by_id_entitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -3239,6 +3313,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get upcoming credit grant applications",
+                "operationId": "get_customers_by_id_grants_upcoming",
                 "parameters": [
                     {
                         "type": "string",
@@ -3283,7 +3358,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer invoice summary",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3294,6 +3369,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get a customer invoice summary",
+                "operationId": "get_customers_by_id_invoices_summary",
                 "parameters": [
                     {
                         "type": "string",
@@ -3343,6 +3419,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallets by customer ID",
+                "operationId": "get_customers_by_id_wallets",
                 "parameters": [
                     {
                         "type": "string",
@@ -3395,6 +3472,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get entitlements",
+                "operationId": "get_entitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -3549,6 +3627,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Create a new entitlement",
+                "operationId": "post_entitlements",
                 "parameters": [
                     {
                         "description": "Entitlement configuration",
@@ -3600,6 +3679,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Create multiple entitlements in bulk",
+                "operationId": "post_entitlements_bulk",
                 "parameters": [
                     {
                         "description": "Bulk entitlement configuration",
@@ -3640,7 +3720,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List entitlements by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3651,6 +3731,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "List entitlements by filter",
+                "operationId": "post_entitlements_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -3691,7 +3772,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get an entitlement by ID",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3702,6 +3783,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get an entitlement by ID",
+                "operationId": "get_entitlements_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -3749,6 +3831,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Update an entitlement",
+                "operationId": "put_entitlements_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -3794,7 +3877,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete an entitlement",
+                "description": "Deletes the target resource and returns the operation result for the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3805,6 +3888,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Delete an entitlement",
+                "operationId": "delete_entitlements_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -3854,6 +3938,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "List entity integration mappings",
+                "operationId": "get_entity_integration_mappings",
                 "parameters": [
                     {
                         "type": "string",
@@ -3936,6 +4021,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Create entity integration mapping",
+                "operationId": "post_entity_integration_mappings",
                 "parameters": [
                     {
                         "description": "Entity integration mapping data",
@@ -3999,6 +4085,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Get entity integration mapping",
+                "operationId": "get_entity_integration_mappings_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -4058,6 +4145,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Delete entity integration mapping",
+                "operationId": "delete_entity_integration_mappings_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -4105,7 +4193,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get environments",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4116,6 +4204,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Get environments",
+                "operationId": "get_environments",
                 "parameters": [
                     {
                         "type": "string",
@@ -4185,7 +4274,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create an environment",
+                "description": "Validates input and creates a new resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4196,6 +4285,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Create an environment",
+                "operationId": "post_environments",
                 "parameters": [
                     {
                         "description": "Environment",
@@ -4236,7 +4326,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get an environment",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4247,6 +4337,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Get an environment",
+                "operationId": "get_environments_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -4289,7 +4380,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an environment",
+                "description": "Validates input and updates the target resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4300,6 +4391,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Update an environment",
+                "operationId": "put_environments_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -4364,6 +4456,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Ingest event",
+                "operationId": "post_events",
                 "parameters": [
                     {
                         "description": "Event data",
@@ -4415,6 +4508,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage analytics",
+                "operationId": "post_events_analytics",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4466,6 +4560,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Bulk Ingest events",
+                "operationId": "post_events_bulk",
                 "parameters": [
                     {
                         "description": "Event data",
@@ -4517,6 +4612,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get hugging face inference data",
+                "operationId": "post_events_huggingface_inference",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4548,6 +4644,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get monitoring data",
+                "operationId": "get_events_monitoring",
                 "parameters": [
                     {
                         "type": "string",
@@ -4593,6 +4690,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "List raw events",
+                "operationId": "post_events_query",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4641,6 +4739,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage statistics",
+                "operationId": "post_events_usage",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4689,6 +4788,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage by meter",
+                "operationId": "post_events_usage_meter",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4743,6 +4843,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get event by ID",
+                "operationId": "get_events_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -4792,6 +4893,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "List features",
+                "operationId": "get_features",
                 "parameters": [
                     {
                         "type": "string",
@@ -4911,7 +5013,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new feature",
+                "description": "Validates input and creates a new resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4922,6 +5024,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Create a new feature",
+                "operationId": "post_features",
                 "parameters": [
                     {
                         "description": "Feature to create",
@@ -4962,7 +5065,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List features by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4973,6 +5076,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "List features by filter",
+                "operationId": "post_features_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -5013,7 +5117,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a feature by ID",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5024,6 +5128,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Get a feature by ID",
+                "operationId": "get_features_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5077,6 +5182,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Update a feature",
+                "operationId": "put_features_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5139,6 +5245,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Delete a feature",
+                "operationId": "delete_features_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5194,6 +5301,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Create a group",
+                "operationId": "post_groups",
                 "parameters": [
                     {
                         "description": "Group",
@@ -5245,6 +5353,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Get groups",
+                "operationId": "post_groups_search",
                 "parameters": [
                     {
                         "type": "string",
@@ -5329,6 +5438,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Get a group",
+                "operationId": "get_groups_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5382,6 +5492,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Delete a group",
+                "operationId": "delete_groups_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5434,6 +5545,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "List invoices",
+                "operationId": "get_invoices",
                 "parameters": [
                     {
                         "type": "number",
@@ -5553,6 +5665,30 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "period_end_gte filters invoices with period_end \u003e= value",
+                        "name": "period_end_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "period_end_lte filters invoices with period_end \u003c= value",
+                        "name": "period_end_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "period_start_gte filters invoices with period_start \u003e= value",
+                        "name": "period_start_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "period_start_lte filters invoices with period_start \u003c= value",
+                        "name": "period_start_lte",
+                        "in": "query"
+                    },
+                    {
                         "type": "boolean",
                         "description": "SkipLineItems if true, will not include line items in the response",
                         "name": "skip_line_items",
@@ -5623,6 +5759,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Create a new one off invoice",
+                "operationId": "post_invoices",
                 "parameters": [
                     {
                         "description": "Invoice details",
@@ -5663,7 +5800,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a preview invoice",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5674,6 +5811,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get a preview invoice",
+                "operationId": "post_invoices_preview",
                 "parameters": [
                     {
                         "description": "Preview Invoice Request",
@@ -5714,7 +5852,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List invoices by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5725,6 +5863,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "List invoices by filter",
+                "operationId": "post_invoices_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -5776,6 +5915,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get an invoice by ID",
+                "operationId": "get_invoices_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5839,6 +5979,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Update an invoice",
+                "operationId": "put_invoices_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -5903,6 +6044,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Trigger communication webhook for an invoice",
+                "operationId": "post_invoices_by_id_comms_trigger",
                 "parameters": [
                     {
                         "type": "string",
@@ -5958,6 +6100,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Finalize an invoice",
+                "operationId": "post_invoices_by_id_finalize",
                 "parameters": [
                     {
                         "type": "string",
@@ -6007,6 +6150,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Update invoice payment status",
+                "operationId": "put_invoices_by_id_payment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6071,6 +6215,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Attempt payment for an invoice",
+                "operationId": "post_invoices_by_id_payment_attempt",
                 "parameters": [
                     {
                         "type": "string",
@@ -6120,6 +6265,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get PDF for an invoice",
+                "operationId": "get_invoices_by_id_pdf",
                 "parameters": [
                     {
                         "type": "string",
@@ -6181,6 +6327,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Recalculate invoice totals and line items",
+                "operationId": "post_invoices_by_id_recalculate",
                 "parameters": [
                     {
                         "type": "string",
@@ -6242,6 +6389,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Void an invoice",
+                "operationId": "post_invoices_by_id_void",
                 "parameters": [
                     {
                         "type": "string",
@@ -6291,6 +6439,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "List payments",
+                "operationId": "get_payments",
                 "parameters": [
                     {
                         "type": "string",
@@ -6438,6 +6587,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Create a new payment",
+                "operationId": "post_payments",
                 "parameters": [
                     {
                         "description": "Payment configuration",
@@ -6478,7 +6628,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a payment by ID",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6489,6 +6639,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Get a payment by ID",
+                "operationId": "get_payments_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -6536,6 +6687,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Update a payment",
+                "operationId": "put_payments_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -6581,7 +6733,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a payment",
+                "description": "Deletes the target resource and returns the operation result for the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6592,6 +6744,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Delete a payment",
+                "operationId": "delete_payments_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -6630,7 +6783,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Process a payment",
+                "description": "Executes the requested processing workflow and returns the resulting operation state.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6641,6 +6794,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Process a payment",
+                "operationId": "post_payments_by_id_process",
                 "parameters": [
                     {
                         "type": "string",
@@ -6690,6 +6844,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Get plans",
+                "operationId": "get_plans",
                 "parameters": [
                     {
                         "type": "string",
@@ -6796,6 +6951,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Create a new plan",
+                "operationId": "post_plans",
                 "parameters": [
                     {
                         "description": "Plan configuration",
@@ -6836,7 +6992,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List plans by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6847,6 +7003,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "List plans by filter",
+                "operationId": "post_plans_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -6898,6 +7055,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Get a plan",
+                "operationId": "get_plans_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -6951,6 +7109,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Update a plan",
+                "operationId": "put_plans_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -7013,6 +7172,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Delete a plan",
+                "operationId": "delete_plans_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -7068,6 +7228,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Get plan credit grants",
+                "operationId": "get_plans_by_id_creditgrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -7123,6 +7284,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get plan entitlements",
+                "operationId": "get_plans_by_id_entitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -7178,6 +7340,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Synchronize plan prices",
+                "operationId": "post_plans_by_id_sync_subscriptions",
                 "parameters": [
                     {
                         "type": "string",
@@ -7239,6 +7402,7 @@ const docTemplate = `{
                     "CustomerPortal"
                 ],
                 "summary": "Create a customer portal session",
+                "operationId": "get_portal_by_external_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -7294,6 +7458,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get prices",
+                "operationId": "get_prices",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -7468,6 +7633,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Create a new price",
+                "operationId": "post_prices",
                 "parameters": [
                     {
                         "description": "Price configuration",
@@ -7519,6 +7685,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Create multiple prices in bulk",
+                "operationId": "post_prices_bulk",
                 "parameters": [
                     {
                         "description": "Bulk price configuration",
@@ -7559,7 +7726,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get price by lookup key",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7570,6 +7737,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get price by lookup key",
+                "operationId": "get_prices_lookup_by_lookup_key",
                 "parameters": [
                     {
                         "type": "string",
@@ -7619,6 +7787,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "List price units",
+                "operationId": "get_prices_units",
                 "parameters": [
                     {
                         "type": "string",
@@ -7683,6 +7852,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Create a new price unit",
+                "operationId": "post_prices_units",
                 "parameters": [
                     {
                         "description": "Price unit details",
@@ -7717,7 +7887,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a price unit by code",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7728,6 +7898,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Get a price unit by code",
+                "operationId": "get_prices_units_code_by_code",
                 "parameters": [
                     {
                         "type": "string",
@@ -7772,7 +7943,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List price units by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7783,6 +7954,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "List price units by filter",
+                "operationId": "post_prices_units_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -7823,7 +7995,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a price unit by ID",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7834,6 +8006,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Get a price unit by ID",
+                "operationId": "get_prices_units_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -7881,6 +8054,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Update a price unit",
+                "operationId": "put_prices_units_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -7937,6 +8111,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Delete a price unit",
+                "operationId": "delete_prices_units_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -7986,6 +8161,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get a price by ID",
+                "operationId": "get_prices_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8033,6 +8209,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Update a price",
+                "operationId": "put_prices_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8078,7 +8255,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a price",
+                "description": "Deletes the target resource and returns the operation result for the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8089,6 +8266,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Delete a price",
+                "operationId": "delete_prices_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8147,6 +8325,7 @@ const docTemplate = `{
                     "RBAC"
                 ],
                 "summary": "List all RBAC roles",
+                "operationId": "get_rbac_roles",
                 "responses": {
                     "200": {
                         "description": "List of roles",
@@ -8185,6 +8364,7 @@ const docTemplate = `{
                     "RBAC"
                 ],
                 "summary": "Get a specific RBAC role",
+                "operationId": "get_rbac_roles_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8232,6 +8412,7 @@ const docTemplate = `{
                     "secrets"
                 ],
                 "summary": "List API keys",
+                "operationId": "get_secrets_api_keys",
                 "parameters": [
                     {
                         "type": "integer",
@@ -8290,6 +8471,7 @@ const docTemplate = `{
                     "secrets"
                 ],
                 "summary": "Create a new API key",
+                "operationId": "post_secrets_api_keys",
                 "parameters": [
                     {
                         "description": "API key creation request\\",
@@ -8341,6 +8523,7 @@ const docTemplate = `{
                     "secrets"
                 ],
                 "summary": "Delete an API key",
+                "operationId": "delete_secrets_api_keys_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8387,6 +8570,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Get integration details",
+                "operationId": "get_secrets_integrations_by_provider_by_provider",
                 "parameters": [
                     {
                         "type": "string",
@@ -8436,6 +8620,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Create or update an integration",
+                "operationId": "post_secrets_integrations_create_by_provider",
                 "parameters": [
                     {
                         "type": "string",
@@ -8494,6 +8679,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "List linked integrations",
+                "operationId": "get_secrets_integrations_linked",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -8528,6 +8714,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Delete an integration",
+                "operationId": "delete_secrets_integrations_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8571,6 +8758,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscriptions",
+                "operationId": "get_subscriptions",
                 "parameters": [
                     {
                         "type": "string",
@@ -8762,6 +8950,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Create subscription",
+                "operationId": "post_subscriptions",
                 "parameters": [
                     {
                         "description": "Subscription Request",
@@ -8813,6 +9002,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Add addon to subscription",
+                "operationId": "post_subscriptions_addon",
                 "parameters": [
                     {
                         "description": "Add Addon Request",
@@ -8862,6 +9052,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Remove addon from subscription",
+                "operationId": "delete_subscriptions_addon",
                 "parameters": [
                     {
                         "description": "Remove Addon Request",
@@ -8913,6 +9104,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Update subscription line item",
+                "operationId": "put_subscriptions_lineitems_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -8969,6 +9161,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Delete subscription line item",
+                "operationId": "delete_subscriptions_lineitems_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -9016,7 +9209,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List subscriptions by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9027,6 +9220,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscriptions by filter",
+                "operationId": "post_subscriptions_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -9078,6 +9272,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get usage by subscription",
+                "operationId": "post_subscriptions_usage",
                 "parameters": [
                     {
                         "description": "Usage request",
@@ -9126,6 +9321,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription",
+                "operationId": "get_subscriptions_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -9175,6 +9371,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Activate draft subscription",
+                "operationId": "post_subscriptions_by_id_activate",
                 "parameters": [
                     {
                         "type": "string",
@@ -9230,6 +9427,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get active addon associations",
+                "operationId": "get_subscriptions_by_id_addons_associations",
                 "parameters": [
                     {
                         "type": "string",
@@ -9288,6 +9486,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Cancel subscription",
+                "operationId": "post_subscriptions_by_id_cancel",
                 "parameters": [
                     {
                         "type": "string",
@@ -9346,6 +9545,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Execute subscription plan change",
+                "operationId": "post_subscriptions_by_id_change_execute",
                 "parameters": [
                     {
                         "type": "string",
@@ -9410,6 +9610,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Preview subscription plan change",
+                "operationId": "post_subscriptions_by_id_change_preview",
                 "parameters": [
                     {
                         "type": "string",
@@ -9474,6 +9675,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription entitlements",
+                "operationId": "get_subscriptions_by_id_entitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -9536,6 +9738,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get upcoming credit grant applications",
+                "operationId": "get_subscriptions_by_id_grants_upcoming",
                 "parameters": [
                     {
                         "type": "string",
@@ -9591,6 +9794,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Pause a subscription",
+                "operationId": "post_subscriptions_by_id_pause",
                 "parameters": [
                     {
                         "type": "string",
@@ -9639,7 +9843,7 @@ const docTemplate = `{
         },
         "/subscriptions/{id}/pauses": {
             "get": {
-                "description": "List all pauses for a subscription",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "produces": [
                     "application/json"
                 ],
@@ -9647,6 +9851,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List all pauses for a subscription",
+                "operationId": "get_subscriptions_by_id_pauses",
                 "parameters": [
                     {
                         "type": "string",
@@ -9705,6 +9910,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Resume a paused subscription",
+                "operationId": "post_subscriptions_by_id_resume",
                 "parameters": [
                     {
                         "type": "string",
@@ -9766,6 +9972,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription V2",
+                "operationId": "get_subscriptions_by_id_v2",
                 "parameters": [
                     {
                         "type": "string",
@@ -9821,6 +10028,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "List tasks",
+                "operationId": "get_tasks",
                 "parameters": [
                     {
                         "type": "string",
@@ -9975,6 +10183,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Create a new task",
+                "operationId": "post_tasks",
                 "parameters": [
                     {
                         "description": "Task configuration",
@@ -10026,6 +10235,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Get task processing result",
+                "operationId": "get_tasks_result",
                 "parameters": [
                     {
                         "type": "string",
@@ -10081,6 +10291,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "List scheduled tasks",
+                "operationId": "get_tasks_scheduled",
                 "parameters": [
                     {
                         "type": "integer",
@@ -10157,6 +10368,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Create a scheduled task",
+                "operationId": "post_tasks_scheduled",
                 "parameters": [
                     {
                         "description": "Scheduled Task",
@@ -10208,6 +10420,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Schedule update billing period",
+                "operationId": "post_tasks_scheduled_schedule_update_billing_period",
                 "parameters": [
                     {
                         "description": "Schedule Update Billing Period Request",
@@ -10259,6 +10472,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Get a scheduled task",
+                "operationId": "get_tasks_scheduled_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10312,6 +10526,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Update a scheduled task",
+                "operationId": "put_tasks_scheduled_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10374,6 +10589,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Delete a scheduled task",
+                "operationId": "delete_tasks_scheduled_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10426,6 +10642,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Trigger force run",
+                "operationId": "post_tasks_scheduled_by_id_run",
                 "parameters": [
                     {
                         "type": "string",
@@ -10489,6 +10706,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Get a task",
+                "operationId": "get_tasks_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10544,6 +10762,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Download task export file",
+                "operationId": "get_tasks_by_id_download",
                 "parameters": [
                     {
                         "type": "string",
@@ -10602,6 +10821,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Update task status",
+                "operationId": "put_tasks_by_id_status",
                 "parameters": [
                     {
                         "type": "string",
@@ -10655,7 +10875,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List tax associations",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10666,6 +10886,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "List tax associations",
+                "operationId": "get_taxes_associations",
                 "parameters": [
                     {
                         "type": "string",
@@ -10724,6 +10945,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Create Tax Association",
+                "operationId": "post_taxes_associations",
                 "parameters": [
                     {
                         "description": "Tax Config Request",
@@ -10775,6 +10997,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Get Tax Association",
+                "operationId": "get_taxes_associations_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10822,6 +11045,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Update tax association",
+                "operationId": "put_taxes_associations_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10878,6 +11102,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Delete tax association",
+                "operationId": "delete_taxes_associations_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -10916,7 +11141,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get tax rates",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10927,6 +11152,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Get tax rates",
+                "operationId": "get_taxes_rates",
                 "parameters": [
                     {
                         "type": "string",
@@ -11044,7 +11270,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a tax rate",
+                "description": "Validates input and creates a new resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11055,6 +11281,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Create a tax rate",
+                "operationId": "post_taxes_rates",
                 "parameters": [
                     {
                         "description": "Tax rate to create",
@@ -11095,7 +11322,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a tax rate",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11106,6 +11333,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Get a tax rate",
+                "operationId": "get_taxes_rates_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -11142,7 +11370,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a tax rate",
+                "description": "Validates input and updates the target resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11153,6 +11381,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Update a tax rate",
+                "operationId": "put_taxes_rates_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -11198,7 +11427,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a tax rate",
+                "description": "Deletes the target resource and returns the operation result for the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11209,6 +11438,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Delete a tax rate",
+                "operationId": "delete_taxes_rates_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -11255,6 +11485,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Get billing usage for the current tenant",
+                "operationId": "get_tenant_billing",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11290,7 +11521,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new tenant",
+                "description": "Validates input and creates a new resource in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11301,6 +11532,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Create a new tenant",
+                "operationId": "post_tenants",
                 "parameters": [
                     {
                         "description": "Create tenant request",
@@ -11352,6 +11584,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Update a tenant",
+                "operationId": "put_tenants_update",
                 "parameters": [
                     {
                         "description": "Update tenant request",
@@ -11398,7 +11631,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get tenant by ID",
+                "description": "Returns the requested resource if it exists and is accessible in the current tenant/environment context.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11409,6 +11642,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Get tenant by ID",
+                "operationId": "get_tenants_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -11458,6 +11692,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Create service account",
+                "operationId": "post_users",
                 "parameters": [
                     {
                         "description": "Create service account request (type must be 'service_account', roles are required)",
@@ -11509,6 +11744,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Get user info",
+                "operationId": "get_users_me",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11549,6 +11785,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "List users with filters",
+                "operationId": "post_users_search",
                 "parameters": [
                     {
                         "description": "Filter parameters",
@@ -11595,6 +11832,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List all subscription schedules",
+                "operationId": "get_v1_subscription_schedules",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -11644,6 +11882,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription schedule",
+                "operationId": "get_v1_subscription_schedules_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -11676,6 +11915,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Cancel subscription schedule",
+                "operationId": "post_v1_subscriptions_schedules_by_schedule_id_cancel",
                 "parameters": [
                     {
                         "type": "string",
@@ -11715,6 +11955,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscription schedules",
+                "operationId": "get_v1_subscriptions_by_subscription_id_schedules",
                 "parameters": [
                     {
                         "type": "string",
@@ -11752,6 +11993,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "List wallets",
+                "operationId": "get_wallets",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -11859,6 +12101,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Create a new wallet",
+                "operationId": "post_wallets",
                 "parameters": [
                     {
                         "description": "Create wallet request",
@@ -11899,7 +12142,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List wallets by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11910,6 +12153,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "List wallets by filter",
+                "operationId": "post_wallets_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -11949,7 +12193,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List wallet transactions by filter",
+                "description": "Returns a filtered, paginated list for this endpoint based on the provided query criteria.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11960,6 +12204,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "List wallet transactions by filter",
+                "operationId": "post_wallets_transactions_search",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -12016,6 +12261,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet by ID",
+                "operationId": "get_wallets_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12069,6 +12315,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Update a wallet",
+                "operationId": "put_wallets_by_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12133,6 +12380,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet balance",
+                "operationId": "get_wallets_by_id_balance_real_time",
                 "parameters": [
                     {
                         "type": "string",
@@ -12194,6 +12442,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Terminate a wallet",
+                "operationId": "post_wallets_by_id_terminate",
                 "parameters": [
                     {
                         "type": "string",
@@ -12249,6 +12498,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Top up wallet",
+                "operationId": "post_wallets_by_id_top_up",
                 "parameters": [
                     {
                         "type": "string",
@@ -12313,6 +12563,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet transactions",
+                "operationId": "get_wallets_by_id_transactions",
                 "parameters": [
                     {
                         "type": "string",
@@ -12423,7 +12674,8 @@ const docTemplate = `{
                             "CREDIT_NOTE",
                             "CREDIT_EXPIRED",
                             "WALLET_TERMINATION",
-                            "MANUAL_BALANCE_DEBIT"
+                            "MANUAL_BALANCE_DEBIT",
+                            "CREDIT_ADJUSTMENT"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -12435,7 +12687,8 @@ const docTemplate = `{
                             "TransactionReasonCreditNote",
                             "TransactionReasonCreditExpired",
                             "TransactionReasonWalletTermination",
-                            "TransactionReasonManualBalanceDebit"
+                            "TransactionReasonManualBalanceDebit",
+                            "TransactionReasonCreditAdjustment"
                         ],
                         "name": "transaction_reason",
                         "in": "query"
@@ -12510,6 +12763,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Chargebee webhook events",
+                "operationId": "post_webhooks_chargebee_by_tenant_id_by_environment_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12577,6 +12831,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle HubSpot webhook events",
+                "operationId": "post_webhooks_hubspot_by_tenant_id_by_environment_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12611,6 +12866,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/webhooks/moyasar/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming Moyasar webhook events for payment status updates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle Moyasar webhook events",
+                "operationId": "post_webhooks_moyasar_by_tenant_id_by_environment_id",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Moyasar webhook signature",
+                        "name": "X-Moyasar-Signature",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook received (always returns 200)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/webhooks/nomod/{tenant_id}/{environment_id}": {
             "post": {
                 "description": "Process incoming Nomod webhook events for payment and invoice payments",
@@ -12624,6 +12926,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Nomod webhook events",
+                "operationId": "post_webhooks_nomod_by_tenant_id_by_environment_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12677,6 +12980,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle QuickBooks webhook events",
+                "operationId": "post_webhooks_quickbooks_by_tenant_id_by_environment_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12744,6 +13048,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Razorpay webhook events",
+                "operationId": "post_webhooks_razorpay_by_tenant_id_by_environment_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12791,6 +13096,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Stripe webhook events",
+                "operationId": "post_webhooks_stripe_by_tenant_id_by_environment_id",
                 "parameters": [
                     {
                         "type": "string",
@@ -12904,6 +13210,81 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.TimeRangeFilter"
                         }
                     ]
+                }
+            }
+        },
+        "coupon_application.CouponApplication": {
+            "type": "object",
+            "properties": {
+                "applied_at": {
+                    "type": "string"
+                },
+                "coupon_association_id": {
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "type": "string"
+                },
+                "coupon_snapshot": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "discount_percentage": {
+                    "type": "string"
+                },
+                "discount_type": {
+                    "$ref": "#/definitions/types.CouponType"
+                },
+                "discounted_amount": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "final_price": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_line_item_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "original_price": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
                 }
             }
         },
@@ -13474,6 +13855,14 @@ const docTemplate = `{
                 "cancellation_type"
             ],
             "properties": {
+                "cancel_immediately_inovice_policy": {
+                    "description": "CancelImmediatelyInvoicePolicy controls whether to generate a final invoice on immediate cancellation. Defaults to skip.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CancelImmediatelyInvoicePolicy"
+                        }
+                    ]
+                },
                 "cancellation_type": {
                     "description": "CancellationType determines when the cancellation takes effect",
                     "allOf": [
@@ -14213,6 +14602,9 @@ const docTemplate = `{
                 "credits": {
                     "type": "string"
                 },
+                "end_date": {
+                    "type": "string"
+                },
                 "expiration_duration": {
                     "type": "integer"
                 },
@@ -14242,6 +14634,9 @@ const docTemplate = `{
                 },
                 "scope": {
                     "$ref": "#/definitions/types.CreditGrantScope"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "subscription_id": {
                     "type": "string"
@@ -14621,6 +15016,14 @@ const docTemplate = `{
                     "description": "entity_type is the optional type of the entity associated with this line item",
                     "type": "string"
                 },
+                "invoice_level_discount": {
+                    "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
+                    "type": "string"
+                },
+                "line_item_discount": {
+                    "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
+                    "type": "string"
+                },
                 "metadata": {
                     "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
                     "allOf": [
@@ -14651,6 +15054,10 @@ const docTemplate = `{
                 },
                 "plan_id": {
                     "description": "TODO: !REMOVE after migration\nplan_id is the optional unique identifier of the plan associated with this line item",
+                    "type": "string"
+                },
+                "prepaid_credits_applied": {
+                    "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
                     "type": "string"
                 },
                 "price_id": {
@@ -14728,16 +15135,12 @@ const docTemplate = `{
                     "description": "due_date is the date by which payment is expected",
                     "type": "string"
                 },
-                "environment_id": {
-                    "description": "environment_id is the unique identifier of the environment this invoice belongs to",
-                    "type": "string"
-                },
                 "idempotency_key": {
                     "description": "idempotency_key is an optional key used to prevent duplicate invoice creation",
                     "type": "string"
                 },
                 "invoice_coupons": {
-                    "description": "Invoice Coupns",
+                    "description": "Invoice Coupons",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceCoupon"
@@ -14806,7 +15209,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "prepared_tax_rates": {
-                    "description": "prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)\nThese are applied at invoice level by the invoice service without further resolution",
+                    "description": "prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.TaxRateResponse"
@@ -14836,6 +15239,10 @@ const docTemplate = `{
                 },
                 "total": {
                     "description": "total is the total amount of the invoice including taxes and discounts",
+                    "type": "string"
+                },
+                "total_prepaid_applied": {
+                    "description": "total_prepaid_applied is the total amount of prepaid applied to this invoice.",
                     "type": "string"
                 }
             }
@@ -15595,9 +16002,6 @@ const docTemplate = `{
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
-                "name": {
-                    "type": "string"
-                },
                 "price_unit": {
                     "description": "price_unit is the code of the price unit to use for wallet creation\nIf provided, the price unit will be used to set the currency and conversion rate of the wallet:\n- currency: set to price unit's base_currency\n- conversion_rate: set to price unit's conversion_rate",
                     "type": "string"
@@ -16131,6 +16535,15 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.DeleteCreditGrantRequest": {
+            "type": "object",
+            "properties": {
+                "effective_date": {
+                    "description": "EffectiveDate is optional; when set (subscription scope) the grant end date is set to this time.",
                     "type": "string"
                 }
             }
@@ -17243,127 +17656,102 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "description": "amount is the monetary amount for this line item",
-                    "type": "string"
+                    "type": "number"
                 },
                 "commitment_info": {
-                    "description": "commitment_info contains details about any commitment applied to this line item",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.CommitmentInfo"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.CommitmentInfo"
                 },
                 "created_at": {
-                    "description": "created_at is the timestamp when this line item was created",
                     "type": "string"
                 },
                 "created_by": {
-                    "description": "created_by is the identifier of the user who created this line item",
                     "type": "string"
                 },
                 "currency": {
-                    "description": "currency is the three-letter ISO currency code for this line item",
                     "type": "string"
                 },
                 "customer_id": {
-                    "description": "customer_id is the unique identifier of the customer associated with this line item",
                     "type": "string"
                 },
                 "display_name": {
-                    "description": "display_name is the optional human-readable name for this line item",
                     "type": "string"
                 },
                 "entity_id": {
-                    "description": "entity_id is the optional unique identifier of the entity associated with this line item",
                     "type": "string"
                 },
                 "entity_type": {
-                    "description": "entity_type is the optional type of the entity associated with this line item",
+                    "type": "string"
+                },
+                "environment_id": {
                     "type": "string"
                 },
                 "id": {
-                    "description": "id is the unique identifier for this line item",
                     "type": "string"
                 },
                 "invoice_id": {
-                    "description": "invoice_id is the unique identifier of the invoice this line item belongs to",
                     "type": "string"
                 },
+                "invoice_level_discount": {
+                    "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
+                    "type": "number"
+                },
+                "line_item_discount": {
+                    "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
+                    "type": "number"
+                },
                 "metadata": {
-                    "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.Metadata"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "meter_display_name": {
-                    "description": "meter_display_name is the optional human-readable name of the meter",
                     "type": "string"
                 },
                 "meter_id": {
-                    "description": "meter_id is the optional unique identifier of the meter used for usage tracking",
                     "type": "string"
                 },
                 "period_end": {
-                    "description": "period_end is the optional end date of the period this line item covers",
                     "type": "string"
                 },
                 "period_start": {
-                    "description": "period_start is the optional start date of the period this line item covers",
                     "type": "string"
                 },
                 "plan_display_name": {
-                    "description": "plan_display_name is the optional human-readable name of the plan",
                     "type": "string"
                 },
-                "plan_id": {
-                    "description": "plan_id is the optional unique identifier of the plan associated with this line item",
-                    "type": "string"
+                "prepaid_credits_applied": {
+                    "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
+                    "type": "number"
                 },
                 "price_id": {
-                    "description": "price_id is the optional unique identifier of the price associated with this line item",
                     "type": "string"
                 },
                 "price_type": {
-                    "description": "price_type indicates the type of pricing (fixed, usage, tiered, etc.)",
                     "type": "string"
                 },
                 "price_unit": {
-                    "description": "price_unit is the optional 3-digit ISO code of the price unit associated with this line item",
                     "type": "string"
                 },
                 "price_unit_amount": {
-                    "description": "price_unit_amount is the optional amount converted to the price unit currency",
-                    "type": "string"
+                    "type": "number"
                 },
                 "price_unit_id": {
-                    "description": "price_unit_id is the optional unique identifier of the price unit associated with this line item",
                     "type": "string"
                 },
                 "quantity": {
-                    "description": "quantity is the quantity of units for this line item",
-                    "type": "string"
+                    "type": "number"
                 },
                 "status": {
-                    "description": "status represents the current status of this line item",
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "subscription_id": {
-                    "description": "subscription_id is the optional unique identifier of the subscription associated with this line item",
                     "type": "string"
                 },
                 "tenant_id": {
-                    "description": "tenant_id is the unique identifier of the tenant this line item belongs to",
                     "type": "string"
                 },
                 "updated_at": {
-                    "description": "updated_at is the timestamp when this line item was last updated",
                     "type": "string"
                 },
                 "updated_by": {
-                    "description": "updated_by is the identifier of the user who last updated this line item",
                     "type": "string"
                 },
                 "usage_analytics": {
@@ -17417,47 +17805,49 @@ const docTemplate = `{
         "dto.InvoiceResponse": {
             "type": "object",
             "properties": {
+                "adjustment_amount": {
+                    "description": "adjustment_amount is the total sum of credit notes of type \"adjustment\".\nThese are non-cash reductions applied to the invoice (e.g. goodwill credit, billing correction).",
+                    "type": "number"
+                },
                 "amount_due": {
                     "description": "amount_due is the total amount that needs to be paid for this invoice",
-                    "type": "string"
+                    "type": "number"
                 },
                 "amount_paid": {
-                    "description": "amount_paid is the amount that has been paid towards this invoice",
-                    "type": "string"
+                    "description": "amount_paid is the amount that has already been paid towards this invoice",
+                    "type": "number"
                 },
                 "amount_remaining": {
-                    "description": "amount_remaining is the amount still outstanding on this invoice",
-                    "type": "string"
+                    "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)",
+                    "type": "number"
                 },
                 "billing_period": {
-                    "description": "billing_period is the period this invoice covers (e.g., \"monthly\", \"yearly\")",
+                    "description": "billing_period describes the billing period this invoice covers (e.g., \"January 2024\", \"Q1 2024\")",
                     "type": "string"
                 },
                 "billing_reason": {
-                    "description": "billing_reason indicates why this invoice was created (subscription_cycle, manual, etc.)",
+                    "description": "billing_reason indicates why this invoice was generated (e.g., \"subscription_billing\", \"manual_charge\")",
                     "type": "string"
                 },
                 "billing_sequence": {
-                    "description": "billing_sequence is the optional sequence number for billing cycles",
+                    "description": "billing_sequence is the sequential number indicating the billing cycle for subscription invoices",
                     "type": "integer"
                 },
                 "coupon_applications": {
-                    "description": "coupon_applications contains the coupon applications associated with this invoice",
+                    "description": "coupon_applications contains the coupon applications associated with this invoice (overrides embedded field)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.CouponApplicationResponse"
                     }
                 },
                 "created_at": {
-                    "description": "created_at is the timestamp when this invoice was created",
                     "type": "string"
                 },
                 "created_by": {
-                    "description": "created_by is the identifier of the user who created this invoice",
                     "type": "string"
                 },
                 "currency": {
-                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR) for the invoice",
+                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR, GBP) that applies to all monetary amounts on this invoice",
                     "type": "string"
                 },
                 "customer": {
@@ -17469,19 +17859,23 @@ const docTemplate = `{
                     ]
                 },
                 "customer_id": {
-                    "description": "customer_id is the unique identifier of the customer this invoice belongs to",
+                    "description": "customer_id is the ID of the customer who will receive this invoice",
                     "type": "string"
                 },
                 "description": {
-                    "description": "description is the optional text description of the invoice",
+                    "description": "description is an optional description or notes about this invoice",
                     "type": "string"
                 },
                 "due_date": {
-                    "description": "due_date is the date by which payment is expected",
+                    "description": "due_date is the date when payment for this invoice is due",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "environment_id is the ID of the environment this invoice belongs to (for multi-environment setups)",
                     "type": "string"
                 },
                 "finalized_at": {
-                    "description": "finalized_at is the timestamp when this invoice was finalized",
+                    "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
                     "type": "string"
                 },
                 "id": {
@@ -17489,19 +17883,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "idempotency_key": {
-                    "description": "idempotency_key is the optional key used to prevent duplicate invoice creation",
+                    "description": "idempotency_key is a unique key used to prevent duplicate invoice creation when retrying API calls",
                     "type": "string"
                 },
                 "invoice_number": {
-                    "description": "invoice_number is the optional human-readable identifier for the invoice",
+                    "description": "invoice_number is the human-readable invoice number displayed to customers (e.g., INV-2024-001)",
                     "type": "string"
                 },
                 "invoice_pdf_url": {
-                    "description": "invoice_pdf_url is the optional URL to the PDF version of this invoice",
+                    "description": "invoice_pdf_url is the URL where customers can download the PDF version of this invoice",
                     "type": "string"
                 },
                 "invoice_status": {
-                    "description": "invoice_status represents the current status of the invoice (draft, finalized, etc.)",
+                    "description": "invoice_status represents the current status of the invoice - values include draft, open, paid, void, etc.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InvoiceStatus"
@@ -17509,7 +17903,7 @@ const docTemplate = `{
                     ]
                 },
                 "invoice_type": {
-                    "description": "invoice_type indicates the type of invoice (subscription, one_time, etc.)",
+                    "description": "invoice_type indicates the type of invoice - whether this is a subscription invoice, one-time charge, or other billing type",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InvoiceType"
@@ -17517,14 +17911,14 @@ const docTemplate = `{
                     ]
                 },
                 "line_items": {
-                    "description": "line_items contains the individual items that make up this invoice",
+                    "description": "line_items contains the individual items that make up this invoice (overrides embedded field)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceLineItemResponse"
                     }
                 },
                 "metadata": {
-                    "description": "metadata contains additional custom key-value pairs for storing extra information",
+                    "description": "metadata contains custom key-value pairs for storing additional information about this invoice",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.Metadata"
@@ -17536,11 +17930,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "paid_at": {
-                    "description": "paid_at is the timestamp when this invoice was paid",
+                    "description": "paid_at is the timestamp when this invoice was fully paid",
                     "type": "string"
                 },
                 "payment_status": {
-                    "description": "payment_status represents the payment status of the invoice (unpaid, paid, etc.)",
+                    "description": "payment_status indicates whether the invoice has been paid, is pending, or failed",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentStatus"
@@ -17548,16 +17942,19 @@ const docTemplate = `{
                     ]
                 },
                 "period_end": {
-                    "description": "period_end is the end date of the billing period",
+                    "description": "period_end is the end date of the billing period covered by this invoice",
                     "type": "string"
                 },
                 "period_start": {
-                    "description": "period_start is the start date of the billing period",
+                    "description": "period_start is the start date of the billing period covered by this invoice",
                     "type": "string"
                 },
+                "refunded_amount": {
+                    "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
+                    "type": "number"
+                },
                 "status": {
-                    "description": "status represents the current status of this invoice",
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "subscription": {
                     "description": "subscription contains the associated subscription information if requested",
@@ -17568,12 +17965,12 @@ const docTemplate = `{
                     ]
                 },
                 "subscription_id": {
-                    "description": "subscription_id is the optional unique identifier of the subscription associated with this invoice",
+                    "description": "subscription_id is the ID of the subscription this invoice is associated with (only present for subscription-based invoices)",
                     "type": "string"
                 },
                 "subtotal": {
-                    "description": "subtotal is the amount before taxes and discounts are applied",
-                    "type": "string"
+                    "description": "subtotal is the sum of all line items before any taxes, discounts, or additional fees",
+                    "type": "number"
                 },
                 "taxes": {
                     "description": "tax_applied_records contains the tax applied records associated with this invoice",
@@ -17583,35 +17980,36 @@ const docTemplate = `{
                     }
                 },
                 "tenant_id": {
-                    "description": "tenant_id is the unique identifier of the tenant this invoice belongs to",
                     "type": "string"
                 },
                 "total": {
-                    "description": "total is the total amount of the invoice including taxes and discounts",
-                    "type": "string"
+                    "description": "total is the final amount including taxes, fees, and discounts",
+                    "type": "number"
                 },
                 "total_discount": {
-                    "description": "total_discount is the total discount amount from coupon applications",
-                    "type": "string"
+                    "description": "total_discount is the sum of all coupon discounts applied to the invoice",
+                    "type": "number"
+                },
+                "total_prepaid_credits_applied": {
+                    "description": "total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.",
+                    "type": "number"
                 },
                 "total_tax": {
-                    "description": "total_tax is the total tax amount for this invoice",
-                    "type": "string"
+                    "description": "total_tax is the sum of all taxes combined at the invoice level.",
+                    "type": "number"
                 },
                 "updated_at": {
-                    "description": "updated_at is the timestamp when this invoice was last updated",
                     "type": "string"
                 },
                 "updated_by": {
-                    "description": "updated_by is the identifier of the user who last updated this invoice",
                     "type": "string"
                 },
                 "version": {
-                    "description": "version is the version number of this invoice",
+                    "description": "version is the version number for tracking changes to this invoice",
                     "type": "integer"
                 },
                 "voided_at": {
-                    "description": "voided_at is the timestamp when this invoice was voided",
+                    "description": "voided_at is the timestamp when this invoice was voided or cancelled",
                     "type": "string"
                 }
             }
@@ -20334,6 +20732,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "auto_apply": {
+                    "description": "Whether this tax should be automatically applied",
                     "type": "boolean"
                 },
                 "created_at": {
@@ -20343,36 +20742,48 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "currency": {
+                    "description": "Currency",
                     "type": "string"
                 },
                 "entity_id": {
+                    "description": "ID of the entity this tax rate applies to",
                     "type": "string"
                 },
                 "entity_type": {
-                    "$ref": "#/definitions/types.TaxRateEntityType"
+                    "description": "Type of entity this tax rate applies to",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxRateEntityType"
+                        }
+                    ]
                 },
                 "environment_id": {
+                    "description": "EnvironmentID is the ID of the environment this tax rate config belongs to",
                     "type": "string"
                 },
                 "id": {
+                    "description": "ID of the ent.",
                     "type": "string"
                 },
                 "metadata": {
+                    "description": "Metadata holds the value of the \"metadata\" field.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "priority": {
+                    "description": "Priority for tax resolution (lower number = higher priority)",
                     "type": "integer"
                 },
                 "status": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "tax_rate": {
                     "$ref": "#/definitions/dto.TaxRateResponse"
                 },
                 "tax_rate_id": {
+                    "description": "Reference to the TaxRate entity",
                     "type": "string"
                 },
                 "tenant_id": {
@@ -20382,12 +20793,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
-                    "type": "string"
-                },
-                "valid_from": {
-                    "type": "string"
-                },
-                "valid_to": {
                     "type": "string"
                 }
             }
@@ -21212,9 +21617,6 @@ const docTemplate = `{
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
-                },
-                "name": {
-                    "type": "string"
                 }
             }
         },
@@ -22068,6 +22470,110 @@ const docTemplate = `{
                 }
             }
         },
+        "invoice.InvoiceLineItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "commitment_info": {
+                    "$ref": "#/definitions/types.CommitmentInfo"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_level_discount": {
+                    "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
+                    "type": "number"
+                },
+                "line_item_discount": {
+                    "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
+                    "type": "number"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "meter_display_name": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "plan_display_name": {
+                    "type": "string"
+                },
+                "prepaid_credits_applied": {
+                    "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
+                    "type": "number"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "price_type": {
+                    "type": "string"
+                },
+                "price_unit": {
+                    "type": "string"
+                },
+                "price_unit_amount": {
+                    "type": "number"
+                },
+                "price_unit_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "meter.Aggregation": {
             "type": "object",
             "properties": {
@@ -22801,6 +23307,9 @@ const docTemplate = `{
         "types.AlertConfig": {
             "type": "object",
             "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
                 "threshold": {
                     "$ref": "#/definitions/types.WalletAlertThreshold"
                 }
@@ -23056,6 +23565,17 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.CancelImmediatelyInvoicePolicy": {
+            "type": "string",
+            "enum": [
+                "generate_invoice",
+                "skip"
+            ],
+            "x-enum-varnames": [
+                "CancelImmediatelyInvoicePolicyGenerateInvoice",
+                "CancelImmediatelyInvoicePolicySkip"
+            ]
+        },
         "types.CancellationType": {
             "type": "string",
             "enum": [
@@ -23213,6 +23733,9 @@ const docTemplate = `{
                 },
                 "hubspot": {
                     "$ref": "#/definitions/types.HubSpotConnectionMetadata"
+                },
+                "moyasar": {
+                    "$ref": "#/definitions/types.MoyasarConnectionMetadata"
                 },
                 "nomod": {
                     "$ref": "#/definitions/types.NomodConnectionMetadata"
@@ -24005,6 +24528,22 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.PaymentStatus"
                     }
                 },
+                "period_end_gte": {
+                    "description": "period_end_gte filters invoices with period_end \u003e= value",
+                    "type": "string"
+                },
+                "period_end_lte": {
+                    "description": "period_end_lte filters invoices with period_end \u003c= value",
+                    "type": "string"
+                },
+                "period_start_gte": {
+                    "description": "period_start_gte filters invoices with period_start \u003e= value",
+                    "type": "string"
+                },
+                "period_start_lte": {
+                    "description": "period_start_lte filters invoices with period_start \u003c= value",
+                    "type": "string"
+                },
                 "skip_line_items": {
                     "description": "SkipLineItems if true, will not include line items in the response",
                     "type": "boolean"
@@ -24071,6 +24610,23 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.MoyasarConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "publishable_key": {
+                    "description": "Moyasar Publishable Key (encrypted, for frontend use)",
+                    "type": "string"
+                },
+                "secret_key": {
+                    "description": "Moyasar Secret Key (encrypted)",
+                    "type": "string"
+                },
+                "webhook_secret": {
+                    "description": "Moyasar Webhook Secret (encrypted, optional)",
+                    "type": "string"
+                }
             }
         },
         "types.NomodConnectionMetadata": {
@@ -24159,12 +24715,14 @@ const docTemplate = `{
             "enum": [
                 "stripe",
                 "razorpay",
-                "nomod"
+                "nomod",
+                "moyasar"
             ],
             "x-enum-varnames": [
                 "PaymentGatewayTypeStripe",
                 "PaymentGatewayTypeRazorpay",
-                "PaymentGatewayTypeNomod"
+                "PaymentGatewayTypeNomod",
+                "PaymentGatewayTypeMoyasar"
             ]
         },
         "types.PaymentMethodType": {
@@ -24647,7 +25205,8 @@ const docTemplate = `{
                 "razorpay",
                 "chargebee",
                 "quickbooks",
-                "nomod"
+                "nomod",
+                "moyasar"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
@@ -24657,7 +25216,8 @@ const docTemplate = `{
                 "SecretProviderRazorpay",
                 "SecretProviderChargebee",
                 "SecretProviderQuickBooks",
-                "SecretProviderNomod"
+                "SecretProviderNomod",
+                "SecretProviderMoyasar"
             ]
         },
         "types.SecretType": {
@@ -25022,7 +25582,8 @@ const docTemplate = `{
                 "CREDIT_NOTE",
                 "CREDIT_EXPIRED",
                 "WALLET_TERMINATION",
-                "MANUAL_BALANCE_DEBIT"
+                "MANUAL_BALANCE_DEBIT",
+                "CREDIT_ADJUSTMENT"
             ],
             "x-enum-varnames": [
                 "TransactionReasonInvoicePayment",
@@ -25033,7 +25594,8 @@ const docTemplate = `{
                 "TransactionReasonCreditNote",
                 "TransactionReasonCreditExpired",
                 "TransactionReasonWalletTermination",
-                "TransactionReasonManualBalanceDebit"
+                "TransactionReasonManualBalanceDebit",
+                "TransactionReasonCreditAdjustment"
             ]
         },
         "types.TransactionStatus": {
@@ -25158,29 +25720,7 @@ const docTemplate = `{
             }
         },
         "types.WalletConfig": {
-            "type": "object",
-            "properties": {
-                "allowed_price_types": {
-                    "description": "AllowedPriceTypes is a list of price types that are allowed for the wallet\nnil means all price types are allowed",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/types.WalletConfigPriceType"
-                    }
-                }
-            }
-        },
-        "types.WalletConfigPriceType": {
-            "type": "string",
-            "enum": [
-                "ALL",
-                "USAGE",
-                "FIXED"
-            ],
-            "x-enum-varnames": [
-                "WalletConfigPriceTypeAll",
-                "WalletConfigPriceTypeUsage",
-                "WalletConfigPriceTypeFixed"
-            ]
+            "type": "object"
         },
         "types.WalletFilter": {
             "type": "object",
@@ -25318,23 +25858,25 @@ const docTemplate = `{
             "enum": [
                 "PAYMENT",
                 "EXTERNAL",
-                "REQUEST"
+                "REQUEST",
+                "INVOICE"
             ],
             "x-enum-varnames": [
                 "WalletTxReferenceTypePayment",
                 "WalletTxReferenceTypeExternal",
-                "WalletTxReferenceTypeRequest"
+                "WalletTxReferenceTypeRequest",
+                "WalletTxReferenceTypeInvoice"
             ]
         },
         "types.WalletType": {
             "type": "string",
             "enum": [
-                "PROMOTIONAL",
-                "PRE_PAID"
+                "PRE_PAID",
+                "POST_PAID"
             ],
             "x-enum-varnames": [
-                "WalletTypePromotional",
-                "WalletTypePrePaid"
+                "WalletTypePrePaid",
+                "WalletTypePostPaid"
             ]
         },
         "types.WindowSize": {
