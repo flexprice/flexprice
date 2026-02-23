@@ -29,8 +29,8 @@ type UserHandler struct {
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.UserResponse
-// @Failure 401 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /users/me [get]
 func (h *UserHandler) GetUserInfo(c *gin.Context) {
 	user, err := h.userService.GetUserInfo(c.Request.Context())
@@ -51,8 +51,8 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param request body dto.CreateUserRequest true "Create service account request (type must be 'service_account', roles are required)"
 // @Success 201 {object} dto.UserResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
@@ -83,8 +83,8 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param filter body types.UserFilter true "Filter parameters"
 // @Success 200 {object} dto.ListUsersResponse
-// @Failure 400 {object} errors.ErrorResponse
-// @Failure 500 {object} errors.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
 // @Router /users/search [post]
 func (h *UserHandler) ListUsersByFilter(c *gin.Context) {
 	var filter types.UserFilter
