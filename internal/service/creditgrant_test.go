@@ -88,6 +88,7 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
+		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 	}
 
 	s.creditGrantService = NewCreditGrantService(serviceParams)
