@@ -70,6 +70,22 @@ func (s *PlanServiceSuite) TestCreatePlan() {
 		s.Equal(req.Name, resp.Plan.Name)
 		s.Equal(req.Description, resp.Plan.Description)
 	})
+
+	// Test case: Plan has default invoice_cadence and trial_period values
+	// This test verifies the fix for issue #879 where the ent schema was missing
+	// invoice_cadence and trial_period fields causing NOT NULL constraint violations
+	s.Run("Plan has default invoice_cadence and trial_period", func() {
+		req := dto.CreatePlanRequest{
+			Name:        "Test Plan With Defaults",
+			Description: "A plan to test default field values",
+		}
+
+		resp, err := s.service.CreatePlan(s.GetContext(), req)
+		s.NoError(err)
+		s.NotNil(resp)
+		s.Equal(types.InvoiceCadenceAdvance, resp.Plan.InvoiceCadence, "invoice_cadence should default to ADVANCE")
+		s.Equal(0, resp.Plan.TrialPeriod, "trial_period should default to 0")
+	})
 }
 
 // TestCreatePlanWithEntitlements is removed - entitlements should be created separately via entitlement APIs

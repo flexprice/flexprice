@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/creditgrant"
 	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // PlanCreate is the builder for creating a Plan entity.
@@ -151,6 +152,34 @@ func (pc *PlanCreate) SetNillableDescription(s *string) *PlanCreate {
 	return pc
 }
 
+// SetInvoiceCadence sets the "invoice_cadence" field.
+func (pc *PlanCreate) SetInvoiceCadence(tc types.InvoiceCadence) *PlanCreate {
+	pc.mutation.SetInvoiceCadence(tc)
+	return pc
+}
+
+// SetNillableInvoiceCadence sets the "invoice_cadence" field if the given value is not nil.
+func (pc *PlanCreate) SetNillableInvoiceCadence(tc *types.InvoiceCadence) *PlanCreate {
+	if tc != nil {
+		pc.SetInvoiceCadence(*tc)
+	}
+	return pc
+}
+
+// SetTrialPeriod sets the "trial_period" field.
+func (pc *PlanCreate) SetTrialPeriod(i int) *PlanCreate {
+	pc.mutation.SetTrialPeriod(i)
+	return pc
+}
+
+// SetNillableTrialPeriod sets the "trial_period" field if the given value is not nil.
+func (pc *PlanCreate) SetNillableTrialPeriod(i *int) *PlanCreate {
+	if i != nil {
+		pc.SetTrialPeriod(*i)
+	}
+	return pc
+}
+
 // SetDisplayOrder sets the "display_order" field.
 func (pc *PlanCreate) SetDisplayOrder(i int) *PlanCreate {
 	pc.mutation.SetDisplayOrder(i)
@@ -237,6 +266,14 @@ func (pc *PlanCreate) defaults() {
 		v := plan.DefaultEnvironmentID
 		pc.mutation.SetEnvironmentID(v)
 	}
+	if _, ok := pc.mutation.InvoiceCadence(); !ok {
+		v := plan.DefaultInvoiceCadence
+		pc.mutation.SetInvoiceCadence(v)
+	}
+	if _, ok := pc.mutation.TrialPeriod(); !ok {
+		v := plan.DefaultTrialPeriod
+		pc.mutation.SetTrialPeriod(v)
+	}
 	if _, ok := pc.mutation.DisplayOrder(); !ok {
 		v := plan.DefaultDisplayOrder
 		pc.mutation.SetDisplayOrder(v)
@@ -269,6 +306,17 @@ func (pc *PlanCreate) check() error {
 		if err := plan.NameValidator(v); err != nil {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Plan.name": %w`, err)}
 		}
+	}
+	if _, ok := pc.mutation.InvoiceCadence(); !ok {
+		return &ValidationError{Name: "invoice_cadence", err: errors.New(`ent: missing required field "Plan.invoice_cadence"`)}
+	}
+	if v, ok := pc.mutation.InvoiceCadence(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "invoice_cadence", err: fmt.Errorf(`ent: validator failed for field "Plan.invoice_cadence": %w`, err)}
+		}
+	}
+	if _, ok := pc.mutation.TrialPeriod(); !ok {
+		return &ValidationError{Name: "trial_period", err: errors.New(`ent: missing required field "Plan.trial_period"`)}
 	}
 	if _, ok := pc.mutation.DisplayOrder(); !ok {
 		return &ValidationError{Name: "display_order", err: errors.New(`ent: missing required field "Plan.display_order"`)}
@@ -351,6 +399,14 @@ func (pc *PlanCreate) createSpec() (*Plan, *sqlgraph.CreateSpec) {
 	if value, ok := pc.mutation.Description(); ok {
 		_spec.SetField(plan.FieldDescription, field.TypeString, value)
 		_node.Description = value
+	}
+	if value, ok := pc.mutation.InvoiceCadence(); ok {
+		_spec.SetField(plan.FieldInvoiceCadence, field.TypeString, value)
+		_node.InvoiceCadence = value
+	}
+	if value, ok := pc.mutation.TrialPeriod(); ok {
+		_spec.SetField(plan.FieldTrialPeriod, field.TypeInt, value)
+		_node.TrialPeriod = value
 	}
 	if value, ok := pc.mutation.DisplayOrder(); ok {
 		_spec.SetField(plan.FieldDisplayOrder, field.TypeInt, value)

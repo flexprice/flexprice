@@ -1274,8 +1274,16 @@ func init() {
 	planDescName := planFields[2].Descriptor()
 	// plan.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	plan.NameValidator = planDescName.Validators[0].(func(string) error)
+	// planDescInvoiceCadence is the schema descriptor for invoice_cadence field.
+	planDescInvoiceCadence := planFields[4].Descriptor()
+	// plan.DefaultInvoiceCadence holds the default value on creation for the invoice_cadence field.
+	plan.DefaultInvoiceCadence = types.InvoiceCadence(planDescInvoiceCadence.Default.(string))
+	// planDescTrialPeriod is the schema descriptor for trial_period field.
+	planDescTrialPeriod := planFields[5].Descriptor()
+	// plan.DefaultTrialPeriod holds the default value on creation for the trial_period field.
+	plan.DefaultTrialPeriod = planDescTrialPeriod.Default.(int)
 	// planDescDisplayOrder is the schema descriptor for display_order field.
-	planDescDisplayOrder := planFields[4].Descriptor()
+	planDescDisplayOrder := planFields[6].Descriptor()
 	// plan.DefaultDisplayOrder holds the default value on creation for the display_order field.
 	plan.DefaultDisplayOrder = planDescDisplayOrder.Default.(int)
 	priceMixin := schema.Price{}.Mixin()

@@ -67,6 +67,8 @@ func (r *planRepository) Create(ctx context.Context, p *domainPlan.Plan) error {
 		SetUpdatedBy(p.UpdatedBy).
 		SetEnvironmentID(p.EnvironmentID).
 		SetMetadata(p.Metadata).
+		SetInvoiceCadence(p.InvoiceCadence).
+		SetTrialPeriod(p.TrialPeriod).
 		SetNillableDisplayOrder(p.DisplayOrder).
 		Save(ctx)
 

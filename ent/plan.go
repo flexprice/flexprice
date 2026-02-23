@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/plan"
+	"github.com/flexprice/flexprice/internal/types"
 )
 
 // Plan is the model entity for the Plan schema.
@@ -40,6 +41,10 @@ type Plan struct {
 	Name string `json:"name,omitempty"`
 	// Description holds the value of the "description" field.
 	Description string `json:"description,omitempty"`
+	// InvoiceCadence holds the value of the "invoice_cadence" field.
+	InvoiceCadence types.InvoiceCadence `json:"invoice_cadence,omitempty"`
+	// TrialPeriod holds the value of the "trial_period" field.
+	TrialPeriod int `json:"trial_period,omitempty"`
 	// DisplayOrder holds the value of the "display_order" field.
 	DisplayOrder int `json:"display_order,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -73,9 +78,9 @@ func (*Plan) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case plan.FieldMetadata:
 			values[i] = new([]byte)
-		case plan.FieldDisplayOrder:
+		case plan.FieldTrialPeriod, plan.FieldDisplayOrder:
 			values[i] = new(sql.NullInt64)
-		case plan.FieldID, plan.FieldTenantID, plan.FieldStatus, plan.FieldCreatedBy, plan.FieldUpdatedBy, plan.FieldEnvironmentID, plan.FieldLookupKey, plan.FieldName, plan.FieldDescription:
+		case plan.FieldID, plan.FieldTenantID, plan.FieldStatus, plan.FieldCreatedBy, plan.FieldUpdatedBy, plan.FieldEnvironmentID, plan.FieldLookupKey, plan.FieldName, plan.FieldDescription, plan.FieldInvoiceCadence:
 			values[i] = new(sql.NullString)
 		case plan.FieldCreatedAt, plan.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -168,6 +173,18 @@ func (pl *Plan) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				pl.Description = value.String
 			}
+		case plan.FieldInvoiceCadence:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_cadence", values[i])
+			} else if value.Valid {
+				pl.InvoiceCadence = types.InvoiceCadence(value.String)
+			}
+		case plan.FieldTrialPeriod:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field trial_period", values[i])
+			} else if value.Valid {
+				pl.TrialPeriod = int(value.Int64)
+			}
 		case plan.FieldDisplayOrder:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field display_order", values[i])
@@ -247,6 +264,12 @@ func (pl *Plan) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("description=")
 	builder.WriteString(pl.Description)
+	builder.WriteString(", ")
+	builder.WriteString("invoice_cadence=")
+	builder.WriteString(fmt.Sprintf("%v", pl.InvoiceCadence))
+	builder.WriteString(", ")
+	builder.WriteString("trial_period=")
+	builder.WriteString(fmt.Sprintf("%v", pl.TrialPeriod))
 	builder.WriteString(", ")
 	builder.WriteString("display_order=")
 	builder.WriteString(fmt.Sprintf("%v", pl.DisplayOrder))
