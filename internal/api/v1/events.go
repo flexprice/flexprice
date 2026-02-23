@@ -38,6 +38,7 @@ func NewEventsHandler(eventService service.EventService, eventPostProcessingServ
 }
 
 // @Summary Ingest event
+// @ID ingestEvent
 // @Description Ingest a new event into the system
 // @Tags Events
 // @Accept json
@@ -75,6 +76,7 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 }
 
 // @Summary Bulk Ingest events
+// @ID ingestEventsBulk
 // @Description Ingest bulk events into the system
 // @Tags Events
 // @Accept json
@@ -107,6 +109,7 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 }
 
 // @Summary Get usage by meter
+// @ID getUsageByMeter
 // @Description Retrieve aggregated usage statistics using meter configuration
 // @Tags Events
 // @Produce json
@@ -148,6 +151,7 @@ func (h *EventsHandler) GetUsageByMeter(c *gin.Context) {
 }
 
 // @Summary Get usage statistics
+// @ID getUsageStatistics
 // @Description Retrieve aggregated usage statistics for events
 // @Tags Events
 // @Produce json
@@ -274,6 +278,7 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 }
 
 // @Summary List raw events
+// @ID listRawEvents
 // @Description Retrieve raw events with pagination and filtering
 // @Tags Events
 // @Produce json
@@ -313,6 +318,7 @@ func (h *EventsHandler) QueryEvents(c *gin.Context) {
 }
 
 // @Summary Get usage analytics
+// @ID getUsageAnalytics
 // @Description Retrieve comprehensive usage analytics with filtering, grouping, and time-series data
 // @Tags Events
 // @Produce json
@@ -434,6 +440,7 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 }
 
 // @Summary Get monitoring data
+// @ID getEventsMonitoringData
 // @Description Retrieve monitoring data for events including consumer lag and event metrics (last 24 hours by default)
 // @Tags Events
 // @Produce json
@@ -467,6 +474,7 @@ func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 }
 
 // @Summary Get hugging face inference data
+// @ID getHuggingfaceInferenceData
 // @Description Retrieve hugging face inference data for events
 // @Tags Events
 // @Produce json
@@ -555,6 +563,7 @@ func (h *EventsHandler) BenchmarkV2(c *gin.Context) {
 }
 
 // @Summary Get event by ID
+// @ID getEventById
 // @Description Retrieve event details and processing status with debug information
 // @Tags Events
 // @Produce json

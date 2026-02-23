@@ -46,6 +46,7 @@ func (h *ConnectionHandler) CreateConnection(c *gin.Context) {
 }
 
 // @Summary Get a connection
+// @ID getConnection
 // @Description Get a connection by ID
 // @Tags Connections
 // @Accept json
@@ -70,6 +71,7 @@ func (h *ConnectionHandler) GetConnection(c *gin.Context) {
 }
 
 // @Summary Get connections
+// @ID listConnections
 // @Description Get a list of connections
 // @Tags Connections
 // @Accept json
@@ -103,6 +105,7 @@ func (h *ConnectionHandler) GetConnections(c *gin.Context) {
 }
 
 // @Summary Update a connection
+// @ID updateConnection
 // @Description Update a connection by ID
 // @Tags Connections
 // @Accept json
@@ -136,6 +139,7 @@ func (h *ConnectionHandler) UpdateConnection(c *gin.Context) {
 }
 
 // @Summary Delete a connection
+// @ID deleteConnection
 // @Description Delete a connection by ID
 // @Tags Connections
 // @Accept json
@@ -160,6 +164,7 @@ func (h *ConnectionHandler) DeleteConnection(c *gin.Context) {
 }
 
 // @Summary List connections by filter
+// @ID listConnectionsByFilter
 // @Description List connections by filter
 // @Tags Connections
 // @Accept json

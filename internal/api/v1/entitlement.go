@@ -21,6 +21,7 @@ func NewEntitlementHandler(service service.EntitlementService, log *logger.Logge
 }
 
 // @Summary Create a new entitlement
+// @ID createEntitlement
 // @Description Create a new entitlement with the specified configuration
 // @Tags Entitlements
 // @Accept json
@@ -52,6 +53,7 @@ func (h *EntitlementHandler) CreateEntitlement(c *gin.Context) {
 }
 
 // @Summary Create multiple entitlements in bulk
+// @ID createEntitlementsBulk
 // @Description Create multiple entitlements with the specified configurations
 // @Tags Entitlements
 // @Accept json
@@ -83,6 +85,7 @@ func (h *EntitlementHandler) CreateBulkEntitlement(c *gin.Context) {
 }
 
 // @Summary Get an entitlement by ID
+// @ID getEntitlementById
 // @Description Get an entitlement by ID
 // @Tags Entitlements
 // @Accept json
@@ -113,6 +116,7 @@ func (h *EntitlementHandler) GetEntitlement(c *gin.Context) {
 }
 
 // @Summary Get entitlements
+// @ID getEntitlements
 // @Description Get entitlements with the specified filter
 // @Tags Entitlements
 // @Accept json
@@ -149,6 +153,7 @@ func (h *EntitlementHandler) ListEntitlements(c *gin.Context) {
 }
 
 // @Summary Update an entitlement
+// @ID updateEntitlement
 // @Description Update an entitlement with the specified configuration
 // @Tags Entitlements
 // @Accept json
@@ -189,6 +194,7 @@ func (h *EntitlementHandler) UpdateEntitlement(c *gin.Context) {
 }
 
 // @Summary Delete an entitlement
+// @ID deleteEntitlement
 // @Description Delete an entitlement
 // @Tags Entitlements
 // @Accept json
@@ -219,6 +225,7 @@ func (h *EntitlementHandler) DeleteEntitlement(c *gin.Context) {
 
 // ListEntitlementsByFilter godoc
 // @Summary List entitlements by filter
+// @ID listEntitlementsByFilter
 // @Description List entitlements by filter
 // @Tags Entitlements
 // @Accept json

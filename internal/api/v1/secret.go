@@ -26,6 +26,7 @@ func NewSecretHandler(service service.SecretService, logger *logger.Logger) *Sec
 
 // ListAPIKeys godoc
 // @Summary List API keys
+// @ID listApiKeys
 // @Description Get a paginated list of API keys
 // @Tags secrets
 // @Accept json
@@ -65,6 +66,7 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 
 // CreateAPIKey godoc
 // @Summary Create a new API key
+// @ID createApiKey
 // @Description Create a new API key. Provide 'service_account_id' in body to create API key for a service account, otherwise creates for authenticated user.
 // @Tags secrets
 // @Accept json
@@ -100,6 +102,7 @@ func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 
 // DeleteAPIKey godoc
 // @Summary Delete an API key
+// @ID deleteApiKey
 // @Description Delete an API key by ID
 // @Tags secrets
 // @Accept json
@@ -123,6 +126,7 @@ func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 
 // CreateIntegration godoc
 // @Summary Create or update an integration
+// @ID createOrUpdateIntegration
 // @Description Create or update integration credentials
 // @Tags Integrations
 // @Accept json
@@ -158,6 +162,7 @@ func (h *SecretHandler) CreateIntegration(c *gin.Context) {
 
 // GetIntegration godoc
 // @Summary Get integration details
+// @ID getIntegration
 // @Description Get details of a specific integration
 // @Tags Integrations
 // @Accept json
@@ -188,6 +193,7 @@ func (h *SecretHandler) GetIntegration(c *gin.Context) {
 
 // DeleteIntegration godoc
 // @Summary Delete an integration
+// @ID deleteIntegration
 // @Description Delete integration credentials
 // @Tags Integrations
 // @Accept json
@@ -212,6 +218,7 @@ func (h *SecretHandler) DeleteIntegration(c *gin.Context) {
 
 // ListLinkedIntegrations godoc
 // @Summary List linked integrations
+// @ID listLinkedIntegrations
 // @Description Get a list of unique providers which have a valid linked integration secret
 // @Tags Integrations
 // @Accept json

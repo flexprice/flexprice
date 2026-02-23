@@ -23,6 +23,7 @@ func NewPaymentHandler(service service.PaymentService, processor service.Payment
 }
 
 // @Summary Create a new payment
+// @ID createPayment
 // @Description Create a new payment with the specified configuration
 // @Tags Payments
 // @Accept json
@@ -54,6 +55,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 }
 
 // @Summary Get a payment by ID
+// @ID getPaymentById
 // @Description Get a payment by ID
 // @Tags Payments
 // @Accept json
@@ -84,6 +86,7 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 }
 
 // @Summary Update a payment
+// @ID updatePayment
 // @Description Update a payment with the specified configuration
 // @Tags Payments
 // @Accept json
@@ -124,6 +127,7 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 }
 
 // @Summary List payments
+// @ID listPayments
 // @Description List payments with the specified filter
 // @Tags Payments
 // @Accept json
@@ -159,6 +163,7 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 }
 
 // @Summary Delete a payment
+// @ID deletePayment
 // @Description Delete a payment
 // @Tags Payments
 // @Accept json
@@ -188,6 +193,7 @@ func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 }
 
 // @Summary Process a payment
+// @ID processPayment
 // @Description Process a payment
 // @Tags Payments
 // @Accept json

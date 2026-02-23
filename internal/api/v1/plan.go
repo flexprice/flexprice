@@ -39,6 +39,7 @@ func NewPlanHandler(
 }
 
 // @Summary Create a new plan
+// @ID createPlan
 // @Description Create a new plan with the specified configuration
 // @Tags Plans
 // @Accept json
@@ -68,6 +69,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 }
 
 // @Summary Get a plan
+// @ID getPlan
 // @Description Get a plan by ID
 // @Tags Plans
 // @Accept json
@@ -98,6 +100,7 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 }
 
 // @Summary Get plans
+// @ID getPlans
 // @Description Get plans with optional filtering
 // @Tags Plans
 // @Accept json
@@ -131,6 +134,7 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 }
 
 // @Summary Update a plan
+// @ID updatePlan
 // @Description Update a plan by ID
 // @Tags Plans
 // @Accept json
@@ -170,6 +174,7 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 }
 
 // @Summary Delete a plan
+// @ID deletePlan
 // @Description Delete a plan by ID
 // @Tags Plans
 // @Accept json
@@ -200,6 +205,7 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 }
 
 // @Summary Get plan entitlements
+// @ID getPlanEntitlements
 // @Description Get all entitlements for a plan
 // @Tags Entitlements
 // @Accept json
@@ -230,6 +236,7 @@ func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 }
 
 // @Summary Get plan credit grants
+// @ID getPlanCreditGrants
 // @Description Get all credit grants for a plan
 // @Tags CreditGrants
 // @Accept json
@@ -264,6 +271,7 @@ func priceSyncLockKey(planID string) string {
 }
 
 // @Summary Synchronize plan prices
+// @ID syncPlanPrices
 // @Description Synchronize current plan prices with all existing active subscriptions
 // @Tags Plans
 // @Accept json
@@ -332,6 +340,7 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 }
 
 // @Summary List plans by filter
+// @ID listPlansByFilter
 // @Description List plans by filter
 // @Tags Plans
 // @Accept json

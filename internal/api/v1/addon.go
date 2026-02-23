@@ -26,6 +26,7 @@ func NewAddonHandler(service service.AddonService, entitlementService service.En
 }
 
 // @Summary Create addon
+// @ID createAddon
 // @Description Create a new addon
 // @Tags Addons
 // @Accept json
@@ -57,6 +58,7 @@ func (h *AddonHandler) CreateAddon(c *gin.Context) {
 }
 
 // @Summary Get addon
+// @ID getAddon
 // @Description Get an addon by ID
 // @Tags Addons
 // @Produce json
@@ -86,6 +88,7 @@ func (h *AddonHandler) GetAddon(c *gin.Context) {
 }
 
 // @Summary Get addon by lookup key
+// @ID getAddonByLookupKey
 // @Description Get an addon by lookup key
 // @Tags Addons
 // @Produce json
@@ -115,6 +118,7 @@ func (h *AddonHandler) GetAddonByLookupKey(c *gin.Context) {
 }
 
 // @Summary List addons
+// @ID listAddons
 // @Description Get addons with optional filtering
 // @Tags Addons
 // @Produce json
@@ -145,6 +149,7 @@ func (h *AddonHandler) GetAddons(c *gin.Context) {
 }
 
 // @Summary Update addon
+// @ID updateAddon
 // @Description Update an existing addon
 // @Tags Addons
 // @Accept json
@@ -185,6 +190,7 @@ func (h *AddonHandler) UpdateAddon(c *gin.Context) {
 }
 
 // @Summary Delete addon
+// @ID deleteAddon
 // @Description Delete an addon
 // @Tags Addons
 // @Produce json
@@ -213,6 +219,7 @@ func (h *AddonHandler) DeleteAddon(c *gin.Context) {
 }
 
 // @Summary List addons by filter
+// @ID listAddonsByFilter
 // @Description List addons by filter
 // @Tags Addons
 // @Accept json
@@ -252,6 +259,7 @@ func (h *AddonHandler) ListAddonsByFilter(c *gin.Context) {
 }
 
 // @Summary Get addon entitlements
+// @ID getAddonEntitlements
 // @Description Get all entitlements for an addon
 // @Tags Entitlements
 // @Accept json

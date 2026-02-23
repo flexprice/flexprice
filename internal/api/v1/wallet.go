@@ -29,6 +29,7 @@ func NewWalletHandler(walletService service.WalletService, logger *logger.Logger
 
 // CreateWallet godoc
 // @Summary Create a new wallet
+// @ID createWallet
 // @Description Create a new wallet for a customer
 // @Tags Wallets
 // @Accept json
@@ -61,6 +62,7 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 
 // GetWalletsByCustomerID godoc
 // @Summary Get wallets by customer ID
+// @ID getWalletsByCustomerId
 // @Description Get all wallets for a customer
 // @Tags Wallets
 // @Accept json
@@ -118,6 +120,7 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 
 // GetCustomerWallets godoc
 // @Summary Get Customer Wallets
+// @ID getCustomerWallets
 // @Description Get all wallets for a customer by lookup key or id
 // @Tags Wallets
 // @Accept json
@@ -186,6 +189,7 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 
 // GetWalletByID godoc
 // @Summary Get wallet by ID
+// @ID getWalletById
 // @Description Get a wallet by its ID
 // @Tags Wallets
 // @Accept json
@@ -218,6 +222,7 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 
 // GetWalletTransactions godoc
 // @Summary Get wallet transactions
+// @ID getWalletTransactions
 // @Description Get transactions for a wallet with pagination
 // @Tags Wallets
 // @Accept json
@@ -264,6 +269,7 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 
 // TopUpWallet godoc
 // @Summary Top up wallet
+// @ID topUpWallet
 // @Description Add credits to a wallet
 // @Tags Wallets
 // @Accept json
@@ -306,6 +312,7 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 // GetWalletBalance godoc
 // @Summary Get wallet balance
+// @ID getWalletBalance
 // @Description Get real-time balance of a wallet
 // @Tags Wallets
 // @Accept json
@@ -422,6 +429,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 
 // TerminateWallet godoc
 // @Summary Terminate a wallet
+// @ID terminateWallet
 // @Description Terminates a wallet by closing it and debiting remaining balance
 // @Tags Wallets
 // @Accept json
@@ -454,6 +462,7 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 
 // UpdateWallet godoc
 // @Summary Update a wallet
+// @ID updateWallet
 // @Description Update a wallet's details including auto top-up configuration
 // @Tags Wallets
 // @Accept json
@@ -519,6 +528,7 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 
 // ListWalletTransactionsByFilter godoc
 // @Summary List wallet transactions by filter
+// @ID listWalletTransactionsByFilter
 // @Description List wallet transactions by filter
 // @Tags Wallets
 // @Accept json
@@ -561,6 +571,7 @@ func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
 }
 
 // @Summary List wallets
+// @ID listWallets
 // @Description List wallets with optional filtering
 // @Tags Wallets
 // @Accept json
@@ -637,6 +648,7 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 
 // ListWalletsByFilter godoc
 // @Summary List wallets by filter
+// @ID listWalletsByFilter
 // @Description List wallets by filter
 // @Tags Wallets
 // @Accept json

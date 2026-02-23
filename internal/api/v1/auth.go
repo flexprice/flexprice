@@ -27,6 +27,7 @@ func NewAuthHandler(cfg *config.Configuration, authService service.AuthService, 
 }
 
 // @Summary Sign up
+// @ID signUp
 // @Description Sign up a new user
 // @Tags Auth
 // @Accept json
@@ -63,6 +64,7 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 }
 
 // @Summary Login
+// @ID login
 // @Description Login a user
 // @Tags Auth
 // @Accept json

@@ -33,6 +33,7 @@ func NewTaskHandler(
 }
 
 // @Summary Create a new task
+// @ID createTask
 // @Description Create a new task for processing files asynchronously
 // @Tags Tasks
 // @Accept json
@@ -75,6 +76,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 }
 
 // @Summary Get a task
+// @ID getTask
 // @Description Get a task by ID
 // @Tags Tasks
 // @Accept json
@@ -105,6 +107,7 @@ func (h *TaskHandler) GetTask(c *gin.Context) {
 }
 
 // @Summary List tasks
+// @ID listTasks
 // @Description List tasks with optional filtering
 // @Tags Tasks
 // @Accept json
@@ -138,6 +141,7 @@ func (h *TaskHandler) ListTasks(c *gin.Context) {
 }
 
 // @Summary Update task status
+// @ID updateTaskStatus
 // @Description Update a task's status
 // @Tags Tasks
 // @Accept json
@@ -177,6 +181,7 @@ func (h *TaskHandler) UpdateTaskStatus(c *gin.Context) {
 }
 
 // @Summary Get task processing result
+// @ID getTaskResult
 // @Description Get the result of a task processing workflow
 // @Tags Tasks
 // @Accept json
@@ -211,6 +216,7 @@ func (h *TaskHandler) GetTaskProcessingResult(c *gin.Context) {
 }
 
 // @Summary Download task export file
+// @ID downloadTaskExport
 // @Description Generate a presigned URL for downloading an exported file (supports both Flexprice-managed and customer-owned S3)
 // @Tags Tasks
 // @Accept json

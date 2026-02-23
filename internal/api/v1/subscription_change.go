@@ -29,6 +29,7 @@ func NewSubscriptionChangeHandler(
 }
 
 // @Summary Preview subscription plan change
+// @ID previewSubscriptionChange
 // @Description Preview the impact of changing a subscription's plan, including proration calculations
 // @Tags Subscriptions
 // @Accept json
@@ -84,6 +85,7 @@ func (h *SubscriptionChangeHandler) PreviewSubscriptionChange(c *gin.Context) {
 }
 
 // @Summary Execute subscription plan change
+// @ID executeSubscriptionChange
 // @Description Execute a subscription plan change, including proration and invoice generation
 // @Tags Subscriptions
 // @Accept json
