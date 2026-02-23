@@ -39,15 +39,15 @@ func NewEventsHandler(eventService service.EventService, eventPostProcessingServ
 
 // @Summary Ingest event
 // @ID ingestEvent
-// @Description Ingest a new event into the system
+// @Description Use when sending a single usage event from your app (e.g. one API call or one GB stored). Events are processed asynchronously; returns 202 with event_id.
 // @Tags Events
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param event body dto.IngestEventRequest true "Event data"
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events [post]
 func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -75,17 +75,17 @@ func (h *EventsHandler) IngestEvent(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{"message": "Event accepted for processing", "event_id": req.EventID})
 }
 
-// @Summary Bulk Ingest events
+// @Summary Bulk ingest events
 // @ID ingestEventsBulk
-// @Description Ingest bulk events into the system
+// @Description Use when batching usage events (e.g. backfill or high-volume ingestion). More efficient than single event calls; returns 202 when accepted.
 // @Tags Events
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param event body dto.BulkIngestEventRequest true "Event data"
 // @Success 202 {object} map[string]string "message:Event accepted for processing"
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/bulk [post]
 func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -110,15 +110,16 @@ func (h *EventsHandler) BulkIngestEvent(c *gin.Context) {
 
 // @Summary Get usage by meter
 // @ID getUsageByMeter
-// @Description Retrieve aggregated usage statistics using meter configuration
+// @Description Use when showing usage for a specific meter (e.g. dashboard or overage check). Supports time range, filters, and grouping by customer or subscription.
 // @Tags Events
+// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageByMeterRequest true "Request body"
 // @Success 200 {object} dto.GetUsageResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/usage/meter [post]
 func (h *EventsHandler) GetUsageByMeter(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -152,14 +153,15 @@ func (h *EventsHandler) GetUsageByMeter(c *gin.Context) {
 
 // @Summary Get usage statistics
 // @ID getUsageStatistics
-// @Description Retrieve aggregated usage statistics for events
+// @Description Use when building usage reports or dashboards across events. Supports filters and grouping; defaults to last 7 days if no range provided.
 // @Tags Events
+// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageRequest true "Request body"
 // @Success 200 {object} dto.GetUsageResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/usage [post]
 func (h *EventsHandler) GetUsage(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -279,14 +281,15 @@ func (h *EventsHandler) GetEvents(c *gin.Context) {
 
 // @Summary List raw events
 // @ID listRawEvents
-// @Description Retrieve raw events with pagination and filtering
+// @Description Use when debugging ingestion or exporting raw event data (e.g. support or audit). Returns a paginated list; supports time range and sorting.
 // @Tags Events
+// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetEventsRequest true "Request body"
 // @Success 200 {object} dto.GetEventsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/query [post]
 func (h *EventsHandler) QueryEvents(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -319,14 +322,15 @@ func (h *EventsHandler) QueryEvents(c *gin.Context) {
 
 // @Summary Get usage analytics
 // @ID getUsageAnalytics
-// @Description Retrieve comprehensive usage analytics with filtering, grouping, and time-series data
+// @Description Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.
 // @Tags Events
+// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageAnalyticsRequest true "Request body"
 // @Success 200 {object} dto.GetUsageAnalyticsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/analytics [post]
 func (h *EventsHandler) GetUsageAnalytics(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -439,19 +443,6 @@ func validateStartAndEndTime(startTime, endTime time.Time) (time.Time, time.Time
 	return startTime, endTime, nil
 }
 
-// @Summary Get monitoring data
-// @ID getEventsMonitoringData
-// @Description Retrieve monitoring data for events including consumer lag and event metrics (last 24 hours by default)
-// @Tags Events
-// @Produce json
-// @Security ApiKeyAuth
-// @Param start_time query time.Time false "Start time (ISO 8601) - defaults to 24 hours ago"
-// @Param end_time query time.Time false "End time (ISO 8601) - defaults to now"
-// @Param window_size query string false "Window size for time series data (e.g., 'HOUR', 'DAY') - optional"
-// @Success 200 {object} dto.GetMonitoringDataResponse
-// @Failure 400 {object} ierr.ErrorResponse "Validation error"
-// @Failure 500 {object} ierr.ErrorResponse "Internal server error"
-// @Router /events/monitoring [get]
 func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -473,14 +464,14 @@ func (h *EventsHandler) GetMonitoringData(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Get hugging face inference data
+// @Summary Get Hugging Face inference data
 // @ID getHuggingfaceInferenceData
-// @Description Retrieve hugging face inference data for events
+// @Description Use when fetching Hugging Face inference usage or billing data (e.g. for HF-specific reporting or reconciliation).
 // @Tags Events
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.GetHuggingFaceBillingDataResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/huggingface-inference [post]
 func (h *EventsHandler) GetHuggingFaceBillingData(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -562,16 +553,16 @@ func (h *EventsHandler) BenchmarkV2(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// @Summary Get event by ID
-// @ID getEventById
-// @Description Retrieve event details and processing status with debug information
+// @Summary Get event
+// @ID getEvent
+// @Description Use when debugging a specific event (e.g. why it failed or how it was aggregated). Includes processing status and debug info.
 // @Tags Events
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Event ID"
 // @Success 200 {object} dto.GetEventByIDResponse
 // @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /events/{id} [get]
 func (h *EventsHandler) GetEventByID(c *gin.Context) {
 	ctx := c.Request.Context()

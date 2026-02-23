@@ -32,17 +32,17 @@ func NewEntityIntegrationMappingHandler(
 // CreateEntityIntegrationMapping godoc
 // @Summary Create entity integration mapping
 // @ID createEntityIntegrationMapping
-// @Description Create a new entity integration mapping
+// @Description Use when linking a FlexPrice entity to an external system (e.g. CRM or payment provider) so you can sync or reconcile by external ID.
 // @Tags Entity Integration Mappings
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param entity_integration_mapping body dto.CreateEntityIntegrationMappingRequest true "Entity integration mapping data"
 // @Success 201 {object} dto.EntityIntegrationMappingResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 409 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 409 {object} ierr.ErrorResponse "Conflict"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entity-integration-mappings [post]
 func (h *EntityIntegrationMappingHandler) CreateEntityIntegrationMapping(c *gin.Context) {
 	var req dto.CreateEntityIntegrationMappingRequest
@@ -64,21 +64,6 @@ func (h *EntityIntegrationMappingHandler) CreateEntityIntegrationMapping(c *gin.
 	c.JSON(http.StatusCreated, mapping)
 }
 
-// GetEntityIntegrationMapping godoc
-// @Summary Get entity integration mapping
-// @ID getEntityIntegrationMapping
-// @Description Retrieve a specific entity integration mapping by ID
-// @Tags Entity Integration Mappings
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Entity integration mapping ID"
-// @Success 200 {object} dto.EntityIntegrationMappingResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /entity-integration-mappings/{id} [get]
 func (h *EntityIntegrationMappingHandler) GetEntityIntegrationMapping(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -101,17 +86,17 @@ func (h *EntityIntegrationMappingHandler) GetEntityIntegrationMapping(c *gin.Con
 // DeleteEntityIntegrationMapping godoc
 // @Summary Delete entity integration mapping
 // @ID deleteEntityIntegrationMapping
-// @Description Delete an entity integration mapping
+// @Description Use when unlinking a FlexPrice entity from an external system or cleaning up stale integration mappings.
 // @Tags Entity Integration Mappings
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Entity integration mapping ID"
 // @Success 204 "No Content"
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /entity-integration-mappings/{id} [delete]
 func (h *EntityIntegrationMappingHandler) DeleteEntityIntegrationMapping(c *gin.Context) {
 	id := c.Param("id")
@@ -132,25 +117,6 @@ func (h *EntityIntegrationMappingHandler) DeleteEntityIntegrationMapping(c *gin.
 	c.Status(http.StatusNoContent)
 }
 
-// ListEntityIntegrationMappings godoc
-// @Summary List entity integration mappings
-// @ID listEntityIntegrationMappings
-// @Description Retrieve a list of entity integration mappings with optional filtering
-// @Tags Entity Integration Mappings
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param entity_id query string false "Filter by FlexPrice entity ID"
-// @Param entity_type query string false "Filter by entity type"
-// @Param provider_type query string false "Filter by provider type"
-// @Param provider_entity_id query string false "Filter by provider entity ID"
-// @Param limit query int false "Number of results to return (default: 20, max: 100)"
-// @Param offset query int false "Pagination offset (default: 0)"
-// @Success 200 {object} dto.ListEntityIntegrationMappingsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /entity-integration-mappings [get]
 func (h *EntityIntegrationMappingHandler) ListEntityIntegrationMappings(c *gin.Context) {
 	// Parse query parameters
 	filter := &types.EntityIntegrationMappingFilter{

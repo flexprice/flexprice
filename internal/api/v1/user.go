@@ -21,16 +21,15 @@ type UserHandler struct {
 	logger      *logger.Logger
 }
 
-// @Summary Get user info
+// @Summary Get current user
 // @ID getUserInfo
-// @Description Get the current user's information
+// @Description Use to show the logged-in user's profile in the UI or to check permissions and roles for the current session.
 // @Tags Users
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.UserResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /users/me [get]
 func (h *UserHandler) GetUserInfo(c *gin.Context) {
 	user, err := h.userService.GetUserInfo(c.Request.Context())
@@ -44,15 +43,15 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 
 // @Summary Create service account
 // @ID createUser
-// @Description Create a new service account with required roles. Only service accounts can be created via this endpoint.
+// @Description Use when provisioning API access for automation, CI/CD pipelines, or headless integrations that need scoped API keys.
 // @Tags Users
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.CreateUserRequest true "Create service account request (type must be 'service_account', roles are required)"
 // @Success 201 {object} dto.UserResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
@@ -74,19 +73,19 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, user)
 }
 
-// @Summary List users with filters
-// @ID listUsersByFilter
-// @Description Search and filter users by type (user/service_account), roles, etc.
+// @Summary Query users
+// @ID queryUser
+// @Description Use when listing or searching service accounts in an admin UI, or when auditing who has API access and which roles they have.
 // @Tags Users
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter body types.UserFilter true "Filter parameters"
+// @Param filter body types.UserFilter true "Filter"
 // @Success 200 {object} dto.ListUsersResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /users/search [post]
-func (h *UserHandler) ListUsersByFilter(c *gin.Context) {
+func (h *UserHandler) QueryUsers(c *gin.Context) {
 	var filter types.UserFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
