@@ -30,6 +30,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "List addons",
+                "operationId": "listAddons",
                 "parameters": [
                     {
                         "type": "array",
@@ -153,6 +154,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Create addon",
+                "operationId": "createAddon",
                 "parameters": [
                     {
                         "description": "Addon Request",
@@ -201,6 +203,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Get addon by lookup key",
+                "operationId": "getAddonByLookupKey",
                 "parameters": [
                     {
                         "type": "string",
@@ -250,6 +253,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "List addons by filter",
+                "operationId": "listAddonsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -298,6 +302,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Get addon",
+                "operationId": "getAddon",
                 "parameters": [
                     {
                         "type": "string",
@@ -345,6 +350,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Update addon",
+                "operationId": "updateAddon",
                 "parameters": [
                     {
                         "type": "string",
@@ -398,6 +404,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Delete addon",
+                "operationId": "deleteAddon",
                 "parameters": [
                     {
                         "type": "string",
@@ -447,6 +454,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get addon entitlements",
+                "operationId": "getAddonEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -502,6 +510,7 @@ const docTemplate = `{
                     "Alert Logs"
                 ],
                 "summary": "List alert logs by filter",
+                "operationId": "listAlertLogsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -548,6 +557,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Login",
+                "operationId": "login",
                 "parameters": [
                     {
                         "description": "Login request",
@@ -588,6 +598,7 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Sign up",
+                "operationId": "signUp",
                 "parameters": [
                     {
                         "description": "Sign up request",
@@ -633,6 +644,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Get connections",
+                "operationId": "listConnections",
                 "parameters": [
                     {
                         "type": "array",
@@ -763,6 +775,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "List connections by filter",
+                "operationId": "listConnectionsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -814,6 +827,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Get a connection",
+                "operationId": "getConnection",
                 "parameters": [
                     {
                         "type": "string",
@@ -867,6 +881,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Update a connection",
+                "operationId": "updateConnection",
                 "parameters": [
                     {
                         "type": "string",
@@ -929,6 +944,7 @@ const docTemplate = `{
                     "Connections"
                 ],
                 "summary": "Delete a connection",
+                "operationId": "deleteConnection",
                 "parameters": [
                     {
                         "type": "string",
@@ -981,6 +997,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Create a new costsheet",
+                "operationId": "createCostsheet",
                 "parameters": [
                     {
                         "description": "Costsheet configuration",
@@ -1038,6 +1055,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get active costsheet for tenant",
+                "operationId": "getActiveCostsheet",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1078,6 +1096,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get combined revenue and cost analytics",
+                "operationId": "getDetailedCostAnalytics",
                 "parameters": [
                     {
                         "description": "Combined analytics request (start_time/end_time optional - defaults to last 7 days)",
@@ -1129,6 +1148,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get combined revenue and cost analytics",
+                "operationId": "getDetailedCostAnalyticsV2",
                 "parameters": [
                     {
                         "description": "Combined analytics request (start_time/end_time optional - defaults to last 7 days)",
@@ -1180,6 +1200,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "List costsheets by filter",
+                "operationId": "listCostsheetsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -1231,6 +1252,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get a costsheet by ID",
+                "operationId": "getCostsheetById",
                 "parameters": [
                     {
                         "type": "string",
@@ -1290,6 +1312,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Update a costsheet",
+                "operationId": "updateCostsheet",
                 "parameters": [
                     {
                         "type": "string",
@@ -1358,6 +1381,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Delete a costsheet",
+                "operationId": "deleteCostsheet",
                 "parameters": [
                     {
                         "type": "string",
@@ -1416,6 +1440,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "List coupons with filtering",
+                "operationId": "listCoupons",
                 "parameters": [
                     {
                         "type": "array",
@@ -1528,6 +1553,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Create a new coupon",
+                "operationId": "createCoupon",
                 "parameters": [
                     {
                         "description": "Coupon request",
@@ -1600,6 +1626,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Get a coupon by ID",
+                "operationId": "getCouponById",
                 "parameters": [
                     {
                         "type": "string",
@@ -1668,6 +1695,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Update a coupon",
+                "operationId": "updateCoupon",
                 "parameters": [
                     {
                         "type": "string",
@@ -1745,6 +1773,7 @@ const docTemplate = `{
                     "Coupons"
                 ],
                 "summary": "Delete a coupon",
+                "operationId": "deleteCoupon",
                 "parameters": [
                     {
                         "type": "string",
@@ -1815,6 +1844,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Get credit grants",
+                "operationId": "getCreditGrants",
                 "parameters": [
                     {
                         "type": "array",
@@ -1953,6 +1983,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Create a new credit grant",
+                "operationId": "createCreditGrant",
                 "parameters": [
                     {
                         "description": "Credit Grant configuration",
@@ -2004,6 +2035,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Get a credit grant by ID",
+                "operationId": "getCreditGrantById",
                 "parameters": [
                     {
                         "type": "string",
@@ -2051,6 +2083,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Update a credit grant",
+                "operationId": "updateCreditGrant",
                 "parameters": [
                     {
                         "type": "string",
@@ -2107,6 +2140,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Delete a credit grant",
+                "operationId": "deleteCreditGrant",
                 "parameters": [
                     {
                         "type": "string",
@@ -2167,6 +2201,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "List credit notes with filtering",
+                "operationId": "listCreditNotes",
                 "parameters": [
                     {
                         "type": "array",
@@ -2326,6 +2361,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Create a new credit note",
+                "operationId": "createCreditNote",
                 "parameters": [
                     {
                         "description": "Credit note request",
@@ -2398,6 +2434,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Get a credit note by ID",
+                "operationId": "getCreditNoteById",
                 "parameters": [
                     {
                         "type": "string",
@@ -2468,6 +2505,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Process a draft credit note",
+                "operationId": "processCreditNote",
                 "parameters": [
                     {
                         "type": "string",
@@ -2538,6 +2576,7 @@ const docTemplate = `{
                     "Credit Notes"
                 ],
                 "summary": "Void a credit note",
+                "operationId": "voidCreditNote",
                 "parameters": [
                     {
                         "type": "string",
@@ -2605,6 +2644,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customers",
+                "operationId": "listCustomers",
                 "parameters": [
                     {
                         "type": "array",
@@ -2734,6 +2774,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Update a customer",
+                "operationId": "updateCustomer",
                 "parameters": [
                     {
                         "type": "string",
@@ -2795,6 +2836,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Create a customer",
+                "operationId": "createCustomer",
                 "parameters": [
                     {
                         "description": "Customer",
@@ -2846,6 +2888,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get a customer by external id",
+                "operationId": "getCustomerByExternalId",
                 "parameters": [
                     {
                         "type": "string",
@@ -2901,6 +2944,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "List customers by filter",
+                "operationId": "listCustomersByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -2952,6 +2996,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customer usage summary",
+                "operationId": "getCustomerUsageSummary",
                 "parameters": [
                     {
                         "type": "string",
@@ -3031,6 +3076,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get Customer Wallets",
+                "operationId": "getCustomerWallets",
                 "parameters": [
                     {
                         "type": "string",
@@ -3109,6 +3155,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get a customer",
+                "operationId": "getCustomer",
                 "parameters": [
                     {
                         "type": "string",
@@ -3156,6 +3203,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Delete a customer",
+                "operationId": "deleteCustomer",
                 "parameters": [
                     {
                         "type": "string",
@@ -3202,6 +3250,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customer entitlements",
+                "operationId": "getCustomerEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -3266,6 +3315,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get upcoming credit grant applications",
+                "operationId": "getCustomerUpcomingGrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -3321,6 +3371,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get a customer invoice summary",
+                "operationId": "getCustomerInvoiceSummary",
                 "parameters": [
                     {
                         "type": "string",
@@ -3370,6 +3421,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallets by customer ID",
+                "operationId": "getWalletsByCustomerId",
                 "parameters": [
                     {
                         "type": "string",
@@ -3422,6 +3474,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get entitlements",
+                "operationId": "getEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -3576,6 +3629,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Create a new entitlement",
+                "operationId": "createEntitlement",
                 "parameters": [
                     {
                         "description": "Entitlement configuration",
@@ -3627,6 +3681,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Create multiple entitlements in bulk",
+                "operationId": "createEntitlementsBulk",
                 "parameters": [
                     {
                         "description": "Bulk entitlement configuration",
@@ -3678,6 +3733,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "List entitlements by filter",
+                "operationId": "listEntitlementsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -3729,6 +3785,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get an entitlement by ID",
+                "operationId": "getEntitlementById",
                 "parameters": [
                     {
                         "type": "string",
@@ -3776,6 +3833,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Update an entitlement",
+                "operationId": "updateEntitlement",
                 "parameters": [
                     {
                         "type": "string",
@@ -3832,6 +3890,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Delete an entitlement",
+                "operationId": "deleteEntitlement",
                 "parameters": [
                     {
                         "type": "string",
@@ -3881,6 +3940,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "List entity integration mappings",
+                "operationId": "listEntityIntegrationMappings",
                 "parameters": [
                     {
                         "type": "string",
@@ -3963,6 +4023,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Create entity integration mapping",
+                "operationId": "createEntityIntegrationMapping",
                 "parameters": [
                     {
                         "description": "Entity integration mapping data",
@@ -4026,6 +4087,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Get entity integration mapping",
+                "operationId": "getEntityIntegrationMapping",
                 "parameters": [
                     {
                         "type": "string",
@@ -4085,6 +4147,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Delete entity integration mapping",
+                "operationId": "deleteEntityIntegrationMapping",
                 "parameters": [
                     {
                         "type": "string",
@@ -4143,6 +4206,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Get environments",
+                "operationId": "listEnvironments",
                 "parameters": [
                     {
                         "type": "string",
@@ -4223,6 +4287,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Create an environment",
+                "operationId": "createEnvironment",
                 "parameters": [
                     {
                         "description": "Environment",
@@ -4274,6 +4339,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Get an environment",
+                "operationId": "getEnvironment",
                 "parameters": [
                     {
                         "type": "string",
@@ -4327,6 +4393,7 @@ const docTemplate = `{
                     "Environments"
                 ],
                 "summary": "Update an environment",
+                "operationId": "updateEnvironment",
                 "parameters": [
                     {
                         "type": "string",
@@ -4391,6 +4458,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Ingest event",
+                "operationId": "ingestEvent",
                 "parameters": [
                     {
                         "description": "Event data",
@@ -4442,6 +4510,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage analytics",
+                "operationId": "getUsageAnalytics",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4493,6 +4562,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Bulk Ingest events",
+                "operationId": "ingestEventsBulk",
                 "parameters": [
                     {
                         "description": "Event data",
@@ -4544,6 +4614,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get hugging face inference data",
+                "operationId": "getHuggingfaceInferenceData",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4575,6 +4646,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get monitoring data",
+                "operationId": "getEventsMonitoringData",
                 "parameters": [
                     {
                         "type": "string",
@@ -4620,6 +4692,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "List raw events",
+                "operationId": "listRawEvents",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4668,6 +4741,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage statistics",
+                "operationId": "getUsageStatistics",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4716,6 +4790,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage by meter",
+                "operationId": "getUsageByMeter",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4770,6 +4845,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get event by ID",
+                "operationId": "getEventById",
                 "parameters": [
                     {
                         "type": "string",
@@ -4819,6 +4895,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "List features",
+                "operationId": "listFeatures",
                 "parameters": [
                     {
                         "type": "string",
@@ -4949,6 +5026,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Create a new feature",
+                "operationId": "createFeature",
                 "parameters": [
                     {
                         "description": "Feature to create",
@@ -5000,6 +5078,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "List features by filter",
+                "operationId": "listFeaturesByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -5051,6 +5130,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Get a feature by ID",
+                "operationId": "getFeatureById",
                 "parameters": [
                     {
                         "type": "string",
@@ -5104,6 +5184,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Update a feature",
+                "operationId": "updateFeature",
                 "parameters": [
                     {
                         "type": "string",
@@ -5166,6 +5247,7 @@ const docTemplate = `{
                     "Features"
                 ],
                 "summary": "Delete a feature",
+                "operationId": "deleteFeature",
                 "parameters": [
                     {
                         "type": "string",
@@ -5221,6 +5303,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Create a group",
+                "operationId": "createGroup",
                 "parameters": [
                     {
                         "description": "Group",
@@ -5272,6 +5355,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Get groups",
+                "operationId": "listGroups",
                 "parameters": [
                     {
                         "type": "string",
@@ -5356,6 +5440,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Get a group",
+                "operationId": "getGroup",
                 "parameters": [
                     {
                         "type": "string",
@@ -5409,6 +5494,7 @@ const docTemplate = `{
                     "Groups"
                 ],
                 "summary": "Delete a group",
+                "operationId": "deleteGroup",
                 "parameters": [
                     {
                         "type": "string",
@@ -5461,6 +5547,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "List invoices",
+                "operationId": "listInvoices",
                 "parameters": [
                     {
                         "type": "number",
@@ -5674,6 +5761,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Create a new one off invoice",
+                "operationId": "createInvoice",
                 "parameters": [
                     {
                         "description": "Invoice details",
@@ -5725,6 +5813,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get a preview invoice",
+                "operationId": "getInvoicePreview",
                 "parameters": [
                     {
                         "description": "Preview Invoice Request",
@@ -5776,6 +5865,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "List invoices by filter",
+                "operationId": "listInvoicesByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -5827,6 +5917,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get an invoice by ID",
+                "operationId": "getInvoiceById",
                 "parameters": [
                     {
                         "type": "string",
@@ -5890,6 +5981,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Update an invoice",
+                "operationId": "updateInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -5954,6 +6046,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Trigger communication webhook for an invoice",
+                "operationId": "triggerInvoiceCommsWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -6009,6 +6102,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Finalize an invoice",
+                "operationId": "finalizeInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -6058,6 +6152,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Update invoice payment status",
+                "operationId": "updateInvoicePaymentStatus",
                 "parameters": [
                     {
                         "type": "string",
@@ -6122,6 +6217,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Attempt payment for an invoice",
+                "operationId": "attemptInvoicePayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6171,6 +6267,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Get PDF for an invoice",
+                "operationId": "getInvoicePdf",
                 "parameters": [
                     {
                         "type": "string",
@@ -6232,6 +6329,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Recalculate invoice totals and line items",
+                "operationId": "recalculateInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -6293,6 +6391,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Void an invoice",
+                "operationId": "voidInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -6342,6 +6441,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "List payments",
+                "operationId": "listPayments",
                 "parameters": [
                     {
                         "type": "string",
@@ -6489,6 +6589,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Create a new payment",
+                "operationId": "createPayment",
                 "parameters": [
                     {
                         "description": "Payment configuration",
@@ -6540,6 +6641,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Get a payment by ID",
+                "operationId": "getPaymentById",
                 "parameters": [
                     {
                         "type": "string",
@@ -6587,6 +6689,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Update a payment",
+                "operationId": "updatePayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6643,6 +6746,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Delete a payment",
+                "operationId": "deletePayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6692,6 +6796,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "Process a payment",
+                "operationId": "processPayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6741,6 +6846,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Get plans",
+                "operationId": "getPlans",
                 "parameters": [
                     {
                         "type": "string",
@@ -6847,6 +6953,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Create a new plan",
+                "operationId": "createPlan",
                 "parameters": [
                     {
                         "description": "Plan configuration",
@@ -6898,6 +7005,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "List plans by filter",
+                "operationId": "listPlansByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -6949,6 +7057,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Get a plan",
+                "operationId": "getPlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -7002,6 +7111,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Update a plan",
+                "operationId": "updatePlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -7064,6 +7174,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Delete a plan",
+                "operationId": "deletePlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -7119,6 +7230,7 @@ const docTemplate = `{
                     "CreditGrants"
                 ],
                 "summary": "Get plan credit grants",
+                "operationId": "getPlanCreditGrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -7174,6 +7286,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get plan entitlements",
+                "operationId": "getPlanEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -7229,6 +7342,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Synchronize plan prices",
+                "operationId": "syncPlanPrices",
                 "parameters": [
                     {
                         "type": "string",
@@ -7290,6 +7404,7 @@ const docTemplate = `{
                     "CustomerPortal"
                 ],
                 "summary": "Create a customer portal session",
+                "operationId": "createCustomerPortalSession",
                 "parameters": [
                     {
                         "type": "string",
@@ -7345,6 +7460,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get prices",
+                "operationId": "getPrices",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -7519,6 +7635,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Create a new price",
+                "operationId": "createPrice",
                 "parameters": [
                     {
                         "description": "Price configuration",
@@ -7570,6 +7687,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Create multiple prices in bulk",
+                "operationId": "createPricesBulk",
                 "parameters": [
                     {
                         "description": "Bulk price configuration",
@@ -7621,6 +7739,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get price by lookup key",
+                "operationId": "getPriceByLookupKey",
                 "parameters": [
                     {
                         "type": "string",
@@ -7670,6 +7789,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "List prices by filter",
+                "operationId": "listPricesByFilter",
                 "parameters": [
                     {
                         "description": "Filter with DSL support",
@@ -7721,6 +7841,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "List price units",
+                "operationId": "listPriceUnits",
                 "parameters": [
                     {
                         "type": "string",
@@ -7785,6 +7906,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Create a new price unit",
+                "operationId": "createPriceUnit",
                 "parameters": [
                     {
                         "description": "Price unit details",
@@ -7830,6 +7952,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Get a price unit by code",
+                "operationId": "getPriceUnitByCode",
                 "parameters": [
                     {
                         "type": "string",
@@ -7885,6 +8008,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "List price units by filter",
+                "operationId": "listPriceUnitsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -7936,6 +8060,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Get a price unit by ID",
+                "operationId": "getPriceUnitById",
                 "parameters": [
                     {
                         "type": "string",
@@ -7983,6 +8108,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Update a price unit",
+                "operationId": "updatePriceUnit",
                 "parameters": [
                     {
                         "type": "string",
@@ -8039,6 +8165,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "Delete a price unit",
+                "operationId": "deletePriceUnit",
                 "parameters": [
                     {
                         "type": "string",
@@ -8088,6 +8215,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get a price by ID",
+                "operationId": "getPriceById",
                 "parameters": [
                     {
                         "type": "string",
@@ -8135,6 +8263,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Update a price",
+                "operationId": "updatePrice",
                 "parameters": [
                     {
                         "type": "string",
@@ -8191,6 +8320,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Delete a price",
+                "operationId": "deletePrice",
                 "parameters": [
                     {
                         "type": "string",
@@ -8249,6 +8379,7 @@ const docTemplate = `{
                     "RBAC"
                 ],
                 "summary": "List all RBAC roles",
+                "operationId": "listRbacRoles",
                 "responses": {
                     "200": {
                         "description": "List of roles",
@@ -8287,6 +8418,7 @@ const docTemplate = `{
                     "RBAC"
                 ],
                 "summary": "Get a specific RBAC role",
+                "operationId": "getRbacRole",
                 "parameters": [
                     {
                         "type": "string",
@@ -8334,6 +8466,7 @@ const docTemplate = `{
                     "secrets"
                 ],
                 "summary": "List API keys",
+                "operationId": "listApiKeys",
                 "parameters": [
                     {
                         "type": "integer",
@@ -8392,6 +8525,7 @@ const docTemplate = `{
                     "secrets"
                 ],
                 "summary": "Create a new API key",
+                "operationId": "createApiKey",
                 "parameters": [
                     {
                         "description": "API key creation request\\",
@@ -8443,6 +8577,7 @@ const docTemplate = `{
                     "secrets"
                 ],
                 "summary": "Delete an API key",
+                "operationId": "deleteApiKey",
                 "parameters": [
                     {
                         "type": "string",
@@ -8489,6 +8624,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Get integration details",
+                "operationId": "getIntegration",
                 "parameters": [
                     {
                         "type": "string",
@@ -8538,6 +8674,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Create or update an integration",
+                "operationId": "createOrUpdateIntegration",
                 "parameters": [
                     {
                         "type": "string",
@@ -8596,6 +8733,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "List linked integrations",
+                "operationId": "listLinkedIntegrations",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -8630,6 +8768,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Delete an integration",
+                "operationId": "deleteIntegration",
                 "parameters": [
                     {
                         "type": "string",
@@ -8673,6 +8812,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscriptions",
+                "operationId": "listSubscriptions",
                 "parameters": [
                     {
                         "type": "string",
@@ -8874,6 +9014,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Create subscription",
+                "operationId": "createSubscription",
                 "parameters": [
                     {
                         "description": "Subscription Request",
@@ -8925,6 +9066,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Add addon to subscription",
+                "operationId": "addSubscriptionAddon",
                 "parameters": [
                     {
                         "description": "Add Addon Request",
@@ -8974,6 +9116,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Remove addon from subscription",
+                "operationId": "removeSubscriptionAddon",
                 "parameters": [
                     {
                         "description": "Remove Addon Request",
@@ -9025,6 +9168,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Update subscription line item",
+                "operationId": "updateSubscriptionLineItem",
                 "parameters": [
                     {
                         "type": "string",
@@ -9081,6 +9225,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Delete subscription line item",
+                "operationId": "deleteSubscriptionLineItem",
                 "parameters": [
                     {
                         "type": "string",
@@ -9139,6 +9284,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscriptions by filter",
+                "operationId": "listSubscriptionsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -9190,6 +9336,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get usage by subscription",
+                "operationId": "getSubscriptionUsage",
                 "parameters": [
                     {
                         "description": "Usage request",
@@ -9238,6 +9385,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription",
+                "operationId": "getSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9285,6 +9433,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Update subscription",
+                "operationId": "updateSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9343,6 +9492,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Activate draft subscription",
+                "operationId": "activateSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9398,6 +9548,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get active addon associations",
+                "operationId": "getSubscriptionAddonAssociations",
                 "parameters": [
                     {
                         "type": "string",
@@ -9456,6 +9607,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Cancel subscription",
+                "operationId": "cancelSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9514,6 +9666,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Execute subscription plan change",
+                "operationId": "executeSubscriptionChange",
                 "parameters": [
                     {
                         "type": "string",
@@ -9578,6 +9731,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Preview subscription plan change",
+                "operationId": "previewSubscriptionChange",
                 "parameters": [
                     {
                         "type": "string",
@@ -9642,6 +9796,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription entitlements",
+                "operationId": "getSubscriptionEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -9704,6 +9859,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get upcoming credit grant applications",
+                "operationId": "getSubscriptionUpcomingGrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -9759,6 +9915,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Create subscription line item",
+                "operationId": "createSubscriptionLineItem",
                 "parameters": [
                     {
                         "type": "string",
@@ -9823,6 +9980,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Pause a subscription",
+                "operationId": "pauseSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9879,6 +10037,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List all pauses for a subscription",
+                "operationId": "listSubscriptionPauses",
                 "parameters": [
                     {
                         "type": "string",
@@ -9937,6 +10096,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Resume a paused subscription",
+                "operationId": "resumeSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9998,6 +10158,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription V2",
+                "operationId": "getSubscriptionV2",
                 "parameters": [
                     {
                         "type": "string",
@@ -10053,6 +10214,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "List tasks",
+                "operationId": "listTasks",
                 "parameters": [
                     {
                         "type": "string",
@@ -10207,6 +10369,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Create a new task",
+                "operationId": "createTask",
                 "parameters": [
                     {
                         "description": "Task configuration",
@@ -10258,6 +10421,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Get task processing result",
+                "operationId": "getTaskResult",
                 "parameters": [
                     {
                         "type": "string",
@@ -10313,6 +10477,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "List scheduled tasks",
+                "operationId": "listScheduledTasks",
                 "parameters": [
                     {
                         "type": "integer",
@@ -10389,6 +10554,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Create a scheduled task",
+                "operationId": "createScheduledTask",
                 "parameters": [
                     {
                         "description": "Scheduled Task",
@@ -10440,6 +10606,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Schedule update billing period",
+                "operationId": "scheduleUpdateBillingPeriod",
                 "parameters": [
                     {
                         "description": "Schedule Update Billing Period Request",
@@ -10491,6 +10658,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Get a scheduled task",
+                "operationId": "getScheduledTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10544,6 +10712,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Update a scheduled task",
+                "operationId": "updateScheduledTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10606,6 +10775,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Delete a scheduled task",
+                "operationId": "deleteScheduledTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10658,6 +10828,7 @@ const docTemplate = `{
                     "ScheduledTasks"
                 ],
                 "summary": "Trigger force run",
+                "operationId": "triggerScheduledTaskRun",
                 "parameters": [
                     {
                         "type": "string",
@@ -10721,6 +10892,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Get a task",
+                "operationId": "getTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10776,6 +10948,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Download task export file",
+                "operationId": "downloadTaskExport",
                 "parameters": [
                     {
                         "type": "string",
@@ -10834,6 +11007,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Update task status",
+                "operationId": "updateTaskStatus",
                 "parameters": [
                     {
                         "type": "string",
@@ -10898,6 +11072,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "List tax associations",
+                "operationId": "listTaxAssociations",
                 "parameters": [
                     {
                         "type": "string",
@@ -10956,6 +11131,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Create Tax Association",
+                "operationId": "createTaxAssociation",
                 "parameters": [
                     {
                         "description": "Tax Config Request",
@@ -11007,6 +11183,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Get Tax Association",
+                "operationId": "getTaxAssociation",
                 "parameters": [
                     {
                         "type": "string",
@@ -11054,6 +11231,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Update tax association",
+                "operationId": "updateTaxAssociation",
                 "parameters": [
                     {
                         "type": "string",
@@ -11110,6 +11288,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Delete tax association",
+                "operationId": "deleteTaxAssociation",
                 "parameters": [
                     {
                         "type": "string",
@@ -11159,6 +11338,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Get tax rates",
+                "operationId": "getTaxRates",
                 "parameters": [
                     {
                         "type": "string",
@@ -11287,6 +11467,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Create a tax rate",
+                "operationId": "createTaxRate",
                 "parameters": [
                     {
                         "description": "Tax rate to create",
@@ -11338,6 +11519,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Get a tax rate",
+                "operationId": "getTaxRate",
                 "parameters": [
                     {
                         "type": "string",
@@ -11385,6 +11567,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Update a tax rate",
+                "operationId": "updateTaxRate",
                 "parameters": [
                     {
                         "type": "string",
@@ -11441,6 +11624,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Delete a tax rate",
+                "operationId": "deleteTaxRate",
                 "parameters": [
                     {
                         "type": "string",
@@ -11487,6 +11671,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Get billing usage for the current tenant",
+                "operationId": "getTenantBillingUsage",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11533,6 +11718,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Create a new tenant",
+                "operationId": "createTenant",
                 "parameters": [
                     {
                         "description": "Create tenant request",
@@ -11584,6 +11770,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Update a tenant",
+                "operationId": "updateTenant",
                 "parameters": [
                     {
                         "description": "Update tenant request",
@@ -11641,6 +11828,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Get tenant by ID",
+                "operationId": "getTenantById",
                 "parameters": [
                     {
                         "type": "string",
@@ -11690,6 +11878,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Create service account",
+                "operationId": "createUser",
                 "parameters": [
                     {
                         "description": "Create service account request (type must be 'service_account', roles are required)",
@@ -11741,6 +11930,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Get user info",
+                "operationId": "getUserInfo",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11781,6 +11971,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "List users with filters",
+                "operationId": "listUsersByFilter",
                 "parameters": [
                     {
                         "description": "Filter parameters",
@@ -11827,6 +12018,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List all subscription schedules",
+                "operationId": "listAllSubscriptionSchedules",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -11876,6 +12068,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription schedule",
+                "operationId": "getSubscriptionSchedule",
                 "parameters": [
                     {
                         "type": "string",
@@ -11908,6 +12101,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Cancel subscription schedule",
+                "operationId": "cancelSubscriptionSchedule",
                 "parameters": [
                     {
                         "type": "string",
@@ -11947,6 +12141,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscription schedules",
+                "operationId": "listSubscriptionSchedules",
                 "parameters": [
                     {
                         "type": "string",
@@ -11984,6 +12179,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "List wallets",
+                "operationId": "listWallets",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -12085,6 +12281,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Create a new wallet",
+                "operationId": "createWallet",
                 "parameters": [
                     {
                         "description": "Create wallet request",
@@ -12136,6 +12333,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "List wallets by filter",
+                "operationId": "listWalletsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -12186,6 +12384,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "List wallet transactions by filter",
+                "operationId": "listWalletTransactionsByFilter",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -12242,6 +12441,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet by ID",
+                "operationId": "getWalletById",
                 "parameters": [
                     {
                         "type": "string",
@@ -12295,6 +12495,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Update a wallet",
+                "operationId": "updateWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12359,6 +12560,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet balance",
+                "operationId": "getWalletBalance",
                 "parameters": [
                     {
                         "type": "string",
@@ -12420,6 +12622,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Terminate a wallet",
+                "operationId": "terminateWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12475,6 +12678,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Top up wallet",
+                "operationId": "topUpWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12539,6 +12743,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet transactions",
+                "operationId": "getWalletTransactions",
                 "parameters": [
                     {
                         "type": "string",
@@ -12738,6 +12943,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Chargebee webhook events",
+                "operationId": "handleChargebeeWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12805,6 +13011,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle HubSpot webhook events",
+                "operationId": "handleHubspotWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12852,6 +13059,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Moyasar webhook events",
+                "operationId": "handleMoyasarWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12898,6 +13106,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Nomod webhook events",
+                "operationId": "handleNomodWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12951,6 +13160,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle QuickBooks webhook events",
+                "operationId": "handleQuickbooksWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -13018,6 +13228,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Razorpay webhook events",
+                "operationId": "handleRazorpayWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -13065,6 +13276,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Stripe webhook events",
+                "operationId": "handleStripeWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -19814,6 +20026,10 @@ const docTemplate = `{
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
+                "billing_period_count": {
+                    "description": "from price at create; default 1",
+                    "type": "integer"
+                },
                 "commitment_amount": {
                     "description": "Commitment fields",
                     "type": "number"
@@ -23150,6 +23366,10 @@ const docTemplate = `{
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
+                "billing_period_count": {
+                    "description": "from price at create; default 1",
+                    "type": "integer"
+                },
                 "commitment_amount": {
                     "description": "Commitment fields",
                     "type": "number"
@@ -26210,6 +26430,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -26219,10 +26440,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -26232,8 +26453,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         }
     },

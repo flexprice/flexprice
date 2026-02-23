@@ -4832,6 +4832,9 @@ definitions:
     properties:
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        description: from price at create; default 1
+        type: integer
       commitment_amount:
         description: Commitment fields
         type: number
@@ -7235,6 +7238,9 @@ definitions:
     properties:
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        description: from price at create; default 1
+        type: integer
       commitment_amount:
         description: Commitment fields
         type: number
@@ -9477,6 +9483,7 @@ definitions:
     - WalletTypePostPaid
   types.WindowSize:
     enum:
+    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -9487,9 +9494,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
-    - MONTH
     type: string
     x-enum-varnames:
+    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9500,7 +9507,6 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
-    - DefaultWindowSize
 info:
   contact: {}
   description: FlexPrice API Service
@@ -9510,6 +9516,7 @@ paths:
   /addons:
     get:
       description: Get addons with optional filtering
+      operationId: listAddons
       parameters:
       - collectionFormat: csv
         in: query
@@ -9591,6 +9598,7 @@ paths:
       consumes:
       - application/json
       description: Create a new addon
+      operationId: createAddon
       parameters:
       - description: Addon Request
         in: body
@@ -9621,6 +9629,7 @@ paths:
   /addons/{id}:
     delete:
       description: Delete an addon
+      operationId: deleteAddon
       parameters:
       - description: Addon ID
         in: path
@@ -9649,6 +9658,7 @@ paths:
       - Addons
     get:
       description: Get an addon by ID
+      operationId: getAddon
       parameters:
       - description: Addon ID
         in: path
@@ -9679,6 +9689,7 @@ paths:
       consumes:
       - application/json
       description: Update an existing addon
+      operationId: updateAddon
       parameters:
       - description: Addon ID
         in: path
@@ -9716,6 +9727,7 @@ paths:
       consumes:
       - application/json
       description: Get all entitlements for an addon
+      operationId: getAddonEntitlements
       parameters:
       - description: Addon ID
         in: path
@@ -9749,6 +9761,7 @@ paths:
   /addons/lookup/{lookup_key}:
     get:
       description: Get an addon by lookup key
+      operationId: getAddonByLookupKey
       parameters:
       - description: Addon Lookup Key
         in: path
@@ -9780,6 +9793,7 @@ paths:
       consumes:
       - application/json
       description: List addons by filter
+      operationId: listAddonsByFilter
       parameters:
       - description: Filter
         in: body
@@ -9813,6 +9827,7 @@ paths:
       - application/json
       description: List alert logs by filter with optional expand for customer, wallet,
         and feature
+      operationId: listAlertLogsByFilter
       parameters:
       - description: Filter
         in: body
@@ -9845,6 +9860,7 @@ paths:
       consumes:
       - application/json
       description: Login a user
+      operationId: login
       parameters:
       - description: Login request
         in: body
@@ -9871,6 +9887,7 @@ paths:
       consumes:
       - application/json
       description: Sign up a new user
+      operationId: signUp
       parameters:
       - description: Sign up request
         in: body
@@ -9897,6 +9914,7 @@ paths:
       consumes:
       - application/json
       description: Get a list of connections
+      operationId: listConnections
       parameters:
       - collectionFormat: csv
         in: query
@@ -9987,6 +10005,7 @@ paths:
       consumes:
       - application/json
       description: Delete a connection by ID
+      operationId: deleteConnection
       parameters:
       - description: Connection ID
         in: path
@@ -10019,6 +10038,7 @@ paths:
       consumes:
       - application/json
       description: Get a connection by ID
+      operationId: getConnection
       parameters:
       - description: Connection ID
         in: path
@@ -10053,6 +10073,7 @@ paths:
       consumes:
       - application/json
       description: Update a connection by ID
+      operationId: updateConnection
       parameters:
       - description: Connection ID
         in: path
@@ -10094,6 +10115,7 @@ paths:
       consumes:
       - application/json
       description: List connections by filter
+      operationId: listConnectionsByFilter
       parameters:
       - description: Filter
         in: body
@@ -10126,6 +10148,7 @@ paths:
       consumes:
       - application/json
       description: Create a new costsheet with the specified name
+      operationId: createCostsheet
       parameters:
       - description: Costsheet configuration
         in: body
@@ -10162,6 +10185,7 @@ paths:
       consumes:
       - application/json
       description: Soft delete a costsheet by setting its status to deleted
+      operationId: deleteCostsheet
       parameters:
       - description: Costsheet ID
         in: path
@@ -10196,6 +10220,7 @@ paths:
       consumes:
       - application/json
       description: Get a costsheet by ID with optional price expansion
+      operationId: getCostsheetById
       parameters:
       - description: Costsheet ID
         in: path
@@ -10234,6 +10259,7 @@ paths:
       consumes:
       - application/json
       description: Update a costsheet with the specified configuration
+      operationId: updateCostsheet
       parameters:
       - description: Costsheet ID
         in: path
@@ -10279,6 +10305,7 @@ paths:
       consumes:
       - application/json
       description: Get the active costsheet for the current tenant
+      operationId: getActiveCostsheet
       produces:
       - application/json
       responses:
@@ -10305,6 +10332,7 @@ paths:
       - application/json
       description: Retrieve combined analytics with ROI, margin, and detailed breakdowns.
         If start_time and end_time are not provided, defaults to last 7 days.
+      operationId: getDetailedCostAnalytics
       parameters:
       - description: Combined analytics request (start_time/end_time optional - defaults
           to last 7 days)
@@ -10339,6 +10367,7 @@ paths:
       - application/json
       description: Retrieve combined analytics with ROI, margin, and detailed breakdowns.
         If start_time and end_time are not provided, defaults to last 7 days.
+      operationId: getDetailedCostAnalyticsV2
       parameters:
       - description: Combined analytics request (start_time/end_time optional - defaults
           to last 7 days)
@@ -10372,6 +10401,7 @@ paths:
       consumes:
       - application/json
       description: List costsheet records by filter with POST body
+      operationId: listCostsheetsByFilter
       parameters:
       - description: Filter
         in: body
@@ -10404,6 +10434,7 @@ paths:
       consumes:
       - application/json
       description: Lists coupons with filtering
+      operationId: listCoupons
       parameters:
       - collectionFormat: csv
         in: query
@@ -10477,6 +10508,7 @@ paths:
       consumes:
       - application/json
       description: Creates a new coupon
+      operationId: createCoupon
       parameters:
       - description: Coupon request
         in: body
@@ -10522,6 +10554,7 @@ paths:
       consumes:
       - application/json
       description: Deletes a coupon
+      operationId: deleteCoupon
       parameters:
       - description: Coupon ID
         in: path
@@ -10567,6 +10600,7 @@ paths:
       consumes:
       - application/json
       description: Retrieves a coupon by ID
+      operationId: getCouponById
       parameters:
       - description: Coupon ID
         in: path
@@ -10610,6 +10644,7 @@ paths:
       consumes:
       - application/json
       description: Updates an existing coupon
+      operationId: updateCoupon
       parameters:
       - description: Coupon ID
         in: path
@@ -10660,6 +10695,7 @@ paths:
       consumes:
       - application/json
       description: Get credit grants with the specified filter
+      operationId: getCreditGrants
       parameters:
       - collectionFormat: csv
         in: query
@@ -10751,6 +10787,7 @@ paths:
       consumes:
       - application/json
       description: Create a new credit grant with the specified configuration
+      operationId: createCreditGrant
       parameters:
       - description: Credit Grant configuration
         in: body
@@ -10785,6 +10822,7 @@ paths:
       description: Delete a credit grant. Plan-scoped grants are archived; subscription-scoped
         grants have their end date set (optional body with effective_date). Request
         body is optional.
+      operationId: deleteCreditGrant
       parameters:
       - description: Credit Grant ID
         in: path
@@ -10820,6 +10858,7 @@ paths:
       consumes:
       - application/json
       description: Get a credit grant by ID
+      operationId: getCreditGrantById
       parameters:
       - description: Credit Grant ID
         in: path
@@ -10850,6 +10889,7 @@ paths:
       consumes:
       - application/json
       description: Update a credit grant with the specified configuration
+      operationId: updateCreditGrant
       parameters:
       - description: Credit Grant ID
         in: path
@@ -10887,6 +10927,7 @@ paths:
       consumes:
       - application/json
       description: Lists credit notes with filtering
+      operationId: listCreditNotes
       parameters:
       - collectionFormat: csv
         in: query
@@ -10991,6 +11032,7 @@ paths:
       consumes:
       - application/json
       description: Creates a new credit note
+      operationId: createCreditNote
       parameters:
       - description: Credit note request
         in: body
@@ -11036,6 +11078,7 @@ paths:
       consumes:
       - application/json
       description: Retrieves a credit note by ID
+      operationId: getCreditNoteById
       parameters:
       - description: Credit note ID
         in: path
@@ -11080,6 +11123,7 @@ paths:
       consumes:
       - application/json
       description: Processes a draft credit note
+      operationId: processCreditNote
       parameters:
       - description: Credit note ID
         in: path
@@ -11124,6 +11168,7 @@ paths:
       consumes:
       - application/json
       description: Voids a credit note
+      operationId: voidCreditNote
       parameters:
       - description: Credit note ID
         in: path
@@ -11168,6 +11213,7 @@ paths:
       consumes:
       - application/json
       description: Get customers
+      operationId: listCustomers
       parameters:
       - collectionFormat: csv
         in: query
@@ -11252,6 +11298,7 @@ paths:
       consumes:
       - application/json
       description: Create a customer
+      operationId: createCustomer
       parameters:
       - description: Customer
         in: body
@@ -11283,6 +11330,7 @@ paths:
       consumes:
       - application/json
       description: Update a customer by id or external_customer_id
+      operationId: updateCustomer
       parameters:
       - description: Customer ID
         in: query
@@ -11323,6 +11371,7 @@ paths:
       consumes:
       - application/json
       description: Delete a customer
+      operationId: deleteCustomer
       parameters:
       - description: Customer ID
         in: path
@@ -11351,6 +11400,7 @@ paths:
       consumes:
       - application/json
       description: Get a customer
+      operationId: getCustomer
       parameters:
       - description: Customer ID
         in: path
@@ -11382,6 +11432,7 @@ paths:
       consumes:
       - application/json
       description: Get customer entitlements
+      operationId: getCustomerEntitlements
       parameters:
       - description: Customer ID
         in: path
@@ -11423,6 +11474,7 @@ paths:
   /customers/{id}/grants/upcoming:
     get:
       description: Get upcoming credit grant applications for a customer
+      operationId: getCustomerUpcomingGrants
       parameters:
       - description: Customer ID
         in: path
@@ -11458,6 +11510,7 @@ paths:
       consumes:
       - application/json
       description: Get a customer invoice summary
+      operationId: getCustomerInvoiceSummary
       parameters:
       - description: Customer ID
         in: path
@@ -11489,6 +11542,7 @@ paths:
       consumes:
       - application/json
       description: Get all wallets for a customer
+      operationId: getWalletsByCustomerId
       parameters:
       - description: Customer ID
         in: path
@@ -11522,6 +11576,7 @@ paths:
       consumes:
       - application/json
       description: Get a customer by external id
+      operationId: getCustomerByExternalId
       parameters:
       - description: Customer External ID
         in: path
@@ -11557,6 +11612,7 @@ paths:
       consumes:
       - application/json
       description: List customers by filter
+      operationId: listCustomersByFilter
       parameters:
       - description: Filter
         in: body
@@ -11590,6 +11646,7 @@ paths:
       - application/json
       description: Get customer usage summary by customer_id or customer_lookup_key
         (external_customer_id)
+      operationId: getCustomerUsageSummary
       parameters:
       - in: query
         name: customer_id
@@ -11640,6 +11697,7 @@ paths:
       consumes:
       - application/json
       description: Get all wallets for a customer by lookup key or id
+      operationId: getCustomerWallets
       parameters:
       - in: query
         name: expand
@@ -11689,6 +11747,7 @@ paths:
       consumes:
       - application/json
       description: Get entitlements with the specified filter
+      operationId: getEntitlements
       parameters:
       - in: query
         name: end_time
@@ -11792,6 +11851,7 @@ paths:
       consumes:
       - application/json
       description: Create a new entitlement with the specified configuration
+      operationId: createEntitlement
       parameters:
       - description: Entitlement configuration
         in: body
@@ -11824,6 +11884,7 @@ paths:
       consumes:
       - application/json
       description: Delete an entitlement
+      operationId: deleteEntitlement
       parameters:
       - description: Entitlement ID
         in: path
@@ -11854,6 +11915,7 @@ paths:
       consumes:
       - application/json
       description: Get an entitlement by ID
+      operationId: getEntitlementById
       parameters:
       - description: Entitlement ID
         in: path
@@ -11884,6 +11946,7 @@ paths:
       consumes:
       - application/json
       description: Update an entitlement with the specified configuration
+      operationId: updateEntitlement
       parameters:
       - description: Entitlement ID
         in: path
@@ -11921,6 +11984,7 @@ paths:
       consumes:
       - application/json
       description: Create multiple entitlements with the specified configurations
+      operationId: createEntitlementsBulk
       parameters:
       - description: Bulk entitlement configuration
         in: body
@@ -11953,6 +12017,7 @@ paths:
       consumes:
       - application/json
       description: List entitlements by filter
+      operationId: listEntitlementsByFilter
       parameters:
       - description: Filter
         in: body
@@ -11985,6 +12050,7 @@ paths:
       consumes:
       - application/json
       description: Retrieve a list of entity integration mappings with optional filtering
+      operationId: listEntityIntegrationMappings
       parameters:
       - description: Filter by FlexPrice entity ID
         in: query
@@ -12038,6 +12104,7 @@ paths:
       consumes:
       - application/json
       description: Create a new entity integration mapping
+      operationId: createEntityIntegrationMapping
       parameters:
       - description: Entity integration mapping data
         in: body
@@ -12078,6 +12145,7 @@ paths:
       consumes:
       - application/json
       description: Delete an entity integration mapping
+      operationId: deleteEntityIntegrationMapping
       parameters:
       - description: Entity integration mapping ID
         in: path
@@ -12114,6 +12182,7 @@ paths:
       consumes:
       - application/json
       description: Retrieve a specific entity integration mapping by ID
+      operationId: getEntityIntegrationMapping
       parameters:
       - description: Entity integration mapping ID
         in: path
@@ -12153,6 +12222,7 @@ paths:
       consumes:
       - application/json
       description: Get environments
+      operationId: listEnvironments
       parameters:
       - in: query
         name: expand
@@ -12204,6 +12274,7 @@ paths:
       consumes:
       - application/json
       description: Create an environment
+      operationId: createEnvironment
       parameters:
       - description: Environment
         in: body
@@ -12236,6 +12307,7 @@ paths:
       consumes:
       - application/json
       description: Get an environment
+      operationId: getEnvironment
       parameters:
       - description: Environment ID
         in: path
@@ -12270,6 +12342,7 @@ paths:
       consumes:
       - application/json
       description: Update an environment
+      operationId: updateEnvironment
       parameters:
       - description: Environment ID
         in: path
@@ -12311,6 +12384,7 @@ paths:
       consumes:
       - application/json
       description: Ingest a new event into the system
+      operationId: ingestEvent
       parameters:
       - description: Event data
         in: body
@@ -12343,6 +12417,7 @@ paths:
   /events/{id}:
     get:
       description: Retrieve event details and processing status with debug information
+      operationId: getEventById
       parameters:
       - description: Event ID
         in: path
@@ -12373,6 +12448,7 @@ paths:
     post:
       description: Retrieve comprehensive usage analytics with filtering, grouping,
         and time-series data
+      operationId: getUsageAnalytics
       parameters:
       - description: Request body
         in: body
@@ -12405,6 +12481,7 @@ paths:
       consumes:
       - application/json
       description: Ingest bulk events into the system
+      operationId: ingestEventsBulk
       parameters:
       - description: Event data
         in: body
@@ -12437,6 +12514,7 @@ paths:
   /events/huggingface-inference:
     post:
       description: Retrieve hugging face inference data for events
+      operationId: getHuggingfaceInferenceData
       produces:
       - application/json
       responses:
@@ -12457,6 +12535,7 @@ paths:
     get:
       description: Retrieve monitoring data for events including consumer lag and
         event metrics (last 24 hours by default)
+      operationId: getEventsMonitoringData
       parameters:
       - description: Window size for time series data (e.g., 'HOUR', 'DAY') - optional
         in: query
@@ -12485,6 +12564,7 @@ paths:
   /events/query:
     post:
       description: Retrieve raw events with pagination and filtering
+      operationId: listRawEvents
       parameters:
       - description: Request body
         in: body
@@ -12515,6 +12595,7 @@ paths:
   /events/usage:
     post:
       description: Retrieve aggregated usage statistics for events
+      operationId: getUsageStatistics
       parameters:
       - description: Request body
         in: body
@@ -12545,6 +12626,7 @@ paths:
   /events/usage/meter:
     post:
       description: Retrieve aggregated usage statistics using meter configuration
+      operationId: getUsageByMeter
       parameters:
       - description: Request body
         in: body
@@ -12581,6 +12663,7 @@ paths:
       consumes:
       - application/json
       description: List features with optional filtering
+      operationId: listFeatures
       parameters:
       - in: query
         name: end_time
@@ -12666,6 +12749,7 @@ paths:
       consumes:
       - application/json
       description: Create a new feature
+      operationId: createFeature
       parameters:
       - description: Feature to create
         in: body
@@ -12698,6 +12782,7 @@ paths:
       consumes:
       - application/json
       description: Delete a feature by ID
+      operationId: deleteFeature
       parameters:
       - description: Feature ID
         in: path
@@ -12732,6 +12817,7 @@ paths:
       consumes:
       - application/json
       description: Get a feature by ID
+      operationId: getFeatureById
       parameters:
       - description: Feature ID
         in: path
@@ -12766,6 +12852,7 @@ paths:
       consumes:
       - application/json
       description: Update a feature by ID
+      operationId: updateFeature
       parameters:
       - description: Feature ID
         in: path
@@ -12807,6 +12894,7 @@ paths:
       consumes:
       - application/json
       description: List features by filter
+      operationId: listFeaturesByFilter
       parameters:
       - description: Filter
         in: body
@@ -12840,6 +12928,7 @@ paths:
       - application/json
       description: Create a new group for organizing entities (prices, plans, customers,
         etc.)
+      operationId: createGroup
       parameters:
       - description: Group
         in: body
@@ -12872,6 +12961,7 @@ paths:
       consumes:
       - application/json
       description: Delete a group and remove all entity associations
+      operationId: deleteGroup
       parameters:
       - description: Group ID
         in: path
@@ -12904,6 +12994,7 @@ paths:
       consumes:
       - application/json
       description: Get a group by ID
+      operationId: getGroup
       parameters:
       - description: Group ID
         in: path
@@ -12939,6 +13030,7 @@ paths:
       consumes:
       - application/json
       description: Get groups with optional filtering via query parameters
+      operationId: listGroups
       parameters:
       - description: Filter by entity type (e.g., 'price')
         in: query
@@ -12993,6 +13085,7 @@ paths:
       consumes:
       - application/json
       description: List invoices with optional filtering
+      operationId: listInvoices
       parameters:
       - description: |-
           amount_due_gt filters invoices with a total amount due greater than the specified value
@@ -13157,6 +13250,7 @@ paths:
       consumes:
       - application/json
       description: Create a new one off invoice with the provided details
+      operationId: createInvoice
       parameters:
       - description: Invoice details
         in: body
@@ -13189,6 +13283,7 @@ paths:
       consumes:
       - application/json
       description: Get detailed information about an invoice
+      operationId: getInvoiceById
       parameters:
       - description: Invoice ID
         in: path
@@ -13231,6 +13326,7 @@ paths:
       consumes:
       - application/json
       description: Update invoice details like PDF URL and due date.
+      operationId: updateInvoice
       parameters:
       - description: Invoice ID
         in: path
@@ -13273,6 +13369,7 @@ paths:
       - application/json
       description: Triggers a communication webhook event containing all information
         about the invoice
+      operationId: triggerInvoiceCommsWebhook
       parameters:
       - description: Invoice ID
         in: path
@@ -13308,6 +13405,7 @@ paths:
       consumes:
       - application/json
       description: Finalize a draft invoice
+      operationId: finalizeInvoice
       parameters:
       - description: Invoice ID
         in: path
@@ -13339,6 +13437,7 @@ paths:
       consumes:
       - application/json
       description: Update the payment status of an invoice
+      operationId: updateInvoicePaymentStatus
       parameters:
       - description: Invoice ID
         in: path
@@ -13380,6 +13479,7 @@ paths:
       consumes:
       - application/json
       description: Attempt to pay an invoice using customer's available wallets
+      operationId: attemptInvoicePayment
       parameters:
       - description: Invoice ID
         in: path
@@ -13413,6 +13513,7 @@ paths:
   /invoices/{id}/pdf:
     get:
       description: Retrieve the PDF document for a specific invoice by its ID
+      operationId: getInvoicePdf
       parameters:
       - description: Invoice ID
         in: path
@@ -13451,6 +13552,7 @@ paths:
       - application/json
       description: Recalculate totals and line items for a draft invoice, useful when
         subscription line items or usage data has changed
+      operationId: recalculateInvoice
       parameters:
       - description: Invoice ID
         in: path
@@ -13491,6 +13593,7 @@ paths:
       consumes:
       - application/json
       description: Void an invoice that hasn't been paid
+      operationId: voidInvoice
       parameters:
       - description: Invoice ID
         in: path
@@ -13522,6 +13625,7 @@ paths:
       consumes:
       - application/json
       description: Get a preview invoice
+      operationId: getInvoicePreview
       parameters:
       - description: Preview Invoice Request
         in: body
@@ -13554,6 +13658,7 @@ paths:
       consumes:
       - application/json
       description: List invoices by filter
+      operationId: listInvoicesByFilter
       parameters:
       - description: Filter
         in: body
@@ -13586,6 +13691,7 @@ paths:
       consumes:
       - application/json
       description: List payments with the specified filter
+      operationId: listPayments
       parameters:
       - in: query
         name: currency
@@ -13680,6 +13786,7 @@ paths:
       consumes:
       - application/json
       description: Create a new payment with the specified configuration
+      operationId: createPayment
       parameters:
       - description: Payment configuration
         in: body
@@ -13712,6 +13819,7 @@ paths:
       consumes:
       - application/json
       description: Delete a payment
+      operationId: deletePayment
       parameters:
       - description: Payment ID
         in: path
@@ -13742,6 +13850,7 @@ paths:
       consumes:
       - application/json
       description: Get a payment by ID
+      operationId: getPaymentById
       parameters:
       - description: Payment ID
         in: path
@@ -13772,6 +13881,7 @@ paths:
       consumes:
       - application/json
       description: Update a payment with the specified configuration
+      operationId: updatePayment
       parameters:
       - description: Payment ID
         in: path
@@ -13809,6 +13919,7 @@ paths:
       consumes:
       - application/json
       description: Process a payment
+      operationId: processPayment
       parameters:
       - description: Payment ID
         in: path
@@ -13840,6 +13951,7 @@ paths:
       consumes:
       - application/json
       description: Get plans with optional filtering
+      operationId: getPlans
       parameters:
       - in: query
         name: end_time
@@ -13909,6 +14021,7 @@ paths:
       consumes:
       - application/json
       description: Create a new plan with the specified configuration
+      operationId: createPlan
       parameters:
       - description: Plan configuration
         in: body
@@ -13941,6 +14054,7 @@ paths:
       consumes:
       - application/json
       description: Delete a plan by ID
+      operationId: deletePlan
       parameters:
       - description: Plan ID
         in: path
@@ -13975,6 +14089,7 @@ paths:
       consumes:
       - application/json
       description: Get a plan by ID
+      operationId: getPlan
       parameters:
       - description: Plan ID
         in: path
@@ -14009,6 +14124,7 @@ paths:
       consumes:
       - application/json
       description: Update a plan by ID
+      operationId: updatePlan
       parameters:
       - description: Plan ID
         in: path
@@ -14050,6 +14166,7 @@ paths:
       consumes:
       - application/json
       description: Get all credit grants for a plan
+      operationId: getPlanCreditGrants
       parameters:
       - description: Plan ID
         in: path
@@ -14085,6 +14202,7 @@ paths:
       consumes:
       - application/json
       description: Get all entitlements for a plan
+      operationId: getPlanEntitlements
       parameters:
       - description: Plan ID
         in: path
@@ -14120,6 +14238,7 @@ paths:
       consumes:
       - application/json
       description: Synchronize current plan prices with all existing active subscriptions
+      operationId: syncPlanPrices
       parameters:
       - description: Plan ID
         in: path
@@ -14159,6 +14278,7 @@ paths:
       consumes:
       - application/json
       description: List plans by filter
+      operationId: listPlansByFilter
       parameters:
       - description: Filter
         in: body
@@ -14192,6 +14312,7 @@ paths:
       - application/json
       description: Generate a dashboard URL/token for a customer to access their billing
         information
+      operationId: createCustomerPortalSession
       parameters:
       - description: Customer External ID
         in: path
@@ -14227,6 +14348,7 @@ paths:
       consumes:
       - application/json
       description: Get prices with the specified filter
+      operationId: getPrices
       parameters:
       - default: false
         in: query
@@ -14344,6 +14466,7 @@ paths:
       - application/json
       description: Create a new price with the specified configuration. Supports both
         regular and price unit configurations.
+      operationId: createPrice
       parameters:
       - description: Price configuration
         in: body
@@ -14376,6 +14499,7 @@ paths:
       consumes:
       - application/json
       description: Delete a price
+      operationId: deletePrice
       parameters:
       - description: Price ID
         in: path
@@ -14412,6 +14536,7 @@ paths:
       consumes:
       - application/json
       description: Get a price by ID with expanded meter and price unit information
+      operationId: getPriceById
       parameters:
       - description: Price ID
         in: path
@@ -14442,6 +14567,7 @@ paths:
       consumes:
       - application/json
       description: Update a price with the specified configuration
+      operationId: updatePrice
       parameters:
       - description: Price ID
         in: path
@@ -14480,6 +14606,7 @@ paths:
       - application/json
       description: Create multiple prices with the specified configurations. Supports
         both regular and price unit configurations.
+      operationId: createPricesBulk
       parameters:
       - description: Bulk price configuration
         in: body
@@ -14512,6 +14639,7 @@ paths:
       consumes:
       - application/json
       description: Get price by lookup key
+      operationId: getPriceByLookupKey
       parameters:
       - description: Lookup key
         in: path
@@ -14543,6 +14671,7 @@ paths:
       consumes:
       - application/json
       description: List prices with filter
+      operationId: listPricesByFilter
       parameters:
       - description: Filter with DSL support
         in: body
@@ -14575,6 +14704,7 @@ paths:
       consumes:
       - application/json
       description: Get a paginated list of price units with optional filtering
+      operationId: listPriceUnits
       parameters:
       - description: Filter by status
         in: query
@@ -14616,6 +14746,7 @@ paths:
       consumes:
       - application/json
       description: Create a new price unit with the provided details
+      operationId: createPriceUnit
       parameters:
       - description: Price unit details
         in: body
@@ -14644,6 +14775,7 @@ paths:
       consumes:
       - application/json
       description: Delete an existing price unit.
+      operationId: deletePriceUnit
       parameters:
       - description: Price unit ID
         in: path
@@ -14674,6 +14806,7 @@ paths:
       consumes:
       - application/json
       description: Get a price unit by ID
+      operationId: getPriceUnitById
       parameters:
       - description: Price unit ID
         in: path
@@ -14705,6 +14838,7 @@ paths:
       - application/json
       description: Update an existing price unit with the provided details. Only name
         and metadata can be updated.
+      operationId: updatePriceUnit
       parameters:
       - description: Price unit ID
         in: path
@@ -14742,6 +14876,7 @@ paths:
       consumes:
       - application/json
       description: Get a price unit by code
+      operationId: getPriceUnitByCode
       parameters:
       - description: Price unit code
         in: path
@@ -14777,6 +14912,7 @@ paths:
       consumes:
       - application/json
       description: List price units by filter
+      operationId: listPriceUnitsByFilter
       parameters:
       - description: Filter
         in: body
@@ -14810,6 +14946,7 @@ paths:
       - application/json
       description: Returns all available roles with their permissions, names, and
         descriptions
+      operationId: listRbacRoles
       produces:
       - application/json
       responses:
@@ -14835,6 +14972,7 @@ paths:
       - application/json
       description: Returns details of a specific role including permissions, name,
         and description
+      operationId: getRbacRole
       parameters:
       - description: Role ID
         in: path
@@ -14865,6 +15003,7 @@ paths:
       consumes:
       - application/json
       description: Get a paginated list of API keys
+      operationId: listApiKeys
       parameters:
       - description: Limit
         in: query
@@ -14903,6 +15042,7 @@ paths:
       - application/json
       description: Create a new API key. Provide 'service_account_id' in body to create
         API key for a service account, otherwise creates for authenticated user.
+      operationId: createApiKey
       parameters:
       - description: API key creation request\
         in: body
@@ -14935,6 +15075,7 @@ paths:
       consumes:
       - application/json
       description: Delete an API key by ID
+      operationId: deleteApiKey
       parameters:
       - description: API key ID
         in: path
@@ -14964,6 +15105,7 @@ paths:
       consumes:
       - application/json
       description: Delete integration credentials
+      operationId: deleteIntegration
       parameters:
       - description: Integration ID
         in: path
@@ -14993,6 +15135,7 @@ paths:
       consumes:
       - application/json
       description: Get details of a specific integration
+      operationId: getIntegration
       parameters:
       - description: Integration provider
         in: path
@@ -15024,6 +15167,7 @@ paths:
       consumes:
       - application/json
       description: Create or update integration credentials
+      operationId: createOrUpdateIntegration
       parameters:
       - description: Integration provider
         in: path
@@ -15062,6 +15206,7 @@ paths:
       - application/json
       description: Get a list of unique providers which have a valid linked integration
         secret
+      operationId: listLinkedIntegrations
       produces:
       - application/json
       responses:
@@ -15081,6 +15226,7 @@ paths:
   /subscriptions:
     get:
       description: Get subscriptions with optional filtering
+      operationId: listSubscriptions
       parameters:
       - description: ActiveAt filters subscriptions that are active at the given time
         in: query
@@ -15219,6 +15365,7 @@ paths:
       consumes:
       - application/json
       description: Create a new subscription
+      operationId: createSubscription
       parameters:
       - description: Subscription Request
         in: body
@@ -15249,6 +15396,7 @@ paths:
   /subscriptions/{id}:
     get:
       description: Get a subscription by ID
+      operationId: getSubscription
       parameters:
       - description: Subscription ID
         in: path
@@ -15280,6 +15428,7 @@ paths:
       - application/json
       description: Update a subscription. parent_subscription_id can be set to another
         subscription ID, cleared by sending "", or left unchanged if omitted.
+      operationId: updateSubscription
       parameters:
       - description: Subscription ID
         in: path
@@ -15317,6 +15466,7 @@ paths:
       consumes:
       - application/json
       description: Activate a draft subscription with a new start date
+      operationId: activateSubscription
       parameters:
       - description: Subscription ID
         in: path
@@ -15352,6 +15502,7 @@ paths:
   /subscriptions/{id}/addons/associations:
     get:
       description: Get active addon associations for a subscription
+      operationId: getSubscriptionAddonAssociations
       parameters:
       - description: Subscription ID
         in: path
@@ -15389,6 +15540,7 @@ paths:
       consumes:
       - application/json
       description: Cancel a subscription with enhanced proration support
+      operationId: cancelSubscription
       parameters:
       - description: Subscription ID
         in: path
@@ -15427,6 +15579,7 @@ paths:
       - application/json
       description: Execute a subscription plan change, including proration and invoice
         generation
+      operationId: executeSubscriptionChange
       parameters:
       - description: Subscription ID
         in: path
@@ -15469,6 +15622,7 @@ paths:
       - application/json
       description: Preview the impact of changing a subscription's plan, including
         proration calculations
+      operationId: previewSubscriptionChange
       parameters:
       - description: Subscription ID
         in: path
@@ -15510,6 +15664,7 @@ paths:
       consumes:
       - application/json
       description: Get all entitlements for a subscription
+      operationId: getSubscriptionEntitlements
       parameters:
       - description: Subscription ID
         in: path
@@ -15550,6 +15705,7 @@ paths:
   /subscriptions/{id}/grants/upcoming:
     get:
       description: Get upcoming credit grant applications for a subscription
+      operationId: getSubscriptionUpcomingGrants
       parameters:
       - description: Subscription ID
         in: path
@@ -15586,6 +15742,7 @@ paths:
       - application/json
       description: Add a new line item to an existing subscription (price_id or inline
         price)
+      operationId: createSubscriptionLineItem
       parameters:
       - description: Subscription ID
         in: path
@@ -15627,6 +15784,7 @@ paths:
       consumes:
       - application/json
       description: Pause a subscription with the specified parameters
+      operationId: pauseSubscription
       parameters:
       - description: Subscription ID
         in: path
@@ -15666,6 +15824,7 @@ paths:
   /subscriptions/{id}/pauses:
     get:
       description: List all pauses for a subscription
+      operationId: listSubscriptionPauses
       parameters:
       - description: Subscription ID
         in: path
@@ -15701,6 +15860,7 @@ paths:
       consumes:
       - application/json
       description: Resume a paused subscription with the specified parameters
+      operationId: resumeSubscription
       parameters:
       - description: Subscription ID
         in: path
@@ -15740,6 +15900,7 @@ paths:
   /subscriptions/{id}/v2:
     get:
       description: Get a subscription by ID with optional expand parameters
+      operationId: getSubscriptionV2
       parameters:
       - description: Subscription ID
         in: path
@@ -15775,6 +15936,7 @@ paths:
       consumes:
       - application/json
       description: Remove an addon from a subscription
+      operationId: removeSubscriptionAddon
       parameters:
       - description: Remove Addon Request
         in: body
@@ -15806,6 +15968,7 @@ paths:
       consumes:
       - application/json
       description: Add an addon to a subscription
+      operationId: addSubscriptionAddon
       parameters:
       - description: Add Addon Request
         in: body
@@ -15838,6 +16001,7 @@ paths:
       consumes:
       - application/json
       description: Delete a subscription line item by setting its end date
+      operationId: deleteSubscriptionLineItem
       parameters:
       - description: Line Item ID
         in: path
@@ -15875,6 +16039,7 @@ paths:
       - application/json
       description: Update a subscription line item by terminating the existing one
         and creating a new one
+      operationId: updateSubscriptionLineItem
       parameters:
       - description: Line Item ID
         in: path
@@ -15912,6 +16077,7 @@ paths:
       consumes:
       - application/json
       description: List subscriptions by filter
+      operationId: listSubscriptionsByFilter
       parameters:
       - description: Filter
         in: body
@@ -15944,6 +16110,7 @@ paths:
       consumes:
       - application/json
       description: Get usage for a subscription
+      operationId: getSubscriptionUsage
       parameters:
       - description: Usage request
         in: body
@@ -15976,6 +16143,7 @@ paths:
       consumes:
       - application/json
       description: List tasks with optional filtering
+      operationId: listTasks
       parameters:
       - in: query
         name: created_by
@@ -16080,6 +16248,7 @@ paths:
       consumes:
       - application/json
       description: Create a new task for processing files asynchronously
+      operationId: createTask
       parameters:
       - description: Task configuration
         in: body
@@ -16112,6 +16281,7 @@ paths:
       consumes:
       - application/json
       description: Get a task by ID
+      operationId: getTask
       parameters:
       - description: Task ID
         in: path
@@ -16148,6 +16318,7 @@ paths:
       - application/json
       description: Generate a presigned URL for downloading an exported file (supports
         both Flexprice-managed and customer-owned S3)
+      operationId: downloadTaskExport
       parameters:
       - description: Task ID
         in: path
@@ -16185,6 +16356,7 @@ paths:
       consumes:
       - application/json
       description: Update a task's status
+      operationId: updateTaskStatus
       parameters:
       - description: Task ID
         in: path
@@ -16226,6 +16398,7 @@ paths:
       consumes:
       - application/json
       description: Get the result of a task processing workflow
+      operationId: getTaskResult
       parameters:
       - description: Workflow ID
         in: query
@@ -16261,6 +16434,7 @@ paths:
       consumes:
       - application/json
       description: Get a list of scheduled tasks with optional filters
+      operationId: listScheduledTasks
       parameters:
       - description: Limit
         in: query
@@ -16310,6 +16484,7 @@ paths:
       consumes:
       - application/json
       description: Create a new scheduled task for data export
+      operationId: createScheduledTask
       parameters:
       - description: Scheduled Task
         in: body
@@ -16343,6 +16518,7 @@ paths:
       - application/json
       description: Archive a scheduled task by ID (soft delete) - Sets status to archived
         and deletes from Temporal
+      operationId: deleteScheduledTask
       parameters:
       - description: Scheduled Task ID
         in: path
@@ -16375,6 +16551,7 @@ paths:
       consumes:
       - application/json
       description: Get a scheduled task by ID
+      operationId: getScheduledTask
       parameters:
       - description: Scheduled Task ID
         in: path
@@ -16410,6 +16587,7 @@ paths:
       - application/json
       description: Update a scheduled task by ID - Only enabled field can be changed
         (pause/resume)
+      operationId: updateScheduledTask
       parameters:
       - description: Scheduled Task ID
         in: path
@@ -16452,6 +16630,7 @@ paths:
       - application/json
       description: Trigger a force run export immediately for a scheduled task with
         optional custom time range
+      operationId: triggerScheduledTaskRun
       parameters:
       - description: Scheduled Task ID
         in: path
@@ -16492,6 +16671,7 @@ paths:
       consumes:
       - application/json
       description: Schedule an update billing period workflow
+      operationId: scheduleUpdateBillingPeriod
       parameters:
       - description: Schedule Update Billing Period Request
         in: body
@@ -16524,6 +16704,7 @@ paths:
       consumes:
       - application/json
       description: List tax associations
+      operationId: listTaxAssociations
       parameters:
       - description: Entity Type
         in: query
@@ -16561,6 +16742,7 @@ paths:
       consumes:
       - application/json
       description: Create a new tax association
+      operationId: createTaxAssociation
       parameters:
       - description: Tax Config Request
         in: body
@@ -16593,6 +16775,7 @@ paths:
       consumes:
       - application/json
       description: Delete a tax association by ID
+      operationId: deleteTaxAssociation
       parameters:
       - description: Tax Config ID
         in: path
@@ -16623,6 +16806,7 @@ paths:
       consumes:
       - application/json
       description: Get a tax association by ID
+      operationId: getTaxAssociation
       parameters:
       - description: Tax Config ID
         in: path
@@ -16653,6 +16837,7 @@ paths:
       consumes:
       - application/json
       description: Update a tax association by ID
+      operationId: updateTaxAssociation
       parameters:
       - description: Tax Config ID
         in: path
@@ -16690,6 +16875,7 @@ paths:
       consumes:
       - application/json
       description: Get tax rates
+      operationId: getTaxRates
       parameters:
       - in: query
         name: end_time
@@ -16775,6 +16961,7 @@ paths:
       consumes:
       - application/json
       description: Create a tax rate
+      operationId: createTaxRate
       parameters:
       - description: Tax rate to create
         in: body
@@ -16807,6 +16994,7 @@ paths:
       consumes:
       - application/json
       description: Delete a tax rate
+      operationId: deleteTaxRate
       parameters:
       - description: Tax rate ID
         in: path
@@ -16835,6 +17023,7 @@ paths:
       consumes:
       - application/json
       description: Get a tax rate
+      operationId: getTaxRate
       parameters:
       - description: Tax rate ID
         in: path
@@ -16865,6 +17054,7 @@ paths:
       consumes:
       - application/json
       description: Update a tax rate
+      operationId: updateTaxRate
       parameters:
       - description: Tax rate ID
         in: path
@@ -16902,6 +17092,7 @@ paths:
       consumes:
       - application/json
       description: Get the subscription and usage details for the current tenant
+      operationId: getTenantBillingUsage
       produces:
       - application/json
       responses:
@@ -16931,6 +17122,7 @@ paths:
       consumes:
       - application/json
       description: Create a new tenant
+      operationId: createTenant
       parameters:
       - description: Create tenant request
         in: body
@@ -16963,6 +17155,7 @@ paths:
       consumes:
       - application/json
       description: Get tenant by ID
+      operationId: getTenantById
       parameters:
       - description: Tenant ID
         in: path
@@ -16994,6 +17187,7 @@ paths:
       consumes:
       - application/json
       description: Update a tenant's details including name and billing information
+      operationId: updateTenant
       parameters:
       - description: Update tenant request
         in: body
@@ -17031,6 +17225,7 @@ paths:
       - application/json
       description: Create a new service account with required roles. Only service
         accounts can be created via this endpoint.
+      operationId: createUser
       parameters:
       - description: Create service account request (type must be 'service_account',
           roles are required)
@@ -17064,6 +17259,7 @@ paths:
       consumes:
       - application/json
       description: Get the current user's information
+      operationId: getUserInfo
       produces:
       - application/json
       responses:
@@ -17090,6 +17286,7 @@ paths:
       - application/json
       description: Search and filter users by type (user/service_account), roles,
         etc.
+      operationId: listUsersByFilter
       parameters:
       - description: Filter parameters
         in: body
@@ -17122,6 +17319,7 @@ paths:
       consumes:
       - application/json
       description: Retrieves subscription schedules with optional filtering
+      operationId: listAllSubscriptionSchedules
       parameters:
       - description: Filter to pending schedules only
         in: query
@@ -17154,6 +17352,7 @@ paths:
       consumes:
       - application/json
       description: Retrieves details of a specific subscription schedule
+      operationId: getSubscriptionSchedule
       parameters:
       - description: Schedule ID
         in: path
@@ -17175,6 +17374,7 @@ paths:
       consumes:
       - application/json
       description: Retrieves all schedules for a specific subscription
+      operationId: listSubscriptionSchedules
       parameters:
       - description: Subscription ID
         in: path
@@ -17198,6 +17398,7 @@ paths:
       description: 'Cancels a pending subscription schedule. Supports two modes: 1)
         By schedule ID in path, or 2) By subscription ID + schedule type in request
         body'
+      operationId: cancelSubscriptionSchedule
       parameters:
       - description: Schedule ID (optional if using request body)
         in: path
@@ -17223,6 +17424,7 @@ paths:
       consumes:
       - application/json
       description: List wallets with optional filtering
+      operationId: listWallets
       parameters:
       - in: query
         name: alert_enabled
@@ -17289,6 +17491,7 @@ paths:
       consumes:
       - application/json
       description: Create a new wallet for a customer
+      operationId: createWallet
       parameters:
       - description: Create wallet request
         in: body
@@ -17321,6 +17524,7 @@ paths:
       consumes:
       - application/json
       description: Get a wallet by its ID
+      operationId: getWalletById
       parameters:
       - description: Wallet ID
         in: path
@@ -17355,6 +17559,7 @@ paths:
       consumes:
       - application/json
       description: Update a wallet's details including auto top-up configuration
+      operationId: updateWallet
       parameters:
       - description: Wallet ID
         in: path
@@ -17396,6 +17601,7 @@ paths:
       consumes:
       - application/json
       description: Get real-time balance of a wallet
+      operationId: getWalletBalance
       parameters:
       - description: Wallet ID
         in: path
@@ -17435,6 +17641,7 @@ paths:
       consumes:
       - application/json
       description: Terminates a wallet by closing it and debiting remaining balance
+      operationId: terminateWallet
       parameters:
       - description: Wallet ID
         in: path
@@ -17470,6 +17677,7 @@ paths:
       consumes:
       - application/json
       description: Add credits to a wallet
+      operationId: topUpWallet
       parameters:
       - description: Wallet ID
         in: path
@@ -17511,6 +17719,7 @@ paths:
       consumes:
       - application/json
       description: Get transactions for a wallet with pagination
+      operationId: getWalletTransactions
       parameters:
       - description: Wallet ID
         in: path
@@ -17650,6 +17859,7 @@ paths:
       consumes:
       - application/json
       description: List wallets by filter
+      operationId: listWalletsByFilter
       parameters:
       - description: Filter
         in: body
@@ -17681,6 +17891,7 @@ paths:
       consumes:
       - application/json
       description: List wallet transactions by filter
+      operationId: listWalletTransactionsByFilter
       parameters:
       - description: Filter
         in: body
@@ -17716,6 +17927,7 @@ paths:
       consumes:
       - application/json
       description: Process incoming Chargebee webhook events for payment status updates
+      operationId: handleChargebeeWebhook
       parameters:
       - description: Tenant ID
         in: path
@@ -17763,6 +17975,7 @@ paths:
       - application/json
       description: Process incoming HubSpot webhook events for deal closed won and
         customer creation
+      operationId: handleHubspotWebhook
       parameters:
       - description: Tenant ID
         in: path
@@ -17795,6 +18008,7 @@ paths:
       consumes:
       - application/json
       description: Process incoming Moyasar webhook events for payment status updates
+      operationId: handleMoyasarWebhook
       parameters:
       - description: Tenant ID
         in: path
@@ -17826,6 +18040,7 @@ paths:
       consumes:
       - application/json
       description: Process incoming Nomod webhook events for payment and invoice payments
+      operationId: handleNomodWebhook
       parameters:
       - description: Tenant ID
         in: path
@@ -17862,6 +18077,7 @@ paths:
       consumes:
       - application/json
       description: Process incoming QuickBooks webhook events for payment sync
+      operationId: handleQuickbooksWebhook
       parameters:
       - description: Tenant ID
         in: path
@@ -17909,6 +18125,7 @@ paths:
       - application/json
       description: Process incoming Razorpay webhook events for payment capture and
         failure
+      operationId: handleRazorpayWebhook
       parameters:
       - description: Tenant ID
         in: path
@@ -17942,6 +18159,7 @@ paths:
       - application/json
       description: Process incoming Stripe webhook events for payment status updates
         and customer creation
+      operationId: handleStripeWebhook
       parameters:
       - description: Tenant ID
         in: path
