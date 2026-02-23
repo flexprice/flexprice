@@ -112,6 +112,7 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 }
 
 // @Summary Handle Stripe webhook events
+// @ID handleStripeWebhook
 // @Description Process incoming Stripe webhook events for payment status updates and customer creation
 // @Tags Webhooks
 // @Accept json
@@ -238,6 +239,7 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 }
 
 // @Summary Handle HubSpot webhook events
+// @ID handleHubspotWebhook
 // @Description Process incoming HubSpot webhook events for deal closed won and customer creation
 // @Tags Webhooks
 // @Accept json
@@ -407,6 +409,7 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Razorpay webhook events
+// @ID handleRazorpayWebhook
 // @Description Process incoming Razorpay webhook events for payment capture and failure
 // @Tags Webhooks
 // @Accept json
@@ -518,6 +521,7 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Chargebee webhook events
+// @ID handleChargebeeWebhook
 // @Description Process incoming Chargebee webhook events for payment status updates
 // @Tags Webhooks
 // @Accept json
@@ -657,6 +661,7 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 }
 
 // @Summary Handle QuickBooks webhook events
+// @ID handleQuickbooksWebhook
 // @Description Process incoming QuickBooks webhook events for payment sync
 // @Tags Webhooks
 // @Accept json
@@ -760,6 +765,7 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Nomod webhook events
+// @ID handleNomodWebhook
 // @Description Process incoming Nomod webhook events for payment and invoice payments
 // @Tags Webhooks
 // @Accept json
@@ -908,6 +914,7 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Moyasar webhook events
+// @ID handleMoyasarWebhook
 // @Description Process incoming Moyasar webhook events for payment status updates
 // @Tags Webhooks
 // @Accept json

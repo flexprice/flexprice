@@ -25,6 +25,7 @@ func NewPriceUnitHandler(service service.PriceUnitService, log *logger.Logger) *
 
 // CreatePriceUnit handles the creation of a new price unit
 // @Summary Create a new price unit
+// @ID createPriceUnit
 // @Description Create a new price unit with the provided details
 // @Tags Price Units
 // @Accept json
@@ -60,6 +61,7 @@ func (h *PriceUnitHandler) CreatePriceUnit(c *gin.Context) {
 
 // ListPriceUnits handles listing price units with pagination and filtering
 // @Summary List price units
+// @ID listPriceUnits
 // @Description Get a paginated list of price units with optional filtering
 // @Tags Price Units
 // @Accept json
@@ -113,6 +115,7 @@ func (h *PriceUnitHandler) ListPriceUnits(c *gin.Context) {
 
 // UpdatePriceUnit handles updating an existing price unit
 // @Summary Update a price unit
+// @ID updatePriceUnit
 // @Description Update an existing price unit with the provided details. Only name and metadata can be updated.
 // @Tags Price Units
 // @Accept json
@@ -159,6 +162,7 @@ func (h *PriceUnitHandler) UpdatePriceUnit(c *gin.Context) {
 
 // DeletePriceUnit handles deleting a price unit
 // @Summary Delete a price unit
+// @ID deletePriceUnit
 // @Description Delete an existing price unit.
 // @Tags Price Units
 // @Accept json
@@ -204,6 +208,7 @@ func (h *PriceUnitHandler) DeletePriceUnit(c *gin.Context) {
 
 // GetPriceUnit handles getting a price unit by ID
 // @Summary Get a price unit by ID
+// @ID getPriceUnitById
 // @Description Get a price unit by ID
 // @Tags Price Units
 // @Accept json
@@ -248,6 +253,7 @@ func (h *PriceUnitHandler) GetPriceUnit(c *gin.Context) {
 
 // GetPriceUnitByCode handles getting a price unit by code
 // @Summary Get a price unit by code
+// @ID getPriceUnitByCode
 // @Description Get a price unit by code
 // @Tags Price Units
 // @Accept json
@@ -292,6 +298,7 @@ func (h *PriceUnitHandler) GetPriceUnitByCode(c *gin.Context) {
 }
 
 // @Summary List price units by filter
+// @ID listPriceUnitsByFilter
 // @Description List price units by filter
 // @Tags Price Units
 // @Accept json

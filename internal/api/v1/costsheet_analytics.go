@@ -35,6 +35,7 @@ func NewRevenueAnalyticsHandler(
 
 // GetCombinedAnalytics retrieves combined cost and revenue analytics with derived metrics
 // @Summary Get combined revenue and cost analytics
+// @ID getDetailedCostAnalytics
 // @Description Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.
 // @Tags Costs
 // @Accept json
@@ -67,6 +68,7 @@ func (h *RevenueAnalyticsHandler) GetDetailedCostAnalytics(c *gin.Context) {
 
 // GetCombinedAnalytics retrieves combined cost and revenue analytics with derived metrics
 // @Summary Get combined revenue and cost analytics
+// @ID getDetailedCostAnalyticsV2
 // @Description Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.
 // @Tags Costs
 // @Accept json

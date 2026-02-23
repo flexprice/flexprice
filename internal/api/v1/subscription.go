@@ -24,6 +24,7 @@ func NewSubscriptionHandler(service service.SubscriptionService, log *logger.Log
 }
 
 // @Summary Create subscription
+// @ID createSubscription
 // @Description Create a new subscription
 // @Tags Subscriptions
 // @Accept json
@@ -55,6 +56,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 }
 
 // @Summary Get subscription
+// @ID getSubscription
 // @Description Get a subscription by ID
 // @Tags Subscriptions
 // @Produce json
@@ -84,6 +86,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 }
 
 // @Summary Update subscription
+// @ID updateSubscription
 // @Description Update a subscription. parent_subscription_id can be set to another subscription ID, cleared by sending "", or left unchanged if omitted.
 // @Tags Subscriptions
 // @Accept json
@@ -124,6 +127,7 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 }
 
 // @Summary Get subscription V2
+// @ID getSubscriptionV2
 // @Description Get a subscription by ID with optional expand parameters
 // @Tags Subscriptions
 // @Produce json
@@ -158,6 +162,7 @@ func (h *SubscriptionHandler) GetSubscriptionV2(c *gin.Context) {
 }
 
 // @Summary List subscriptions
+// @ID listSubscriptions
 // @Description Get subscriptions with optional filtering
 // @Tags Subscriptions
 // @Produce json
@@ -188,6 +193,7 @@ func (h *SubscriptionHandler) GetSubscriptions(c *gin.Context) {
 }
 
 // @Summary Cancel subscription
+// @ID cancelSubscription
 // @Description Cancel a subscription with enhanced proration support
 // @Tags Subscriptions
 // @Accept json
@@ -229,6 +235,7 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 }
 
 // @Summary Activate draft subscription
+// @ID activateSubscription
 // @Description Activate a draft subscription with a new start date
 // @Tags Subscriptions
 // @Accept json
@@ -269,6 +276,7 @@ func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 }
 
 // @Summary Get usage by subscription
+// @ID getSubscriptionUsage
 // @Description Get usage for a subscription
 // @Tags Subscriptions
 // @Accept json
@@ -301,6 +309,7 @@ func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 
 // ListSubscriptionsByFilter godoc
 // @Summary List subscriptions by filter
+// @ID listSubscriptionsByFilter
 // @Description List subscriptions by filter
 // @Tags Subscriptions
 // @Accept json
@@ -340,6 +349,7 @@ func (h *SubscriptionHandler) ListSubscriptionsByFilter(c *gin.Context) {
 }
 
 // @Summary Add addon to subscription
+// @ID addSubscriptionAddon
 // @Description Add an addon to a subscription
 // @Tags Subscriptions
 // @Accept json
@@ -371,6 +381,7 @@ func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 }
 
 // @Summary Remove addon from subscription
+// @ID removeSubscriptionAddon
 // @Description Remove an addon from a subscription
 // @Tags Subscriptions
 // @Accept json
@@ -401,6 +412,7 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 }
 
 // @Summary Get subscription entitlements
+// @ID getSubscriptionEntitlements
 // @Description Get all entitlements for a subscription
 // @Tags Subscriptions
 // @Accept json
@@ -442,6 +454,7 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 }
 
 // @Summary Create subscription line item
+// @ID createSubscriptionLineItem
 // @Description Add a new line item to an existing subscription (price_id or inline price)
 // @Tags Subscriptions
 // @Accept json
@@ -483,6 +496,7 @@ func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
 }
 
 // @Summary Update subscription line item
+// @ID updateSubscriptionLineItem
 // @Description Update a subscription line item by terminating the existing one and creating a new one
 // @Tags Subscriptions
 // @Accept json
@@ -523,6 +537,7 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 }
 
 // @Summary Delete subscription line item
+// @ID deleteSubscriptionLineItem
 // @Description Delete a subscription line item by setting its end date
 // @Tags Subscriptions
 // @Accept json
@@ -563,6 +578,7 @@ func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 }
 
 // @Summary Get upcoming credit grant applications
+// @ID getSubscriptionUpcomingGrants
 // @Description Get upcoming credit grant applications for a subscription
 // @Tags Subscriptions
 // @Produce json
@@ -598,6 +614,7 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 }
 
 // @Summary Get active addon associations
+// @ID getSubscriptionAddonAssociations
 // @Description Get active addon associations for a subscription
 // @Tags Subscriptions
 // @Produce json

@@ -28,6 +28,7 @@ func NewCostsheetHandler(service service.CostsheetService, log *logger.Logger) *
 }
 
 // @Summary Create a new costsheet
+// @ID createCostsheet
 // @Description Create a new costsheet with the specified name
 // @Tags Costs
 // @Accept json
@@ -60,6 +61,7 @@ func (h *CostsheetHandler) CreateCostsheet(c *gin.Context) {
 }
 
 // @Summary Get a costsheet by ID
+// @ID getCostsheetById
 // @Description Get a costsheet by ID with optional price expansion
 // @Tags Costs
 // @Accept json
@@ -92,6 +94,7 @@ func (h *CostsheetHandler) GetCostsheet(c *gin.Context) {
 }
 
 // @Summary Update a costsheet
+// @ID updateCostsheet
 // @Description Update a costsheet with the specified configuration
 // @Tags Costs
 // @Accept json
@@ -134,6 +137,7 @@ func (h *CostsheetHandler) UpdateCostsheet(c *gin.Context) {
 }
 
 // @Summary Delete a costsheet
+// @ID deleteCostsheet
 // @Description Soft delete a costsheet by setting its status to deleted
 // @Tags Costs
 // @Accept json
@@ -165,6 +169,7 @@ func (h *CostsheetHandler) DeleteCostsheet(c *gin.Context) {
 }
 
 // @Summary List costsheets by filter
+// @ID listCostsheetsByFilter
 // @Description List costsheet records by filter with POST body
 // @Tags Costs
 // @Accept json
@@ -204,6 +209,7 @@ func (h *CostsheetHandler) ListCostsheetByFilter(c *gin.Context) {
 }
 
 // @Summary Get active costsheet for tenant
+// @ID getActiveCostsheet
 // @Description Get the active costsheet for the current tenant
 // @Tags Costs
 // @Accept json

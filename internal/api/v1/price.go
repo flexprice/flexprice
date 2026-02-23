@@ -25,6 +25,7 @@ func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHan
 }
 
 // @Summary Create a new price
+// @ID createPrice
 // @Description Create a new price with the specified configuration. Supports both regular and price unit configurations.
 // @Tags Prices
 // @Accept json
@@ -54,6 +55,7 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 }
 
 // @Summary Create multiple prices in bulk
+// @ID createPricesBulk
 // @Description Create multiple prices with the specified configurations. Supports both regular and price unit configurations.
 // @Tags Prices
 // @Accept json
@@ -83,6 +85,7 @@ func (h *PriceHandler) CreateBulkPrice(c *gin.Context) {
 }
 
 // @Summary Get a price by ID
+// @ID getPriceById
 // @Description Get a price by ID with expanded meter and price unit information
 // @Tags Prices
 // @Accept json
@@ -112,6 +115,7 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 }
 
 // @Summary Get prices
+// @ID getPrices
 // @Description Get prices with the specified filter
 // @Tags Prices
 // @Accept json
@@ -145,6 +149,7 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 }
 
 // @Summary Update a price
+// @ID updatePrice
 // @Description Update a price with the specified configuration
 // @Tags Prices
 // @Accept json
@@ -183,6 +188,7 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 }
 
 // @Summary Delete a price
+// @ID deletePrice
 // @Description Delete a price
 // @Tags Prices
 // @Accept json
@@ -220,6 +226,7 @@ func (h *PriceHandler) DeletePrice(c *gin.Context) {
 }
 
 // @Summary Get price by lookup key
+// @ID getPriceByLookupKey
 // @Description Get price by lookup key
 // @Tags Prices
 // @Accept json
@@ -249,6 +256,7 @@ func (h *PriceHandler) GetByLookupKey(c *gin.Context) {
 }
 
 // @Summary List prices by filter
+// @ID listPricesByFilter
 // @Description List prices with filter
 // @Tags Prices
 // @Accept json

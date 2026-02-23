@@ -38,6 +38,7 @@ func NewAlertLogsHandler(
 
 // ListAlertLogsByFilter godoc
 // @Summary List alert logs by filter
+// @ID listAlertLogsByFilter
 // @Description List alert logs by filter with optional expand for customer, wallet, and feature
 // @Tags Alert Logs
 // @Accept json

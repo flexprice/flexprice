@@ -27,6 +27,7 @@ func NewTenantHandler(
 }
 
 // @Summary Create a new tenant
+// @ID createTenant
 // @Description Create a new tenant
 // @Tags Tenants
 // @Accept json
@@ -56,6 +57,7 @@ func (h *TenantHandler) CreateTenant(c *gin.Context) {
 }
 
 // @Summary Get tenant by ID
+// @ID getTenantById
 // @Description Get tenant by ID
 // @Tags Tenants
 // @Accept json
@@ -79,6 +81,7 @@ func (h *TenantHandler) GetTenantByID(c *gin.Context) {
 }
 
 // @Summary Update a tenant
+// @ID updateTenant
 // @Description Update a tenant's details including name and billing information
 // @Tags Tenants
 // @Accept json
@@ -111,6 +114,7 @@ func (h *TenantHandler) UpdateTenant(c *gin.Context) {
 }
 
 // @Summary Get billing usage for the current tenant
+// @ID getTenantBillingUsage
 // @Description Get the subscription and usage details for the current tenant
 // @Tags Tenants
 // @Accept json

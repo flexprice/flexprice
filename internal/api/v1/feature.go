@@ -26,6 +26,7 @@ func NewFeatureHandler(featureService service.FeatureService, log *logger.Logger
 
 // CreateFeature godoc
 // @Summary Create a new feature
+// @ID createFeature
 // @Description Create a new feature
 // @Tags Features
 // @Accept json
@@ -56,6 +57,7 @@ func (h *FeatureHandler) CreateFeature(c *gin.Context) {
 
 // GetFeature godoc
 // @Summary Get a feature by ID
+// @ID getFeatureById
 // @Description Get a feature by ID
 // @Tags Features
 // @Accept json
@@ -87,6 +89,7 @@ func (h *FeatureHandler) GetFeature(c *gin.Context) {
 
 // ListFeatures godoc
 // @Summary List features
+// @ID listFeatures
 // @Description List features with optional filtering
 // @Tags Features
 // @Accept json
@@ -121,6 +124,7 @@ func (h *FeatureHandler) ListFeatures(c *gin.Context) {
 
 // UpdateFeature godoc
 // @Summary Update a feature
+// @ID updateFeature
 // @Description Update a feature by ID
 // @Tags Features
 // @Accept json
@@ -161,6 +165,7 @@ func (h *FeatureHandler) UpdateFeature(c *gin.Context) {
 
 // DeleteFeature godoc
 // @Summary Delete a feature
+// @ID deleteFeature
 // @Description Delete a feature by ID
 // @Tags Features
 // @Accept json
@@ -191,6 +196,7 @@ func (h *FeatureHandler) DeleteFeature(c *gin.Context) {
 
 // ListFeaturesByFilter godoc
 // @Summary List features by filter
+// @ID listFeaturesByFilter
 // @Description List features by filter
 // @Tags Features
 // @Accept json

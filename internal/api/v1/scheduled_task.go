@@ -27,6 +27,7 @@ func NewScheduledTaskHandler(
 }
 
 // @Summary Create a scheduled task
+// @ID createScheduledTask
 // @Description Create a new scheduled task for data export
 // @Tags ScheduledTasks
 // @Accept json
@@ -58,6 +59,7 @@ func (h *ScheduledTaskHandler) CreateScheduledTask(c *gin.Context) {
 }
 
 // @Summary Get a scheduled task
+// @ID getScheduledTask
 // @Description Get a scheduled task by ID
 // @Tags ScheduledTasks
 // @Accept json
@@ -83,6 +85,7 @@ func (h *ScheduledTaskHandler) GetScheduledTask(c *gin.Context) {
 }
 
 // @Summary List scheduled tasks
+// @ID listScheduledTasks
 // @Description Get a list of scheduled tasks with optional filters
 // @Tags ScheduledTasks
 // @Accept json
@@ -135,6 +138,7 @@ func (h *ScheduledTaskHandler) ListScheduledTasks(c *gin.Context) {
 }
 
 // @Summary Update a scheduled task
+// @ID updateScheduledTask
 // @Description Update a scheduled task by ID - Only enabled field can be changed (pause/resume)
 // @Tags ScheduledTasks
 // @Accept json
@@ -170,6 +174,7 @@ func (h *ScheduledTaskHandler) UpdateScheduledTask(c *gin.Context) {
 }
 
 // @Summary Delete a scheduled task
+// @ID deleteScheduledTask
 // @Description Archive a scheduled task by ID (soft delete) - Sets status to archived and deletes from Temporal
 // @Tags ScheduledTasks
 // @Accept json
@@ -199,6 +204,7 @@ func (h *ScheduledTaskHandler) DeleteScheduledTask(c *gin.Context) {
 }
 
 // @Summary Trigger force run
+// @ID triggerScheduledTaskRun
 // @Description Trigger a force run export immediately for a scheduled task with optional custom time range
 // @Tags ScheduledTasks
 // @Accept json
@@ -252,6 +258,7 @@ func (h *ScheduledTaskHandler) TriggerForceRun(c *gin.Context) {
 }
 
 // @Summary Schedule update billing period
+// @ID scheduleUpdateBillingPeriod
 // @Description Schedule an update billing period workflow
 // @Tags ScheduledTasks
 // @Accept json

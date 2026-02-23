@@ -21,6 +21,7 @@ func NewGroupHandler(service service.GroupService, log *logger.Logger) *GroupHan
 }
 
 // @Summary Create a group
+// @ID createGroup
 // @Description Create a new group for organizing entities (prices, plans, customers, etc.)
 // @Tags Groups
 // @Accept json
@@ -50,6 +51,7 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 }
 
 // @Summary Get a group
+// @ID getGroup
 // @Description Get a group by ID
 // @Tags Groups
 // @Accept json
@@ -74,6 +76,7 @@ func (h *GroupHandler) GetGroup(c *gin.Context) {
 }
 
 // @Summary Delete a group
+// @ID deleteGroup
 // @Description Delete a group and remove all entity associations
 // @Tags Groups
 // @Accept json
@@ -98,6 +101,7 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 }
 
 // @Summary Get groups
+// @ID listGroups
 // @Description Get groups with optional filtering via query parameters
 // @Tags Groups
 // @Accept json
