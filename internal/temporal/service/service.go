@@ -1077,15 +1077,31 @@ func (s *temporalService) buildReprocessRawEventsInput(_ context.Context, tenant
 			batchSize = int(bsFloat)
 		}
 
+		// Extract optional array filters
+		var eventIDs []string
+		if ids, ok := paramsMap["event_ids"].([]string); ok {
+			eventIDs = ids
+		}
+
+		var externalCustomerIDs []string
+		if ids, ok := paramsMap["external_customer_ids"].([]string); ok {
+			externalCustomerIDs = ids
+		}
+
+		useUnprocessed, _ := paramsMap["use_unprocessed"].(bool)
+
 		input := eventsModels.ReprocessRawEventsWorkflowInput{
-			ExternalCustomerID: externalCustomerID, // Optional - can be empty for raw events
-			EventName:          eventName,          // Optional - can be empty
-			StartDate:          startDate,
-			EndDate:            endDate,
-			BatchSize:          batchSize,
-			TenantID:           tenantID,
-			EnvironmentID:      environmentID,
-			UserID:             userID,
+			ExternalCustomerID:  externalCustomerID, // Optional - can be empty for raw events
+			ExternalCustomerIDs: externalCustomerIDs,
+			EventName:           eventName, // Optional - can be empty
+			StartDate:           startDate,
+			EndDate:             endDate,
+			BatchSize:           batchSize,
+			TenantID:            tenantID,
+			EnvironmentID:       environmentID,
+			UserID:              userID,
+			EventIDs:            eventIDs,
+			UseUnprocessed:      useUnprocessed,
 		}
 
 		// Validate the input

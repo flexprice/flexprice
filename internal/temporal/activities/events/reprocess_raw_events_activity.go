@@ -57,11 +57,14 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 
 	// Convert workflow input to service params
 	reprocessParams := &events.ReprocessRawEventsParams{
-		ExternalCustomerID: input.ExternalCustomerID,
-		EventName:          input.EventName,
-		StartTime:          input.StartDate,
-		EndTime:            input.EndDate,
-		BatchSize:          input.BatchSize,
+		ExternalCustomerID:  input.ExternalCustomerID,
+		ExternalCustomerIDs: input.ExternalCustomerIDs,
+		EventName:           input.EventName,
+		StartTime:           input.StartDate,
+		EndTime:             input.EndDate,
+		BatchSize:           input.BatchSize,
+		EventIDs:            input.EventIDs,
+		UseUnprocessed:      input.UseUnprocessed,
 	}
 
 	// Call the service method to reprocess raw events

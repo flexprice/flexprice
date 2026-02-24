@@ -131,21 +131,26 @@ type RawEvent struct {
 
 // FindRawEventsParams contains parameters for finding raw events
 type FindRawEventsParams struct {
-	ExternalCustomerID string    // Optional filter by external customer ID
-	EventName          string    // Optional filter by event name
-	StartTime          time.Time // Optional filter by start time
-	EndTime            time.Time // Optional filter by end time
-	BatchSize          int       // Number of events to return per batch
-	Offset             int       // Offset for pagination (OFFSET/LIMIT approach)
+	ExternalCustomerID  string    // Optional filter by external customer ID
+	ExternalCustomerIDs []string  // Optional filter by multiple external customer IDs
+	EventName           string    // Optional filter by event name
+	StartTime           time.Time // Optional filter by start time
+	EndTime             time.Time // Optional filter by end time
+	BatchSize           int       // Number of events to return per batch
+	Offset              int       // Offset for pagination (OFFSET/LIMIT approach)
+	EventIDs            []string  // Optional filter by specific event IDs
 }
 
 // ReprocessRawEventsParams contains parameters for raw event reprocessing
 type ReprocessRawEventsParams struct {
-	ExternalCustomerID string    // Filter by external customer ID (optional)
-	EventName          string    // Filter by event name (optional)
-	StartTime          time.Time // Filter by start time (optional)
-	EndTime            time.Time // Filter by end time (optional)
-	BatchSize          int       // Number of events to process per batch (default 1000)
+	ExternalCustomerID  string    // Filter by external customer ID (optional)
+	ExternalCustomerIDs []string  // Filter by multiple external customer IDs (optional)
+	EventName           string    // Filter by event name (optional)
+	StartTime           time.Time // Filter by start time (optional)
+	EndTime             time.Time // Filter by end time (optional)
+	BatchSize           int       // Number of events to process per batch (default 1000)
+	EventIDs            []string  // Filter by specific event IDs (optional)
+	UseUnprocessed      bool      // When true, use FindUnprocessedRawEvents instead of FindRawEvents
 }
 
 // NewEvent creates a new event with defaults

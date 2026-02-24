@@ -57,6 +57,11 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 		args = append(args, params.ExternalCustomerID)
 	}
 
+	if len(params.ExternalCustomerIDs) > 0 {
+		query += " AND external_customer_id IN ?"
+		args = append(args, params.ExternalCustomerIDs)
+	}
+
 	if !params.StartTime.IsZero() {
 		query += " AND timestamp >= ?"
 		args = append(args, params.StartTime)
@@ -70,6 +75,11 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 	if params.EventName != "" {
 		query += " AND event_name = ?"
 		args = append(args, params.EventName)
+	}
+
+	if len(params.EventIDs) > 0 {
+		query += " AND id IN ?"
+		args = append(args, params.EventIDs)
 	}
 
 	// Add sorting for consistent ordering
@@ -168,9 +178,8 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 }
 
 // FindUnprocessedRawEvents finds raw events that haven't been processed yet
-// Uses ANTI JOIN to exclude raw events that already exist in the events table
+// Uses ANTI JOIN with feature_usage table to exclude already processed events
 // This is useful for catching up on missed events without creating duplicates
-// NOTE: Currently not used - reserved for future use cases
 func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, params *events.FindRawEventsParams) ([]*events.RawEvent, error) {
 	span := StartRepositorySpan(ctx, "raw_event", "find_unprocessed_raw_events", map[string]interface{}{
 		"batch_size":           params.BatchSize,
@@ -182,8 +191,8 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	// Use ANTI JOIN for better performance with ClickHouse
-	// This finds raw events that don't have a corresponding entry in the events table
+	// Use ANTI JOIN with feature_usage table for better performance with ClickHouse
+	// This finds raw events that don't have a corresponding entry in the feature_usage table
 	query := `
 		SELECT 
 			r.id, r.tenant_id, r.environment_id, r.external_customer_id, r.event_name, 
@@ -193,7 +202,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 		FROM raw_events r
 		ANTI JOIN (
 			SELECT id, tenant_id, environment_id
-			FROM events
+			FROM feature_usage
 			WHERE tenant_id = ?
 			AND environment_id = ?
 		) AS e
@@ -210,6 +219,11 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 		args = append(args, params.ExternalCustomerID)
 	}
 
+	if len(params.ExternalCustomerIDs) > 0 {
+		query += " AND r.external_customer_id IN ?"
+		args = append(args, params.ExternalCustomerIDs)
+	}
+
 	if !params.StartTime.IsZero() {
 		query += " AND r.timestamp >= ?"
 		args = append(args, params.StartTime)
@@ -223,6 +237,11 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 	if params.EventName != "" {
 		query += " AND r.event_name = ?"
 		args = append(args, params.EventName)
+	}
+
+	if len(params.EventIDs) > 0 {
+		query += " AND r.id IN ?"
+		args = append(args, params.EventIDs)
 	}
 
 	// Add sorting for consistent ordering

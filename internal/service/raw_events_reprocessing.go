@@ -45,11 +45,14 @@ type ReprocessRawEventsResult struct {
 
 // ReprocessRawEventsRequest represents the request to reprocess raw events
 type ReprocessRawEventsRequest struct {
-	ExternalCustomerID string `json:"external_customer_id"`
-	EventName          string `json:"event_name"`
-	StartDate          string `json:"start_date" validate:"required"`
-	EndDate            string `json:"end_date" validate:"required"`
-	BatchSize          int    `json:"batch_size"`
+	ExternalCustomerID  string   `json:"external_customer_id"`
+	ExternalCustomerIDs []string `json:"external_customer_ids"`
+	EventName           string   `json:"event_name"`
+	StartDate           string   `json:"start_date" validate:"required"`
+	EndDate             string   `json:"end_date" validate:"required"`
+	BatchSize           int      `json:"batch_size"`
+	EventIDs            []string `json:"event_ids"`
+	UseUnprocessed      bool     `json:"use_unprocessed"`
 }
 
 // NewRawEventsReprocessingService creates a new raw events reprocessing service
@@ -90,11 +93,13 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 	// Create find params from reprocess params
 	findParams := &events.FindRawEventsParams{
-		ExternalCustomerID: params.ExternalCustomerID,
-		EventName:          params.EventName,
-		StartTime:          params.StartTime,
-		EndTime:            params.EndTime,
-		BatchSize:          batchSize,
+		ExternalCustomerID:  params.ExternalCustomerID,
+		ExternalCustomerIDs: params.ExternalCustomerIDs,
+		EventName:           params.EventName,
+		StartTime:           params.StartTime,
+		EndTime:             params.EndTime,
+		BatchSize:           batchSize,
+		EventIDs:            params.EventIDs,
 	}
 
 	// Process in batches to avoid memory issues with large datasets
@@ -106,8 +111,14 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		// Update offset for next batch
 		findParams.Offset = offset
 
-		// Find raw events
-		rawEvents, err := s.rawEventRepo.FindRawEvents(ctx, findParams)
+		// Find raw events using the appropriate method
+		var rawEvents []*events.RawEvent
+		var err error
+		if params.UseUnprocessed {
+			rawEvents, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
+		} else {
+			rawEvents, err = s.rawEventRepo.FindRawEvents(ctx, findParams)
+		}
 		if err != nil {
 			return result, ierr.WithError(err).
 				WithHint("Failed to find raw events").
@@ -313,11 +324,14 @@ func (s *rawEventsReprocessingService) TriggerReprocessRawEventsWorkflow(ctx con
 
 	// Build workflow input
 	workflowInput := map[string]interface{}{
-		"external_customer_id": req.ExternalCustomerID,
-		"event_name":           req.EventName,
-		"start_date":           req.StartDate,
-		"end_date":             req.EndDate,
-		"batch_size":           req.BatchSize,
+		"external_customer_id":  req.ExternalCustomerID,
+		"external_customer_ids": req.ExternalCustomerIDs,
+		"event_name":            req.EventName,
+		"start_date":            req.StartDate,
+		"end_date":              req.EndDate,
+		"batch_size":            req.BatchSize,
+		"event_ids":             req.EventIDs,
+		"use_unprocessed":       req.UseUnprocessed,
 	}
 
 	// Get global temporal service
