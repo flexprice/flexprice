@@ -1089,7 +1089,7 @@ func (s *temporalService) buildReprocessRawEventsInput(_ context.Context, tenant
 			eventNames = names
 		}
 
-		useUnprocessed, _ := paramsMap["use_unprocessed"].(bool)
+		unprocessedOnly, _ := paramsMap["unprocessed_only"].(bool)
 
 		input := eventsModels.ReprocessRawEventsWorkflowInput{
 			ExternalCustomerIDs: externalCustomerIDs,
@@ -1101,7 +1101,7 @@ func (s *temporalService) buildReprocessRawEventsInput(_ context.Context, tenant
 			EnvironmentID:       environmentID,
 			UserID:              userID,
 			EventIDs:            eventIDs,
-			UseUnprocessed:      useUnprocessed,
+			UnprocessedOnly:      unprocessedOnly,
 		}
 
 		// Validate the input

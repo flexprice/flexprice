@@ -63,7 +63,7 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 		EndTime:             input.EndDate,
 		BatchSize:           input.BatchSize,
 		EventIDs:            input.EventIDs,
-		UseUnprocessed:      input.UseUnprocessed,
+		UnprocessedOnly:      input.UnprocessedOnly,
 	}
 
 	// Call the service method to reprocess raw events

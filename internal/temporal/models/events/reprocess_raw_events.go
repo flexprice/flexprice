@@ -17,7 +17,7 @@ type ReprocessRawEventsWorkflowInput struct {
 	EnvironmentID       string    `json:"environment_id"`
 	UserID              string    `json:"user_id"`
 	EventIDs            []string  `json:"event_ids"`
-	UseUnprocessed      bool      `json:"use_unprocessed"`
+	UnprocessedOnly      bool      `json:"unprocessed_only"`
 }
 
 // Validate validates the reprocess raw events workflow input

@@ -654,7 +654,7 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 		EndDate:             req.EndDate,
 		BatchSize:           req.BatchSize,
 		EventIDs:            req.EventIDs,
-		UseUnprocessed:      false,
+		UnprocessedOnly:      false,
 	})
 	if err != nil {
 		h.log.Error("Failed to trigger reprocess raw events workflow", "error", err)
@@ -690,7 +690,7 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 		EndDate:             req.EndDate,
 		BatchSize:           req.BatchSize,
 		EventIDs:            req.EventIDs,
-		UseUnprocessed:      true,
+		UnprocessedOnly:      true,
 	})
 	if err != nil {
 		h.log.Error("Failed to trigger reprocess unprocessed raw events workflow", "error", err)

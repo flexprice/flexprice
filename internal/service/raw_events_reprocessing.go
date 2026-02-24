@@ -51,7 +51,7 @@ type ReprocessRawEventsRequest struct {
 	EndDate             string   `json:"end_date" validate:"required"`
 	BatchSize           int      `json:"batch_size"`
 	EventIDs            []string `json:"event_ids"`
-	UseUnprocessed      bool     `json:"use_unprocessed"`
+	UnprocessedOnly      bool     `json:"unprocessed_only"`
 }
 
 // NewRawEventsReprocessingService creates a new raw events reprocessing service
@@ -112,7 +112,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		// Find raw events using the appropriate method
 		var rawEvents []*events.RawEvent
 		var err error
-		if params.UseUnprocessed {
+		if params.UnprocessedOnly {
 			rawEvents, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
 		} else {
 			rawEvents, err = s.rawEventRepo.FindRawEvents(ctx, findParams)
@@ -328,7 +328,7 @@ func (s *rawEventsReprocessingService) TriggerReprocessRawEventsWorkflow(ctx con
 		"end_date":              req.EndDate,
 		"batch_size":            req.BatchSize,
 		"event_ids":             req.EventIDs,
-		"use_unprocessed":       req.UseUnprocessed,
+		"unprocessed_only":       req.UnprocessedOnly,
 	}
 
 	// Get global temporal service

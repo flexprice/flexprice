@@ -148,7 +148,7 @@ type ReprocessRawEventsParams struct {
 	EndTime             time.Time // Filter by end time (optional)
 	BatchSize           int       // Number of events to process per batch (default 1000)
 	EventIDs            []string  // Filter by specific event IDs (optional)
-	UseUnprocessed      bool      // When true, use FindUnprocessedRawEvents instead of FindRawEvents
+	UnprocessedOnly      bool      // When true, use FindUnprocessedRawEvents instead of FindRawEvents
 }
 
 // NewEvent creates a new event with defaults
