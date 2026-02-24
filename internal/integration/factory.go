@@ -343,13 +343,11 @@ func (f *Factory) GetQuickBooksIntegration(ctx context.Context) (*QuickBooksInte
 	// Verify a QuickBooks connection exists for this environment before building the integration
 	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderQuickBooks)
 	if err != nil {
-		return nil, ierr.WithError(err).
-			WithHint("Failed to get QuickBooks connection").
-			Mark(ierr.ErrNotFound)
+		return nil, err
 	}
 	if conn == nil || conn.Status != types.StatusPublished {
-		return nil, ierr.NewError("Connection with provider quickbooks was not found in this environment").
-			WithHint("QuickBooks connection must be configured and active before use").
+		return nil, ierr.NewError("Connection with provider quickbooks is not configured in this environment").
+			WithHint("QuickBooks connection must be configured and published before use").
 			Mark(ierr.ErrNotFound)
 	}
 
