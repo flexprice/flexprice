@@ -1,18 +1,19 @@
 <p align="center">
-  <img align="center" src="./assets/flexprice_logo.png" height="30%" width="30%"  alt="fleprice logo"/>
+  <img align="center" src="./assets/logo.png" height="30%" 
+  width="30%"  alt="fleprice logo"/>
 </p>
 <h3 align="center">
 <b>
-⚡️ Usage based metering & billing for developers ⚡️
+ Monetization Infrastructure Built for AI Native Companies 
 </b>
 </h3 >
 <p align="center">
-Build usage-based, credit-based, or hybrid pricing models with full control. Flexprice handles metering, pricing, and invoicing so you can focus on building, not billing.
+Flexprice lets AI-native and SaaS teams operate usage-based, credit-based, and hybrid pricing with real-time metering and reporting that scales as your product evolves.
 </p>
 
 <h5 align="center">
 
-[Documentation](https://docs.flexprice.io) • [Demo](https://www.loom.com/share/60d8308781254fe0bc5be341501f9fd5) • [Website](https://flexprice.io/) • [LinkedIn](https://www.linkedin.com/company/flexpriceio)
+[Docs](https://docs.flexprice.io) • [Demo](https://www.loom.com/share/60d8308781254fe0bc5be341501f9fd5) • [Website](https://flexprice.io/) • [LinkedIn](https://www.linkedin.com/company/flexpriceio) • [X](https://x.com/tryflexprice) • [Slack Community](https://flexpricecommunity.slack.com/ssb/redirect#/shared-invite/email)
 
 
 [![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white)](https://pkg.go.dev/github.com/flexprice/go-sdk) [![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)](https://pypi.org/project/flexprice) [![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)](https://www.npmjs.com/package/@flexprice/sdk) 
@@ -28,10 +29,6 @@ Build usage-based, credit-based, or hybrid pricing models with full control. Fle
 
 ## Open architecture
 The Flexprice core (metering, credits, pricing, billing) has an open and composable design. 
-
-<p align="center">
-  <img align="center" src="./assets/open-arch.jpg" alt="open architechture"/>
-</p>
 
 Your application, whether it's running backend APIs, AI agents, or custom workflows, can send usage data to Flexprice. You can directly stream data from data warehouses or analytics pipelines as well.
 
