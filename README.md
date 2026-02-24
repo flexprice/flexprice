@@ -1,6 +1,6 @@
 <p align="center">
   <img align="center" src="./assets/logo.png" height="30%" 
-  width="30%"  alt="fleprice logo"/>
+  width="30%"  alt="flexprice logo"/>
 </p>
 <h3 align="center">
 <b>
