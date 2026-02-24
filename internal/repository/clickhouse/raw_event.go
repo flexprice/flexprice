@@ -27,8 +27,8 @@ func NewRawEventRepository(store *clickhouse.ClickHouseStore, logger *logger.Log
 // - ENGINE: ReplacingMergeTree(version)
 func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.FindRawEventsParams) ([]*events.RawEvent, error) {
 	span := StartRepositorySpan(ctx, "raw_event", "find_raw_events", map[string]interface{}{
-		"batch_size":           params.BatchSize,
-		"external_customer_id": params.ExternalCustomerID,
+		"batch_size":            params.BatchSize,
+		"external_customer_ids": params.ExternalCustomerIDs,
 	})
 	defer FinishSpan(span)
 
@@ -52,11 +52,6 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 
 	// Add filters if provided - order matters for index usage
 	// Follow the primary key order: tenant_id, environment_id, external_customer_id, timestamp
-	if params.ExternalCustomerID != "" {
-		query += " AND external_customer_id = ?"
-		args = append(args, params.ExternalCustomerID)
-	}
-
 	if len(params.ExternalCustomerIDs) > 0 {
 		query += " AND external_customer_id IN ?"
 		args = append(args, params.ExternalCustomerIDs)
@@ -72,9 +67,9 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 		args = append(args, params.EndTime)
 	}
 
-	if params.EventName != "" {
-		query += " AND event_name = ?"
-		args = append(args, params.EventName)
+	if len(params.EventNames) > 0 {
+		query += " AND event_name IN ?"
+		args = append(args, params.EventNames)
 	}
 
 	if len(params.EventIDs) > 0 {
@@ -106,8 +101,8 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 	r.logger.Infow("executing find raw events query",
 		"query", query,
 		"args", args,
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 		"batch_size", params.BatchSize,
 		"offset", params.Offset,
 	)
@@ -182,8 +177,8 @@ func (r *RawEventRepository) FindRawEvents(ctx context.Context, params *events.F
 // This is useful for catching up on missed events without creating duplicates
 func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, params *events.FindRawEventsParams) ([]*events.RawEvent, error) {
 	span := StartRepositorySpan(ctx, "raw_event", "find_unprocessed_raw_events", map[string]interface{}{
-		"batch_size":           params.BatchSize,
-		"external_customer_id": params.ExternalCustomerID,
+		"batch_size":            params.BatchSize,
+		"external_customer_ids": params.ExternalCustomerIDs,
 	})
 	defer FinishSpan(span)
 
@@ -214,11 +209,6 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 	args := []interface{}{tenantID, environmentID, tenantID, environmentID}
 
 	// Add filters if provided - order matters for index usage
-	if params.ExternalCustomerID != "" {
-		query += " AND r.external_customer_id = ?"
-		args = append(args, params.ExternalCustomerID)
-	}
-
 	if len(params.ExternalCustomerIDs) > 0 {
 		query += " AND r.external_customer_id IN ?"
 		args = append(args, params.ExternalCustomerIDs)
@@ -234,9 +224,9 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 		args = append(args, params.EndTime)
 	}
 
-	if params.EventName != "" {
-		query += " AND r.event_name = ?"
-		args = append(args, params.EventName)
+	if len(params.EventNames) > 0 {
+		query += " AND r.event_name IN ?"
+		args = append(args, params.EventNames)
 	}
 
 	if len(params.EventIDs) > 0 {
@@ -267,8 +257,8 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 
 	r.logger.Debugw("executing find unprocessed raw events query",
 		"query", query,
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 		"batch_size", params.BatchSize,
 	)
 
@@ -321,8 +311,8 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 
 	r.logger.Infow("found unprocessed raw events",
 		"count", len(eventsList),
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 	)
 
 	SetSpanSuccess(span)

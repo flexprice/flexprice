@@ -131,9 +131,8 @@ type RawEvent struct {
 
 // FindRawEventsParams contains parameters for finding raw events
 type FindRawEventsParams struct {
-	ExternalCustomerID  string    // Optional filter by external customer ID
-	ExternalCustomerIDs []string  // Optional filter by multiple external customer IDs
-	EventName           string    // Optional filter by event name
+	ExternalCustomerIDs []string  // Optional filter by external customer IDs
+	EventNames          []string  // Optional filter by event names
 	StartTime           time.Time // Optional filter by start time
 	EndTime             time.Time // Optional filter by end time
 	BatchSize           int       // Number of events to return per batch
@@ -143,9 +142,8 @@ type FindRawEventsParams struct {
 
 // ReprocessRawEventsParams contains parameters for raw event reprocessing
 type ReprocessRawEventsParams struct {
-	ExternalCustomerID  string    // Filter by external customer ID (optional)
-	ExternalCustomerIDs []string  // Filter by multiple external customer IDs (optional)
-	EventName           string    // Filter by event name (optional)
+	ExternalCustomerIDs []string  // Filter by external customer IDs (optional)
+	EventNames          []string  // Filter by event names (optional)
 	StartTime           time.Time // Filter by start time (optional)
 	EndTime             time.Time // Filter by end time (optional)
 	BatchSize           int       // Number of events to process per batch (default 1000)

@@ -49,17 +49,16 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 	ctx = types.SetUserID(ctx, input.UserID)
 
 	logger.Info("Starting reprocess raw events activity",
-		"external_customer_id", input.ExternalCustomerID,
-		"event_name", input.EventName,
+		"external_customer_ids", input.ExternalCustomerIDs,
+		"event_names", input.EventNames,
 		"start_date", input.StartDate,
 		"end_date", input.EndDate,
 		"batch_size", input.BatchSize)
 
 	// Convert workflow input to service params
 	reprocessParams := &events.ReprocessRawEventsParams{
-		ExternalCustomerID:  input.ExternalCustomerID,
 		ExternalCustomerIDs: input.ExternalCustomerIDs,
-		EventName:           input.EventName,
+		EventNames:          input.EventNames,
 		StartTime:           input.StartDate,
 		EndTime:             input.EndDate,
 		BatchSize:           input.BatchSize,
@@ -71,21 +70,21 @@ func (a *ReprocessRawEventsActivities) ReprocessRawEvents(ctx context.Context, i
 	result, err := a.rawEventsReprocessingService.ReprocessRawEvents(ctx, reprocessParams)
 	if err != nil {
 		logger.Error("Failed to reprocess raw events",
-			"external_customer_id", input.ExternalCustomerID,
-			"event_name", input.EventName,
+			"external_customer_ids", input.ExternalCustomerIDs,
+			"event_names", input.EventNames,
 			"error", err)
 		return response, ierr.WithError(err).
 			WithHint("Failed to reprocess raw events").
 			WithReportableDetails(map[string]interface{}{
-				"external_customer_id": input.ExternalCustomerID,
-				"event_name":           input.EventName,
+				"external_customer_ids": input.ExternalCustomerIDs,
+				"event_names":           input.EventNames,
 			}).
 			Mark(ierr.ErrInternal)
 	}
 
 	logger.Info("Completed reprocess raw events activity",
-		"external_customer_id", input.ExternalCustomerID,
-		"event_name", input.EventName,
+		"external_customer_ids", input.ExternalCustomerIDs,
+		"event_names", input.EventNames,
 		"total_events_found", result.TotalEventsFound,
 		"total_events_published", result.TotalEventsPublished,
 		"total_events_dropped", result.TotalEventsDropped,

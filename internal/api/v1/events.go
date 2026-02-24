@@ -648,9 +648,8 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 	}
 
 	result, err := h.rawEventsReprocessingService.TriggerReprocessRawEventsWorkflow(ctx, &service.ReprocessRawEventsRequest{
-		ExternalCustomerID:  req.ExternalCustomerID,
 		ExternalCustomerIDs: req.ExternalCustomerIDs,
-		EventName:           req.EventName,
+		EventNames:          req.EventNames,
 		StartDate:           req.StartDate,
 		EndDate:             req.EndDate,
 		BatchSize:           req.BatchSize,
@@ -685,9 +684,8 @@ func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
 	}
 
 	result, err := h.rawEventsReprocessingService.TriggerReprocessRawEventsWorkflow(ctx, &service.ReprocessRawEventsRequest{
-		ExternalCustomerID:  req.ExternalCustomerID,
 		ExternalCustomerIDs: req.ExternalCustomerIDs,
-		EventName:           req.EventName,
+		EventNames:          req.EventNames,
 		StartDate:           req.StartDate,
 		EndDate:             req.EndDate,
 		BatchSize:           req.BatchSize,

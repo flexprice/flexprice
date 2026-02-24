@@ -8,9 +8,8 @@ import (
 
 // ReprocessRawEventsWorkflowInput represents the input for reprocess raw events workflow
 type ReprocessRawEventsWorkflowInput struct {
-	ExternalCustomerID  string    `json:"external_customer_id"`
 	ExternalCustomerIDs []string  `json:"external_customer_ids"`
-	EventName           string    `json:"event_name"`
+	EventNames          []string  `json:"event_names"`
 	StartDate           time.Time `json:"start_date"`
 	EndDate             time.Time `json:"end_date"`
 	BatchSize           int       `json:"batch_size"`

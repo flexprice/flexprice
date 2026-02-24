@@ -45,9 +45,8 @@ type ReprocessRawEventsResult struct {
 
 // ReprocessRawEventsRequest represents the request to reprocess raw events
 type ReprocessRawEventsRequest struct {
-	ExternalCustomerID  string   `json:"external_customer_id"`
 	ExternalCustomerIDs []string `json:"external_customer_ids"`
-	EventName           string   `json:"event_name"`
+	EventNames          []string `json:"event_names"`
 	StartDate           string   `json:"start_date" validate:"required"`
 	EndDate             string   `json:"end_date" validate:"required"`
 	BatchSize           int      `json:"batch_size"`
@@ -79,8 +78,8 @@ func NewRawEventsReprocessingService(
 // ReprocessRawEvents reprocesses raw events with given parameters
 func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, params *events.ReprocessRawEventsParams) (*ReprocessRawEventsResult, error) {
 	s.Logger.Infow("starting raw event reprocessing",
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 		"start_time", params.StartTime,
 		"end_time", params.EndTime,
 	)
@@ -93,9 +92,8 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 	// Create find params from reprocess params
 	findParams := &events.FindRawEventsParams{
-		ExternalCustomerID:  params.ExternalCustomerID,
 		ExternalCustomerIDs: params.ExternalCustomerIDs,
-		EventName:           params.EventName,
+		EventNames:          params.EventNames,
 		StartTime:           params.StartTime,
 		EndTime:             params.EndTime,
 		BatchSize:           batchSize,
@@ -123,9 +121,9 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 			return result, ierr.WithError(err).
 				WithHint("Failed to find raw events").
 				WithReportableDetails(map[string]interface{}{
-					"external_customer_id": params.ExternalCustomerID,
-					"event_name":           params.EventName,
-					"batch":                result.ProcessedBatches,
+					"external_customer_ids": params.ExternalCustomerIDs,
+					"event_names":           params.EventNames,
+					"batch":                 result.ProcessedBatches,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
@@ -239,8 +237,8 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 	}
 
 	s.Logger.Infow("completed raw event reprocessing",
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 		"batches_processed", result.ProcessedBatches,
 		"total_events_found", result.TotalEventsFound,
 		"total_events_published", result.TotalEventsPublished,
@@ -324,9 +322,8 @@ func (s *rawEventsReprocessingService) TriggerReprocessRawEventsWorkflow(ctx con
 
 	// Build workflow input
 	workflowInput := map[string]interface{}{
-		"external_customer_id":  req.ExternalCustomerID,
 		"external_customer_ids": req.ExternalCustomerIDs,
-		"event_name":            req.EventName,
+		"event_names":           req.EventNames,
 		"start_date":            req.StartDate,
 		"end_date":              req.EndDate,
 		"batch_size":            req.BatchSize,
