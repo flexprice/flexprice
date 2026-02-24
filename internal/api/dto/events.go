@@ -628,11 +628,12 @@ func (r *InternalReprocessEventsRequest) Validate() error {
 
 // ReprocessRawEventsRequest represents the request to reprocess raw events
 type ReprocessRawEventsRequest struct {
-	ExternalCustomerID string `json:"external_customer_id" example:"customer456"`
-	EventName          string `json:"event_name" example:"api_request"`
-	StartDate          string `json:"start_date" validate:"required" binding:"required" example:"2024-01-01T00:00:00Z"`
-	EndDate            string `json:"end_date" example:"2024-01-31T23:59:59Z"` // Optional - defaults to current time
-	BatchSize          int    `json:"batch_size" example:"1000"`
+	ExternalCustomerIDs []string `json:"external_customer_ids" example:"[\"customer456\",\"customer789\"]"`
+	EventNames          []string `json:"event_names" example:"[\"api_request\",\"page_view\"]"`
+	StartDate           string   `json:"start_date" validate:"required" binding:"required" example:"2024-01-01T00:00:00Z"`
+	EndDate             string   `json:"end_date" example:"2024-01-31T23:59:59Z"` // Optional - defaults to current time
+	BatchSize           int      `json:"batch_size" example:"1000"`
+	EventIDs            []string `json:"event_ids" example:"[\"evt_123\",\"evt_456\"]"`
 }
 
 // Validate validates the reprocess raw events request

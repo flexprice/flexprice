@@ -429,24 +429,23 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		}
 	case types.TemporalReprocessRawEventsWorkflow:
 		// Extract context ID from ReprocessRawEventsWorkflowInput
-		// Format: external_customer_id-event_name (if event_name provided) or just external_customer_id
 		if input, ok := params.(eventsModels.ReprocessRawEventsWorkflowInput); ok {
-			if input.ExternalCustomerID != "" {
-				if input.EventName != "" {
-					return fmt.Sprintf("%s-%s", input.ExternalCustomerID, input.EventName)
+			if len(input.ExternalCustomerIDs) > 0 {
+				if len(input.EventNames) > 0 {
+					return fmt.Sprintf("%s-%s", input.ExternalCustomerIDs[0], input.EventNames[0])
 				}
-				return input.ExternalCustomerID
+				return input.ExternalCustomerIDs[0]
 			}
 		}
 		// Also handle map input for reprocess raw events
 		if paramsMap, ok := params.(map[string]interface{}); ok {
-			externalCustomerID, _ := paramsMap["external_customer_id"].(string)
-			eventName, _ := paramsMap["event_name"].(string)
-			if externalCustomerID != "" {
-				if eventName != "" {
-					return fmt.Sprintf("%s-%s", externalCustomerID, eventName)
+			externalCustomerIDs, _ := paramsMap["external_customer_ids"].([]string)
+			eventNames, _ := paramsMap["event_names"].([]string)
+			if len(externalCustomerIDs) > 0 {
+				if len(eventNames) > 0 {
+					return fmt.Sprintf("%s-%s", externalCustomerIDs[0], eventNames[0])
 				}
-				return externalCustomerID
+				return externalCustomerIDs[0]
 			}
 		}
 	}
@@ -1041,9 +1040,6 @@ func (s *temporalService) buildReprocessRawEventsInput(_ context.Context, tenant
 
 	// Handle map input
 	if paramsMap, ok := params.(map[string]interface{}); ok {
-		externalCustomerID, _ := paramsMap["external_customer_id"].(string)
-		eventName, _ := paramsMap["event_name"].(string)
-
 		var startDate, endDate time.Time
 		if sd, ok := paramsMap["start_date"].(time.Time); ok {
 			startDate = sd
@@ -1077,15 +1073,35 @@ func (s *temporalService) buildReprocessRawEventsInput(_ context.Context, tenant
 			batchSize = int(bsFloat)
 		}
 
+		// Extract optional array filters
+		var eventIDs []string
+		if ids, ok := paramsMap["event_ids"].([]string); ok {
+			eventIDs = ids
+		}
+
+		var externalCustomerIDs []string
+		if ids, ok := paramsMap["external_customer_ids"].([]string); ok {
+			externalCustomerIDs = ids
+		}
+
+		var eventNames []string
+		if names, ok := paramsMap["event_names"].([]string); ok {
+			eventNames = names
+		}
+
+		useUnprocessed, _ := paramsMap["use_unprocessed"].(bool)
+
 		input := eventsModels.ReprocessRawEventsWorkflowInput{
-			ExternalCustomerID: externalCustomerID, // Optional - can be empty for raw events
-			EventName:          eventName,          // Optional - can be empty
-			StartDate:          startDate,
-			EndDate:            endDate,
-			BatchSize:          batchSize,
-			TenantID:           tenantID,
-			EnvironmentID:      environmentID,
-			UserID:             userID,
+			ExternalCustomerIDs: externalCustomerIDs,
+			EventNames:          eventNames,
+			StartDate:           startDate,
+			EndDate:             endDate,
+			BatchSize:           batchSize,
+			TenantID:            tenantID,
+			EnvironmentID:       environmentID,
+			UserID:              userID,
+			EventIDs:            eventIDs,
+			UseUnprocessed:      useUnprocessed,
 		}
 
 		// Validate the input
