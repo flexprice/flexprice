@@ -727,11 +727,14 @@ func (s *billingService) CalculateUsageCharges(
 							return nil, decimal.Zero, err
 						}
 
-						// Extract bucket values
-						bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
-						for i, result := range usageResult.Results {
-							bucketedValues[i] = result.Value
-						}
+						bucketedValues := s.fillBucketedValuesForWindowedCommitment(
+							item,
+							usageResult,
+							item.GetPeriodStart(periodStart),
+							item.GetPeriodEnd(periodEnd),
+							meter.Aggregation.BucketSize,
+							&sub.BillingAnchor,
+						)
 
 						// Apply window-based commitment
 						adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(
@@ -908,6 +911,46 @@ func (s *billingService) calculateRemainingCommitment(
 	commitmentUtilized := decimal.NewFromFloat(usage.CommitmentUtilized)
 	remainingCommitment := commitmentAmount.Sub(commitmentUtilized)
 	return decimal.Max(remainingCommitment, decimal.Zero)
+}
+
+// fillBucketedValuesForWindowedCommitment returns one value per expected bucket in the period.
+// When CommitmentTrueUpEnabled is true, fills missing buckets (no usage) with zero so that
+// windowed commitment true-up is applied to every window. Otherwise returns only the
+// buckets returned by the usage API (current behavior).
+func (s *billingService) fillBucketedValuesForWindowedCommitment(
+	item *subscription.SubscriptionLineItem,
+	usageResult *events.AggregationResult,
+	periodStart, periodEnd time.Time,
+	bucketSize types.WindowSize,
+	billingAnchor *time.Time,
+) []decimal.Decimal {
+	if usageResult == nil {
+		return nil
+	}
+	if !item.CommitmentTrueUpEnabled {
+		bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
+		for i, result := range usageResult.Results {
+			bucketedValues[i] = result.Value
+		}
+		return bucketedValues
+	}
+	expectedStarts := generateBucketStarts(periodStart, periodEnd, bucketSize, billingAnchor)
+	if len(expectedStarts) == 0 {
+		return nil
+	}
+	usageByWindow := make(map[time.Time]decimal.Decimal)
+	for _, r := range usageResult.Results {
+		usageByWindow[r.WindowSize] = r.Value
+	}
+	bucketedValues := make([]decimal.Decimal, 0, len(expectedStarts))
+	for _, t := range expectedStarts {
+		if v, ok := usageByWindow[t]; ok {
+			bucketedValues = append(bucketedValues, v)
+		} else {
+			bucketedValues = append(bucketedValues, decimal.Zero)
+		}
+	}
+	return bucketedValues
 }
 
 func (s *billingService) CalculateFeatureUsageCharges(
@@ -1308,11 +1351,14 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							return nil, decimal.Zero, err
 						}
 
-						// Extract bucket values
-						bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
-						for i, result := range usageResult.Results {
-							bucketedValues[i] = result.Value
-						}
+						bucketedValues := s.fillBucketedValuesForWindowedCommitment(
+							item,
+							usageResult,
+							item.GetPeriodStart(periodStart),
+							item.GetPeriodEnd(periodEnd),
+							meter.Aggregation.BucketSize,
+							&sub.BillingAnchor,
+						)
 
 						// Apply window-based commitment
 						adjustedAmount, info, err := commitmentCalc.applyWindowCommitmentToLineItem(
