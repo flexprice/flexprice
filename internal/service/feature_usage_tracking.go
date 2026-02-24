@@ -2404,7 +2404,9 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 				// When true-up is enabled, total must include empty windows (same as billing)
 				if lineItem.CommitmentTrueUpEnabled {
 					if meter := data.Meters[item.MeterID]; meter != nil && meter.Aggregation.BucketSize != "" {
-						periodStart, periodEnd := data.Params.StartTime, data.Params.EndTime
+						// Restrict to line item's active window: no events before StartDate or after EndDate
+						periodStart := lineItem.GetPeriodStart(data.Params.StartTime)
+						periodEnd := lineItem.GetPeriodEnd(data.Params.EndTime)
 						var billingAnchor *time.Time
 						if sub := data.SubscriptionsMap[lineItem.SubscriptionID]; sub != nil {
 							billingAnchor = &sub.BillingAnchor
@@ -2549,7 +2551,9 @@ func (s *featureUsageTrackingService) calculateSumWithBucketCost(ctx context.Con
 				}
 				// When true-up is enabled, total must include empty windows (same as billing)
 				if lineItem.CommitmentTrueUpEnabled && meter.Aggregation.BucketSize != "" {
-					periodStart, periodEnd := data.Params.StartTime, data.Params.EndTime
+					// Restrict to line item's active window: no events before StartDate or after EndDate
+					periodStart := lineItem.GetPeriodStart(data.Params.StartTime)
+					periodEnd := lineItem.GetPeriodEnd(data.Params.EndTime)
 					var billingAnchor *time.Time
 					if sub := data.SubscriptionsMap[lineItem.SubscriptionID]; sub != nil {
 						billingAnchor = &sub.BillingAnchor
