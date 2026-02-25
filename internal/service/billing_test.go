@@ -361,6 +361,31 @@ func (s *BillingServiceSuite) setupTestData() {
 		}
 		s.NoError(s.eventRepo.InsertEvent(s.GetContext(), event))
 	}
+
+	// Seed feature_usage so period_end and preview use the same usage as events (GetFeatureUsageBySubscription).
+	// Only API calls is usage-based; storage_archive is a fixed price with arrear cadence (included via fixed charges).
+	featureUsageStore := s.GetStores().FeatureUsageRepo.(*testutil.InMemoryFeatureUsageStore)
+	periodID := uint64(s.testData.subscription.CurrentPeriodStart.UnixMilli())
+	ts := s.testData.now.Add(-1 * time.Hour)
+	fu := &events.FeatureUsage{
+		Event: events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           s.testData.subscription.TenantID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID,
+			CustomerID:         s.testData.customer.ID,
+			Timestamp:          ts,
+		},
+		SubscriptionID: s.testData.subscription.ID,
+		SubLineItemID:  lineItems[1].ID, // API calls line item
+		PriceID:        s.testData.prices.apiCalls.ID,
+		FeatureID:      "feat_api",
+		MeterID:        s.testData.meters.apiCalls.ID,
+		PeriodID:       periodID,
+		QtyTotal:       decimal.NewFromInt(500),
+		ProcessedAt:    ts,
+	}
+	s.NoError(featureUsageStore.InsertProcessedEvent(s.GetContext(), fu))
 }
 
 func (s *BillingServiceSuite) TestPrepareSubscriptionInvoiceRequest() {

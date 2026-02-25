@@ -98,19 +98,34 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Co
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	result := make(map[string]*events.UsageByFeatureResult)
+	// Aggregate by SubLineItemID (sum QtyTotal, max for count)
+	agg := make(map[string]*events.UsageByFeatureResult)
 	for _, usage := range s.usage {
-		if usage.SubscriptionID == subscriptionID {
-			result[usage.SubLineItemID] = &events.UsageByFeatureResult{
-				SubLineItemID: usage.SubLineItemID,
-				FeatureID:     usage.FeatureID,
-				MeterID:       usage.MeterID,
-				PriceID:       usage.PriceID,
-				SumTotal:      usage.QtyTotal,
-			}
+		if usage.SubscriptionID != subscriptionID {
+			continue
 		}
+		existing, ok := agg[usage.SubLineItemID]
+		if !ok {
+			agg[usage.SubLineItemID] = &events.UsageByFeatureResult{
+				SubLineItemID:    usage.SubLineItemID,
+				FeatureID:        usage.FeatureID,
+				MeterID:          usage.MeterID,
+				PriceID:          usage.PriceID,
+				SumTotal:         usage.QtyTotal,
+				MaxTotal:         usage.QtyTotal,
+				CountDistinctIDs: uint64(usage.QtyTotal.IntPart()),
+				LatestQty:        usage.QtyTotal,
+			}
+			continue
+		}
+		existing.SumTotal = existing.SumTotal.Add(usage.QtyTotal)
+		if usage.QtyTotal.GreaterThan(existing.MaxTotal) {
+			existing.MaxTotal = usage.QtyTotal
+			existing.LatestQty = usage.QtyTotal
+		}
+		existing.CountDistinctIDs += uint64(usage.QtyTotal.IntPart())
 	}
-	return result, nil
+	return agg, nil
 }
 
 // GetFeatureUsageForExport gets feature usage for export
