@@ -3033,6 +3033,12 @@ const docTemplate = `{
                 "summary": "Get Customer Wallets",
                 "parameters": [
                     {
+                        "type": "integer",
+                        "description": "populated from x-max-live header, not query param",
+                        "name": "-",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "expand",
                         "in": "query"
@@ -7088,6 +7094,76 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/plans/{id}/clone": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Clone an existing plan, copying its active prices, published entitlements, and published credit grants",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Plans"
+                ],
+                "summary": "Clone a plan",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Source Plan ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Clone configuration",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ClonePlanRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.PlanResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11515,57 +11591,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/tenants": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Create a new tenant",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Tenants"
-                ],
-                "summary": "Create a new tenant",
-                "parameters": [
-                    {
-                        "description": "Create tenant request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateTenantRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/dto.TenantResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/tenants/update": {
             "put": {
                 "security": [
@@ -13890,6 +13915,35 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.ClonePlanRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "description": "Description overrides the source plan's description when provided",
+                    "type": "string"
+                },
+                "display_order": {
+                    "description": "DisplayOrder overrides the source plan's display order when provided",
+                    "type": "integer"
+                },
+                "lookup_key": {
+                    "description": "LookupKey is required and must be unique across published plans",
+                    "type": "string"
+                },
+                "metadata": {
+                    "description": "Metadata overrides the source plan's metadata when provided",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.Metadata"
+                        }
+                    ]
+                },
+                "name": {
+                    "description": "Name is required and must be different from the source plan's name",
+                    "type": "string"
+                }
+            }
+        },
         "dto.ConnectionResponse": {
             "type": "object",
             "properties": {
@@ -15944,20 +15998,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.TaxRateType"
                         }
                     ]
-                }
-            }
-        },
-        "dto.CreateTenantRequest": {
-            "type": "object",
-            "required": [
-                "name"
-            ],
-            "properties": {
-                "billing_details": {
-                    "$ref": "#/definitions/dto.TenantBillingDetails"
-                },
-                "name": {
-                    "type": "string"
                 }
             }
         },
@@ -19814,6 +19854,10 @@ const docTemplate = `{
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
                 },
+                "billing_period_count": {
+                    "description": "from price at create; default 1",
+                    "type": "integer"
+                },
                 "commitment_amount": {
                     "description": "Commitment fields",
                     "type": "number"
@@ -23149,6 +23193,10 @@ const docTemplate = `{
             "properties": {
                 "billing_period": {
                     "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_count": {
+                    "description": "from price at create; default 1",
+                    "type": "integer"
                 },
                 "commitment_amount": {
                     "description": "Commitment fields",

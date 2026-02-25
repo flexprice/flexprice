@@ -514,6 +514,26 @@ definitions:
       total_credit_amount:
         type: string
     type: object
+  dto.ClonePlanRequest:
+    properties:
+      description:
+        description: Description overrides the source plan's description when provided
+        type: string
+      display_order:
+        description: DisplayOrder overrides the source plan's display order when provided
+        type: integer
+      lookup_key:
+        description: LookupKey is required and must be unique across published plans
+        type: string
+      metadata:
+        allOf:
+        - $ref: '#/definitions/types.Metadata'
+        description: Metadata overrides the source plan's metadata when provided
+      name:
+        description: Name is required and must be different from the source plan's
+          name
+        type: string
+    type: object
   dto.ConnectionResponse:
     properties:
       created_at:
@@ -2035,15 +2055,6 @@ definitions:
           or "fixed")
     required:
     - code
-    - name
-    type: object
-  dto.CreateTenantRequest:
-    properties:
-      billing_details:
-        $ref: '#/definitions/dto.TenantBillingDetails'
-      name:
-        type: string
-    required:
     - name
     type: object
   dto.CreateUserRequest:
@@ -4832,6 +4843,9 @@ definitions:
     properties:
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        description: from price at create; default 1
+        type: integer
       commitment_amount:
         description: Commitment fields
         type: number
@@ -7235,6 +7249,9 @@ definitions:
     properties:
       billing_period:
         $ref: '#/definitions/types.BillingPeriod'
+      billing_period_count:
+        description: from price at create; default 1
+        type: integer
       commitment_amount:
         description: Commitment fields
         type: number
@@ -11641,6 +11658,10 @@ paths:
       - application/json
       description: Get all wallets for a customer by lookup key or id
       parameters:
+      - description: populated from x-max-live header, not query param
+        in: query
+        name: '-'
+        type: integer
       - in: query
         name: expand
         type: string
@@ -14043,6 +14064,52 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Update a plan
+      tags:
+      - Plans
+  /plans/{id}/clone:
+    post:
+      consumes:
+      - application/json
+      description: Clone an existing plan, copying its active prices, published entitlements,
+        and published credit grants
+      parameters:
+      - description: Source Plan ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Clone configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ClonePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/dto.PlanResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Clone a plan
       tags:
       - Plans
   /plans/{id}/creditgrants:
@@ -16924,38 +16991,6 @@ paths:
       security:
       - ApiKeyAuth: []
       summary: Get billing usage for the current tenant
-      tags:
-      - Tenants
-  /tenants:
-    post:
-      consumes:
-      - application/json
-      description: Create a new tenant
-      parameters:
-      - description: Create tenant request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateTenantRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.TenantResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create a new tenant
       tags:
       - Tenants
   /tenants/{id}:
