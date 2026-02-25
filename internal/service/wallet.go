@@ -2713,6 +2713,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		"wallet_id", req.WalletID,
 		"source", req.Source,
 		"force_calculate", req.ForceCalculateBalance,
+		"get_from_cache", req.GetFromCache,
 	)
 
 	// Get active wallets for this customer
@@ -2755,7 +2756,14 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"has_wallet_alert_settings", w.AlertSettings != nil,
 			"event_id", req.ID,
 		)
-		balance, err := s.GetWalletBalanceV2(ctx, w.ID)
+		var balance *dto.WalletBalanceResponse
+		if req.GetFromCache {
+			// Use cached balance with a 1-minute max-live to avoid stale reads
+			maxLive := int64(60) // 1 minute in seconds
+			balance, err = s.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
+		} else {
+			balance, err = s.GetWalletBalanceV2(ctx, w.ID)
+		}
 		if err != nil {
 			s.Logger.Errorw("failed to get wallet balance, skipping wallet",
 				"error", err,
