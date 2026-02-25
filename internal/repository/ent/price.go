@@ -387,6 +387,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetDisplayAmount(p.DisplayAmount).
 			SetEntityID(p.EntityID).
 			SetEntityType(p.EntityType).
+			SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
 			SetType(p.Type).
 			SetBillingPeriod(p.BillingPeriod).
 			SetBillingPeriodCount(p.BillingPeriodCount).
