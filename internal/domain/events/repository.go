@@ -60,7 +60,7 @@ type RawEventRepository interface {
 
 	// FindUnprocessedRawEvents finds raw events that haven't been processed yet
 	// Uses ANTI JOIN with feature_usage table to exclude already processed events
-	FindUnprocessedRawEvents(ctx context.Context, params *FindRawEventsParams) ([]*RawEvent, error)
+	FindUnprocessedRawEvents(ctx context.Context, params *FindRawEventsParams) ([]*RawEvent, *KeysetCursor, error)
 }
 
 // Additional types needed for the new methods

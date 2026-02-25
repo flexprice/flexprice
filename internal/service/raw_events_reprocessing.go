@@ -106,14 +106,17 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 	// Keep processing batches until we're done
 	for {
-		// Update offset for next batch
+		// Update offset for next batch (used by FindRawEvents path)
 		findParams.Offset = offset
 
 		// Find raw events using the appropriate method
 		var rawEvents []*events.RawEvent
 		var err error
 		if params.UseUnprocessed {
-			rawEvents, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
+			var cursor *events.KeysetCursor
+			rawEvents, cursor, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
+			// Store cursor for next iteration's keyset pagination
+			findParams.KeysetCursor = cursor
 		} else {
 			rawEvents, err = s.rawEventRepo.FindRawEvents(ctx, findParams)
 		}
@@ -222,9 +225,19 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 		// Update for next batch
 		result.ProcessedBatches++
-		offset += eventsCount // Move offset by the number of rows we actually got
 
-		// If we didn't get a full batch, we're done
+		// For UseUnprocessed path: pagination is driven by KeysetCursor, not offset.
+		// If cursor is nil it means the last batch was partial — no more data.
+		if params.UseUnprocessed {
+			if findParams.KeysetCursor == nil {
+				break
+			}
+			continue
+		}
+
+		// For FindRawEvents path: advance offset and check for a partial batch.
+		offset += eventsCount
+		findParams.Offset = offset
 		if eventsCount < batchSize {
 			break
 		}
