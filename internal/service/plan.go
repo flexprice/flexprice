@@ -839,7 +839,8 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	// Published credit grants — filter at query level, no post-loop status check needed
 	sourceGrants, err := s.CreditGrantRepo.List(ctx, types.NewNoLimitCreditGrantFilter().
 		WithPlanIDs([]string{id}).
-		WithStatus(types.StatusPublished))
+		WithStatus(types.StatusPublished).
+		WithScope(types.CreditGrantScopePlan))
 	if err != nil {
 		s.Logger.Errorw("failed to fetch credit grants for plan clone", "plan_id", id, "error", err)
 		return nil, err
@@ -870,56 +871,59 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
 
-	// Collect newly created objects so we can build the response without an extra DB round-trip
-	newPrices := make([]*domainPrice.Price, 0, len(sourcePrices))
-	newEntitlements := make([]*domainEntitlement.Entitlement, 0, len(sourceEntitlements))
-	newGrants := make([]*domainCreditGrant.CreditGrant, 0, len(sourceGrants))
+	emptyLookupKey := ""
+	entityTypePlan := types.PRICE_ENTITY_TYPE_PLAN
+	entEntityTypePlan := types.ENTITLEMENT_ENTITY_TYPE_PLAN
+	scopePlan := types.CreditGrantScopePlan
 
-	err = s.DB.WithTx(ctx, func(ctx context.Context) error {
-		if err := s.PlanRepo.Create(ctx, newPlan); err != nil {
+	newPrices := make([]*domainPrice.Price, 0, len(sourcePrices))
+	for _, p := range sourcePrices {
+		newPrices = append(newPrices, p.CopyWith(ctx, &domainPrice.PriceCloneOverrides{
+			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+			EntityType: &entityTypePlan,
+			EntityID:   &newPlan.ID,
+			LookupKey:  lo.ToPtr(emptyLookupKey),
+		}))
+	}
+
+	newEntitlements := make([]*domainEntitlement.Entitlement, 0, len(sourceEntitlements))
+	for _, e := range sourceEntitlements {
+		newEntitlements = append(newEntitlements, e.CopyWith(ctx, &domainEntitlement.EntitlementCloneOverrides{
+			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)),
+			EntityType: &entEntityTypePlan,
+			EntityID:   &newPlan.ID,
+		}))
+	}
+
+	newGrants := make([]*domainCreditGrant.CreditGrant, 0, len(sourceGrants))
+	newPlanID := newPlan.ID
+	for _, cg := range sourceGrants {
+		newGrants = append(newGrants, cg.CopyWith(ctx, &domainCreditGrant.CreditGrantCloneOverrides{
+			ID:     lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)),
+			Scope:  &scopePlan,
+			PlanID: &newPlanID,
+		}))
+	}
+
+	// Inside tx: only the four DB writes
+	var entitlementsCreated []*domainEntitlement.Entitlement
+	var grantsCreated []*domainCreditGrant.CreditGrant
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.PlanRepo.Create(txCtx, newPlan); err != nil {
 			return err
 		}
-
-		for _, p := range sourcePrices {
-			// Shallow-copy all fields then override identity/lineage fields so new
-			// fields added to Price are automatically carried over.
-			newPrice := *p
-			newPrice.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)
-			newPrice.EntityType = types.PRICE_ENTITY_TYPE_PLAN
-			newPrice.EntityID = newPlan.ID
-			newPrice.LookupKey = "" // price lookup keys are globally unique — do not copy
-			newPrice.BaseModel = types.GetDefaultBaseModel(ctx)
-			if err := s.PriceRepo.Create(ctx, &newPrice); err != nil {
-				return err
-			}
-			newPrices = append(newPrices, &newPrice)
+		if err := s.PriceRepo.CreateBulk(txCtx, newPrices); err != nil {
+			return err
 		}
-
-		for _, e := range sourceEntitlements {
-			newEnt := *e
-			newEnt.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)
-			newEnt.EntityType = types.ENTITLEMENT_ENTITY_TYPE_PLAN
-			newEnt.EntityID = newPlan.ID
-			newEnt.BaseModel = types.GetDefaultBaseModel(ctx)
-			if _, err := s.EntitlementRepo.Create(ctx, &newEnt); err != nil {
-				return err
-			}
-			newEntitlements = append(newEntitlements, &newEnt)
+		var err error
+		entitlementsCreated, err = s.EntitlementRepo.CreateBulk(txCtx, newEntitlements)
+		if err != nil {
+			return err
 		}
-
-		for _, cg := range sourceGrants {
-			newPlanID := newPlan.ID
-			newCG := *cg
-			newCG.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)
-			newCG.Scope = types.CreditGrantScopePlan
-			newCG.PlanID = &newPlanID
-			newCG.BaseModel = types.GetDefaultBaseModel(ctx)
-			if _, err := s.CreditGrantRepo.Create(ctx, &newCG); err != nil {
-				return err
-			}
-			newGrants = append(newGrants, &newCG)
+		grantsCreated, err = s.CreditGrantRepo.CreateBulk(txCtx, newGrants)
+		if err != nil {
+			return err
 		}
-
 		return nil
 	})
 	if err != nil {
@@ -930,21 +934,20 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		"source_plan_id", id,
 		"new_plan_id", newPlan.ID,
 		"prices_cloned", len(newPrices),
-		"entitlements_cloned", len(newEntitlements),
-		"grants_cloned", len(newGrants),
+		"entitlements_cloned", len(entitlementsCreated),
+		"grants_cloned", len(grantsCreated),
 	)
 
-	// Build response from in-memory objects — no extra DB round-trip needed
 	priceResponses := make([]*dto.PriceResponse, len(newPrices))
 	for i, p := range newPrices {
 		priceResponses[i] = &dto.PriceResponse{Price: p}
 	}
-	entitlementResponses := make([]*dto.EntitlementResponse, len(newEntitlements))
-	for i, e := range newEntitlements {
+	entitlementResponses := make([]*dto.EntitlementResponse, len(entitlementsCreated))
+	for i, e := range entitlementsCreated {
 		entitlementResponses[i] = &dto.EntitlementResponse{Entitlement: e}
 	}
-	grantResponses := make([]*dto.CreditGrantResponse, len(newGrants))
-	for i, cg := range newGrants {
+	grantResponses := make([]*dto.CreditGrantResponse, len(grantsCreated))
+	for i, cg := range grantsCreated {
 		grantResponses[i] = &dto.CreditGrantResponse{CreditGrant: cg}
 	}
 
