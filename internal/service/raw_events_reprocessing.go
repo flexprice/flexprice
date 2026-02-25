@@ -45,11 +45,13 @@ type ReprocessRawEventsResult struct {
 
 // ReprocessRawEventsRequest represents the request to reprocess raw events
 type ReprocessRawEventsRequest struct {
-	ExternalCustomerID string `json:"external_customer_id"`
-	EventName          string `json:"event_name"`
-	StartDate          string `json:"start_date" validate:"required"`
-	EndDate            string `json:"end_date" validate:"required"`
-	BatchSize          int    `json:"batch_size"`
+	ExternalCustomerIDs []string `json:"external_customer_ids"`
+	EventNames          []string `json:"event_names"`
+	StartDate           string   `json:"start_date" validate:"required"`
+	EndDate             string   `json:"end_date" validate:"required"`
+	BatchSize           int      `json:"batch_size"`
+	EventIDs            []string `json:"event_ids"`
+	UnprocessedOnly      bool     `json:"unprocessed_only"`
 }
 
 // NewRawEventsReprocessingService creates a new raw events reprocessing service
@@ -76,8 +78,8 @@ func NewRawEventsReprocessingService(
 // ReprocessRawEvents reprocesses raw events with given parameters
 func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, params *events.ReprocessRawEventsParams) (*ReprocessRawEventsResult, error) {
 	s.Logger.Infow("starting raw event reprocessing",
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 		"start_time", params.StartTime,
 		"end_time", params.EndTime,
 	)
@@ -90,11 +92,12 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 	// Create find params from reprocess params
 	findParams := &events.FindRawEventsParams{
-		ExternalCustomerID: params.ExternalCustomerID,
-		EventName:          params.EventName,
-		StartTime:          params.StartTime,
-		EndTime:            params.EndTime,
-		BatchSize:          batchSize,
+		ExternalCustomerIDs: params.ExternalCustomerIDs,
+		EventNames:          params.EventNames,
+		StartTime:           params.StartTime,
+		EndTime:             params.EndTime,
+		BatchSize:           batchSize,
+		EventIDs:            params.EventIDs,
 	}
 
 	// Process in batches to avoid memory issues with large datasets
@@ -106,15 +109,21 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		// Update offset for next batch
 		findParams.Offset = offset
 
-		// Find raw events
-		rawEvents, err := s.rawEventRepo.FindRawEvents(ctx, findParams)
+		// Find raw events using the appropriate method
+		var rawEvents []*events.RawEvent
+		var err error
+		if params.UnprocessedOnly {
+			rawEvents, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
+		} else {
+			rawEvents, err = s.rawEventRepo.FindRawEvents(ctx, findParams)
+		}
 		if err != nil {
 			return result, ierr.WithError(err).
 				WithHint("Failed to find raw events").
 				WithReportableDetails(map[string]interface{}{
-					"external_customer_id": params.ExternalCustomerID,
-					"event_name":           params.EventName,
-					"batch":                result.ProcessedBatches,
+					"external_customer_ids": params.ExternalCustomerIDs,
+					"event_names":           params.EventNames,
+					"batch":                 result.ProcessedBatches,
 				}).
 				Mark(ierr.ErrDatabase)
 		}
@@ -228,8 +237,8 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 	}
 
 	s.Logger.Infow("completed raw event reprocessing",
-		"external_customer_id", params.ExternalCustomerID,
-		"event_name", params.EventName,
+		"external_customer_ids", params.ExternalCustomerIDs,
+		"event_names", params.EventNames,
 		"batches_processed", result.ProcessedBatches,
 		"total_events_found", result.TotalEventsFound,
 		"total_events_published", result.TotalEventsPublished,
@@ -313,11 +322,13 @@ func (s *rawEventsReprocessingService) TriggerReprocessRawEventsWorkflow(ctx con
 
 	// Build workflow input
 	workflowInput := map[string]interface{}{
-		"external_customer_id": req.ExternalCustomerID,
-		"event_name":           req.EventName,
-		"start_date":           req.StartDate,
-		"end_date":             req.EndDate,
-		"batch_size":           req.BatchSize,
+		"external_customer_ids": req.ExternalCustomerIDs,
+		"event_names":           req.EventNames,
+		"start_date":            req.StartDate,
+		"end_date":              req.EndDate,
+		"batch_size":            req.BatchSize,
+		"event_ids":             req.EventIDs,
+		"unprocessed_only":       req.UnprocessedOnly,
 	}
 
 	// Get global temporal service

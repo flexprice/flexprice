@@ -648,14 +648,52 @@ func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {
 	}
 
 	result, err := h.rawEventsReprocessingService.TriggerReprocessRawEventsWorkflow(ctx, &service.ReprocessRawEventsRequest{
-		ExternalCustomerID: req.ExternalCustomerID,
-		EventName:          req.EventName,
-		StartDate:          req.StartDate,
-		EndDate:            req.EndDate,
-		BatchSize:          req.BatchSize,
+		ExternalCustomerIDs: req.ExternalCustomerIDs,
+		EventNames:          req.EventNames,
+		StartDate:           req.StartDate,
+		EndDate:             req.EndDate,
+		BatchSize:           req.BatchSize,
+		EventIDs:            req.EventIDs,
+		UnprocessedOnly:      false,
 	})
 	if err != nil {
 		h.log.Error("Failed to trigger reprocess raw events workflow", "error", err)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *EventsHandler) ReprocessUnprocessedRawEvents(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req dto.ReprocessRawEventsRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		h.log.Error("Failed to validate request", "error", err)
+		c.Error(err)
+		return
+	}
+
+	result, err := h.rawEventsReprocessingService.TriggerReprocessRawEventsWorkflow(ctx, &service.ReprocessRawEventsRequest{
+		ExternalCustomerIDs: req.ExternalCustomerIDs,
+		EventNames:          req.EventNames,
+		StartDate:           req.StartDate,
+		EndDate:             req.EndDate,
+		BatchSize:           req.BatchSize,
+		EventIDs:            req.EventIDs,
+		UnprocessedOnly:      true,
+	})
+	if err != nil {
+		h.log.Error("Failed to trigger reprocess unprocessed raw events workflow", "error", err)
 		c.Error(err)
 		return
 	}
