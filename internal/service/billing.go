@@ -869,11 +869,15 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			continue
 		}
 
-		// Find matching usage charges - may have multiple if there's overage
+		// O(1) lookup by price_id when ChargesByPriceID is populated (GetFeatureUsageBySubscription)
 		var matchingCharges []*dto.SubscriptionUsageByMetersResponse
-		for _, charge := range usage.Charges {
-			if charge.Price.ID == item.PriceID {
-				matchingCharges = append(matchingCharges, charge)
+		if len(usage.ChargesByPriceID) > 0 {
+			matchingCharges = usage.ChargesByPriceID[item.PriceID]
+		} else {
+			for _, charge := range usage.Charges {
+				if charge.Price != nil && charge.Price.ID == item.PriceID {
+					matchingCharges = append(matchingCharges, charge)
+				}
 			}
 		}
 
@@ -1510,8 +1514,8 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		// For current period arrear charges (same path as preview: feature_usage + CalculateFeatureUsageCharges)
+		arrearResult, err := s.calculateChargesForPreview(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1524,7 +1528,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
+		advanceResult, err := s.calculateChargesForPreview(
 			ctx,
 			sub,
 			advanceLineItems,

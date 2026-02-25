@@ -5111,6 +5111,13 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	response.StartTime = usageStartTime
 	response.EndTime = usageEndTime
 	response.Charges = finalCharges
+	// O(1) lookup by price_id for billing (CalculateFeatureUsageCharges)
+	response.ChargesByPriceID = make(map[string][]*dto.SubscriptionUsageByMetersResponse)
+	for _, charge := range finalCharges {
+		if charge.Price != nil && charge.Price.ID != "" {
+			response.ChargesByPriceID[charge.Price.ID] = append(response.ChargesByPriceID[charge.Price.ID], charge)
+		}
+	}
 
 	s.Logger.Infow("subscription usage calculation completed V2",
 		"subscription_id", req.SubscriptionID,

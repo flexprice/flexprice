@@ -1541,6 +1541,8 @@ type GetUsageBySubscriptionResponse struct {
 	StartTime          time.Time                            `json:"start_time"`
 	EndTime            time.Time                            `json:"end_time"`
 	Charges            []*SubscriptionUsageByMetersResponse `json:"charges"`
+	// ChargesByPriceID enables O(1) lookup by price_id for billing; populated by GetFeatureUsageBySubscription, not serialized.
+	ChargesByPriceID   map[string][]*SubscriptionUsageByMetersResponse `json:"-"`
 	CommitmentAmount   float64                              `json:"commitment_amount,omitempty"`
 	OverageFactor      float64                              `json:"overage_factor,omitempty"`
 	CommitmentUtilized float64                              `json:"commitment_utilized,omitempty"` // Amount of commitment used
