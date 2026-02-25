@@ -17874,7 +17874,7 @@
                 },
                 "total_prepaid_credits_applied": {
                     "description": "total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.",
-                    "type": "number"
+                    "type": "string"
                 },
                 "total_tax": {
                     "description": "total_tax is the sum of all taxes combined at the invoice level.",

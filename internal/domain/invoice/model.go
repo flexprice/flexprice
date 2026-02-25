@@ -118,7 +118,7 @@ type Invoice struct {
 	TotalTax decimal.Decimal `json:"total_tax"`
 
 	// total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.
-	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied"`
+	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied" swaggertype:"string"`
 
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
