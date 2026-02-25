@@ -8,14 +8,16 @@ import (
 
 // ReprocessRawEventsWorkflowInput represents the input for reprocess raw events workflow
 type ReprocessRawEventsWorkflowInput struct {
-	ExternalCustomerID string    `json:"external_customer_id"`
-	EventName          string    `json:"event_name"`
-	StartDate          time.Time `json:"start_date"`
-	EndDate            time.Time `json:"end_date"`
-	BatchSize          int       `json:"batch_size"`
-	TenantID           string    `json:"tenant_id"`
-	EnvironmentID      string    `json:"environment_id"`
-	UserID             string    `json:"user_id"`
+	ExternalCustomerIDs []string  `json:"external_customer_ids"`
+	EventNames          []string  `json:"event_names"`
+	StartDate           time.Time `json:"start_date"`
+	EndDate             time.Time `json:"end_date"`
+	BatchSize           int       `json:"batch_size"`
+	TenantID            string    `json:"tenant_id"`
+	EnvironmentID       string    `json:"environment_id"`
+	UserID              string    `json:"user_id"`
+	EventIDs            []string  `json:"event_ids"`
+	UseUnprocessed      bool      `json:"use_unprocessed"`
 }
 
 // Validate validates the reprocess raw events workflow input
@@ -57,8 +59,8 @@ type ReprocessRawEventsWorkflowResult struct {
 	TotalEventsFound          int       `json:"total_events_found"`
 	TotalEventsPublished      int       `json:"total_events_published"`
 	TotalEventsFailed         int       `json:"total_events_failed"`
-	TotalEventsDropped        int       `json:"total_events_dropped"`         // Events that failed validation
-	TotalTransformationErrors int       `json:"total_transformation_errors"`  // Events that errored during transformation
+	TotalEventsDropped        int       `json:"total_events_dropped"`        // Events that failed validation
+	TotalTransformationErrors int       `json:"total_transformation_errors"` // Events that errored during transformation
 	ProcessedBatches          int       `json:"processed_batches"`
 	CompletedAt               time.Time `json:"completed_at"`
 }

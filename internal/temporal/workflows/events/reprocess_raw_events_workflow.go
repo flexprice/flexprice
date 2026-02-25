@@ -24,8 +24,8 @@ func ReprocessRawEventsWorkflow(ctx workflow.Context, input models.ReprocessRawE
 
 	logger := workflow.GetLogger(ctx)
 	logger.Info("Starting reprocess raw events workflow",
-		"external_customer_id", input.ExternalCustomerID,
-		"event_name", input.EventName,
+		"external_customer_ids", input.ExternalCustomerIDs,
+		"event_names", input.EventNames,
 		"start_date", input.StartDate,
 		"end_date", input.EndDate)
 
@@ -48,8 +48,8 @@ func ReprocessRawEventsWorkflow(ctx workflow.Context, input models.ReprocessRawE
 
 	if err != nil {
 		logger.Error("Reprocess raw events workflow failed",
-			"external_customer_id", input.ExternalCustomerID,
-			"event_name", input.EventName,
+			"external_customer_ids", input.ExternalCustomerIDs,
+			"event_names", input.EventNames,
 			"error", err)
 		return &models.ReprocessRawEventsWorkflowResult{
 			TotalEventsFound:          0,
@@ -63,8 +63,8 @@ func ReprocessRawEventsWorkflow(ctx workflow.Context, input models.ReprocessRawE
 	}
 
 	logger.Info("Reprocess raw events workflow completed successfully",
-		"external_customer_id", input.ExternalCustomerID,
-		"event_name", input.EventName,
+		"external_customer_ids", input.ExternalCustomerIDs,
+		"event_names", input.EventNames,
 		"total_events_found", result.TotalEventsFound,
 		"total_events_published", result.TotalEventsPublished,
 		"total_events_dropped", result.TotalEventsDropped,
