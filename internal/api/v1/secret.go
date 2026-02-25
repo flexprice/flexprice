@@ -26,8 +26,9 @@ func NewSecretHandler(service service.SecretService, logger *logger.Logger) *Sec
 
 // ListAPIKeys godoc
 // @Summary List API keys
-// @Description Get a paginated list of API keys
-// @Tags secrets
+// @ID listApiKeys
+// @Description Use when listing API keys (e.g. admin view or rotating keys). Returns a paginated list.
+// @Tags Secrets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -35,8 +36,8 @@ func NewSecretHandler(service service.SecretService, logger *logger.Logger) *Sec
 // @Param offset query int false "Offset"
 // @Param status query string false "Status (published/archived)"
 // @Success 200 {object} dto.ListSecretsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/api/keys [get]
 func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 	filter := &types.SecretFilter{
@@ -65,15 +66,16 @@ func (h *SecretHandler) ListAPIKeys(c *gin.Context) {
 
 // CreateAPIKey godoc
 // @Summary Create a new API key
-// @Description Create a new API key. Provide 'service_account_id' in body to create API key for a service account, otherwise creates for authenticated user.
-// @Tags secrets
+// @ID createApiKey
+// @Description Use when issuing a new API key (e.g. for a service account or for the current user). Provide service_account_id to create for a service account.
+// @Tags Secrets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.CreateAPIKeyRequest true "API key creation request\"
+// @Param request body dto.CreateAPIKeyRequest true "API key creation request"
 // @Success 201 {object} dto.CreateAPIKeyResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/api/keys [post]
 func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 	var req dto.CreateAPIKeyRequest
@@ -100,15 +102,16 @@ func (h *SecretHandler) CreateAPIKey(c *gin.Context) {
 
 // DeleteAPIKey godoc
 // @Summary Delete an API key
-// @Description Delete an API key by ID
-// @Tags secrets
+// @ID deleteApiKey
+// @Description Use when revoking an API key (e.g. rotation or compromise). Permanently invalidates the key.
+// @Tags Secrets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "API key ID"
 // @Success 204 "No Content"
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/api/keys/{id} [delete]
 func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 	id := c.Param("id")
@@ -123,7 +126,8 @@ func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 
 // CreateIntegration godoc
 // @Summary Create or update an integration
-// @Description Create or update integration credentials
+// @ID createOrUpdateIntegration
+// @Description Use when storing or updating credentials for an external integration (e.g. Stripe, HubSpot). Secrets are encrypted at rest.
 // @Tags Integrations
 // @Accept json
 // @Produce json
@@ -131,8 +135,8 @@ func (h *SecretHandler) DeleteAPIKey(c *gin.Context) {
 // @Param provider path string true "Integration provider"
 // @Param request body dto.CreateIntegrationRequest true "Integration creation request"
 // @Success 201 {object} dto.SecretResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/integrations/create/{provider} [post]
 func (h *SecretHandler) CreateIntegration(c *gin.Context) {
 	provider := types.SecretProvider(c.Param("provider"))
@@ -158,15 +162,16 @@ func (h *SecretHandler) CreateIntegration(c *gin.Context) {
 
 // GetIntegration godoc
 // @Summary Get integration details
-// @Description Get details of a specific integration
+// @ID getIntegration
+// @Description Use when you need to check or display integration config (e.g. which provider is linked). Sensitive values may be redacted.
 // @Tags Integrations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param provider path string true "Integration provider"
 // @Success 200 {object} dto.SecretResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/integrations/by-provider/{provider} [get]
 func (h *SecretHandler) GetIntegration(c *gin.Context) {
 	provider := types.SecretProvider(c.Param("provider"))
@@ -188,15 +193,16 @@ func (h *SecretHandler) GetIntegration(c *gin.Context) {
 
 // DeleteIntegration godoc
 // @Summary Delete an integration
-// @Description Delete integration credentials
+// @ID deleteIntegration
+// @Description Use when disconnecting an integration (e.g. switching provider or removing OAuth). Deletes stored credentials.
 // @Tags Integrations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Integration ID"
 // @Success 204 "No Content"
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/integrations/{id} [delete]
 func (h *SecretHandler) DeleteIntegration(c *gin.Context) {
 	id := c.Param("id")
@@ -212,13 +218,14 @@ func (h *SecretHandler) DeleteIntegration(c *gin.Context) {
 
 // ListLinkedIntegrations godoc
 // @Summary List linked integrations
-// @Description Get a list of unique providers which have a valid linked integration secret
+// @ID listLinkedIntegrations
+// @Description Use when showing which integrations are connected (e.g. settings page). Returns providers that have valid linked credentials.
 // @Tags Integrations
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Success 200 {object} dto.LinkedIntegrationsResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /secrets/integrations/linked [get]
 func (h *SecretHandler) ListLinkedIntegrations(c *gin.Context) {
 	providers, err := h.service.ListLinkedIntegrations(c.Request.Context())
