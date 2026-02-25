@@ -3351,7 +3351,7 @@ definitions:
   dto.InvoiceLineItemResponse:
     properties:
       amount:
-        type: number
+        type: string
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
       created_at:
@@ -3377,11 +3377,11 @@ definitions:
       invoice_level_discount:
         description: invoice_level_discount is the discount amount in invoice currency
           applied to all line items on the invoice.
-        type: number
+        type: string
       line_item_discount:
         description: line_item_discount is the discount amount in invoice currency
           applied directly to this line item.
-        type: number
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       meter_display_name:
@@ -3397,7 +3397,7 @@ definitions:
       prepaid_credits_applied:
         description: prepaid_credits_applied is the amount in invoice currency reduced
           from this line item due to prepaid credits application.
-        type: number
+        type: string
       price_id:
         type: string
       price_type:
@@ -3405,11 +3405,11 @@ definitions:
       price_unit:
         type: string
       price_unit_amount:
-        type: number
+        type: string
       price_unit_id:
         type: string
       quantity:
-        type: number
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
@@ -3462,19 +3462,19 @@ definitions:
         description: |-
           adjustment_amount is the total sum of credit notes of type "adjustment".
           These are non-cash reductions applied to the invoice (e.g. goodwill credit, billing correction).
-        type: number
+        type: string
       amount_due:
         description: amount_due is the total amount that needs to be paid for this
           invoice
-        type: number
+        type: string
       amount_paid:
         description: amount_paid is the amount that has already been paid towards
           this invoice
-        type: number
+        type: string
       amount_remaining:
         description: amount_remaining is the outstanding amount still owed on this
           invoice (calculated as amount_due minus amount_paid)
-        type: number
+        type: string
       billing_period:
         description: billing_period describes the billing period this invoice covers
           (e.g., "January 2024", "Q1 2024")
@@ -3583,7 +3583,7 @@ definitions:
         description: |-
           refunded_amount is the total sum of credit notes of type "refund".
           These are actual refunds issued to the customer.
-        type: number
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription:
@@ -3598,7 +3598,7 @@ definitions:
       subtotal:
         description: subtotal is the sum of all line items before any taxes, discounts,
           or additional fees
-        type: number
+        type: string
       taxes:
         description: tax_applied_records contains the tax applied records associated
           with this invoice
@@ -3609,18 +3609,18 @@ definitions:
         type: string
       total:
         description: total is the final amount including taxes, fees, and discounts
-        type: number
+        type: string
       total_discount:
         description: total_discount is the sum of all coupon discounts applied to
           the invoice
-        type: number
+        type: string
       total_prepaid_credits_applied:
         description: total_prepaid_credits_applied is the total amount of prepaid
           credits applied to this invoice.
         type: string
       total_tax:
         description: total_tax is the sum of all taxes combined at the invoice level.
-        type: number
+        type: string
       updated_at:
         type: string
       updated_by:
@@ -4848,13 +4848,13 @@ definitions:
         type: integer
       commitment_amount:
         description: Commitment fields
-        type: number
+        type: string
       commitment_duration:
         $ref: '#/definitions/types.BillingPeriod'
       commitment_overage_factor:
-        type: number
+        type: string
       commitment_quantity:
-        type: number
+        type: string
       commitment_true_up_enabled:
         type: boolean
       commitment_type:
@@ -6897,7 +6897,7 @@ definitions:
   invoice.InvoiceLineItem:
     properties:
       amount:
-        type: number
+        type: string
       commitment_info:
         $ref: '#/definitions/types.CommitmentInfo'
       created_at:
@@ -6923,11 +6923,11 @@ definitions:
       invoice_level_discount:
         description: invoice_level_discount is the discount amount in invoice currency
           applied to all line items on the invoice.
-        type: number
+        type: string
       line_item_discount:
         description: line_item_discount is the discount amount in invoice currency
           applied directly to this line item.
-        type: number
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       meter_display_name:
@@ -6943,7 +6943,7 @@ definitions:
       prepaid_credits_applied:
         description: prepaid_credits_applied is the amount in invoice currency reduced
           from this line item due to prepaid credits application.
-        type: number
+        type: string
       price_id:
         type: string
       price_type:
@@ -6951,11 +6951,11 @@ definitions:
       price_unit:
         type: string
       price_unit_amount:
-        type: number
+        type: string
       price_unit_id:
         type: string
       quantity:
-        type: number
+        type: string
       status:
         $ref: '#/definitions/types.Status'
       subscription_id:
@@ -7254,13 +7254,13 @@ definitions:
         type: integer
       commitment_amount:
         description: Commitment fields
-        type: number
+        type: string
       commitment_duration:
         $ref: '#/definitions/types.BillingPeriod'
       commitment_overage_factor:
-        type: number
+        type: string
       commitment_quantity:
-        type: number
+        type: string
       commitment_true_up_enabled:
         type: boolean
       commitment_type:
@@ -9494,6 +9494,7 @@ definitions:
     - WalletTypePostPaid
   types.WindowSize:
     enum:
+    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -9504,9 +9505,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
-    - MONTH
     type: string
     x-enum-varnames:
+    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9517,7 +9518,6 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
-    - DefaultWindowSize
 info:
   contact: {}
   description: FlexPrice API Service

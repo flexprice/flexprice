@@ -38,10 +38,10 @@ type SubscriptionLineItem struct {
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty"`
+	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
 	CommitmentType          types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
 	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
 	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
 	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`

@@ -35,22 +35,22 @@ type Invoice struct {
 	Currency string `json:"currency"`
 
 	// amount_due is the total amount that needs to be paid for this invoice
-	AmountDue decimal.Decimal `json:"amount_due"`
+	AmountDue decimal.Decimal `json:"amount_due" swaggertype:"string"`
 
 	// amount_paid is the amount that has already been paid towards this invoice
-	AmountPaid decimal.Decimal `json:"amount_paid"`
+	AmountPaid decimal.Decimal `json:"amount_paid" swaggertype:"string"`
 
 	// subtotal is the sum of all line items before any taxes, discounts, or additional fees
-	Subtotal decimal.Decimal `json:"subtotal"`
+	Subtotal decimal.Decimal `json:"subtotal" swaggertype:"string"`
 
 	// total is the final amount including taxes, fees, and discounts
-	Total decimal.Decimal `json:"total"`
+	Total decimal.Decimal `json:"total" swaggertype:"string"`
 
 	// total_discount is the sum of all coupon discounts applied to the invoice
-	TotalDiscount decimal.Decimal `json:"total_discount"`
+	TotalDiscount decimal.Decimal `json:"total_discount" swaggertype:"string"`
 
 	// amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)
-	AmountRemaining decimal.Decimal `json:"amount_remaining"`
+	AmountRemaining decimal.Decimal `json:"amount_remaining" swaggertype:"string"`
 
 	// invoice_number is the human-readable invoice number displayed to customers (e.g., INV-2024-001)
 	InvoiceNumber *string `json:"invoice_number"`
