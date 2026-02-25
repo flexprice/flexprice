@@ -134,11 +134,12 @@ type Price struct {
 
 // PriceCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
 type PriceCloneOverrides struct {
-	ID         *string
-	EntityType *types.PriceEntityType
-	EntityID   *string
-	LookupKey  *string
-	BaseModel  *types.BaseModel
+	ID             *string
+	EntityType     *types.PriceEntityType
+	EntityID       *string
+	LookupKey      *string
+	ParentPriceID  *string // nil = clear (e.g. for clones); non-nil = set value
+	BaseModel      *types.BaseModel
 }
 
 // CopyWith returns a shallow copy of the price with optional overrides applied.
@@ -169,9 +170,11 @@ func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *P
 	} else {
 		out.BaseModel = types.GetDefaultBaseModel(ctx)
 	}
-
-	// clear parent price id to avoid lineage tracking
-	out.ParentPriceID = ""
+	if overrides.ParentPriceID != nil {
+		out.ParentPriceID = lo.FromPtr(overrides.ParentPriceID)
+	} else {
+		out.ParentPriceID = "" // clear so cloned prices do not retain source lineage
+	}
 
 	return lo.ToPtr(out)
 }
