@@ -108,14 +108,14 @@ type Invoice struct {
 
 	// adjustment_amount is the total sum of credit notes of type "adjustment".
 	// These are non-cash reductions applied to the invoice (e.g. goodwill credit, billing correction).
-	AdjustmentAmount decimal.Decimal `json:"adjustment_amount"`
+	AdjustmentAmount decimal.Decimal `json:"adjustment_amount" swaggertype:"string"`
 
 	// refunded_amount is the total sum of credit notes of type "refund".
 	// These are actual refunds issued to the customer.
-	RefundedAmount decimal.Decimal `json:"refunded_amount"`
+	RefundedAmount decimal.Decimal `json:"refunded_amount" swaggertype:"string"`
 
 	// total_tax is the sum of all taxes combined at the invoice level.
-	TotalTax decimal.Decimal `json:"total_tax"`
+	TotalTax decimal.Decimal `json:"total_tax" swaggertype:"string"`
 
 	// total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.
 	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied" swaggertype:"string"`
