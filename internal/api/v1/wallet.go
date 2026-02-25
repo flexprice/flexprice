@@ -388,8 +388,16 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 		}
 	}
 
+	// Parse optional x-max-live header (value in seconds)
+	var maxLiveSeconds *int64
+	if maxLiveStr := c.GetHeader("x-max-live"); maxLiveStr != "" {
+		if maxLive, err := strconv.ParseInt(maxLiveStr, 10, 64); err == nil && maxLive > 0 {
+			maxLiveSeconds = &maxLive
+		}
+	}
+
 	// Get wallet balance
-	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID, nil)
+	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID, maxLiveSeconds)
 	if err != nil {
 		h.logger.Error("Failed to get wallet balance", "error", err)
 		c.Error(err)
