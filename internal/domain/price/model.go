@@ -169,6 +169,10 @@ func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *P
 	} else {
 		out.BaseModel = types.GetDefaultBaseModel(ctx)
 	}
+
+	// clear parent price id to avoid lineage tracking
+	out.ParentPriceID = ""
+
 	return lo.ToPtr(out)
 }
 
