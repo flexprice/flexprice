@@ -237,6 +237,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			plan.GET("/:id", handlers.Plan.GetPlan)
 			plan.PUT("/:id", handlers.Plan.UpdatePlan)
 			plan.DELETE("/:id", handlers.Plan.DeletePlan)
+			plan.POST("/:id/clone", handlers.Plan.ClonePlan)
 			plan.POST("/:id/sync/subscriptions", handlers.Plan.SyncPlanPrices)
 			plan.POST("/:id/sync/subscriptions/v2", handlers.Plan.SyncPlanPricesV2)
 
@@ -334,7 +335,6 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")
 		{
-			tenantRoutes.POST("", handlers.Tenant.CreateTenant)
 			tenantRoutes.PUT("/update", handlers.Tenant.UpdateTenant)
 			tenantRoutes.GET("/:id", handlers.Tenant.GetTenantByID)
 			tenantRoutes.GET("/billing", handlers.Tenant.GetTenantBillingUsage)

@@ -28,6 +28,7 @@ type SubscriptionLineItem struct {
 	Quantity            decimal.Decimal                      `db:"quantity" json:"quantity" swaggertype:"string"`
 	Currency            string                               `db:"currency" json:"currency"`
 	BillingPeriod       types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
+	BillingPeriodCount  int                                  `db:"billing_period_count" json:"billing_period_count"` // from price at create; default 1
 	InvoiceCadence      types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
 	TrialPeriod         int                                  `db:"trial_period" json:"trial_period"`
 	StartDate           time.Time                            `db:"start_date" json:"start_date,omitempty"`
@@ -142,6 +143,10 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		commitmentDuration = &cd
 	}
 
+	billingPeriodCount := e.BillingPeriodCount
+	if billingPeriodCount <= 0 {
+		billingPeriodCount = 1
+	}
 	return &SubscriptionLineItem{
 		ID:                      e.ID,
 		SubscriptionID:          e.SubscriptionID,
@@ -159,6 +164,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		Quantity:                e.Quantity,
 		Currency:                e.Currency,
 		BillingPeriod:           e.BillingPeriod,
+		BillingPeriodCount:      billingPeriodCount,
 		InvoiceCadence:          e.InvoiceCadence,
 		TrialPeriod:             e.TrialPeriod,
 		StartDate:               startDate,

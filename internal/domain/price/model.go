@@ -1,6 +1,7 @@
 package price
 
 import (
+	"context"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -129,6 +130,53 @@ type Price struct {
 	EndDate *time.Time `db:"end_date" json:"end_date,omitempty"`
 
 	types.BaseModel
+}
+
+// PriceCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
+type PriceCloneOverrides struct {
+	ID             *string
+	EntityType     *types.PriceEntityType
+	EntityID       *string
+	LookupKey      *string
+	ParentPriceID  *string // nil = clear (e.g. for clones); non-nil = set value
+	BaseModel      *types.BaseModel
+}
+
+// CopyWith returns a shallow copy of the price with optional overrides applied.
+// Pointer fields on the original (StartDate, EndDate, MinQuantity, etc.) are shallow-copied.
+// If BaseModel is not in overrides, uses types.GetDefaultBaseModel(ctx).
+func (p *Price) CopyWith(ctx context.Context, overrides *PriceCloneOverrides) *Price {
+	if p == nil {
+		return nil
+	}
+	out := lo.FromPtr(p)
+	if overrides == nil {
+		return lo.ToPtr(out)
+	}
+	if overrides.ID != nil {
+		out.ID = lo.FromPtr(overrides.ID)
+	}
+	if overrides.EntityType != nil {
+		out.EntityType = lo.FromPtr(overrides.EntityType)
+	}
+	if overrides.EntityID != nil {
+		out.EntityID = lo.FromPtr(overrides.EntityID)
+	}
+	if overrides.LookupKey != nil {
+		out.LookupKey = lo.FromPtr(overrides.LookupKey)
+	}
+	if overrides.BaseModel != nil {
+		out.BaseModel = lo.FromPtr(overrides.BaseModel)
+	} else {
+		out.BaseModel = types.GetDefaultBaseModel(ctx)
+	}
+	if overrides.ParentPriceID != nil {
+		out.ParentPriceID = lo.FromPtr(overrides.ParentPriceID)
+	} else {
+		out.ParentPriceID = "" // clear so cloned prices do not retain source lineage
+	}
+
+	return lo.ToPtr(out)
 }
 
 // IsUsage returns true if the price is a usage based price

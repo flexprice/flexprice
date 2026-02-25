@@ -1,3 +1,4 @@
+
 package service
 
 import (
@@ -36,6 +37,7 @@ type BillingServiceSuite struct {
 		}
 		prices struct {
 			fixed          *price.Price
+			fixedDaily     *price.Price
 			apiCalls       *price.Price
 			storageArchive *price.Price
 		}
@@ -227,6 +229,23 @@ func (s *BillingServiceSuite) setupTestData() {
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.fixed))
 
+	// Fixed Daily - for testing daily line item quantity (e.g. Feb 22–Mar 22 = 28 days)
+	s.testData.prices.fixedDaily = &price.Price{
+		ID:                 "price_fixed_daily",
+		Amount:             decimal.NewFromInt(1), // 1 per day
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           s.testData.plan.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_DAILY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.fixedDaily))
+
 	// Archive Storage - Fixed fee with ARREAR invoice cadence (for testing fixed arrear)
 	s.testData.prices.storageArchive = &price.Price{
 		ID:                 "price_storage_archive",
@@ -246,13 +265,18 @@ func (s *BillingServiceSuite) setupTestData() {
 	s.NoError(s.GetStores().PriceRepo.Create(s.GetContext(), s.testData.prices.storageArchive))
 
 	s.testData.now = time.Now().UTC()
+	// Use CurrentPeriodEnd as BillingAnchor so the next period is a full month (same day-of-month),
+	// ensuring next-period advance charges (e.g. fixed price) are included when billing at period end.
+	currentPeriodStart := s.testData.now.Add(-48 * time.Hour)
+	currentPeriodEnd := s.testData.now.Add(6 * 24 * time.Hour)
 	s.testData.subscription = &subscription.Subscription{
 		ID:                 "sub_123",
 		PlanID:             s.testData.plan.ID,
 		CustomerID:         s.testData.customer.ID,
 		StartDate:          s.testData.now.Add(-30 * 24 * time.Hour),
-		CurrentPeriodStart: s.testData.now.Add(-48 * time.Hour),
-		CurrentPeriodEnd:   s.testData.now.Add(6 * 24 * time.Hour),
+		BillingAnchor:      currentPeriodEnd,
+		CurrentPeriodStart: currentPeriodStart,
+		CurrentPeriodEnd:   currentPeriodEnd,
 		Currency:           "usd",
 		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 		BillingPeriodCount: 1,

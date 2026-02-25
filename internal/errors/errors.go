@@ -18,20 +18,22 @@ var (
 	ErrPermissionDenied = new(ErrCodePermissionDenied, "permission denied")
 	ErrHTTPClient       = new(ErrCodeHTTPClient, "http client error")
 	ErrDatabase         = new(ErrCodeDatabase, "database error")
-	ErrSystem           = new(ErrCodeSystemError, "system error")
-	ErrInternal         = new(ErrCodeInternalError, "internal error")
+	ErrSystem              = new(ErrCodeSystemError, "system error")
+	ErrInternal            = new(ErrCodeInternalError, "internal error")
+	ErrServiceUnavailable  = new(ErrCodeServiceUnavailable, "service unavailable")
 	// maps errors to http status codes
 	statusCodeMap = map[error]int{
-		ErrHTTPClient:       http.StatusInternalServerError,
-		ErrDatabase:         http.StatusInternalServerError,
-		ErrNotFound:         http.StatusNotFound,
-		ErrAlreadyExists:    http.StatusConflict,
-		ErrVersionConflict:  http.StatusConflict,
-		ErrValidation:       http.StatusBadRequest,
-		ErrInvalidOperation: http.StatusBadRequest,
-		ErrPermissionDenied: http.StatusForbidden,
-		ErrSystem:           http.StatusInternalServerError,
-		ErrInternal:         http.StatusInternalServerError,
+		ErrHTTPClient:          http.StatusInternalServerError,
+		ErrDatabase:            http.StatusInternalServerError,
+		ErrNotFound:            http.StatusNotFound,
+		ErrAlreadyExists:       http.StatusConflict,
+		ErrVersionConflict:     http.StatusConflict,
+		ErrValidation:          http.StatusBadRequest,
+		ErrInvalidOperation:   http.StatusBadRequest,
+		ErrPermissionDenied:    http.StatusForbidden,
+		ErrSystem:              http.StatusInternalServerError,
+		ErrInternal:            http.StatusInternalServerError,
+		ErrServiceUnavailable:  http.StatusServiceUnavailable,
 	}
 )
 
@@ -46,6 +48,7 @@ const (
 	ErrCodeInvalidOperation = "invalid_operation"
 	ErrCodePermissionDenied = "permission_denied"
 	ErrCodeDatabase         = "database_error"
+	ErrCodeServiceUnavailable = "service_unavailable"
 )
 
 // InternalError represents a domain error
@@ -142,6 +145,11 @@ func IsPermissionDenied(err error) bool {
 // IsHTTPClient checks if an error is an http client error
 func IsHTTPClient(err error) bool {
 	return errors.Is(err, ErrHTTPClient)
+}
+
+// IsServiceUnavailable checks if an error is a service unavailable error
+func IsServiceUnavailable(err error) bool {
+	return errors.Is(err, ErrServiceUnavailable)
 }
 
 func HTTPStatusFromErr(err error) int {
