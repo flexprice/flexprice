@@ -2,6 +2,7 @@ package v1
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -137,6 +138,13 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 			WithHint("Invalid request format").
 			Mark(ierr.ErrValidation))
 		return
+	}
+
+	// Parse optional x-max-live header (value in seconds)
+	if maxLiveStr := c.GetHeader("x-max-live"); maxLiveStr != "" {
+		if maxLive, err := strconv.ParseInt(maxLiveStr, 10, 64); err == nil && maxLive > 0 {
+			req.MaxLiveSeconds = &maxLive
+		}
 	}
 
 	// Parse and validate expand parameter
@@ -334,7 +342,7 @@ func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	var balance *dto.WalletBalanceResponse
 	var err error
 	if fromCache {
-		balance, err = h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID)
+		balance, err = h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID, nil)
 	} else {
 		balance, err = h.walletService.GetWalletBalanceV2(c.Request.Context(), walletID)
 	}
@@ -381,7 +389,7 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 	}
 
 	// Get wallet balance
-	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID)
+	balance, err := h.walletService.GetWalletBalanceFromCache(c.Request.Context(), walletID, nil)
 	if err != nil {
 		h.logger.Error("Failed to get wallet balance", "error", err)
 		c.Error(err)

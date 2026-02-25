@@ -237,6 +237,28 @@ func (c *RedisCache) ForceCacheGet(ctx context.Context, key string) (interface{}
 	return value, true
 }
 
+// ForceCacheGetWithTTL retrieves a value and its remaining TTL from the cache bypassing configuration checks
+func (c *RedisCache) ForceCacheGetWithTTL(ctx context.Context, key string) (interface{}, time.Duration, bool) {
+	redisKey := c.GetRedisKey(key)
+	value, err := c.client.Get(ctx, redisKey).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, 0, false
+		}
+		fmt.Println("Redis GET error", "key", redisKey, "error", err)
+		return nil, 0, false
+	}
+
+	ttl, err := c.client.TTL(ctx, redisKey).Result()
+	if err != nil {
+		fmt.Println("Redis TTL error", "key", redisKey, "error", err)
+		// Still return the value even if TTL lookup fails
+		return value, 0, true
+	}
+
+	return value, ttl, true
+}
+
 // Set value from cache bypassing configuration checks
 func (c *RedisCache) ForceCacheSet(ctx context.Context, key string, value interface{}, expiration time.Duration) {
 	// Use default expiration if none specified
