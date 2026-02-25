@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
+	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -780,4 +782,179 @@ func createPlanLineItem(
 	lineItem := req.ToSubscriptionLineItem(ctx, lineItemParams)
 
 	return lineItem
+}
+
+// ClonePlan clones a plan and its associated active prices, published entitlements,
+// and published credit grants into a new plan with a distinct name and lookup_key.
+func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("plan ID is required").
+			WithHint("Please provide a valid plan ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	sourcePlan, err := s.PlanRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// GetByLookupKey only matches published plans, so a successful lookup means the
+	// key is already taken — covers both "same as source" and "taken by another plan".
+	existing, err := s.PlanRepo.GetByLookupKey(ctx, req.LookupKey)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ierr.NewError("a published plan with this lookup_key already exists").
+			WithHint("Please choose a different lookup_key for the cloned plan").
+			WithReportableDetails(map[string]interface{}{
+				"lookup_key": req.LookupKey,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	// Active prices: published + not expired
+	sourcePrices, err := s.PriceRepo.List(ctx, types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{id}).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+		WithStatus(types.StatusPublished))
+	if err != nil {
+		s.Logger.Errorw("failed to fetch prices for plan clone", "plan_id", id, "error", err)
+		return nil, err
+	}
+
+	// Published entitlements — WithPlanIDs sets EntityType=PLAN + EntityIDs in one call
+	sourceEntitlements, err := s.EntitlementRepo.List(ctx, types.NewNoLimitEntitlementFilter().
+		WithPlanIDs([]string{id}).
+		WithStatus(types.StatusPublished))
+	if err != nil {
+		s.Logger.Errorw("failed to fetch entitlements for plan clone", "plan_id", id, "error", err)
+		return nil, err
+	}
+
+	// Published credit grants — filter at query level, no post-loop status check needed
+	sourceGrants, err := s.CreditGrantRepo.List(ctx, types.NewNoLimitCreditGrantFilter().
+		WithPlanIDs([]string{id}).
+		WithStatus(types.StatusPublished).
+		WithScope(types.CreditGrantScopePlan))
+	if err != nil {
+		s.Logger.Errorw("failed to fetch credit grants for plan clone", "plan_id", id, "error", err)
+		return nil, err
+	}
+
+	// Resolve fields: request overrides take precedence over source values
+	description := sourcePlan.Description
+	if req.Description != nil {
+		description = *req.Description
+	}
+	metadata := sourcePlan.Metadata
+	if req.Metadata != nil {
+		metadata = req.Metadata
+	}
+	displayOrder := sourcePlan.DisplayOrder
+	if req.DisplayOrder != nil {
+		displayOrder = req.DisplayOrder
+	}
+
+	newPlan := &plan.Plan{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:          req.Name,
+		LookupKey:     req.LookupKey,
+		Description:   description,
+		EnvironmentID: sourcePlan.EnvironmentID,
+		Metadata:      metadata,
+		DisplayOrder:  displayOrder,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	emptyLookupKey := ""
+	entityTypePlan := types.PRICE_ENTITY_TYPE_PLAN
+	entEntityTypePlan := types.ENTITLEMENT_ENTITY_TYPE_PLAN
+	scopePlan := types.CreditGrantScopePlan
+
+	newPrices := make([]*domainPrice.Price, 0, len(sourcePrices))
+	for _, p := range sourcePrices {
+		newPrices = append(newPrices, p.CopyWith(ctx, &domainPrice.PriceCloneOverrides{
+			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+			EntityType: &entityTypePlan,
+			EntityID:   &newPlan.ID,
+			LookupKey:  lo.ToPtr(emptyLookupKey),
+		}))
+	}
+
+	newEntitlements := make([]*domainEntitlement.Entitlement, 0, len(sourceEntitlements))
+	for _, e := range sourceEntitlements {
+		newEntitlements = append(newEntitlements, e.CopyWith(ctx, &domainEntitlement.EntitlementCloneOverrides{
+			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)),
+			EntityType: &entEntityTypePlan,
+			EntityID:   &newPlan.ID,
+		}))
+	}
+
+	newGrants := make([]*domainCreditGrant.CreditGrant, 0, len(sourceGrants))
+	newPlanID := newPlan.ID
+	for _, cg := range sourceGrants {
+		newGrants = append(newGrants, cg.CopyWith(ctx, &domainCreditGrant.CreditGrantCloneOverrides{
+			ID:     lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)),
+			Scope:  &scopePlan,
+			PlanID: &newPlanID,
+		}))
+	}
+
+	// Inside tx: only the four DB writes
+	var entitlementsCreated []*domainEntitlement.Entitlement
+	var grantsCreated []*domainCreditGrant.CreditGrant
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.PlanRepo.Create(txCtx, newPlan); err != nil {
+			return err
+		}
+		if err := s.PriceRepo.CreateBulk(txCtx, newPrices); err != nil {
+			return err
+		}
+		var err error
+		entitlementsCreated, err = s.EntitlementRepo.CreateBulk(txCtx, newEntitlements)
+		if err != nil {
+			return err
+		}
+		grantsCreated, err = s.CreditGrantRepo.CreateBulk(txCtx, newGrants)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.Infow("plan cloned successfully",
+		"source_plan_id", id,
+		"new_plan_id", newPlan.ID,
+		"prices_cloned", len(newPrices),
+		"entitlements_cloned", len(entitlementsCreated),
+		"grants_cloned", len(grantsCreated),
+	)
+
+	priceResponses := make([]*dto.PriceResponse, len(newPrices))
+	for i, p := range newPrices {
+		priceResponses[i] = &dto.PriceResponse{Price: p}
+	}
+	entitlementResponses := make([]*dto.EntitlementResponse, len(entitlementsCreated))
+	for i, e := range entitlementsCreated {
+		entitlementResponses[i] = &dto.EntitlementResponse{Entitlement: e}
+	}
+	grantResponses := make([]*dto.CreditGrantResponse, len(grantsCreated))
+	for i, cg := range grantsCreated {
+		grantResponses[i] = &dto.CreditGrantResponse{CreditGrant: cg}
+	}
+
+	return &dto.PlanResponse{
+		Plan:         newPlan,
+		Prices:       priceResponses,
+		Entitlements: entitlementResponses,
+		CreditGrants: grantResponses,
+	}, nil
 }

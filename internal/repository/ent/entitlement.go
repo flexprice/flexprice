@@ -392,6 +392,10 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetUsageResetPeriod(e.UsageResetPeriod).
 			SetIsSoftLimit(e.IsSoftLimit).
 			SetStaticValue(e.StaticValue).
+			SetNillableParentEntitlementID(e.ParentEntitlementID).
+			SetNillableStartDate(e.StartDate).
+			SetNillableEndDate(e.EndDate).
+			SetDisplayOrder(e.DisplayOrder).
 			SetTenantID(e.TenantID).
 			SetStatus(string(e.Status)).
 			SetCreatedAt(e.CreatedAt).

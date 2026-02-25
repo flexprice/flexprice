@@ -186,8 +186,8 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
 
-	// Use ANTI JOIN with feature_usage table for better performance with ClickHouse
-	// This finds raw events that don't have a corresponding entry in the feature_usage table
+	// Use ANTI JOIN with events table for better performance with ClickHouse
+	// This finds raw events that don't have a corresponding entry in the events table
 	query := `
 		SELECT 
 			r.id, r.tenant_id, r.environment_id, r.external_customer_id, r.event_name, 
@@ -197,7 +197,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(ctx context.Context, param
 		FROM raw_events r
 		ANTI JOIN (
 			SELECT id, tenant_id, environment_id
-			FROM feature_usage
+			FROM events
 			WHERE tenant_id = ?
 			AND environment_id = ?
 		) AS e

@@ -50,7 +50,8 @@ type WalletService interface {
 	GetWalletBalanceV2(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
 
 	// GetWalletBalanceFromCache retrieves wallet balance from cache
-	GetWalletBalanceFromCache(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error)
+	// maxLiveSeconds controls cache staleness: if non-nil, cached entries older than this are skipped
+	GetWalletBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) (*dto.WalletBalanceResponse, error)
 
 	// TerminateWallet terminates a wallet by closing it and debiting remaining balance
 	TerminateWallet(ctx context.Context, walletID string) error
@@ -1633,7 +1634,24 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 	// Publish webhook event after transaction commits
 	s.publishInternalTransactionWebhookEvent(ctx, types.WebhookEventWalletTransactionCreated, tx.ID)
 
-	s.PublishWalletBalanceAlertEvent(ctx, w.CustomerID, true, req.WalletID)
+	walletBalanceAlertSvc := NewWalletBalanceAlertService(s.ServiceParams)
+	event := &wallet.WalletBalanceAlertEvent{
+		ID:                    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_WALLET_ALERT),
+		Timestamp:             time.Now().UTC(),
+		Source:                EventSourceWalletTransaction,
+		CustomerID:            w.CustomerID,
+		ForceCalculateBalance: true,
+		TenantID:              types.GetTenantID(ctx),
+		EnvironmentID:         types.GetEnvironmentID(ctx),
+		WalletID:              req.WalletID,
+	}
+	if err := walletBalanceAlertSvc.PublishEvent(ctx, event); err != nil {
+		s.Logger.Errorw("failed to publish wallet balance alert event",
+			"error", err,
+			"customer_id", w.CustomerID,
+			"wallet_id", req.WalletID,
+		)
+	}
 
 	// Log credit balance alert after wallet operation
 	if err := s.logCreditBalanceAlert(ctx, w, newCreditBalance); err != nil {
@@ -1641,6 +1659,14 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		s.Logger.Errorw("failed to log credit balance alert after wallet operation",
 			"error", err,
 			"wallet_id", w.ID,
+		)
+	}
+
+	if err := s.CheckWalletBalanceAlert(ctx, event); err != nil {
+		s.Logger.Errorw("failed to check wallet balance alert after wallet operation",
+			"error", err,
+			"wallet_id", req.WalletID,
+			"customer_id", w.CustomerID,
 		)
 	}
 
@@ -1891,7 +1917,7 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 			var balance *dto.WalletBalanceResponse
 			var err error
 			if req.FromCache {
-				balance, err = s.GetWalletBalanceFromCache(ctx, w.ID)
+				balance, err = s.GetWalletBalanceFromCache(ctx, w.ID, req.MaxLiveSeconds)
 				if err != nil {
 					return nil, err
 				}
@@ -2443,7 +2469,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 	}, nil
 }
 
-func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID string) (*dto.WalletBalanceResponse, error) {
+func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) (*dto.WalletBalanceResponse, error) {
 	if walletID == "" {
 		return nil, ierr.NewError("wallet_id is required").
 			WithHint("Wallet ID is required").
@@ -2487,7 +2513,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 		lo.Contains(w.Config.AllowedPriceTypes, types.WalletConfigPriceTypeAll)
 
 	totalPendingCharges := decimal.Zero
-	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, walletID)
+	cachedBalance := s.getWalletRealtimeBalanceFromCache(ctx, walletID, maxLiveSeconds)
 	if cachedBalance != nil {
 		s.Logger.Infow("using cached real-time balance",
 			"wallet_id", walletID,
@@ -2687,6 +2713,7 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 		"wallet_id", req.WalletID,
 		"source", req.Source,
 		"force_calculate", req.ForceCalculateBalance,
+		"get_from_cache", req.GetFromCache,
 	)
 
 	// Get active wallets for this customer
@@ -2729,7 +2756,14 @@ func (s *walletService) CheckWalletBalanceAlert(ctx context.Context, req *wallet
 			"has_wallet_alert_settings", w.AlertSettings != nil,
 			"event_id", req.ID,
 		)
-		balance, err := s.GetWalletBalanceV2(ctx, w.ID)
+		var balance *dto.WalletBalanceResponse
+		if req.GetFromCache {
+			// Use cached balance with a 1-minute max-live to avoid stale reads
+			maxLive := int64(60) // 1 minute in seconds
+			balance, err = s.GetWalletBalanceFromCache(ctx, w.ID, &maxLive)
+		} else {
+			balance, err = s.GetWalletBalanceV2(ctx, w.ID)
+		}
 		if err != nil {
 			s.Logger.Errorw("failed to get wallet balance, skipping wallet",
 				"error", err,
@@ -3098,7 +3132,7 @@ func (s *walletService) setWalletRealtimeBalanceToCache(ctx context.Context, wal
 	redisCache.ForceCacheSet(ctx, cacheKey, balance.String(), cache.ExpiryWalletBalance)
 }
 
-func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string) *decimal.Decimal {
+func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, walletID string, maxLiveSeconds *int64) *decimal.Decimal {
 	span := cache.StartCacheSpan(ctx, "wallet", "get", map[string]interface{}{
 		"wallet_id": walletID,
 	})
@@ -3109,13 +3143,42 @@ func (s *walletService) getWalletRealtimeBalanceFromCache(ctx context.Context, w
 		return nil
 	}
 	cacheKey := cache.GenerateKey(cache.PrefixWallet, walletID)
+
+	// When maxLiveSeconds is specified, check cache age via TTL
+	if maxLiveSeconds != nil {
+		cachedValue, remainingTTL, found := redisCache.ForceCacheGetWithTTL(ctx, cacheKey)
+		if !found {
+			return nil
+		}
+
+		// Calculate cache age: original expiry minus remaining TTL
+		cacheAge := cache.ExpiryWalletBalance - remainingTTL
+		maxAge := time.Duration(*maxLiveSeconds) * time.Second
+
+		if cacheAge > maxAge {
+			// Cache entry is too old, treat as miss
+			s.Logger.Infow("cache entry exceeds max-live, treating as miss",
+				"wallet_id", walletID,
+				"cache_age_seconds", cacheAge.Seconds(),
+				"max_live_seconds", *maxLiveSeconds,
+			)
+			return nil
+		}
+
+		balance, success := cache.UnmarshalCacheValue[decimal.Decimal](cachedValue)
+		if !success {
+			return nil
+		}
+		return balance
+	}
+
+	// Default path: no max-live check
 	cachedValue, found := redisCache.ForceCacheGet(ctx, cacheKey)
 	if !found {
 		return nil
 	}
 
 	balance, success := cache.UnmarshalCacheValue[decimal.Decimal](cachedValue)
-
 	if !success {
 		return nil
 	}

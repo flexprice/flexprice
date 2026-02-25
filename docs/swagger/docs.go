@@ -42,11 +42,13 @@ const docTemplate = `{
                     },
                     {
                         "enum": [
-                            "onetime"
+                            "onetime",
+                            "multiple_instance"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "AddonTypeOnetime"
+                            "AddonTypeOnetime",
+                            "AddonTypeMultipleInstance"
                         ],
                         "name": "addon_type",
                         "in": "query"
@@ -682,7 +684,8 @@ const docTemplate = `{
                             "razorpay",
                             "chargebee",
                             "quickbooks",
-                            "nomod"
+                            "nomod",
+                            "moyasar"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -693,7 +696,8 @@ const docTemplate = `{
                             "SecretProviderRazorpay",
                             "SecretProviderChargebee",
                             "SecretProviderQuickBooks",
-                            "SecretProviderNomod"
+                            "SecretProviderNomod",
+                            "SecretProviderMoyasar"
                         ],
                         "name": "provider_type",
                         "in": "query"
@@ -1813,6 +1817,15 @@ const docTemplate = `{
                 "summary": "Get credit grants",
                 "parameters": [
                     {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "name": "credit_grant_ids",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "name": "end_time",
                         "in": "query"
@@ -2083,7 +2096,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a credit grant",
+                "description": "Delete a credit grant. Plan-scoped grants are archived; subscription-scoped grants have their end date set (optional body with effective_date). Request body is optional.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2101,6 +2114,14 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "description": "Optional: effective_date for subscription-scoped grants",
+                        "name": "body",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/dto.DeleteCreditGrantRequest"
+                        }
                     }
                 ],
                 "responses": {
@@ -3014,6 +3035,12 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "name": "expand",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "default": false,
+                        "name": "from_cache",
                         "in": "query"
                     },
                     {
@@ -5553,6 +5580,30 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "string",
+                        "description": "period_end_gte filters invoices with period_end \u003e= value",
+                        "name": "period_end_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "period_end_lte filters invoices with period_end \u003c= value",
+                        "name": "period_end_lte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "period_start_gte filters invoices with period_start \u003e= value",
+                        "name": "period_start_gte",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "period_start_lte filters invoices with period_start \u003c= value",
+                        "name": "period_start_lte",
+                        "in": "query"
+                    },
+                    {
                         "type": "boolean",
                         "description": "SkipLineItems if true, will not include line items in the response",
                         "name": "skip_line_items",
@@ -7601,6 +7652,57 @@ const docTemplate = `{
                 }
             }
         },
+        "/prices/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "List prices with filter",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Prices"
+                ],
+                "summary": "List prices by filter",
+                "parameters": [
+                    {
+                        "description": "Filter with DSL support",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.PriceFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListPricesResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/prices/units": {
             "get": {
                 "security": [
@@ -8665,6 +8767,16 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "csv",
+                        "description": "ParentSubscriptionIDs filters by parent subscription IDs",
+                        "name": "parent_subscription_ids",
+                        "in": "query"
+                    },
+                    {
                         "type": "string",
                         "description": "PlanID filters by plan ID",
                         "name": "plan_id",
@@ -9155,6 +9267,62 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Update a subscription. parent_subscription_id can be set to another subscription ID, cleared by sending \"\", or left unchanged if omitted.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Update subscription",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update Subscription Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.UpdateSubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/subscriptions/{id}/activate": {
@@ -9550,6 +9718,70 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/dto.ListCreditGrantApplicationsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/lineitems": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Add a new line item to an existing subscription (price_id or inline price)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Subscriptions"
+                ],
+                "summary": "Create subscription line item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Create Line Item Request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.CreateSubscriptionLineItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/dto.SubscriptionLineItemResponse"
                         }
                     },
                     "400": {
@@ -11813,12 +12045,6 @@ const docTemplate = `{
                         "collectionFormat": "csv",
                         "name": "wallet_ids",
                         "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Expand fields (e.g., credits_available_breakdown)",
-                        "name": "expand",
-                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12423,7 +12649,8 @@ const docTemplate = `{
                             "CREDIT_NOTE",
                             "CREDIT_EXPIRED",
                             "WALLET_TERMINATION",
-                            "MANUAL_BALANCE_DEBIT"
+                            "MANUAL_BALANCE_DEBIT",
+                            "CREDIT_ADJUSTMENT"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -12435,7 +12662,8 @@ const docTemplate = `{
                             "TransactionReasonCreditNote",
                             "TransactionReasonCreditExpired",
                             "TransactionReasonWalletTermination",
-                            "TransactionReasonManualBalanceDebit"
+                            "TransactionReasonManualBalanceDebit",
+                            "TransactionReasonCreditAdjustment"
                         ],
                         "name": "transaction_reason",
                         "in": "query"
@@ -12598,6 +12826,52 @@ const docTemplate = `{
                         "name": "X-HubSpot-Signature-v3",
                         "in": "header",
                         "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Webhook received (always returns 200)",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/webhooks/moyasar/{tenant_id}/{environment_id}": {
+            "post": {
+                "description": "Process incoming Moyasar webhook events for payment status updates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Webhooks"
+                ],
+                "summary": "Handle Moyasar webhook events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Tenant ID",
+                        "name": "tenant_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Environment ID",
+                        "name": "environment_id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Moyasar webhook signature",
+                        "name": "X-Moyasar-Signature",
+                        "in": "header"
                     }
                 ],
                 "responses": {
@@ -12904,6 +13178,81 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.TimeRangeFilter"
                         }
                     ]
+                }
+            }
+        },
+        "coupon_application.CouponApplication": {
+            "type": "object",
+            "properties": {
+                "applied_at": {
+                    "type": "string"
+                },
+                "coupon_association_id": {
+                    "type": "string"
+                },
+                "coupon_id": {
+                    "type": "string"
+                },
+                "coupon_snapshot": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "discount_percentage": {
+                    "type": "string"
+                },
+                "discount_type": {
+                    "$ref": "#/definitions/types.CouponType"
+                },
+                "discounted_amount": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "final_price": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_line_item_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "original_price": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
                 }
             }
         },
@@ -13270,14 +13619,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.AlertConfig": {
-            "type": "object",
-            "properties": {
-                "threshold": {
-                    "$ref": "#/definitions/dto.Threshold"
-                }
-            }
-        },
         "dto.AlertLogResponse": {
             "type": "object",
             "properties": {
@@ -13474,6 +13815,14 @@ const docTemplate = `{
                 "cancellation_type"
             ],
             "properties": {
+                "cancel_immediately_inovice_policy": {
+                    "description": "CancelImmediatelyInvoicePolicy controls whether to generate a final invoice on immediate cancellation. Defaults to skip.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.CancelImmediatelyInvoicePolicy"
+                        }
+                    ]
+                },
                 "cancellation_type": {
                     "description": "CancellationType determines when the cancellation takes effect",
                     "allOf": [
@@ -14213,6 +14562,9 @@ const docTemplate = `{
                 "credits": {
                     "type": "string"
                 },
+                "end_date": {
+                    "type": "string"
+                },
                 "expiration_duration": {
                     "type": "integer"
                 },
@@ -14242,6 +14594,9 @@ const docTemplate = `{
                 },
                 "scope": {
                     "$ref": "#/definitions/types.CreditGrantScope"
+                },
+                "start_date": {
+                    "type": "string"
                 },
                 "subscription_id": {
                     "type": "string"
@@ -14621,6 +14976,14 @@ const docTemplate = `{
                     "description": "entity_type is the optional type of the entity associated with this line item",
                     "type": "string"
                 },
+                "invoice_level_discount": {
+                    "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
+                    "type": "string"
+                },
+                "line_item_discount": {
+                    "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
+                    "type": "string"
+                },
                 "metadata": {
                     "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
                     "allOf": [
@@ -14651,6 +15014,10 @@ const docTemplate = `{
                 },
                 "plan_id": {
                     "description": "TODO: !REMOVE after migration\nplan_id is the optional unique identifier of the plan associated with this line item",
+                    "type": "string"
+                },
+                "prepaid_credits_applied": {
+                    "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
                     "type": "string"
                 },
                 "price_id": {
@@ -14728,16 +15095,12 @@ const docTemplate = `{
                     "description": "due_date is the date by which payment is expected",
                     "type": "string"
                 },
-                "environment_id": {
-                    "description": "environment_id is the unique identifier of the environment this invoice belongs to",
-                    "type": "string"
-                },
                 "idempotency_key": {
                     "description": "idempotency_key is an optional key used to prevent duplicate invoice creation",
                     "type": "string"
                 },
                 "invoice_coupons": {
-                    "description": "Invoice Coupns",
+                    "description": "Invoice Coupons",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceCoupon"
@@ -14806,7 +15169,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "prepared_tax_rates": {
-                    "description": "prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)\nThese are applied at invoice level by the invoice service without further resolution",
+                    "description": "prepared_tax_rates contains the tax rates pre-resolved by the caller (e.g., billing service)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.TaxRateResponse"
@@ -14836,6 +15199,10 @@ const docTemplate = `{
                 },
                 "total": {
                     "description": "total is the total amount of the invoice including taxes and discounts",
+                    "type": "string"
+                },
+                "total_prepaid_applied": {
+                    "description": "total_prepaid_applied is the total amount of prepaid applied to this invoice.",
                     "type": "string"
                 }
             }
@@ -15190,6 +15557,66 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CreateSubscriptionLineItemRequest": {
+            "type": "object",
+            "properties": {
+                "commitment_amount": {
+                    "description": "Commitment fields",
+                    "type": "number"
+                },
+                "commitment_duration": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "commitment_overage_factor": {
+                    "type": "number"
+                },
+                "commitment_quantity": {
+                    "type": "number"
+                },
+                "commitment_true_up_enabled": {
+                    "type": "boolean"
+                },
+                "commitment_type": {
+                    "$ref": "#/definitions/types.CommitmentType"
+                },
+                "commitment_windowed": {
+                    "type": "boolean"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "price": {
+                    "description": "Price defines a new price inline; server creates a subscription-scoped price and adds the line item. Exactly one of price_id or price must be set. Entity/currency are set from the subscription.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.SubscriptionPriceCreateRequest"
+                        }
+                    ]
+                },
+                "price_id": {
+                    "description": "PriceID references an existing price (plan, addon, or subscription-scoped). Exactly one of price_id or price must be set.",
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "subscription_phase_id": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CreateSubscriptionRequest": {
             "type": "object",
             "required": [
@@ -15235,6 +15662,14 @@ const docTemplate = `{
                 "commitment_amount": {
                     "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
                     "type": "string"
+                },
+                "commitment_duration": {
+                    "description": "CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "coupons": {
                     "type": "array",
@@ -15298,6 +15733,13 @@ const docTemplate = `{
                         }
                     }
                 },
+                "line_items": {
+                    "description": "LineItems are extra line items to add at creation (each with price_id or price), in addition to plan prices",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreateSubscriptionLineItemRequest"
+                    }
+                },
                 "lookup_key": {
                     "type": "string"
                 },
@@ -15325,11 +15767,23 @@ const docTemplate = `{
                         "$ref": "#/definitions/dto.OverrideLineItemRequest"
                     }
                 },
+                "parent_subscription_id": {
+                    "description": "ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)",
+                    "type": "string"
+                },
                 "payment_behavior": {
                     "description": "Payment behavior configuration",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentBehavior"
+                        }
+                    ]
+                },
+                "payment_terms": {
+                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
                         }
                     ]
                 },
@@ -15538,17 +15992,13 @@ const docTemplate = `{
                 "currency"
             ],
             "properties": {
-                "alert_config": {
-                    "description": "alert_config is the alert configuration for the wallet (optional)",
+                "alert_settings": {
+                    "description": "alert_settings is the alert settings for the wallet (optional)\nIf not provided, tenant level alert settings will be used",
                     "allOf": [
                         {
-                            "$ref": "#/definitions/dto.AlertConfig"
+                            "$ref": "#/definitions/types.AlertSettings"
                         }
                     ]
-                },
-                "alert_enabled": {
-                    "description": "alert_enabled is the flag to enable alerts for the wallet\ndefaults to true, can be explicitly set to false to disable alerts",
-                    "type": "boolean"
                 },
                 "auto_topup": {
                     "description": "auto top-up object",
@@ -15557,9 +16007,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.AutoTopup"
                         }
                     ]
-                },
-                "config": {
-                    "$ref": "#/definitions/types.WalletConfig"
                 },
                 "conversion_rate": {
                     "description": "amount in the currency =  number of credits * conversion_rate\nex if conversion_rate is 1, then 1 USD = 1 credit\nex if conversion_rate is 2, then 1 USD = 0.5 credits\nex if conversion_rate is 0.5, then 1 USD = 2 credits",
@@ -15594,9 +16041,6 @@ const docTemplate = `{
                 },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
-                },
-                "name": {
-                    "type": "string"
                 },
                 "price_unit": {
                     "description": "price_unit is the code of the price unit to use for wallet creation\nIf provided, the price unit will be used to set the currency and conversion rate of the wallet:\n- currency: set to price unit's base_currency\n- conversion_rate: set to price unit's conversion_rate",
@@ -15909,6 +16353,29 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.CustomAnalyticItem": {
+            "type": "object",
+            "properties": {
+                "feature_name": {
+                    "description": "Name of the feature this applies to",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Calculation name (e.g., \"Revenue per Minute\")",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "\"feature\", \"meter\", \"event_name\"",
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
         "dto.CustomerEntitlementsResponse": {
             "type": "object",
             "properties": {
@@ -16131,6 +16598,15 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.DeleteCreditGrantRequest": {
+            "type": "object",
+            "properties": {
+                "effective_date": {
+                    "description": "EffectiveDate is optional; when set (subscription scope) the grant end date is set to this time.",
                     "type": "string"
                 }
             }
@@ -16848,6 +17324,12 @@ const docTemplate = `{
                 "currency": {
                     "type": "string"
                 },
+                "custom_analytics": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CustomAnalyticItem"
+                    }
+                },
                 "items": {
                     "type": "array",
                     "items": {
@@ -17029,6 +17511,10 @@ const docTemplate = `{
                             "type": "string"
                         }
                     }
+                },
+                "group_by_property": {
+                    "description": "GroupByProperty is the property name in event.properties to group by before aggregating.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.",
+                    "type": "string"
                 },
                 "multiplier": {
                     "type": "string"
@@ -17243,127 +17729,102 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "amount": {
-                    "description": "amount is the monetary amount for this line item",
-                    "type": "string"
+                    "type": "number"
                 },
                 "commitment_info": {
-                    "description": "commitment_info contains details about any commitment applied to this line item",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.CommitmentInfo"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.CommitmentInfo"
                 },
                 "created_at": {
-                    "description": "created_at is the timestamp when this line item was created",
                     "type": "string"
                 },
                 "created_by": {
-                    "description": "created_by is the identifier of the user who created this line item",
                     "type": "string"
                 },
                 "currency": {
-                    "description": "currency is the three-letter ISO currency code for this line item",
                     "type": "string"
                 },
                 "customer_id": {
-                    "description": "customer_id is the unique identifier of the customer associated with this line item",
                     "type": "string"
                 },
                 "display_name": {
-                    "description": "display_name is the optional human-readable name for this line item",
                     "type": "string"
                 },
                 "entity_id": {
-                    "description": "entity_id is the optional unique identifier of the entity associated with this line item",
                     "type": "string"
                 },
                 "entity_type": {
-                    "description": "entity_type is the optional type of the entity associated with this line item",
+                    "type": "string"
+                },
+                "environment_id": {
                     "type": "string"
                 },
                 "id": {
-                    "description": "id is the unique identifier for this line item",
                     "type": "string"
                 },
                 "invoice_id": {
-                    "description": "invoice_id is the unique identifier of the invoice this line item belongs to",
                     "type": "string"
                 },
+                "invoice_level_discount": {
+                    "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
+                    "type": "number"
+                },
+                "line_item_discount": {
+                    "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
+                    "type": "number"
+                },
                 "metadata": {
-                    "description": "metadata contains additional custom key-value pairs for storing extra information about this line item",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.Metadata"
-                        }
-                    ]
+                    "$ref": "#/definitions/types.Metadata"
                 },
                 "meter_display_name": {
-                    "description": "meter_display_name is the optional human-readable name of the meter",
                     "type": "string"
                 },
                 "meter_id": {
-                    "description": "meter_id is the optional unique identifier of the meter used for usage tracking",
                     "type": "string"
                 },
                 "period_end": {
-                    "description": "period_end is the optional end date of the period this line item covers",
                     "type": "string"
                 },
                 "period_start": {
-                    "description": "period_start is the optional start date of the period this line item covers",
                     "type": "string"
                 },
                 "plan_display_name": {
-                    "description": "plan_display_name is the optional human-readable name of the plan",
                     "type": "string"
                 },
-                "plan_id": {
-                    "description": "plan_id is the optional unique identifier of the plan associated with this line item",
-                    "type": "string"
+                "prepaid_credits_applied": {
+                    "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
+                    "type": "number"
                 },
                 "price_id": {
-                    "description": "price_id is the optional unique identifier of the price associated with this line item",
                     "type": "string"
                 },
                 "price_type": {
-                    "description": "price_type indicates the type of pricing (fixed, usage, tiered, etc.)",
                     "type": "string"
                 },
                 "price_unit": {
-                    "description": "price_unit is the optional 3-digit ISO code of the price unit associated with this line item",
                     "type": "string"
                 },
                 "price_unit_amount": {
-                    "description": "price_unit_amount is the optional amount converted to the price unit currency",
-                    "type": "string"
+                    "type": "number"
                 },
                 "price_unit_id": {
-                    "description": "price_unit_id is the optional unique identifier of the price unit associated with this line item",
                     "type": "string"
                 },
                 "quantity": {
-                    "description": "quantity is the quantity of units for this line item",
-                    "type": "string"
+                    "type": "number"
                 },
                 "status": {
-                    "description": "status represents the current status of this line item",
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "subscription_id": {
-                    "description": "subscription_id is the optional unique identifier of the subscription associated with this line item",
                     "type": "string"
                 },
                 "tenant_id": {
-                    "description": "tenant_id is the unique identifier of the tenant this line item belongs to",
                     "type": "string"
                 },
                 "updated_at": {
-                    "description": "updated_at is the timestamp when this line item was last updated",
                     "type": "string"
                 },
                 "updated_by": {
-                    "description": "updated_by is the identifier of the user who last updated this line item",
                     "type": "string"
                 },
                 "usage_analytics": {
@@ -17417,47 +17878,49 @@ const docTemplate = `{
         "dto.InvoiceResponse": {
             "type": "object",
             "properties": {
+                "adjustment_amount": {
+                    "description": "adjustment_amount is the total sum of credit notes of type \"adjustment\".\nThese are non-cash reductions applied to the invoice (e.g. goodwill credit, billing correction).",
+                    "type": "number"
+                },
                 "amount_due": {
                     "description": "amount_due is the total amount that needs to be paid for this invoice",
-                    "type": "string"
+                    "type": "number"
                 },
                 "amount_paid": {
-                    "description": "amount_paid is the amount that has been paid towards this invoice",
-                    "type": "string"
+                    "description": "amount_paid is the amount that has already been paid towards this invoice",
+                    "type": "number"
                 },
                 "amount_remaining": {
-                    "description": "amount_remaining is the amount still outstanding on this invoice",
-                    "type": "string"
+                    "description": "amount_remaining is the outstanding amount still owed on this invoice (calculated as amount_due minus amount_paid)",
+                    "type": "number"
                 },
                 "billing_period": {
-                    "description": "billing_period is the period this invoice covers (e.g., \"monthly\", \"yearly\")",
+                    "description": "billing_period describes the billing period this invoice covers (e.g., \"January 2024\", \"Q1 2024\")",
                     "type": "string"
                 },
                 "billing_reason": {
-                    "description": "billing_reason indicates why this invoice was created (subscription_cycle, manual, etc.)",
+                    "description": "billing_reason indicates why this invoice was generated (e.g., \"subscription_billing\", \"manual_charge\")",
                     "type": "string"
                 },
                 "billing_sequence": {
-                    "description": "billing_sequence is the optional sequence number for billing cycles",
+                    "description": "billing_sequence is the sequential number indicating the billing cycle for subscription invoices",
                     "type": "integer"
                 },
                 "coupon_applications": {
-                    "description": "coupon_applications contains the coupon applications associated with this invoice",
+                    "description": "coupon_applications contains the coupon applications associated with this invoice (overrides embedded field)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.CouponApplicationResponse"
                     }
                 },
                 "created_at": {
-                    "description": "created_at is the timestamp when this invoice was created",
                     "type": "string"
                 },
                 "created_by": {
-                    "description": "created_by is the identifier of the user who created this invoice",
                     "type": "string"
                 },
                 "currency": {
-                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR) for the invoice",
+                    "description": "currency is the three-letter ISO currency code (e.g., USD, EUR, GBP) that applies to all monetary amounts on this invoice",
                     "type": "string"
                 },
                 "customer": {
@@ -17469,19 +17932,23 @@ const docTemplate = `{
                     ]
                 },
                 "customer_id": {
-                    "description": "customer_id is the unique identifier of the customer this invoice belongs to",
+                    "description": "customer_id is the ID of the customer who will receive this invoice",
                     "type": "string"
                 },
                 "description": {
-                    "description": "description is the optional text description of the invoice",
+                    "description": "description is an optional description or notes about this invoice",
                     "type": "string"
                 },
                 "due_date": {
-                    "description": "due_date is the date by which payment is expected",
+                    "description": "due_date is the date when payment for this invoice is due",
+                    "type": "string"
+                },
+                "environment_id": {
+                    "description": "environment_id is the ID of the environment this invoice belongs to (for multi-environment setups)",
                     "type": "string"
                 },
                 "finalized_at": {
-                    "description": "finalized_at is the timestamp when this invoice was finalized",
+                    "description": "finalized_at is the timestamp when this invoice was finalized and made ready for payment",
                     "type": "string"
                 },
                 "id": {
@@ -17489,19 +17956,19 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "idempotency_key": {
-                    "description": "idempotency_key is the optional key used to prevent duplicate invoice creation",
+                    "description": "idempotency_key is a unique key used to prevent duplicate invoice creation when retrying API calls",
                     "type": "string"
                 },
                 "invoice_number": {
-                    "description": "invoice_number is the optional human-readable identifier for the invoice",
+                    "description": "invoice_number is the human-readable invoice number displayed to customers (e.g., INV-2024-001)",
                     "type": "string"
                 },
                 "invoice_pdf_url": {
-                    "description": "invoice_pdf_url is the optional URL to the PDF version of this invoice",
+                    "description": "invoice_pdf_url is the URL where customers can download the PDF version of this invoice",
                     "type": "string"
                 },
                 "invoice_status": {
-                    "description": "invoice_status represents the current status of the invoice (draft, finalized, etc.)",
+                    "description": "invoice_status represents the current status of the invoice - values include draft, open, paid, void, etc.",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InvoiceStatus"
@@ -17509,7 +17976,7 @@ const docTemplate = `{
                     ]
                 },
                 "invoice_type": {
-                    "description": "invoice_type indicates the type of invoice (subscription, one_time, etc.)",
+                    "description": "invoice_type indicates the type of invoice - whether this is a subscription invoice, one-time charge, or other billing type",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.InvoiceType"
@@ -17517,14 +17984,14 @@ const docTemplate = `{
                     ]
                 },
                 "line_items": {
-                    "description": "line_items contains the individual items that make up this invoice",
+                    "description": "line_items contains the individual items that make up this invoice (overrides embedded field)",
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/dto.InvoiceLineItemResponse"
                     }
                 },
                 "metadata": {
-                    "description": "metadata contains additional custom key-value pairs for storing extra information",
+                    "description": "metadata contains custom key-value pairs for storing additional information about this invoice",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.Metadata"
@@ -17536,11 +18003,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "paid_at": {
-                    "description": "paid_at is the timestamp when this invoice was paid",
+                    "description": "paid_at is the timestamp when this invoice was fully paid",
                     "type": "string"
                 },
                 "payment_status": {
-                    "description": "payment_status represents the payment status of the invoice (unpaid, paid, etc.)",
+                    "description": "payment_status indicates whether the invoice has been paid, is pending, or failed",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.PaymentStatus"
@@ -17548,16 +18015,19 @@ const docTemplate = `{
                     ]
                 },
                 "period_end": {
-                    "description": "period_end is the end date of the billing period",
+                    "description": "period_end is the end date of the billing period covered by this invoice",
                     "type": "string"
                 },
                 "period_start": {
-                    "description": "period_start is the start date of the billing period",
+                    "description": "period_start is the start date of the billing period covered by this invoice",
                     "type": "string"
                 },
+                "refunded_amount": {
+                    "description": "refunded_amount is the total sum of credit notes of type \"refund\".\nThese are actual refunds issued to the customer.",
+                    "type": "number"
+                },
                 "status": {
-                    "description": "status represents the current status of this invoice",
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "subscription": {
                     "description": "subscription contains the associated subscription information if requested",
@@ -17568,12 +18038,12 @@ const docTemplate = `{
                     ]
                 },
                 "subscription_id": {
-                    "description": "subscription_id is the optional unique identifier of the subscription associated with this invoice",
+                    "description": "subscription_id is the ID of the subscription this invoice is associated with (only present for subscription-based invoices)",
                     "type": "string"
                 },
                 "subtotal": {
-                    "description": "subtotal is the amount before taxes and discounts are applied",
-                    "type": "string"
+                    "description": "subtotal is the sum of all line items before any taxes, discounts, or additional fees",
+                    "type": "number"
                 },
                 "taxes": {
                     "description": "tax_applied_records contains the tax applied records associated with this invoice",
@@ -17583,35 +18053,36 @@ const docTemplate = `{
                     }
                 },
                 "tenant_id": {
-                    "description": "tenant_id is the unique identifier of the tenant this invoice belongs to",
                     "type": "string"
                 },
                 "total": {
-                    "description": "total is the total amount of the invoice including taxes and discounts",
-                    "type": "string"
+                    "description": "total is the final amount including taxes, fees, and discounts",
+                    "type": "number"
                 },
                 "total_discount": {
-                    "description": "total_discount is the total discount amount from coupon applications",
-                    "type": "string"
+                    "description": "total_discount is the sum of all coupon discounts applied to the invoice",
+                    "type": "number"
+                },
+                "total_prepaid_credits_applied": {
+                    "description": "total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.",
+                    "type": "number"
                 },
                 "total_tax": {
-                    "description": "total_tax is the total tax amount for this invoice",
-                    "type": "string"
+                    "description": "total_tax is the sum of all taxes combined at the invoice level.",
+                    "type": "number"
                 },
                 "updated_at": {
-                    "description": "updated_at is the timestamp when this invoice was last updated",
                     "type": "string"
                 },
                 "updated_by": {
-                    "description": "updated_by is the identifier of the user who last updated this invoice",
                     "type": "string"
                 },
                 "version": {
-                    "description": "version is the version number of this invoice",
+                    "description": "version is the version number for tracking changes to this invoice",
                     "type": "integer"
                 },
                 "voided_at": {
-                    "description": "voided_at is the timestamp when this invoice was voided",
+                    "description": "voided_at is the timestamp when this invoice was voided or cancelled",
                     "type": "string"
                 }
             }
@@ -17622,6 +18093,14 @@ const docTemplate = `{
                 "commitment_amount": {
                     "description": "CommitmentAmount is the minimum amount committed for this line item",
                     "type": "number"
+                },
+                "commitment_duration": {
+                    "description": "CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on MONTHLY billing)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "commitment_quantity": {
                     "description": "CommitmentQuantity is the minimum quantity committed for this line item",
@@ -19339,6 +19818,9 @@ const docTemplate = `{
                     "description": "Commitment fields",
                     "type": "number"
                 },
+                "commitment_duration": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
                 "commitment_overage_factor": {
                     "type": "number"
                 },
@@ -19613,6 +20095,97 @@ const docTemplate = `{
                 }
             }
         },
+        "dto.SubscriptionPriceCreateRequest": {
+            "type": "object",
+            "required": [
+                "billing_cadence",
+                "billing_model",
+                "billing_period",
+                "invoice_cadence",
+                "price_unit_type",
+                "type"
+            ],
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "billing_cadence": {
+                    "$ref": "#/definitions/types.BillingCadence"
+                },
+                "billing_model": {
+                    "$ref": "#/definitions/types.BillingModel"
+                },
+                "billing_period": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
+                "billing_period_count": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "filter_values": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "invoice_cadence": {
+                    "$ref": "#/definitions/types.InvoiceCadence"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "min_quantity": {
+                    "type": "integer"
+                },
+                "price_unit_config": {
+                    "$ref": "#/definitions/dto.PriceUnitConfig"
+                },
+                "price_unit_type": {
+                    "$ref": "#/definitions/types.PriceUnitType"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "tier_mode": {
+                    "$ref": "#/definitions/types.BillingTier"
+                },
+                "tiers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.CreatePriceTier"
+                    }
+                },
+                "transform_quantity": {
+                    "$ref": "#/definitions/price.TransformQuantity"
+                },
+                "trial_period": {
+                    "type": "integer"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.PriceType"
+                }
+            }
+        },
         "dto.SubscriptionResponse": {
             "type": "object",
             "properties": {
@@ -19662,6 +20235,14 @@ const docTemplate = `{
                 "commitment_amount": {
                     "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
                     "type": "string"
+                },
+                "commitment_duration": {
+                    "description": "CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on a MONTHLY subscription)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
                 },
                 "coupon_associations": {
                     "description": "CouponAssociations are the coupon associations for this subscription",
@@ -19753,6 +20334,10 @@ const docTemplate = `{
                     "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
                     "type": "string"
                 },
+                "parent_subscription_id": {
+                    "description": "ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)",
+                    "type": "string"
+                },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
                 },
@@ -19765,6 +20350,14 @@ const docTemplate = `{
                 "payment_behavior": {
                     "description": "PaymentBehavior determines how subscription payments are handled",
                     "type": "string"
+                },
+                "payment_terms": {
+                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
                 },
                 "phases": {
                     "description": "Phases are the subscription phases for this subscription",
@@ -19866,6 +20459,14 @@ const docTemplate = `{
                     "description": "CommitmentAmount is the minimum amount a customer commits to paying for a billing period",
                     "type": "string"
                 },
+                "commitment_duration": {
+                    "description": "CommitmentDuration is the time frame of the commitment (e.g., ANNUAL commitment on a MONTHLY subscription)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.BillingPeriod"
+                        }
+                    ]
+                },
                 "coupon_associations": {
                     "description": "CouponAssociations are included when \"coupon_associations\" is in expand parameter",
                     "type": "array",
@@ -19954,6 +20555,10 @@ const docTemplate = `{
                     "description": "OverageFactor is a multiplier applied to usage beyond the commitment amount",
                     "type": "string"
                 },
+                "parent_subscription_id": {
+                    "description": "ParentSubscriptionID is the parent subscription ID for hierarchy (e.g. child subscription under a parent)",
+                    "type": "string"
+                },
                 "pause_status": {
                     "$ref": "#/definitions/types.PauseStatus"
                 },
@@ -19967,6 +20572,14 @@ const docTemplate = `{
                 "payment_behavior": {
                     "description": "PaymentBehavior determines how subscription payments are handled",
                     "type": "string"
+                },
+                "payment_terms": {
+                    "description": "PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.PaymentTerms"
+                        }
+                    ]
                 },
                 "phases": {
                     "description": "Phases are included when \"phases\" is in expand parameter",
@@ -20334,6 +20947,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "auto_apply": {
+                    "description": "Whether this tax should be automatically applied",
                     "type": "boolean"
                 },
                 "created_at": {
@@ -20343,36 +20957,48 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "currency": {
+                    "description": "Currency",
                     "type": "string"
                 },
                 "entity_id": {
+                    "description": "ID of the entity this tax rate applies to",
                     "type": "string"
                 },
                 "entity_type": {
-                    "$ref": "#/definitions/types.TaxRateEntityType"
+                    "description": "Type of entity this tax rate applies to",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.TaxRateEntityType"
+                        }
+                    ]
                 },
                 "environment_id": {
+                    "description": "EnvironmentID is the ID of the environment this tax rate config belongs to",
                     "type": "string"
                 },
                 "id": {
+                    "description": "ID of the ent.",
                     "type": "string"
                 },
                 "metadata": {
+                    "description": "Metadata holds the value of the \"metadata\" field.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
                     }
                 },
                 "priority": {
+                    "description": "Priority for tax resolution (lower number = higher priority)",
                     "type": "integer"
                 },
                 "status": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.Status"
                 },
                 "tax_rate": {
                     "$ref": "#/definitions/dto.TaxRateResponse"
                 },
                 "tax_rate_id": {
+                    "description": "Reference to the TaxRate entity",
                     "type": "string"
                 },
                 "tenant_id": {
@@ -20382,12 +21008,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_by": {
-                    "type": "string"
-                },
-                "valid_from": {
-                    "type": "string"
-                },
-                "valid_to": {
                     "type": "string"
                 }
             }
@@ -20549,18 +21169,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "dto.Threshold": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "description": "amount",
-                    "type": "string"
-                },
-                "value": {
                     "type": "string"
                 }
             }
@@ -21084,6 +21692,9 @@ const docTemplate = `{
                     "description": "Commitment fields",
                     "type": "number"
                 },
+                "commitment_duration": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
                 "commitment_overage_factor": {
                     "type": "number"
                 },
@@ -21132,6 +21743,24 @@ const docTemplate = `{
                             "$ref": "#/definitions/price.TransformQuantity"
                         }
                     ]
+                }
+            }
+        },
+        "dto.UpdateSubscriptionRequest": {
+            "type": "object",
+            "properties": {
+                "cancel_at": {
+                    "type": "string"
+                },
+                "cancel_at_period_end": {
+                    "type": "boolean"
+                },
+                "parent_subscription_id": {
+                    "description": "ParentSubscriptionID sets or clears the parent subscription. Omit to leave unchanged; send \"\" to clear.",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.SubscriptionStatus"
                 }
             }
         },
@@ -21195,11 +21824,8 @@ const docTemplate = `{
         "dto.UpdateWalletRequest": {
             "type": "object",
             "properties": {
-                "alert_config": {
-                    "$ref": "#/definitions/dto.AlertConfig"
-                },
-                "alert_enabled": {
-                    "type": "boolean"
+                "alert_settings": {
+                    "$ref": "#/definitions/types.AlertSettings"
                 },
                 "auto_topup": {
                     "$ref": "#/definitions/types.AutoTopup"
@@ -21452,14 +22078,11 @@ const docTemplate = `{
         "dto.WalletBalanceResponse": {
             "type": "object",
             "properties": {
-                "alert_config": {
-                    "$ref": "#/definitions/types.AlertConfig"
-                },
-                "alert_enabled": {
-                    "type": "boolean"
+                "alert_settings": {
+                    "$ref": "#/definitions/types.AlertSettings"
                 },
                 "alert_state": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.AlertState"
                 },
                 "auto_topup": {
                     "$ref": "#/definitions/types.AutoTopup"
@@ -21549,14 +22172,11 @@ const docTemplate = `{
         "dto.WalletResponse": {
             "type": "object",
             "properties": {
-                "alert_config": {
-                    "$ref": "#/definitions/types.AlertConfig"
-                },
-                "alert_enabled": {
-                    "type": "boolean"
+                "alert_settings": {
+                    "$ref": "#/definitions/types.AlertSettings"
                 },
                 "alert_state": {
-                    "type": "string"
+                    "$ref": "#/definitions/types.AlertState"
                 },
                 "auto_topup": {
                     "$ref": "#/definitions/types.AutoTopup"
@@ -22068,6 +22688,110 @@ const docTemplate = `{
                 }
             }
         },
+        "invoice.InvoiceLineItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number"
+                },
+                "commitment_info": {
+                    "$ref": "#/definitions/types.CommitmentInfo"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "customer_id": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "type": "string"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "invoice_id": {
+                    "type": "string"
+                },
+                "invoice_level_discount": {
+                    "description": "invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.",
+                    "type": "number"
+                },
+                "line_item_discount": {
+                    "description": "line_item_discount is the discount amount in invoice currency applied directly to this line item.",
+                    "type": "number"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/types.Metadata"
+                },
+                "meter_display_name": {
+                    "type": "string"
+                },
+                "meter_id": {
+                    "type": "string"
+                },
+                "period_end": {
+                    "type": "string"
+                },
+                "period_start": {
+                    "type": "string"
+                },
+                "plan_display_name": {
+                    "type": "string"
+                },
+                "prepaid_credits_applied": {
+                    "description": "prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.",
+                    "type": "number"
+                },
+                "price_id": {
+                    "type": "string"
+                },
+                "price_type": {
+                    "type": "string"
+                },
+                "price_unit": {
+                    "type": "string"
+                },
+                "price_unit_amount": {
+                    "type": "number"
+                },
+                "price_unit_id": {
+                    "type": "string"
+                },
+                "quantity": {
+                    "type": "number"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
+                    "type": "string"
+                }
+            }
+        },
         "meter.Aggregation": {
             "type": "object",
             "properties": {
@@ -22081,6 +22805,10 @@ const docTemplate = `{
                 },
                 "field": {
                     "description": "Field is the key in $event.properties on which the aggregation is to be applied\nFor ex if the aggregation type is sum for API usage, the field could be \"duration_ms\"",
+                    "type": "string"
+                },
+                "group_by": {
+                    "description": "GroupBy is the property name in event.properties to group by before aggregating.\nCurrently only supported for MAX aggregation with bucket_size.\nWhen set, aggregation is applied per unique value of this property within each bucket,\nthen the per-group results are summed to produce the bucket total.",
                     "type": "string"
                 },
                 "multiplier": {
@@ -22426,6 +23154,9 @@ const docTemplate = `{
                     "description": "Commitment fields",
                     "type": "number"
                 },
+                "commitment_duration": {
+                    "$ref": "#/definitions/types.BillingPeriod"
+                },
                 "commitment_overage_factor": {
                     "type": "number"
                 },
@@ -22745,10 +23476,12 @@ const docTemplate = `{
         "types.AddonType": {
             "type": "string",
             "enum": [
-                "onetime"
+                "onetime",
+                "multiple_instance"
             ],
             "x-enum-varnames": [
-                "AddonTypeOnetime"
+                "AddonTypeOnetime",
+                "AddonTypeMultipleInstance"
             ]
         },
         "types.AggregationType": {
@@ -22797,14 +23530,6 @@ const docTemplate = `{
                 "AlertConditionAbove",
                 "AlertConditionBelow"
             ]
-        },
-        "types.AlertConfig": {
-            "type": "object",
-            "properties": {
-                "threshold": {
-                    "$ref": "#/definitions/types.WalletAlertThreshold"
-                }
-            }
         },
         "types.AlertEntityType": {
             "type": "string",
@@ -22935,15 +23660,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.AlertThresholdType": {
-            "type": "string",
-            "enum": [
-                "amount"
-            ],
-            "x-enum-varnames": [
-                "AlertThresholdTypeAmount"
-            ]
-        },
         "types.AlertType": {
             "type": "string",
             "enum": [
@@ -23056,6 +23772,17 @@ const docTemplate = `{
                 "BILLING_TIER_SLAB"
             ]
         },
+        "types.CancelImmediatelyInvoicePolicy": {
+            "type": "string",
+            "enum": [
+                "generate_invoice",
+                "skip"
+            ],
+            "x-enum-varnames": [
+                "CancelImmediatelyInvoicePolicyGenerateInvoice",
+                "CancelImmediatelyInvoicePolicySkip"
+            ]
+        },
         "types.CancellationType": {
             "type": "string",
             "enum": [
@@ -23118,6 +23845,9 @@ const docTemplate = `{
                 "computed_true_up_amount": {
                     "description": "total_cost = computed_commitment_utilized_amount + computed_overage_amount + computed_true_up_amount",
                     "type": "string"
+                },
+                "duration": {
+                    "$ref": "#/definitions/types.BillingPeriod"
                 },
                 "is_windowed": {
                     "type": "boolean"
@@ -23213,6 +23943,9 @@ const docTemplate = `{
                 },
                 "hubspot": {
                     "$ref": "#/definitions/types.HubSpotConnectionMetadata"
+                },
+                "moyasar": {
+                    "$ref": "#/definitions/types.MoyasarConnectionMetadata"
                 },
                 "nomod": {
                     "$ref": "#/definitions/types.NomodConnectionMetadata"
@@ -24005,6 +24738,22 @@ const docTemplate = `{
                         "$ref": "#/definitions/types.PaymentStatus"
                     }
                 },
+                "period_end_gte": {
+                    "description": "period_end_gte filters invoices with period_end \u003e= value",
+                    "type": "string"
+                },
+                "period_end_lte": {
+                    "description": "period_end_lte filters invoices with period_end \u003c= value",
+                    "type": "string"
+                },
+                "period_start_gte": {
+                    "description": "period_start_gte filters invoices with period_start \u003e= value",
+                    "type": "string"
+                },
+                "period_start_lte": {
+                    "description": "period_start_lte filters invoices with period_start \u003c= value",
+                    "type": "string"
+                },
                 "skip_line_items": {
                     "description": "SkipLineItems if true, will not include line items in the response",
                     "type": "boolean"
@@ -24071,6 +24820,23 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.MoyasarConnectionMetadata": {
+            "type": "object",
+            "properties": {
+                "publishable_key": {
+                    "description": "Moyasar Publishable Key (encrypted, for frontend use)",
+                    "type": "string"
+                },
+                "secret_key": {
+                    "description": "Moyasar Secret Key (encrypted)",
+                    "type": "string"
+                },
+                "webhook_secret": {
+                    "description": "Moyasar Webhook Secret (encrypted, optional)",
+                    "type": "string"
+                }
             }
         },
         "types.NomodConnectionMetadata": {
@@ -24159,12 +24925,14 @@ const docTemplate = `{
             "enum": [
                 "stripe",
                 "razorpay",
-                "nomod"
+                "nomod",
+                "moyasar"
             ],
             "x-enum-varnames": [
                 "PaymentGatewayTypeStripe",
                 "PaymentGatewayTypeRazorpay",
-                "PaymentGatewayTypeNomod"
+                "PaymentGatewayTypeNomod",
+                "PaymentGatewayTypeMoyasar"
             ]
         },
         "types.PaymentMethodType": {
@@ -24205,6 +24973,25 @@ const docTemplate = `{
                 "PaymentStatusFailed",
                 "PaymentStatusRefunded",
                 "PaymentStatusPartiallyRefunded"
+            ]
+        },
+        "types.PaymentTerms": {
+            "type": "string",
+            "enum": [
+                "15 NET",
+                "30 NET",
+                "45 NET",
+                "60 NET",
+                "75 NET",
+                "90 NET"
+            ],
+            "x-enum-varnames": [
+                "PaymentTerms15Net",
+                "PaymentTerms30Net",
+                "PaymentTerms45Net",
+                "PaymentTerms60Net",
+                "PaymentTerms75Net",
+                "PaymentTerms90Net"
             ]
         },
         "types.PlanFilter": {
@@ -24278,6 +25065,90 @@ const docTemplate = `{
                 "PRICE_ENTITY_TYPE_PRICE",
                 "PRICE_ENTITY_TYPE_COSTSHEET"
             ]
+        },
+        "types.PriceFilter": {
+            "type": "object",
+            "properties": {
+                "allow_expired_prices": {
+                    "type": "boolean",
+                    "default": false
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "entity_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.PriceEntityType"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "DSL filters",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "meter_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "parent_price_id": {
+                    "type": "string"
+                },
+                "plan_ids": {
+                    "description": "Price override filtering fields",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "price_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sort": {
+                    "type": "string"
+                },
+                "start_date_lt": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "subscription_id": {
+                    "type": "string"
+                }
+            }
         },
         "types.PriceType": {
             "type": "string",
@@ -24647,7 +25518,8 @@ const docTemplate = `{
                 "razorpay",
                 "chargebee",
                 "quickbooks",
-                "nomod"
+                "nomod",
+                "moyasar"
             ],
             "x-enum-varnames": [
                 "SecretProviderFlexPrice",
@@ -24657,7 +25529,8 @@ const docTemplate = `{
                 "SecretProviderRazorpay",
                 "SecretProviderChargebee",
                 "SecretProviderQuickBooks",
-                "SecretProviderNomod"
+                "SecretProviderNomod",
+                "SecretProviderMoyasar"
             ]
         },
         "types.SecretType": {
@@ -24802,6 +25675,13 @@ const docTemplate = `{
                         "desc"
                     ]
                 },
+                "parent_subscription_ids": {
+                    "description": "ParentSubscriptionIDs filters by parent subscription IDs",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
                 "plan_id": {
                     "description": "PlanID filters by plan ID",
                     "type": "string"
@@ -24841,11 +25721,13 @@ const docTemplate = `{
             "type": "string",
             "enum": [
                 "plan",
-                "addon"
+                "addon",
+                "subscription"
             ],
             "x-enum-varnames": [
                 "SubscriptionLineItemEntityTypePlan",
-                "SubscriptionLineItemEntityTypeAddon"
+                "SubscriptionLineItemEntityTypeAddon",
+                "SubscriptionLineItemEntityTypeSubscription"
             ]
         },
         "types.SubscriptionScheduleChangeType": {
@@ -25022,7 +25904,8 @@ const docTemplate = `{
                 "CREDIT_NOTE",
                 "CREDIT_EXPIRED",
                 "WALLET_TERMINATION",
-                "MANUAL_BALANCE_DEBIT"
+                "MANUAL_BALANCE_DEBIT",
+                "CREDIT_ADJUSTMENT"
             ],
             "x-enum-varnames": [
                 "TransactionReasonInvoicePayment",
@@ -25033,7 +25916,8 @@ const docTemplate = `{
                 "TransactionReasonCreditNote",
                 "TransactionReasonCreditExpired",
                 "TransactionReasonWalletTermination",
-                "TransactionReasonManualBalanceDebit"
+                "TransactionReasonManualBalanceDebit",
+                "TransactionReasonCreditAdjustment"
             ]
         },
         "types.TransactionStatus": {
@@ -25140,22 +26024,6 @@ const docTemplate = `{
                 "UserTypeUser",
                 "UserTypeServiceAccount"
             ]
-        },
-        "types.WalletAlertThreshold": {
-            "type": "object",
-            "properties": {
-                "type": {
-                    "description": "amount",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.AlertThresholdType"
-                        }
-                    ]
-                },
-                "value": {
-                    "type": "number"
-                }
-            }
         },
         "types.WalletConfig": {
             "type": "object",
@@ -25318,23 +26186,25 @@ const docTemplate = `{
             "enum": [
                 "PAYMENT",
                 "EXTERNAL",
-                "REQUEST"
+                "REQUEST",
+                "INVOICE"
             ],
             "x-enum-varnames": [
                 "WalletTxReferenceTypePayment",
                 "WalletTxReferenceTypeExternal",
-                "WalletTxReferenceTypeRequest"
+                "WalletTxReferenceTypeRequest",
+                "WalletTxReferenceTypeInvoice"
             ]
         },
         "types.WalletType": {
             "type": "string",
             "enum": [
-                "PROMOTIONAL",
-                "PRE_PAID"
+                "PRE_PAID",
+                "POST_PAID"
             ],
             "x-enum-varnames": [
-                "WalletTypePromotional",
-                "WalletTypePrePaid"
+                "WalletTypePrePaid",
+                "WalletTypePostPaid"
             ]
         },
         "types.WindowSize": {

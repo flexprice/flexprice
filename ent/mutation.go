@@ -48729,6 +48729,8 @@ type SubscriptionLineItemMutation struct {
 	quantity                   *decimal.Decimal
 	currency                   *string
 	billing_period             *types.BillingPeriod
+	billing_period_count       *int
+	addbilling_period_count    *int
 	invoice_cadence            *types.InvoiceCadence
 	trial_period               *int
 	addtrial_period            *int
@@ -49793,6 +49795,62 @@ func (m *SubscriptionLineItemMutation) ResetBillingPeriod() {
 	m.billing_period = nil
 }
 
+// SetBillingPeriodCount sets the "billing_period_count" field.
+func (m *SubscriptionLineItemMutation) SetBillingPeriodCount(i int) {
+	m.billing_period_count = &i
+	m.addbilling_period_count = nil
+}
+
+// BillingPeriodCount returns the value of the "billing_period_count" field in the mutation.
+func (m *SubscriptionLineItemMutation) BillingPeriodCount() (r int, exists bool) {
+	v := m.billing_period_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingPeriodCount returns the old "billing_period_count" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldBillingPeriodCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingPeriodCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingPeriodCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingPeriodCount: %w", err)
+	}
+	return oldValue.BillingPeriodCount, nil
+}
+
+// AddBillingPeriodCount adds i to the "billing_period_count" field.
+func (m *SubscriptionLineItemMutation) AddBillingPeriodCount(i int) {
+	if m.addbilling_period_count != nil {
+		*m.addbilling_period_count += i
+	} else {
+		m.addbilling_period_count = &i
+	}
+}
+
+// AddedBillingPeriodCount returns the value that was added to the "billing_period_count" field in this mutation.
+func (m *SubscriptionLineItemMutation) AddedBillingPeriodCount() (r int, exists bool) {
+	v := m.addbilling_period_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBillingPeriodCount resets all changes to the "billing_period_count" field.
+func (m *SubscriptionLineItemMutation) ResetBillingPeriodCount() {
+	m.billing_period_count = nil
+	m.addbilling_period_count = nil
+}
+
 // SetInvoiceCadence sets the "invoice_cadence" field.
 func (m *SubscriptionLineItemMutation) SetInvoiceCadence(tc types.InvoiceCadence) {
 	m.invoice_cadence = &tc
@@ -50526,7 +50584,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 36)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -50592,6 +50650,9 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	}
 	if m.billing_period != nil {
 		fields = append(fields, subscriptionlineitem.FieldBillingPeriod)
+	}
+	if m.billing_period_count != nil {
+		fields = append(fields, subscriptionlineitem.FieldBillingPeriodCount)
 	}
 	if m.invoice_cadence != nil {
 		fields = append(fields, subscriptionlineitem.FieldInvoiceCadence)
@@ -50684,6 +50745,8 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case subscriptionlineitem.FieldBillingPeriod:
 		return m.BillingPeriod()
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		return m.BillingPeriodCount()
 	case subscriptionlineitem.FieldInvoiceCadence:
 		return m.InvoiceCadence()
 	case subscriptionlineitem.FieldTrialPeriod:
@@ -50763,6 +50826,8 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldCurrency(ctx)
 	case subscriptionlineitem.FieldBillingPeriod:
 		return m.OldBillingPeriod(ctx)
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		return m.OldBillingPeriodCount(ctx)
 	case subscriptionlineitem.FieldInvoiceCadence:
 		return m.OldInvoiceCadence(ctx)
 	case subscriptionlineitem.FieldTrialPeriod:
@@ -50952,6 +51017,13 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetBillingPeriod(v)
 		return nil
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingPeriodCount(v)
+		return nil
 	case subscriptionlineitem.FieldInvoiceCadence:
 		v, ok := value.(types.InvoiceCadence)
 		if !ok {
@@ -51051,6 +51123,9 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 // this mutation.
 func (m *SubscriptionLineItemMutation) AddedFields() []string {
 	var fields []string
+	if m.addbilling_period_count != nil {
+		fields = append(fields, subscriptionlineitem.FieldBillingPeriodCount)
+	}
 	if m.addtrial_period != nil {
 		fields = append(fields, subscriptionlineitem.FieldTrialPeriod)
 	}
@@ -51062,6 +51137,8 @@ func (m *SubscriptionLineItemMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *SubscriptionLineItemMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		return m.AddedBillingPeriodCount()
 	case subscriptionlineitem.FieldTrialPeriod:
 		return m.AddedTrialPeriod()
 	}
@@ -51073,6 +51150,13 @@ func (m *SubscriptionLineItemMutation) AddedField(name string) (ent.Value, bool)
 // type.
 func (m *SubscriptionLineItemMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBillingPeriodCount(v)
+		return nil
 	case subscriptionlineitem.FieldTrialPeriod:
 		v, ok := value.(int)
 		if !ok {
@@ -51301,6 +51385,9 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldBillingPeriod:
 		m.ResetBillingPeriod()
+		return nil
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		m.ResetBillingPeriodCount()
 		return nil
 	case subscriptionlineitem.FieldInvoiceCadence:
 		m.ResetInvoiceCadence()
