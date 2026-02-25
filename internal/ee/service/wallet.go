@@ -688,6 +688,15 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		)
 	}
 
+	baseWalletService := service.NewWalletService(s.ServiceParams)
+	if err := baseWalletService.CheckWalletBalanceAlert(ctx, event); err != nil {
+		s.Logger.Errorw("failed to check wallet balance alert after wallet operation",
+			"error", err,
+			"wallet_id", req.WalletID,
+			"customer_id", w.CustomerID,
+		)
+	}
+
 	return nil
 }
 
