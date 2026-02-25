@@ -222,6 +222,12 @@ func (f *CreditGrantFilter) WithSubscriptionIDs(subscriptionIDs []string) *Credi
 	return f
 }
 
+// WithScope sets the scope on the filter
+func (f *CreditGrantFilter) WithScope(scope CreditGrantScope) *CreditGrantFilter {
+	f.Scope = &scope
+	return f
+}
+
 // WithStatus sets the status on the filter
 func (f *CreditGrantFilter) WithStatus(status Status) *CreditGrantFilter {
 	f.Status = &status

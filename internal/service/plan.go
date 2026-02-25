@@ -839,7 +839,8 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	// Published credit grants — filter at query level, no post-loop status check needed
 	sourceGrants, err := s.CreditGrantRepo.List(ctx, types.NewNoLimitCreditGrantFilter().
 		WithPlanIDs([]string{id}).
-		WithStatus(types.StatusPublished))
+		WithStatus(types.StatusPublished).
+		WithScope(types.CreditGrantScopePlan))
 	if err != nil {
 		s.Logger.Errorw("failed to fetch credit grants for plan clone", "plan_id", id, "error", err)
 		return nil, err
