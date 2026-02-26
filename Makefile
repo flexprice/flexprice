@@ -282,6 +282,7 @@ help-sdk:
 	@echo "SDK Management Commands:"
 	@echo "======================="
 	@echo "  make sdk-all             - Validate + generate all SDKs/MCP + merge custom (uses existing swagger)"
+	@echo "  make filter-mcp-spec     - Build tag-filtered OpenAPI spec for MCP (allowed tags in api/mcp/.speakeasy/allowed-tags.yaml)"
 	@echo "  make update-sdk          - Regenerate swagger then run sdk-all"
 	@echo "  make clean-sdk           - Remove generated api/go, api/typescript, api/python, api/mcp"
 	@echo "  make merge-custom       - Copy api/custom/<lang>/ into api/<lang>/"
@@ -372,7 +373,13 @@ speakeasy-clean:
 	@rm -rf api/typescript 2>/dev/null || true
 	@echo "✓ SDK cleanup complete"
 
-speakeasy-generate: speakeasy-validate
+# MCP uses a tag-filtered spec (docs/swagger/swagger-3-0-mcp.json). Run this before sdk-all/speakeasy-generate.
+# Allowed tags are in api/mcp/.speakeasy/allowed-tags.yaml.
+.PHONY: filter-mcp-spec
+filter-mcp-spec:
+	@node scripts/filter-openapi-by-tags.mjs
+
+speakeasy-generate: speakeasy-validate filter-mcp-spec
 	@echo "Generating SDKs with Speakeasy..."
 	@CI=true TERM=dumb speakeasy run --target all -y --skip-upload-spec --skip-compile --minimal
 

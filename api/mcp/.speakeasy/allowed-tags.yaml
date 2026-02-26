@@ -1,0 +1,7 @@
+# Tags from OpenAPI that should be exposed as MCP tools.
+# Only operations with at least one of these tags are included in the MCP bundle.
+# Edit this list and run `make filter-mcp-spec` then `make sdk-all` to regenerate.
+allowedTags:
+  - Customers
+  - Invoices
+  - Events
