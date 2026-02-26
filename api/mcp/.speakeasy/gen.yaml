@@ -28,10 +28,10 @@ generation:
   persistentEdits: {}
   tests:
     generateTests: false
-    generateNewTests: true
+    generateNewTests: false
     skipResponseBodyAssertions: false
 mcp-typescript:
-  version: 0.0.23
+  version: 0.0.40
   additionalDependencies:
     dependencies: {}
     devDependencies: {}
