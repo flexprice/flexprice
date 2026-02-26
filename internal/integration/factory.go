@@ -340,6 +340,17 @@ func (f *Factory) GetChargebeeIntegration(ctx context.Context) (*ChargebeeIntegr
 
 // GetQuickBooksIntegration returns a complete QuickBooks integration setup
 func (f *Factory) GetQuickBooksIntegration(ctx context.Context) (*QuickBooksIntegration, error) {
+	// Verify a QuickBooks connection exists for this environment before building the integration
+	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderQuickBooks)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider quickbooks is not configured in this environment").
+			WithHint("QuickBooks connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+
 	// Create QuickBooks client
 	qbClient := quickbooks.NewClient(
 		f.connectionRepo,
