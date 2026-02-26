@@ -320,12 +320,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	// Use map like customer_onboarding to avoid import cycles
 	defaultPrepareProcessedEventsConfig := map[string]interface{}{
 		"workflow_type": "prepare_processed_events",
-		"actions": []interface{}{
-			map[string]interface{}{
-				"action": "create_feature_and_price",
-				// plan_id must be provided by user - not in defaults
-			},
-		},
+		"actions":       []interface{}{},
 	}
 
 	// Convert typed structs to maps using centralized utility
