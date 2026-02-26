@@ -277,6 +277,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
 	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
+	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

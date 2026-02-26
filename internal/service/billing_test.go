@@ -348,6 +348,27 @@ func (s *BillingServiceSuite) setupTestData() {
 	// Update the subscription object to include the line items
 	s.testData.subscription.LineItems = lineItems
 
+	// Populate feature_usage for tests that use GetFeatureUsageBySubscription (final invoice, preview).
+	// This mirrors what the feature_usage pipeline would produce from the raw events.
+	featureUsageStore := s.GetStores().FeatureUsageRepo.(*testutil.InMemoryFeatureUsageStore)
+	apiCallsLineItem := lineItems[1] // Usage-based arrear line item
+	s.NoError(featureUsageStore.InsertProcessedEvent(s.GetContext(), &events.FeatureUsage{
+		Event: events.Event{
+			ID:                 s.GetUUID(),
+			TenantID:           s.testData.subscription.TenantID,
+			EnvironmentID:      s.testData.subscription.EnvironmentID,
+			EventName:          s.testData.meters.apiCalls.EventName,
+			ExternalCustomerID: s.testData.customer.ExternalID,
+			Timestamp:          s.testData.now.Add(-1 * time.Hour),
+		},
+		SubscriptionID: s.testData.subscription.ID,
+		SubLineItemID:  apiCallsLineItem.ID,
+		PriceID:        s.testData.prices.apiCalls.ID,
+		FeatureID:      "feat_api_calls",
+		MeterID:        s.testData.meters.apiCalls.ID,
+		QtyTotal:       decimal.NewFromInt(500), // 500 API calls to produce $10 (500 * $0.02 tier)
+	}))
+
 	// Create test events
 	for i := 0; i < 500; i++ {
 		event := &events.Event{

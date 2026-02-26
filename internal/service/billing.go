@@ -1457,7 +1457,7 @@ func (s *billingService) CalculateAllCharges(
 	}, nil
 }
 
-func (s *billingService) calculateAllChargesForPreview(
+func (s *billingService) calculateAllFeatureUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
@@ -1543,7 +1543,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		calculationResult, err = s.CalculateCharges(
+		calculationResult, err = s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1578,7 +1578,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1591,7 +1591,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
+		advanceResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1618,7 +1618,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// but don't filter out already invoiced items
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateChargesForPreview(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			classification.CurrentPeriodArrear,
@@ -1631,7 +1631,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.calculateChargesForPreview(
+		advanceResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			classification.NextPeriodAdvance,
@@ -1661,7 +1661,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1871,7 +1871,7 @@ func (s *billingService) FilterLineItemsToBeInvoiced(
 	return filteredLineItems, nil
 }
 
-func (s *billingService) calculateChargesForPreview(
+func (s *billingService) calculateFeatureUsageCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	lineItems []*subscription.SubscriptionLineItem,
@@ -1900,7 +1900,7 @@ func (s *billingService) calculateChargesForPreview(
 	}
 
 	// Calculate charges
-	return s.calculateAllChargesForPreview(ctx, &filteredSub, usage, periodStart, periodEnd)
+	return s.calculateAllFeatureUsageCharges(ctx, &filteredSub, usage, periodStart, periodEnd)
 }
 
 // CalculateCharges calculates charges for the given line items and period
