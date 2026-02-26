@@ -14,13 +14,14 @@ name: Generate SDKs
 on:
   push:
     branches: [main, develop, feat/speakeasy-v2]
-    paths:
-      - "docs/swagger/**"
-      - ".speakeasy/**"
-      - "api/custom/**"
-      - "cmd/**"
-      - "internal/api/**"
-      - "Makefile"
+    # TODO: Uncomment these paths when we have a way to test the workflow without pushing to main
+    # paths:
+    #   - "docs/swagger/**"
+    #   - ".speakeasy/**"
+    #   - "api/custom/**"
+    #   - "cmd/**"
+    #   - "internal/api/**"
+    #   - "Makefile"
   workflow_dispatch:
     inputs:
       # Always publish to GitHub, npm, and PyPI when workflow runs
@@ -100,7 +101,7 @@ jobs:
           unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
       # Resolve version so every run is unique and publish never fails (npm/PyPI reject re-publish).
-      # Current version = max(npm flexprice-ts, .speakeasy/sdk-version.json); then patch is bumped. workflow_dispatch can override with inputs.version.
+      # Version = max(npm flexprice-ts, .speakeasy/sdk-version.json). If one is already greater, use it directly; only bump when both are equal (in sync). workflow_dispatch can override with inputs.version.
       - name: Resolve version
         id: resolve-version
         run: |
@@ -113,9 +114,14 @@ jobs:
             [ -z "$BASE_NPM" ] && BASE_NPM="0.0.0"
             [ -z "$BASE_FILE" ] || [ "$BASE_FILE" = "null" ] && BASE_FILE="0.0.0"
             BASE=$(printf "%s\n%s\n" "$BASE_NPM" "$BASE_FILE" | sort -V | tail -1)
-            NEXT=$(./scripts/next-sdk-version.sh patch "$BASE")
-            echo "version=$NEXT" >> $GITHUB_OUTPUT
-            echo "Resolved version (bumped from $BASE, npm=$BASE_NPM file=$BASE_FILE): $NEXT"
+            if [ "$BASE_NPM" = "$BASE_FILE" ]; then
+              NEXT=$(./scripts/next-sdk-version.sh patch "$BASE")
+              echo "version=$NEXT" >> $GITHUB_OUTPUT
+              echo "Resolved version (bumped from $BASE, npm=$BASE_NPM file=$BASE_FILE): $NEXT"
+            else
+              echo "version=$BASE" >> $GITHUB_OUTPUT
+              echo "Resolved version (using greater, npm=$BASE_NPM file=$BASE_FILE): $BASE"
+            fi
           fi
 
       # SDKs: generate with resolved version so artifacts have a unique version for publish
