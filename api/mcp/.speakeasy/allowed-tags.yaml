@@ -5,3 +5,5 @@ allowedTags:
   - Customers
   - Invoices
   - Events
+  - Plans
+  - Prices
