@@ -44,7 +44,25 @@ Synchronizes all prices from a plan to existing subscriptions.
 go run scripts/main.go -cmd sync-plan-prices -tenant-id <tenant_id> -environment-id <environment_id> -plan-id <plan_id>
 ```
 
-### 3. Other Scripts
+### 3. Next SDK version (CI / optional)
+Prints the next SDK version (patch by default) without writing. Used by CI and by `make sdk-all` when `VERSION` is not set.
+
+**Usage:**
+```bash
+./scripts/next-sdk-version.sh [major|minor|patch] [baseVersion]
+```
+Default is `patch`. Omit `baseVersion` to use `.speakeasy/sdk-version.json`; CI passes base from `npm view flexprice-ts version`.
+
+### 4. Sync SDK version to gen.yaml
+Writes the given version into all `api/<lang>/.speakeasy/gen.yaml` and `.speakeasy/sdk-version.json` so the next SDK generation starts from that version. Run after `make sdk-all` if you want gen.yaml to match the generated package version (CI runs this automatically).
+
+**Usage:**
+```bash
+./scripts/sync-sdk-version-to-gen.sh <VERSION>
+```
+Example: `./scripts/sync-sdk-version-to-gen.sh $(jq -r .version api/typescript/package.json)`
+
+### 5. Other Scripts
 - `seed-events`: Seed events data into Clickhouse
 - `generate-apikey`: Generate a new API key
 - `assign-tenant`: Assign tenant to user

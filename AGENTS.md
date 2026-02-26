@@ -75,16 +75,54 @@ make swagger
 ```
 
 ### SDK Generation
+
+SDKs and the MCP server are generated with Speakeasy from the OpenAPI spec. Output layout: **api/** (api/go, api/typescript, api/python, api/mcp).
+
+**Source:** [docs/swagger/swagger-3-0.json](docs/swagger/swagger-3-0.json) (regenerate with `make swagger`).
+
+**Commands:**
 ```bash
-# Generate Go SDK only (current production pipeline)
+# Single command: validate + generate all SDKs/MCP + merge custom (uses existing docs/swagger/swagger-3-0.json)
+make sdk-all
+
+# When you change the API, regenerate the spec first, then run sdk-all
+make swagger
+make sdk-all
+
+# Validate OpenAPI
+make speakeasy-validate
+
+# Generate Go SDK (validate + generate + custom merge + build; uses existing swagger)
 make go-sdk
 
-# Quick regeneration during development (no clean)
+# Quick regeneration (no clean)
 make regenerate-go-sdk
 
-# Clean and rebuild Go SDK
-make clean-go-sdk go-sdk
+# Generate all targets (after configuring workflow targets)
+make swagger speakeasy-generate
+make merge-custom
+
+# Merge custom files only (after any speakeasy run)
+make merge-custom
 ```
+
+**Custom methods and files:** Custom logic lives in `api/custom/<lang>/` (same path structure as api/<lang>/). It is merged into the generated output after every generation via `make merge-custom`. Do not edit generated files under api/<lang>/ for custom code; edit the custom tree so changes survive regeneration. See [api/custom/README.md](api/custom/README.md). READMEs for each SDK and MCP are maintained in `api/custom/<lang>/README.md` and overwrite the generated README on merge; `api/go`, `api/python`, and `api/typescript` also list README in `.genignore` so a generate run without merge-custom does not overwrite the current README.
+
+**MCP server:** Generated in **api/mcp**. Run from that directory (e.g. `npx . start` or per generated README). Auth: set `FLEXPRICE_API_KEY` or the env var documented in the MCP server README. For large tool sets, use dynamic mode (e.g. `--mode dynamic`) to reduce context size; document in api/mcp README.
+
+**SDK integration tests:** In **api/tests/** – two variants: `test_local_sdk_*` (unpublished SDKs from api/go, api/python, api/javascript) and `test_sdk_*` (published packages). Run `make test-sdk-local` or `make test-sdk-published`; see [api/tests/README.md](api/tests/README.md).
+
+**Publishing:** Single workflow [.github/workflows/generate-sdks.yml](.github/workflows/generate-sdks.yml): on push to main (path-filtered) or workflow_dispatch it runs generate → push to GitHub repos → publish to npm/PyPI. Secrets: `SPEAKEASY_API_KEY`, `SDK_DEPLOY_GIT_TOKEN`, `NPM_TOKEN`, `PYPI_TOKEN`. See [api/README.md](api/README.md#publishing). To test the full pipeline (including artifact upload), run on GitHub; local `act` runs often fail at upload-artifact due to missing `ACTIONS_RUNTIME_TOKEN`.
+
+**Best practices checklist (per release):**
+
+| Area | Practices |
+|------|------------|
+| **OpenAPI** | operationId, summary, description, tags, schema docs; use .speakeasy/overlays/ for x-speakeasy-mcp; validate before generate |
+| **SDK** | Type safety, sdkClassName Flexprice, retries, minimal deps, idiomatic per language, README + repoUrl in gen.yaml |
+| **MCP** | Scopes, clear tool names/descriptions, dynamic mode for scale, mcpbManifestOverlay, auth docs, validateResponse choice |
+| **Resilience** | Retries with backoff, timeouts, rate-limit awareness |
+| **CI** | Generate on spec change, run merge-custom after generate, build/test SDKs, version and publish |
 
 ### Infrastructure Services Access
 Once services are running:

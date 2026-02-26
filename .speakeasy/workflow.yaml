@@ -1,48 +1,52 @@
 workflowVersion: 1.0.0
 speakeasyVersion: latest
 sources:
-    flexprice-api:
+    swagger-json:
         inputs:
-            - location: ./docs/swagger/swagger-3-0.json
-        overlays:
-            - location: .speakeasy/overlays.yaml
+            - location: docs/swagger/swagger-3-0.json
         registry:
-            location: registry.speakeasyapi.dev/flexprice/develop-cw0/flexprice-api
+            location: registry.speakeasyapi.dev/flexprice/prod/swagger-json
 targets:
     flexprice-go:
         target: go
-        source: flexprice-api
+        source: swagger-json
         output: ./api/go
-        publish: {}
         codeSamples:
             registry:
-                location: registry.speakeasyapi.dev/flexprice/develop-cw0/flexprice-api-go-code-samples
+                location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-go-code-samples
             labelOverride:
                 fixedValue: Go (SDK)
             blocking: false
+    flexprice-mcp:
+        target: mcp-typescript
+        source: swagger-json
+        output: ./api/mcp
+        publish:
+            npm:
+                token: $npm_token
     flexprice-python:
         target: python
-        source: flexprice-api
+        source: swagger-json
         output: ./api/python
         publish:
             pypi:
-                token: ""
+                token: $pypi_token
         codeSamples:
             registry:
-                location: registry.speakeasyapi.dev/flexprice/develop-cw0/flexprice-api-python-code-samples
+                location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-python-code-samples
             labelOverride:
                 fixedValue: Python (SDK)
             blocking: false
     flexprice-typescript:
         target: typescript
-        source: flexprice-api
-        output: ./api/javascript
+        source: swagger-json
+        output: ./api/typescript
         publish:
             npm:
-                token: ""
+                token: $npm_token
         codeSamples:
             registry:
-                location: registry.speakeasyapi.dev/flexprice/develop-cw0/flexprice-api-typescript-code-samples
+                location: registry.speakeasyapi.dev/flexprice/prod/swagger-json-typescript-code-samples
             labelOverride:
                 fixedValue: Typescript (SDK)
             blocking: false
