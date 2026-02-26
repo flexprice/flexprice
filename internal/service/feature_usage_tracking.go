@@ -886,9 +886,11 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		return results, err
 	}
 
+	// Fetch workflow config once when we might need it; avoids duplicate lookups in handleMissingFeature.
+	workflowConfig, hasPrepareProcessedEventsConfig := s.getPrepareProcessedEventsConfig(ctx)
 	// When config is off, no meters means nothing to do. When config is on, we still run the helper
 	// so it can create the feature/meter via workflow (e.g. token/audio events from workflow.go) and re-fetch.
-	if !s.hasPrepareProcessedEventsConfig(ctx) && len(meters) == 0 {
+	if !hasPrepareProcessedEventsConfig && len(meters) == 0 {
 		s.Logger.Debugw("no meters found for event name, skipping",
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -898,8 +900,8 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 
 	var meterMap map[string]*meter.Meter
 	var meterIDs []string
-	if s.hasPrepareProcessedEventsConfig(ctx) {
-		meterMap, meterIDs, err = s.matchMetersWithFeatureCreationSupport(ctx, event, meters, meterFilter)
+	if hasPrepareProcessedEventsConfig {
+		meterMap, meterIDs, err = s.matchMetersWithFeatureCreationSupport(ctx, event, meters, meterFilter, workflowConfig)
 		if err != nil {
 			return results, err
 		}
@@ -4348,11 +4350,16 @@ func (s *featureUsageTrackingService) getCustomAnalyticsConfig(ctx context.Conte
 	return &config, nil
 }
 
-// hasPrepareProcessedEventsConfig returns true when the prepare_processed_events workflow setting exists and has actions.
-func (s *featureUsageTrackingService) hasPrepareProcessedEventsConfig(ctx context.Context) bool {
+// getPrepareProcessedEventsConfig fetches the prepare_processed_events workflow setting once.
+// Returns (config, true) when the setting exists and has actions, (nil, false) otherwise.
+// Callers can pass the config to matchMetersWithFeatureCreationSupport and handleMissingFeature to avoid redundant fetches.
+func (s *featureUsageTrackingService) getPrepareProcessedEventsConfig(ctx context.Context) (*workflowModels.WorkflowConfig, bool) {
 	settingsService := &settingsService{ServiceParams: s.ServiceParams}
 	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](settingsService, ctx, types.SettingKeyPrepareProcessedEvents)
-	return err == nil && workflowConfig != nil && len(workflowConfig.Actions) > 0
+	if err != nil || workflowConfig == nil || len(workflowConfig.Actions) == 0 {
+		return nil, false
+	}
+	return workflowConfig, true
 }
 
 // matchMetersWithFeatureCreationSupport runs the required-aggregation-field matching and optional feature auto-creation.
@@ -4362,6 +4369,7 @@ func (s *featureUsageTrackingService) matchMetersWithFeatureCreationSupport(
 	event *events.Event,
 	meters []*meter.Meter,
 	meterFilter *types.MeterFilter,
+	workflowConfig *workflowModels.WorkflowConfig,
 ) (map[string]*meter.Meter, []string, error) {
 	required := workflowModels.RequiredAggregationFields(event.EventName, event.Properties)
 	meterMap, meterIDs, existing := s.matchMetersForEvent(meters, event, required)
@@ -4373,7 +4381,7 @@ func (s *featureUsageTrackingService) matchMetersWithFeatureCreationSupport(
 			return nil, nil, nil
 		}
 		s.Logger.Debugw("no meters found for event name, attempting auto-creation", "event_id", event.ID, "event_name", event.EventName, "required", required)
-		workflowResult, err := s.handleMissingFeature(ctx, event, nil)
+		workflowResult, err := s.handleMissingFeature(ctx, event, nil, workflowConfig)
 		if err != nil {
 			s.Logger.Errorw("failed to handle missing feature", "event_id", event.ID, "event_name", event.EventName, "error", err)
 			return nil, nil, err
@@ -4395,7 +4403,15 @@ func (s *featureUsageTrackingService) matchMetersWithFeatureCreationSupport(
 		}
 	} else if len(missing) > 0 {
 		s.Logger.Infow("creating only missing aggregation fields (skipping existing)", "event_id", event.ID, "event_name", event.EventName, "existing", lo.Keys(existing), "missing", missing)
-		_, _ = s.handleMissingFeature(ctx, event, missing)
+		if _, err := s.handleMissingFeature(ctx, event, missing, workflowConfig); err != nil {
+			s.Logger.Errorw("failed to create missing aggregation fields",
+				"event_id", event.ID,
+				"event_name", event.EventName,
+				"missing", missing,
+				"error", err,
+			)
+			// Continue with existing meters; do not fail the event
+		}
 	}
 
 	if len(meterIDs) == 0 {
@@ -4426,22 +4442,10 @@ func (s *featureUsageTrackingService) handleMissingFeature(
 	ctx context.Context,
 	event *events.Event,
 	onlyCreateAggregationFields []string,
+	workflowConfig *workflowModels.WorkflowConfig,
 ) (*feature.Feature, error) {
-	// Get config from settings
-	settingsService := &settingsService{ServiceParams: s.ServiceParams}
-	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](
-		settingsService,
-		ctx,
-		types.SettingKeyPrepareProcessedEvents,
-	)
-	if err != nil {
-		s.Logger.Debugw("failed to get workflow config",
-			"event_id", event.ID,
-			"event_name", event.EventName,
-			"error", err,
-		)
-		return nil, nil // No config, skip auto-creation
-	}
+
+	var err error
 
 	if workflowConfig == nil || len(workflowConfig.Actions) == 0 {
 		s.Logger.Debugw("no workflow config found for prepare processed events",
