@@ -188,9 +188,9 @@ jobs:
           - lang: typescript
             artifact: api-typescript
             default_repo: Random-test-v2/ts-temp
-          # - lang: mcp
-          #   artifact: api-mcp
-          #   default_repo: Random-test-v2/mcp-temp
+          - lang: mcp
+            artifact: api-mcp
+            default_repo: Random-test-v2/mcp-temp
     env:
       SDK_DEPLOY_GIT_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
       SDK_GO_REPO: ${{ vars.SDK_GO_REPO }}
@@ -264,7 +264,7 @@ jobs:
           echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- Python: https://github.com/$PY_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- TypeScript: https://github.com/$TS_REPO" >> $GITHUB_STEP_SUMMARY
-          # echo "- MCP: https://github.com/$MCP_REPO" >> $GITHUB_STEP_SUMMARY
+          echo "- MCP: https://github.com/$MCP_REPO" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Publishes via npm/twine here; .speakeasy/workflow.yaml publish config is for Speakeasy CLI/action only and is not used by this workflow.
