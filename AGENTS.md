@@ -76,7 +76,7 @@ make swagger
 
 ### SDK Generation
 
-SDKs and the MCP server are generated with Speakeasy from the OpenAPI spec. Output layout: **api/** (api/go, api/typescript, api/python, api/mcp).
+SDKs and the MCP server are generated from the OpenAPI spec. Output layout: **api/** (api/go, api/typescript, api/python, api/mcp).
 
 **Source:** [docs/swagger/swagger-3-0.json](docs/swagger/swagger-3-0.json) (regenerate with `make swagger`).
 
@@ -102,13 +102,13 @@ make regenerate-go-sdk
 make swagger speakeasy-generate
 make merge-custom
 
-# Merge custom files only (after any speakeasy run)
+# Merge custom files only (after any SDK generation run)
 make merge-custom
 ```
 
 **Custom methods and files:** Custom logic lives in `api/custom/<lang>/` (same path structure as api/<lang>/). It is merged into the generated output after every generation via `make merge-custom`. Do not edit generated files under api/<lang>/ for custom code; edit the custom tree so changes survive regeneration. See [api/custom/README.md](api/custom/README.md). READMEs for each SDK and MCP are maintained in `api/custom/<lang>/README.md` and overwrite the generated README on merge; `api/go`, `api/python`, and `api/typescript` also list README in `.genignore` so a generate run without merge-custom does not overwrite the current README.
 
-**MCP server:** Generated in **api/mcp**. Run from that directory (e.g. `npx . start` or per generated README). Auth: set `FLEXPRICE_API_KEY` or the env var documented in the MCP server README. For large tool sets, use dynamic mode (e.g. `--mode dynamic`) to reduce context size; document in api/mcp README. Only operations whose OpenAPI tags are listed in [api/mcp/.speakeasy/allowed-tags.yaml](api/mcp/.speakeasy/allowed-tags.yaml) are included; the filtered spec is built by `make filter-mcp-spec` (runs automatically before `make sdk-all`). To change which tools are exposed, edit `allowed-tags.yaml` and run `make filter-mcp-spec` then `make sdk-all`.
+**MCP server:** Generated in **api/mcp**. Run from that directory (e.g. `npx . start` or per generated README). Auth: set `FLEXPRICE_API_KEY` or the env var documented in the MCP server README. For large tool sets, use dynamic mode (e.g. `--mode dynamic`) to reduce context size; document in api/mcp README. Only operations whose OpenAPI tags are listed in the MCP allowed-tags configuration are included; the filtered spec is built by `make filter-mcp-spec` (runs automatically before `make sdk-all`). To change which tools are exposed, edit `allowed-tags.yaml` and run `make filter-mcp-spec` then `make sdk-all`.
 
 **SDK integration tests:** In **api/tests/** – two variants: `test_local_sdk_*` (unpublished SDKs from api/go, api/python, api/javascript) and `test_sdk_*` (published packages). Run `make test-sdk-local` or `make test-sdk-published`; see [api/tests/README.md](api/tests/README.md).
 
@@ -118,7 +118,7 @@ make merge-custom
 
 | Area | Practices |
 |------|------------|
-| **OpenAPI** | operationId, summary, description, tags, schema docs; use .speakeasy/overlays/ for x-speakeasy-mcp; validate before generate |
+| **OpenAPI** | operationId, summary, description, tags, schema docs; use overlays for MCP metadata; validate before generate |
 | **SDK** | Type safety, sdkClassName Flexprice, retries, minimal deps, idiomatic per language, README + repoUrl in gen.yaml |
 | **MCP** | Scopes, clear tool names/descriptions, dynamic mode for scale, mcpbManifestOverlay, auth docs, validateResponse choice |
 | **Resilience** | Retries with backoff, timeouts, rate-limit awareness |

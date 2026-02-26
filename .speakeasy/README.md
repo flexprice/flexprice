@@ -1,10 +1,10 @@
-# Speakeasy SDK and MCP setup
+# SDK and MCP setup
 
-This directory configures Speakeasy code generation for Flexprice: **api/go**, **api/typescript**, **api/python**, and **api/mcp** from [docs/swagger/swagger-3-0.json](../docs/swagger/swagger-3-0.json).
+This directory configures SDK code generation for Flexprice: **api/go**, **api/typescript**, **api/python**, and **api/mcp** from [docs/swagger/swagger-3-0.json](../docs/swagger/swagger-3-0.json).
 
 ## SDK version (unique every run so publish never fails)
 
-- **When Speakeasy bumps on its own**: Speakeasy’s automatic versioning only bumps when the **generator** changes, **gen.yaml** (or checksum) changes, or **OpenAPI** (e.g. `info.version`) changes. It does **not** bump on every run, so re-running without changes can produce the same version and cause npm/PyPI publish to fail.
+- **When the generator bumps on its own**: Automatic versioning only bumps when the generator changes, **gen.yaml** (or checksum) changes, or **OpenAPI** (e.g. `info.version`) changes. It does **not** bump on every run, so re-running without changes can produce the same version and cause npm/PyPI publish to fail.
 - **Our behavior**: Every `make sdk-all` and every CI run uses a **unique** version so publish never fails:
   - **Local**: If you don’t pass `VERSION`, the Makefile uses `./scripts/next-sdk-version.sh patch` (reads `.speakeasy/sdk-version.json`), then `./scripts/sync-sdk-version-to-gen.sh <next>` to write that version into all gen.yaml and sdk-version.json, then generates.
   - **CI**: Resolves the next version with `./scripts/next-sdk-version.sh patch "$BASE"` where BASE is max(npm `flexprice-ts` version, `.speakeasy/sdk-version.json`). Then runs `make sdk-all VERSION=<resolved>`. After generate, CI runs `./scripts/sync-sdk-version-to-gen.sh <version>` so gen.yaml and sdk-version.json match the generated version.
@@ -14,12 +14,12 @@ This directory configures Speakeasy code generation for Flexprice: **api/go**, *
 
 ## Workflow
 
-- **workflow.yaml** – Sources (OpenAPI spec + overlays) and targets (one per SDK/MCP). Add targets via `speakeasy configure targets` with output paths: `api/go`, `api/typescript`, `api/python`, `api/mcp`.
-- **overlays/flexprice-sdk.yaml** – OpenAPI overlay to add `x-speakeasy-mcp` (scopes, descriptions, hints), improve operation summaries, or schema docs without editing the main spec.
+- **workflow.yaml** – Sources (OpenAPI spec + overlays) and targets (one per SDK/MCP). Add targets via the generator CLI with output paths: `api/go`, `api/typescript`, `api/python`, `api/mcp`.
+- **overlays/flexprice-sdk.yaml** – OpenAPI overlay for MCP (scopes, descriptions, hints), improve operation summaries, or schema docs without editing the main spec.
 
 ## Recommended gen.yaml (per target)
 
-When each target is created, Speakeasy generates a `gen.yaml` in that target’s output directory. Apply these for best quality:
+When each target is created, the generator produces a `gen.yaml` in that target’s output directory. Apply these for best quality:
 
 ### Generation (all targets)
 
@@ -38,14 +38,14 @@ When each target is created, Speakeasy generates a `gen.yaml` in that target’s
 
 ### Retries (production)
 
-Use Speakeasy retry support (e.g. `x-speakeasy-retries` in OpenAPI or generator options) with exponential backoff for 5xx and transient errors.
+Use retry support (e.g. in OpenAPI or generator options) with exponential backoff for 5xx and transient errors.
 
 ## Commands
 
 - `make sdk-all` – Validate + generate all SDKs/MCP + merge custom (uses existing docs/swagger/swagger-3-0.json).
 - `make swagger` – Regenerate OpenAPI spec from code; run this when the API changes, then `make sdk-all`.
 - `make speakeasy-validate` – Validate OpenAPI spec.
-- `make speakeasy-generate` – Validate + lint + run Speakeasy (all targets).
+- `make speakeasy-generate` – Validate + lint + run generator (all targets).
 - `make go-sdk` – Clean, swagger, validate, lint, generate Go SDK, copy custom, merge-custom, build.
 - `make merge-custom` – Merge `api/custom/<lang>/` into `api/<lang>/`.
 
