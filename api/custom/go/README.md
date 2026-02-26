@@ -12,6 +12,12 @@ Type-safe Go client for the FlexPrice API: billing, metering, and subscription m
 go get github.com/flexprice/flexprice-go
 ```
 
+Then in your code:
+
+```go
+import "github.com/flexprice/flexprice-go"
+```
+
 ## Quick start
 
 Initialize the client with your base URL and API key, then create a customer, ingest an event, and list events:
@@ -63,9 +69,11 @@ func main() {
 	}
 
 	// List events: use client.Events.ListRawEvents(ctx, ...) with optional filters
-	// See docs/sdks/events/ for all event operations.
+	// See the API reference and the examples/ directory for more operations.
 }
 ```
+
+For more examples and all API operations, see the [API reference](https://docs.flexprice.io) and the [examples](examples/) in this repo.
 
 ## Async client (high-volume events)
 
@@ -106,7 +114,7 @@ err = asyncClient.EnqueueWithOptions(flexprice.EventOptions{
 - Built-in retries and error handling
 - Optional async client for event batching
 
-For a full list of operations, see the [API reference](https://docs.flexprice.io) or the generated `docs/sdks/` in this repo.
+For a full list of operations, see the [API reference](https://docs.flexprice.io) and the [examples](examples/) in this repo.
 
 ## Troubleshooting
 
