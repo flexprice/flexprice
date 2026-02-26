@@ -1,0 +1,63 @@
+configVersion: 2.0.0
+generation:
+  sdkClassName: Flexprice
+  maintainOpenAPIOrder: true
+  usageSnippets:
+    optionalPropertyRendering: withExample
+    sdkInitStyle: constructor
+  useClassNamesForArrayFields: true
+  fixes:
+    nameResolutionDec2023: true
+    nameResolutionFeb2025: true
+    parameterOrderingFeb2024: true
+    requestResponseComponentNamesFeb2024: true
+    securityFeb2025: true
+    sharedErrorComponentsApr2025: true
+    sharedNestedComponentsJan2026: true
+    nameOverrideFeb2026: true
+  auth:
+    oAuth2ClientCredentialsEnabled: true
+    oAuth2PasswordEnabled: true
+    hoistGlobalSecurity: true
+  inferSSEOverload: true
+  sdkHooksConfigAccess: true
+  schemas:
+    allOfMergeStrategy: shallowMerge
+  requestBodyFieldName: body
+  versioningStrategy: automatic
+  persistentEdits: {}
+  tests:
+    generateTests: false
+    generateNewTests: true
+    skipResponseBodyAssertions: false
+go:
+  version: 0.0.22
+  additionalDependencies: {}
+  baseErrorName: FlexpriceError
+  clientServerStatusCodesAsErrors: true
+  defaultErrorName: APIError
+  flattenGlobalSecurity: true
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-and-untagged
+  imports:
+    option: openapi
+    paths:
+      callbacks: models/callbacks
+      errors: models/apierrors
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
+  includeEmptyObjects: true
+  inferUnionDiscriminators: true
+  inputModelSuffix: input
+  maxMethodParams: 4
+  methodArguments: require-security-and-request
+  modulePath: github.com/flexprice/flexprice-go
+  multipartArrayFormat: standard
+  nullableOptionalWrapper: true
+  outputModelSuffix: output
+  respectRequiredFields: false
+  respectTitlesForPrimitiveUnionMembers: true
+  responseFormat: envelope-http
+  sdkPackageName: flexprice
+  unionStrategy: populated-fields

@@ -1,0 +1,55 @@
+configVersion: 2.0.0
+generation:
+  sdkClassName: Flexprice
+  maintainOpenAPIOrder: true
+  usageSnippets:
+    optionalPropertyRendering: withExample
+    sdkInitStyle: constructor
+  useClassNamesForArrayFields: true
+  fixes:
+    nameResolutionDec2023: true
+    nameResolutionFeb2025: true
+    parameterOrderingFeb2024: true
+    requestResponseComponentNamesFeb2024: true
+    securityFeb2025: true
+    sharedErrorComponentsApr2025: true
+    sharedNestedComponentsJan2026: true
+    nameOverrideFeb2026: true
+  auth:
+    oAuth2ClientCredentialsEnabled: true
+    oAuth2PasswordEnabled: true
+    hoistGlobalSecurity: true
+  inferSSEOverload: true
+  sdkHooksConfigAccess: true
+  schemas:
+    allOfMergeStrategy: shallowMerge
+  requestBodyFieldName: body
+  versioningStrategy: automatic
+  persistentEdits: {}
+  tests:
+    generateTests: false
+    generateNewTests: true
+    skipResponseBodyAssertions: false
+mcp-typescript:
+  version: 0.0.22
+  additionalDependencies:
+    dependencies: {}
+    devDependencies: {}
+    peerDependencies: {}
+  advancedFlags: []
+  author: flexprice
+  baseErrorName: FlexpriceError
+  cloudflareEnabled: false
+  defaultErrorName: FlexpriceDefaultError
+  formStringArrayEncodeMode: array
+  gramEnabled: false
+  inferUnionDiscriminators: true
+  inputModelSuffix: input
+  maxMethodParams: 0
+  mcpbManifestOverlay:
+    displayName: Flexprice
+  multipartArrayFormat: standard
+  outputModelSuffix: output
+  packageName: '@omkar273/mcp-temp'
+  responseFormat: flat
+  validateResponse: false
