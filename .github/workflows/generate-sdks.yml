@@ -291,8 +291,8 @@ jobs:
             artifact: api-typescript
           - lang: python
             artifact: api-python
-          # - lang: mcp
-          #   artifact: api-mcp
+          - lang: mcp
+            artifact: api-mcp
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -332,21 +332,21 @@ jobs:
           npm run build
           npm publish --access public
 
-      # - name: Publish MCP to npm
-      #   if: matrix.lang == 'mcp'
-      #   env:
-      #     NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      #   run: |
-      #     if [ -z "$NPM_TOKEN" ]; then
-      #       echo "::error::NPM_TOKEN secret is not set. Add it in repository Secrets or in .secrets for act."
-      #       exit 1
-      #     fi
-      #     cd sdk
-      #     echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
-      #     npm install --ignore-scripts
-      #     [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
-      #     npm run build
-      #     npm publish --access public
+      - name: Publish MCP to npm
+        if: matrix.lang == 'mcp'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Add it in repository Secrets or in .secrets for act."
+            exit 1
+          fi
+          cd sdk
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+          npm install --ignore-scripts
+          [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
+          npm run build
+          npm publish --access public
 
       - name: Set up Python
         if: matrix.lang == 'python'
