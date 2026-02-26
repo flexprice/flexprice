@@ -1,7 +1,0 @@
-# Preserve custom files during SDK regeneration
-# Note: Removed examples/ to allow Speakeasy to regenerate it properly
-
-# NOTE: CustomerPortal.ts is NOT preserved because it was written for 
-# the old OpenAPI Generator structure and is incompatible with Speakeasy.
-# TODO: Rewrite CustomerPortal for Speakeasy SDK structure
-

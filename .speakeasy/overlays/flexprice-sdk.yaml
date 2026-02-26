@@ -1,0 +1,9 @@
+# OpenAPI Overlay for Flexprice SDK and MCP
+# Use actions here to add x-speakeasy-mcp (scopes, descriptions, hints), improve
+# operation summary/description, or x-speakeasy-name-override without editing the main spec.
+# See https://spec.openapis.org/overlay/latest.html
+overlay: 1.0.0
+info:
+  title: Flexprice SDK and MCP customizations
+  version: 1.0.0
+actions: []

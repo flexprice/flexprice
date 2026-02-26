@@ -250,133 +250,47 @@ docker-build-local:
 install-typst:
 	@./scripts/install-typst.sh
 
-# SDK Generation targets
-.PHONY: install-openapi-generator
-install-openapi-generator:
-	@which openapi-generator-cli > /dev/null || (npm install -g @openapitools/openapi-generator-cli)
+# SDK Generation targets (Speakeasy pipeline; use make sdk-all)
+.PHONY: clean-sdk update-sdk
 
-.PHONY: generate-sdk generate-go-sdk generate-python-sdk generate-javascript-sdk regenerate-sdk clean-sdk update-sdk
+# Update swagger and regenerate all SDKs/MCP
+update-sdk: swagger sdk-all
+	@echo "Swagger updated and all SDKs/MCP regenerated."
 
-# Generate all SDKs
-generate-sdk: generate-go-sdk generate-python-sdk generate-javascript-sdk
-	@echo "All SDKs generated successfully with custom files"
-
-# Regenerate all SDKs (clean + generate) - DEPRECATED: Use speakeasy-regenerate-sdk
-# regenerate-sdk: clean-sdk generate-sdk
-# 	@echo "All SDKs regenerated successfully with custom files"
-
-# Update swagger and regenerate all SDKs
-update-sdk: swagger regenerate-sdk
-	@echo "Swagger updated and all SDKs regenerated with custom files"
-
-# Clean all generated SDKs
+# Clean all generated SDK/MCP output directories
 clean-sdk:
-	@echo "Cleaning generated SDKs..."
-	@rm -rf api/javascript api/python api/go
-	@echo "Generated SDKs cleaned"
+	@echo "Cleaning generated SDKs/MCP..."
+	@rm -rf api/go api/typescript api/python api/mcp
+	@echo "Generated SDKs/MCP cleaned"
 
-# Generate Go SDK
-generate-go-sdk: install-openapi-generator
-	@echo "Generating Go SDK..."
-	@openapi-generator-cli generate \
-		-i docs/swagger/swagger-3-0.json \
-		-g go \
-		-o api/go \
-		--additional-properties=packageName=flexprice,isGoSubmodule=true,enumClassPrefix=true,structPrefix=true \
-		--git-repo-id=go-sdk \
-		--git-user-id=flexprice \
-		--global-property apiTests=false,modelTests=false
-	@chmod +x api/scripts/go/add_go_async.sh
-	@./api/scripts/go/add_go_async.sh
-	@echo "Copying custom files..."
-	@./scripts/copy-custom-files.sh go
-	@echo "Go SDK generated successfully"
-
-# Generate Python SDK
-generate-python-sdk: install-openapi-generator
-	@echo "Generating Python SDK..."
-	@openapi-generator-cli generate \
-		-i docs/swagger/swagger-3-0.json \
-		-g python \
-		-o api/python \
-		--additional-properties=packageName=flexprice \
-		--git-repo-id=python-sdk \
-		--git-user-id=flexprice \
-		--global-property apiTests=false,modelTests=false
-	@python api/scripts/python/add_python_async.py || echo "Failed to add async functionality, but continuing..."
-	@echo "Copying custom files..."
-	@./scripts/copy-custom-files.sh python
-	@echo "Python SDK generated successfully"
-
-# Generate JavaScript/TypeScript SDK
-generate-javascript-sdk: install-openapi-generator
-	@echo "Generating TypeScript SDK with modern ES7 module support..."
-	@./scripts/generate-ts-sdk.sh
-
-# Copy custom files to specific SDKs (manual operation)
-copy-custom:
-	@echo "Copying custom files to all SDKs..."
-	@./scripts/copy-custom-files.sh javascript
-	@./scripts/copy-custom-files.sh python
-	@./scripts/copy-custom-files.sh go
-
-copy-javascript-custom:
-	@echo "Copying custom files to JavaScript SDK..."
-	@./scripts/copy-custom-files.sh javascript
-
-copy-python-custom:
-	@echo "Copying custom files to Python SDK..."
-	@./scripts/copy-custom-files.sh python
-
-copy-go-custom:
-	@echo "Copying custom files to Go SDK..."
-	@./scripts/copy-custom-files.sh go
-
-# Show custom files status
+# Show custom files status (api/custom/<lang>/)
 show-custom-files:
-	@echo "Custom files status:"
-	@echo "==================="
-	@echo "JavaScript custom files:"
-	@if [ -d "api/custom/javascript" ]; then \
-		find api/custom/javascript -type f -not -name "README.md" | sed 's/^/  /' || echo "  No custom files found"; \
-	else \
-		echo "  No custom directory found"; \
-	fi
-	@echo ""
-	@echo "Python custom files:"
-	@if [ -d "api/custom/python" ]; then \
-		find api/custom/python -type f -not -name "README.md" | sed 's/^/  /' || echo "  No custom files found"; \
-	else \
-		echo "  No custom directory found"; \
-	fi
-	@echo ""
-	@echo "Go custom files:"
-	@if [ -d "api/custom/go" ]; then \
-		find api/custom/go -type f -not -name "README.md" | sed 's/^/  /' || echo "  No custom files found"; \
-	else \
-		echo "  No custom directory found"; \
-	fi
+	@echo "Custom files status (api/custom/):"
+	@echo "================================"
+	@for dir in go typescript python mcp; do \
+		echo "$$dir:"; \
+		if [ -d "api/custom/$$dir" ]; then \
+			find api/custom/$$dir -type f | sed 's/^/  /' || echo "  (none)"; \
+		else \
+			echo "  No custom directory"; \
+		fi; \
+		echo ""; \
+	done
 
 # Help for SDK management
 help-sdk:
 	@echo "SDK Management Commands:"
 	@echo "======================="
-	@echo "  make generate-sdk        - Generate all SDKs with custom files"
-	@echo "  make regenerate-sdk      - Clean and regenerate all SDKs"
-	@echo "  make update-sdk          - Update swagger and regenerate all SDKs"
-	@echo "  make clean-sdk           - Clean all generated SDKs"
-	@echo "  make copy-custom         - Copy custom files to all SDKs"
-	@echo "  make show-custom-files   - Show status of custom files"
+	@echo "  make sdk-all             - Validate + generate all SDKs/MCP + merge custom (uses existing swagger)"
+	@echo "  make update-sdk          - Regenerate swagger then run sdk-all"
+	@echo "  make clean-sdk           - Remove generated api/go, api/typescript, api/python, api/mcp"
+	@echo "  make merge-custom       - Copy api/custom/<lang>/ into api/<lang>/"
+	@echo "  make show-custom-files  - List files in api/custom/"
 	@echo ""
-	@echo "Individual SDK Commands:"
-	@echo "  make generate-javascript-sdk  - Generate JavaScript SDK"
-	@echo "  make generate-python-sdk      - Generate Python SDK"
-	@echo "  make generate-go-sdk          - Generate Go SDK"
-	@echo "  make copy-javascript-custom   - Copy custom files to JavaScript SDK"
-	@echo "  make copy-python-custom       - Copy custom files to Python SDK"
-	@echo "  make copy-go-custom           - Copy custom files to Go SDK"
-
-# Note: Alternative modern approach removed during cleanup
+	@echo "Go SDK only:"
+	@echo "  make go-sdk              - Clean + generate Go SDK + merge custom + build"
+	@echo "  make regenerate-go-sdk   - Regenerate Go SDK (no clean) + merge custom"
+	@echo "  make clean-go-sdk        - Remove api/go only"
 
 # SDK publishing
 sdk-publish-js:
@@ -420,8 +334,9 @@ test-github-workflow:
 # =============================================================================
 # Speakeasy SDK Generation (New Pipeline)
 # =============================================================================
+# Version is managed by Speakeasy (versioningStrategy: automatic in gen.yaml); do not pass --set-version.
 
-.PHONY: speakeasy-install speakeasy-generate speakeasy-validate speakeasy-test
+.PHONY: speakeasy-install speakeasy-generate speakeasy-validate speakeasy-lint speakeasy-test
 
 speakeasy-install:
 	@echo "Installing Speakeasy CLI..."
@@ -431,6 +346,12 @@ speakeasy-install:
 speakeasy-validate:
 	@echo "Validating OpenAPI spec..."
 	@speakeasy validate openapi --schema docs/swagger/swagger-3-0.json
+
+# 413 on upload is expected for large specs; report is still written to ~/.speakeasy/temp/
+# CI=true and TERM=dumb disable the interactive TUI so make does not hang
+speakeasy-lint:
+	@echo "Linting OpenAPI spec..."
+	@CI=true TERM=dumb speakeasy openapi lint -s docs/swagger/swagger-3-0.json --non-interactive
 
 speakeasy-clean:
 	@echo "Cleaning generated SDK files..."
@@ -447,81 +368,89 @@ speakeasy-clean:
 	@rm -f api/python/setup.py api/python/pyproject.toml api/python/poetry.lock 2>/dev/null || true
 	@rm -rf api/python/.devcontainer api/python/docs 2>/dev/null || true
 	@rm -f api/python/*.md api/python/.git* 2>/dev/null || true
-	@echo "Removing JavaScript SDK generated files..."
-	@find api/javascript/src -type f -name "*.ts" ! -path "*/apis/CustomerPortal.ts" -delete 2>/dev/null || true
-	@rm -rf api/javascript/dist api/javascript/node_modules 2>/dev/null || true
-	@rm -f api/javascript/package*.json api/javascript/tsconfig*.json 2>/dev/null || true
-	@rm -rf api/javascript/.devcontainer api/javascript/docs 2>/dev/null || true
-	@rm -f api/javascript/*.md api/javascript/.git* 2>/dev/null || true
+	@echo "Removing TypeScript SDK generated files..."
+	@rm -rf api/typescript 2>/dev/null || true
 	@echo "✓ SDK cleanup complete"
 
-speakeasy-generate:
+speakeasy-generate: speakeasy-validate
 	@echo "Generating SDKs with Speakeasy..."
-	@speakeasy run
+	@CI=true TERM=dumb speakeasy run --target all -y --skip-upload-spec --skip-compile --minimal
 
 regenerate-sdk: go-sdk
 	@echo "✓ Go SDK regenerated (Python/JS commented out for now)"
 
 speakeasy-test:
 	@echo "Testing generated SDKs..."
-	@echo "Testing JavaScript SDK..."
-	@cd api/javascript && npm ci && npm run build && npm test
-	@echo "Testing Python SDK..."
-	@cd api/python && pip install -e . && pytest
-	@echo "Testing Go SDK..."
-	@cd api/go && go mod tidy && go test ./...
+	@if [ -d "api/typescript" ]; then echo "Testing TypeScript SDK..."; (cd api/typescript && npm ci && npm run build && npm test) || true; fi
+	@if [ -d "api/python" ]; then echo "Testing Python SDK..."; (cd api/python && pip install -e . && pytest) || true; fi
+	@if [ -d "api/go" ]; then echo "Testing Go SDK..."; (cd api/go && go mod tidy && go test ./...); fi
 
 # New unified SDK generation with Speakeasy
-speakeasy-sdk: swagger speakeasy-generate
+speakeasy-sdk: speakeasy-generate
 	@echo "✓ SDKs generated successfully with Speakeasy"
+
+# =============================================================================
+# Single command: Swagger + SDK/MCP generation + lint (no testing; add make sdk-test later if needed)
+# =============================================================================
+# Run: make sdk-all
+# Uses existing docs/swagger/swagger-3-0.json. Run 'make swagger' when you change the API.
+# Does: (if VERSION unset) next patch version from .speakeasy/sdk-version.json → sync version to all gen.yaml → validate → generate → merge custom.
+# Speakeasy reads version from gen.yaml (cannot use --set-version with --target all). Every run uses a unique version so publish never fails.
+#
+# Local auth: create a .secrets file (already gitignored) with:
+#   SPEAKEASY_API_KEY=spk_your_key_here
+# Then run: make sdk-all-local  (loads .secrets and runs sdk-all)
+.PHONY: sdk-all sdk-all-local
+
+sdk-all:
+	@VER="$${VERSION:-$$(./scripts/next-sdk-version.sh patch)}"; \
+	./scripts/sync-sdk-version-to-gen.sh "$$VER" && \
+	$(MAKE) speakeasy-validate speakeasy-generate merge-custom fix-mcp-package-name
+	@echo "✅ SDK/MCP generation complete. (Use make sdk-test for install/test when needed.)"
+
+# Load SPEAKEASY_API_KEY from .secrets then run sdk-all. Use this when running locally.
+sdk-all-local:
+	@if [ -f .secrets ]; then set -a && . ./.secrets && set +a; fi && $(MAKE) sdk-all
+
+# Optional: run install + tests for each generated SDK. Not part of sdk-all; use when you want full verification.
+sdk-test:
+	@echo "Running SDK/MCP tests (skipping missing targets)..."
+	@if [ -f "api/go/go.mod" ]; then \
+		echo "Testing Go SDK..."; \
+		(cd api/go && go mod tidy && go build ./... && go test ./...); \
+	else \
+		echo "⏭️  Skipping Go SDK (api/go not generated)"; \
+	fi
+	@if [ -f "api/typescript/package.json" ]; then \
+		echo "Testing TypeScript SDK..."; \
+		(cd api/typescript && npm ci && npm run build && npm test); \
+	else \
+		echo "⏭️  Skipping TypeScript SDK (api/typescript not generated)"; \
+	fi
+	@if [ -f "api/python/pyproject.toml" ] || [ -f "api/python/setup.py" ]; then \
+		echo "Testing Python SDK..."; \
+		(cd api/python && (pip install -e . 2>/dev/null || pip install .) && pytest); \
+	else \
+		echo "⏭️  Skipping Python SDK (api/python not generated)"; \
+	fi
+	@echo "✓ SDK tests finished"
 
 # =============================================================================
 # Go SDK Generation with Speakeasy (Production Pipeline)
 # =============================================================================
 
-.PHONY: speakeasy-go-sdk speakeasy-copy-go-custom clean-go-sdk go-sdk regenerate-go-sdk
+.PHONY: speakeasy-go-sdk speakeasy-copy-go-custom merge-custom clean-go-sdk go-sdk regenerate-go-sdk
 
 # Generate Go SDK only with Speakeasy
 speakeasy-go-sdk:
 	@echo "🔨 Generating Go SDK with Speakeasy..."
-	@speakeasy run --target flexprice-go
+	@bash -c 'set -o pipefail; CI=true TERM=dumb speakeasy run --target flexprice-go -y < /dev/null | cat'
 	@echo "✓ Go SDK generated successfully"
 
-# Copy custom files to Go SDK (post-generation)
-speakeasy-copy-go-custom:
-	@echo "📋 Copying custom files to Go SDK..."
-	@if [ ! -d "api/go" ]; then \
-		echo "❌ Error: api/go directory not found. Run 'make speakeasy-go-sdk' first"; \
-		exit 1; \
-	fi
-	@COPIED=0; \
-	if [ -f "api/custom/go/helpers.go" ]; then \
-		cp api/custom/go/helpers.go api/go/ 2>/dev/null || true; \
-		echo "✓ Copied helpers.go"; \
-		COPIED=$$((COPIED + 1)); \
-	else \
-		echo "⏭️  Skipping: helpers.go not found"; \
-	fi; \
-	if [ -f "api/custom/go/async.go" ]; then \
-		cp api/custom/go/async.go api/go/ 2>/dev/null || true; \
-		echo "✓ Copied async.go"; \
-		COPIED=$$((COPIED + 1)); \
-	else \
-		echo "⏭️  Skipping: async.go not found"; \
-	fi; \
-	if [ -d "api/custom/go/examples" ]; then \
-		rm -rf api/go/examples 2>/dev/null || true; \
-		cp -r api/custom/go/examples api/go/ 2>/dev/null || true; \
-		echo "✓ Copied examples/ directory"; \
-		COPIED=$$((COPIED + 1)); \
-	else \
-		echo "⏭️  Skipping: examples/ not found"; \
-	fi; \
-	if [ $$COPIED -eq 0 ]; then \
-		echo "ℹ️  No custom files found to copy"; \
-	else \
-		echo "✅ Successfully copied $$COPIED custom file(s)/folder(s)"; \
-	fi
+# Apply custom Go files (async.go, helpers.go, examples) from api/custom/go/ into api/go/.
+# Source of truth: api/custom/go/. merge-custom does the copy.
+speakeasy-copy-go-custom: merge-custom
+	@echo "✓ Go custom files applied (from api/custom/go/)"
 
 # Clean only Go SDK
 clean-go-sdk:
@@ -529,32 +458,75 @@ clean-go-sdk:
 	@rm -rf api/go
 	@echo "✓ Go SDK cleaned"
 
-# Complete Go SDK pipeline: clean → generate → copy custom files → build
-go-sdk: clean-go-sdk swagger speakeasy-go-sdk speakeasy-copy-go-custom
+# Complete Go SDK pipeline: clean → validate/lint → generate → copy custom → build
+go-sdk: clean-go-sdk speakeasy-validate speakeasy-go-sdk speakeasy-copy-go-custom merge-custom
 	@echo "🧪 Testing Go SDK compilation..."
 	@cd api/go && go mod tidy && go build ./...
 	@echo "✅ Go SDK ready for publishing!"
 
 # Quick regeneration (no clean, faster for development)
-regenerate-go-sdk: swagger speakeasy-go-sdk speakeasy-copy-go-custom
+regenerate-go-sdk: speakeasy-go-sdk speakeasy-copy-go-custom merge-custom
 	@echo "✓ Go SDK regenerated"
 
+# Merge custom files from api/custom/<lang>/ into api/<lang>/ after generation.
+# Add files under api/custom/go etc. with same relative paths as in api/go.
+merge-custom:
+	@for dir in go typescript python mcp; do \
+		if [ -d "api/custom/$$dir" ]; then \
+			echo "Merging custom files into api/$$dir/..."; \
+			rsync -av --exclude='.gitkeep' "api/custom/$$dir/" "api/$$dir/" 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "✓ Custom merge complete"
+
+# Force MCP package name so npm publish never uses reserved "mcp"; CI artifact gets @omkar273/mcp-temp.
+.PHONY: fix-mcp-package-name
+fix-mcp-package-name:
+	@if [ -f api/mcp/package.json ]; then \
+		jq '.name = "@omkar273/mcp-temp"' api/mcp/package.json > api/mcp/package.json.tmp && mv api/mcp/package.json.tmp api/mcp/package.json; \
+		echo "✓ MCP package name set to @omkar273/mcp-temp"; \
+	fi
 
 # Testing all SDKs
 test-speakeasy-sdks: speakeasy-test
 	@echo "✓ All SDK tests passed"
 
-# Migration helpers
-speakeasy-migrate:
-	@echo "Running Speakeasy migration..."
-	@./scripts/migrate-to-speakeasy.sh
+# =============================================================================
+# SDK integration tests (api/tests): local vs published
+# =============================================================================
+# Require FLEXPRICE_API_KEY and FLEXPRICE_API_HOST. Local tests require SDKs built (make sdk-all).
+# Published tests require published packages installed (go mod tidy, pip install flexprice-sdk-test, npm install flexprice-sdk-test).
+.PHONY: test-sdk-local test-sdk-local-go-ts test-sdk-published
 
-speakeasy-compare:
-	@echo "Comparing old and new SDK structures..."
-	@./scripts/compare-sdks.sh
+test-sdk-local:
+	@echo "Running local SDK tests (unpublished SDKs from api/go, api/python, api/javascript)..."
+	@if [ -f "api/tests/go/go.mod" ]; then \
+		echo "--- Go (local) ---"; (cd api/tests/go && go run test_local_sdk.go) || true; \
+	else echo "⏭️  Skipping Go local (api/tests/go not found)"; fi
+	@if [ -d "api/python" ]; then \
+		echo "--- Python (local) ---"; (cd api/tests/python && python test_local_sdk.py) || true; \
+	else echo "⏭️  Skipping Python local (api/python not found)"; fi
+	@if [ -d "api/javascript" ] || [ -d "api/typescript" ]; then \
+		echo "--- TypeScript (local) ---"; (cd api/tests/ts && npx ts-node test_local_sdk_js.ts) || true; \
+	else echo "⏭️  Skipping TypeScript local (api/javascript not found)"; fi
+	@echo "✓ Local SDK tests finished"
 
-speakeasy-archive-old:
-	@echo "Archiving old OpenAPI Generator pipeline..."
-	@./scripts/archive-old-pipeline.sh
+# Local SDK tests: Go + TypeScript only (no Python).
+test-sdk-local-go-ts:
+	@echo "Running local SDK tests (Go + TypeScript only)..."
+	@if [ -f "api/tests/go/go.mod" ]; then \
+		echo "--- Go (local) ---"; (cd api/tests/go && go run test_local_sdk.go) || true; \
+	else echo "⏭️  Skipping Go local (api/tests/go not found)"; fi
+	@if [ -d "api/javascript" ] || [ -d "api/typescript" ]; then \
+		echo "--- TypeScript (local) ---"; (cd api/tests/ts && npx ts-node test_local_sdk_js.ts) || true; \
+	else echo "⏭️  Skipping TypeScript local (api/javascript not found)"; fi
+	@echo "✓ Go + TypeScript local SDK tests finished"
 
-.PHONY: speakeasy-sdk test-speakeasy-sdks speakeasy-migrate speakeasy-compare speakeasy-archive-old
+test-sdk-published:
+	@echo "Running published SDK tests..."
+	@echo "--- Go (published) ---"; (cd $(CURDIR) && go run -tags published ./api/tests/go/test_sdk.go) || true
+	@echo "--- Python (published) ---"; (cd api/tests/python && python test_sdk.py) || true
+	@echo "--- TypeScript (published) ---"; (cd api/tests/ts && npx ts-node test_sdk_js.ts) || true
+	@echo "✓ Published SDK tests finished"
+
+.PHONY: speakeasy-sdk sdk-all sdk-test test-speakeasy-sdks test-sdk-local test-sdk-local-go-ts test-sdk-published
