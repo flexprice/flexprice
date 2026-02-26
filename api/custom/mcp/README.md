@@ -16,10 +16,10 @@ You can run the server in two ways: **npm package** (one command) or **local rep
 
 ### Option 1: npm package
 
-Install: `npm i @omkar273/mcp-temp`. Or run with one command (no clone or build):
+Install: `npm i @flexprice/mcp-server`. Or run with one command (no clone or build):
 
 ```bash
-npx @omkar273/mcp-temp start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
+npx @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
 ```
 
 Replace `YOUR_API_KEY` with your FlexPrice API key. Next: [Add to your MCP client](#add-to-your-mcp-client).
@@ -74,7 +74,7 @@ Add the FlexPrice MCP server in your editor. Replace `YOUR_API_KEY` with your Fl
       "command": "npx",
       "args": [
         "-y",
-        "@omkar273/mcp-temp",
+        "@flexprice/mcp-server",
         "start",
         "--server-url",
         "https://us.api.flexprice.io/v1",
@@ -101,7 +101,7 @@ Add the FlexPrice MCP server in your editor. Replace `YOUR_API_KEY` with your Fl
       "command": "npx",
       "args": [
         "-y",
-        "@omkar273/mcp-temp",
+        "@flexprice/mcp-server",
         "start",
         "--server-url",
         "https://us.api.flexprice.io/v1",
@@ -118,7 +118,7 @@ Add the FlexPrice MCP server in your editor. Replace `YOUR_API_KEY` with your Fl
 ### Claude Code
 
 ```bash
-claude mcp add FlexPrice -- npx -y @omkar273/mcp-temp start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
+claude mcp add FlexPrice -- npx -y @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
 ```
 
 Then run `claude` and use `/mcp` to confirm the server is connected.
@@ -136,7 +136,7 @@ Add to your Claude Desktop config file (path in the table above):
       "command": "npx",
       "args": [
         "-y",
-        "@omkar273/mcp-temp",
+        "@flexprice/mcp-server",
         "start",
         "--server-url",
         "https://us.api.flexprice.io/v1",
@@ -205,7 +205,7 @@ Servers with many tools can bloat context and token usage. **Dynamic mode** expo
 To enable dynamic mode, add `--mode dynamic` when starting the server:
 
 ```json
-"args": ["-y", "@omkar273/mcp-temp", "start", "--server-url", "https://us.api.flexprice.io/v1", "--api-key-auth", "YOUR_API_KEY", "--mode", "dynamic"]
+"args": ["-y", "@flexprice/mcp-server", "start", "--server-url", "https://us.api.flexprice.io/v1", "--api-key-auth", "YOUR_API_KEY", "--mode", "dynamic"]
 ```
 
 This reduces tokens per request and can improve tool choice when there are many operations.
@@ -215,7 +215,7 @@ This reduces tokens per request and can improve tool choice when there are many 
 If the server is configured with scopes (e.g. `read`, `write`), you can limit tools by scope:
 
 ```bash
-npx @omkar273/mcp-temp start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY --scope read
+npx @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY --scope read
 ```
 
 Use `read` for read-only access when the server defines a `read` scope.

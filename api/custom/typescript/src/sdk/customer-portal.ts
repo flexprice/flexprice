@@ -1,8 +1,8 @@
 /**
  * FlexPrice Customer Portal - Dashboard API (custom)
  *
- * Merged from api/custom/typescript/. Uses the Speakeasy-generated
- * FlexPrice SDK (customers, subscriptions, invoices, wallets, entitlements, features).
+ * Merged from api/custom/typescript/. Uses the FlexPrice SDK
+ * (customers, subscriptions, invoices, wallets, entitlements, features).
  */
 
 import type { SDKOptions } from "../lib/config.js";
@@ -12,9 +12,6 @@ import type * as models from "./models/shared/index.js";
 export type DashboardOptions = {
   subscriptionLimit?: number;
   invoiceLimit?: number;
-  days?: number;
-  startDate?: string;
-  endDate?: string;
   includeCustomer?: boolean;
   includeSubscriptions?: boolean;
   includeInvoices?: boolean;
