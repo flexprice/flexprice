@@ -70,7 +70,7 @@ func main() {
 	fmt.Printf("✓ API Key: %s...%s\n", apiKey[:min(8, len(apiKey))], apiKey[max(0, len(apiKey)-4):])
 	fmt.Printf("✓ API Host: %s\n\n", apiHost)
 
-	// Initialize SDK (Speakeasy: Flexprice with WithSecurity)
+	// Initialize SDK (Flexprice with WithSecurity)
 	parts := strings.SplitN(apiHost, "/", 2)
 	hostOnly := parts[0]
 	basePath := ""

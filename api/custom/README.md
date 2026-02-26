@@ -1,6 +1,6 @@
 # Custom SDK and MCP files
 
-Files under `api/custom/<lang>/` are **merged** into the generated output after each `speakeasy run`. Paths must **mirror** `api/<lang>/`.
+Files under `api/custom/<lang>/` are **merged** into the generated output after each SDK generation run. Paths must **mirror** `api/<lang>/`.
 
 | Directory | Contents |
 |-----------|----------|
