@@ -1,9 +1,9 @@
 # Generate OpenAPI spec and all SDKs (Go, TypeScript, Python) + MCP.
 #
-# Flow: trigger -> resolve version -> make swagger -> sync version into gen.yaml -> Speakeasy generate -> read version -> sync gen.yaml -> upload artifacts (go, typescript, python, mcp) -> push to GitHub repos (matrix) -> publish TypeScript to npm, Python to PyPI (matrix). MCP publishing commented out for testing.
-# Version is synced into gen.yaml before generate (Speakeasy cannot use --set-version with --target all).
+# Flow: trigger -> version-check (skip if .speakeasy/sdk-version.json equals api/go/.speakeasy/gen.yaml) -> generate (swagger, Speakeasy, upload artifacts) -> push to GitHub -> publish to npm/PyPI.
+# Version source: .speakeasy/sdk-version.json only. To release: update that file, then trigger.
 #
-# Triggers: push to main (path-filtered); workflow_dispatch. Always publishes to GitHub, npm, PyPI.
+# Triggers: push to main (path-filtered); workflow_dispatch. When version unchanged, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk-temp, flexprice/js-sdk-temp, flexprice/python-sdk-temp, flexprice/mcp-temp.
 #
@@ -23,13 +23,6 @@ on:
     #   - "internal/api/**"
     #   - "Makefile"
   workflow_dispatch:
-    inputs:
-      # Always publish to GitHub, npm, and PyPI when workflow runs
-      version:
-        description: "SDK version. Leave default to auto-bump from npm / sdk-version.json; set a value (e.g. 1.0.0) to force that version."
-        required: false
-        default: "0.0.1-dev"
-        type: string
 
 concurrency:
   group: sdk-generate-publish
@@ -40,9 +33,44 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Compare .speakeasy/sdk-version.json with api/go/.speakeasy/gen.yaml; skip generate/publish if equal.
+  # ---------------------------------------------------------------------------
+  version-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version-check.outputs.version }}
+      skip: ${{ steps.version-check.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare versions and set outputs
+        id: version-check
+        run: |
+          SDK_VERSION=$(jq -r .version .speakeasy/sdk-version.json 2>/dev/null || echo "")
+          [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ] && SDK_VERSION="0.0.0"
+          GEN_VERSION=""
+          if [ -f api/go/.speakeasy/gen.yaml ]; then
+            GEN_VERSION=$(sed -n '/^go:/,/^[a-z]/p' api/go/.speakeasy/gen.yaml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | xargs)
+          fi
+          [ -z "$GEN_VERSION" ] && GEN_VERSION=""
+          if [ "$SDK_VERSION" = "$GEN_VERSION" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Version unchanged (sdk-version.json=$SDK_VERSION, gen.yaml=$GEN_VERSION); skipping generate and publish."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Version changed (sdk-version.json=$SDK_VERSION, gen.yaml=$GEN_VERSION); will generate and publish."
+          fi
+          echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
+
+  # ---------------------------------------------------------------------------
   # Setup → OpenAPI → SDK tooling → Generate → Upload artifacts
   # ---------------------------------------------------------------------------
   generate:
+    needs: version-check
+    if: needs.version-check.outputs.skip != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -100,52 +128,28 @@ jobs:
         run: |
           unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
-      # Resolve version so every run is unique and publish never fails (npm/PyPI reject re-publish).
-      # Version = max(npm flexprice-ts, .speakeasy/sdk-version.json). If one is already greater, use it directly; only bump when both are equal (in sync). workflow_dispatch can override with inputs.version.
-      - name: Resolve version
-        id: resolve-version
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.version }}" ] && [ "${{ github.event.inputs.version }}" != "0.0.1-dev" ]; then
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "Resolved version (manual): ${{ github.event.inputs.version }}"
-          else
-            BASE_NPM=$(npm view flexprice-ts version 2>/dev/null || true)
-            BASE_FILE=$(jq -r .version .speakeasy/sdk-version.json 2>/dev/null || true)
-            [ -z "$BASE_NPM" ] && BASE_NPM="0.0.0"
-            [ -z "$BASE_FILE" ] || [ "$BASE_FILE" = "null" ] && BASE_FILE="0.0.0"
-            BASE=$(printf "%s\n%s\n" "$BASE_NPM" "$BASE_FILE" | sort -V | tail -1)
-            if [ "$BASE_NPM" = "$BASE_FILE" ]; then
-              NEXT=$(./scripts/next-sdk-version.sh patch "$BASE")
-              echo "version=$NEXT" >> $GITHUB_OUTPUT
-              echo "Resolved version (bumped from $BASE, npm=$BASE_NPM file=$BASE_FILE): $NEXT"
-            else
-              echo "version=$BASE" >> $GITHUB_OUTPUT
-              echo "Resolved version (using greater, npm=$BASE_NPM file=$BASE_FILE): $BASE"
-            fi
-          fi
-
-      # SDKs: generate with resolved version so artifacts have a unique version for publish
+      # SDKs: generate with version from .speakeasy/sdk-version.json (set by version-check job)
       - name: Generate SDKs and MCP
-        run: make sdk-all VERSION=${{ steps.resolve-version.outputs.version }}
+        run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
 
-      # Use resolved version strictly: overwrite whatever Speakeasy wrote so publish never gets 0.0.1
+      # Use version from sdk-version.json strictly: overwrite whatever Speakeasy wrote so publish never gets 0.0.1
       - name: Force resolved version into SDK artifacts
-        run: ./scripts/force-sdk-version.sh "${{ steps.resolve-version.outputs.version }}"
+        run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
 
-      - name: Set version output (use resolved version strictly)
+      - name: Set version output
         id: read-version
         run: |
-          echo "version=${{ steps.resolve-version.outputs.version }}" >> $GITHUB_OUTPUT
-          echo "SDK version (resolved): ${{ steps.resolve-version.outputs.version }}"
+          echo "version=${{ needs.version-check.outputs.version }}" >> $GITHUB_OUTPUT
+          echo "SDK version: ${{ needs.version-check.outputs.version }}"
 
       - name: Sync version to gen.yaml
         run: |
-          ./scripts/sync-sdk-version-to-gen.sh "${{ steps.resolve-version.outputs.version }}"
+          ./scripts/sync-sdk-version-to-gen.sh "${{ needs.version-check.outputs.version }}"
 
       - name: Generate job summary
         run: |
           echo "## Generate SDKs" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ steps.read-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload api-go artifact
@@ -275,9 +279,6 @@ jobs:
   # ---------------------------------------------------------------------------
   # Publishes via npm/twine here; .speakeasy/workflow.yaml publish config is for Speakeasy CLI/action only and is not used by this workflow.
   # ---------------------------------------------------------------------------
-  # npm/PyPI publish. GitHub push works because it only copies files; npm fails if package name
-  # is reserved (e.g. "mcp") or token lacks publish scope. Generate job must run fix-mcp-package-name
-  # so api-mcp artifact has "name": "@omkar273/mcp-temp" in package.json.
   publish-to-registries:
     needs: [generate, publish-to-github]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
@@ -355,7 +356,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Publish Python to PyPI
+      - name: bvish Python to PyPI
         if: matrix.lang == 'python'
         env:
           TWINE_USERNAME: __token__
