@@ -6,8 +6,8 @@
  */
 
 import type { SDKOptions } from "../lib/config.js";
-import type * as shared from "./models/shared/index.js";
-import { FlexPrice } from "./sdk.js";
+import type * as models from "../models/index.js";
+import { FlexPrice } from "../index.js";
 
 export type DashboardOptions = {
   subscriptionLimit?: number;
@@ -25,13 +25,13 @@ export type DashboardOptions = {
 };
 
 export interface CustomerDashboardData {
-  customer?: shared.DtoCustomerResponse;
-  usage?: shared.DtoCustomerUsageSummaryResponse;
-  entitlements?: shared.DtoCustomerEntitlementsResponse;
-  walletBalance?: shared.DtoWalletResponse;
-  activeSubscriptions?: shared.DtoSubscriptionResponse[];
-  invoices?: shared.DtoInvoiceResponse[];
-  summary?: shared.DtoCustomerMultiCurrencyInvoiceSummary;
+  customer?: models.DtoCustomerResponse;
+  usage?: models.DtoCustomerUsageSummaryResponse;
+  entitlements?: models.DtoCustomerEntitlementsResponse;
+  walletBalance?: models.DtoWalletResponse;
+  activeSubscriptions?: models.DtoSubscriptionResponse[];
+  invoices?: models.DtoInvoiceResponse[];
+  summary?: models.DtoCustomerMultiCurrencyInvoiceSummary;
   metadata: {
     fetchedAt: string;
     customerId: string;
@@ -40,6 +40,10 @@ export interface CustomerDashboardData {
     errors?: string[];
     warnings?: string[];
   };
+}
+
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
 }
 
 /**
@@ -91,7 +95,7 @@ export class CustomerPortal {
     );
 
     const customerData =
-      customer && "id" in customer && customer.id ? customer : undefined;
+      customer && isRecord(customer) && "id" in customer && customer.id ? customer : undefined;
     if (!customerData?.id) {
       return {
         metadata: {
@@ -147,31 +151,38 @@ export class CustomerPortal {
         : undefined,
     ]);
 
-    const activeSubscriptions =
-      subsResp && "items" in subsResp ? subsResp.items ?? [] : [];
-    const invoices =
-      invoicesResp && "items" in invoicesResp ? invoicesResp.items ?? [] : [];
+    const activeSubscriptions: models.DtoSubscriptionResponse[] =
+      subsResp && isRecord(subsResp) && "items" in subsResp && Array.isArray(subsResp.items)
+        ? subsResp.items
+        : [];
+    const invoices: models.DtoInvoiceResponse[] =
+      invoicesResp && isRecord(invoicesResp) && "items" in invoicesResp && Array.isArray(invoicesResp.items)
+        ? invoicesResp.items
+        : [];
 
     const isSuccess = <T>(r: T): r is Exclude<T, { error?: unknown }> =>
-      !r || !("error" in (r as object));
+      !r || typeof r !== "object" || r === null || !("error" in r);
 
-    return {
-      ...(opts.includeCustomer && customerData ? { customer: customerData } : {}),
-      ...(usage && isSuccess(usage) ? { usage } : {}),
-      ...(entitlements && isSuccess(entitlements) ? { entitlements } : {}),
-      ...(walletBalance && isSuccess(walletBalance) ? { walletBalance } : {}),
-      ...(activeSubscriptions.length ? { activeSubscriptions } : {}),
-      ...(invoices.length ? { invoices } : {}),
-      ...(summary && isSuccess(summary) ? { summary } : {}),
-      metadata: {
-        fetchedAt: now,
-        customerId: customerExternalId,
-        totalSubscriptions: activeSubscriptions.length,
-        totalInvoices: invoices.length,
-        ...(errors.length ? { errors } : {}),
-        ...(warnings.length ? { warnings } : {}),
-      },
+    const metadata = {
+      fetchedAt: now,
+      customerId: customerExternalId,
+      totalSubscriptions: activeSubscriptions.length,
+      totalInvoices: invoices.length,
+      ...(errors.length ? { errors } : {}),
+      ...(warnings.length ? { warnings } : {}),
     };
+
+    const result: CustomerDashboardData = { metadata };
+
+    if (opts.includeCustomer && customerData) result.customer = customerData as models.DtoCustomerResponse;
+    if (usage && isSuccess(usage)) result.usage = usage;
+    if (entitlements && isSuccess(entitlements)) result.entitlements = entitlements;
+    if (walletBalance && isSuccess(walletBalance)) result.walletBalance = walletBalance;
+    if (activeSubscriptions.length > 0) result.activeSubscriptions = activeSubscriptions;
+    if (invoices.length > 0) result.invoices = invoices;
+    if (summary && isSuccess(summary)) result.summary = summary;
+
+    return result;
   }
 }
 
