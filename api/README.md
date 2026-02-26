@@ -4,10 +4,10 @@ Generated SDKs and MCP server for the Flexprice API. Source: OpenAPI spec at `do
 
 ## Layout
 
-- **api/go** – Go SDK (Speakeasy)
-- **api/typescript** – TypeScript SDK (Speakeasy)
-- **api/python** – Python SDK (Speakeasy)
-- **api/mcp** – MCP server (Speakeasy)
+- **api/go** – Go SDK
+- **api/typescript** – TypeScript SDK
+- **api/python** – Python SDK
+- **api/mcp** – MCP server
 - **api/tests** – SDK integration tests (local vs published); see [api/tests/README.md](tests/README.md). Run `make test-sdk-local` or `make test-sdk-published` from repo root.
 
 ## Generation
@@ -24,7 +24,7 @@ make swagger
 make sdk-all
 ```
 
-See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md) for details. Custom code lives under `api/custom/<lang>/` and is merged into `api/<lang>/` after each run. READMEs are maintained in `api/custom/<lang>/README.md` and overwrite the generated README on merge; `.genignore` in each SDK output dir prevents the generator from overwriting README if you run generate without merge-custom.
+See [AGENTS.md](../AGENTS.md) and the SDK generation README in the repo for details. Custom code lives under `api/custom/<lang>/` and is merged into `api/<lang>/` after each run. READMEs are maintained in `api/custom/<lang>/README.md` and overwrite the generated README on merge; `.genignore` in each SDK output dir prevents the generator from overwriting README if you run generate without merge-custom.
 
 ## Usage (high level)
 
@@ -36,20 +36,20 @@ See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md
 
 ## CI/CD
 
-Use the **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) for Speakeasy generation (`make sdk-all`), merge-custom, and publish. See **Publishing** below.
+Use the **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) for SDK generation (`make sdk-all`), merge-custom, and publish. See **Publishing** below.
 
 ## Publishing
 
 The **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) is the single pipeline: (1) generate SDKs, (2) push to GitHub repos, (3) publish to npm (TypeScript) and PyPI (Python). Go is published by the repo push in step 2.
 
-- **Trigger:** Push to `main` (when `docs/swagger/**`, `.speakeasy/**`, `api/custom/**`, `cmd/**`, `internal/api/**`, or `Makefile` change) or manual run via **workflow_dispatch**. For manual runs, check "Push generated SDKs to GitHub repos" to run steps 2 and 3; leave unchecked to only generate.
+- **Trigger:** Push to `main` (when `docs/swagger/**`, generator config, `api/custom/**`, `cmd/**`, `internal/api/**`, or `Makefile` change) or manual run via **workflow_dispatch**. For manual runs, check "Push generated SDKs to GitHub repos" to run steps 2 and 3; leave unchecked to only generate.
 - **Variables (optional):** `SDK_GO_REPO`, `SDK_PYTHON_REPO`, `SDK_TYPESCRIPT_REPO` (defaults: Random-test-v2/go-temp, py-temp, ts-temp).
 
 **Secrets (Settings → Secrets and variables → Actions):**
 
 | Secret                 | Used for                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `SPEAKEASY_API_KEY`    | Speakeasy CLI (generate step)                                                                     |
+| `SPEAKEASY_API_KEY`    | SDK generator CLI (generate step)                                                                  |
 | `SDK_DEPLOY_GIT_TOKEN` | Push to GitHub repos (fine-grained PAT: Contents Read and write, Metadata Read on selected SDK repos) |
 | `NPM_TOKEN`            | Publish TypeScript SDK and MCP to npm (granular token, read/write)                               |
 | `PYPI_TOKEN`           | Publish Python SDK to PyPI                                                                        |

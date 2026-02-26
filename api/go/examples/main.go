@@ -12,7 +12,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// This sample demonstrates the FlexPrice Go SDK (Speakeasy-generated) and the custom async client.
+// This sample demonstrates the FlexPrice Go SDK and the custom async client.
 // To run: from api/go/examples, ensure parent api/go is built, then: go run main.go
 
 func main() {
