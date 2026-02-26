@@ -9,23 +9,25 @@ Type-safe Python client for the FlexPrice API: billing, metering, and subscripti
 ## Installation
 
 ```bash
-pip install flexprice-py
+pip install flexprice
 ```
 
 With uv or poetry:
 
 ```bash
-uv add flexprice-py
+uv add flexprice
 # or
-poetry add flexprice-py
+poetry add flexprice
 ```
+
+Runnable samples are in the `examples/` directory.
 
 ## Quick start
 
 Initialize the client with your server URL and API key, then ingest an event:
 
 ```python
-from flexprice_py import Flexprice
+from flexprice import Flexprice
 
 with Flexprice(
     server_url="https://us.api.flexprice.io",
@@ -49,7 +51,7 @@ The same client supports async when used as an async context manager:
 
 ```python
 import asyncio
-from flexprice_py import Flexprice
+from flexprice import Flexprice
 
 async def main():
     async with Flexprice(
@@ -74,6 +76,21 @@ asyncio.run(main())
 - Pass your API key as `api_key_auth` when creating the client. The SDK sends it in the `x-api-key` header.
 - Prefer environment variables (e.g. `FLEXPRICE_API_KEY`) and load them in code; get keys from your [FlexPrice dashboard](https://app.flexprice.io) or docs.
 
+## Error handling
+
+API errors are raised as exceptions. Catch them and inspect the response as needed:
+
+```python
+try:
+    with Flexprice(server_url="...", api_key_auth="...") as flexprice:
+        result = flexprice.events.ingest_event(request={...})
+except Exception as e:
+    print(f"Error: {e}")
+    # Inspect status code and body if available on the exception
+```
+
+See the [API docs](https://docs.flexprice.io) for error formats and status codes.
+
 ## Features
 
 - Full API coverage (customers, plans, events, invoices, payments, entitlements, etc.)
@@ -81,7 +98,7 @@ asyncio.run(main())
 - Type-safe request/response models (Pydantic)
 - Built-in retries and error handling
 
-For a full list of operations, see the [API reference](https://docs.flexprice.io) or the generated `docs/sdks/` in this repo.
+For a full list of operations, see the [API reference](https://docs.flexprice.io) and the [examples](examples/) in this repo.
 
 ## Troubleshooting
 
