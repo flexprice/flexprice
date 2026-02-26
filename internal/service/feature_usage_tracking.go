@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -83,12 +84,13 @@ type FeatureUsageTrackingService interface {
 
 type featureUsageTrackingService struct {
 	ServiceParams
-	pubSub           pubsub.PubSub // Regular PubSub for normal processing
-	backfillPubSub   pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
-	lazyPubSub       pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
-	replayPubSub     pubsub.PubSub // Dedicated Kafka PubSub for replay processing
-	eventRepo        events.Repository
-	featureUsageRepo events.FeatureUsageRepository
+	pubSub              pubsub.PubSub // Regular PubSub for normal processing
+	backfillPubSub      pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
+	lazyPubSub          pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
+	replayPubSub        pubsub.PubSub // Dedicated Kafka PubSub for replay processing
+	eventRepo           events.Repository
+	featureUsageRepo    events.FeatureUsageRepository
+	expressionEvaluator expression.Evaluator
 }
 
 // NewFeatureUsageTrackingService creates a new feature usage tracking service
@@ -98,9 +100,10 @@ func NewFeatureUsageTrackingService(
 	featureUsageRepo events.FeatureUsageRepository,
 ) FeatureUsageTrackingService {
 	ev := &featureUsageTrackingService{
-		ServiceParams:    params,
-		eventRepo:        eventRepo,
-		featureUsageRepo: featureUsageRepo,
+		ServiceParams:       params,
+		eventRepo:           eventRepo,
+		featureUsageRepo:    featureUsageRepo,
+		expressionEvaluator: expression.NewCELEvaluator(),
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -1415,6 +1418,24 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 	subscription *subscription.Subscription,
 	periodID uint64,
 ) (decimal.Decimal, string) {
+	// When expression is set, use CEL for per-event quantity (works with any aggregation type)
+	if meter.Aggregation.Expression != "" {
+		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
+		if err != nil {
+			s.Logger.Warnw("CEL evaluation failed",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"expression", meter.Aggregation.Expression,
+				"error", err,
+			)
+			return decimal.Zero, ""
+		}
+		if meter.Aggregation.Multiplier != nil {
+			qty = qty.Mul(*meter.Aggregation.Multiplier)
+		}
+		return qty, qty.String()
+	}
+
 	switch meter.Aggregation.Type {
 	case types.AggregationCount:
 		// For count, always return 1 and empty string for field value
