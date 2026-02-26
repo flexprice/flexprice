@@ -1,0 +1,14 @@
+{
+    "name": "flexprice-with-openai",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "node --env-file=.env src/wrap-openai.mjs"
+    },
+    "dependencies": {
+        "@flexprice/sdk": "^1.0.17",
+        "openai": "^4.57.3",
+        "dotenv": "^16.4.5"
+    }
+}
