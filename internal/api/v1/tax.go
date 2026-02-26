@@ -269,6 +269,7 @@ func (h *TaxHandler) DeleteTaxAssociation(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param entity_type query string false "Entity Type"
 // @Param entity_id query string false "Entity ID"
+// @Param external_customer_id query string false "External Customer ID"
 // @Param tax_rate_id query string false "Tax Rate ID"
 // @Success 200 {object} dto.ListTaxAssociationsResponse
 // @Failure 400 {object} ierr.ErrorResponse
