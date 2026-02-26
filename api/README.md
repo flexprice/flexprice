@@ -46,12 +46,14 @@ The **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) is the si
 
 **Secrets (Settings → Secrets and variables → Actions):**
 
-| Secret                 | Used for                                                           |
-| ---------------------- | ------------------------------------------------------------------ |
-| `SPEAKEASY_API_KEY`    | Speakeasy CLI (generate step)                                      |
-| `SDK_DEPLOY_GIT_TOKEN` | Push to GitHub repos (classic PAT with `repo` scope)               |
-| `NPM_TOKEN`            | Publish TypeScript SDK and MCP to npm (granular token, read/write) |
-| `PYPI_TOKEN`           | Publish Python SDK to PyPI                                         |
+| Secret                 | Used for                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------- |
+| `SPEAKEASY_API_KEY`    | Speakeasy CLI (generate step)                                                                     |
+| `SDK_DEPLOY_GIT_TOKEN` | Push to GitHub repos (fine-grained PAT: Contents Read and write, Metadata Read on selected SDK repos) |
+| `NPM_TOKEN`            | Publish TypeScript SDK and MCP to npm (granular token, read/write)                               |
+| `PYPI_TOKEN`           | Publish Python SDK to PyPI                                                                        |
+
+**Fine-grained token setup (SDK_DEPLOY_GIT_TOKEN):** Create a [fine-grained personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) under the account or org that owns the SDK repos. Use **Only select repositories** and add every repo the workflow pushes to (defaults: go-temp, py-temp, ts-temp; add any overridden via `SDK_GO_REPO` etc.). Under **Repository permissions** set **Contents** to **Read and write** and **Metadata** to **Read**. No other permissions are required.
 
 **Why GitHub publish can succeed but npm publish fails:** The GitHub step only copies files into a git repo; it does not care about `package.json` `name`. The npm step reads `package.json` and publishes under that name. If the name is reserved (e.g. `"mcp"`) or the token does not have publish permission for that package/scope, npm returns 403. The generate job runs `fix-mcp-package-name` (Makefile) so the MCP artifact has `"name": "@omkar273/mcp-temp"`. In the **publish-to-registries** job, the "Show package name" step logs the name from the downloaded artifact; if it still shows `mcp`, the generate run did not apply the fix (e.g. branch missing the Makefile change, or `jq` not available). For 403, also ensure `NPM_TOKEN` has **Publish** scope and access to the `@omkar273` scope (or the TypeScript package’s scope).
 
@@ -67,7 +69,8 @@ Create a `.secrets` file (gitignored) with **KEY=value** per line; keys must mat
 
 ```
 SPEAKEASY_API_KEY=spk_...
-SDK_DEPLOY_GIT_TOKEN=ghp_...
+# Fine-grained PAT: Contents (Read and write) + Metadata (Read) on SDK repos
+SDK_DEPLOY_GIT_TOKEN=github_pat_...
 NPM_TOKEN=npm_...
 PYPI_TOKEN=pypi-...
 ```
