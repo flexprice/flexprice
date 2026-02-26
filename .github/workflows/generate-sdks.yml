@@ -178,7 +178,7 @@ jobs:
   # Publish: one matrix cell per SDK/MCP (parallel push to GitHub repos)
   # ---------------------------------------------------------------------------
   publish-to-github:
-    needs: generate
+    needs: [version-check, generate]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
@@ -252,7 +252,7 @@ jobs:
   # Summary (runs once after all publish matrix cells)
   # ---------------------------------------------------------------------------
   publish-summary:
-    needs: [generate, publish-to-github]
+    needs: [version-check, generate, publish-to-github]
     if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
