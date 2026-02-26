@@ -6,8 +6,8 @@
  */
 
 import type { SDKOptions } from "../lib/config.js";
+import { Flexprice } from "../index.js";
 import type * as models from "../models/index.js";
-import { FlexPrice } from "../index.js";
 
 export type DashboardOptions = {
   subscriptionLimit?: number;
@@ -50,10 +50,10 @@ function isRecord(x: unknown): x is Record<string, unknown> {
  * Customer Portal – single entry point for customer dashboard data using the FlexPrice SDK.
  */
 export class CustomerPortal {
-  private sdk: FlexPrice;
+  private sdk: Flexprice;
 
   constructor(options: SDKOptions) {
-    this.sdk = new FlexPrice(options);
+    this.sdk = new Flexprice(options);
   }
 
   /**
@@ -111,43 +111,43 @@ export class CustomerPortal {
     const [usage, entitlements, walletBalance, subsResp, invoicesResp, summary] = await Promise.all([
       opts.includeUsage
         ? safe("Usage", () =>
-            this.sdk.customers.getCustomerUsageSummary({ customerId }),
-          )
+          this.sdk.customers.getCustomerUsageSummary({ customerId }),
+        )
         : undefined,
       opts.includeEntitlements
         ? safe("Entitlements", () =>
-            this.sdk.customers.getCustomerEntitlements({ id: customerId }),
-          )
+          this.sdk.customers.getCustomerEntitlements({ id: customerId }),
+        )
         : undefined,
       opts.includeWalletBalance
         ? safe("Wallets", () =>
-            this.sdk.wallets.getCustomerWallets({
-              id: customerId,
-              includeRealTimeBalance: true,
-            }),
-          ).then((w) => (Array.isArray(w) && w.length > 0 ? w[0] : undefined))
+          this.sdk.wallets.getCustomerWallets({
+            id: customerId,
+            includeRealTimeBalance: true,
+          }),
+        ).then((w) => (Array.isArray(w) && w.length > 0 ? w[0] : undefined))
         : undefined,
       opts.includeSubscriptions
         ? safe("Subscriptions", () =>
-            this.sdk.subscriptions.querySubscription({
-              customerId,
-              externalCustomerId: customerExternalId,
-              limit: opts.subscriptionLimit ?? 10,
-            }),
-          )
+          this.sdk.subscriptions.querySubscription({
+            customerId,
+            externalCustomerId: customerExternalId,
+            limit: opts.subscriptionLimit ?? 10,
+          }),
+        )
         : undefined,
       opts.includeInvoices
         ? safe("Invoices", () =>
-            this.sdk.invoices.queryInvoice({
-              customerId,
-              limit: opts.invoiceLimit ?? 5,
-            }),
-          )
+          this.sdk.invoices.queryInvoice({
+            customerId,
+            limit: opts.invoiceLimit ?? 5,
+          }),
+        )
         : undefined,
       opts.includeSummary
         ? safe("Summary", () =>
-            this.sdk.invoices.getCustomerInvoiceSummary({ id: customerId }),
-          )
+          this.sdk.invoices.getCustomerInvoiceSummary({ id: customerId }),
+        )
         : undefined,
     ]);
 
