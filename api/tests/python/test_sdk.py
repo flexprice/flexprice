@@ -117,7 +117,7 @@ test_event_customer_id: Optional[str] = None
 def get_configuration() -> flexprice.Configuration:
     """Get and configure the FlexPrice API client."""
     api_key = os.getenv("FLEXPRICE_API_KEY")
-    api_host = os.getenv("FLEXPRICE_API_HOST", "api.cloud.flexprice.io/v1")
+    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io/v1")
 
     if not api_key:
         print("❌ Missing FLEXPRICE_API_KEY environment variable")

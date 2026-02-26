@@ -30,7 +30,7 @@ Initialize the client with your server URL and API key, then create a customer a
 import { FlexPrice } from "flexprice-ts";
 
 const flexPrice = new FlexPrice({
-  serverURL: "https://api.cloud.flexprice.io",
+  serverURL: "https://us.api.flexprice.io",
   apiKeyAuth: process.env.FLEXPRICE_API_KEY ?? "YOUR_API_KEY",
 });
 
@@ -73,7 +73,7 @@ The package ships with TypeScript definitions. Use the client with full type saf
 import { FlexPrice } from "flexprice-ts";
 
 const flexPrice = new FlexPrice({
-  serverURL: "https://api.cloud.flexprice.io",
+  serverURL: "https://us.api.flexprice.io",
   apiKeyAuth: process.env.FLEXPRICE_API_KEY!,
 });
 
@@ -102,7 +102,7 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 ## Troubleshooting
 
 - **Missing or invalid API key:** Ensure `apiKeyAuth` is set and the key is active. Use server-side only.
-- **Wrong server URL:** Use `https://api.cloud.flexprice.io` (no trailing slash).
+- **Wrong server URL:** Use `https://us.api.flexprice.io` (no trailing slash).
 - **Validation or 4xx errors:** Confirm request body field names (snake_case vs camelCase) and required fields against the [API docs](https://docs.flexprice.io).
 - **Parameter passing:** Pass the request object directly to methods (e.g. `ingestEvent({ ... })`), not wrapped in an extra key, unless the SDK docs say otherwise.
 
