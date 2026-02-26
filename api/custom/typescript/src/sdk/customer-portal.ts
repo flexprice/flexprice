@@ -6,7 +6,7 @@
  */
 
 import type { SDKOptions } from "../lib/config.js";
-import { FlexPrice } from "../index.js";
+import { Flexprice } from "../index.js";
 import type * as models from "./models/shared/index.js";
 
 export type DashboardOptions = {
@@ -50,10 +50,10 @@ function isRecord(x: unknown): x is Record<string, unknown> {
  * Customer Portal – single entry point for customer dashboard data using the FlexPrice SDK.
  */
 export class CustomerPortal {
-  private sdk: FlexPrice;
+  private sdk: Flexprice;
 
   constructor(options: SDKOptions) {
-    this.sdk = new FlexPrice(options);
+    this.sdk = new Flexprice(options);
   }
 
   /**
