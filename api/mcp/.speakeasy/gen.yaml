@@ -26,10 +26,6 @@ generation:
   requestBodyFieldName: body
   versioningStrategy: automatic
   persistentEdits: {}
-  tests:
-    generateTests: false
-    generateNewTests: false
-    skipResponseBodyAssertions: false
 mcp-typescript:
   version: 0.0.43
   additionalDependencies:
