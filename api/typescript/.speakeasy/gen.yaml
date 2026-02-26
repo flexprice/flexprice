@@ -1,6 +1,6 @@
 configVersion: 2.0.0
 generation:
-  sdkClassName: FlexPrice
+  sdkClassName: Flexprice
   usageSnippets:
     optionalPropertyRendering: withExample
     sdkInitStyle: constructor
@@ -27,7 +27,7 @@ generation:
     generateNewTests: false
     skipResponseBodyAssertions: false
 typescript:
-  version: 0.0.22
+  version: 0.0.23
   acceptHeaderEnum: true
   additionalDependencies:
     dependencies: {}

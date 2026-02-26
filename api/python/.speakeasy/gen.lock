@@ -5,13 +5,13 @@ management:
   docVersion: "1.0"
   speakeasyVersion: 1.730.1
   generationVersion: 2.844.3
-  releaseVersion: 0.0.22
-  configChecksum: 188a735d799fcc652547e47833ace68f
+  releaseVersion: 0.0.23
+  configChecksum: 361518e37f60a27d502e4b36e6388dce
   published: true
 persistentEdits:
-  generation_id: 7b567d76-f462-43fc-b509-0f62e3f1aa76
-  pristine_commit_hash: c4aed54442c0e1b3af4b6dbd8ddf3c6b970b280c
-  pristine_tree_hash: 8a6b3c85943e59284818164d8e17c4926fa1387e
+  generation_id: bd83cfc7-02a9-4b82-9676-90b3c40ef654
+  pristine_commit_hash: ad56ba67aab23f13996a11758b7bd9a1a7ec2932
+  pristine_tree_hash: 94c41b182f00d8b9ad345d1894e6eaa37014c841
 features:
   python:
     additionalDependencies: 1.0.0
@@ -2160,8 +2160,8 @@ trackedFiles:
     pristine_git_object: c00200cfd072e9febac5d6be783da1925d11dac0
   pyproject.toml:
     id: 5d07e7d72637
-    last_write_checksum: sha1:1acbe5353824cbc2f3d98864f6b7dc2a8e9de49b
-    pristine_git_object: df0a5af272a0bb6c3327e4d41a3d0b1d7a9ce52f
+    last_write_checksum: sha1:6fd7788ceab32ec8cfa1ab41aad5927c84a5065e
+    pristine_git_object: b845d74d971502558764e61593ee630997fc151a
   scripts/publish.sh:
     id: fe273b08f514
     last_write_checksum: sha1:adc9b741c12ad1591ab4870eabe20f0d0a86cd1a
@@ -2184,8 +2184,8 @@ trackedFiles:
     pristine_git_object: ef3da48c7cdb4bb23808a4346b706af023d0f718
   src/flexprice_py/_version.py:
     id: 3c1e35f77e44
-    last_write_checksum: sha1:c186b1194abaa448888296d5da2d9dc980b50bae
-    pristine_git_object: 0ff7377492fb192794e979988765210c2a1145d5
+    last_write_checksum: sha1:64d504039ae61ec27240a952b572353589e40168
+    pristine_git_object: 5b02f6def98e021e5ec1139ad00ce142b00af3ef
   src/flexprice_py/addons.py:
     id: 7aac19084030
     last_write_checksum: sha1:4ed8ffc95dc90595538947a7df14b87e2ddf632a
