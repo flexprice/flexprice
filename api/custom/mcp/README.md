@@ -1,14 +1,25 @@
-# FlexPrice MCP Server
+# flexprice MCP Server
 
-A Model Context Protocol (MCP) server that exposes the FlexPrice API as tools for AI assistants (e.g. Claude, Cursor, VS Code, Windsurf). Use it to manage customers, plans, prices, subscriptions, invoices, payments, events, and more from your IDE or CLI.
+A Model Context Protocol (MCP) server that exposes the flexprice API as tools for AI assistants (e.g. Claude, Cursor, VS Code, Windsurf). Use it to manage customers, plans, prices, subscriptions, invoices, payments, events, and more from your IDE or CLI.
+
+## Table of contents
+
+- [Prerequisites](#prerequisites)
+- [How to use the flexprice MCP server](#how-to-use-the-flexprice-mcp-server)
+- [Add to your MCP client](#add-to-your-mcp-client)
+- [Tools](#tools)
+- [Progressive discovery (dynamic mode)](#progressive-discovery-dynamic-mode)
+- [Scopes](#scopes)
+- [Troubleshooting](#troubleshooting)
+- [Generating the MCP server](#generating-the-mcp-server)
 
 ## Prerequisites
 
 - **Node.js** v20 or higher
 - **npm** or **yarn**
-- **FlexPrice API key** from your [FlexPrice account](https://app.flexprice.io)
+- **flexprice API key** from your [flexprice account](https://app.flexprice.io)
 
-## How to use the FlexPrice MCP server
+## How to use the flexprice MCP server
 
 You can run the server in two ways: **npm package** (one command) or **local repo** (clone and run). Pick one, then [add it to your MCP client](#add-to-your-mcp-client).
 
@@ -22,7 +33,7 @@ Install: `npm i @flexprice/mcp-server`. Or run with one command (no clone or bui
 npx @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
 ```
 
-Replace `YOUR_API_KEY` with your FlexPrice API key. Next: [Add to your MCP client](#add-to-your-mcp-client).
+Replace `YOUR_API_KEY` with your flexprice API key. Next: [Add to your MCP client](#add-to-your-mcp-client).
 
 ---
 
@@ -49,7 +60,9 @@ Next: [Add to your MCP client](#add-to-your-mcp-client) and use the **Node from 
 
 ## Add to your MCP client
 
-Add the FlexPrice MCP server in your editor. Replace `YOUR_API_KEY` with your FlexPrice API key in all examples.
+Add the flexprice MCP server in your editor. Replace `YOUR_API_KEY` with your flexprice API key in all examples. Example config snippets are in [examples/](examples/).
+
+**After connecting:** In Cursor, open the MCP panel and confirm the server is connected. You can list tools and try an operation (e.g. list customers) from your assistant. In Claude, use `/mcp` to see connected servers and available tools.
 
 ### Config file locations
 
@@ -118,7 +131,7 @@ Add the FlexPrice MCP server in your editor. Replace `YOUR_API_KEY` with your Fl
 ### Claude Code
 
 ```bash
-claude mcp add FlexPrice -- npx -y @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
+claude mcp add flexprice -- npx -y @flexprice/mcp-server start --server-url https://us.api.flexprice.io/v1 --api-key-auth YOUR_API_KEY
 ```
 
 Then run `claude` and use `/mcp` to confirm the server is connected.
@@ -192,7 +205,7 @@ After editing, save and **restart Cursor or quit and reopen Claude Desktop** so 
 
 ## Tools
 
-The server exposes FlexPrice API operations as MCP tools. **Only operations with certain OpenAPI tags are included** (e.g. Customers, Invoices, Events). The allowed tags are configured in the repo; the filtered spec is `docs/swagger/swagger-3-0-mcp.json`. Tool names and parameters follow the OpenAPI spec. For the full list, see your MCP client’s tool list after connecting, or the OpenAPI spec (e.g. `docs/swagger/swagger-3-0.json`) in the repo.
+The server exposes flexprice API operations as MCP tools. **Only operations with certain OpenAPI tags are included** (e.g. Customers, Invoices, Events). The allowed tags are configured in the repo; the filtered spec is `docs/swagger/swagger-3-0-mcp.json`. Tool names and parameters follow the OpenAPI spec. For the full list, see your MCP client’s tool list after connecting, or the OpenAPI spec (e.g. `docs/swagger/swagger-3-0.json`) in the repo.
 
 ## Progressive discovery (dynamic mode)
 
@@ -230,9 +243,9 @@ Use `read` for read-only access when the server defines a `read` scope.
 
 ### API connection issues
 
-1. **Credentials:** Check that your API key and base URL are correct. Test the key with the FlexPrice API (e.g. `curl -H "x-api-key: your_key" https://us.api.flexprice.io/v1/customers`).
-2. **Network:** Confirm the host can reach the FlexPrice API (firewall, proxy).
-3. **Rate limiting:** If you see rate-limit errors, reduce request frequency or contact FlexPrice support.
+1. **Credentials:** Check that your API key and base URL are correct. Test the key with the flexprice API (e.g. `curl -H "x-api-key: your_key" https://us.api.flexprice.io/v1/customers`).
+2. **Network:** Confirm the host can reach the flexprice API (firewall, proxy).
+3. **Rate limiting:** If you see rate-limit errors, reduce request frequency or contact flexprice support.
 
 ### Server issues
 
