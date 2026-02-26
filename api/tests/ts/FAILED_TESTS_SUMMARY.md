@@ -36,7 +36,7 @@ These tests expect the SDK to return the **entity object** (e.g. `{ id, name, ..
   `console.log('createCustomer response:', JSON.stringify(response, null, 2));`  
   right after `createCustomer`. That will show whether the body is wrapped (e.g. `data`) or missing `id`.
 - If the API really returns a wrapper, either:
-  - Change the SDK (or Speakeasy config) so single-entity endpoints return the unwrapped object, or
+  - Change the SDK (or generator config) so single-entity endpoints return the unwrapped object, or
   - Change the test to use the wrapped shape (e.g. `response.data?.id`).
 
 ---

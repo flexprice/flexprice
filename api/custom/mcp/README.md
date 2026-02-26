@@ -192,7 +192,7 @@ After editing, save and **restart Cursor or quit and reopen Claude Desktop** so 
 
 ## Tools
 
-The server exposes FlexPrice API operations as MCP tools. **Only operations with certain OpenAPI tags are included** (e.g. Customers, Invoices, Events). The allowed tags are configured in `api/mcp/.speakeasy/allowed-tags.yaml` in the repo; the filtered spec is `docs/swagger/swagger-3-0-mcp.json`. Tool names and parameters follow the OpenAPI spec. For the full list, see your MCP client’s tool list after connecting, or the OpenAPI spec (e.g. `docs/swagger/swagger-3-0.json`) in the repo.
+The server exposes FlexPrice API operations as MCP tools. **Only operations with certain OpenAPI tags are included** (e.g. Customers, Invoices, Events). The allowed tags are configured in the repo; the filtered spec is `docs/swagger/swagger-3-0-mcp.json`. Tool names and parameters follow the OpenAPI spec. For the full list, see your MCP client’s tool list after connecting, or the OpenAPI spec (e.g. `docs/swagger/swagger-3-0.json`) in the repo.
 
 ## Progressive discovery (dynamic mode)
 
@@ -248,12 +248,11 @@ Use `read` for read-only access when the server defines a `read` scope.
 
 ## Generating the MCP server
 
-The server is generated with **Speakeasy** from a **tag-filtered** OpenAPI spec (`docs/swagger/swagger-3-0-mcp.json`), not the full spec. Only operations whose tags are listed in `api/mcp/.speakeasy/allowed-tags.yaml` are included. To regenerate after API or overlay changes:
+The server is generated from a tag-filtered OpenAPI spec (`docs/swagger/swagger-3-0-mcp.json`), not the full spec. Only operations whose tags are listed in the allowed-tags configuration are included. To regenerate after API or overlay changes:
 
-1. Install the [Speakeasy CLI](https://www.speakeasy.com/).
-2. (Optional) Edit `api/mcp/.speakeasy/allowed-tags.yaml` to add or remove tags; then run `make filter-mcp-spec` to rebuild the filtered spec.
-3. From the repo root, run `make sdk-all` (this runs `filter-mcp-spec` automatically, then generates the MCP server).
-4. Run `make merge-custom` so custom files (including this README) are merged into the output.
-5. Build and run: `npm run build` and `npm start` from the MCP output directory.
+1. (Optional) Edit the allowed-tags configuration to add or remove tags; then run `make filter-mcp-spec` to rebuild the filtered spec.
+2. From the repo root, run `make sdk-all` (this runs `filter-mcp-spec` automatically, then generates the MCP server).
+3. Run `make merge-custom` so custom files (including this README) are merged into the output.
+4. Build and run: `npm run build` and `npm start` from the MCP output directory.
 
-See the main repo README and [AGENTS.md](AGENTS.md) for SDK/MCP generation and publishing.
+See the main repo README and AGENTS.md for SDK/MCP generation and publishing.
