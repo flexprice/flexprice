@@ -4,7 +4,7 @@
 # Version is synced into gen.yaml before generate (Speakeasy cannot use --set-version with --target all).
 #
 # Triggers: push to main (path-filtered); workflow_dispatch. Always publishes to GitHub, npm, PyPI.
-# Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN, NPM_TOKEN, PYPI_TOKEN.
+# Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): Random-test-v2/go-temp, py-temp, ts-temp, mcp-temp.
 #
 # Full pipeline runs on GitHub. Local act may fail at upload-artifact unless act's artifact server is configured (ACTIONS_RUNTIME_TOKEN, ACTIONS_RUNTIME_URL, ACTIONS_RESULTS_URL).
