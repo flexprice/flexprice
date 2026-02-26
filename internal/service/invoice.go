@@ -1772,7 +1772,7 @@ func (s *invoiceService) GetUnpaidInvoicesToBePaid(ctx context.Context, req dto.
 
 		for _, item := range inv.LineItems {
 			if lo.FromPtr(item.PriceType) == string(types.PRICE_TYPE_USAGE) {
-				unpaidUsageCharges = unpaidUsageCharges.Add(item.Amount)
+				unpaidUsageCharges = unpaidUsageCharges.Add(item.Amount).Sub(item.PrepaidCreditsApplied).Sub(item.LineItemDiscount)
 			} else {
 				unpaidFixedCharges = unpaidFixedCharges.Add(item.Amount)
 			}
