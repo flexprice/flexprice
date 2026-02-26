@@ -122,24 +122,19 @@ jobs:
       - name: Generate SDKs and MCP
         run: make sdk-all VERSION=${{ steps.resolve-version.outputs.version }}
 
-      - name: Read version from generated SDK
+      # Use resolved version strictly: overwrite whatever Speakeasy wrote so publish never gets 0.0.1
+      - name: Force resolved version into SDK artifacts
+        run: ./scripts/force-sdk-version.sh "${{ steps.resolve-version.outputs.version }}"
+
+      - name: Set version output (use resolved version strictly)
         id: read-version
         run: |
-          VERSION="0.0.1-dev"
-          if [ -f api/typescript/package.json ]; then
-            V=$(jq -r .version api/typescript/package.json)
-            [ -n "$V" ] && [ "$V" != "null" ] && VERSION="$V"
-          fi
-          if [ "$VERSION" = "0.0.1-dev" ] && [ -f api/typescript/package.json ]; then
-            echo "::error::Generated package.json has no valid version; refusing to publish fallback 0.0.1-dev"
-            exit 1
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "SDK version (from Speakeasy): $VERSION"
+          echo "version=${{ steps.resolve-version.outputs.version }}" >> $GITHUB_OUTPUT
+          echo "SDK version (resolved): ${{ steps.resolve-version.outputs.version }}"
 
       - name: Sync version to gen.yaml
         run: |
-          ./scripts/sync-sdk-version-to-gen.sh "${{ steps.read-version.outputs.version }}"
+          ./scripts/sync-sdk-version-to-gen.sh "${{ steps.resolve-version.outputs.version }}"
 
       - name: Generate job summary
         run: |
