@@ -9,25 +9,33 @@ Type-safe TypeScript/JavaScript client for the FlexPrice API: billing, metering,
 ## Installation
 
 ```bash
-npm add flexprice-ts
+npm i @flexprice/sdk
 ```
 
 With pnpm, bun, or yarn:
 
 ```bash
-pnpm add flexprice-ts
-bun add flexprice-ts
-yarn add flexprice-ts
+pnpm add @flexprice/sdk
+bun add @flexprice/sdk
+yarn add @flexprice/sdk
 ```
 
 The package supports both CommonJS and ESM.
+
+Then in your code:
+
+```typescript
+import { FlexPrice } from "@flexprice/sdk";
+```
+
+Runnable samples are in the `examples/` directory.
 
 ## Quick start
 
 Initialize the client with your server URL and API key, then create a customer and ingest an event:
 
 ```typescript
-import { FlexPrice } from "flexprice-ts";
+import { FlexPrice } from "@flexprice/sdk";
 
 const flexPrice = new FlexPrice({
   serverURL: "https://us.api.flexprice.io",
@@ -56,6 +64,8 @@ async function main() {
 main();
 ```
 
+For more examples and all API operations, see the [API reference](https://docs.flexprice.io) and the [examples](examples/) in this repo.
+
 ## Property names (snake_case)
 
 For request bodies, the API often expects **snake_case** field names. The SDK may accept camelCase and serialize to snake_case; if you see validation errors, use the API shape:
@@ -63,14 +73,14 @@ For request bodies, the API often expects **snake_case** field names. The SDK ma
 - Prefer: `event_name`, `external_customer_id`, `page_size`
 - Avoid using only camelCase in raw payloads if the API spec uses snake_case
 
-Check the [API reference](https://docs.flexprice.io) or generated types for the exact request shapes.
+Check the [API reference](https://docs.flexprice.io) for the exact request shapes.
 
 ## TypeScript
 
 The package ships with TypeScript definitions. Use the client with full type safety:
 
 ```typescript
-import { FlexPrice } from "flexprice-ts";
+import { FlexPrice } from "@flexprice/sdk";
 
 const flexPrice = new FlexPrice({
   serverURL: "https://us.api.flexprice.io",
@@ -97,7 +107,7 @@ const result = await flexPrice.events.ingestEvent({
 - Built-in retries and error handling
 - ESM and CommonJS support
 
-For a full list of operations, see the [API reference](https://docs.flexprice.io) or the generated `docs/sdks/` in this repo.
+For a full list of operations, see the [API reference](https://docs.flexprice.io) and the [examples](examples/) in this repo.
 
 ## Troubleshooting
 
@@ -109,4 +119,4 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 ## Documentation
 
 - [FlexPrice API documentation](https://docs.flexprice.io)
-- [TypeScript SDK examples](src/) in this repo
+- [TypeScript SDK examples](examples/) in this repo
