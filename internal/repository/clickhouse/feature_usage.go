@@ -2021,7 +2021,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			meter_id,
 			price_id,
 			%s
-		FROM feature_usage
+		FROM feature_usage FINAL
 		WHERE 
 			subscription_id = ?
 			AND customer_id = ?
@@ -2337,7 +2337,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 					%s as bucket_start,
 					%s as group_key,
 					%s(qty_total) as group_value
-				FROM feature_usage
+				FROM feature_usage FINAL
 				PREWHERE tenant_id = '%s'
 					AND environment_id = '%s'
 					AND sign != 0
@@ -2391,7 +2391,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			SELECT
 				%s as bucket_start,
 				%s(qty_total) as %s
-			FROM feature_usage
+			FROM feature_usage FINAL
 			PREWHERE tenant_id = '%s'
 				AND environment_id = '%s'
 				AND sign != 0
