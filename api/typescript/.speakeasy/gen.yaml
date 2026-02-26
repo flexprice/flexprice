@@ -72,7 +72,7 @@ typescript:
   moduleFormat: dual
   multipartArrayFormat: legacy
   outputModelSuffix: output
-  packageName: flexprice-ts
+  packageName: flexprice-ts-temp
   preApplyUnionDiscriminators: true
   preserveModelFieldNames: false
   responseFormat: flat
