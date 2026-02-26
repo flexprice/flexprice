@@ -5,12 +5,12 @@ management:
   docVersion: "1.0"
   speakeasyVersion: 1.730.1
   generationVersion: 2.844.3
-  releaseVersion: 0.0.22
-  configChecksum: 1d1bb91580c41e4984930fb7da93ffff
+  releaseVersion: 0.0.23
+  configChecksum: 397b8a8c0136e962cf242d053ce24e8c
 persistentEdits:
-  generation_id: d91131bf-2792-409a-9628-762b4e086eb8
-  pristine_commit_hash: 9a2482e100513a2e63ce38c6e07f3792ccd4245c
-  pristine_tree_hash: c012d275f9a5f771d3b5f031615469cf9926f27e
+  generation_id: c1a49604-7147-4454-9d44-5774380e97ef
+  pristine_commit_hash: a2cf53cfd74fbb6df33a26c93a552171032427a4
+  pristine_tree_hash: 15b7eb44eba878005f7efb5b5182eb6eb942186e
 features:
   go:
     additionalDependencies: 0.1.0
@@ -2948,8 +2948,8 @@ trackedFiles:
     pristine_git_object: 16d33592bade539f82a123193df006b73455c28f
   flexprice.go:
     id: 48f5d8abf9c4
-    last_write_checksum: sha1:9894532ca61a1ee7817340a9c564a4c731c9bb2a
-    pristine_git_object: b892a50dabd154e39c62dc3ecd8bec1d8d2452d3
+    last_write_checksum: sha1:b9ccd055273f341e17b3a293d68fc58292128cd6
+    pristine_git_object: 28bebc0d02e9d69893fc948b98ce9fcf5cddcf96
   go.mod:
     id: c47645c391ad
     last_write_checksum: sha1:36a75f1021770d66cf31bb8806271f845c894811

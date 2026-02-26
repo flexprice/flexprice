@@ -6,8 +6,8 @@
  */
 
 import type { SDKOptions } from "../lib/config.js";
-import { Flexprice } from "../index.js";
-import type * as models from "../models/index.js";
+import { FlexPrice } from "../index.js";
+import type * as models from "./models/shared/index.js";
 
 export type DashboardOptions = {
   subscriptionLimit?: number;
@@ -50,10 +50,10 @@ function isRecord(x: unknown): x is Record<string, unknown> {
  * Customer Portal – single entry point for customer dashboard data using the FlexPrice SDK.
  */
 export class CustomerPortal {
-  private sdk: Flexprice;
+  private sdk: FlexPrice;
 
   constructor(options: SDKOptions) {
-    this.sdk = new Flexprice(options);
+    this.sdk = new FlexPrice(options);
   }
 
   /**
@@ -95,8 +95,8 @@ export class CustomerPortal {
     );
 
     const customerData =
-      customer && isRecord(customer) && "id" in customer && customer.id ? customer : undefined;
-    if (!customerData?.id) {
+      customer && isRecord(customer) && "id" in customer && customer["id"] ? customer : undefined;
+    if (!customerData?.["id"]) {
       return {
         metadata: {
           fetchedAt: now,
@@ -106,7 +106,7 @@ export class CustomerPortal {
       };
     }
 
-    const customerId = customerData.id as string;
+    const customerId = customerData["id"] as string;
 
     const [usage, entitlements, walletBalance, subsResp, invoicesResp, summary] = await Promise.all([
       opts.includeUsage
@@ -152,12 +152,12 @@ export class CustomerPortal {
     ]);
 
     const activeSubscriptions: models.DtoSubscriptionResponse[] =
-      subsResp && isRecord(subsResp) && "items" in subsResp && Array.isArray(subsResp.items)
-        ? subsResp.items
+      subsResp && isRecord(subsResp) && "items" in subsResp && Array.isArray(subsResp["items"])
+        ? subsResp["items"]
         : [];
     const invoices: models.DtoInvoiceResponse[] =
-      invoicesResp && isRecord(invoicesResp) && "items" in invoicesResp && Array.isArray(invoicesResp.items)
-        ? invoicesResp.items
+      invoicesResp && isRecord(invoicesResp) && "items" in invoicesResp && Array.isArray(invoicesResp["items"])
+        ? invoicesResp["items"]
         : [];
 
     const isSuccess = <T>(r: T): r is Exclude<T, { error?: unknown }> =>
