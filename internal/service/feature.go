@@ -308,19 +308,37 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 			Mark(ierr.ErrNotFound)
 	}
 
-	entitlementFilter := types.NewDefaultEntitlementFilter()
-	entitlementFilter.QueryFilter.Limit = lo.ToPtr(1)
+	// Check whether this feature is attached to any ACTIVE plans.
+	entitlementFilter := types.NewNoLimitEntitlementFilter()
 	entitlementFilter.QueryFilter.Status = lo.ToPtr(types.StatusPublished)
+	entitlementFilter.EntityType = lo.ToPtr(types.ENTITLEMENT_ENTITY_TYPE_PLAN)
 	entitlementFilter.FeatureIDs = []string{id}
-	entitlements, err := s.EntitlementRepo.List(ctx, entitlementFilter)
 
+	entitlements, err := s.EntitlementRepo.List(ctx, entitlementFilter)
 	if err != nil {
 		return err
 	}
-	if len(entitlements) > 0 {
-		return ierr.NewError("feature is linked to some plans").
-			WithHint("Feature is linked to some plans, please remove the feature from the plans first").
-			Mark(ierr.ErrInvalidOperation)
+
+	// Check the referenced plan's status and block if active
+	for _, ent := range entitlements {
+		if ent == nil {
+			continue
+		}
+		if ent.EntityType != types.ENTITLEMENT_ENTITY_TYPE_PLAN {
+			continue
+		}
+
+		p, err := s.PlanRepo.Get(ctx, ent.EntityID)
+		if err != nil {
+			s.Logger.Debugw("skipping entitlement check - failed to get plan", "plan_id", ent.EntityID, "error", err)
+			continue
+		}
+
+		if p.Status == types.StatusPublished {
+			return ierr.NewError("feature is linked to some plans").
+				WithHint("Feature is linked to some active plans, please remove the feature from the plans first").
+				Mark(ierr.ErrInvalidOperation)
+		}
 	}
 
 	if feature.Type == types.FeatureTypeMetered {
