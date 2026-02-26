@@ -21,7 +21,7 @@ func main() {
 	apiKey := os.Getenv("FLEXPRICE_API_KEY")
 	apiHost := os.Getenv("FLEXPRICE_API_HOST")
 	if apiHost == "" {
-		apiHost = "https://api.cloud.flexprice.io"
+		apiHost = "https://us.api.flexprice.io"
 	}
 	if apiKey == "" {
 		log.Fatal("Set FLEXPRICE_API_KEY in .env")

@@ -29,7 +29,7 @@ def run_example():
     try:
         # Configure the API client
         api_key = os.getenv("FLEXPRICE_API_KEY")
-        api_host = os.getenv("FLEXPRICE_API_HOST", "api.cloud.flexprice.io")
+        api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io")
 
         if not api_key:
             raise ValueError("FLEXPRICE_API_KEY environment variable is required")

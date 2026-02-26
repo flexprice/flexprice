@@ -28,7 +28,7 @@ Initialize the client with your server URL and API key, then ingest an event:
 from flexprice_py import Flexprice
 
 with Flexprice(
-    server_url="https://api.cloud.flexprice.io",
+    server_url="https://us.api.flexprice.io",
     api_key_auth="YOUR_API_KEY",
 ) as flexprice:
     # Ingest an event
@@ -53,7 +53,7 @@ from flexprice_py import Flexprice
 
 async def main():
     async with Flexprice(
-        server_url="https://api.cloud.flexprice.io",
+        server_url="https://us.api.flexprice.io",
         api_key_auth="YOUR_API_KEY",
     ) as flexprice:
         result = await flexprice.events.ingest_event_async(
@@ -86,7 +86,7 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 ## Troubleshooting
 
 - **Missing or invalid API key:** Ensure `api_key_auth` is set (or set `FLEXPRICE_API_KEY` and pass it in). Keys are for server-side use only.
-- **Wrong server URL:** Use `https://api.cloud.flexprice.io` (no trailing slash). The SDK appends paths as needed.
+- **Wrong server URL:** Use `https://us.api.flexprice.io` (no trailing slash). The SDK appends paths as needed.
 - **4xx/5xx on ingest:** Event ingest returns 202 Accepted; for errors, check request fields (`event_name`, `external_customer_id`, `properties`, `source`) against the [API docs](https://docs.flexprice.io).
 
 ## Documentation

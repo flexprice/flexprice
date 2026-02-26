@@ -70,7 +70,7 @@ func main() {
 	fmt.Printf("✓ API Host: %s\n\n", apiHost)
 
 	// Initialize API client with local SDK
-	// Split host into domain and path (e.g., "api.cloud.flexprice.io/v1" -> "api.cloud.flexprice.io" + "/v1")
+	// Split host into domain and path (e.g., "us.api.flexprice.io/v1" -> "us.api.flexprice.io" + "/v1")
 	parts := strings.SplitN(apiHost, "/", 2)
 	hostOnly := parts[0]
 	basePath := ""

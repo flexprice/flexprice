@@ -22,14 +22,14 @@ Set these **before** running any variant:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `FLEXPRICE_API_KEY` | **Yes** | Your FlexPrice API key. If missing, tests exit with an error. |
-| `FLEXPRICE_API_HOST` | **Yes** (for most tests) | API host only (no `https://`). Examples: `api.cloud.flexprice.io`, `api.flexprice.dev`, or `localhost:8080` for a local server. Scripts typically prepend `https://`; for local HTTP you may need to pass a full URL in code. |
+| `FLEXPRICE_API_HOST` | **Yes** (for most tests) | API host only (no `https://`). Use `us.api.flexprice.io` for cloud; or `localhost:8080` for a local server. Scripts typically prepend `https://`; for local HTTP you may need to pass a full URL in code. |
 
 **Step 1 – Set environment (examples):**
 
 ```bash
 # Cloud / staging
 export FLEXPRICE_API_KEY="your-api-key"
-export FLEXPRICE_API_HOST="api.cloud.flexprice.io"
+export FLEXPRICE_API_HOST="us.api.flexprice.io"
 
 # Local API (e.g. go run cmd/server/main.go)
 export FLEXPRICE_API_KEY="your-dev-key"
@@ -58,7 +58,7 @@ This validates the OpenAPI spec, generates all SDKs (and MCP), and runs `merge-c
 
 ```bash
 export FLEXPRICE_API_KEY="your-api-key"
-export FLEXPRICE_API_HOST="api.cloud.flexprice.io"   # or your host / localhost:8080
+export FLEXPRICE_API_HOST="us.api.flexprice.io"   # or your host / localhost:8080
 ```
 
 ### Step 3: Run the local test for your language
@@ -81,7 +81,7 @@ cd api/tests/go && go run test_local_sdk.go
 
 ```bash
 cd api/tests/go
-FLEXPRICE_API_KEY=your-key FLEXPRICE_API_HOST=api.cloud.flexprice.io go run test_local_sdk.go
+FLEXPRICE_API_KEY=your-key FLEXPRICE_API_HOST=us.api.flexprice.io go run test_local_sdk.go
 ```
 
 **Notes:**
@@ -110,7 +110,7 @@ Same as local:
 
 ```bash
 export FLEXPRICE_API_KEY="your-api-key"
-export FLEXPRICE_API_HOST="api.cloud.flexprice.io"
+export FLEXPRICE_API_HOST="us.api.flexprice.io"
 ```
 
 ### Step 3: Run the published test

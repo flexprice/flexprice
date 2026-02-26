@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def main():
     # Configure API key authorization
     api_key = os.getenv("FLEXPRICE_API_KEY", "test_api_key")
-    api_host = os.getenv("FLEXPRICE_API_HOST", "api.cloud.flexprice.io")
+    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io")
 
     logger.info(f"Using API host: {api_host} (use FLEXPRICE_API_HOST env var to change)")
     logger.info("Using " + ("actual API key" if os.getenv("FLEXPRICE_API_KEY") else "test API key") +

@@ -37,7 +37,7 @@ func main() {
 	apiKey := os.Getenv("FLEXPRICE_API_KEY")
 	apiHost := os.Getenv("FLEXPRICE_API_HOST")
 	if apiHost == "" {
-		apiHost = "https://api.cloud.flexprice.io"
+		apiHost = "https://us.api.flexprice.io"
 	}
 	if apiKey == "" {
 		log.Fatal("Set FLEXPRICE_API_KEY in .env or environment")
@@ -111,7 +111,7 @@ For a full list of operations, see the [API reference](https://docs.flexprice.io
 ## Troubleshooting
 
 - **Missing or invalid API key:** Ensure `FLEXPRICE_API_KEY` is set and the key is active. Keys are usually server-side only; do not expose them in client-side code.
-- **Wrong base URL:** Use `https://api.cloud.flexprice.io` (or your tenant host) including scheme; the SDK does not add `/v1` automatically in all paths—check the host you pass to `flexprice.New`.
+- **Wrong base URL:** Use `https://us.api.flexprice.io` (or your tenant host) including scheme; the SDK does not add `/v1` automatically in all paths—check the host you pass to `flexprice.New`.
 - **Non-202 on ingest:** Event ingest returns 202 Accepted; if you get 4xx/5xx, check request shape (e.g. `EventName`, `ExternalCustomerID`, `Properties`) and [API docs](https://docs.flexprice.io).
 
 ## Documentation
