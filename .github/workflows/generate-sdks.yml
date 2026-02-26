@@ -65,6 +65,12 @@ jobs:
           fi
           echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Skip summary
+        if: steps.version-check.outputs.skip == 'true'
+        run: |
+          echo "## Skipped generate and publish" >> $GITHUB_STEP_SUMMARY
+          echo "Version in \`.speakeasy/sdk-version.json\` matches \`api/go/.speakeasy/gen.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
+
   # ---------------------------------------------------------------------------
   # Setup → OpenAPI → SDK tooling → Generate → Upload artifacts
   # ---------------------------------------------------------------------------
@@ -76,8 +82,6 @@ jobs:
       contents: read
     env:
       SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
-    outputs:
-      version: ${{ steps.read-version.outputs.version }}
     steps:
       - name: Check required secrets
         run: |
@@ -132,15 +136,9 @@ jobs:
       - name: Generate SDKs and MCP
         run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
 
-      # Use version from sdk-version.json strictly: overwrite whatever Speakeasy wrote so publish never gets 0.0.1
-      - name: Force resolved version into SDK artifacts
+      # Overwrite Speakeasy version in artifacts so publish never gets 0.0.1
+      - name: Apply version from sdk-version.json to SDK artifacts
         run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
-
-      - name: Set version output
-        id: read-version
-        run: |
-          echo "version=${{ needs.version-check.outputs.version }}" >> $GITHUB_OUTPUT
-          echo "SDK version: ${{ needs.version-check.outputs.version }}"
 
       - name: Sync version to gen.yaml
         run: |
@@ -207,7 +205,7 @@ jobs:
       SDK_PYTHON_REPO: ${{ vars.SDK_PYTHON_REPO }}
       SDK_TYPESCRIPT_REPO: ${{ vars.SDK_TYPESCRIPT_REPO }}
       SDK_MCP_REPO: ${{ vars.SDK_MCP_REPO }}
-      VERSION: ${{ needs.generate.outputs.version }}
+      VERSION: ${{ needs.version-check.outputs.version }}
     steps:
       - name: Checkout (for LICENSE)
         uses: actions/checkout@v4
@@ -261,7 +259,7 @@ jobs:
       SDK_PYTHON_REPO: ${{ vars.SDK_PYTHON_REPO }}
       SDK_TYPESCRIPT_REPO: ${{ vars.SDK_TYPESCRIPT_REPO }}
       SDK_MCP_REPO: ${{ vars.SDK_MCP_REPO }}
-      VERSION: ${{ needs.generate.outputs.version }}
+      VERSION: ${{ needs.version-check.outputs.version }}
     steps:
       - name: Summary
         run: |
@@ -356,7 +354,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: bvish Python to PyPI
+      - name: Publish Python to PyPI
         if: matrix.lang == 'python'
         env:
           TWINE_USERNAME: __token__
