@@ -5,7 +5,7 @@
 #
 # Triggers: push to main (path-filtered); workflow_dispatch. Always publishes to GitHub, npm, PyPI.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
-# Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): Random-test-v2/go-temp, py-temp, ts-temp, mcp-temp.
+# Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk-temp, flexprice/js-sdk-temp, flexprice/python-sdk-temp, flexprice/mcp-temp.
 #
 # Full pipeline runs on GitHub. Local act may fail at upload-artifact unless act's artifact server is configured (ACTIONS_RUNTIME_TOKEN, ACTIONS_RUNTIME_URL, ACTIONS_RESULTS_URL).
 
@@ -187,16 +187,16 @@ jobs:
         include:
           - lang: go
             artifact: api-go
-            default_repo: Random-test-v2/go-temp
+            default_repo: flexprice/go-sdk-temp
           - lang: python
             artifact: api-python
-            default_repo: Random-test-v2/py-temp
+            default_repo: flexprice/python-sdk-temp
           - lang: typescript
             artifact: api-typescript
-            default_repo: Random-test-v2/ts-temp
+            default_repo: flexprice/js-sdk-temp
           - lang: mcp
             artifact: api-mcp
-            default_repo: Random-test-v2/mcp-temp
+            default_repo: flexprice/mcp-temp
     env:
       SDK_DEPLOY_GIT_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
       SDK_GO_REPO: ${{ vars.SDK_GO_REPO }}
@@ -261,10 +261,10 @@ jobs:
     steps:
       - name: Summary
         run: |
-          GO_REPO="${SDK_GO_REPO:-Random-test-v2/go-temp}"
-          PY_REPO="${SDK_PYTHON_REPO:-Random-test-v2/py-temp}"
-          TS_REPO="${SDK_TYPESCRIPT_REPO:-Random-test-v2/ts-temp}"
-          MCP_REPO="${SDK_MCP_REPO:-Random-test-v2/mcp-temp}"
+          GO_REPO="${SDK_GO_REPO:-flexprice/go-sdk-temp}"
+          PY_REPO="${SDK_PYTHON_REPO:-flexprice/python-sdk-temp}"
+          TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/js-sdk-temp}"
+          MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-temp}"
           echo "## SDKs pushed to GitHub" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
