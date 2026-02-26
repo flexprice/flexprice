@@ -6,6 +6,9 @@ sources:
             - location: docs/swagger/swagger-3-0.json
         registry:
             location: registry.speakeasyapi.dev/flexprice/prod/swagger-json
+    swagger-json-mcp:
+        inputs:
+            - location: docs/swagger/swagger-3-0-mcp.json
 targets:
     flexprice-go:
         target: go
@@ -19,7 +22,7 @@ targets:
             blocking: false
     flexprice-mcp:
         target: mcp-typescript
-        source: swagger-json
+        source: swagger-json-mcp
         output: ./api/mcp
         publish:
             npm:
