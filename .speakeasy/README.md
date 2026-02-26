@@ -1,6 +1,6 @@
 # SDK and MCP setup
 
-This directory configures SDK code generation for Flexprice: **api/go**, **api/typescript**, **api/python**, and **api/mcp** from [docs/swagger/swagger-3-0.json](../docs/swagger/swagger-3-0.json).
+This directory configures SDK code generation for flexprice: **api/go**, **api/typescript**, **api/python**, and **api/mcp** from [docs/swagger/swagger-3-0.json](../docs/swagger/swagger-3-0.json).
 
 ## SDK version (unique every run so publish never fails)
 
@@ -34,7 +34,7 @@ When each target is created, the generator produces a `gen.yaml` in that targetâ
 - **Go:** `maxMethodParams: 4`, `methodArguments: "infer-optional-args"`, `modulePath` (e.g. `github.com/flexprice/flexprice-go`), `sdkPackageName: flexprice`
 - **TypeScript:** `packageName: "@flexprice/sdk"`, `generateExamples: true`
 - **Python:** `packageName: flexprice`, `moduleName: flexprice`, `packageManager: uv`
-- **MCP:** `mcpbManifestOverlay.displayName: "Flexprice"`, `validateResponse: false` for robustness; package `@flexprice/mcp`
+- **MCP:** `mcpbManifestOverlay.displayName: "flexprice"`, `validateResponse: false` for robustness; package `@flexprice/mcp`
 
 ### Retries (production)
 

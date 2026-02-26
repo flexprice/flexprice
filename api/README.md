@@ -1,6 +1,6 @@
-# FlexPrice API SDKs
+# flexprice API SDKs
 
-Generated SDKs and MCP server for the Flexprice API. Source: OpenAPI spec at `docs/swagger/swagger-3-0.json`.
+Generated SDKs and MCP server for the flexprice API. Source: OpenAPI spec at `docs/swagger/swagger-3-0.json`.
 
 ## Layout
 
