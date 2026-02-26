@@ -17,6 +17,15 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '..');
 
+/** Convert operationId (camelCase) to MCP tool name (kebab-case), e.g. deleteCustomer -> delete-customer */
+function toKebab(operationId) {
+  if (!operationId || typeof operationId !== 'string') return operationId;
+  return operationId
+    .replace(/([A-Z])/g, '-$1')
+    .toLowerCase()
+    .replace(/^-/, '');
+}
+
 function parseAllowedTags(content) {
   const tags = [];
   let inAllowed = false;
@@ -77,6 +86,9 @@ function main() {
         delete pathItem[method];
         removed++;
       } else {
+        // Force MCP tool name to operationId-only (kebab-case), excluding tag prefix
+        const existing = op['x-speakeasy-mcp'] && typeof op['x-speakeasy-mcp'] === 'object' ? op['x-speakeasy-mcp'] : {};
+        op['x-speakeasy-mcp'] = { ...existing, name: toKebab(op.operationId) };
         kept++;
       }
     }

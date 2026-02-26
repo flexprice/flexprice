@@ -227,6 +227,9 @@ jobs:
 
       - name: Push SDK to repo
         run: |
+          # Ensure VERSION is never empty so commit message and tag always include version number
+          VERSION="${{ env.VERSION }}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
           git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/${{ env.REPO }}.git /tmp/sdk-repo
           cd /tmp/sdk-repo
           find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
@@ -236,12 +239,12 @@ jobs:
           git config user.email "actions@github.com"
           if [ -n "$(git status --porcelain)" ]; then
             git add .
-            git commit -m "Release ${{ matrix.lang }} SDK v${{ env.VERSION }}"
-            if ! git rev-parse "v${{ env.VERSION }}" >/dev/null 2>&1; then
-              git tag -a "v${{ env.VERSION }}" -m "${{ matrix.lang }} SDK version ${{ env.VERSION }}"
+            git commit -m "Release ${{ matrix.lang }} SDK v${VERSION}"
+            if ! git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+              git tag -a "v${VERSION}" -m "${{ matrix.lang }} SDK version ${VERSION}"
             fi
             git push origin main
-            git push origin "v${{ env.VERSION }}" 2>/dev/null || true
+            git push origin "v${VERSION}" 2>/dev/null || true
           fi
           echo "Pushed ${{ matrix.lang }} SDK to ${{ env.REPO }}"
 

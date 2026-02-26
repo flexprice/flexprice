@@ -92,7 +92,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "customer"
+        "x-codegen-request-body-name": "customer",
+        "x-speakeasy-mcp": {
+          "name": "update-customer"
+        }
       },
       "post": {
         "tags": [
@@ -149,7 +152,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "customer"
+        "x-codegen-request-body-name": "customer",
+        "x-speakeasy-mcp": {
+          "name": "create-customer"
+        }
       }
     },
     "/customers/external/{external_id}": {
@@ -217,7 +223,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-customer-by-external-id"
+        }
       }
     },
     "/customers/search": {
@@ -276,7 +285,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "filter"
+        "x-codegen-request-body-name": "filter",
+        "x-speakeasy-mcp": {
+          "name": "query-customer"
+        }
       }
     },
     "/customers/usage": {
@@ -375,7 +387,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-customer-usage-summary"
+        }
       }
     },
     "/customers/{id}": {
@@ -433,7 +448,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-customer"
+        }
       },
       "delete": {
         "tags": [
@@ -483,7 +501,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "delete-customer"
+        }
       }
     },
     "/customers/{id}/entitlements": {
@@ -541,7 +562,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-customer-entitlements"
+        }
       }
     },
     "/customers/{id}/grants/upcoming": {
@@ -609,7 +633,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-customer-upcoming-grants"
+        }
       }
     },
     "/customers/{id}/invoices/summary": {
@@ -667,7 +694,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-customer-invoice-summary"
+        }
       }
     },
     "/events": {
@@ -729,7 +759,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "event"
+        "x-codegen-request-body-name": "event",
+        "x-speakeasy-mcp": {
+          "name": "ingest-event"
+        }
       }
     },
     "/events/analytics": {
@@ -788,7 +821,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "get-usage-analytics"
+        }
       }
     },
     "/events/bulk": {
@@ -850,7 +886,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "event"
+        "x-codegen-request-body-name": "event",
+        "x-speakeasy-mcp": {
+          "name": "ingest-events-bulk"
+        }
       }
     },
     "/events/huggingface-inference": {
@@ -887,7 +926,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-huggingface-inference-data"
+        }
       }
     },
     "/events/query": {
@@ -946,7 +988,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "list-raw-events"
+        }
       }
     },
     "/events/usage": {
@@ -1005,7 +1050,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "get-usage-statistics"
+        }
       }
     },
     "/events/usage/meter": {
@@ -1074,7 +1122,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "get-usage-by-meter"
+        }
       }
     },
     "/events/{id}": {
@@ -1132,7 +1183,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-event"
+        }
       }
     },
     "/invoices": {
@@ -1191,7 +1245,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "invoice"
+        "x-codegen-request-body-name": "invoice",
+        "x-speakeasy-mcp": {
+          "name": "create-invoice"
+        }
       }
     },
     "/invoices/preview": {
@@ -1250,7 +1307,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "get-invoice-preview"
+        }
       }
     },
     "/invoices/search": {
@@ -1309,7 +1369,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "filter"
+        "x-codegen-request-body-name": "filter",
+        "x-speakeasy-mcp": {
+          "name": "query-invoice"
+        }
       }
     },
     "/invoices/{id}": {
@@ -1388,7 +1451,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-invoice"
+        }
       },
       "put": {
         "tags": [
@@ -1466,7 +1532,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "update-invoice"
+        }
       }
     },
     "/invoices/{id}/comms/trigger": {
@@ -1534,7 +1603,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "trigger-invoice-comms-webhook"
+        }
       }
     },
     "/invoices/{id}/finalize": {
@@ -1592,7 +1664,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "finalize-invoice"
+        }
       }
     },
     "/invoices/{id}/payment": {
@@ -1672,7 +1747,10 @@
             "ApiKeyAuth": []
           }
         ],
-        "x-codegen-request-body-name": "request"
+        "x-codegen-request-body-name": "request",
+        "x-speakeasy-mcp": {
+          "name": "update-invoice-payment-status"
+        }
       }
     },
     "/invoices/{id}/payment/attempt": {
@@ -1740,7 +1818,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "attempt-invoice-payment"
+        }
       }
     },
     "/invoices/{id}/pdf": {
@@ -1817,7 +1898,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "get-invoice-pdf"
+        }
       }
     },
     "/invoices/{id}/recalculate": {
@@ -1893,7 +1977,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "recalculate-invoice"
+        }
       }
     },
     "/invoices/{id}/void": {
@@ -1951,7 +2038,10 @@
           {
             "ApiKeyAuth": []
           }
-        ]
+        ],
+        "x-speakeasy-mcp": {
+          "name": "void-invoice"
+        }
       }
     }
   },
