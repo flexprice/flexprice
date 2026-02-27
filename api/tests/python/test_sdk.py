@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-FlexPrice Python SDK - Published SDK tests (pip install flexprice-temp).
-Run from api/tests/python: pip install flexprice-temp && python test_sdk.py
+FlexPrice Python SDK - Published SDK tests (pip install flexprice).
+Run from api/tests/python: pip install flexprice && python test_sdk.py
 Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
 Uses the Flexprice client (server_url, api_key_auth) and namespaced APIs (client.customers, client.events, etc.).
-Package: https://pypi.org/project/flexprice-temp/
-Repo: https://github.com/flexprice/python-sdk-temp
+Package: https://pypi.org/project/flexprice/
+Repo: https://github.com/flexprice/python-sdk
 """
 
 import os
@@ -38,20 +38,20 @@ def check_dependencies():
 
 check_dependencies()
 
-# Use published package (pip install flexprice-temp)
+# Use published package (pip install flexprice)
 try:
-    from flexprice_temp import Flexprice
-    from flexprice_temp import errors as sdk_errors
+    from flexprice import Flexprice
+    from flexprice import errors as sdk_errors
 except ImportError as e:
-    print("❌ SDK not found. Install with: pip install flexprice-temp")
+    print("❌ SDK not found. Install with: pip install flexprice")
     print(f"   Error: {e}")
     sys.exit(1)
 
-# Enum values derived from flexprice_temp.models types (Union[Literal[...], UnrecognizedStr]).
+# Enum values derived from flexprice.models types (Union[Literal[...], UnrecognizedStr]).
 # Single source of truth: SDK type definitions.
 from typing import get_args
 
-from flexprice_temp.models import (
+from flexprice.models import (
     types_addontype,
     types_billingcadence,
     types_billingcycle,

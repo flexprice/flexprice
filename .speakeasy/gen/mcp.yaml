@@ -31,7 +31,7 @@ generation:
     generateNewTests: false
     skipResponseBodyAssertions: false
 mcp-typescript:
-  version: 0.0.54
+  version: 0.0.50
   additionalDependencies:
     dependencies: {}
     devDependencies: {}
@@ -50,6 +50,6 @@ mcp-typescript:
     displayName: Flexprice
   multipartArrayFormat: standard
   outputModelSuffix: output
-  packageName: '@omkar273/mcp-temp'
+  packageName: "@flexprice/mcp-server"
   responseFormat: flat
   validateResponse: false

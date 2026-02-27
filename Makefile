@@ -445,12 +445,12 @@ merge-custom:
 	fi
 	@echo "✓ Custom merge complete"
 
-# Force MCP package name so npm publish never uses reserved "mcp"; CI artifact gets @omkar273/mcp-temp.
+# Force MCP package name so npm publish uses @flexprice/mcp-server.
 .PHONY: fix-mcp-package-name
 fix-mcp-package-name:
 	@if [ -f api/mcp/package.json ]; then \
-		jq '.name = "@omkar273/mcp-temp"' api/mcp/package.json > api/mcp/package.json.tmp && mv api/mcp/package.json.tmp api/mcp/package.json; \
-		echo "✓ MCP package name set to @omkar273/mcp-temp"; \
+		jq '.name = "@flexprice/mcp-server"' api/mcp/package.json > api/mcp/package.json.tmp && mv api/mcp/package.json.tmp api/mcp/package.json; \
+		echo "✓ MCP package name set to @flexprice/mcp-server"; \
 	fi
 
 # =============================================================================

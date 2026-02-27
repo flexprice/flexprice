@@ -30,9 +30,9 @@ See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md
 
 - **API base URL:** Use `https://us.api.flexprice.io/v1` for all SDKs and the MCP server. Always include `/v1` in the base URL; no trailing space or trailing slash.
 - **Go:** `flexprice.New(serverURL, flexprice.WithSecurity(apiKey))` – see `api/go/README.md` and `api/go/examples/`.
-- **TypeScript:** Import from the built package; optional custom `CustomerPortal` in `src/sdk/customer-portal.ts`.
-- **Python:** Use the generated package; examples in `api/python/examples/` (may need updates for current SDK).
-- **MCP:** Run from `api/mcp` (e.g. `npx . start`); set `FLEXPRICE_API_KEY` or per-README auth.
+- **TypeScript:** `npm i @flexprice/sdk` then import `Flexprice` / `FlexPrice`; optional custom `CustomerPortal` in `src/sdk/customer-portal.ts`.
+- **Python:** `pip install flexprice` then `from flexprice import Flexprice`; examples in `api/python/examples/`.
+- **MCP:** `npm i @flexprice/mcp-server`; run with `npx @flexprice/mcp-server start` (or from `api/mcp`); set `FLEXPRICE_API_KEY` or per-README auth.
 
 ## CI/CD
 
@@ -43,7 +43,7 @@ Use the **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) for S
 The **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) is the single pipeline: (1) generate SDKs, (2) push to GitHub repos, (3) publish to npm (TypeScript) and PyPI (Python). Go is published by the repo push in step 2.
 
 - **Trigger:** Push to `main` (when `docs/swagger/**`, generator config, `api/custom/**`, `cmd/**`, `internal/api/**`, or `Makefile` change) or manual run via **workflow_dispatch**. For manual runs, check "Push generated SDKs to GitHub repos" to run steps 2 and 3; leave unchecked to only generate.
-- **Variables (optional):** `SDK_GO_REPO`, `SDK_PYTHON_REPO`, `SDK_TYPESCRIPT_REPO` (defaults: Random-test-v2/go-temp, py-temp, ts-temp).
+- **Variables (optional):** `SDK_GO_REPO`, `SDK_PYTHON_REPO`, `SDK_TYPESCRIPT_REPO`, `SDK_MCP_REPO` (defaults: flexprice/go-sdk, flexprice/python-sdk, flexprice/javascript-sdk, flexprice/mcp-server).
 
 **Secrets (Settings → Secrets and variables → Actions):**
 
@@ -56,7 +56,9 @@ The **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) is the si
 
 **Fine-grained token setup (SDK_DEPLOY_GIT_TOKEN):** Create a [fine-grained personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) under the account or org that owns the SDK repos. Use **Only select repositories** and add every repo the workflow pushes to (defaults: go-temp, py-temp, ts-temp; add any overridden via `SDK_GO_REPO` etc.). Under **Repository permissions** set **Contents** to **Read and write** and **Metadata** to **Read**. No other permissions are required.
 
-**Why GitHub publish can succeed but npm publish fails:** The GitHub step only copies files into a git repo; it does not care about `package.json` `name`. The npm step reads `package.json` and publishes under that name. If the name is reserved (e.g. `"mcp"`) or the token does not have publish permission for that package/scope, npm returns 403. The generate job runs `fix-mcp-package-name` (Makefile) so the MCP artifact has `"name": "@omkar273/mcp-temp"`. In the **publish-to-registries** job, the "Show package name" step logs the name from the downloaded artifact; if it still shows `mcp`, the generate run did not apply the fix (e.g. branch missing the Makefile change, or `jq` not available). For 403, also ensure `NPM_TOKEN` has **Publish** scope and access to the `@omkar273` scope (or the TypeScript package’s scope).
+**Published packages:** Python: `pip install flexprice` | TypeScript: `npm i @flexprice/sdk` | MCP: `npm i @flexprice/mcp-server`.
+
+**Why GitHub publish can succeed but npm publish fails:** The GitHub step only copies files into a git repo; it does not care about `package.json` `name`. The npm step reads `package.json` and publishes under that name. If the name is reserved (e.g. `"mcp"`) or the token does not have publish permission for that package/scope, npm returns 403. The generate job runs `fix-mcp-package-name` (Makefile) so the MCP artifact has `"name": "@flexprice/mcp-server"`. In the **publish-to-registries** job, the "Show package name" step logs the name from the downloaded artifact. For 403, ensure `NPM_TOKEN` has **Publish** scope and access to the `@flexprice` scope.
 
 **When using act:** The publish-to-registries job runs three matrix jobs (TypeScript, Python, MCP) in parallel. If **one** of them fails (e.g. TypeScript npm publish), act may cancel the others with "context canceled", so MCP can show as failed even though the token works from CLI. In that case the **first** failure is the real one (e.g. TypeScript); fix that (check the TypeScript step log for `npm error` or 403/409) so the rest can complete. Python succeeded in your run; TypeScript failed first, then MCP was canceled during its build phase.
 

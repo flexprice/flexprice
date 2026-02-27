@@ -1,7 +1,7 @@
 {
   "name": "flexprice-sdk-tests",
   "private": true,
-  "description": "Published SDK integration tests (flexprice-ts-temp)",
+  "description": "Published SDK integration tests (@flexprice/sdk)",
   "scripts": {
     "test": "npx ts-node test_sdk_js.ts"
   },
@@ -11,6 +11,6 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "flexprice-ts-temp": "latest"
+    "@flexprice/sdk": "latest"
   }
 }

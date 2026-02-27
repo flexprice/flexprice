@@ -27,7 +27,7 @@ generation:
     generateNewTests: false
     skipResponseBodyAssertions: false
 typescript:
-  version: 0.0.54
+  version: 0.0.50
   acceptHeaderEnum: true
   additionalDependencies:
     dependencies: {}
@@ -72,7 +72,7 @@ typescript:
   moduleFormat: dual
   multipartArrayFormat: legacy
   outputModelSuffix: output
-  packageName: flexprice-ts-temp
+  packageName: "@flexprice/sdk"
   preApplyUnionDiscriminators: true
   preserveModelFieldNames: false
   responseFormat: flat

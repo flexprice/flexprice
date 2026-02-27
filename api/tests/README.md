@@ -6,12 +6,12 @@ Install the SDK from the registry, set credentials, and run the test for your la
 
 ## Packages and repos (canonical)
 
-| Language   | Package / registry | Repo |
-| ---------- | ------------------ | ----- |
-| **Go**     | [go-sdk-temp](https://github.com/flexprice/go-sdk-temp) (GitHub) | [go-sdk-temp](https://github.com/flexprice/go-sdk-temp) |
-| **TypeScript** | [flexprice-ts-temp](https://www.npmjs.com/package/flexprice-ts-temp) (npm) | [js-sdk-temp](https://github.com/flexprice/js-sdk-temp) |
-| **MCP**    | [@omkar273/mcp-temp](https://www.npmjs.com/package/@omkar273/mcp-temp) (npm) | [mcp-temp](https://github.com/flexprice/mcp-temp) |
-| **Python** | [flexprice-temp](https://pypi.org/project/flexprice-temp/) (PyPI) | [python-sdk-temp](https://github.com/flexprice/python-sdk-temp) |
+| Language   | Install | Repo |
+| ---------- | ------- | ----- |
+| **Go**     | [go-sdk](https://github.com/flexprice/go-sdk) (GitHub) | [go-sdk](https://github.com/flexprice/go-sdk) |
+| **TypeScript** | `npm i @flexprice/sdk` | [javascript-sdk](https://github.com/flexprice/javascript-sdk) |
+| **MCP**    | `npm i @flexprice/mcp-server` | [mcp-server](https://github.com/flexprice/mcp-server) |
+| **Python** | `pip install flexprice` | [python-sdk](https://github.com/flexprice/python-sdk) |
 
 ---
 
@@ -48,7 +48,7 @@ go run -tags published test_sdk.go
 ### Python
 
 ```bash
-python3 -m pip install flexprice-temp
+python3 -m pip install flexprice
 cd api/tests/python
 python3 test_sdk.py
 ```
@@ -74,7 +74,7 @@ make test-sdk
 make test-sdks
 ```
 
-- **Go:** `go mod tidy` + `go mod download` then run tests (SDK is fetched from [go-sdk-temp](https://github.com/flexprice/go-sdk-temp) via a `replace` in `go.mod`).  
+- **Go:** `go mod tidy` + `go mod download` then run tests (SDK is fetched from [go-sdk](https://github.com/flexprice/go-sdk) via a `replace` in `go.mod`).  
 - **Python:** A `.venv` is created in `api/tests/python` and used so system Python is not modified (avoids “externally-managed-environment” on macOS/Homebrew).  
 - **TypeScript:** `npm install` then run tests
 

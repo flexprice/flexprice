@@ -5,7 +5,8 @@
 #
 # Triggers: push to main (path-filtered); workflow_dispatch. When version unchanged, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
-# Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk-temp, flexprice/js-sdk-temp, flexprice/python-sdk-temp, flexprice/mcp-temp.
+# Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
+# Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
 #
 # Full pipeline runs on GitHub. Local act may fail at upload-artifact unless act's artifact server is configured (ACTIONS_RUNTIME_TOKEN, ACTIONS_RUNTIME_URL, ACTIONS_RESULTS_URL).
 
@@ -185,16 +186,16 @@ jobs:
         include:
           - lang: go
             artifact: api-go
-            default_repo: flexprice/go-sdk-temp
+            default_repo: flexprice/go-sdk
           - lang: python
             artifact: api-python
-            default_repo: flexprice/python-sdk-temp
+            default_repo: flexprice/python-sdk
           - lang: typescript
             artifact: api-typescript
-            default_repo: flexprice/js-sdk-temp
+            default_repo: flexprice/javascript-sdk
           - lang: mcp
             artifact: api-mcp
-            default_repo: flexprice/mcp-temp
+            default_repo: flexprice/mcp-server
     env:
       SDK_DEPLOY_GIT_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
       SDK_GO_REPO: ${{ vars.SDK_GO_REPO }}
@@ -262,16 +263,21 @@ jobs:
     steps:
       - name: Summary
         run: |
-          GO_REPO="${SDK_GO_REPO:-flexprice/go-sdk-temp}"
-          PY_REPO="${SDK_PYTHON_REPO:-flexprice/python-sdk-temp}"
-          TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/js-sdk-temp}"
-          MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-temp}"
+          GO_REPO="${SDK_GO_REPO:-flexprice/go-sdk}"
+          PY_REPO="${SDK_PYTHON_REPO:-flexprice/python-sdk}"
+          TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/javascript-sdk}"
+          MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-server}"
           echo "## SDKs pushed to GitHub" >> $GITHUB_STEP_SUMMARY
           echo "**Version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- Python: https://github.com/$PY_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- TypeScript: https://github.com/$TS_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- MCP: https://github.com/$MCP_REPO" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Install (published packages)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python:** \`pip install flexprice\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **TypeScript:** \`npm i @flexprice/sdk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **MCP:** \`npm i @flexprice/mcp-server\`" >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Publishes via npm/twine here; .speakeasy/workflow.yaml publish config is for Speakeasy CLI/action only and is not used by this workflow.

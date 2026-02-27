@@ -36,7 +36,7 @@ import {
     ProrationBehavior,
     ResumeMode,
     TransactionReason,
-} from 'flexprice-ts-temp';
+} from '@flexprice/sdk';
 
 // Global test entity IDs
 let testCustomerID = '';
