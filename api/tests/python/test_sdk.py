@@ -47,6 +47,67 @@ except ImportError as e:
     print(f"   Error: {e}")
     sys.exit(1)
 
+# Enum values derived from flexprice_temp.models types (Union[Literal[...], UnrecognizedStr]).
+# Single source of truth: SDK type definitions.
+from typing import get_args
+
+from flexprice_temp.models import (
+    types_addontype,
+    types_billingcadence,
+    types_billingcycle,
+    types_billingmodel,
+    types_billingperiod,
+    types_creditgrantcadence,
+    types_creditgrantexpirydurationunit,
+    types_creditgrantexpirytype,
+    types_creditgrantscope,
+    types_creditnotereason,
+    types_invoicecadence,
+    types_invoicestatus,
+    types_invoicetype,
+    types_paymentstatus,
+    types_priceentitytype,
+    types_pricetype,
+    types_priceunittype,
+    types_subscriptionstatus,
+    types_transactionreason,
+)
+
+
+def _literals(union_type):
+    """Return the Literal options from SDK Union[Literal[...], UnrecognizedStr]."""
+    return get_args(get_args(union_type)[0])
+
+
+_l = _literals
+# Billing
+BILLING_PERIOD_MONTHLY = _l(types_billingperiod.TypesBillingPeriod)[0]
+BILLING_CADENCE_RECURRING = _l(types_billingcadence.TypesBillingCadence)[0]
+BILLING_MODEL_FLAT_FEE = _l(types_billingmodel.TypesBillingModel)[0]
+INVOICE_CADENCE_ARREAR = _l(types_invoicecadence.TypesInvoiceCadence)[0]
+INVOICE_CADENCE_ADVANCE = _l(types_invoicecadence.TypesInvoiceCadence)[1]
+# Price
+PRICE_ENTITY_TYPE_PLAN = _l(types_priceentitytype.TypesPriceEntityType)[0]
+PRICE_ENTITY_TYPE_ADDON = _l(types_priceentitytype.TypesPriceEntityType)[2]
+PRICE_TYPE_FIXED = _l(types_pricetype.TypesPriceType)[1]
+PRICE_UNIT_TYPE_FIAT = _l(types_priceunittype.TypesPriceUnitType)[0]
+# Invoice / Payment
+INVOICE_TYPE_ONE_OFF = _l(types_invoicetype.TypesInvoiceType)[1]
+INVOICE_STATUS_DRAFT = _l(types_invoicestatus.TypesInvoiceStatus)[0]
+PAYMENT_STATUS_SUCCEEDED = _l(types_paymentstatus.TypesPaymentStatus)[3]
+PAYMENT_STATUS_PENDING = _l(types_paymentstatus.TypesPaymentStatus)[1]
+# Addon / Subscription / Billing cycle (lowercase in OpenAPI)
+ADDON_TYPE_ONETIME = _l(types_addontype.TypesAddonType)[0]
+SUBSCRIPTION_STATUS_DRAFT = _l(types_subscriptionstatus.TypesSubscriptionStatus)[5]
+BILLING_CYCLE_ANNIVERSARY = _l(types_billingcycle.TypesBillingCycle)[0]
+# Wallet / Credit grant / Credit note
+TRANSACTION_REASON_PURCHASED_CREDIT_DIRECT = _l(types_transactionreason.TypesTransactionReason)[4]
+CREDIT_GRANT_SCOPE_PLAN = _l(types_creditgrantscope.TypesCreditGrantScope)[0]
+CREDIT_GRANT_CADENCE_ONETIME = _l(types_creditgrantcadence.TypesCreditGrantCadence)[0]
+CREDIT_GRANT_EXPIRY_TYPE_NEVER = _l(types_creditgrantexpirytype.TypesCreditGrantExpiryType)[0]
+CREDIT_GRANT_EXPIRY_DURATION_UNIT_DAY = _l(types_creditgrantexpirydurationunit.TypesCreditGrantExpiryDurationUnit)[0]
+CREDIT_NOTE_REASON_BILLING_ERROR = _l(types_creditnotereason.TypesCreditNoteReason)[5]
+
 # Optional: Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -534,7 +595,7 @@ def test_create_addon(client: Flexprice):
             name=test_addon_name,
             lookup_key=test_addon_lookup_key,
             description="This is a test addon created by SDK tests",
-            type_="onetime",
+            type_=ADDON_TYPE_ONETIME,
             metadata={
                 "source": "sdk_test",
                 "test_run": datetime.now().isoformat(),
@@ -815,13 +876,13 @@ def test_create_subscription(client: Flexprice):
         # First create a price for the plan
         client.prices.create_price(
             entity_id=test_plan_id,
-            entity_type="plan",
-            type_="fixed",
-            billing_model="flat_fee",
-            billing_cadence="recurring",
-            billing_period="monthly",
-            invoice_cadence="arrear",
-            price_unit_type="fiat",
+            entity_type=PRICE_ENTITY_TYPE_PLAN,
+            type_=PRICE_TYPE_FIXED,
+            billing_model=BILLING_MODEL_FLAT_FEE,
+            billing_cadence=BILLING_CADENCE_RECURRING,
+            billing_period=BILLING_PERIOD_MONTHLY,
+            invoice_cadence=INVOICE_CADENCE_ARREAR,
+            price_unit_type=PRICE_UNIT_TYPE_FIAT,
             amount="29.99",
             currency="USD",
             display_name="Monthly Subscription Price",
@@ -831,10 +892,10 @@ def test_create_subscription(client: Flexprice):
             customer_id=test_customer_id,
             plan_id=test_plan_id,
             currency="USD",
-            billing_cadence="recurring",
-            billing_period="monthly",
+            billing_cadence=BILLING_CADENCE_RECURRING,
+            billing_period=BILLING_PERIOD_MONTHLY,
             billing_period_count=1,
-            billing_cycle="anniversary",
+            billing_cycle=BILLING_CYCLE_ANNIVERSARY,
             start_date=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             metadata={
                 "source": "sdk_test",
@@ -921,11 +982,11 @@ def test_activate_subscription(client: Flexprice):
             customer_id=test_customer_id,
             plan_id=test_plan_id,
             currency="USD",
-            billing_cadence="recurring",
-            billing_period="monthly",
+            billing_cadence=BILLING_CADENCE_RECURRING,
+            billing_period=BILLING_PERIOD_MONTHLY,
             billing_period_count=1,
             start_date=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            subscription_status="draft",
+            subscription_status=SUBSCRIPTION_STATUS_DRAFT,
         )
         draft_id = draft_sub.id
         print(f"  Created draft subscription: {draft_id}")
@@ -1011,13 +1072,13 @@ def test_add_addon_to_subscription(client: Flexprice):
         try:
             client.prices.create_price(
                 entity_id=test_addon_id,
-                entity_type="addon",
-                type_="fixed",
-                billing_model="flat_fee",
-                billing_cadence="recurring",
-                billing_period="monthly",
-                invoice_cadence="arrear",
-                price_unit_type="fiat",
+                entity_type=PRICE_ENTITY_TYPE_ADDON,
+                type_=PRICE_TYPE_FIXED,
+                billing_model=BILLING_MODEL_FLAT_FEE,
+                billing_cadence=BILLING_CADENCE_RECURRING,
+                billing_period=BILLING_PERIOD_MONTHLY,
+                invoice_cadence=INVOICE_CADENCE_ARREAR,
+                price_unit_type=PRICE_UNIT_TYPE_FIAT,
                 amount="5.00",
                 currency="USD",
                 display_name="Addon Monthly Price",
@@ -1061,9 +1122,9 @@ def test_preview_subscription_change(client: Flexprice):
         preview = client.subscriptions.preview_subscription_change(
             id=test_subscription_id,
             target_plan_id=test_plan_id,
-            billing_cadence="recurring",
-            billing_period="monthly",
-            billing_cycle="anniversary",
+            billing_cadence=BILLING_CADENCE_RECURRING,
+            billing_period=BILLING_PERIOD_MONTHLY,
+            billing_cycle=BILLING_CYCLE_ANNIVERSARY,
             proration_behavior="create_prorations",
         )
         print("✓ Subscription change preview generated!")
@@ -1214,9 +1275,9 @@ def test_create_invoice(client: Flexprice):
             amount_due="100.00",
             subtotal="100.00",
             total="100.00",
-            invoice_type="one_off",
+            invoice_type=INVOICE_TYPE_ONE_OFF,
             billing_reason="MANUAL",
-            invoice_status="draft",
+            invoice_status=INVOICE_STATUS_DRAFT,
             line_items=[
                 {"display_name": "Test Service", "quantity": "1", "amount": "100.00"}
             ],
@@ -1310,9 +1371,9 @@ def test_finalize_invoice(client: Flexprice):
             amount_due="50.00",
             subtotal="50.00",
             total="50.00",
-            invoice_type="one_off",
+            invoice_type=INVOICE_TYPE_ONE_OFF,
             billing_reason="MANUAL",
-            invoice_status="draft",
+            invoice_status=INVOICE_STATUS_DRAFT,
             line_items=[
                 {"display_name": "Finalize Test Service", "quantity": "1", "amount": "50.00"}
             ],
@@ -1344,7 +1405,7 @@ def test_record_payment(client: Flexprice):
     try:
         client.invoices.update_invoice_payment_status(
             id=test_invoice_id,
-            payment_status="succeeded",
+            payment_status=PAYMENT_STATUS_SUCCEEDED,
             amount="100.00",
         )
 
@@ -1371,10 +1432,10 @@ def test_attempt_payment(client: Flexprice):
             subtotal="25.00",
             total="25.00",
             amount_paid="0.00",
-            invoice_type="one_off",
+            invoice_type=INVOICE_TYPE_ONE_OFF,
             billing_reason="MANUAL",
-            invoice_status="draft",
-            payment_status="pending",
+            invoice_status=INVOICE_STATUS_DRAFT,
+            payment_status=PAYMENT_STATUS_PENDING,
             line_items=[
                 {"display_name": "Attempt Payment Test", "quantity": "1", "amount": "25.00"}
             ],
@@ -1472,16 +1533,16 @@ def test_create_price(client: Flexprice):
     try:
         response = client.prices.create_price(
             entity_id=test_plan_id,
-            entity_type="plan",
-            type_="fixed",
+            entity_type=PRICE_ENTITY_TYPE_PLAN,
+            type_=PRICE_TYPE_FIXED,
             currency="USD",
             amount="99.00",
-            billing_model="flat_fee",
-            billing_cadence="recurring",
-            billing_period="monthly",
+            billing_model=BILLING_MODEL_FLAT_FEE,
+            billing_cadence=BILLING_CADENCE_RECURRING,
+            billing_period=BILLING_PERIOD_MONTHLY,
             billing_period_count=1,
-            invoice_cadence="advance",
-            price_unit_type="fiat",
+            invoice_cadence=INVOICE_CADENCE_ADVANCE,
+            price_unit_type=PRICE_UNIT_TYPE_FIAT,
             display_name="Monthly Subscription",
             description="Standard monthly subscription price",
         )
@@ -1580,10 +1641,10 @@ def test_create_payment(client: Flexprice):
             subtotal="100.00",
             total="100.00",
             amount_paid="0.00",
-            invoice_type="one_off",
+            invoice_type=INVOICE_TYPE_ONE_OFF,
             billing_reason="MANUAL",
-            invoice_status="draft",
-            payment_status="pending",
+            invoice_status=INVOICE_STATUS_DRAFT,
+            payment_status=PAYMENT_STATUS_PENDING,
             line_items=[{"display_name": "Payment Test Service", "quantity": "1", "amount": "100.00"}],
             metadata={"source": "sdk_test_payment"},
         )
@@ -1851,7 +1912,7 @@ def test_top_up_wallet(client: Flexprice):
             id=test_wallet_id,
             amount="100.00",
             description="Test top-up",
-            transaction_reason="purchased_credit_direct",
+            transaction_reason=TRANSACTION_REASON_PURCHASED_CREDIT_DIRECT,
         )
 
         print("✓ Wallet topped up successfully!")
@@ -1889,7 +1950,7 @@ def test_get_wallet_transactions(client: Flexprice):
         return
 
     try:
-        response = client.wallets.get_wallet_transactions(id=test_wallet_id)
+        response = client.wallets.get_wallet_transactions(id_path_parameter=test_wallet_id)
 
         print("✓ Wallet transactions retrieved!")
         print(f"  Total transactions: {len(response.items) if response.items else 0}\n")
@@ -1927,11 +1988,11 @@ def test_create_credit_grant(client: Flexprice):
         response = client.credit_grants.create_credit_grant(
             name="Test Credit Grant",
             credits="500.00",
-            scope="plan",
+            scope=CREDIT_GRANT_SCOPE_PLAN,
             plan_id=test_plan_id,
-            cadence="onetime",
-            expiration_type="never",
-            expiration_duration_unit="day",
+            cadence=CREDIT_GRANT_CADENCE_ONETIME,
+            expiration_type=CREDIT_GRANT_EXPIRY_TYPE_NEVER,
+            expiration_duration_unit=CREDIT_GRANT_EXPIRY_DURATION_UNIT_DAY,
             metadata={"source": "sdk_test", "test_run": datetime.now().isoformat()},
         )
 
@@ -2084,7 +2145,7 @@ def test_create_credit_note(client: Flexprice):
         credit_amount = "50.00"
         response = client.credit_notes.create_credit_note(
             invoice_id=test_invoice_id,
-            reason="billing_error",
+            reason=CREDIT_NOTE_REASON_BILLING_ERROR,
             memo="Test credit note from SDK",
             line_items=[
                 {"invoice_line_item_id": line_item_id, "amount": credit_amount, "display_name": f"Credit for {display_name}"}
@@ -2494,7 +2555,9 @@ def main():
     server_url, api_key = get_server_url_and_api_key()
     print("=== FlexPrice Python SDK - API Tests ===\n")
     print(f"✓ API Key: {api_key[:8]}...{api_key[-4:]}")
-    print(f"✓ API Host: {server_url}\n")
+    print(f"✓ API Host: {server_url}")
+    # Verify enum values from SDK are UPPERCASE (API expects these)
+    print(f"  Enum check: invoice_type={INVOICE_TYPE_ONE_OFF!r}, billing_period={BILLING_PERIOD_MONTHLY!r}, payment_status={PAYMENT_STATUS_SUCCEEDED!r}\n")
 
     with Flexprice(server_url=server_url, api_key_auth=api_key) as client:
 

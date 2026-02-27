@@ -8,7 +8,7 @@
  * Repo: https://github.com/flexprice/js-sdk-temp
  */
 
-import { Flexprice } from 'flexprice-ts-temp';
+import { FeatureType, Flexprice } from 'flexprice-ts-temp';
 
 // Global test entity IDs
 let testCustomerID = '';
@@ -314,7 +314,7 @@ async function testCreateFeature(client: Flexprice) {
             name: testFeatureName,
             lookupKey: featureKey,
             description: 'This is a test feature created by SDK tests',
-            type: 'boolean' as const,
+            type: FeatureType.Boolean,
             metadata: {
                 source: 'sdk_test',
                 test_run: new Date().toISOString(),
