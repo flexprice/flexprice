@@ -1,5 +1,4 @@
-# .github/workflows/deploy.yml
-name: Build and push image to Flexprice ECR
+name: Build, Push & Deploy to AWS ECS
 
 on:
   push:
@@ -14,8 +13,14 @@ env:
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
 jobs:
-  deploy:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 1: Build the Docker image and push it to ECR (single region)
+  # ──────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build & Push Docker Image
     runs-on: self-hosted
+    outputs:
+      image: ${{ steps.set-image.outputs.image }}
 
     steps:
       - uses: actions/checkout@v3
@@ -32,7 +37,7 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push image (without cache)
+      - name: Build & push image
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -41,3 +46,137 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Set image output
+        id: set-image
+        run: echo "image=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 2: Deploy to ECS — one run per region in DEPLOY_REGIONS
+  #
+  # Required GitHub Actions variables:
+  #   ECS_CLUSTER          - ECS cluster name          (default: prod-cluster-v1)
+  #   API_SERVICE_NAME     - ECS service name for API
+  #   CONSUMER_SERVICE_NAME- ECS service name for Consumer
+  #   WORKER_SERVICE_NAME  - ECS service name for Temporal Worker
+  #   DEPLOY_REGIONS       - JSON array of regions     (default: ["ap-south-1"])
+  #
+  # Optional GitHub Actions variables (if not set, family is derived from service):
+  #   API_TASK_FAMILY      - Task definition family for API
+  #   CONSUMER_TASK_FAMILY - Task definition family for Consumer
+  #   WORKER_TASK_FAMILY   - Task definition family for Temporal Worker
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to ECS (${{ matrix.region }})
+    needs: build
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        region: ${{ fromJson(vars.DEPLOY_REGIONS || '["ap-south-1"]') }}
+      fail-fast: false
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.region }}
+
+      - name: Deploy all ECS services
+        env:
+          IMAGE: ${{ needs.build.outputs.image }}
+          CLUSTER: ${{ vars.ECS_CLUSTER || 'prod-cluster-v1' }}
+          REGION: ${{ matrix.region }}
+          ECR_REPO_PREFIX: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+        run: |
+          set -euo pipefail
+
+          # ---------------------------------------------------------------
+          # deploy_service <service-name> <task-family-or-empty>
+          #
+          # 1. Resolves the task definition family (from arg or service)
+          # 2. Fetches current task definition
+          # 3. Replaces the image for any container whose current image
+          #    starts with the ECR repo prefix
+          # 4. Registers the new revision
+          # 5. Forces a new deployment on the service
+          # ---------------------------------------------------------------
+          deploy_service() {
+            local SERVICE="$1"
+            local TASK_FAMILY="$2"
+
+            echo ""
+            echo "==> Deploying: $SERVICE  |  region: $REGION"
+
+            # Resolve task definition family from service if not explicitly provided
+            if [ -z "$TASK_FAMILY" ]; then
+              echo "  No task family supplied — resolving from service..."
+              TASK_ARN=$(aws ecs describe-services \
+                --cluster "$CLUSTER" \
+                --services "$SERVICE" \
+                --region "$REGION" \
+                --query 'services[0].taskDefinition' \
+                --output text)
+              # Strip ARN prefix and revision suffix: arn:.../family:42 -> family
+              TASK_FAMILY=$(echo "$TASK_ARN" | sed 's|.*/||' | sed 's|:[0-9]*$||')
+              echo "  Resolved task family: $TASK_FAMILY"
+            fi
+
+            # Fetch the latest task definition JSON
+            TASK_DEF=$(aws ecs describe-task-definition \
+              --task-definition "$TASK_FAMILY" \
+              --region "$REGION" \
+              --query 'taskDefinition')
+
+            # Update image for containers that use this ECR repository,
+            # and strip fields that are not accepted by register-task-definition
+            NEW_TASK_DEF=$(echo "$TASK_DEF" | python3 -c "
+import json, sys
+
+td = json.load(sys.stdin)
+ecr_prefix = '$ECR_REPO_PREFIX'
+new_image   = '$IMAGE'
+
+for c in td.get('containerDefinitions', []):
+    if c.get('image', '').startswith(ecr_prefix):
+        c['image'] = new_image
+
+# Fields not accepted by register-task-definition
+for f in [
+    'taskDefinitionArn', 'revision', 'status',
+    'requiresAttributes', 'compatibilities',
+    'registeredAt', 'registeredBy',
+]:
+    td.pop(f, None)
+
+print(json.dumps(td))
+")
+
+            # Register new task definition revision
+            NEW_ARN=$(aws ecs register-task-definition \
+              --cli-input-json "$NEW_TASK_DEF" \
+              --region "$REGION" \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text)
+            echo "  Registered new revision: $NEW_ARN"
+
+            # Force a new deployment on the service with the new revision
+            aws ecs update-service \
+              --cluster "$CLUSTER" \
+              --service "$SERVICE" \
+              --task-definition "$NEW_ARN" \
+              --force-new-deployment \
+              --region "$REGION" \
+              --query 'service.{status:status,running:runningCount,desired:desiredCount}' \
+              --output table
+
+            echo "  Deployment triggered for: $SERVICE"
+          }
+
+          # Deploy all three services
+          deploy_service "${{ vars.API_SERVICE_NAME }}"       "${{ vars.API_TASK_FAMILY }}"
+          deploy_service "${{ vars.CONSUMER_SERVICE_NAME }}"  "${{ vars.CONSUMER_TASK_FAMILY }}"
+          deploy_service "${{ vars.WORKER_SERVICE_NAME }}"    "${{ vars.WORKER_TASK_FAMILY }}"
+
+          echo ""
+          echo "All services deployed in $REGION"
