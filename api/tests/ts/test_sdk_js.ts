@@ -1,11 +1,11 @@
 #!/usr/bin/env ts-node
 
 /**
- * Flexprice TypeScript SDK - Published SDK tests (npm install flexprice-ts-temp).
- * Run from api/tests/ts: npm install flexprice-ts-temp && npx ts-node test_sdk_js.ts
+ * Flexprice TypeScript SDK - API tests (uses local api/typescript by default).
+ * Run from api/tests/ts: npm install && npx ts-node test_sdk_js.ts
  * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
- * Package: https://www.npmjs.com/package/flexprice-ts-temp
- * Repo: https://github.com/flexprice/js-sdk-temp
+ * Debug: FLEXPRICE_DEBUG=1 logs every request/response for Customer, Entitlement, Subscription, Price
+ *        and full error details (message, stack, response, body) on failure.
  */
 
 import {
@@ -74,17 +74,43 @@ let testEventCustomerID = '';
 // HELPERS (published SDK may return { result } or { data } wrapper; also handle { customer } etc.)
 // ========================================
 
+const DEBUG = process.env.FLEXPRICE_DEBUG === '1' || process.env.FLEXPRICE_DEBUG === 'true';
+
+function safeStringify(x: unknown, maxLen = 800): string {
+    try {
+        const s = JSON.stringify(x, null, 2);
+        return s.length > maxLen ? s.slice(0, maxLen) + '...' : s;
+    } catch {
+        return String(x);
+    }
+}
+
+/** Log API call and response when FLEXPRICE_DEBUG=1 (shows exactly what SDK returned) */
+function logApiCall(method: string, args: unknown, result: unknown, err?: unknown): void {
+    if (!DEBUG) return;
+    console.log(`  [API ${method}] >> args: ${safeStringify(args, 400)}`);
+    if (err !== undefined) {
+        console.log(`  [API ${method}] !! error: ${err instanceof Error ? err.message : String(err)}`);
+        if (err && typeof err === 'object') {
+            const e = err as Record<string, unknown>;
+            if (e.response) console.log(`  [API ${method}] !! error.response: ${safeStringify(e.response, 400)}`);
+            if (e.body) console.log(`  [API ${method}] !! error.body: ${safeStringify(e.body, 400)}`);
+            if (e.status !== undefined) console.log(`  [API ${method}] !! error.status: ${e.status}`);
+            if (e.statusCode !== undefined) console.log(`  [API ${method}] !! error.statusCode: ${e.statusCode}`);
+        }
+    } else {
+        const t = result === null ? 'null' : typeof result;
+        const keys = result != null && typeof result === 'object' ? Object.keys(result as object) : [];
+        console.log(`  [API ${method}] << typeof: ${t}, keys: ${JSON.stringify(keys)}, value: ${safeStringify(result, 500)}`);
+    }
+    console.log('');
+}
+
 /** Log raw and unwrapped response for debugging "Unexpected response shape" */
 function debugResponse(label: string, raw: unknown, unwrapped: unknown): void {
-    const safe = (x: unknown) => {
-        try {
-            const s = JSON.stringify(x, null, 2);
-            return s.length > 800 ? s.slice(0, 800) + '...' : s;
-        } catch {
-            return String(x);
-        }
-    };
-    console.log(`  [DEBUG ${label}] raw: ${safe(raw)}`);
+    console.log(`  [DEBUG ${label}] typeof raw: ${raw === null ? 'null' : typeof raw}`);
+    if (raw === undefined) console.log(`  [DEBUG ${label}] raw is undefined (SDK may have returned void/undefined)`);
+    console.log(`  [DEBUG ${label}] raw: ${safeStringify(raw)}`);
     if (raw != null && typeof raw === 'object') {
         const r = raw as Record<string, unknown>;
         console.log(`  [DEBUG ${label}] Object.keys(raw): ${JSON.stringify(Object.keys(r))}`);
@@ -92,7 +118,24 @@ function debugResponse(label: string, raw: unknown, unwrapped: unknown): void {
         console.log(`  [DEBUG ${label}] raw.id: ${JSON.stringify((r as { id?: unknown }).id)}`);
         console.log(`  [DEBUG ${label}] raw.value: ${r.value !== undefined ? typeof r.value : 'undefined'}`);
     }
-    console.log(`  [DEBUG ${label}] unwrapped: ${safe(unwrapped)}\n`);
+    console.log(`  [DEBUG ${label}] unwrapped: ${safeStringify(unwrapped)}\n`);
+}
+
+/** Log full error details (message, stack, response, body) for debugging failures */
+function logError(context: string, error: unknown): void {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.log(`  [ERROR ${context}] message: ${msg}`);
+    if (error instanceof Error && error.stack) {
+        console.log(`  [ERROR ${context}] stack: ${error.stack.split('\n').slice(0, 6).join('\n')}`);
+    }
+    if (error && typeof error === 'object') {
+        const e = error as Record<string, unknown>;
+        if (e.response !== undefined) console.log(`  [ERROR ${context}] response: ${safeStringify(e.response, 600)}`);
+        if (e.body !== undefined) console.log(`  [ERROR ${context}] body: ${safeStringify(e.body, 400)}`);
+        if (e.status !== undefined) console.log(`  [ERROR ${context}] status: ${e.status}`);
+        if (e.statusCode !== undefined) console.log(`  [ERROR ${context}] statusCode: ${e.statusCode}`);
+    }
+    console.log('');
 }
 
 /** Get entity with id from raw SDK response (handles Result, wrapped, and non-enumerable props) */
@@ -146,6 +189,7 @@ function getClient(): Flexprice {
     }
 
     console.log('=== Flexprice TypeScript SDK - API Tests (local api/typescript) ===\n');
+    if (DEBUG) console.log('🔍 Debug mode: ON (set FLEXPRICE_DEBUG=1 for request/response logging)\n');
     console.log(`✓ API Key: ${apiKey.substring(0, 8)}...${apiKey.slice(-4)}`);
     console.log(`✓ API Host: ${apiHost}\n`);
 
@@ -172,11 +216,13 @@ async function testCreateCustomer(client: Flexprice) {
         testCustomerName = `Test Customer ${timestamp}`;
         const externalId = `test-customer-${timestamp}`;
 
+        const args = { name: testCustomerName, email: `test-${timestamp}@example.com`, externalId };
         const raw = await client.customers.createCustomer({
             name: testCustomerName,
             email: `test-${timestamp}@example.com`,
             externalId: externalId,
         });
+        logApiCall('customers.createCustomer', args, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; name?: string; externalId?: string; email?: string }>(raw)) as { id?: string; name?: string; externalId?: string; email?: string } | null;
 
         if (response && response.id) {
@@ -191,6 +237,7 @@ async function testCreateCustomer(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Create Customer', error);
         console.log(`❌ Error creating customer: ${error.message}\n`);
     }
 }
@@ -200,6 +247,7 @@ async function testGetCustomer(client: Flexprice) {
 
     try {
         const raw = await client.customers.getCustomer({ id: testCustomerID });
+        logApiCall('customers.getCustomer', { id: testCustomerID }, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; name?: string }>(raw)) as { id?: string; name?: string } | null;
 
         if (response && response.id) {
@@ -211,6 +259,7 @@ async function testGetCustomer(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Get Customer', error);
         console.log(`❌ Error getting customer: ${error.message}\n`);
     }
 }
@@ -251,6 +300,7 @@ async function testUpdateCustomer(client: Flexprice) {
                 },
             },
         });
+        logApiCall('customers.updateCustomer', { id: testCustomerID }, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; name?: string; updatedAt?: string }>(raw)) as { id?: string; name?: string; updatedAt?: string } | null;
 
         if (response && response.id) {
@@ -263,6 +313,7 @@ async function testUpdateCustomer(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Update Customer', error);
         console.log(`❌ Error updating customer: ${error.message}\n`);
     }
 }
@@ -277,6 +328,7 @@ async function testLookupCustomer(client: Flexprice) {
             return;
         }
         const raw = await client.customers.getCustomerByExternalId({ externalId });
+        logApiCall('customers.getCustomerByExternalId', { externalId }, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; name?: string }>(raw)) as { id?: string; name?: string } | null;
 
         if (response && response.id) {
@@ -289,6 +341,7 @@ async function testLookupCustomer(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Lookup Customer by External ID', error);
         console.log(`❌ Error looking up customer: ${error.message}\n`);
     }
 }
@@ -810,6 +863,7 @@ async function testCreateEntitlement(client: Flexprice) {
     console.log('--- Test 1: Create Entitlement ---');
 
     try {
+        const args = { featureId: testFeatureID, planId: testPlanID, isEnabled: true };
         const raw = await client.entitlements.createEntitlement({
             featureId: testFeatureID,
             featureType: FeatureType.Boolean,
@@ -817,6 +871,7 @@ async function testCreateEntitlement(client: Flexprice) {
             isEnabled: true,
             usageResetPeriod: EntitlementUsageResetPeriod.Monthly,
         });
+        logApiCall('entitlements.createEntitlement', args, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; featureId?: string; planId?: string }>(raw)) as { id?: string; featureId?: string; planId?: string } | null;
 
         if (response && response.id) {
@@ -830,6 +885,7 @@ async function testCreateEntitlement(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Create Entitlement', error);
         console.log(`❌ Error creating entitlement: ${error.message}\n`);
     }
 }
@@ -1019,6 +1075,7 @@ async function testCreateSubscription(client: Flexprice) {
                 test_run: new Date().toISOString(),
             },
         });
+        logApiCall('subscriptions.createSubscription', { customerId: testCustomerID, planId: testPlanID }, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; customerId?: string; planId?: string; subscriptionStatus?: string }>(raw)) as { id?: string; customerId?: string; planId?: string; subscriptionStatus?: string } | null;
 
         if (response && response.id) {
@@ -1033,6 +1090,7 @@ async function testCreateSubscription(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Create Subscription', error);
         console.log(`❌ Error creating subscription: ${error.message}\n`);
     }
 }
@@ -1767,6 +1825,7 @@ async function testCreatePrice(client: Flexprice) {
             displayName: 'Monthly Subscription',
             description: 'Standard monthly subscription price',
         });
+        logApiCall('prices.createPrice', { entityId: testPlanID, amount: '99.00', currency: 'USD' }, raw);
         const response = (getEntityWithId(raw) ?? unwrap<{ id: string; amount?: string; currency?: string; billingModel?: string }>(raw)) as { id?: string; amount?: string; currency?: string; billingModel?: string } | null;
 
         if (response && response.id) {
@@ -1780,6 +1839,7 @@ async function testCreatePrice(client: Flexprice) {
             console.log(`❌ Unexpected response shape\n`);
         }
     } catch (error: any) {
+        logError('Create Price', error);
         console.log(`❌ Error creating price: ${error.message}\n`);
     }
 }
