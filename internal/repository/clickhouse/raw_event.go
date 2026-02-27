@@ -378,6 +378,7 @@ func (r *RawEventRepository) FindUnprocessedRawEvents(
 		WHERE tenant_id      = ?
 		  AND environment_id = ?
 		  AND id IN ?
+		ORDER BY timestamp DESC, id DESC
 	`
 	stepBArgs := []interface{}{tenantID, environmentID, ids}
 
