@@ -56,11 +56,11 @@ typescript:
   imports:
     option: openapi
     paths:
-      callbacks: sdk/models/callbacks
-      errors: sdk/models/errors
-      operations: sdk/models/operations
-      shared: sdk/models/shared
-      webhooks: sdk/models/webhooks
+      callbacks: sdk/models
+      errors: sdk/models
+      operations: sdk/models
+      shared: sdk/models
+      webhooks: sdk/models
   inferUnionDiscriminators: true
   inputModelSuffix: input
   jsonpath: legacy
