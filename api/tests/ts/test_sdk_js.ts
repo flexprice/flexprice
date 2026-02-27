@@ -8,7 +8,35 @@
  * Repo: https://github.com/flexprice/js-sdk-temp
  */
 
-import { FeatureType, Flexprice } from 'flexprice-ts-temp';
+import {
+    AddonType,
+    BillingCadence,
+    BillingCycle,
+    BillingModel,
+    BillingPeriod,
+    CreditGrantCadence,
+    CreditGrantExpiryDurationUnit,
+    CreditGrantExpiryType,
+    CreditGrantScope,
+    CreditNoteReason,
+    EntitlementUsageResetPeriod,
+    FeatureType,
+    Flexprice,
+    InvoiceBillingReason,
+    InvoiceCadence,
+    InvoiceStatus,
+    InvoiceType,
+    PauseMode,
+    PaymentDestinationType,
+    PaymentMethodType,
+    PaymentStatus,
+    PriceEntityType,
+    PriceType,
+    PriceUnitType,
+    ProrationBehavior,
+    ResumeMode,
+    TransactionReason,
+} from 'flexprice-ts-temp';
 
 // Global test entity IDs
 let testCustomerID = '';
@@ -584,7 +612,7 @@ async function testCreateAddon(client: Flexprice) {
             name: testAddonName,
             lookupKey: testAddonLookupKey,
             description: 'This is a test addon created by SDK tests',
-            type: 'onetime',
+            type: AddonType.Onetime,
             metadata: {
                 source: 'sdk_test',
                 test_run: new Date().toISOString(),
@@ -738,10 +766,10 @@ async function testCreateEntitlement(client: Flexprice) {
     try {
         const raw = await client.entitlements.createEntitlement({
             featureId: testFeatureID,
-            featureType: 'boolean',
+            featureType: FeatureType.Boolean,
             planId: testPlanID,
             isEnabled: true,
-            usageResetPeriod: 'MONTHLY',
+            usageResetPeriod: EntitlementUsageResetPeriod.Monthly,
         });
         const response = unwrap<{ id: string; featureId?: string; planId?: string }>(raw);
 
@@ -905,13 +933,14 @@ async function testCreateSubscription(client: Flexprice) {
     try {
         await client.prices.createPrice({
             entityId: testPlanID,
-            entityType: 'PLAN',
-            type: 'FIXED',
-            billingModel: 'FLAT_FEE',
-            billingCadence: 'RECURRING',
-            billingPeriod: 'MONTHLY',
-            invoiceCadence: 'ARREAR',
-            priceUnitType: 'FIAT',
+            entityType: PriceEntityType.Plan,
+            type: PriceType.Fixed,
+            billingModel: BillingModel.FlatFee,
+            billingCadence: BillingCadence.Recurring,
+            billingPeriod: BillingPeriod.Monthly,
+            billingPeriodCount: 1,
+            invoiceCadence: InvoiceCadence.Arrear,
+            priceUnitType: PriceUnitType.Fiat,
             amount: '29.99',
             currency: 'USD',
             displayName: 'Monthly Subscription Price',
@@ -921,10 +950,10 @@ async function testCreateSubscription(client: Flexprice) {
             customerId: testCustomerID,
             planId: testPlanID,
             currency: 'USD',
-            billingCadence: 'RECURRING',
-            billingPeriod: 'MONTHLY',
+            billingCadence: BillingCadence.Recurring,
+            billingPeriod: BillingPeriod.Monthly,
             billingPeriodCount: 1,
-            billingCycle: 'anniversary',
+            billingCycle: BillingCycle.Anniversary,
             startDate: new Date().toISOString(),
             metadata: {
                 source: 'sdk_test',
@@ -1025,8 +1054,8 @@ async function testActivateSubscription(client: Flexprice) {
             customerId: testCustomerID,
             planId: testPlanID,
             currency: 'USD',
-            billingCadence: 'RECURRING',
-            billingPeriod: 'MONTHLY',
+            billingCadence: BillingCadence.Recurring,
+            billingPeriod: BillingPeriod.Monthly,
             billingPeriodCount: 1,
             startDate: new Date().toISOString(),
         });
@@ -1061,7 +1090,7 @@ async function testPauseSubscription(client: Flexprice) {
     try {
         const response = await client.subscriptions.pauseSubscription({
             id: testSubscriptionID,
-            dtoPauseSubscriptionRequest: { pauseMode: 'immediate' },
+            dtoPauseSubscriptionRequest: { pauseMode: PauseMode.Immediate },
         });
 
         if (response && 'id' in response) {
@@ -1092,7 +1121,7 @@ async function testResumeSubscription(client: Flexprice) {
     try {
         const response = await client.subscriptions.resumeSubscription({
             id: testSubscriptionID,
-            dtoResumeSubscriptionRequest: { resumeMode: 'immediate' },
+            dtoResumeSubscriptionRequest: { resumeMode: ResumeMode.Immediate },
         });
 
         if (response && 'id' in response) {
@@ -1154,13 +1183,13 @@ async function testAddAddonToSubscription(client: Flexprice) {
     try {
         await client.prices.createPrice({
             entityId: testAddonID,
-            entityType: 'ADDON',
-            type: 'FIXED',
-            billingModel: 'FLAT_FEE',
-            billingCadence: 'RECURRING',
-            billingPeriod: 'MONTHLY',
-            invoiceCadence: 'ARREAR',
-            priceUnitType: 'FIAT',
+            entityType: PriceEntityType.Addon,
+            type: PriceType.Fixed,
+            billingModel: BillingModel.FlatFee,
+            billingCadence: BillingCadence.Recurring,
+            billingPeriod: BillingPeriod.Monthly,
+            invoiceCadence: InvoiceCadence.Arrear,
+            priceUnitType: PriceUnitType.Fiat,
             amount: '5.00',
             currency: 'USD',
             displayName: 'Addon Monthly Price',
@@ -1202,10 +1231,10 @@ async function testPreviewSubscriptionChange(client: Flexprice) {
             id: testSubscriptionID,
             dtoSubscriptionChangeRequest: {
                 targetPlanId: testPlanID,
-                billingCadence: 'RECURRING',
-                billingPeriod: 'MONTHLY',
-                billingCycle: 'anniversary',
-                prorationBehavior: 'create_prorations',
+                billingCadence: BillingCadence.Recurring,
+                billingPeriod: BillingPeriod.Monthly,
+                billingCycle: BillingCycle.Anniversary,
+                prorationBehavior: ProrationBehavior.CreateProrations,
             },
         });
 
@@ -1384,9 +1413,9 @@ async function testCreateInvoice(client: Flexprice) {
             amountDue: '100.00',
             subtotal: '100.00',
             total: '100.00',
-            invoiceType: 'ONE_OFF',
-            billingReason: 'MANUAL',
-            invoiceStatus: 'DRAFT',
+            invoiceType: InvoiceType.OneOff,
+            billingReason: InvoiceBillingReason.Manual,
+            invoiceStatus: InvoiceStatus.Draft,
             lineItems: [{ displayName: 'Test Service', amount: '100.00', quantity: '1' }],
             metadata: { source: 'sdk_test', type: 'manual' },
         });
@@ -1496,9 +1525,9 @@ async function testFinalizeInvoice(client: Flexprice) {
             amountDue: '50.00',
             subtotal: '50.00',
             total: '50.00',
-            invoiceType: 'ONE_OFF',
-            billingReason: 'MANUAL',
-            invoiceStatus: 'DRAFT',
+            invoiceType: InvoiceType.OneOff,
+            billingReason: InvoiceBillingReason.Manual,
+            invoiceStatus: InvoiceStatus.Draft,
             lineItems: [{ displayName: 'Finalize Test Service', amount: '50.00', quantity: '1' }],
         });
 
@@ -1534,7 +1563,7 @@ async function testRecordPayment(client: Flexprice) {
     try {
         await client.invoices.updateInvoicePaymentStatus({
             id: testInvoiceID,
-            dtoUpdatePaymentStatusRequest: { paymentStatus: 'SUCCEEDED', amount: '100.00' },
+            dtoUpdatePaymentStatusRequest: { paymentStatus: PaymentStatus.Succeeded, amount: '100.00' },
         });
 
         console.log('✓ Payment recorded successfully!');
@@ -1556,10 +1585,10 @@ async function testAttemptPayment(client: Flexprice) {
             subtotal: '25.00',
             total: '25.00',
             amountPaid: '0.00',
-            invoiceType: 'ONE_OFF',
-            billingReason: 'MANUAL',
-            invoiceStatus: 'DRAFT',
-            paymentStatus: 'PENDING',
+            invoiceType: InvoiceType.OneOff,
+            billingReason: InvoiceBillingReason.Manual,
+            invoiceStatus: InvoiceStatus.Draft,
+            paymentStatus: PaymentStatus.Pending,
             lineItems: [{ displayName: 'Attempt Payment Test', amount: '25.00', quantity: '1' }],
         });
 
@@ -1665,15 +1694,15 @@ async function testCreatePrice(client: Flexprice) {
     try {
         const raw = await client.prices.createPrice({
             entityId: testPlanID,
-            entityType: 'PLAN',
+            entityType: PriceEntityType.Plan,
             currency: 'USD',
             amount: '99.00',
-            billingModel: 'FLAT_FEE',
-            billingCadence: 'RECURRING',
-            billingPeriod: 'MONTHLY',
-            invoiceCadence: 'ADVANCE',
-            priceUnitType: 'FIAT',
-            type: 'FIXED',
+            billingModel: BillingModel.FlatFee,
+            billingCadence: BillingCadence.Recurring,
+            billingPeriod: BillingPeriod.Monthly,
+            invoiceCadence: InvoiceCadence.Advance,
+            priceUnitType: PriceUnitType.Fiat,
+            type: PriceType.Fixed,
             displayName: 'Monthly Subscription',
             description: 'Standard monthly subscription price',
         });
@@ -1794,10 +1823,10 @@ async function testCreatePayment(client: Flexprice) {
             subtotal: '100.00',
             total: '100.00',
             amountPaid: '0.00',
-            invoiceType: 'ONE_OFF',
-            billingReason: 'MANUAL',
-            invoiceStatus: 'DRAFT',
-            paymentStatus: 'PENDING',
+            invoiceType: InvoiceType.OneOff,
+            billingReason: InvoiceBillingReason.Manual,
+            invoiceStatus: InvoiceStatus.Draft,
+            paymentStatus: PaymentStatus.Pending,
             lineItems: [{ displayName: 'Payment Test Service', amount: '100.00', quantity: '1' }],
             metadata: { source: 'sdk_test_payment' },
         });
@@ -1822,7 +1851,7 @@ async function testCreatePayment(client: Flexprice) {
         if (cur.amountDue && cur.total) {
             console.log(`  Invoice before finalization - AmountDue: ${cur.amountDue}, Total: ${cur.total}`);
         }
-        if (cur.invoiceStatus === 'DRAFT') {
+        if (cur.invoiceStatus === InvoiceStatus.Draft) {
             try {
                 await client.invoices.finalizeInvoice({ id: paymentInvoiceID });
                 console.log('  Finalized invoice for payment');
@@ -1842,7 +1871,7 @@ async function testCreatePayment(client: Flexprice) {
         if (finalInvoice.amountDue && finalInvoice.total && finalInvoice.amountPaid) {
             console.log(`  Invoice after finalization - AmountDue: ${finalInvoice.amountDue}, Total: ${finalInvoice.total}, AmountPaid: ${finalInvoice.amountPaid}`);
         }
-        if (finalInvoice.paymentStatus === 'SUCCEEDED') {
+        if (finalInvoice.paymentStatus === PaymentStatus.Succeeded) {
             console.log(`⚠ Warning: Invoice is already paid\n⚠ Skipping payment creation test\n`);
             return;
         }
@@ -1860,8 +1889,8 @@ async function testCreatePayment(client: Flexprice) {
             amount: '100.00',
             currency: 'USD',
             destinationId: paymentInvoiceID,
-            destinationType: 'INVOICE',
-            paymentMethodType: 'OFFLINE',
+            destinationType: PaymentDestinationType.Invoice,
+            paymentMethodType: PaymentMethodType.Offline,
             processPayment: false,
             metadata: { source: 'sdk_test', test_run: new Date().toISOString() },
         });
@@ -2180,7 +2209,7 @@ async function testTopUpWallet(client: Flexprice) {
     try {
         await client.wallets.topUpWallet({
             id: testWalletID,
-            dtoTopUpWalletRequest: { amount: '100.00', description: 'Test top-up', transactionReason: 'PURCHASED_CREDIT_DIRECT' },
+            dtoTopUpWalletRequest: { amount: '100.00', description: 'Test top-up', transactionReason: TransactionReason.PurchasedCreditDirect },
         });
 
         console.log('✓ Wallet topped up successfully!');
@@ -2252,11 +2281,11 @@ async function testCreateCreditGrant(client: Flexprice) {
         const response = await client.creditGrants.createCreditGrant({
             name: 'Test Credit Grant',
             credits: '500.00',
-            scope: 'PLAN',
+            scope: CreditGrantScope.Plan,
             planId: testPlanID,
-            cadence: 'ONETIME',
-            expirationType: 'NEVER',
-            expirationDurationUnit: 'DAY',
+            cadence: CreditGrantCadence.Onetime,
+            expirationType: CreditGrantExpiryType.Never,
+            expirationDurationUnit: CreditGrantExpiryDurationUnit.Day,
             metadata: { source: 'sdk_test', test_run: new Date().toISOString() },
         });
 
@@ -2441,7 +2470,7 @@ async function testCreateCreditNote(client: Flexprice) {
             return;
         }
 
-        if (invoice.invoiceStatus === 'DRAFT') {
+        if (invoice.invoiceStatus === InvoiceStatus.Draft) {
             console.log(`  Invoice is in DRAFT status, attempting to finalize...`);
             try {
                 await client.invoices.finalizeInvoice({ id: testInvoiceID });
@@ -2455,7 +2484,7 @@ async function testCreateCreditNote(client: Flexprice) {
             }
         }
 
-        if (invoice.invoiceStatus !== 'FINALIZED') {
+        if (invoice.invoiceStatus !== InvoiceStatus.Finalized) {
             console.log(`⚠ Warning: Invoice must be FINALIZED to create credit note. Current status: ${invoice.invoiceStatus}\n⚠ Skipping create credit note test\n`);
             return;
         }
@@ -2482,7 +2511,7 @@ async function testCreateCreditNote(client: Flexprice) {
 
         const response = await client.creditNotes.createCreditNote({
             invoiceId: testInvoiceID,
-            reason: 'BILLING_ERROR',
+            reason: CreditNoteReason.BillingError,
             memo: 'Test credit note from SDK',
             lineItems: [{
                 invoiceLineItemId: lineItemId,
