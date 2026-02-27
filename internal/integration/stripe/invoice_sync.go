@@ -231,8 +231,10 @@ func (s *InvoiceSyncService) syncLineItemsToStripe(ctx context.Context, flexInvo
 
 // addLineItemToStripeInvoice adds a single line item to Stripe invoice
 func (s *InvoiceSyncService) addLineItemToStripeInvoice(ctx context.Context, stripeClient *stripe.Client, stripeInvoiceID string, lineItem *invoice.InvoiceLineItem, flexInvoice *invoice.Invoice, customerService interfaces.CustomerService) error {
+	// Calculate discounted amount (original - line item discounts - invoice level discounts)
+	discountedAmount := lineItem.Amount.Sub(lineItem.LineItemDiscount).Sub(lineItem.InvoiceLevelDiscount)
 	// Convert amount to cents (Stripe uses cents)
-	amountCents := lineItem.Amount.Mul(decimal.NewFromInt(100)).IntPart()
+	amountCents := discountedAmount.Mul(decimal.NewFromInt(100)).IntPart()
 
 	// Get customer ID from the invoice
 	customerID, err := s.getStripeCustomerID(ctx, flexInvoice.CustomerID, customerService)
