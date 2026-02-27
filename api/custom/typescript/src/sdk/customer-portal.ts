@@ -7,7 +7,7 @@
 
 import type { SDKOptions } from "../lib/config.js";
 import { Flexprice } from "../index.js";
-import type * as models from "./models/shared/index.js";
+import type * as models from "./models/index.js";
 
 export type DashboardOptions = {
   subscriptionLimit?: number;
