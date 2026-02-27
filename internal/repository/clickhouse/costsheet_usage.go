@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -301,13 +302,8 @@ func (r *CostSheetUsageRepository) GetUsageByCostSheetID(ctx context.Context, co
 		GROUP BY feature_id, meter_id, price_id
 	`
 
-	r.logger.Debugw("executing cost sheet usage query",
-		"cost_sheet_id", costSheetID,
-		"external_customer_id", externalCustomerID,
-		"environment_id", environmentID,
-		"start_time", startTime,
-		"end_time", endTime,
-	)
+	log.Printf("Executing query: %s", query)
+	log.Printf("Params: %v", []interface{}{costSheetID, externalCustomerID, environmentID, tenantID, startTime, endTime})
 
 	rows, err := r.store.GetConn().Query(ctx, query, costSheetID, externalCustomerID, environmentID, tenantID, startTime, endTime)
 	if err != nil {

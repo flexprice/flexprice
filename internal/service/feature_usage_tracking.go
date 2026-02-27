@@ -21,7 +21,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -84,13 +83,12 @@ type FeatureUsageTrackingService interface {
 
 type featureUsageTrackingService struct {
 	ServiceParams
-	pubSub              pubsub.PubSub // Regular PubSub for normal processing
-	backfillPubSub      pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
-	lazyPubSub          pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
-	replayPubSub        pubsub.PubSub // Dedicated Kafka PubSub for replay processing
-	eventRepo           events.Repository
-	featureUsageRepo    events.FeatureUsageRepository
-	expressionEvaluator expression.Evaluator
+	pubSub           pubsub.PubSub // Regular PubSub for normal processing
+	backfillPubSub   pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
+	lazyPubSub       pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
+	replayPubSub     pubsub.PubSub // Dedicated Kafka PubSub for replay processing
+	eventRepo        events.Repository
+	featureUsageRepo events.FeatureUsageRepository
 }
 
 // NewFeatureUsageTrackingService creates a new feature usage tracking service
@@ -100,10 +98,9 @@ func NewFeatureUsageTrackingService(
 	featureUsageRepo events.FeatureUsageRepository,
 ) FeatureUsageTrackingService {
 	ev := &featureUsageTrackingService{
-		ServiceParams:       params,
-		eventRepo:           eventRepo,
-		featureUsageRepo:    featureUsageRepo,
-		expressionEvaluator: expression.NewCELEvaluator(),
+		ServiceParams:    params,
+		eventRepo:        eventRepo,
+		featureUsageRepo: featureUsageRepo,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -793,10 +790,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			}
 
 			// Extract quantity based on meter aggregation
-			quantity, _, err := s.extractQuantityFromEvent(event, match.Meter, sub.Subscription, periodID)
-			if err != nil {
-				return nil, err
-			}
+			quantity, _ := s.extractQuantityFromEvent(event, match.Meter, sub.Subscription, periodID)
 
 			// Validate the quantity is positive and within reasonable bounds
 			if quantity.IsNegative() {
@@ -1110,10 +1104,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		}
 
 		// Extract quantity based on meter aggregation
-		quantity, _, err := s.extractQuantityFromEvent(event, m, sub, periodID)
-		if err != nil {
-			return nil, err
-		}
+		quantity, _ := s.extractQuantityFromEvent(event, m, sub, periodID)
 
 		// Validate the quantity is positive
 		if quantity.IsNegative() {
@@ -1429,48 +1420,17 @@ func (s *featureUsageTrackingService) checkMeterFilters(event *events.Event, fil
 }
 
 // Extract quantity from event based on meter aggregation
-// Returns the quantity, the string representation of the field value, and an error.
-// Callers must propagate errors and must not treat evaluation failures as zero.
+// Returns the quantity and the string representation of the field value
 func (s *featureUsageTrackingService) extractQuantityFromEvent(
 	event *events.Event,
 	meter *meter.Meter,
 	subscription *subscription.Subscription,
 	periodID uint64,
-) (decimal.Decimal, string, error) {
-	// When expression is set, use CEL for per-event quantity (works with most aggregation types)
-	if meter.Aggregation.Expression != "" {
-		// Expression is not supported with COUNT_UNIQUE
-		if meter.Aggregation.Type == types.AggregationCountUnique {
-			err := fmt.Errorf("expression is not supported with aggregation type COUNT_UNIQUE")
-			s.Logger.Errorw("unsupported meter configuration: expression with count_unique",
-				"event_id", event.ID,
-				"meter_id", meter.ID,
-				"expression", meter.Aggregation.Expression,
-				"error", err,
-			)
-			return decimal.Zero, "", err
-		}
-
-		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
-		if err != nil {
-			s.Logger.Errorw("CEL evaluation failed, event rejected",
-				"event_id", event.ID,
-				"meter_id", meter.ID,
-				"expression", meter.Aggregation.Expression,
-				"error", err,
-			)
-			return decimal.Zero, "", fmt.Errorf("CEL evaluation failed for event %s meter %s: %w", event.ID, meter.ID, err)
-		}
-		if meter.Aggregation.Multiplier != nil {
-			qty = qty.Mul(*meter.Aggregation.Multiplier)
-		}
-		return qty, qty.String(), nil
-	}
-
+) (decimal.Decimal, string) {
 	switch meter.Aggregation.Type {
 	case types.AggregationCount:
 		// For count, always return 1 and empty string for field value
-		return decimal.NewFromInt(1), "", nil
+		return decimal.NewFromInt(1), ""
 
 	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if meter.Aggregation.Field == "" {
@@ -1479,7 +1439,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"aggregation_type", meter.Aggregation.Type,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1490,12 +1450,12 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"field", meter.Aggregation.Field,
 				"aggregation_type", meter.Aggregation.Type,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		// Convert value to decimal and string with detailed error handling
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
-		return decimalValue, stringValue, nil
+		return decimalValue, stringValue
 
 	case types.AggregationSumWithMultiplier:
 		if meter.Aggregation.Field == "" {
@@ -1503,7 +1463,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		if meter.Aggregation.Multiplier == nil {
@@ -1511,7 +1471,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1521,18 +1481,18 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		// Convert value to decimal and apply multiplier
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
 		if decimalValue.IsZero() {
-			return decimal.Zero, stringValue, nil
+			return decimal.Zero, stringValue
 		}
 
 		// Apply multiplier
 		result := decimalValue.Mul(*meter.Aggregation.Multiplier)
-		return result, stringValue, nil
+		return result, stringValue
 
 	case types.AggregationCountUnique:
 		if meter.Aggregation.Field == "" {
@@ -1540,7 +1500,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1550,20 +1510,20 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		// For count_unique, we return 1 if the value exists (uniqueness is handled at aggregation level)
 		// and convert the value to string for tracking
 		stringValue := s.convertValueToString(val)
-		return decimal.NewFromInt(1), stringValue, nil
+		return decimal.NewFromInt(1), stringValue
 	case types.AggregationWeightedSum:
 		if meter.Aggregation.Field == "" {
 			s.Logger.Warnw("weighted_sum aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1573,28 +1533,28 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, "", nil
+			return decimal.Zero, ""
 		}
 
 		// Convert value to decimal and apply multiplier
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
 		if decimalValue.IsZero() {
-			return decimal.Zero, stringValue, nil
+			return decimal.Zero, stringValue
 		}
 
 		// Apply multiplier
 		result, err := s.getTotalUsageForWeightedSumAggregation(subscription, event, decimalValue, periodID)
 		if err != nil {
-			return decimal.Zero, stringValue, nil
+			return decimal.Zero, stringValue
 		}
-		return result, stringValue, nil
+		return result, stringValue
 	default:
 		s.Logger.Warnw("unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
 		)
-		return decimal.Zero, "", nil
+		return decimal.Zero, ""
 	}
 }
 

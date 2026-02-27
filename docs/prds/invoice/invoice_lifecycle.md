@@ -69,7 +69,7 @@ graph TD
         CreateFilteredSub --> CheckIncludeUsage{includeUsage Flag?}
         CheckIncludeUsage -->|true| GetUsageService[Get SubscriptionService]
         CheckIncludeUsage -->|false| SkipUsage[Set usage = nil]
-        GetUsageService --> CallGetUsage[Call GetFeatureUsageBySubscription]
+        GetUsageService --> CallGetUsage[Call GetUsageBySubscription]
         CallGetUsage --> UsageResponse[Get Usage Response]
         SkipUsage --> CallCalculateAll[Call CalculateAllCharges]
         UsageResponse --> CallCalculateAll
@@ -78,7 +78,7 @@ graph TD
     
     subgraph "CalculateAllCharges Method Details"
         CalcAllCharges[CalculateAllCharges] --> CalcFixedMethod[CalculateFixedCharges]
-        CalcAllCharges --> CalcUsageMethod[CalculateFeatureUsageCharges]
+        CalcAllCharges --> CalcUsageMethod[CalculateUsageCharges]
         
         CalcFixedMethod --> IterateLineItems[Iterate Through Line Items]
         IterateLineItems --> CheckPriceType{PriceType == FIXED?}

@@ -100,22 +100,14 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Co
 
 	result := make(map[string]*events.UsageByFeatureResult)
 	for _, usage := range s.usage {
-		if usage.SubscriptionID != subscriptionID {
-			continue
-		}
-		// For count aggregation, subscription service uses CountDistinctIDs.
-		// Use QtyTotal as count when it's a whole number (typical for count meters).
-		countDistinctIDs := uint64(0)
-		if usage.QtyTotal.IsInteger() {
-			countDistinctIDs = uint64(usage.QtyTotal.IntPart())
-		}
-		result[usage.SubLineItemID] = &events.UsageByFeatureResult{
-			SubLineItemID:    usage.SubLineItemID,
-			FeatureID:        usage.FeatureID,
-			MeterID:          usage.MeterID,
-			PriceID:          usage.PriceID,
-			SumTotal:         usage.QtyTotal,
-			CountDistinctIDs: countDistinctIDs,
+		if usage.SubscriptionID == subscriptionID {
+			result[usage.SubLineItemID] = &events.UsageByFeatureResult{
+				SubLineItemID: usage.SubLineItemID,
+				FeatureID:     usage.FeatureID,
+				MeterID:       usage.MeterID,
+				PriceID:       usage.PriceID,
+				SumTotal:      usage.QtyTotal,
+			}
 		}
 	}
 	return result, nil

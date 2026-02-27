@@ -19,7 +19,6 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
-	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/pubsub"
@@ -50,11 +49,10 @@ type CostSheetUsageTrackingService interface {
 
 type costsheetUsageTrackingService struct {
 	ServiceParams
-	pubSub              pubsub.PubSub
-	lazyPubSub          pubsub.PubSub
-	eventRepo           events.Repository
-	costUsageRepo       events.CostSheetUsageRepository
-	expressionEvaluator expression.Evaluator
+	pubSub        pubsub.PubSub
+	lazyPubSub    pubsub.PubSub
+	eventRepo     events.Repository
+	costUsageRepo events.CostSheetUsageRepository
 }
 
 // NewCostSheetUsageTrackingService creates a new cost sheet usage tracking service
@@ -64,10 +62,9 @@ func NewCostSheetUsageTrackingService(
 	costUsageRepo events.CostSheetUsageRepository,
 ) CostSheetUsageTrackingService {
 	ev := &costsheetUsageTrackingService{
-		ServiceParams:       params,
-		eventRepo:           eventRepo,
-		costUsageRepo:       costUsageRepo,
-		expressionEvaluator: expression.NewCELEvaluator(),
+		ServiceParams: params,
+		eventRepo:     eventRepo,
+		costUsageRepo: costUsageRepo,
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -594,24 +591,6 @@ func (s *costsheetUsageTrackingService) extractQuantityFromEvent(
 	event *events.Event,
 	meter *meter.Meter,
 ) (decimal.Decimal, string) {
-	// When expression is set, use CEL for per-event quantity (works with any aggregation type)
-	if meter.Aggregation.Expression != "" {
-		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
-		if err != nil {
-			s.Logger.Warnw("CEL evaluation failed",
-				"event_id", event.ID,
-				"meter_id", meter.ID,
-				"expression", meter.Aggregation.Expression,
-				"error", err,
-			)
-			return decimal.Zero, ""
-		}
-		if meter.Aggregation.Multiplier != nil {
-			qty = qty.Mul(*meter.Aggregation.Multiplier)
-		}
-		return qty, qty.String()
-	}
-
 	switch meter.Aggregation.Type {
 	case types.AggregationCount:
 		// For count, always return 1 and empty string for field value

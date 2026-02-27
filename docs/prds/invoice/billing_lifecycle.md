@@ -23,12 +23,15 @@
         BillingService --> CalculateCharges[BillingService.CalculateCharges]
 
         CalculateCharges --> CheckIncludeUsage{includeUsage?}
-        CheckIncludeUsage -->|Yes| GetFeatureUsageBySubscription[SubscriptionService.GetFeatureUsageBySubscription]
+        CheckIncludeUsage -->|Yes| GetUsageBySubscription[SubscriptionService.GetUsageBySubscription]
         CheckIncludeUsage -->|No| FixedChargesOnly[Calculate Fixed Charges Only]
 
-        GetFeatureUsageBySubscription --> FeatureUsageRepo[FeatureUsageRepository]
-        FeatureUsageRepo --> FeatureUsageTable[(ClickHouse: feature_usage)]
-        FeatureUsageTable --> AggregationResult[AggregationResult]
+        GetUsageBySubscription --> BulkGetUsageByMeter[EventService.BulkGetUsageByMeter]
+        BulkGetUsageByMeter --> GetUsageByMeter[EventService.GetUsageByMeter]
+
+        GetUsageByMeter --> EventRepoUsage[EventRepository.GetUsage]
+        EventRepoUsage --> ClickHouseQuery[ClickHouse Query]
+        ClickHouseQuery --> AggregationResult[AggregationResult]
     end
 
     %% ClickHouse Query Details
@@ -58,10 +61,10 @@
 
     %% Amount Due Calculation
     subgraph "Amount Due Calculation"
-        UsageCharges --> CalculateFeatureUsageCharges[BillingService.CalculateFeatureUsageCharges]
+        UsageCharges --> CalculateUsageCharges[BillingService.CalculateUsageCharges]
         FixedChargesOnly --> CalculateFixedCharges[BillingService.CalculateFixedCharges]
 
-        CalculateFeatureUsageCharges --> ProcessEntitlements[Process Entitlements]
+        CalculateUsageCharges --> ProcessEntitlements[Process Entitlements]
         ProcessEntitlements --> ApplyOverage{Overage?}
         ApplyOverage -->|Yes| OverageCharges[Create Overage Charges]
         ApplyOverage -->|No| NormalCharges[Normal Usage Charges]

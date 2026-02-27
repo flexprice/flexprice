@@ -930,12 +930,6 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	}
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
-	// Build lineItemByID map for O(1) lookup by subscription_line_item_id (from feature_usage)
-	chargesByLineItemID := make(map[string]*dto.SubscriptionUsageByMetersResponse)
-	for _, charge := range usage.Charges {
-		chargesByLineItemID[charge.SubscriptionLineItemID] = charge
-	}
-
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -944,8 +938,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 		// Find matching usage charges - may have multiple if there's overage
 		var matchingCharges []*dto.SubscriptionUsageByMetersResponse
-		if charges, ok := chargesByLineItemID[item.ID]; ok {
-			matchingCharges = append(matchingCharges, charges)
+		for _, charge := range usage.Charges {
+			if charge.Price.ID == item.PriceID {
+				matchingCharges = append(matchingCharges, charge)
+			}
 		}
 
 		if len(matchingCharges) == 0 {
@@ -1461,7 +1457,7 @@ func (s *billingService) CalculateAllCharges(
 	}, nil
 }
 
-func (s *billingService) calculateAllFeatureUsageCharges(
+func (s *billingService) calculateAllChargesForPreview(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	usage *dto.GetUsageBySubscriptionResponse,
@@ -1547,7 +1543,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		calculationResult, err = s.calculateFeatureUsageCharges(
+		calculationResult, err = s.CalculateCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1582,7 +1578,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
+		arrearResult, err := s.CalculateCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1595,7 +1591,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.calculateFeatureUsageCharges(
+		advanceResult, err := s.CalculateCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1622,7 +1618,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// but don't filter out already invoiced items
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
+		arrearResult, err := s.calculateChargesForPreview(
 			ctx,
 			sub,
 			classification.CurrentPeriodArrear,
@@ -1635,7 +1631,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.calculateFeatureUsageCharges(
+		advanceResult, err := s.calculateChargesForPreview(
 			ctx,
 			sub,
 			classification.NextPeriodAdvance,
@@ -1665,7 +1661,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
+		arrearResult, err := s.CalculateCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1875,7 +1871,7 @@ func (s *billingService) FilterLineItemsToBeInvoiced(
 	return filteredLineItems, nil
 }
 
-func (s *billingService) calculateFeatureUsageCharges(
+func (s *billingService) calculateChargesForPreview(
 	ctx context.Context,
 	sub *subscription.Subscription,
 	lineItems []*subscription.SubscriptionLineItem,
@@ -1904,7 +1900,7 @@ func (s *billingService) calculateFeatureUsageCharges(
 	}
 
 	// Calculate charges
-	return s.calculateAllFeatureUsageCharges(ctx, &filteredSub, usage, periodStart, periodEnd)
+	return s.calculateAllChargesForPreview(ctx, &filteredSub, usage, periodStart, periodEnd)
 }
 
 // CalculateCharges calculates charges for the given line items and period

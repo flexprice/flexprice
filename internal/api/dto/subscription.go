@@ -1549,9 +1549,8 @@ type GetUsageBySubscriptionResponse struct {
 }
 
 type SubscriptionUsageByMetersResponse struct {
-	SubscriptionLineItemID string             `json:"subscription_line_item_id,omitempty"` // For feature_usage: direct match by sub_line_item_id
-	Amount                 float64            `json:"amount"`
-	Currency               string             `json:"currency"`
+	Amount           float64            `json:"amount"`
+	Currency         string             `json:"currency"`
 	DisplayAmount    string             `json:"display_amount"`
 	Quantity         float64            `json:"quantity"`
 	FilterValues     price.JSONBFilters `json:"filter_values"`
