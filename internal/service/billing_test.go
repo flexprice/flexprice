@@ -1,7 +1,7 @@
-
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -719,6 +719,425 @@ func (s *BillingServiceSuite) validateNextPeriodAdvanceOnly(req *dto.CreateInvoi
 	// Verify the period matches the current subscription period
 	s.Equal(sub.CurrentPeriodStart, *req.PeriodStart)
 	s.Equal(sub.CurrentPeriodEnd, *req.PeriodEnd)
+}
+
+// TestCalculateFixedCharges_MixedCadence tests mixed cadence (line item period > subscription period).
+// When a line item has longer cadence (e.g. quarterly) than the subscription (e.g. monthly), it is
+// included only when a line-item period end falls in [periodStart, periodEnd); that period's start/end
+// become the invoice line's service period.
+func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
+	ctx := s.GetContext()
+	// Use fixed dates for predictable quarter boundaries (anniversary from Jan 1 -> Apr 1, Jul 1, ...)
+	jan1 := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mar1 := time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC)
+	apr1 := time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC)
+	may1 := time.Date(2024, time.May, 1, 0, 0, 0, 0, time.UTC)
+
+	s.BaseServiceTestSuite.ClearStores()
+	// Reuse customer and plan from test data (they may already exist from SetupTest)
+	cust := &customer.Customer{
+		ID:         "cust_mixed",
+		ExternalID: "ext_mixed",
+		Name:       "Mixed Cadence Customer",
+		Email:      "mixed@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_mixed",
+		Name:        "Mixed Plan",
+		Description: "Mixed cadence test",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	// Monthly fixed price
+	priceMonthly := &price.Price{
+		ID:                 "price_monthly_mixed",
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceMonthly))
+
+	// Quarterly fixed price
+	priceQuarterly := &price.Price{
+		ID:                 "price_quarterly_mixed",
+		Amount:             decimal.NewFromInt(300),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceQuarterly))
+
+	// Subscription: monthly billing, period Apr 1 - May 1
+	sub := &subscription.Subscription{
+		ID:                 "sub_mixed",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          jan1,
+		BillingAnchor:      jan1,
+		CurrentPeriodStart: apr1,
+		CurrentPeriodEnd:   may1,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	// Line items: monthly fixed (same cadence as sub), quarterly fixed (longer cadence, start Jan 1)
+	liMonthly := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:    pl.Name,
+		PriceID:            priceMonthly.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Monthly Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           sub.Currency,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          jan1,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	liQuarterly := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:    pl.Name,
+		PriceID:            priceQuarterly.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Quarterly Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           sub.Currency,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		StartDate:          jan1,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{liMonthly, liQuarterly}))
+	sub.LineItems = []*subscription.SubscriptionLineItem{liMonthly, liQuarterly}
+
+	// Included: invoice period Apr 1 - May 1. Quarter from Jan 1 ends Apr 1; Apr 1 is in [Apr 1, May 1) -> include quarterly with period Jan 1 - Apr 1
+	lineItems, total, err := s.service.CalculateFixedCharges(ctx, sub, apr1, may1)
+	s.NoError(err)
+	s.Require().Len(lineItems, 2, "expected 2 fixed line items (monthly + quarterly)")
+	var monthlyLine, quarterlyLine *dto.CreateInvoiceLineItemRequest
+	for i := range lineItems {
+		if lo.FromPtr(lineItems[i].PriceID) == priceMonthly.ID {
+			monthlyLine = &lineItems[i]
+		} else if lo.FromPtr(lineItems[i].PriceID) == priceQuarterly.ID {
+			quarterlyLine = &lineItems[i]
+		}
+	}
+	s.Require().NotNil(monthlyLine, "monthly line should be present")
+	s.Require().NotNil(quarterlyLine, "quarterly line should be present")
+	s.True((*monthlyLine.PeriodStart).Equal(apr1) && (*monthlyLine.PeriodEnd).Equal(may1), "monthly line should have period Apr 1 - May 1")
+	s.True((*quarterlyLine.PeriodStart).Equal(jan1) && (*quarterlyLine.PeriodEnd).Equal(apr1), "quarterly line should have period Jan 1 - Apr 1")
+	s.True(quarterlyLine.Amount.Equal(decimal.NewFromInt(300)), "quarterly line should be full amount 300")
+	// Monthly line may be prorated by existing logic; total = monthly (possibly prorated) + 300
+	s.True(total.GreaterThanOrEqual(decimal.NewFromInt(300)), "total should be at least 300 (quarterly)")
+	s.True(total.LessThanOrEqual(decimal.NewFromInt(310)), "total should be at most 310 (full monthly + quarterly)")
+
+	// Excluded: invoice period Mar 1 - Apr 1. Quarter end Apr 1 is not in [Mar 1, Apr 1) (end exclusive) -> no quarterly line
+	lineItems2, total2, err2 := s.service.CalculateFixedCharges(ctx, sub, mar1, apr1)
+	s.NoError(err2)
+	s.Require().Len(lineItems2, 1, "expected 1 fixed line item (monthly only)")
+	s.Equal(priceMonthly.ID, lo.FromPtr(lineItems2[0].PriceID))
+	s.True(total2.Equal(decimal.NewFromInt(10)), "total = 10 (monthly only)")
+}
+
+// scenario1DailyExpectedTotals is the expected fixed charge total for each of 12 daily invoices (Orb-style:
+// advance at period start, arrear at period end; ProrationBehavior=None in test). Invoice i uses period [Jan i, Jan i+1).
+// Invoice 1: advance 1500 + arrear 200 (daily arrear period end Jan 2 included by current logic) = 1700.
+var scenario1DailyExpectedTotals = []int{1700, 300, 300, 300, 300, 300, 300, 800, 300, 300, 300, 300}
+
+// scenario2MonthlyExpectedTotals is the expected fixed charge total for each of 12 monthly invoices (advance only; proration_behavior=none).
+var scenario2MonthlyExpectedTotals = []int{1200, 300, 300, 700, 300, 300, 700, 300, 300, 700, 300, 300}
+
+// setupScenario1DailySub creates a daily subscription (start Jan 1 2026) with 10 fixed line items:
+// advance: daily 100, weekly 200, monthly 300, quarterly 400, annual 500;
+// arrear: daily 200, weekly 300, monthly 400, quarterly 500, annual 600.
+func (s *BillingServiceSuite) setupScenario1DailySub(ctx context.Context) (*subscription.Subscription, []*price.Price) {
+	jan1 := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	cust := &customer.Customer{
+		ID:         "cust_sc1",
+		ExternalID: "ext_sc1",
+		Name:       "Scenario 1 Customer",
+		Email:      "sc1@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_sc1",
+		Name:        "Scenario 1 Plan",
+		Description: "Daily sub with mixed cadences",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	specs := []struct {
+		id      string
+		period  types.BillingPeriod
+		amount  int
+		cadence types.InvoiceCadence
+		display string
+	}{
+		{"price_daily_adv", types.BILLING_PERIOD_DAILY, 100, types.InvoiceCadenceAdvance, "Daily Advance"},
+		{"price_weekly_adv", types.BILLING_PERIOD_WEEKLY, 200, types.InvoiceCadenceAdvance, "Weekly Advance"},
+		{"price_monthly_adv", types.BILLING_PERIOD_MONTHLY, 300, types.InvoiceCadenceAdvance, "Monthly Advance"},
+		{"price_quarterly_adv", types.BILLING_PERIOD_QUARTER, 400, types.InvoiceCadenceAdvance, "Quarterly Advance"},
+		{"price_annual_adv", types.BILLING_PERIOD_ANNUAL, 500, types.InvoiceCadenceAdvance, "Annual Advance"},
+		{"price_daily_arr", types.BILLING_PERIOD_DAILY, 200, types.InvoiceCadenceArrear, "Daily Arrear"},
+		{"price_weekly_arr", types.BILLING_PERIOD_WEEKLY, 300, types.InvoiceCadenceArrear, "Weekly Arrear"},
+		{"price_monthly_arr", types.BILLING_PERIOD_MONTHLY, 400, types.InvoiceCadenceArrear, "Monthly Arrear"},
+		{"price_quarterly_arr", types.BILLING_PERIOD_QUARTER, 500, types.InvoiceCadenceArrear, "Quarterly Arrear"},
+		{"price_annual_arr", types.BILLING_PERIOD_ANNUAL, 600, types.InvoiceCadenceArrear, "Annual Arrear"},
+	}
+	prices := make([]*price.Price, 0, len(specs))
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(specs))
+	sub := &subscription.Subscription{
+		ID:                 "sub_sc1",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          jan1,
+		BillingAnchor:      jan1,
+		CurrentPeriodStart: jan1,
+		CurrentPeriodEnd:   jan1.AddDate(0, 0, 1),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_DAILY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:   types.ProrationBehaviorNone, // full amounts in tests
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	for _, spec := range specs {
+		p := &price.Price{
+			ID:                 spec.id,
+			Amount:             decimal.NewFromInt(int64(spec.amount)),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           pl.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     spec.cadence,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+		prices = append(prices, p)
+		li := &subscription.SubscriptionLineItem{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:     sub.ID,
+			CustomerID:         sub.CustomerID,
+			EntityID:           pl.ID,
+			EntityType:         types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:    pl.Name,
+			PriceID:            p.ID,
+			PriceType:          types.PRICE_TYPE_FIXED,
+			DisplayName:        spec.display,
+			Quantity:           decimal.NewFromInt(1),
+			Currency:           sub.Currency,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			InvoiceCadence:     spec.cadence,
+			StartDate:          jan1,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		lineItems = append(lineItems, li)
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
+	sub.LineItems = lineItems
+	return sub, prices
+}
+
+// setupScenario2MonthlySub creates a monthly subscription (start Jan 1 2026) with 3 advance-only fixed line items:
+// monthly 300, quarterly 400, annual 500.
+func (s *BillingServiceSuite) setupScenario2MonthlySub(ctx context.Context) (*subscription.Subscription, []*price.Price) {
+	jan1 := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	feb1 := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	cust := &customer.Customer{
+		ID:         "cust_sc2",
+		ExternalID: "ext_sc2",
+		Name:       "Scenario 2 Customer",
+		Email:      "sc2@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_sc2",
+		Name:        "Scenario 2 Plan",
+		Description: "Monthly sub with advance only",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+	specs := []struct {
+		id      string
+		period  types.BillingPeriod
+		amount  int
+		display string
+	}{
+		{"price_sc2_monthly", types.BILLING_PERIOD_MONTHLY, 300, "Monthly Advance"},
+		{"price_sc2_quarterly", types.BILLING_PERIOD_QUARTER, 400, "Quarterly Advance"},
+		{"price_sc2_annual", types.BILLING_PERIOD_ANNUAL, 500, "Annual Advance"},
+	}
+	prices := make([]*price.Price, 0, len(specs))
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(specs))
+	sub := &subscription.Subscription{
+		ID:                 "sub_sc2",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          jan1,
+		BillingAnchor:      jan1,
+		CurrentPeriodStart: jan1,
+		CurrentPeriodEnd:   feb1,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:   types.ProrationBehaviorNone, // Orb-style: full amounts in tests
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	for _, spec := range specs {
+		p := &price.Price{
+			ID:                 spec.id,
+			Amount:             decimal.NewFromInt(int64(spec.amount)),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           pl.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+		prices = append(prices, p)
+		li := &subscription.SubscriptionLineItem{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:     sub.ID,
+			CustomerID:         sub.CustomerID,
+			EntityID:           pl.ID,
+			EntityType:         types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:    pl.Name,
+			PriceID:            p.ID,
+			PriceType:          types.PRICE_TYPE_FIXED,
+			DisplayName:        spec.display,
+			Quantity:           decimal.NewFromInt(1),
+			Currency:           sub.Currency,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			StartDate:          jan1,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		lineItems = append(lineItems, li)
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
+	sub.LineItems = lineItems
+	return sub, prices
+}
+
+// TestScenario1_DailySub_12Invoices asserts Orb-style fixed charges for 12 daily invoices:
+// advance at period start, arrear at period end. Expected totals from Orb doc.
+func (s *BillingServiceSuite) TestScenario1_DailySub_12Invoices() {
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+	sub, _ := s.setupScenario1DailySub(ctx)
+	var advanceItems, arrearItems []*subscription.SubscriptionLineItem
+	for _, li := range sub.LineItems {
+		if li.InvoiceCadence == types.InvoiceCadenceAdvance {
+			advanceItems = append(advanceItems, li)
+		} else {
+			arrearItems = append(arrearItems, li)
+		}
+	}
+	subAdvance := *sub
+	subAdvance.LineItems = advanceItems
+	subArrear := *sub
+	subArrear.LineItems = arrearItems
+
+	for i := 0; i < 12; i++ {
+		start := time.Date(2026, time.January, 1+i, 0, 0, 0, 0, time.UTC)
+		end := time.Date(2026, time.January, 2+i, 0, 0, 0, 0, time.UTC)
+		_, totalAdvance, err := s.service.CalculateFixedCharges(ctx, &subAdvance, start, end)
+		s.NoError(err, "invoice %d advance", i+1)
+		_, totalArrear, err := s.service.CalculateFixedCharges(ctx, &subArrear, start, end)
+		s.NoError(err, "invoice %d arrear", i+1)
+		got := totalAdvance.Add(totalArrear)
+		expected := decimal.NewFromInt(int64(scenario1DailyExpectedTotals[i]))
+		s.True(got.Equal(expected), "invoice %d: expected fixed total %s, got %s", i+1, expected, got)
+	}
+}
+
+// TestScenario2_MonthlySub_12Invoices asserts fixed charges for 12 monthly invoices (advance only). Expected totals from Orb.
+func (s *BillingServiceSuite) TestScenario2_MonthlySub_12Invoices() {
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+	sub, _ := s.setupScenario2MonthlySub(ctx)
+	monthStarts := []time.Time{
+		time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC),
+	}
+	monthEnds := []time.Time{
+		time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+	}
+	for i := 0; i < 12; i++ {
+		_, total, err := s.service.CalculateFixedCharges(ctx, sub, monthStarts[i], monthEnds[i])
+		s.NoError(err, "invoice %d", i+1)
+		expected := decimal.NewFromInt(int64(scenario2MonthlyExpectedTotals[i]))
+		s.True(total.Equal(expected), "invoice %d: expected fixed total %s, got %s", i+1, expected, total)
+	}
 }
 
 func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
