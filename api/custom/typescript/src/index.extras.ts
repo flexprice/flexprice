@@ -5,5 +5,4 @@
  */
 export * from "./sdk/models/shared.js";
 export * from "./sdk/models/errors.js";
-export * from "./sdk/models/operations/index.js";
 export * from "./sdk/types/index.js";
