@@ -930,6 +930,12 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	}
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
+	// Build lineItemByID map for O(1) lookup by subscription_line_item_id (from feature_usage)
+	chargesByLineItemID := make(map[string]*dto.SubscriptionUsageByMetersResponse)
+	for _, charge := range usage.Charges {
+		chargesByLineItemID[charge.SubscriptionLineItemID] = charge
+	}
+
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -938,10 +944,8 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 		// Find matching usage charges - may have multiple if there's overage
 		var matchingCharges []*dto.SubscriptionUsageByMetersResponse
-		for _, charge := range usage.Charges {
-			if charge.Price.ID == item.PriceID {
-				matchingCharges = append(matchingCharges, charge)
-			}
+		if charges, ok := chargesByLineItemID[item.ID]; ok {
+			matchingCharges = append(matchingCharges, charges)
 		}
 
 		if len(matchingCharges) == 0 {

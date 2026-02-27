@@ -1751,6 +1751,85 @@ func (s *BillingServiceSuite) TestCalculateUsageChargesWithBucketedMaxAggregatio
 	}
 }
 
+func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_SkipsInactiveLineItemWithSamePriceID() {
+	// When two subscription line items share the same price_id (one active, one inactive),
+	// feature_usage may have data for the inactive line item. CalculateFeatureUsageCharges
+	// must match by SubscriptionLineItemID and skip charges for inactive line items.
+	ctx := s.GetContext()
+	s.setupTestData()
+
+	// Subscription has one active usage line item (API calls)
+	apiCallsLineItem := s.testData.subscription.LineItems[1]
+	s.Require().Equal(s.testData.prices.apiCalls.ID, apiCallsLineItem.PriceID)
+
+	// Simulate usage from feature_usage for an INACTIVE line item (same price_id, different sub_line_item_id)
+	// That inactive line item is NOT in sub.LineItems, so the charge should be skipped
+	inactiveLineItemID := "sub_li_inactive_999" // Not in sub.LineItems
+
+	usage := &dto.GetUsageBySubscriptionResponse{
+		StartTime: s.testData.subscription.CurrentPeriodStart,
+		EndTime:   s.testData.subscription.CurrentPeriodEnd,
+		Currency:  s.testData.subscription.Currency,
+		Charges: []*dto.SubscriptionUsageByMetersResponse{
+			{
+				SubscriptionLineItemID: inactiveLineItemID,
+				Price:                  s.testData.prices.apiCalls,
+				Quantity:               500,
+				Amount:                 10,
+				IsOverage:              false,
+			},
+		},
+	}
+
+	lineItems, totalAmount, err := s.service.CalculateFeatureUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+	)
+
+	s.NoError(err)
+	s.Empty(lineItems, "Should have no invoice line items: charge was for inactive line item, not in invoiced set")
+	s.True(totalAmount.IsZero(), "Total should be zero: no charges should be attributed to active line items")
+}
+
+func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_MatchesActiveLineItemBySubscriptionLineItemID() {
+	// When SubscriptionLineItemID is set and matches an active line item, the charge should be processed.
+	ctx := s.GetContext()
+	s.setupTestData()
+
+	apiCallsLineItem := s.testData.subscription.LineItems[1]
+
+	usage := &dto.GetUsageBySubscriptionResponse{
+		StartTime: s.testData.subscription.CurrentPeriodStart,
+		EndTime:   s.testData.subscription.CurrentPeriodEnd,
+		Currency:  s.testData.subscription.Currency,
+		Charges: []*dto.SubscriptionUsageByMetersResponse{
+			{
+				SubscriptionLineItemID: apiCallsLineItem.ID,
+				Price:                  s.testData.prices.apiCalls,
+				Quantity:               500,
+				Amount:                 10,
+				IsOverage:              false,
+			},
+		},
+	}
+
+	lineItems, totalAmount, err := s.service.CalculateFeatureUsageCharges(
+		ctx,
+		s.testData.subscription,
+		usage,
+		s.testData.subscription.CurrentPeriodStart,
+		s.testData.subscription.CurrentPeriodEnd,
+	)
+
+	s.NoError(err)
+	s.Len(lineItems, 1, "Should have one invoice line item for active line item")
+	s.Equal(s.testData.prices.apiCalls.ID, *lineItems[0].PriceID, "Line item should be for API calls price")
+	s.True(totalAmount.GreaterThan(decimal.Zero), "Total should be positive")
+}
+
 func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 	ctx := s.GetContext()
 
