@@ -54,15 +54,22 @@ Prints the next SDK version (patch by default) without writing. Used by CI and b
 Default is `patch`. Omit `baseVersion` to use `.speakeasy/sdk-version.json`; CI passes base from `npm view flexprice-ts version`.
 
 ### 4. Sync SDK version to gen.yaml
-Writes the given version into all `api/<lang>/.speakeasy/gen.yaml` and `.speakeasy/sdk-version.json` so the next SDK generation starts from that version. Run after `make sdk-all` if you want gen.yaml to match the generated package version (CI runs this automatically).
+Writes the given version into `.speakeasy/gen/*.yaml` and `.speakeasy/sdk-version.json` (central config). Run before generate (Makefile does this in `sdk-all`).
 
 **Usage:**
 ```bash
 ./scripts/sync-sdk-version-to-gen.sh <VERSION>
 ```
-Example: `./scripts/sync-sdk-version-to-gen.sh $(jq -r .version api/typescript/package.json)`
 
-### 5. Other Scripts
+### 5. Sync gen to output (pre-generate)
+Copies `.speakeasy/gen/<lang>.yaml` to `api/<lang>/.speakeasy/gen.yaml` so the Speakeasy CLI finds config. Run automatically before `speakeasy run` in `make speakeasy-generate`.
+
+**Usage:**
+```bash
+./scripts/sync-gen-to-output.sh
+```
+
+### 6. Other Scripts
 - `seed-events`: Seed events data into Clickhouse
 - `generate-apikey`: Generate a new API key
 - `assign-tenant`: Assign tenant to user

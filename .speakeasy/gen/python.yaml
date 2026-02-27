@@ -31,7 +31,7 @@ generation:
     generateNewTests: true
     skipResponseBodyAssertions: false
 python:
-  version: 0.0.43
+  version: 0.0.48
   additionalDependencies:
     dev: {}
     main: {}
@@ -62,11 +62,11 @@ python:
   imports:
     option: openapi
     paths:
-      callbacks: ""
+      callbacks: models/callbacks
       errors: errors
-      operations: ""
-      shared: ""
-      webhooks: ""
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
   inferUnionDiscriminators: true
   inputModelSuffix: input
   license: Apache-2.0

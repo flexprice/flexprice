@@ -8,7 +8,7 @@ Generated SDKs and MCP server for the flexprice API. Source: OpenAPI spec at `do
 - **api/typescript** – TypeScript SDK
 - **api/python** – Python SDK
 - **api/mcp** – MCP server
-- **api/tests** – SDK integration tests (local vs published); see [api/tests/README.md](tests/README.md). Run `make test-sdk-local` or `make test-sdk-published` from repo root.
+- **api/tests** – SDK integration tests (published SDKs only); see [api/tests/README.md](tests/README.md). Run `make test-sdk` or `make test-sdks` from repo root.
 
 ## Generation
 
@@ -24,7 +24,7 @@ make swagger
 make sdk-all
 ```
 
-See [AGENTS.md](../AGENTS.md) and the SDK generation README in the repo for details. Custom code lives under `api/custom/<lang>/` and is merged into `api/<lang>/` after each run. READMEs are maintained in `api/custom/<lang>/README.md` and overwrite the generated README on merge; `.genignore` in each SDK output dir prevents the generator from overwriting README if you run generate without merge-custom.
+See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md) for details. SDK generation config (gen.yaml) lives in `.speakeasy/gen/` and is copied to `api/<lang>/.speakeasy/` before each generate. Custom code lives under `api/custom/<lang>/` and is merged into `api/<lang>/` after each run. READMEs are maintained in `api/custom/<lang>/README.md` and overwrite the generated README on merge; `.genignore` in each SDK output dir prevents the generator from overwriting README if you run generate without merge-custom.
 
 ## Usage (high level)
 
@@ -47,12 +47,12 @@ The **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) is the si
 
 **Secrets (Settings → Secrets and variables → Actions):**
 
-| Secret                 | Used for                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------- |
-| `SPEAKEASY_API_KEY`    | SDK generator CLI (generate step)                                                                  |
+| Secret                 | Used for                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- |
+| `SPEAKEASY_API_KEY`    | SDK generator CLI (generate step)                                                                     |
 | `SDK_DEPLOY_GIT_TOKEN` | Push to GitHub repos (fine-grained PAT: Contents Read and write, Metadata Read on selected SDK repos) |
-| `NPM_TOKEN`            | Publish TypeScript SDK and MCP to npm (granular token, read/write)                               |
-| `PYPI_TOKEN`           | Publish Python SDK to PyPI                                                                        |
+| `NPM_TOKEN`            | Publish TypeScript SDK and MCP to npm (granular token, read/write)                                    |
+| `PYPI_TOKEN`           | Publish Python SDK to PyPI                                                                            |
 
 **Fine-grained token setup (SDK_DEPLOY_GIT_TOKEN):** Create a [fine-grained personal access token](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token) under the account or org that owns the SDK repos. Use **Only select repositories** and add every repo the workflow pushes to (defaults: go-temp, py-temp, ts-temp; add any overridden via `SDK_GO_REPO` etc.). Under **Repository permissions** set **Contents** to **Read and write** and **Metadata** to **Read**. No other permissions are required.
 

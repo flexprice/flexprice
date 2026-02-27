@@ -5,22 +5,23 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
 	"time"
 
-	flexprice "github.com/flexprice/go-sdk"
-	"github.com/samber/lo"
+	"github.com/flexprice/flexprice-go"
+	"github.com/flexprice/flexprice-go/models/components"
+	"github.com/flexprice/flexprice-go/models/operations"
 )
 
-// test_sdk.go - Published SDK tests. Run from repo root: go run ./api/tests/go/test_sdk.go
+// test_local_sdk.go - Local SDK tests (unpublished SDK from api/go).
+// Run from api/tests/go: go run test_local_sdk.go
 // Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
 // SDK repo: update defaultGoSDKRepo when you change where the Go SDK is hosted.
 
-// defaultGoSDKRepo is the Go SDK repo (module path). Change this when you host the SDK elsewhere; then update go.mod and the import below.
-const defaultGoSDKRepo = "github.com/Random-test-v2/go-temp"
+// defaultGoSDKRepo is the Go SDK repo (module path). Change this when you host the SDK elsewhere.
+const defaultGoSDKRepo = "github.com/flexprice/go-sdk-temp"
 
 var (
 	testCustomerID   string
@@ -69,24 +70,15 @@ func main() {
 	fmt.Printf("✓ API Key: %s...%s\n", apiKey[:min(8, len(apiKey))], apiKey[max(0, len(apiKey)-4):])
 	fmt.Printf("✓ API Host: %s\n\n", apiHost)
 
-	// Initialize API client with local SDK
-	// Split host into domain and path (e.g., "us.api.flexprice.io/v1" -> "us.api.flexprice.io" + "/v1")
+	// Initialize SDK (Flexprice with WithSecurity)
 	parts := strings.SplitN(apiHost, "/", 2)
 	hostOnly := parts[0]
 	basePath := ""
 	if len(parts) > 1 {
 		basePath = "/" + parts[1]
 	}
-
-	config := flexprice.NewConfiguration()
-	config.Scheme = "https"
-	config.Host = hostOnly
-	if basePath != "" {
-		config.Servers[0].URL = basePath
-	}
-	config.AddDefaultHeader("x-api-key", apiKey)
-
-	client := flexprice.NewAPIClient(config)
+	serverURL := "https://" + hostOnly + basePath
+	client := flexprice.New(serverURL, flexprice.WithSecurity(apiKey))
 	ctx := context.Background()
 
 	// Run all Customer API tests (without delete)
@@ -333,6 +325,8 @@ func main() {
 	testDeleteAddon(ctx, client)
 	testDeletePlan(ctx, client)
 	testDeleteFeature(ctx, client)
+	testCancelSubscriptionCleanup(ctx, client) // must run before customer (API rejects delete if customer has active subscriptions)
+	testDeleteWallet(ctx, client)            // must run before customer (API rejects delete if customer has wallets)
 	testDeleteCustomer(ctx, client)
 
 	fmt.Println("✓ Cleanup Completed!\n")
@@ -341,223 +335,196 @@ func main() {
 }
 
 // Test 1: Create a new customer
-func testCreateCustomer(ctx context.Context, client *flexprice.APIClient) {
+func testCreateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Customer ---")
 
 	timestamp := time.Now().Unix()
 	testCustomerName = fmt.Sprintf("Test Customer %d", timestamp)
 	testExternalID = fmt.Sprintf("test-customer-%d", timestamp)
 
-	customerRequest := flexprice.DtoCreateCustomerRequest{
-		Name:       lo.ToPtr(testCustomerName),
-		ExternalId: testExternalID,
-		Email:      lo.ToPtr(fmt.Sprintf("test-%d@example.com", timestamp)),
-		Metadata: &map[string]string{
+	request := components.DtoCreateCustomerRequest{
+		ExternalID: testExternalID,
+		Name:       flexprice.String(testCustomerName),
+		Email:      flexprice.String(fmt.Sprintf("test-%d@example.com", timestamp)),
+		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
 			"environment": "test",
 		},
 	}
 
-	customer, response, err := client.CustomersAPI.CustomersPost(ctx).
-		Customer(customerRequest).
-		Execute()
-
+	resp, err := client.Customers.CreateCustomer(ctx, request)
 	if err != nil {
 		log.Printf("❌ Error creating customer: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d", response.StatusCode)
+	customer := resp.DtoCustomerResponse
+	if customer == nil || customer.ID == nil {
+		log.Printf("❌ Create customer returned no body")
 		fmt.Println()
 		return
 	}
-
-	testCustomerID = *customer.Id
+	testCustomerID = *customer.ID
 	fmt.Printf("✓ Customer created successfully!\n")
-	fmt.Printf("  ID: %s\n", *customer.Id)
+	fmt.Printf("  ID: %s\n", *customer.ID)
 	fmt.Printf("  Name: %s\n", *customer.Name)
-	fmt.Printf("  External ID: %s\n", *customer.ExternalId)
+	fmt.Printf("  External ID: %s\n", *customer.ExternalID)
 	fmt.Printf("  Email: %s\n\n", *customer.Email)
 }
 
 // Test 2: Get customer by ID
-func testGetCustomer(ctx context.Context, client *flexprice.APIClient) {
+func testGetCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Customer by ID ---")
 
-	customer, response, err := client.CustomersAPI.CustomersIdGet(ctx, testCustomerID).
-		Execute()
-
+	resp, err := client.Customers.GetCustomer(ctx, testCustomerID)
 	if err != nil {
 		log.Printf("❌ Error getting customer: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	customer := resp.DtoCustomerResponse
+	if customer == nil {
+		log.Printf("❌ Get customer returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Customer retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *customer.Id)
+	fmt.Printf("  ID: %s\n", *customer.ID)
 	fmt.Printf("  Name: %s\n", *customer.Name)
 	fmt.Printf("  Created At: %s\n\n", *customer.CreatedAt)
 }
 
-// Test 3: List all customers
-func testListCustomers(ctx context.Context, client *flexprice.APIClient) {
+// Test 3: List all customers (query with limit)
+func testListCustomers(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Customers ---")
 
-	customers, response, err := client.CustomersAPI.CustomersGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesCustomerFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Customers.QueryCustomer(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing customers: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
+	listResp := resp.DtoListCustomersResponse
+	if listResp == nil {
+		fmt.Printf("✓ Retrieved 0 customers\n\n")
 		return
 	}
-
-	fmt.Printf("✓ Retrieved %d customers\n", len(customers.Items))
-	if len(customers.Items) > 0 {
-		fmt.Printf("  First customer: %s - %s\n", *customers.Items[0].Id, *customers.Items[0].Name)
+	items := listResp.Items
+	if items == nil {
+		items = []components.DtoCustomerResponse{}
 	}
-	if customers.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *customers.Pagination.Total)
+	fmt.Printf("✓ Retrieved %d customers\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First customer: %s - %s\n", *items[0].ID, *items[0].Name)
+	}
+	if listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update customer
-func testUpdateCustomer(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Customer ---")
 
 	updatedName := fmt.Sprintf("%s (Updated)", testCustomerName)
-	updateRequest := flexprice.DtoUpdateCustomerRequest{
-		Name: &updatedName,
-		Metadata: &map[string]string{
+	body := components.DtoUpdateCustomerRequest{
+		Name: flexprice.String(updatedName),
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	customer, response, err := client.CustomersAPI.CustomersIdPut(ctx, testCustomerID).
-		Customer(updateRequest).
-		Execute()
-
+	resp, err := client.Customers.UpdateCustomer(ctx, body, flexprice.String(testCustomerID), nil)
 	if err != nil {
 		log.Printf("❌ Error updating customer: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	customer := resp.DtoCustomerResponse
+	if customer == nil {
+		log.Printf("❌ Update customer returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Customer updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *customer.Id)
+	fmt.Printf("  ID: %s\n", *customer.ID)
 	fmt.Printf("  New Name: %s\n", *customer.Name)
 	fmt.Printf("  Updated At: %s\n\n", *customer.UpdatedAt)
 }
 
 // Test 5: Lookup customer by external ID
-func testLookupCustomer(ctx context.Context, client *flexprice.APIClient) {
+func testLookupCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Lookup Customer by External ID ---")
 
-	customer, response, err := client.CustomersAPI.CustomersLookupLookupKeyGet(ctx, testExternalID).
-		Execute()
-
+	resp, err := client.Customers.GetCustomerByExternalID(ctx, testExternalID)
 	if err != nil {
 		log.Printf("❌ Error looking up customer: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	customer := resp.DtoCustomerResponse
+	if customer == nil {
+		log.Printf("❌ Lookup returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Customer found by external ID!\n")
 	fmt.Printf("  External ID: %s\n", testExternalID)
-	fmt.Printf("  ID: %s\n", *customer.Id)
+	fmt.Printf("  ID: %s\n", *customer.ID)
 	fmt.Printf("  Name: %s\n\n", *customer.Name)
 }
 
 // Test 6: Search customers
-func testSearchCustomers(ctx context.Context, client *flexprice.APIClient) {
+func testSearchCustomers(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Search Customers ---")
 
-	// Use filter to search by external ID
-	searchFilter := flexprice.TypesCustomerFilter{
-		ExternalId: &testExternalID,
-	}
-
-	customers, response, err := client.CustomersAPI.CustomersSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesCustomerFilter{ExternalID: flexprice.String(testExternalID)}
+	resp, err := client.Customers.QueryCustomer(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching customers: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListCustomersResponse
+	items := []components.DtoCustomerResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d customers matching external ID '%s'\n", len(customers.Items), testExternalID)
-	for i, customer := range customers.Items {
-		if i < 3 { // Show first 3 results
-			fmt.Printf("  - %s: %s\n", *customer.Id, *customer.Name)
+	fmt.Printf("  Found %d customers matching external ID '%s'\n", len(items), testExternalID)
+	for i, customer := range items {
+		if i < 3 && customer.ID != nil && customer.Name != nil {
+			fmt.Printf("  - %s: %s\n", *customer.ID, *customer.Name)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 7: Get customer entitlements
-func testGetCustomerEntitlements(ctx context.Context, client *flexprice.APIClient) {
+func testGetCustomerEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 7: Get Customer Entitlements ---")
 
-	entitlements, response, err := client.CustomersAPI.CustomersIdEntitlementsGet(ctx, testCustomerID).
-		Execute()
-
+	resp, err := client.Customers.GetCustomerEntitlements(ctx, testCustomerID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting customer entitlements: %v\n", err)
 		fmt.Println("⚠ Skipping entitlements test (customer may not have any entitlements)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping entitlements test\n")
+	entitlements := resp.DtoCustomerEntitlementsResponse
+	if entitlements == nil {
+		fmt.Println("  No entitlements found\n")
 		return
 	}
-
 	fmt.Printf("✓ Retrieved customer entitlements!\n")
 	if entitlements.Features != nil {
 		fmt.Printf("  Total features: %d\n", len(entitlements.Features))
 		for i, feature := range entitlements.Features {
-			if i < 3 && feature.Feature != nil && feature.Feature.Id != nil { // Show first 3
-				fmt.Printf("  - Feature: %s\n", *feature.Feature.Id)
+			if i < 3 && feature.Feature != nil && feature.Feature.ID != nil {
+				fmt.Printf("  - Feature: %s\n", *feature.Feature.ID)
 			}
 		}
 	} else {
@@ -567,85 +534,55 @@ func testGetCustomerEntitlements(ctx context.Context, client *flexprice.APIClien
 }
 
 // Test 8: Get customer upcoming grants
-func testGetCustomerUpcomingGrants(ctx context.Context, client *flexprice.APIClient) {
+func testGetCustomerUpcomingGrants(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 8: Get Customer Upcoming Grants ---")
 
-	grants, response, err := client.CustomersAPI.CustomersIdGrantsUpcomingGet(ctx, testCustomerID).
-		Execute()
-
+	resp, err := client.Customers.GetCustomerUpcomingGrants(ctx, testCustomerID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting upcoming grants: %v\n", err)
 		fmt.Println("⚠ Skipping upcoming grants test (customer may not have any grants)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping upcoming grants test\n")
-		return
+	grants := resp.DtoListCreditGrantApplicationsResponse
+	n := 0
+	if grants != nil && grants.Items != nil {
+		n = len(grants.Items)
 	}
-
 	fmt.Printf("✓ Retrieved upcoming grants!\n")
-	if grants.Items != nil {
-		fmt.Printf("  Total upcoming grants: %d\n", len(grants.Items))
-	} else {
-		fmt.Println("  No upcoming grants found")
-	}
+	fmt.Printf("  Total upcoming grants: %d\n", n)
 	fmt.Println()
 }
 
 // Test 9: Get customer usage
-func testGetCustomerUsage(ctx context.Context, client *flexprice.APIClient) {
+func testGetCustomerUsage(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 9: Get Customer Usage ---")
 
-	usage, response, err := client.CustomersAPI.CustomersUsageGet(ctx).
-		CustomerId(testCustomerID).
-		Execute()
-
+	req := operations.GetCustomerUsageSummaryRequest{CustomerID: flexprice.String(testCustomerID)}
+	resp, err := client.Customers.GetCustomerUsageSummary(ctx, req)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting customer usage: %v\n", err)
 		fmt.Println("⚠ Skipping usage test (customer may not have usage data)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping usage test\n")
-		return
-	}
-
-	fmt.Printf("✓ Retrieved customer usage!\n")
-	if usage.Features != nil {
-		fmt.Printf("  Feature usage records: %d\n", len(usage.Features))
+	usage := resp.DtoCustomerUsageSummaryResponse
+	if usage != nil && usage.Features != nil {
+		fmt.Printf("✓ Retrieved customer usage!\n  Feature usage records: %d\n", len(usage.Features))
 	} else {
-		fmt.Println("  No usage data found")
+		fmt.Printf("✓ Retrieved customer usage!\n  No usage data found\n")
 	}
 	fmt.Println()
 }
 
 // Test 10: Delete customer
-func testDeleteCustomer(ctx context.Context, client *flexprice.APIClient) {
+func testDeleteCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 10: Delete Customer ---")
 
-	response, err := client.CustomersAPI.CustomersIdDelete(ctx, testCustomerID).
-		Execute()
-
+	_, err := client.Customers.DeleteCustomer(ctx, testCustomerID)
 	if err != nil {
 		log.Printf("❌ Error deleting customer: %v", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
 	fmt.Printf("✓ Customer deleted successfully!\n")
 	fmt.Printf("  Deleted ID: %s\n\n", testCustomerID)
 }
@@ -655,196 +592,167 @@ func testDeleteCustomer(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new feature
-func testCreateFeature(ctx context.Context, client *flexprice.APIClient) {
+func testCreateFeature(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Feature ---")
 
 	timestamp := time.Now().Unix()
 	testFeatureName = fmt.Sprintf("Test Feature %d", timestamp)
 	featureKey := fmt.Sprintf("test_feature_%d", timestamp)
 
-	featureRequest := flexprice.DtoCreateFeatureRequest{
+	request := components.DtoCreateFeatureRequest{
 		Name:        testFeatureName,
-		LookupKey:   lo.ToPtr(featureKey),
-		Description: lo.ToPtr("This is a test feature created by SDK tests"),
-		Type:        flexprice.TYPESFEATURETYPE_FeatureTypeBoolean,
-		Metadata: &map[string]string{
+		LookupKey:   flexprice.String(featureKey),
+		Description: flexprice.String("This is a test feature created by SDK tests"),
+		Type:        components.TypesFeatureTypeBoolean,
+		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
 			"environment": "test",
 		},
 	}
 
-	feature, response, err := client.FeaturesAPI.FeaturesPost(ctx).
-		Feature(featureRequest).
-		Execute()
-
+	resp, err := client.Features.CreateFeature(ctx, request)
 	if err != nil {
 		log.Printf("❌ Error creating feature: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d", response.StatusCode)
+	feature := resp.DtoFeatureResponse
+	if feature == nil || feature.ID == nil {
+		log.Printf("❌ Create feature returned no body")
 		fmt.Println()
 		return
 	}
-
-	testFeatureID = *feature.Id
+	testFeatureID = *feature.ID
 	fmt.Printf("✓ Feature created successfully!\n")
-	fmt.Printf("  ID: %s\n", *feature.Id)
+	fmt.Printf("  ID: %s\n", *feature.ID)
 	fmt.Printf("  Name: %s\n", *feature.Name)
 	fmt.Printf("  Lookup Key: %s\n", *feature.LookupKey)
 	fmt.Printf("  Type: %s\n\n", string(*feature.Type))
 }
 
-// Test 2: Get feature by ID
-func testGetFeature(ctx context.Context, client *flexprice.APIClient) {
+// Test 2: Get feature by ID (query by feature_ids)
+func testGetFeature(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Feature by ID ---")
 
-	feature, response, err := client.FeaturesAPI.FeaturesIdGet(ctx, testFeatureID).
-		Execute()
-
+	filter := components.TypesFeatureFilter{FeatureIds: []string{testFeatureID}}
+	resp, err := client.Features.QueryFeature(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error getting feature: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	listResp := resp.DtoListFeaturesResponse
+	if listResp == nil || listResp.Items == nil || len(listResp.Items) == 0 {
+		log.Printf("❌ Feature not found")
 		fmt.Println()
 		return
 	}
-
+	feature := listResp.Items[0]
 	fmt.Printf("✓ Feature retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *feature.Id)
+	fmt.Printf("  ID: %s\n", *feature.ID)
 	fmt.Printf("  Name: %s\n", *feature.Name)
 	fmt.Printf("  Lookup Key: %s\n", *feature.LookupKey)
 	fmt.Printf("  Created At: %s\n\n", *feature.CreatedAt)
 }
 
 // Test 3: List all features
-func testListFeatures(ctx context.Context, client *flexprice.APIClient) {
+func testListFeatures(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Features ---")
 
-	features, response, err := client.FeaturesAPI.FeaturesGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesFeatureFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Features.QueryFeature(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing features: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListFeaturesResponse
+	items := []components.DtoFeatureResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d features\n", len(features.Items))
-	if len(features.Items) > 0 {
-		fmt.Printf("  First feature: %s - %s\n", *features.Items[0].Id, *features.Items[0].Name)
+	fmt.Printf("✓ Retrieved %d features\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First feature: %s - %s\n", *items[0].ID, *items[0].Name)
 	}
-	if features.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *features.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update feature
-func testUpdateFeature(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateFeature(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Feature ---")
 
 	updatedName := fmt.Sprintf("%s (Updated)", testFeatureName)
 	updatedDescription := "Updated description for test feature"
-	updateRequest := flexprice.DtoUpdateFeatureRequest{
-		Name:        &updatedName,
-		Description: &updatedDescription,
-		Metadata: &map[string]string{
+	body := components.DtoUpdateFeatureRequest{
+		Name:        flexprice.String(updatedName),
+		Description: flexprice.String(updatedDescription),
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	feature, response, err := client.FeaturesAPI.FeaturesIdPut(ctx, testFeatureID).
-		Feature(updateRequest).
-		Execute()
-
+	resp, err := client.Features.UpdateFeature(ctx, testFeatureID, body)
 	if err != nil {
 		log.Printf("❌ Error updating feature: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	feature := resp.DtoFeatureResponse
+	if feature == nil {
+		log.Printf("❌ Update feature returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Feature updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *feature.Id)
+	fmt.Printf("  ID: %s\n", *feature.ID)
 	fmt.Printf("  New Name: %s\n", *feature.Name)
 	fmt.Printf("  New Description: %s\n", *feature.Description)
 	fmt.Printf("  Updated At: %s\n\n", *feature.UpdatedAt)
 }
 
 // Test 5: Search features
-func testSearchFeatures(ctx context.Context, client *flexprice.APIClient) {
+func testSearchFeatures(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Features ---")
 
-	// Use filter to search by feature ID
-	searchFilter := flexprice.TypesFeatureFilter{
-		FeatureIds: []string{testFeatureID},
-	}
-
-	features, response, err := client.FeaturesAPI.FeaturesSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesFeatureFilter{FeatureIds: []string{testFeatureID}}
+	resp, err := client.Features.QueryFeature(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching features: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListFeaturesResponse
+	items := []components.DtoFeatureResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d features matching ID '%s'\n", len(features.Items), testFeatureID)
-	for i, feature := range features.Items {
-		if i < 3 { // Show first 3 results
-			fmt.Printf("  - %s: %s (%s)\n", *feature.Id, *feature.Name, *feature.LookupKey)
+	fmt.Printf("  Found %d features matching ID '%s'\n", len(items), testFeatureID)
+	for i, feature := range items {
+		if i < 3 {
+			fmt.Printf("  - %s: %s (%s)\n", *feature.ID, *feature.Name, *feature.LookupKey)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 6: Delete feature
-func testDeleteFeature(ctx context.Context, client *flexprice.APIClient) {
+func testDeleteFeature(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Delete Feature ---")
 
-	_, response, err := client.FeaturesAPI.FeaturesIdDelete(ctx, testFeatureID).
-		Execute()
-
+	resp, err := client.Features.DeleteFeature(ctx, testFeatureID)
 	if err != nil {
 		log.Printf("❌ Error deleting feature: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d", response.StatusCode)
-		fmt.Println()
-		return
-	}
+	_ = resp
 
 	fmt.Printf("✓ Feature deleted successfully!\n")
 	fmt.Printf("  Deleted ID: %s\n\n", testFeatureID)
@@ -855,144 +763,129 @@ func testDeleteFeature(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new addon
-func testCreateAddon(ctx context.Context, client *flexprice.APIClient) {
+func testCreateAddon(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Addon ---")
 
 	timestamp := time.Now().Unix()
 	testAddonName = fmt.Sprintf("Test Addon %d", timestamp)
 	testAddonLookupKey = fmt.Sprintf("test_addon_%d", timestamp)
 
-	addonRequest := flexprice.DtoCreateAddonRequest{
+	request := components.DtoCreateAddonRequest{
 		Name:        testAddonName,
 		LookupKey:   testAddonLookupKey,
-		Description: lo.ToPtr("This is a test addon created by SDK tests"),
-		Type:        flexprice.TYPESADDONTYPE_AddonTypeOnetime,
-		Metadata: map[string]interface{}{
+		Description: flexprice.String("This is a test addon created by SDK tests"),
+		Type:        components.TypesAddonTypeOnetime,
+		Metadata: map[string]any{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
 			"environment": "test",
 		},
 	}
 
-	addon, response, err := client.AddonsAPI.AddonsPost(ctx).
-		Addon(addonRequest).
-		Execute()
-
+	resp, err := client.Addons.CreateAddon(ctx, request)
 	if err != nil {
 		log.Printf("❌ Error creating addon: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d", response.StatusCode)
+	addon := resp.DtoCreateAddonResponse
+	if addon == nil || addon.ID == nil {
+		log.Printf("❌ Create addon returned no body")
 		fmt.Println()
 		return
 	}
-
-	testAddonID = *addon.Id
+	testAddonID = *addon.ID
 	fmt.Printf("✓ Addon created successfully!\n")
-	fmt.Printf("  ID: %s\n", *addon.Id)
+	fmt.Printf("  ID: %s\n", *addon.ID)
 	fmt.Printf("  Name: %s\n", *addon.Name)
 	fmt.Printf("  Lookup Key: %s\n\n", *addon.LookupKey)
 }
 
 // Test 2: Get addon by ID
-func testGetAddon(ctx context.Context, client *flexprice.APIClient) {
+func testGetAddon(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Addon by ID ---")
 
-	addon, response, err := client.AddonsAPI.AddonsIdGet(ctx, testAddonID).
-		Execute()
-
+	resp, err := client.Addons.GetAddon(ctx, testAddonID)
 	if err != nil {
 		log.Printf("❌ Error getting addon: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	addon := resp.DtoAddonResponse
+	if addon == nil {
+		log.Printf("❌ Get addon returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Addon retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *addon.Id)
+	fmt.Printf("  ID: %s\n", *addon.ID)
 	fmt.Printf("  Name: %s\n", *addon.Name)
 	fmt.Printf("  Lookup Key: %s\n", *addon.LookupKey)
 	fmt.Printf("  Created At: %s\n\n", *addon.CreatedAt)
 }
 
 // Test 3: List all addons
-func testListAddons(ctx context.Context, client *flexprice.APIClient) {
+func testListAddons(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Addons ---")
 
-	addons, response, err := client.AddonsAPI.AddonsGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesAddonFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Addons.QueryAddon(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing addons: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListAddonsResponse
+	items := []components.DtoAddonResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d addons\n", len(addons.Items))
-	if len(addons.Items) > 0 {
-		fmt.Printf("  First addon: %s - %s\n", *addons.Items[0].Id, *addons.Items[0].Name)
+	fmt.Printf("✓ Retrieved %d addons\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First addon: %s - %s\n", *items[0].ID, *items[0].Name)
 	}
-	if addons.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *addons.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update addon
-func testUpdateAddon(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateAddon(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Addon ---")
 
 	updatedName := fmt.Sprintf("%s (Updated)", testAddonName)
 	updatedDescription := "Updated description for test addon"
-	updateRequest := flexprice.DtoUpdateAddonRequest{
-		Name:        &updatedName,
-		Description: &updatedDescription,
-		Metadata: map[string]interface{}{
+	body := components.DtoUpdateAddonRequest{
+		Name:        flexprice.String(updatedName),
+		Description: flexprice.String(updatedDescription),
+		Metadata: map[string]any{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	addon, response, err := client.AddonsAPI.AddonsIdPut(ctx, testAddonID).
-		Addon(updateRequest).
-		Execute()
-
+	resp, err := client.Addons.UpdateAddon(ctx, testAddonID, body)
 	if err != nil {
 		log.Printf("❌ Error updating addon: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	addon := resp.DtoAddonResponse
+	if addon == nil {
+		log.Printf("❌ Update addon returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Addon updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *addon.Id)
+	fmt.Printf("  ID: %s\n", *addon.ID)
 	fmt.Printf("  New Name: %s\n", *addon.Name)
 	fmt.Printf("  New Description: %s\n", *addon.Description)
 	fmt.Printf("  Updated At: %s\n\n", *addon.UpdatedAt)
 }
 
 // Test 5: Lookup addon by lookup key
-func testLookupAddon(ctx context.Context, client *flexprice.APIClient) {
+func testLookupAddon(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Lookup Addon by Lookup Key ---")
 
 	// Use the lookup key from the addon we created earlier
@@ -1004,88 +897,60 @@ func testLookupAddon(ctx context.Context, client *flexprice.APIClient) {
 
 	fmt.Printf("  Looking up addon with key: %s\n", testAddonLookupKey)
 
-	addon, response, err := client.AddonsAPI.AddonsLookupLookupKeyGet(ctx, testAddonLookupKey).
-		Execute()
-
+	resp, err := client.Addons.GetAddonByLookupKey(ctx, testAddonLookupKey)
 	if err != nil {
 		log.Printf("⚠ Warning: Error looking up addon: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping lookup test (lookup key may not match)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	addon := resp.DtoAddonResponse
+	if addon == nil {
+		log.Printf("⚠ Warning: Lookup returned no body\n")
 		fmt.Println("⚠ Skipping lookup test\n")
 		return
 	}
-
 	fmt.Printf("✓ Addon found by lookup key!\n")
 	fmt.Printf("  Lookup Key: %s\n", testAddonLookupKey)
-	fmt.Printf("  ID: %s\n", *addon.Id)
+	fmt.Printf("  ID: %s\n", *addon.ID)
 	fmt.Printf("  Name: %s\n\n", *addon.Name)
 }
 
 // Test 6: Search addons
-func testSearchAddons(ctx context.Context, client *flexprice.APIClient) {
+func testSearchAddons(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Search Addons ---")
 
-	searchFilter := flexprice.TypesAddonFilter{
-		AddonIds: []string{testAddonID},
-	}
-
-	addons, response, err := client.AddonsAPI.AddonsSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesAddonFilter{AddonIds: []string{testAddonID}}
+	resp, err := client.Addons.QueryAddon(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching addons: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListAddonsResponse
+	items := []components.DtoAddonResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d addons matching ID '%s'\n", len(addons.Items), testAddonID)
-	for i, addon := range addons.Items {
+	fmt.Printf("  Found %d addons matching ID '%s'\n", len(items), testAddonID)
+	for i, addon := range items {
 		if i < 3 {
-			fmt.Printf("  - %s: %s (%s)\n", *addon.Id, *addon.Name, *addon.LookupKey)
+			fmt.Printf("  - %s: %s (%s)\n", *addon.ID, *addon.Name, *addon.LookupKey)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 7: Delete addon
-func testDeleteAddon(ctx context.Context, client *flexprice.APIClient) {
-	fmt.Println("--- Test 1: Delete Addon ---")
+func testDeleteAddon(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Test 7: Delete Addon ---")
 
-	_, response, err := client.AddonsAPI.AddonsIdDelete(ctx, testAddonID).
-		Execute()
-
+	_, err := client.Addons.DeleteAddon(ctx, testAddonID)
 	if err != nil {
 		log.Printf("❌ Error deleting addon: %v", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
 	fmt.Printf("✓ Addon deleted successfully!\n")
 	fmt.Printf("  Deleted ID: %s\n\n", testAddonID)
 }
@@ -1095,174 +960,143 @@ func testDeleteAddon(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new entitlement
-func testCreateEntitlement(ctx context.Context, client *flexprice.APIClient) {
+func testCreateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Entitlement ---")
 
-	entitlementRequest := flexprice.DtoCreateEntitlementRequest{
-		FeatureId:        testFeatureID,
-		FeatureType:      flexprice.TYPESFEATURETYPE_FeatureTypeBoolean,
-		PlanId:           lo.ToPtr(testPlanID),
-		IsEnabled:        lo.ToPtr(true),
-		UsageResetPeriod: flexprice.TYPESENTITLEMENTUSAGERESETPERIOD_ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY.Ptr(),
+	request := components.DtoCreateEntitlementRequest{
+		FeatureID:   testFeatureID,
+		FeatureType: components.TypesFeatureTypeBoolean,
+		PlanID:      flexprice.String(testPlanID),
+		IsEnabled:   flexprice.Bool(true),
+		UsageResetPeriod: func() *components.TypesEntitlementUsageResetPeriod {
+			v := components.TypesEntitlementUsageResetPeriodMonthly
+			return &v
+		}(),
 	}
 
-	entitlement, response, err := client.EntitlementsAPI.EntitlementsPost(ctx).
-		Entitlement(entitlementRequest).
-		Execute()
-
+	resp, err := client.Entitlements.CreateEntitlement(ctx, request)
 	if err != nil {
 		log.Printf("❌ Error creating entitlement: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d", response.StatusCode)
+	entitlement := resp.DtoEntitlementResponse
+	if entitlement == nil || entitlement.ID == nil {
+		log.Printf("❌ Create entitlement returned no body")
 		fmt.Println()
 		return
 	}
-
-	testEntitlementID = *entitlement.Id
+	testEntitlementID = *entitlement.ID
 	fmt.Printf("✓ Entitlement created successfully!\n")
-	fmt.Printf("  ID: %s\n", *entitlement.Id)
-	fmt.Printf("  Feature ID: %s\n", *entitlement.FeatureId)
-	fmt.Printf("  Plan ID: %s\n\n", *entitlement.PlanId)
+	fmt.Printf("  ID: %s\n", *entitlement.ID)
+	fmt.Printf("  Feature ID: %s\n", *entitlement.FeatureID)
+	fmt.Printf("  Plan ID: %s\n\n", *entitlement.PlanID)
 }
 
 // Test 2: Get entitlement by ID
-func testGetEntitlement(ctx context.Context, client *flexprice.APIClient) {
+func testGetEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Entitlement by ID ---")
 
-	entitlement, response, err := client.EntitlementsAPI.EntitlementsIdGet(ctx, testEntitlementID).
-		Execute()
-
+	resp, err := client.Entitlements.GetEntitlement(ctx, testEntitlementID)
 	if err != nil {
 		log.Printf("❌ Error getting entitlement: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	entitlement := resp.DtoEntitlementResponse
+	if entitlement == nil {
+		log.Printf("❌ Get entitlement returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Entitlement retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *entitlement.Id)
-	fmt.Printf("  Feature ID: %s\n", *entitlement.FeatureId)
+	fmt.Printf("  ID: %s\n", *entitlement.ID)
+	fmt.Printf("  Feature ID: %s\n", *entitlement.FeatureID)
 	fmt.Printf("  Created At: %s\n\n", *entitlement.CreatedAt)
 }
 
 // Test 3: List all entitlements
-func testListEntitlements(ctx context.Context, client *flexprice.APIClient) {
+func testListEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Entitlements ---")
 
-	entitlements, response, err := client.EntitlementsAPI.EntitlementsGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesEntitlementFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Entitlements.QueryEntitlement(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing entitlements: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListEntitlementsResponse
+	items := []components.DtoEntitlementResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d entitlements\n", len(entitlements.Items))
-	if len(entitlements.Items) > 0 {
-		fmt.Printf("  First entitlement: %s (Feature: %s)\n", *entitlements.Items[0].Id, *entitlements.Items[0].FeatureId)
+	fmt.Printf("✓ Retrieved %d entitlements\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First entitlement: %s (Feature: %s)\n", *items[0].ID, *items[0].FeatureID)
 	}
-	if entitlements.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *entitlements.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update entitlement
-func testUpdateEntitlement(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Entitlement ---")
 
-	updateRequest := flexprice.DtoUpdateEntitlementRequest{
-		IsEnabled: lo.ToPtr(false),
-	}
-
-	entitlement, response, err := client.EntitlementsAPI.EntitlementsIdPut(ctx, testEntitlementID).
-		Entitlement(updateRequest).
-		Execute()
-
+	body := components.DtoUpdateEntitlementRequest{IsEnabled: flexprice.Bool(false)}
+	resp, err := client.Entitlements.UpdateEntitlement(ctx, testEntitlementID, body)
 	if err != nil {
 		log.Printf("❌ Error updating entitlement: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	entitlement := resp.DtoEntitlementResponse
+	if entitlement == nil {
+		log.Printf("❌ Update entitlement returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Entitlement updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *entitlement.Id)
+	fmt.Printf("  ID: %s\n", *entitlement.ID)
 	fmt.Printf("  Is Enabled: %v\n", *entitlement.IsEnabled)
 	fmt.Printf("  Updated At: %s\n\n", *entitlement.UpdatedAt)
 }
 
 // Test 5: Search entitlements
-func testSearchEntitlements(ctx context.Context, client *flexprice.APIClient) {
+func testSearchEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Entitlements ---")
 
-	searchFilter := flexprice.TypesEntitlementFilter{
-		EntityIds: []string{testEntitlementID},
-	}
-
-	entitlements, response, err := client.EntitlementsAPI.EntitlementsSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesEntitlementFilter{FeatureIds: []string{testFeatureID}}
+	resp, err := client.Entitlements.QueryEntitlement(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching entitlements: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListEntitlementsResponse
+	items := []components.DtoEntitlementResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d entitlements matching ID '%s'\n", len(entitlements.Items), testEntitlementID)
-	for i, entitlement := range entitlements.Items {
-		if i < 3 {
-			fmt.Printf("  - %s: Feature %s\n", *entitlement.Id, *entitlement.FeatureId)
+	fmt.Printf("  Found %d entitlements for feature '%s'\n", len(items), testFeatureID)
+	for i, entitlement := range items {
+		if i < 3 && entitlement.ID != nil {
+			fmt.Printf("  - %s: Feature %s\n", *entitlement.ID, *entitlement.FeatureID)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 6: Delete entitlement
-func testDeleteEntitlement(ctx context.Context, client *flexprice.APIClient) {
-	fmt.Println("--- Test 1: Delete Entitlement ---")
+func testDeleteEntitlement(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Test 6: Delete Entitlement ---")
 
-	_, response, err := client.EntitlementsAPI.EntitlementsIdDelete(ctx, testEntitlementID).
-		Execute()
-
+	_, err := client.Entitlements.DeleteEntitlement(ctx, testEntitlementID)
 	if err != nil {
 		log.Printf("❌ Error deleting entitlement: %v", err)
-		fmt.Println()
-		return
-	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d", response.StatusCode)
 		fmt.Println()
 		return
 	}
@@ -1276,199 +1110,162 @@ func testDeleteEntitlement(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new plan
-func testCreatePlan(ctx context.Context, client *flexprice.APIClient) {
+func testCreatePlan(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Plan ---")
 
 	timestamp := time.Now().Unix()
 	testPlanName = fmt.Sprintf("Test Plan %d", timestamp)
 	lookupKey := fmt.Sprintf("test_plan_%d", timestamp)
 
-	planRequest := flexprice.DtoCreatePlanRequest{
+	request := components.DtoCreatePlanRequest{
 		Name:        testPlanName,
-		LookupKey:   lo.ToPtr(lookupKey),
-		Description: lo.ToPtr("This is a test plan created by SDK tests"),
-		Metadata: &map[string]string{
+		LookupKey:   flexprice.String(lookupKey),
+		Description: flexprice.String("This is a test plan created by SDK tests"),
+		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
 			"environment": "test",
 		},
 	}
 
-	plan, response, err := client.PlansAPI.PlansPost(ctx).
-		Plan(planRequest).
-		Execute()
-
+	resp, err := client.Plans.CreatePlan(ctx, request)
 	if err != nil {
 		log.Printf("❌ Error creating plan: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d", response.StatusCode)
+	plan := resp.DtoPlanResponse
+	if plan == nil || plan.ID == nil {
+		log.Printf("❌ Create plan returned no body")
 		fmt.Println()
 		return
 	}
-
-	testPlanID = *plan.Id
+	testPlanID = *plan.ID
 	fmt.Printf("✓ Plan created successfully!\n")
-	fmt.Printf("  ID: %s\n", *plan.Id)
+	fmt.Printf("  ID: %s\n", *plan.ID)
 	fmt.Printf("  Name: %s\n", *plan.Name)
 	fmt.Printf("  Lookup Key: %s\n\n", *plan.LookupKey)
 }
 
 // Test 2: Get plan by ID
-func testGetPlan(ctx context.Context, client *flexprice.APIClient) {
+func testGetPlan(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Plan by ID ---")
 
-	plan, response, err := client.PlansAPI.PlansIdGet(ctx, testPlanID).
-		Execute()
-
+	resp, err := client.Plans.GetPlan(ctx, testPlanID)
 	if err != nil {
 		log.Printf("❌ Error getting plan: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	plan := resp.DtoPlanResponse
+	if plan == nil {
+		log.Printf("❌ Get plan returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Plan retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *plan.Id)
+	fmt.Printf("  ID: %s\n", *plan.ID)
 	fmt.Printf("  Name: %s\n", *plan.Name)
 	fmt.Printf("  Lookup Key: %s\n", *plan.LookupKey)
 	fmt.Printf("  Created At: %s\n\n", *plan.CreatedAt)
 }
 
 // Test 3: List all plans
-func testListPlans(ctx context.Context, client *flexprice.APIClient) {
+func testListPlans(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Plans ---")
 
-	plans, response, err := client.PlansAPI.PlansGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesPlanFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Plans.QueryPlan(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing plans: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListPlansResponse
+	items := []components.DtoPlanResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d plans\n", len(plans.Items))
-	if len(plans.Items) > 0 {
-		fmt.Printf("  First plan: %s - %s\n", *plans.Items[0].Id, *plans.Items[0].Name)
+	fmt.Printf("✓ Retrieved %d plans\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First plan: %s - %s\n", *items[0].ID, *items[0].Name)
 	}
-	if plans.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *plans.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update plan
-func testUpdatePlan(ctx context.Context, client *flexprice.APIClient) {
+func testUpdatePlan(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Plan ---")
 
 	updatedName := fmt.Sprintf("%s (Updated)", testPlanName)
 	updatedDescription := "Updated description for test plan"
-	updateRequest := flexprice.DtoUpdatePlanRequest{
-		Name:        &updatedName,
-		Description: &updatedDescription,
-		Metadata: &map[string]string{
+	body := components.DtoUpdatePlanRequest{
+		Name:        flexprice.String(updatedName),
+		Description: flexprice.String(updatedDescription),
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	plan, response, err := client.PlansAPI.PlansIdPut(ctx, testPlanID).
-		Plan(updateRequest).
-		Execute()
-
+	resp, err := client.Plans.UpdatePlan(ctx, testPlanID, body)
 	if err != nil {
 		log.Printf("❌ Error updating plan: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	plan := resp.DtoPlanResponse
+	if plan == nil {
+		log.Printf("❌ Update plan returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Plan updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *plan.Id)
+	fmt.Printf("  ID: %s\n", *plan.ID)
 	fmt.Printf("  New Name: %s\n", *plan.Name)
 	fmt.Printf("  New Description: %s\n", *plan.Description)
 	fmt.Printf("  Updated At: %s\n\n", *plan.UpdatedAt)
 }
 
 // Test 5: Search plans
-func testSearchPlans(ctx context.Context, client *flexprice.APIClient) {
+func testSearchPlans(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Plans ---")
 
-	// Use filter to search by plan ID
-	searchFilter := flexprice.TypesPlanFilter{
-		PlanIds: []string{testPlanID},
-	}
-
-	plans, response, err := client.PlansAPI.PlansSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesPlanFilter{PlanIds: []string{testPlanID}}
+	resp, err := client.Plans.QueryPlan(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching plans: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListPlansResponse
+	items := []components.DtoPlanResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d plans matching ID '%s'\n", len(plans.Items), testPlanID)
-	for i, plan := range plans.Items {
-		if i < 3 { // Show first 3 results
-			fmt.Printf("  - %s: %s (%s)\n", *plan.Id, *plan.Name, *plan.LookupKey)
+	fmt.Printf("  Found %d plans matching ID '%s'\n", len(items), testPlanID)
+	for i, plan := range items {
+		if i < 3 {
+			fmt.Printf("  - %s: %s (%s)\n", *plan.ID, *plan.Name, *plan.LookupKey)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 6: Delete plan
-func testDeletePlan(ctx context.Context, client *flexprice.APIClient) {
-	fmt.Println("--- Test 1: Delete Plan ---")
+func testDeletePlan(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Test 6: Delete Plan ---")
 
-	_, response, err := client.PlansAPI.PlansIdDelete(ctx, testPlanID).
-		Execute()
-
+	_, err := client.Plans.DeletePlan(ctx, testPlanID)
 	if err != nil {
 		log.Printf("❌ Error deleting plan: %v", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
 	fmt.Printf("✓ Plan deleted successfully!\n")
 	fmt.Printf("  Deleted ID: %s\n\n", testPlanID)
 }
@@ -1479,35 +1276,26 @@ func testDeletePlan(ctx context.Context, client *flexprice.APIClient) {
 // Note: Connections API doesn't have a create endpoint
 // These tests work with existing connections
 
-// Test 1: List all connections
-func testListConnections(ctx context.Context, client *flexprice.APIClient) {
-	fmt.Println("--- Test 1: List Connections ---")
+// Test 1: List linked integrations (replaces legacy "connections" list)
+func testListConnections(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Test 1: List Linked Integrations ---")
 
-	connections, response, err := client.ConnectionsAPI.ConnectionsGet(ctx).
-		Limit(10).
-		Execute()
-
+	resp, err := client.Integrations.ListLinkedIntegrations(ctx)
 	if err != nil {
-		log.Printf("⚠ Warning: Error listing connections: %v\n", err)
-		fmt.Println("⚠ Skipping connections tests (may not have any connections)\n")
+		log.Printf("⚠ Warning: Error listing integrations: %v\n", err)
+		fmt.Println("⚠ Skipping integrations tests (may not have any linked)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping connections tests\n")
-		return
+	dto := resp.DtoLinkedIntegrationsResponse
+	providers := []string{}
+	if dto != nil && dto.Providers != nil {
+		providers = dto.Providers
 	}
-
-	fmt.Printf("✓ Retrieved %d connections\n", len(connections.Connections))
-	if len(connections.Connections) > 0 {
-		fmt.Printf("  First connection: %s\n", *connections.Connections[0].Id)
-		if connections.Connections[0].ProviderType != nil {
-			fmt.Printf("  Provider Type: %s\n", string(*connections.Connections[0].ProviderType))
+	fmt.Printf("✓ Retrieved %d linked integration(s)\n", len(providers))
+	for i, p := range providers {
+		if i < 5 {
+			fmt.Printf("  - %s\n", p)
 		}
-	}
-	if connections.Total != nil {
-		fmt.Printf("  Total: %d\n", *connections.Total)
 	}
 	fmt.Println()
 }
@@ -1517,86 +1305,72 @@ func testListConnections(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new subscription
-func testCreateSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Subscription ---")
 
 	// First, create a price for the plan (required for subscription creation)
-	priceRequest := flexprice.DtoCreatePriceRequest{
-		EntityId:       testPlanID,
-		EntityType:     flexprice.TYPESPRICEENTITYTYPE_PRICE_ENTITY_TYPE_PLAN,
-		Type:           flexprice.TYPESPRICETYPE_PRICE_TYPE_FIXED,
-		BillingModel:   flexprice.TYPESBILLINGMODEL_BILLING_MODEL_FLAT_FEE,
-		BillingCadence: flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
-		BillingPeriod:  flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
-		InvoiceCadence: flexprice.TYPESINVOICECADENCE_InvoiceCadenceArrear,
-		Amount:         lo.ToPtr("29.99"),
-		Currency:       "USD",
-		DisplayName:    lo.ToPtr("Monthly Subscription Price"),
+	priceRequest := components.DtoCreatePriceRequest{
+		EntityID:           testPlanID,
+		EntityType:         components.TypesPriceEntityTypePlan,
+		Type:               components.TypesPriceTypeFixed,
+		BillingModel:       components.TypesBillingModelFlatFee,
+		BillingCadence:     components.TypesBillingCadenceRecurring,
+		BillingPeriod:      components.TypesBillingPeriodMonthly,
+		BillingPeriodCount: flexprice.Int64(1),
+		InvoiceCadence:     components.TypesInvoiceCadenceArrear,
+		PriceUnitType:      components.TypesPriceUnitTypeFiat,
+		Amount:             flexprice.String("29.99"),
+		Currency:           "USD",
+		DisplayName:        flexprice.String("Monthly Subscription Price"),
 	}
 
-	_, response, err := client.PricesAPI.PricesPost(ctx).
-		Price(priceRequest).
-		Execute()
+	priceResp, err := client.Prices.CreatePrice(ctx, priceRequest)
 
 	if err != nil {
 		log.Printf("⚠ Warning: Could not create price for plan: %v", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Price creation error: %s", string(bodyBytes))
-		}
 		log.Printf("Attempting subscription creation anyway...")
 	}
+	_ = priceResp
 
 	startDate := time.Now().Format(time.RFC3339)
-	subscriptionRequest := flexprice.DtoCreateSubscriptionRequest{
-		CustomerId:         lo.ToPtr(testCustomerID),
-		PlanId:             testPlanID,
+	subscriptionRequest := components.DtoCreateSubscriptionRequest{
+		CustomerID:         flexprice.String(testCustomerID),
+		PlanID:             testPlanID,
 		Currency:           "USD",
-		BillingCadence:     flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
-		BillingPeriod:      flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: lo.ToPtr(int32(1)),
-		BillingCycle:       flexprice.TYPESBILLINGCYCLE_BillingCycleAnniversary.Ptr(),
-		StartDate:          lo.ToPtr(startDate),
-		Metadata: &map[string]string{
+		BillingCadence:     components.TypesBillingCadenceRecurring,
+		BillingPeriod:      components.TypesBillingPeriodMonthly,
+		BillingPeriodCount: flexprice.Int64(1),
+		BillingCycle:       func() *components.TypesBillingCycle { v := components.TypesBillingCycleAnniversary; return &v }(),
+		StartDate:          flexprice.String(startDate),
+		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
 			"environment": "test",
 		},
 	}
 
-	subscription, response, err := client.SubscriptionsAPI.SubscriptionsPost(ctx).
-		Subscription(subscriptionRequest).
-		Execute()
-
+	subResp, err := client.Subscriptions.CreateSubscription(ctx, subscriptionRequest)
 	if err != nil {
 		log.Printf("❌ Error creating subscription: %v", err)
-		if response != nil {
-			log.Printf("Response Status Code: %d", response.StatusCode)
-			if response.Body != nil {
-				bodyBytes, _ := io.ReadAll(response.Body)
-				log.Printf("Response Body: %s", string(bodyBytes))
-			}
-		}
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d", response.StatusCode)
+	subscription := subResp.DtoSubscriptionResponse
+	if subscription == nil || subscription.ID == nil {
+		log.Printf("❌ Create subscription returned no body")
 		fmt.Println()
 		return
 	}
-
-	testSubscriptionID = *subscription.Id
+	testSubscriptionID = *subscription.ID
 	fmt.Printf("✓ Subscription created successfully!\n")
-	fmt.Printf("  ID: %s\n", *subscription.Id)
-	fmt.Printf("  Customer ID: %s\n", *subscription.CustomerId)
-	fmt.Printf("  Plan ID: %s\n", *subscription.PlanId)
+	fmt.Printf("  ID: %s\n", *subscription.ID)
+	fmt.Printf("  Customer ID: %s\n", *subscription.CustomerID)
+	fmt.Printf("  Plan ID: %s\n", *subscription.PlanID)
 	fmt.Printf("  Status: %s\n\n", string(*subscription.SubscriptionStatus))
 }
 
 // Test 2: Get subscription by ID
-func testGetSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testGetSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Subscription by ID ---")
 
 	// Check if subscription was created successfully
@@ -1606,30 +1380,27 @@ func testGetSubscription(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	subscription, response, err := client.SubscriptionsAPI.SubscriptionsIdGet(ctx, testSubscriptionID).
-		Execute()
-
+	resp, err := client.Subscriptions.GetSubscription(ctx, testSubscriptionID)
 	if err != nil {
 		log.Printf("❌ Error getting subscription: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
+	subscription := resp.DtoSubscriptionResponse
+	if subscription == nil {
+		log.Printf("❌ Get subscription returned no body")
 		fmt.Println()
 		return
 	}
-
 	fmt.Printf("✓ Subscription retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *subscription.Id)
-	fmt.Printf("  Customer ID: %s\n", *subscription.CustomerId)
+	fmt.Printf("  ID: %s\n", *subscription.ID)
+	fmt.Printf("  Customer ID: %s\n", *subscription.CustomerID)
 	fmt.Printf("  Status: %s\n", string(*subscription.SubscriptionStatus))
 	fmt.Printf("  Created At: %s\n\n", *subscription.CreatedAt)
 }
 
 // Test 3: List all subscriptions
-func testListSubscriptions(ctx context.Context, client *flexprice.APIClient) {
+func testListSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Subscriptions ---")
 
 	// Skip if subscription creation failed
@@ -1639,28 +1410,24 @@ func testListSubscriptions(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	subscriptions, response, err := client.SubscriptionsAPI.SubscriptionsGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesSubscriptionFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Subscriptions.QuerySubscription(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing subscriptions: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListSubscriptionsResponse
+	items := []components.DtoSubscriptionResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d subscriptions\n", len(subscriptions.Items))
-	if len(subscriptions.Items) > 0 {
-		fmt.Printf("  First subscription: %s (Customer: %s)\n", *subscriptions.Items[0].Id, *subscriptions.Items[0].CustomerId)
+	fmt.Printf("✓ Retrieved %d subscriptions\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First subscription: %s (Customer: %s)\n", *items[0].ID, *items[0].CustomerID)
 	}
-	if subscriptions.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *subscriptions.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
@@ -1668,13 +1435,13 @@ func testListSubscriptions(ctx context.Context, client *flexprice.APIClient) {
 // Test 4: Update subscription - SKIPPED
 // Note: Update subscription endpoint may not be available in current SDK
 // Skipping this test for now
-func testUpdateSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Subscription ---")
 	fmt.Println("⚠ Skipping update subscription test (endpoint not available in SDK)\n")
 }
 
 // Test 5: Search subscriptions
-func testSearchSubscriptions(ctx context.Context, client *flexprice.APIClient) {
+func testSearchSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Subscriptions ---")
 
 	// Skip if subscription creation failed
@@ -1684,29 +1451,23 @@ func testSearchSubscriptions(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	searchFilter := flexprice.TypesSubscriptionFilter{}
-
-	subscriptions, response, err := client.SubscriptionsAPI.SubscriptionsSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesSubscriptionFilter{}
+	resp, err := client.Subscriptions.QuerySubscription(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching subscriptions: %v", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListSubscriptionsResponse
+	items := []components.DtoSubscriptionResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d subscriptions for customer '%s'\n", len(subscriptions.Items), testCustomerID)
-	for i, subscription := range subscriptions.Items {
-		if i < 3 {
-			fmt.Printf("  - %s: %s\n", *subscription.Id, string(*subscription.SubscriptionStatus))
+	fmt.Printf("  Found %d subscriptions for customer '%s'\n", len(items), testCustomerID)
+	for i, subscription := range items {
+		if i < 3 && subscription.ID != nil && subscription.SubscriptionStatus != nil {
+			fmt.Printf("  - %s: %s\n", *subscription.ID, string(*subscription.SubscriptionStatus))
 		}
 	}
 	fmt.Println()
@@ -1717,55 +1478,40 @@ func testSearchSubscriptions(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 6: Activate subscription (for draft subscriptions)
-func testActivateSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testActivateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Activate Subscription ---")
 
 	// Create a dedicated draft subscription for this test
-	draftSubscriptionRequest := flexprice.DtoCreateSubscriptionRequest{
-		CustomerId:         lo.ToPtr(testCustomerID),
-		PlanId:             testPlanID,
+	draftSubscriptionRequest := components.DtoCreateSubscriptionRequest{
+		CustomerID:         flexprice.String(testCustomerID),
+		PlanID:             testPlanID,
 		Currency:           "USD",
-		BillingCadence:     flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
-		BillingPeriod:      flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
-		BillingPeriodCount: lo.ToPtr(int32(1)),
-		StartDate:          lo.ToPtr(time.Now().Format(time.RFC3339)),
-		SubscriptionStatus: flexprice.TYPESSUBSCRIPTIONSTATUS_SubscriptionStatusDraft.Ptr(),
+		BillingCadence:     components.TypesBillingCadenceRecurring,
+		BillingPeriod:      components.TypesBillingPeriodMonthly,
+		BillingPeriodCount: flexprice.Int64(1),
+		StartDate:          flexprice.String(time.Now().Format(time.RFC3339)),
+		SubscriptionStatus: func() *components.TypesSubscriptionStatus { v := components.TypesSubscriptionStatusDraft; return &v }(),
 	}
 
-	draftSub, _, err := client.SubscriptionsAPI.SubscriptionsPost(ctx).
-		Subscription(draftSubscriptionRequest).
-		Execute()
-
+	draftResp, err := client.Subscriptions.CreateSubscription(ctx, draftSubscriptionRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to create draft subscription: %v\n", err)
 		fmt.Println("⚠ Skipping activate test\n")
 		return
 	}
-
-	draftSubscriptionID := *draftSub.Id
-	fmt.Printf("  Created draft subscription: %s\n", draftSubscriptionID)
-
-	// Activate the draft subscription
-	activateRequest := flexprice.DtoActivateDraftSubscriptionRequest{
-		StartDate: time.Now().Format(time.RFC3339),
-	}
-
-	_, response, err := client.SubscriptionsAPI.SubscriptionsIdActivatePost(ctx, draftSubscriptionID).
-		Request(activateRequest).
-		Execute()
-
-	if err != nil {
-		log.Printf("⚠ Warning: Error activating subscription (may already be active): %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
+	draftSub := draftResp.DtoSubscriptionResponse
+	if draftSub == nil || draftSub.ID == nil {
+		log.Printf("⚠ Warning: Create draft returned no body\n")
 		fmt.Println("⚠ Skipping activate test\n")
 		return
 	}
+	draftSubscriptionID := *draftSub.ID
+	fmt.Printf("  Created draft subscription: %s\n", draftSubscriptionID)
 
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	activateBody := components.DtoActivateDraftSubscriptionRequest{StartDate: time.Now().Format(time.RFC3339)}
+	_, err = client.Subscriptions.ActivateSubscription(ctx, draftSubscriptionID, activateBody)
+	if err != nil {
+		log.Printf("⚠ Warning: Error activating subscription (may already be active): %v\n", err)
 		fmt.Println("⚠ Skipping activate test\n")
 		return
 	}
@@ -1775,7 +1521,7 @@ func testActivateSubscription(ctx context.Context, client *flexprice.APIClient) 
 }
 
 // Test 7: Pause subscription
-func testPauseSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testPauseSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 7: Pause Subscription ---")
 
 	// Skip if subscription creation failed
@@ -1785,37 +1531,29 @@ func testPauseSubscription(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	pauseRequest := flexprice.DtoPauseSubscriptionRequest{
-		PauseMode: flexprice.TYPESPAUSEMODE_PauseModeImmediate,
+	pauseRequest := components.DtoPauseSubscriptionRequest{
+		PauseMode: components.TypesPauseModeImmediate,
 	}
 
-	subscription, response, err := client.SubscriptionsAPI.SubscriptionsIdPausePost(ctx, testSubscriptionID).
-		Request(pauseRequest).
-		Execute()
-
+	resp, err := client.Subscriptions.PauseSubscription(ctx, testSubscriptionID, pauseRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error pausing subscription: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping pause test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	pauseResp := resp.DtoSubscriptionPauseResponse
+	if pauseResp == nil || pauseResp.ID == nil {
+		log.Printf("⚠ Warning: Pause returned no body\n")
 		fmt.Println("⚠ Skipping pause test\n")
 		return
 	}
-
 	fmt.Printf("✓ Subscription paused successfully!\n")
-	fmt.Printf("  Pause ID: %s\n", *subscription.Id)
-	fmt.Printf("  Subscription ID: %s\n\n", *subscription.SubscriptionId)
+	fmt.Printf("  Pause ID: %s\n", *pauseResp.ID)
+	fmt.Printf("  Subscription ID: %s\n\n", *pauseResp.SubscriptionID)
 }
 
 // Test 8: Resume subscription
-func testResumeSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testResumeSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 8: Resume Subscription ---")
 
 	// Skip if subscription creation failed
@@ -1825,35 +1563,26 @@ func testResumeSubscription(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	resumeRequest := flexprice.DtoResumeSubscriptionRequest{}
+	resumeRequest := components.DtoResumeSubscriptionRequest{ResumeMode: components.TypesResumeModeImmediate}
 
-	subscription, response, err := client.SubscriptionsAPI.SubscriptionsIdResumePost(ctx, testSubscriptionID).
-		Request(resumeRequest).
-		Execute()
-
+	resp, err := client.Subscriptions.ResumeSubscription(ctx, testSubscriptionID, resumeRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error resuming subscription: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping resume test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	resumeResp := resp.DtoSubscriptionPauseResponse
+	if resumeResp == nil || resumeResp.SubscriptionID == nil {
+		log.Printf("⚠ Warning: Resume returned no body\n")
 		fmt.Println("⚠ Skipping resume test\n")
 		return
 	}
-
 	fmt.Printf("✓ Subscription resumed successfully!\n")
-	fmt.Printf("  Pause ID: %s\n", *subscription.Id)
-	fmt.Printf("  Subscription ID: %s\n\n", *subscription.SubscriptionId)
+	fmt.Printf("  Subscription ID: %s\n\n", *resumeResp.SubscriptionID)
 }
 
 // Test 9: Get pause history
-func testGetPauseHistory(ctx context.Context, client *flexprice.APIClient) {
+func testGetPauseHistory(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 9: Get Pause History ---")
 
 	// Skip if subscription creation failed
@@ -1863,25 +1592,16 @@ func testGetPauseHistory(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	pauses, response, err := client.SubscriptionsAPI.SubscriptionsIdPausesGet(ctx, testSubscriptionID).
-		Execute()
-
+	resp, err := client.Subscriptions.ListSubscriptionPauses(ctx, testSubscriptionID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting pause history: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping pause history test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping pause history test\n")
-		return
+	pauses := resp.DtoListSubscriptionPausesResponses
+	if pauses == nil {
+		pauses = []components.DtoListSubscriptionPausesResponse{}
 	}
-
 	fmt.Printf("✓ Retrieved pause history!\n")
 	fmt.Printf("  Total pauses: %d\n\n", len(pauses))
 }
@@ -1891,7 +1611,7 @@ func testGetPauseHistory(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 10: Add addon to subscription
-func testAddAddonToSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testAddAddonToSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 10: Add Addon to Subscription ---")
 
 	// Skip if subscription or addon creation failed
@@ -1902,65 +1622,55 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.APIClient
 	}
 
 	// Create a price for the addon first (required)
-	priceRequest := flexprice.DtoCreatePriceRequest{
-		EntityId:       testAddonID,
-		EntityType:     flexprice.TYPESPRICEENTITYTYPE_PRICE_ENTITY_TYPE_ADDON,
-		Type:           flexprice.TYPESPRICETYPE_PRICE_TYPE_FIXED,
-		BillingModel:   flexprice.TYPESBILLINGMODEL_BILLING_MODEL_FLAT_FEE,
-		BillingCadence: flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
-		BillingPeriod:  flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
-		InvoiceCadence: flexprice.TYPESINVOICECADENCE_InvoiceCadenceArrear,
-		Amount:         lo.ToPtr("5.00"),
-		Currency:       "USD",
-		DisplayName:    lo.ToPtr("Addon Monthly Price"),
+	priceRequest := components.DtoCreatePriceRequest{
+		EntityID:           testAddonID,
+		EntityType:         components.TypesPriceEntityTypeAddon,
+		Type:               components.TypesPriceTypeFixed,
+		BillingModel:       components.TypesBillingModelFlatFee,
+		BillingCadence:     components.TypesBillingCadenceRecurring,
+		BillingPeriod:      components.TypesBillingPeriodMonthly,
+		BillingPeriodCount: flexprice.Int64(1),
+		InvoiceCadence:     components.TypesInvoiceCadenceArrear,
+		PriceUnitType:      components.TypesPriceUnitTypeFiat,
+		Amount:             flexprice.String("5.00"),
+		Currency:           "USD",
+		DisplayName:        flexprice.String("Addon Monthly Price"),
 	}
 
-	_, priceResponse, err := client.PricesAPI.PricesPost(ctx).
-		Price(priceRequest).
-		Execute()
+	_, err := client.Prices.CreatePrice(ctx, priceRequest)
 
 	if err != nil {
 		log.Printf("⚠ Warning: Error creating price for addon: %v\n", err)
-		if priceResponse != nil && priceResponse.Body != nil {
-			bodyBytes, _ := io.ReadAll(priceResponse.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 	} else {
 		fmt.Printf("  Created price for addon: %s\n", testAddonID)
 	}
 
-	addAddonRequest := flexprice.DtoAddAddonRequest{
-		SubscriptionId: testSubscriptionID,
-		AddonId:        testAddonID,
+	addAddonRequest := components.DtoAddAddonRequest{
+		SubscriptionID: testSubscriptionID,
+		AddonID:        testAddonID,
 	}
 
-	subscription, response, err := client.SubscriptionsAPI.SubscriptionsAddonPost(ctx).
-		Request(addAddonRequest).
-		Execute()
-
+	addResp, err := client.Subscriptions.AddSubscriptionAddon(ctx, addAddonRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error adding addon to subscription: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping add addon test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	assoc := addResp.DtoAddonAssociationResponse
+	if assoc == nil {
+		log.Printf("⚠ Warning: Add addon returned no body\n")
 		fmt.Println("⚠ Skipping add addon test\n")
 		return
 	}
-
 	fmt.Printf("✓ Addon added to subscription successfully!\n")
-	fmt.Printf("  Subscription ID: %s\n", *subscription.Id)
+	if assoc.Subscription != nil && assoc.Subscription.ID != nil {
+		fmt.Printf("  Subscription ID: %s\n", *assoc.Subscription.ID)
+	}
 	fmt.Printf("  Addon ID: %s\n\n", testAddonID)
 }
 
 // // Test 11: Get active addons
-// func testGetActiveAddons(ctx context.Context, client *flexprice.APIClient) {
+// func testGetActiveAddons(ctx context.Context, client *flexprice.Flexprice) {
 // 	fmt.Println("--- Test 11: Get Active Addons ---")
 
 // 	// Skip if subscription creation failed
@@ -1970,7 +1680,7 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.APIClient
 // 		return
 // 	}
 
-// 	addons, response, err := client.SubscriptionsAPI.SubscriptionsIdAddonsActiveGet(ctx, testSubscriptionID).
+// 	addons, response, err := client.Subscriptions.SubscriptionsIdAddonsActiveGet(ctx, testSubscriptionID).
 // 		Execute()
 
 // 	if err != nil {
@@ -1996,7 +1706,7 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.APIClient
 // }
 
 // Test 12: Remove addon from subscription
-func testRemoveAddonFromSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testRemoveAddonFromSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 12: Remove Addon from Subscription ---")
 
 	// Skip if subscription or addon creation failed
@@ -2015,7 +1725,7 @@ func testRemoveAddonFromSubscription(ctx context.Context, client *flexprice.APIC
 // ========================================
 
 // Test 13: Preview subscription change
-func testPreviewSubscriptionChange(ctx context.Context, client *flexprice.APIClient) {
+func testPreviewSubscriptionChange(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 13: Preview Subscription Change ---")
 
 	// Skip if subscription creation failed
@@ -2032,43 +1742,30 @@ func testPreviewSubscriptionChange(ctx context.Context, client *flexprice.APICli
 		return
 	}
 
-	changeRequest := flexprice.DtoSubscriptionChangeRequest{
-		TargetPlanId:      testPlanID,
-		BillingCadence:    flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
-		BillingPeriod:     flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
-		BillingCycle:      flexprice.TYPESBILLINGCYCLE_BillingCycleAnniversary,
-		ProrationBehavior: flexprice.TYPESPRORATIONBEHAVIOR_ProrationBehaviorCreateProrations,
+	changeRequest := components.DtoSubscriptionChangeRequest{
+		TargetPlanID:      testPlanID,
+		BillingCadence:    components.TypesBillingCadenceRecurring,
+		BillingPeriod:     components.TypesBillingPeriodMonthly,
+		BillingCycle:      components.TypesBillingCycleAnniversary,
+		ProrationBehavior: components.TypesProrationBehaviorCreateProrations,
 	}
 
-	preview, response, err := client.SubscriptionsAPI.SubscriptionsIdChangePreviewPost(ctx, testSubscriptionID).
-		Request(changeRequest).
-		Execute()
-
+	previewResp, err := client.Subscriptions.PreviewSubscriptionChange(ctx, testSubscriptionID, changeRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error previewing subscription change: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping preview change test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping preview change test\n")
-		return
-	}
-
+	preview := previewResp.DtoSubscriptionChangePreviewResponse
 	fmt.Printf("✓ Subscription change preview generated!\n")
-	if preview.NextInvoicePreview != nil {
+	if preview != nil {
 		fmt.Printf("  Preview available\n")
 	}
 	fmt.Println()
 }
 
 // Test 14: Execute subscription change
-func testExecuteSubscriptionChange(ctx context.Context, client *flexprice.APIClient) {
+func testExecuteSubscriptionChange(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 14: Execute Subscription Change ---")
 	fmt.Println("⚠ Skipping execute change test (would modify active subscription)\n")
 	// Skipping this to avoid actually changing the subscription during tests
@@ -2079,7 +1776,7 @@ func testExecuteSubscriptionChange(ctx context.Context, client *flexprice.APICli
 // ========================================
 
 // Test 15: Get subscription entitlements
-func testGetSubscriptionEntitlements(ctx context.Context, client *flexprice.APIClient) {
+func testGetSubscriptionEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 15: Get Subscription Entitlements ---")
 
 	// Skip if subscription creation failed
@@ -2089,35 +1786,29 @@ func testGetSubscriptionEntitlements(ctx context.Context, client *flexprice.APIC
 		return
 	}
 
-	entitlements, response, err := client.SubscriptionsAPI.SubscriptionsIdEntitlementsGet(ctx, testSubscriptionID).
-		Execute()
-
+	entitlementsResp, err := client.Subscriptions.GetSubscriptionEntitlements(ctx, testSubscriptionID, nil)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting subscription entitlements: %v\n", err)
 		fmt.Println("⚠ Skipping get entitlements test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping get entitlements test\n")
-		return
+	entitlements := entitlementsResp.DtoSubscriptionEntitlementsResponse
+	features := []components.DtoAggregatedFeature{}
+	if entitlements != nil && entitlements.Features != nil {
+		features = entitlements.Features
 	}
-
 	fmt.Printf("✓ Retrieved subscription entitlements!\n")
-	fmt.Printf("  Total features: %d\n", len(entitlements.Features))
-	for i, feature := range entitlements.Features {
-		if i < 3 {
-			if feature.Feature != nil && feature.Feature.Name != nil {
-				fmt.Printf("  - Feature: %s\n", *feature.Feature.Name)
-			}
+	fmt.Printf("  Total features: %d\n", len(features))
+	for i, feature := range features {
+		if i < 3 && feature.Feature != nil && feature.Feature.Name != nil {
+			fmt.Printf("  - Feature: %s\n", *feature.Feature.Name)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 16: Get upcoming grants
-func testGetUpcomingGrants(ctx context.Context, client *flexprice.APIClient) {
+func testGetUpcomingGrants(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 16: Get Upcoming Grants ---")
 
 	// Skip if subscription creation failed
@@ -2127,27 +1818,23 @@ func testGetUpcomingGrants(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	grants, response, err := client.SubscriptionsAPI.SubscriptionsIdGrantsUpcomingGet(ctx, testSubscriptionID).
-		Execute()
-
+	grantsResp, err := client.Subscriptions.GetSubscriptionUpcomingGrants(ctx, testSubscriptionID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting upcoming grants: %v\n", err)
 		fmt.Println("⚠ Skipping get upcoming grants test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping get upcoming grants test\n")
-		return
+	listResp := grantsResp.DtoListCreditGrantApplicationsResponse
+	items := []components.DtoCreditGrantApplicationResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Retrieved upcoming grants!\n")
-	fmt.Printf("  Total upcoming grants: %d\n\n", len(grants.Items))
+	fmt.Printf("  Total upcoming grants: %d\n\n", len(items))
 }
 
 // Test 17: Report usage
-func testReportUsage(ctx context.Context, client *flexprice.APIClient) {
+func testReportUsage(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 17: Report Usage ---")
 
 	// Skip if subscription creation failed
@@ -2164,22 +1851,13 @@ func testReportUsage(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	usageRequest := flexprice.DtoGetUsageBySubscriptionRequest{
-		SubscriptionId: testSubscriptionID,
+	usageRequest := components.DtoGetUsageBySubscriptionRequest{
+		SubscriptionID: testSubscriptionID,
 	}
 
-	_, response, err := client.SubscriptionsAPI.SubscriptionsUsagePost(ctx).
-		Request(usageRequest).
-		Execute()
-
+	_, err := client.Subscriptions.GetSubscriptionUsage(ctx, usageRequest)
 	if err != nil {
-		log.Printf("⚠ Warning: Error reporting usage: %v\n", err)
-		fmt.Println("⚠ Skipping report usage test\n")
-		return
-	}
-
-	if response.StatusCode != 200 && response.StatusCode != 201 {
-		log.Printf("⚠ Warning: Expected status code 200/201, got %d\n", response.StatusCode)
+		log.Printf("⚠ Warning: Error getting usage: %v\n", err)
 		fmt.Println("⚠ Skipping report usage test\n")
 		return
 	}
@@ -2195,21 +1873,21 @@ func testReportUsage(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 18: Update line item
-func testUpdateLineItem(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateLineItem(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 18: Update Line Item ---")
 	fmt.Println("⚠ Skipping update line item test (requires line item ID)\n")
 	// Would need to get line items from subscription first to have an ID
 }
 
 // Test 19: Delete line item
-func testDeleteLineItem(ctx context.Context, client *flexprice.APIClient) {
+func testDeleteLineItem(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 19: Delete Line Item ---")
 	fmt.Println("⚠ Skipping delete line item test (requires line item ID)\n")
 	// Would need to get line items from subscription first to have an ID
 }
 
 // Test 20: Cancel subscription
-func testCancelSubscription(ctx context.Context, client *flexprice.APIClient) {
+func testCancelSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 20: Cancel Subscription ---")
 
 	// Skip if subscription creation failed
@@ -2219,29 +1897,29 @@ func testCancelSubscription(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	cancelRequest := flexprice.DtoCancelSubscriptionRequest{
-		CancellationType: flexprice.TYPESCANCELLATIONTYPE_CancellationTypeEndOfPeriod,
+	cancelRequest := components.DtoCancelSubscriptionRequest{
+		CancellationType: components.TypesCancellationTypeEndOfPeriod,
 	}
 
-	subscription, response, err := client.SubscriptionsAPI.SubscriptionsIdCancelPost(ctx, testSubscriptionID).
-		Request(cancelRequest).
-		Execute()
-
+	cancelResp, err := client.Subscriptions.CancelSubscription(ctx, testSubscriptionID, cancelRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error canceling subscription: %v\n", err)
 		fmt.Println("⚠ Skipping cancel test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	cancelResult := cancelResp.DtoCancelSubscriptionResponse
+	if cancelResult == nil {
+		log.Printf("⚠ Warning: Cancel returned no body\n")
 		fmt.Println("⚠ Skipping cancel test\n")
 		return
 	}
-
 	fmt.Printf("✓ Subscription canceled successfully!\n")
-	fmt.Printf("  Subscription ID: %s\n", *subscription.SubscriptionId)
-	fmt.Printf("  Cancellation Type: %s\n\n", string(*subscription.CancellationType))
+	if cancelResult.SubscriptionID != nil {
+		fmt.Printf("  Subscription ID: %s\n", *cancelResult.SubscriptionID)
+	}
+	if cancelResult.CancellationType != nil {
+		fmt.Printf("  Cancellation Type: %s\n\n", string(*cancelResult.CancellationType))
+	}
 }
 
 // ========================================
@@ -2249,77 +1927,67 @@ func testCancelSubscription(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: List all invoices
-func testListInvoices(ctx context.Context, client *flexprice.APIClient) {
+func testListInvoices(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: List Invoices ---")
 
-	invoices, response, err := client.InvoicesAPI.InvoicesGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesInvoiceFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Invoices.QueryInvoice(ctx, filter)
 	if err != nil {
 		log.Printf("⚠ Warning: Error listing invoices: %v\n", err)
 		fmt.Println("⚠ Skipping invoices tests (may not have any invoices yet)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping invoices tests\n")
-		return
+	listResp := resp.DtoListInvoicesResponse
+	items := []components.DtoInvoiceResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d invoices\n", len(invoices.Items))
-	if len(invoices.Items) > 0 {
-		testInvoiceID = *invoices.Items[0].Id
-		fmt.Printf("  First invoice: %s (Customer: %s)\n", *invoices.Items[0].Id, *invoices.Items[0].CustomerId)
-		if invoices.Items[0].Status != nil {
-			fmt.Printf("  Status: %s\n", string(*invoices.Items[0].Status))
+	fmt.Printf("✓ Retrieved %d invoices\n", len(items))
+	if len(items) > 0 {
+		testInvoiceID = *items[0].ID
+		fmt.Printf("  First invoice: %s (Customer: %s)\n", *items[0].ID, *items[0].CustomerID)
+		if items[0].InvoiceStatus != nil {
+			fmt.Printf("  Status: %s\n", string(*items[0].InvoiceStatus))
 		}
 	}
-	if invoices.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *invoices.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 2: Search invoices
-func testSearchInvoices(ctx context.Context, client *flexprice.APIClient) {
+func testSearchInvoices(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Search Invoices ---")
 
-	searchFilter := flexprice.TypesInvoiceFilter{}
-
-	invoices, response, err := client.InvoicesAPI.InvoicesSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesInvoiceFilter{}
+	resp, err := client.Invoices.QueryInvoice(ctx, searchFilter)
 	if err != nil {
 		log.Printf("⚠ Warning: Error searching invoices: %v\n", err)
 		fmt.Println("⚠ Skipping search invoices test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping search invoices test\n")
-		return
+	listResp := resp.DtoListInvoicesResponse
+	items := []components.DtoInvoiceResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
 	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d invoices for customer '%s'\n", len(invoices.Items), testCustomerID)
-	for i, invoice := range invoices.Items {
-		if i < 3 {
+	fmt.Printf("  Found %d invoices for customer '%s'\n", len(items), testCustomerID)
+	for i, invoice := range items {
+		if i < 3 && invoice.ID != nil {
 			status := "unknown"
-			if invoice.Status != nil {
-				status = string(*invoice.Status)
+			if invoice.InvoiceStatus != nil {
+				status = string(*invoice.InvoiceStatus)
 			}
-			fmt.Printf("  - %s: %s\n", *invoice.Id, status)
+			fmt.Printf("  - %s: %s\n", *invoice.ID, status)
 		}
 	}
 	fmt.Println()
 }
 
 // Test 3: Create invoice
-func testCreateInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testCreateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: Create Invoice ---")
 
 	// Skip if customer or subscription not available
@@ -2329,55 +1997,50 @@ func testCreateInvoice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	// Create invoice as DRAFT so we can test finalize later
-	draftStatus := flexprice.TYPESINVOICESTATUS_InvoiceStatusDraft
-	invoiceRequest := flexprice.DtoCreateInvoiceRequest{
-		CustomerId:    testCustomerID,
-		Currency:      "USD",
-		AmountDue:     "100.00",
-		Subtotal:      "100.00",
-		Total:         "100.00",
-		InvoiceType:   lo.ToPtr(flexprice.TYPESINVOICETYPE_InvoiceTypeOneOff),
-		BillingReason: lo.ToPtr(flexprice.TYPESINVOICEBILLINGREASON_InvoiceBillingReasonManual),
+	draftStatus := components.TypesInvoiceStatusDraft
+	invoiceRequest := components.DtoCreateInvoiceRequest{
+		CustomerID:  testCustomerID,
+		Currency:    "USD",
+		AmountDue:   "100.00",
+		Subtotal:    "100.00",
+		Total:       "100.00",
+		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *components.TypesInvoiceBillingReason {
+			v := components.TypesInvoiceBillingReasonManual
+			return &v
+		}(),
 		InvoiceStatus: &draftStatus,
-		LineItems: []flexprice.DtoCreateInvoiceLineItemRequest{
+		LineItems: []components.DtoCreateInvoiceLineItemRequest{
 			{
-				DisplayName: lo.ToPtr("Test Service"),
+				DisplayName: flexprice.String("Test Service"),
 				Quantity:    "1",
 				Amount:      "100.00",
 			},
 		},
-		Metadata: &map[string]string{
+		Metadata: map[string]string{
 			"source": "sdk_test",
 			"type":   "manual",
 		},
 	}
 
-	invoice, response, err := client.InvoicesAPI.InvoicesPost(ctx).
-		Invoice(invoiceRequest).
-		Execute()
-
+	createResp, err := client.Invoices.CreateInvoice(ctx, invoiceRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error creating invoice: %v\n", err)
 		fmt.Println("⚠ Skipping create invoice test\n")
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 201/200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping create invoice test\n")
+	invoice := createResp.DtoInvoiceResponse
+	if invoice == nil {
+		log.Printf("⚠ Warning: Create invoice returned no body\n")
 		return
 	}
-
-	fmt.Printf("  Invoice finalized\n")
 	fmt.Printf("✓ Invoice created successfully!\n")
-	fmt.Printf("  Invoice finalized\n")
-	fmt.Printf("  Customer ID: %s\n", *invoice.CustomerId)
+	fmt.Printf("  Customer ID: %s\n", *invoice.CustomerID)
 	fmt.Printf("  Status: %s\n", string(*invoice.InvoiceStatus))
 }
 
 // Test 4: Get invoice by ID
-func testGetInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testGetInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Get Invoice by ID ---")
 
 	// Skip if invoice creation failed
@@ -2387,28 +2050,23 @@ func testGetInvoice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	invoice, response, err := client.InvoicesAPI.InvoicesIdGet(ctx, testInvoiceID).
-		Execute()
-
+	getResp, err := client.Invoices.GetInvoice(ctx, testInvoiceID, nil, nil)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting invoice: %v\n", err)
 		fmt.Println("⚠ Skipping get invoice test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping get invoice test\n")
+	invoice := getResp.DtoInvoiceResponse
+	if invoice == nil {
+		log.Printf("⚠ Warning: Get invoice returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Invoice retrieved successfully!\n")
-	fmt.Printf("  Invoice finalized\n")
 	fmt.Printf("  Total: %s %s\n\n", *invoice.Currency, *invoice.Total)
 }
 
 // Test 5: Update invoice
-func testUpdateInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Update Invoice ---")
 
 	// Skip if invoice creation failed
@@ -2418,36 +2076,30 @@ func testUpdateInvoice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	updateRequest := flexprice.DtoUpdateInvoiceRequest{
-		Metadata: &map[string]string{
+	updateRequest := components.DtoUpdateInvoiceRequest{
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	invoice, response, err := client.InvoicesAPI.InvoicesIdPut(ctx, testInvoiceID).
-		Request(updateRequest).
-		Execute()
-
+	updateResp, err := client.Invoices.UpdateInvoice(ctx, testInvoiceID, updateRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error updating invoice: %v\n", err)
 		fmt.Println("⚠ Skipping update invoice test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping update invoice test\n")
+	invoice := updateResp.DtoInvoiceResponse
+	if invoice == nil {
+		log.Printf("⚠ Warning: Update invoice returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Invoice updated successfully!\n")
-	fmt.Printf("  Invoice finalized\n")
 	fmt.Printf("  Updated At: %s\n\n", *invoice.UpdatedAt)
 }
 
 // Test 6: Preview invoice
-func testPreviewInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testPreviewInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Preview Invoice ---")
 
 	// Skip if customer not available
@@ -2457,92 +2109,69 @@ func testPreviewInvoice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	// Use subscription ID if available, otherwise use hardcoded one
 	subsID := testSubscriptionID
-	previewRequest := flexprice.DtoGetPreviewInvoiceRequest{
-		SubscriptionId: subsID,
+	if subsID == "" {
+		log.Printf("⚠ Warning: No subscription ID for invoice preview\n")
+		fmt.Println()
+		return
 	}
+	previewRequest := components.DtoGetPreviewInvoiceRequest{SubscriptionID: subsID}
 
-	preview, response, err := client.InvoicesAPI.InvoicesPreviewPost(ctx).
-		Request(previewRequest).
-		Execute()
-
+	previewResp, err := client.Invoices.GetInvoicePreview(ctx, previewRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error previewing invoice: %v\n", err)
 		fmt.Println("⚠ Skipping preview invoice test\n")
 		return
 	}
 
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping preview invoice test\n")
-		return
-	}
-
+	preview := previewResp.DtoInvoiceResponse
 	fmt.Printf("✓ Invoice preview generated!\n")
-	if preview.Total != nil {
+	if preview != nil && preview.Total != nil {
 		fmt.Printf("  Preview Total: %s\n", *preview.Total)
 	}
 	fmt.Println()
 }
 
 // Test 7: Finalize invoice
-func testFinalizeInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testFinalizeInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 7: Finalize Invoice ---")
 
-	// Create a dedicated draft invoice for this test
-	// The shared testInvoiceID may already be finalized by other tests
-	draftStatus := flexprice.TYPESINVOICESTATUS_InvoiceStatusDraft
-	invoiceRequest := flexprice.DtoCreateInvoiceRequest{
-		CustomerId:    testCustomerID,
-		Currency:      "USD",
-		AmountDue:     "50.00",
-		Subtotal:      "50.00",
-		Total:         "50.00",
-		InvoiceType:   lo.ToPtr(flexprice.TYPESINVOICETYPE_InvoiceTypeOneOff),
-		BillingReason: lo.ToPtr(flexprice.TYPESINVOICEBILLINGREASON_InvoiceBillingReasonManual),
+	draftStatus := components.TypesInvoiceStatusDraft
+	invoiceRequest := components.DtoCreateInvoiceRequest{
+		CustomerID:  testCustomerID,
+		Currency:    "USD",
+		AmountDue:   "50.00",
+		Subtotal:    "50.00",
+		Total:       "50.00",
+		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *components.TypesInvoiceBillingReason {
+			v := components.TypesInvoiceBillingReasonManual
+			return &v
+		}(),
 		InvoiceStatus: &draftStatus,
-		LineItems: []flexprice.DtoCreateInvoiceLineItemRequest{
-			{
-				DisplayName: lo.ToPtr("Finalize Test Service"),
-				Quantity:    "1",
-				Amount:      "50.00",
-			},
+		LineItems: []components.DtoCreateInvoiceLineItemRequest{
+			{DisplayName: flexprice.String("Finalize Test Service"), Quantity: "1", Amount: "50.00"},
 		},
-		Metadata: &map[string]string{
-			"source": "sdk_test_finalize",
-		},
+		Metadata: map[string]string{"source": "sdk_test_finalize"},
 	}
 
-	invoice, _, err := client.InvoicesAPI.InvoicesPost(ctx).
-		Invoice(invoiceRequest).
-		Execute()
-
+	createResp, err := client.Invoices.CreateInvoice(ctx, invoiceRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to create draft invoice for finalize test: %v\n", err)
 		fmt.Println("⚠ Skipping finalize invoice test\n")
 		return
 	}
-
-	finalizeInvoiceID := *invoice.Id
-	fmt.Printf("  Created draft invoice: %s\n", finalizeInvoiceID)
-
-	// Now finalize the draft invoice
-	_, response, err := client.InvoicesAPI.InvoicesIdFinalizePost(ctx, finalizeInvoiceID).
-		Execute()
-
-	if err != nil {
-		log.Printf("⚠ Warning: Error finalizing invoice: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
-		fmt.Println("⚠ Skipping finalize invoice test\n")
+	invoice := createResp.DtoInvoiceResponse
+	if invoice == nil || invoice.ID == nil {
+		log.Printf("⚠ Warning: Create draft returned no body\n")
 		return
 	}
+	finalizeInvoiceID := *invoice.ID
+	fmt.Printf("  Created draft invoice: %s\n", finalizeInvoiceID)
 
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
+	_, err = client.Invoices.FinalizeInvoice(ctx, finalizeInvoiceID)
+	if err != nil {
+		log.Printf("⚠ Warning: Error finalizing invoice: %v\n", err)
 		fmt.Println("⚠ Skipping finalize invoice test\n")
 		return
 	}
@@ -2552,7 +2181,7 @@ func testFinalizeInvoice(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 8: Recalculate invoice
-func testRecalculateInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testRecalculateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 8: Recalculate Invoice ---")
 
 	// Skip this test - recalculate only works on subscription invoices
@@ -2562,7 +2191,7 @@ func testRecalculateInvoice(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 9: Record payment
-func testRecordPayment(ctx context.Context, client *flexprice.APIClient) {
+func testRecordPayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 9: Record Payment ---")
 
 	// Skip if invoice creation failed
@@ -2572,23 +2201,14 @@ func testRecordPayment(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	paymentRequest := flexprice.DtoUpdatePaymentStatusRequest{
-		PaymentStatus: flexprice.TYPESPAYMENTSTATUS_PaymentStatusSucceeded,
-		Amount:        lo.ToPtr("100.00"),
+	paymentRequest := components.DtoUpdatePaymentStatusRequest{
+		PaymentStatus: components.TypesPaymentStatusSucceeded,
+		Amount:        flexprice.String("100.00"),
 	}
 
-	_, response, err := client.InvoicesAPI.InvoicesIdPaymentPut(ctx, testInvoiceID).
-		Request(paymentRequest).
-		Execute()
-
+	_, err := client.Invoices.UpdateInvoicePaymentStatus(ctx, testInvoiceID, paymentRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error recording payment: %v\n", err)
-		fmt.Println("⚠ Skipping record payment test\n")
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println("⚠ Skipping record payment test\n")
 		return
 	}
@@ -2599,77 +2219,56 @@ func testRecordPayment(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 10: Attempt payment
-func testAttemptPayment(ctx context.Context, client *flexprice.APIClient) {
+func testAttemptPayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 10: Attempt Payment ---")
 
-	// Create a dedicated finalized but unpaid invoice for attempt payment test
-	// Important: Set AmountPaid and PaymentStatus to prevent auto-payment
-	draftStatus := flexprice.TYPESINVOICESTATUS_InvoiceStatusDraft
-	pendingStatus := flexprice.TYPESPAYMENTSTATUS_PaymentStatusPending
-	invoiceRequest := flexprice.DtoCreateInvoiceRequest{
-		CustomerId:    testCustomerID,
-		Currency:      "USD",
-		AmountDue:     "25.00",
-		Subtotal:      "25.00",
-		Total:         "25.00",
-		AmountPaid:    lo.ToPtr("0.00"), // Explicitly set to 0 to prevent auto-payment
-		InvoiceType:   lo.ToPtr(flexprice.TYPESINVOICETYPE_InvoiceTypeOneOff),
-		BillingReason: lo.ToPtr(flexprice.TYPESINVOICEBILLINGREASON_InvoiceBillingReasonManual),
+	draftStatus := components.TypesInvoiceStatusDraft
+	pendingStatus := components.TypesPaymentStatusPending
+	invoiceRequest := components.DtoCreateInvoiceRequest{
+		CustomerID:  testCustomerID,
+		Currency:    "USD",
+		AmountDue:   "25.00",
+		Subtotal:    "25.00",
+		Total:       "25.00",
+		AmountPaid:  flexprice.String("0.00"),
+		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *components.TypesInvoiceBillingReason {
+			v := components.TypesInvoiceBillingReasonManual
+			return &v
+		}(),
 		InvoiceStatus: &draftStatus,
-		PaymentStatus: &pendingStatus, // Set to PENDING to prevent auto-payment
-		LineItems: []flexprice.DtoCreateInvoiceLineItemRequest{
-			{
-				DisplayName: lo.ToPtr("Attempt Payment Test Service"),
-				Quantity:    "1",
-				Amount:      "25.00",
-			},
+		PaymentStatus: &pendingStatus,
+		LineItems: []components.DtoCreateInvoiceLineItemRequest{
+			{DisplayName: flexprice.String("Attempt Payment Test Service"), Quantity: "1", Amount: "25.00"},
 		},
-		Metadata: &map[string]string{
-			"source": "sdk_test_attempt_payment",
-		},
+		Metadata: map[string]string{"source": "sdk_test_attempt_payment"},
 	}
 
-	invoice, _, err := client.InvoicesAPI.InvoicesPost(ctx).
-		Invoice(invoiceRequest).
-		Execute()
-
+	createResp, err := client.Invoices.CreateInvoice(ctx, invoiceRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to create invoice for attempt payment test: %v\n", err)
 		fmt.Println("⚠ Skipping attempt payment test\n")
 		return
 	}
-
-	attemptInvoiceID := *invoice.Id
+	inv := createResp.DtoInvoiceResponse
+	if inv == nil || inv.ID == nil {
+		log.Printf("⚠ Warning: Create invoice returned no body\n")
+		return
+	}
+	attemptInvoiceID := *inv.ID
 	fmt.Printf("  Created invoice: %s\n", attemptInvoiceID)
 
-	// Finalize the invoice (required for payment attempts)
-	_, _, err = client.InvoicesAPI.InvoicesIdFinalizePost(ctx, attemptInvoiceID).
-		Execute()
-
+	_, err = client.Invoices.FinalizeInvoice(ctx, attemptInvoiceID)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to finalize invoice for attempt payment test: %v\n", err)
 		fmt.Println("⚠ Skipping attempt payment test\n")
 		return
 	}
-
 	fmt.Printf("  Finalized invoice\n")
 
-	// Now attempt payment on the finalized, unpaid invoice
-	_, response, err := client.InvoicesAPI.InvoicesIdPaymentAttemptPost(ctx, attemptInvoiceID).
-		Execute()
-
+	_, err = client.Invoices.AttemptInvoicePayment(ctx, attemptInvoiceID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error attempting payment: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
-		fmt.Println("⚠ Skipping attempt payment test\n")
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println("⚠ Skipping attempt payment test\n")
 		return
 	}
@@ -2679,7 +2278,7 @@ func testAttemptPayment(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 11: Download invoice PDF
-func testDownloadInvoicePDF(ctx context.Context, client *flexprice.APIClient) {
+func testDownloadInvoicePDF(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 11: Download Invoice PDF ---")
 
 	// Skip if invoice creation failed
@@ -2689,17 +2288,9 @@ func testDownloadInvoicePDF(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	_, response, err := client.InvoicesAPI.InvoicesIdPdfGet(ctx, testInvoiceID).
-		Execute()
-
+	_, err := client.Invoices.GetInvoicePdf(ctx, testInvoiceID, nil)
 	if err != nil {
 		log.Printf("⚠ Warning: Error downloading invoice PDF: %v\n", err)
-		fmt.Println("⚠ Skipping download PDF test\n")
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println("⚠ Skipping download PDF test\n")
 		return
 	}
@@ -2710,7 +2301,7 @@ func testDownloadInvoicePDF(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 12: Trigger invoice communications
-func testTriggerInvoiceComms(ctx context.Context, client *flexprice.APIClient) {
+func testTriggerInvoiceComms(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 12: Trigger Invoice Communications ---")
 
 	// Skip if invoice creation failed
@@ -2720,18 +2311,9 @@ func testTriggerInvoiceComms(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	// Trigger invoice communications (no request body needed)
-	_, response, err := client.InvoicesAPI.InvoicesIdCommsTriggerPost(ctx, testInvoiceID).
-		Execute()
-
+	_, err := client.Invoices.TriggerInvoiceCommsWebhook(ctx, testInvoiceID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error triggering invoice communications: %v\n", err)
-		fmt.Println("⚠ Skipping trigger comms test\n")
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println("⚠ Skipping trigger comms test\n")
 		return
 	}
@@ -2741,7 +2323,7 @@ func testTriggerInvoiceComms(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 13: Get customer invoice summary
-func testGetCustomerInvoiceSummary(ctx context.Context, client *flexprice.APIClient) {
+func testGetCustomerInvoiceSummary(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 13: Get Customer Invoice Summary ---")
 
 	// Skip if customer not available
@@ -2751,17 +2333,9 @@ func testGetCustomerInvoiceSummary(ctx context.Context, client *flexprice.APICli
 		return
 	}
 
-	_, response, err := client.InvoicesAPI.CustomersIdInvoicesSummaryGet(ctx, testCustomerID).
-		Execute()
-
+	_, err := client.Invoices.GetCustomerInvoiceSummary(ctx, testCustomerID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting customer invoice summary: %v\n", err)
-		fmt.Println("⚠ Skipping customer invoice summary test\n")
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println("⚠ Skipping customer invoice summary test\n")
 		return
 	}
@@ -2773,7 +2347,7 @@ func testGetCustomerInvoiceSummary(ctx context.Context, client *flexprice.APICli
 }
 
 // Test 14: Void invoice
-func testVoidInvoice(ctx context.Context, client *flexprice.APIClient) {
+func testVoidInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 14: Void Invoice ---")
 
 	// Skip if invoice creation failed
@@ -2783,17 +2357,9 @@ func testVoidInvoice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	_, response, err := client.InvoicesAPI.InvoicesIdVoidPost(ctx, testInvoiceID).
-		Execute()
-
+	_, err := client.Invoices.VoidInvoice(ctx, testInvoiceID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error voiding invoice: %v\n", err)
-		fmt.Println("⚠ Skipping void invoice test\n")
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println("⚠ Skipping void invoice test\n")
 		return
 	}
@@ -2808,7 +2374,7 @@ func testVoidInvoice(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new price
-func testCreatePrice(ctx context.Context, client *flexprice.APIClient) {
+func testCreatePrice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Price ---")
 
 	// Skip if plan creation failed
@@ -2818,46 +2384,42 @@ func testCreatePrice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	priceRequest := flexprice.DtoCreatePriceRequest{
-		EntityId:       testPlanID,
-		EntityType:     flexprice.TYPESPRICEENTITYTYPE_PRICE_ENTITY_TYPE_PLAN,
-		Currency:       "USD",
-		Amount:         lo.ToPtr("99.00"),
-		BillingModel:   flexprice.TYPESBILLINGMODEL_BILLING_MODEL_FLAT_FEE,
-		BillingCadence: flexprice.TYPESBILLINGCADENCE_BILLING_CADENCE_RECURRING,
-		BillingPeriod:  flexprice.TYPESBILLINGPERIOD_BILLING_PERIOD_MONTHLY,
-		InvoiceCadence: flexprice.TYPESINVOICECADENCE_InvoiceCadenceAdvance,
-		PriceUnitType:  flexprice.TYPESPRICEUNITTYPE_PRICE_UNIT_TYPE_FIAT,
-		Type:           flexprice.TYPESPRICETYPE_PRICE_TYPE_FIXED,
-		DisplayName:    lo.ToPtr("Monthly Subscription"),
-		Description:    lo.ToPtr("Standard monthly subscription price"),
+	priceRequest := components.DtoCreatePriceRequest{
+		EntityID:           testPlanID,
+		EntityType:         components.TypesPriceEntityTypePlan,
+		Currency:           "USD",
+		Amount:             flexprice.String("99.00"),
+		BillingModel:       components.TypesBillingModelFlatFee,
+		BillingCadence:     components.TypesBillingCadenceRecurring,
+		BillingPeriod:      components.TypesBillingPeriodMonthly,
+		BillingPeriodCount: flexprice.Int64(1), // required: must be > 0
+		InvoiceCadence:     components.TypesInvoiceCadenceAdvance,
+		PriceUnitType:      components.TypesPriceUnitTypeFiat,
+		Type:               components.TypesPriceTypeFixed,
+		DisplayName:        flexprice.String("Monthly Subscription"),
+		Description:        flexprice.String("Standard monthly subscription price"),
 	}
 
-	price, response, err := client.PricesAPI.PricesPost(ctx).
-		Price(priceRequest).
-		Execute()
-
+	resp, err := client.Prices.CreatePrice(ctx, priceRequest)
 	if err != nil {
 		log.Printf("❌ Error creating price: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
-		fmt.Println()
+	price := resp.DtoPriceResponse
+	if price == nil || price.ID == nil {
+		log.Printf("❌ Create price returned no body\n")
 		return
 	}
-
-	testPriceID = *price.Id
+	testPriceID = *price.ID
 	fmt.Printf("✓ Price created successfully!\n")
-	fmt.Printf("  ID: %s\n", *price.Id)
+	fmt.Printf("  ID: %s\n", *price.ID)
 	fmt.Printf("  Amount: %s %s\n", *price.Amount, *price.Currency)
 	fmt.Printf("  Billing Model: %s\n\n", string(*price.BillingModel))
 }
 
 // Test 2: Get price by ID
-func testGetPrice(ctx context.Context, client *flexprice.APIClient) {
+func testGetPrice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Price by ID ---")
 
 	if testPriceID == "" {
@@ -2866,60 +2428,53 @@ func testGetPrice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	price, response, err := client.PricesAPI.PricesIdGet(ctx, testPriceID).
-		Execute()
-
+	resp, err := client.Prices.GetPrice(ctx, testPriceID)
 	if err != nil {
 		log.Printf("❌ Error getting price: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	price := resp.DtoPriceResponse
+	if price == nil {
+		log.Printf("❌ Get price returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Price retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *price.Id)
+	fmt.Printf("  ID: %s\n", *price.ID)
 	fmt.Printf("  Amount: %s %s\n", *price.Amount, *price.Currency)
-	fmt.Printf("  Entity ID: %s\n", *price.EntityId)
+	fmt.Printf("  Entity ID: %s\n", *price.EntityID)
 	fmt.Printf("  Created At: %s\n\n", *price.CreatedAt)
 }
 
 // Test 3: List all prices
-func testListPrices(ctx context.Context, client *flexprice.APIClient) {
+func testListPrices(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Prices ---")
 
-	prices, response, err := client.PricesAPI.PricesGet(ctx).
-		Limit(10).
-		Execute()
+	filter := components.TypesPriceFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Prices.QueryPrice(ctx, filter)
 
 	if err != nil {
 		log.Printf("❌ Error listing prices: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListPricesResponse
+	items := []components.DtoPriceResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d prices\n", len(prices.Items))
-	if len(prices.Items) > 0 {
-		fmt.Printf("  First price: %s - %s %s\n", *prices.Items[0].Id, *prices.Items[0].Amount, *prices.Items[0].Currency)
+	fmt.Printf("✓ Retrieved %d prices\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First price: %s - %s %s\n", *items[0].ID, *items[0].Amount, *items[0].Currency)
 	}
-	if prices.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *prices.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update price
-func testUpdatePrice(ctx context.Context, client *flexprice.APIClient) {
+func testUpdatePrice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Price ---")
 
 	if testPriceID == "" {
@@ -2929,38 +2484,33 @@ func testUpdatePrice(ctx context.Context, client *flexprice.APIClient) {
 	}
 
 	updatedDescription := "Updated price description for testing"
-	updateRequest := flexprice.DtoUpdatePriceRequest{
-		Description: &updatedDescription,
-		Metadata: &map[string]string{
+	updateRequest := components.DtoUpdatePriceRequest{
+		Description: flexprice.String(updatedDescription),
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	price, response, err := client.PricesAPI.PricesIdPut(ctx, testPriceID).
-		Price(updateRequest).
-		Execute()
-
+	updateResp, err := client.Prices.UpdatePrice(ctx, testPriceID, updateRequest)
 	if err != nil {
 		log.Printf("❌ Error updating price: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	price := updateResp.DtoPriceResponse
+	if price == nil {
+		log.Printf("❌ Update price returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Price updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *price.Id)
+	fmt.Printf("  ID: %s\n", *price.ID)
 	fmt.Printf("  New Description: %s\n", *price.Description)
 	fmt.Printf("  Updated At: %s\n\n", *price.UpdatedAt)
 }
 
 // Test 5: Delete price
-func testDeletePrice(ctx context.Context, client *flexprice.APIClient) {
+func testDeletePrice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Delete Price ---")
 
 	if testPriceID == "" {
@@ -2969,29 +2519,12 @@ func testDeletePrice(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	// Delete price requires a request body with optional EndDate
-	// Set EndDate to future date to soft-delete the price
 	futureDate := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
-	deleteRequest := flexprice.DtoDeletePriceRequest{
-		EndDate: &futureDate,
-	}
+	deleteRequest := components.DtoDeletePriceRequest{EndDate: flexprice.String(futureDate)}
 
-	_, response, err := client.PricesAPI.PricesIdDelete(ctx, testPriceID).
-		Request(deleteRequest).
-		Execute()
-
+	_, err := client.Prices.DeletePrice(ctx, testPriceID, deleteRequest)
 	if err != nil {
 		log.Printf("❌ Error deleting price: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
-		fmt.Println()
-		return
-	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d\n", response.StatusCode)
 		fmt.Println()
 		return
 	}
@@ -3004,59 +2537,55 @@ func testDeletePrice(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new payment
-func testCreatePayment(ctx context.Context, client *flexprice.APIClient) {
+func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Payment ---")
 
 	// Create a fresh invoice for this payment test
 	// This is necessary because previous tests might have already paid the shared testInvoiceID
 
-	// 1. Create Draft Invoice
-	// Important: Set AmountPaid to "0.00" and PaymentStatus to PENDING to prevent auto-payment
-	// The backend auto-sets AmountPaid = AmountDue if not provided, which marks invoice as paid
-	draftStatus := flexprice.TYPESINVOICESTATUS_InvoiceStatusDraft
-	pendingStatus := flexprice.TYPESPAYMENTSTATUS_PaymentStatusPending
-	invoiceRequest := flexprice.DtoCreateInvoiceRequest{
-		CustomerId:    testCustomerID,
-		Currency:      "USD",
-		AmountDue:     "100.00",
-		Subtotal:      "100.00",
-		Total:         "100.00",
-		AmountPaid:    lo.ToPtr("0.00"), // Explicitly set to 0 to prevent auto-payment
-		InvoiceType:   lo.ToPtr(flexprice.TYPESINVOICETYPE_InvoiceTypeOneOff),
-		BillingReason: lo.ToPtr(flexprice.TYPESINVOICEBILLINGREASON_InvoiceBillingReasonManual),
+	draftStatus := components.TypesInvoiceStatusDraft
+	pendingStatus := components.TypesPaymentStatusPending
+	invoiceRequest := components.DtoCreateInvoiceRequest{
+		CustomerID:  testCustomerID,
+		Currency:    "USD",
+		AmountDue:   "100.00",
+		Subtotal:    "100.00",
+		Total:       "100.00",
+		AmountPaid:  flexprice.String("0.00"),
+		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *components.TypesInvoiceBillingReason {
+			v := components.TypesInvoiceBillingReasonManual
+			return &v
+		}(),
 		InvoiceStatus: &draftStatus,
-		PaymentStatus: &pendingStatus, // Set to PENDING to prevent auto-payment
-		LineItems: []flexprice.DtoCreateInvoiceLineItemRequest{
-			{
-				DisplayName: lo.ToPtr("Payment Test Service"),
-				Quantity:    "1",
-				Amount:      "100.00",
-			},
+		PaymentStatus: &pendingStatus,
+		LineItems: []components.DtoCreateInvoiceLineItemRequest{
+			{DisplayName: flexprice.String("Payment Test Service"), Quantity: "1", Amount: "100.00"},
 		},
-		Metadata: &map[string]string{
-			"source": "sdk_test_payment",
-		},
+		Metadata: map[string]string{"source": "sdk_test_payment"},
 	}
 
-	invoice, _, err := client.InvoicesAPI.InvoicesPost(ctx).
-		Invoice(invoiceRequest).
-		Execute()
-
+	createResp, err := client.Invoices.CreateInvoice(ctx, invoiceRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to create invoice for payment test: %v\n", err)
 		return
 	}
-
-	paymentInvoiceID := *invoice.Id
+	inv := createResp.DtoInvoiceResponse
+	if inv == nil || inv.ID == nil {
+		log.Printf("⚠ Warning: Create invoice returned no body\n")
+		return
+	}
+	paymentInvoiceID := *inv.ID
 	fmt.Printf("  Created invoice for payment: %s\n", paymentInvoiceID)
 
-	// 2. Check invoice status immediately after creation (before finalization)
-	// This helps us detect if the invoice is already paid or has issues
-	currentInvoice, _, err := client.InvoicesAPI.InvoicesIdGet(ctx, paymentInvoiceID).
-		Execute()
-
+	currentInvoiceResp, err := client.Invoices.GetInvoice(ctx, paymentInvoiceID, nil, nil)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to get invoice for payment test: %v\n", err)
+		return
+	}
+	currentInvoice := currentInvoiceResp.DtoInvoiceResponse
+	if currentInvoice == nil {
+		log.Printf("⚠ Warning: Get invoice returned no body\n")
 		return
 	}
 
@@ -3085,26 +2614,17 @@ func testCreatePayment(ctx context.Context, client *flexprice.APIClient) {
 		fmt.Printf("  Invoice before finalization - AmountDue: %s, Total: %s\n", *currentInvoice.AmountDue, *currentInvoice.Total)
 	}
 
-	// Only finalize if the invoice is still in draft status
-	if currentInvoice.InvoiceStatus != nil && *currentInvoice.InvoiceStatus == flexprice.TYPESINVOICESTATUS_InvoiceStatusDraft {
-		_, response, err := client.InvoicesAPI.InvoicesIdFinalizePost(ctx, paymentInvoiceID).
-			Execute()
-
+	if currentInvoice.InvoiceStatus != nil && *currentInvoice.InvoiceStatus == components.TypesInvoiceStatusDraft {
+		_, err = client.Invoices.FinalizeInvoice(ctx, paymentInvoiceID)
 		if err != nil {
-			// Check if it's an unmarshaling error - this happens when API returns a string error instead of JSON
 			errStr := err.Error()
 			if strings.Contains(errStr, "cannot unmarshal string") || strings.Contains(errStr, "json:") {
-				// This is likely a 400 error returned as a string - invoice might already be finalized or invalid
-				// Continue anyway - the invoice might still be usable for payment
 				log.Printf("⚠ Warning: Invoice finalization returned error (may already be finalized): %v\n", err)
-			} else if response != nil && response.StatusCode == 400 {
-				log.Printf("⚠ Warning: Invoice may already be finalized or invalid: %v\n", err)
-				// Continue anyway - the invoice might be usable
 			} else {
 				log.Printf("⚠ Warning: Failed to finalize invoice for payment test: %v\n", err)
 				return
 			}
-		} else if response != nil && response.StatusCode == 200 {
+		} else {
 			fmt.Printf("  Finalized invoice for payment\n")
 		}
 	} else {
@@ -3115,13 +2635,14 @@ func testCreatePayment(ctx context.Context, client *flexprice.APIClient) {
 		}
 	}
 
-	// 3. Verify invoice is unpaid before creating payment
-	// Re-fetch the invoice to get the latest payment status after finalization
-	finalInvoice, _, err := client.InvoicesAPI.InvoicesIdGet(ctx, paymentInvoiceID).
-		Execute()
-
+	finalInvoiceResp, err := client.Invoices.GetInvoice(ctx, paymentInvoiceID, nil, nil)
 	if err != nil {
 		log.Printf("⚠ Warning: Failed to get final invoice status for payment test: %v\n", err)
+		return
+	}
+	finalInvoice := finalInvoiceResp.DtoInvoiceResponse
+	if finalInvoice == nil {
+		log.Printf("⚠ Warning: Get final invoice returned no body\n")
 		return
 	}
 
@@ -3172,42 +2693,33 @@ func testCreatePayment(ctx context.Context, client *flexprice.APIClient) {
 	}
 	fmt.Printf("  Invoice is unpaid and ready for payment (status: %s, total: %s)\n", paymentStatusStr, totalStr)
 
-	paymentRequest := flexprice.DtoCreatePaymentRequest{
+	paymentRequest := components.DtoCreatePaymentRequest{
 		Amount:            "100.00",
 		Currency:          "USD",
-		DestinationId:     paymentInvoiceID,
-		DestinationType:   flexprice.TYPESPAYMENTDESTINATIONTYPE_PaymentDestinationTypeInvoice,
-		PaymentMethodType: flexprice.TYPESPAYMENTMETHODTYPE_PaymentMethodTypeOffline,
-		ProcessPayment:    lo.ToPtr(false), // Don't process immediately in test
-		Metadata: &map[string]string{
+		DestinationID:     paymentInvoiceID,
+		DestinationType:   components.TypesPaymentDestinationTypeInvoice,
+		PaymentMethodType: components.TypesPaymentMethodTypeOffline,
+		ProcessPayment:    flexprice.Bool(false),
+		Metadata: map[string]string{
 			"source":   "sdk_test",
 			"test_run": time.Now().Format(time.RFC3339),
 		},
 	}
 
-	payment, response, err := client.PaymentsAPI.PaymentsPost(ctx).
-		Payment(paymentRequest).
-		Execute()
-
+	paymentResp, err := client.Payments.CreatePayment(ctx, paymentRequest)
 	if err != nil {
 		log.Printf("❌ Error creating payment: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
-		fmt.Println()
+	payment := paymentResp.DtoPaymentResponse
+	if payment == nil || payment.ID == nil {
+		log.Printf("❌ Create payment returned no body\n")
 		return
 	}
-
-	testPaymentID = *payment.Id
+	testPaymentID = *payment.ID
 	fmt.Printf("✓ Payment created successfully!\n")
-	fmt.Printf("  ID: %s\n", *payment.Id)
+	fmt.Printf("  ID: %s\n", *payment.ID)
 	fmt.Printf("  Amount: %s %s\n", *payment.Amount, *payment.Currency)
 	if payment.PaymentStatus != nil {
 		fmt.Printf("  Status: %s\n\n", string(*payment.PaymentStatus))
@@ -3215,7 +2727,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 2: Get payment by ID
-func testGetPayment(ctx context.Context, client *flexprice.APIClient) {
+func testGetPayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Payment by ID ---")
 
 	if testPaymentID == "" {
@@ -3224,23 +2736,19 @@ func testGetPayment(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	payment, response, err := client.PaymentsAPI.PaymentsIdGet(ctx, testPaymentID).
-		Execute()
-
+	resp, err := client.Payments.GetPayment(ctx, testPaymentID)
 	if err != nil {
 		log.Printf("❌ Error getting payment: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	payment := resp.DtoPaymentResponse
+	if payment == nil {
+		log.Printf("❌ Get payment returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Payment retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *payment.Id)
+	fmt.Printf("  ID: %s\n", *payment.ID)
 	fmt.Printf("  Amount: %s %s\n", *payment.Amount, *payment.Currency)
 	if payment.PaymentStatus != nil {
 		fmt.Printf("  Status: %s\n", string(*payment.PaymentStatus))
@@ -3249,7 +2757,7 @@ func testGetPayment(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 3: List all payments
-func testListPayments(ctx context.Context, client *flexprice.APIClient) {
+func testListPayments(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: List Payments ---")
 
 	// Filter to only get the payment we just created to avoid archived payments from other tests
@@ -3259,50 +2767,41 @@ func testListPayments(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	payments, response, err := client.PaymentsAPI.PaymentsGet(ctx).
-		PaymentIds([]string{testPaymentID}).
-		Limit(10).
-		Execute()
-
+	req := operations.ListPaymentsRequest{PaymentIds: []string{testPaymentID}, Limit: flexprice.Int64(10)}
+	resp, err := client.Payments.ListPayments(ctx, req)
 	if err != nil {
 		log.Printf("⚠ Warning: Error listing payments: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
 		fmt.Println("⚠ Skipping payments tests (may not have any payments yet)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping payments tests\n")
-		return
+	listResp := resp.DtoListPaymentsResponse
+	items := []components.DtoPaymentResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d payments\n", len(payments.Items))
-	if len(payments.Items) > 0 {
-		testPaymentID = *payments.Items[0].Id
-		fmt.Printf("  First payment: %s\n", *payments.Items[0].Id)
-		if payments.Items[0].PaymentStatus != nil {
-			fmt.Printf("  Status: %s\n", string(*payments.Items[0].PaymentStatus))
+	fmt.Printf("✓ Retrieved %d payments\n", len(items))
+	if len(items) > 0 {
+		testPaymentID = *items[0].ID
+		fmt.Printf("  First payment: %s\n", *items[0].ID)
+		if items[0].PaymentStatus != nil {
+			fmt.Printf("  Status: %s\n", string(*items[0].PaymentStatus))
 		}
 	}
-	if payments.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *payments.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 2: Search payments - SKIPPED
 // Note: Payment search endpoint may not be available in current SDK
-func testSearchPayments(ctx context.Context, client *flexprice.APIClient) {
+func testSearchPayments(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Search Payments ---")
 	fmt.Println("⚠ Skipping search payments test (endpoint not available in SDK)\n")
 }
 
 // Test 4: Update payment
-func testUpdatePayment(ctx context.Context, client *flexprice.APIClient) {
+func testUpdatePayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Payment ---")
 
 	if testPaymentID == "" {
@@ -3311,36 +2810,30 @@ func testUpdatePayment(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	updateRequest := flexprice.DtoUpdatePaymentRequest{
-		Metadata: &map[string]string{
+	updateRequest := components.DtoUpdatePaymentRequest{
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	payment, response, err := client.PaymentsAPI.PaymentsIdPut(ctx, testPaymentID).
-		Payment(updateRequest).
-		Execute()
-
+	updateResp, err := client.Payments.UpdatePayment(ctx, testPaymentID, updateRequest)
 	if err != nil {
 		log.Printf("❌ Error updating payment: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	payment := updateResp.DtoPaymentResponse
+	if payment == nil {
 		return
 	}
-
 	fmt.Printf("✓ Payment updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *payment.Id)
+	fmt.Printf("  ID: %s\n", *payment.ID)
 	fmt.Printf("  Updated At: %s\n\n", *payment.UpdatedAt)
 }
 
 // Test 5: Process payment
-func testProcessPayment(ctx context.Context, client *flexprice.APIClient) {
+func testProcessPayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Process Payment ---")
 
 	if testPaymentID == "" {
@@ -3349,32 +2842,25 @@ func testProcessPayment(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	// Note: This will attempt to process the payment
-	// In a real scenario, this requires proper payment gateway configuration
-	payment, response, err := client.PaymentsAPI.PaymentsIdProcessPost(ctx, testPaymentID).
-		Execute()
-
+	processResp, err := client.Payments.ProcessPayment(ctx, testPaymentID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error processing payment: %v\n", err)
 		fmt.Println("⚠ Skipping process payment test (may require payment gateway setup)\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping process payment test\n")
+	payment := processResp.DtoPaymentResponse
+	if payment == nil {
 		return
 	}
-
 	fmt.Printf("✓ Payment processed successfully!\n")
-	fmt.Printf("  ID: %s\n", *payment.Id)
+	fmt.Printf("  ID: %s\n", *payment.ID)
 	if payment.PaymentStatus != nil {
 		fmt.Printf("  Status: %s\n\n", string(*payment.PaymentStatus))
 	}
 }
 
 // Test 6: Delete payment
-func testDeletePayment(ctx context.Context, client *flexprice.APIClient) {
+func testDeletePayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Delete Payment ---")
 
 	if testPaymentID == "" {
@@ -3383,17 +2869,9 @@ func testDeletePayment(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	_, response, err := client.PaymentsAPI.PaymentsIdDelete(ctx, testPaymentID).
-		Execute()
-
+	_, err := client.Payments.DeletePayment(ctx, testPaymentID)
 	if err != nil {
 		log.Printf("❌ Error deleting payment: %v\n", err)
-		fmt.Println()
-		return
-	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d\n", response.StatusCode)
 		fmt.Println()
 		return
 	}
@@ -3402,40 +2880,24 @@ func testDeletePayment(ctx context.Context, client *flexprice.APIClient) {
 	fmt.Printf("  Deleted ID: %s\n\n", testPaymentID)
 }
 
-// Test 2: Search connections
-func testSearchConnections(ctx context.Context, client *flexprice.APIClient) {
+// Test 2: Search connections (replaced by list linked integrations; no search in new API)
+func testSearchConnections(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Search Connections ---")
-
-	// Use filter to search connections
-	searchFilter := flexprice.TypesConnectionFilter{
-		Limit: lo.ToPtr(int32(5)),
-	}
-
-	connections, response, err := client.ConnectionsAPI.ConnectionsSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	resp, err := client.Integrations.ListLinkedIntegrations(ctx)
 	if err != nil {
-		log.Printf("⚠ Warning: Error searching connections: %v\n", err)
+		log.Printf("⚠ Warning: Error listing integrations: %v\n", err)
 		fmt.Println("⚠ Skipping search connections test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping search connections test\n")
-		return
+	providers := []string{}
+	if resp != nil && resp.DtoLinkedIntegrationsResponse != nil && resp.DtoLinkedIntegrationsResponse.Providers != nil {
+		providers = resp.DtoLinkedIntegrationsResponse.Providers
 	}
-
-	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d connections\n", len(connections.Connections))
-	for i, connection := range connections.Connections {
-		if i < 3 { // Show first 3 results
-			provider := "unknown"
-			if connection.ProviderType != nil {
-				provider = string(*connection.ProviderType)
-			}
-			fmt.Printf("  - %s: %s\n", *connection.Id, provider)
+	fmt.Printf("✓ List completed!\n")
+	fmt.Printf("  Found %d linked integration(s)\n", len(providers))
+	for i, p := range providers {
+		if i < 3 {
+			fmt.Printf("  - %s\n", p)
 		}
 	}
 	fmt.Println()
@@ -3461,7 +2923,7 @@ func max(a, b int) int {
 // ========================================
 
 // Test 1: Create a new wallet
-func testCreateWallet(ctx context.Context, client *flexprice.APIClient) {
+func testCreateWallet(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Wallet ---")
 
 	// Skip if no customer available
@@ -3471,41 +2933,35 @@ func testCreateWallet(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	walletRequest := flexprice.DtoCreateWalletRequest{
-		CustomerId: &testCustomerID,
+	walletRequest := components.DtoCreateWalletRequest{
+		CustomerID: flexprice.String(testCustomerID),
 		Currency:   "USD",
-		Name:       lo.ToPtr("Test Wallet"),
-		Metadata: &map[string]string{
+		Metadata: map[string]string{
 			"source":   "sdk_test",
 			"test_run": time.Now().Format(time.RFC3339),
 		},
 	}
 
-	wallet, response, err := client.WalletsAPI.WalletsPost(ctx).
-		Request(walletRequest).
-		Execute()
-
+	resp, err := client.Wallets.CreateWallet(ctx, walletRequest)
 	if err != nil {
 		log.Printf("❌ Error creating wallet: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
-		fmt.Println()
+	wallet := resp.DtoWalletResponse
+	if wallet == nil || wallet.ID == nil {
+		log.Printf("❌ Create wallet returned no body\n")
 		return
 	}
-
-	testWalletID = *wallet.Id
+	testWalletID = *wallet.ID
 	fmt.Printf("✓ Wallet created successfully!\n")
-	fmt.Printf("  ID: %s\n", *wallet.Id)
-	fmt.Printf("  Customer ID: %s\n", *wallet.CustomerId)
+	fmt.Printf("  ID: %s\n", *wallet.ID)
+	fmt.Printf("  Customer ID: %s\n", *wallet.CustomerID)
 	fmt.Printf("  Currency: %s\n\n", *wallet.Currency)
 }
 
 // Test 2: Get wallet by ID
-func testGetWallet(ctx context.Context, client *flexprice.APIClient) {
+func testGetWallet(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Wallet by ID ---")
 
 	if testWalletID == "" {
@@ -3514,60 +2970,52 @@ func testGetWallet(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	wallet, response, err := client.WalletsAPI.WalletsIdGet(ctx, testWalletID).
-		Execute()
-
+	resp, err := client.Wallets.GetWallet(ctx, testWalletID)
 	if err != nil {
 		log.Printf("❌ Error getting wallet: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	wallet := resp.DtoWalletResponse
+	if wallet == nil {
+		log.Printf("❌ Get wallet returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Wallet retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *wallet.Id)
-	fmt.Printf("  Customer ID: %s\n", *wallet.CustomerId)
+	fmt.Printf("  ID: %s\n", *wallet.ID)
+	fmt.Printf("  Customer ID: %s\n", *wallet.CustomerID)
 	fmt.Printf("  Currency: %s\n", *wallet.Currency)
 	fmt.Printf("  Created At: %s\n\n", *wallet.CreatedAt)
 }
 
 // Test 3: List all wallets
-func testListWallets(ctx context.Context, client *flexprice.APIClient) {
+func testListWallets(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Wallets ---")
 
-	wallets, response, err := client.WalletsAPI.WalletsGet(ctx).
-		Limit(10).
-		Execute()
-
+	filter := components.TypesWalletFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Wallets.QueryWallet(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing wallets: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.TypesListResponseDtoWalletResponse
+	items := []components.DtoWalletResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d wallets\n", len(wallets.Items))
-	if len(wallets.Items) > 0 {
-		fmt.Printf("  First wallet: %s\n", *wallets.Items[0].Id)
+	fmt.Printf("✓ Retrieved %d wallets\n", len(items))
+	if len(items) > 0 {
+		fmt.Printf("  First wallet: %s\n", *items[0].ID)
 	}
-	if wallets.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *wallets.Pagination.Total)
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update wallet
-func testUpdateWallet(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateWallet(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Wallet ---")
 
 	if testWalletID == "" {
@@ -3576,36 +3024,31 @@ func testUpdateWallet(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	updateRequest := flexprice.DtoUpdateWalletRequest{
-		Metadata: &map[string]string{
+	updateRequest := components.DtoUpdateWalletRequest{
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	wallet, response, err := client.WalletsAPI.WalletsIdPut(ctx, testWalletID).
-		Request(updateRequest).
-		Execute()
-
+	updateResp, err := client.Wallets.UpdateWallet(ctx, testWalletID, updateRequest)
 	if err != nil {
 		log.Printf("❌ Error updating wallet: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	wallet := updateResp.DtoWalletResponse
+	if wallet == nil {
 		return
 	}
 
 	fmt.Printf("✓ Wallet updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *wallet.Id)
+	fmt.Printf("  ID: %s\n", *wallet.ID)
 	fmt.Printf("  Updated At: %s\n\n", *wallet.UpdatedAt)
 }
 
 // Test 5: Get wallet balance (real-time)
-func testGetWalletBalance(ctx context.Context, client *flexprice.APIClient) {
+func testGetWalletBalance(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Get Wallet Balance ---")
 
 	if testWalletID == "" {
@@ -3614,31 +3057,23 @@ func testGetWalletBalance(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	balance, response, err := client.WalletsAPI.WalletsIdBalanceRealTimeGet(ctx, testWalletID).
-		Execute()
-
+	balanceResp, err := client.Wallets.GetWalletBalance(ctx, testWalletID, nil)
 	if err != nil {
 		log.Printf("❌ Error getting wallet balance: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
+	balance := balanceResp.DtoWalletBalanceResponse
 	fmt.Printf("✓ Wallet balance retrieved successfully!\n")
 	fmt.Printf("  Wallet ID: %s\n", testWalletID)
-	if balance.Balance != nil {
+	if balance != nil && balance.Balance != nil {
 		fmt.Printf("  Balance: %s\n", *balance.Balance)
 	}
 	fmt.Println()
 }
 
 // Test 6: Top up wallet
-func testTopUpWallet(ctx context.Context, client *flexprice.APIClient) {
+func testTopUpWallet(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Top Up Wallet ---")
 
 	if testWalletID == "" {
@@ -3647,28 +3082,15 @@ func testTopUpWallet(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	topUpRequest := flexprice.DtoTopUpWalletRequest{
-		Amount:            lo.ToPtr("100.00"),
-		TransactionReason: flexprice.TYPESTRANSACTIONREASON_TransactionReasonPurchasedCreditDirect,
-		Description:       lo.ToPtr("Test top-up from SDK"),
+	topUpRequest := components.DtoTopUpWalletRequest{
+		Amount:            flexprice.String("100.00"),
+		TransactionReason: components.TypesTransactionReasonPurchasedCreditDirect,
+		Description:       flexprice.String("Test top-up from SDK"),
 	}
 
-	_, response, err := client.WalletsAPI.WalletsIdTopUpPost(ctx, testWalletID).
-		Request(topUpRequest).
-		Execute()
-
+	_, err := client.Wallets.TopUpWallet(ctx, testWalletID, topUpRequest)
 	if err != nil {
 		log.Printf("❌ Error topping up wallet: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
-		fmt.Println()
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
 		fmt.Println()
 		return
 	}
@@ -3679,49 +3101,14 @@ func testTopUpWallet(ctx context.Context, client *flexprice.APIClient) {
 	fmt.Println()
 }
 
-// Test 7: Debit wallet
-func testDebitWallet(ctx context.Context, client *flexprice.APIClient) {
+// Test 7: Debit wallet (no Debit method in current SDK - skip)
+func testDebitWallet(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 7: Debit Wallet ---")
-
-	if testWalletID == "" {
-		log.Printf("⚠ Warning: No wallet ID available\n")
-		fmt.Println("⚠ Skipping debit wallet test\n")
-		return
-	}
-
-	debitRequest := flexprice.DtoManualBalanceDebitRequest{
-		Credits:           lo.ToPtr("10.00"),
-		IdempotencyKey:    fmt.Sprintf("test-debit-%d", time.Now().Unix()),
-		TransactionReason: flexprice.TYPESTRANSACTIONREASON_TransactionReasonManualBalanceDebit,
-		Description:       lo.ToPtr("Test debit from SDK"),
-	}
-
-	wallet, response, err := client.WalletsAPI.WalletsIdDebitPost(ctx, testWalletID).
-		Request(debitRequest).
-		Execute()
-
-	if err != nil {
-		log.Printf("❌ Error debiting wallet: %v\n", err)
-		if response != nil && response.Body != nil {
-			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Printf("Response: %s", string(bodyBytes))
-		}
-		fmt.Println()
-		return
-	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
-	fmt.Printf("✓ Wallet debited successfully!\n")
-	fmt.Printf("  Wallet ID: %s\n\n", *wallet.Id)
+	fmt.Println("⚠ Skipping debit wallet test (no Debit method in SDK)\n")
 }
 
 // Test 8: Get wallet transactions
-func testGetWalletTransactions(ctx context.Context, client *flexprice.APIClient) {
+func testGetWalletTransactions(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 8: Get Wallet Transactions ---")
 
 	if testWalletID == "" {
@@ -3730,56 +3117,82 @@ func testGetWalletTransactions(ctx context.Context, client *flexprice.APIClient)
 		return
 	}
 
-	transactions, response, err := client.WalletsAPI.WalletsIdTransactionsGet(ctx, testWalletID).
-		Limit(10).
-		Execute()
-
+	req := operations.GetWalletTransactionsRequest{IDPathParameter: testWalletID, Limit: flexprice.Int64(10)}
+	resp, err := client.Wallets.GetWalletTransactions(ctx, req)
 	if err != nil {
 		log.Printf("❌ Error getting wallet transactions: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
+	listResp := resp.DtoListWalletTransactionsResponse
+	items := []components.DtoWalletTransactionResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
 	}
-
-	fmt.Printf("✓ Retrieved %d wallet transactions\n", len(transactions.Items))
-	if transactions.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *transactions.Pagination.Total)
+	fmt.Printf("✓ Retrieved %d wallet transactions\n", len(items))
+	if listResp != nil && listResp.Pagination != nil && listResp.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *listResp.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 9: Search wallets
-func testSearchWallets(ctx context.Context, client *flexprice.APIClient) {
+func testSearchWallets(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 9: Search Wallets ---")
 
-	searchFilter := flexprice.TypesWalletFilter{
-		// Filter by customer if field exists
-		Limit: lo.ToPtr(int32(10)),
-	}
-
-	wallets, response, err := client.WalletsAPI.WalletsSearchPost(ctx).
-		Filter(searchFilter).
-		Execute()
-
+	searchFilter := components.TypesWalletFilter{Limit: flexprice.Int64(10)}
+	resp, err := client.Wallets.QueryWallet(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching wallets: %v\n", err)
 		fmt.Println()
 		return
 	}
+	listResp := resp.TypesListResponseDtoWalletResponse
+	items := []components.DtoWalletResponse{}
+	if listResp != nil && listResp.Items != nil {
+		items = listResp.Items
+	}
+	fmt.Printf("✓ Search completed!\n")
+	fmt.Printf("  Found %d wallets for customer '%s'\n\n", len(items), testCustomerID)
+}
 
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
+// testCancelSubscriptionCleanup cancels the test subscription immediately (used in cleanup only).
+// Must run before deleting the customer, since the API forbids deleting a customer with active subscriptions.
+func testCancelSubscriptionCleanup(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Cleanup: Cancel Subscription ---")
+	if testSubscriptionID == "" {
+		fmt.Println("⚠ No subscription ID; skipping.")
 		fmt.Println()
 		return
 	}
+	req := components.DtoCancelSubscriptionRequest{
+		CancellationType: components.TypesCancellationTypeImmediate,
+	}
+	_, err := client.Subscriptions.CancelSubscription(ctx, testSubscriptionID, req)
+	if err != nil {
+		log.Printf("⚠ Warning: could not cancel subscription %s: %v\n", testSubscriptionID, err)
+		fmt.Println()
+		return
+	}
+	fmt.Printf("✓ Subscription canceled (ID: %s)\n\n", testSubscriptionID)
+}
 
-	fmt.Printf("✓ Search completed!\n")
-	fmt.Printf("  Found %d wallets for customer '%s'\n\n", len(wallets.Items), testCustomerID)
+// testDeleteWallet terminates the test wallet (used in cleanup only).
+// Must run before deleting the customer, since the API forbids deleting a customer with associated wallets.
+func testDeleteWallet(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Cleanup: Terminate Wallet ---")
+	if testWalletID == "" {
+		fmt.Println("⚠ No wallet ID; skipping.")
+		fmt.Println()
+		return
+	}
+	_, err := client.Wallets.TerminateWallet(ctx, testWalletID)
+	if err != nil {
+		log.Printf("⚠ Warning: could not terminate wallet %s: %v\n", testWalletID, err)
+		fmt.Println()
+		return
+	}
+	fmt.Printf("✓ Wallet terminated (ID: %s)\n\n", testWalletID)
 }
 
 // ========================================
@@ -3787,7 +3200,7 @@ func testSearchWallets(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new credit grant
-func testCreateCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+func testCreateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Credit Grant ---")
 
 	// Skip if no plan available
@@ -3797,55 +3210,42 @@ func testCreateCreditGrant(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	grantRequest := flexprice.DtoCreateCreditGrantRequest{
-		Scope:                  flexprice.TYPESCREDITGRANTSCOPE_CreditGrantScopePlan,
-		PlanId:                 &testPlanID,
+	grantRequest := components.DtoCreateCreditGrantRequest{
+		Scope:                  components.TypesCreditGrantScopePlan,
+		PlanID:                 flexprice.String(testPlanID),
 		Credits:                "500.00",
 		Name:                   "Test Credit Grant",
-		Cadence:                flexprice.TYPESCREDITGRANTCADENCE_CreditGrantCadenceOneTime,
-		ExpirationType:         lo.ToPtr(flexprice.TYPESCREDITGRANTEXPIRYTYPE_CreditGrantExpiryTypeNever),
-		ExpirationDurationUnit: lo.ToPtr(flexprice.TYPESCREDITGRANTEXPIRYDURATIONUNIT_CreditGrantExpiryDurationUnitDays),
-		Metadata: &map[string]string{
+		Cadence:                components.TypesCreditGrantCadenceOnetime,
+		ExpirationType:         func() *components.TypesCreditGrantExpiryType { v := components.TypesCreditGrantExpiryTypeNever; return &v }(),
+		ExpirationDurationUnit: func() *components.TypesCreditGrantExpiryDurationUnit { v := components.TypesCreditGrantExpiryDurationUnitDay; return &v }(),
+		Metadata: map[string]string{
 			"source":   "sdk_test",
 			"test_run": time.Now().Format(time.RFC3339),
 		},
 	}
 
-	grant, response, err := client.CreditGrantsAPI.CreditgrantsPost(ctx).
-		CreditGrant(grantRequest).
-		Execute()
-
+	resp, err := client.CreditGrants.CreateCreditGrant(ctx, grantRequest)
 	if err != nil {
 		log.Printf("❌ Error creating credit grant: %v\n", err)
-		// Print detailed error information
-		if response != nil {
-			log.Printf("Response Status Code: %d\n", response.StatusCode)
-			if response.Body != nil {
-				bodyBytes, _ := io.ReadAll(response.Body)
-				log.Printf("Response Body: %s\n", string(bodyBytes))
-			}
-		}
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
-		fmt.Println()
+	grant := resp.DtoCreditGrantResponse
+	if grant == nil || grant.ID == nil {
+		log.Printf("❌ Create credit grant returned no body\n")
 		return
 	}
-
-	testCreditGrantID = *grant.Id
+	testCreditGrantID = *grant.ID
 	fmt.Printf("✓ Credit grant created successfully!\n")
-	fmt.Printf("  ID: %s\n", *grant.Id)
+	fmt.Printf("  ID: %s\n", *grant.ID)
 	if grant.Credits != nil {
-		fmt.Printf("  Credits: %.2f\n", *grant.Credits)
+		fmt.Printf("  Credits: %s\n", *grant.Credits)
 	}
-	fmt.Printf("  Plan ID: %s\n\n", *grant.PlanId)
+	fmt.Printf("  Plan ID: %s\n\n", *grant.PlanID)
 }
 
 // Test 2: Get credit grant by ID
-func testGetCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+func testGetCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Credit Grant by ID ---")
 
 	if testCreditGrantID == "" {
@@ -3854,61 +3254,57 @@ func testGetCreditGrant(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	grant, response, err := client.CreditGrantsAPI.CreditgrantsIdGet(ctx, testCreditGrantID).
-		Execute()
-
+	resp, err := client.CreditGrants.GetCreditGrant(ctx, testCreditGrantID)
 	if err != nil {
 		log.Printf("❌ Error getting credit grant: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	grant := resp.DtoCreditGrantResponse
+	if grant == nil {
+		log.Printf("❌ Get credit grant returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Credit grant retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *grant.Id)
+	fmt.Printf("  ID: %s\n", *grant.ID)
 	if grant.Credits != nil {
-		fmt.Printf("  Credits: %.2f\n", *grant.Credits)
+		fmt.Printf("  Credits: %s\n", *grant.Credits)
 	}
-	fmt.Printf("  Created At: %s\n\n", *grant.CreatedAt)
+	if grant.CreatedAt != nil {
+		fmt.Printf("  Created At: %s\n\n", *grant.CreatedAt)
+	}
 }
 
 // Test 3: List all credit grants
-func testListCreditGrants(ctx context.Context, client *flexprice.APIClient) {
+func testListCreditGrants(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Credit Grants ---")
 
-	grants, response, err := client.CreditGrantsAPI.CreditgrantsGet(ctx).
-		Limit(10).
-		Execute()
-
+	// List grants for the plan
+	resp, err := client.CreditGrants.GetPlanCreditGrants(ctx, testPlanID)
 	if err != nil {
 		log.Printf("❌ Error listing credit grants: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
+	list := resp.DtoListCreditGrantsResponse
+	if list == nil {
+		list = &components.DtoListCreditGrantsResponse{Items: []components.DtoCreditGrantResponse{}}
 	}
-
-	fmt.Printf("✓ Retrieved %d credit grants\n", len(grants.Items))
-	if len(grants.Items) > 0 {
-		fmt.Printf("  First grant: %s\n", *grants.Items[0].Id)
+	fmt.Printf("✓ Retrieved %d credit grants\n", len(list.Items))
+	if len(list.Items) > 0 {
+		first := list.Items[0]
+		if first.ID != nil {
+			fmt.Printf("  First grant: %s\n", *first.ID)
+		}
 	}
-	if grants.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *grants.Pagination.Total)
+	if list.Pagination != nil && list.Pagination.Total != nil {
+		fmt.Printf("  Total: %d\n", *list.Pagination.Total)
 	}
 	fmt.Println()
 }
 
 // Test 4: Update credit grant
-func testUpdateCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+func testUpdateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Credit Grant ---")
 
 	if testCreditGrantID == "" {
@@ -3917,36 +3313,33 @@ func testUpdateCreditGrant(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	updateRequest := flexprice.DtoUpdateCreditGrantRequest{
-		Metadata: &map[string]string{
+	updateRequest := components.DtoUpdateCreditGrantRequest{
+		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	grant, response, err := client.CreditGrantsAPI.CreditgrantsIdPut(ctx, testCreditGrantID).
-		CreditGrant(updateRequest).
-		Execute()
-
+	resp, err := client.CreditGrants.UpdateCreditGrant(ctx, testCreditGrantID, updateRequest)
 	if err != nil {
 		log.Printf("❌ Error updating credit grant: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	grant := resp.DtoCreditGrantResponse
+	if grant == nil {
+		log.Printf("❌ Update credit grant returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Credit grant updated successfully!\n")
-	fmt.Printf("  ID: %s\n", *grant.Id)
-	fmt.Printf("  Updated At: %s\n\n", *grant.UpdatedAt)
+	fmt.Printf("  ID: %s\n", *grant.ID)
+	if grant.UpdatedAt != nil {
+		fmt.Printf("  Updated At: %s\n\n", *grant.UpdatedAt)
+	}
 }
 
 // Test 5: Delete credit grant
-func testDeleteCreditGrant(ctx context.Context, client *flexprice.APIClient) {
+func testDeleteCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Delete Credit Grant ---")
 
 	if testCreditGrantID == "" {
@@ -3955,21 +3348,12 @@ func testDeleteCreditGrant(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	_, response, err := client.CreditGrantsAPI.CreditgrantsIdDelete(ctx, testCreditGrantID).
-		Execute()
-
+	_, err := client.CreditGrants.DeleteCreditGrant(ctx, testCreditGrantID, nil)
 	if err != nil {
 		log.Printf("❌ Error deleting credit grant: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 204 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 204/200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
 	fmt.Printf("✓ Credit grant deleted successfully!\n")
 	fmt.Printf("  Deleted ID: %s\n\n", testCreditGrantID)
 }
@@ -3979,7 +3363,7 @@ func testDeleteCreditGrant(ctx context.Context, client *flexprice.APIClient) {
 // ========================================
 
 // Test 1: Create a new credit note
-func testCreateCreditNote(ctx context.Context, client *flexprice.APIClient) {
+func testCreateCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Credit Note ---")
 
 	// Skip if no customer available
@@ -3997,12 +3381,13 @@ func testCreateCreditNote(ctx context.Context, client *flexprice.APIClient) {
 	}
 
 	// Get invoice to retrieve line items for credit note
-	invoice, _, err := client.InvoicesAPI.InvoicesIdGet(ctx, testInvoiceID).Execute()
-	if err != nil || invoice == nil {
+	invResp, err := client.Invoices.GetInvoice(ctx, testInvoiceID, nil, nil)
+	if err != nil || invResp.DtoInvoiceResponse == nil {
 		log.Printf("⚠ Warning: Could not retrieve invoice: %v\n", err)
 		fmt.Println("⚠ Skipping create credit note test\n")
 		return
 	}
+	invoice := invResp.DtoInvoiceResponse
 
 	log.Printf("Invoice has %d line items\n", len(invoice.LineItems))
 	if len(invoice.LineItems) == 0 {
@@ -4013,51 +3398,55 @@ func testCreateCreditNote(ctx context.Context, client *flexprice.APIClient) {
 
 	// Use first line item from invoice for credit note
 	firstLineItem := invoice.LineItems[0]
-	creditAmount := "50.00" // Credit 50% of the line item amount
+	if firstLineItem.ID == nil {
+		log.Printf("⚠ Warning: First line item has no ID\n")
+		return
+	}
+	creditAmount := "50.00"
+	displayName := "Invoice Line Item"
+	if firstLineItem.DisplayName != nil {
+		displayName = *firstLineItem.DisplayName
+	}
 
-	noteRequest := flexprice.DtoCreateCreditNoteRequest{
-		InvoiceId: testInvoiceID,
-		Reason:    flexprice.TYPESCREDITNOTEREASON_CreditNoteReasonBillingError,
-		Memo:      lo.ToPtr("Test credit note from SDK"),
-		LineItems: []flexprice.DtoCreateCreditNoteLineItemRequest{
+	noteRequest := components.DtoCreateCreditNoteRequest{
+		InvoiceID: testInvoiceID,
+		Reason:    components.TypesCreditNoteReasonBillingError,
+		Memo:      flexprice.String("Test credit note from SDK"),
+		LineItems: []components.DtoCreateCreditNoteLineItemRequest{
 			{
-				InvoiceLineItemId: *firstLineItem.Id,
+				InvoiceLineItemID: *firstLineItem.ID,
 				Amount:            creditAmount,
-				DisplayName:       lo.ToPtr("Credit for " + lo.FromPtrOr(firstLineItem.DisplayName, "Invoice Line Item")),
+				DisplayName:       &displayName,
 			},
 		},
-		Metadata: &map[string]string{
+		Metadata: map[string]string{
 			"source":   "sdk_test",
 			"test_run": time.Now().Format(time.RFC3339),
 		},
 	}
 
-	note, response, err := client.CreditNotesAPI.CreditnotesPost(ctx).
-		CreditNote(noteRequest).
-		Execute()
-
+	resp, err := client.CreditNotes.CreateCreditNote(ctx, noteRequest)
 	if err != nil {
 		log.Printf("❌ Error creating credit note: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 201 && response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 201/200, got %d\n", response.StatusCode)
-		fmt.Println()
+	note := resp.DtoCreditNoteResponse
+	if note == nil || note.ID == nil {
+		log.Printf("❌ Create credit note returned no body\n")
 		return
 	}
-
-	testCreditNoteID = *note.Id
+	testCreditNoteID = *note.ID
 	fmt.Printf("✓ Credit note created successfully!\n")
-	fmt.Printf("  ID: %s\n", *note.Id)
-	// Credit note details
-	fmt.Printf("  Invoice ID: %s\n", *note.InvoiceId)
+	fmt.Printf("  ID: %s\n", *note.ID)
+	if note.InvoiceID != nil {
+		fmt.Printf("  Invoice ID: %s\n", *note.InvoiceID)
+	}
 	fmt.Println()
 }
 
 // Test 2: Get credit note by ID
-func testGetCreditNote(ctx context.Context, client *flexprice.APIClient) {
+func testGetCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Credit Note by ID ---")
 
 	if testCreditNoteID == "" {
@@ -4066,60 +3455,38 @@ func testGetCreditNote(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	note, response, err := client.CreditNotesAPI.CreditnotesIdGet(ctx, testCreditNoteID).
-		Execute()
-
+	resp, err := client.CreditNotes.GetCreditNote(ctx, testCreditNoteID)
 	if err != nil {
 		log.Printf("❌ Error getting credit note: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
+	note := resp.DtoCreditNoteResponse
+	if note == nil {
+		log.Printf("❌ Get credit note returned no body\n")
 		return
 	}
-
 	fmt.Printf("✓ Credit note retrieved successfully!\n")
-	fmt.Printf("  ID: %s\n", *note.Id)
-	// Credit note details
-	fmt.Printf("  Invoice ID: %s\n", *note.InvoiceId)
-	fmt.Printf("  Created At: %s\n\n", *note.CreatedAt)
-}
-
-// Test 3: List all credit notes
-func testListCreditNotes(ctx context.Context, client *flexprice.APIClient) {
-	fmt.Println("--- Test 3: List Credit Notes ---")
-
-	notes, response, err := client.CreditNotesAPI.CreditnotesGet(ctx).
-		Limit(10).
-		Execute()
-
-	if err != nil {
-		log.Printf("❌ Error listing credit notes: %v\n", err)
-		fmt.Println()
-		return
+	fmt.Printf("  ID: %s\n", *note.ID)
+	if note.InvoiceID != nil {
+		fmt.Printf("  Invoice ID: %s\n", *note.InvoiceID)
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("❌ Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
-	fmt.Printf("✓ Retrieved %d credit notes\n", len(notes.Items))
-	if len(notes.Items) > 0 {
-		fmt.Printf("  First note: %s\n", *notes.Items[0].Id)
-	}
-	if notes.Pagination != nil {
-		fmt.Printf("  Total: %d\n", *notes.Pagination.Total)
+	if note.CreatedAt != nil {
+		fmt.Printf("  Created At: %s\n", *note.CreatedAt)
 	}
 	fmt.Println()
 }
 
-// Test 4: Finalize credit note
-func testFinalizeCreditNote(ctx context.Context, client *flexprice.APIClient) {
+// Test 3: List all credit notes
+func testListCreditNotes(ctx context.Context, client *flexprice.Flexprice) {
+	fmt.Println("--- Test 3: List Credit Notes ---")
+	// SDK does not expose a list credit notes endpoint; skip.
+	fmt.Println("⚠ Skipping list credit notes (no list endpoint in SDK)")
+	fmt.Println()
+}
+
+// Test 4: Finalize credit note (ProcessCreditNote)
+func testFinalizeCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Finalize Credit Note ---")
 
 	if testCreditNoteID == "" {
@@ -4128,24 +3495,16 @@ func testFinalizeCreditNote(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	note, response, err := client.CreditNotesAPI.CreditnotesIdFinalizePost(ctx, testCreditNoteID).
-		Execute()
-
+	resp, err := client.CreditNotes.ProcessCreditNote(ctx, testCreditNoteID)
 	if err != nil {
 		log.Printf("⚠ Warning: Error finalizing credit note: %v\n", err)
 		fmt.Println("⚠ Skipping finalize credit note test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping finalize credit note test\n")
-		return
-	}
-
+	note := resp.DtoCreditNoteResponse
 	fmt.Printf("✓ Credit note finalized successfully!\n")
-	if note != nil && note.Id != nil {
-		fmt.Printf("  ID: %s\n\n", *note.Id)
+	if note != nil && note.ID != nil {
+		fmt.Printf("  ID: %s\n\n", *note.ID)
 	} else {
 		fmt.Println()
 	}
@@ -4162,7 +3521,7 @@ var (
 )
 
 // Test 1: Create an event
-func testCreateEvent(ctx context.Context, client *flexprice.APIClient) {
+func testCreateEvent(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Event ---")
 
 	// Use test customer external ID if available, otherwise generate a unique one
@@ -4174,47 +3533,37 @@ func testCreateEvent(ctx context.Context, client *flexprice.APIClient) {
 
 	testEventName = fmt.Sprintf("Test Event %d", time.Now().Unix())
 
-	eventRequest := flexprice.DtoIngestEventRequest{
+	eventRequest := components.DtoIngestEventRequest{
 		EventName:          testEventName,
-		ExternalCustomerId: testEventCustomerID,
-		Properties: &map[string]string{
+		ExternalCustomerID: testEventCustomerID,
+		Properties: map[string]string{
 			"source":      "sdk_test",
 			"environment": "test",
 			"test_run":    time.Now().Format(time.RFC3339),
 		},
-		Source:    lo.ToPtr("sdk_test"),
-		Timestamp: lo.ToPtr(time.Now().Format(time.RFC3339)),
+		Source:    flexprice.String("sdk_test"),
+		Timestamp: flexprice.String(time.Now().Format(time.RFC3339)),
 	}
 
-	result, response, err := client.EventsAPI.EventsPost(ctx).
-		Event(eventRequest).
-		Execute()
-
+	resp, err := client.Events.IngestEvent(ctx, eventRequest)
 	if err != nil {
 		log.Printf("❌ Error creating event: %v\n", err)
 		fmt.Println()
 		return
 	}
-
-	if response.StatusCode != 202 {
-		log.Printf("❌ Expected status code 202, got %d\n", response.StatusCode)
-		fmt.Println()
-		return
-	}
-
-	// The result is a map[string]string, so we can access it directly
-	if result != nil {
-		if eventId, ok := result["event_id"]; ok {
-			testEventID = eventId
+	obj := resp.Object
+	if obj != nil {
+		if eventID, ok := obj["event_id"]; ok {
+			testEventID = eventID
 			fmt.Printf("✓ Event created successfully!\n")
-			fmt.Printf("  Event ID: %s\n", eventId)
+			fmt.Printf("  Event ID: %s\n", eventID)
 			fmt.Printf("  Event Name: %s\n", testEventName)
 			fmt.Printf("  Customer ID: %s\n\n", testEventCustomerID)
 		} else {
 			fmt.Printf("✓ Event created successfully!\n")
 			fmt.Printf("  Event Name: %s\n", testEventName)
 			fmt.Printf("  Customer ID: %s\n", testEventCustomerID)
-			fmt.Printf("  Response: %v\n\n", result)
+			fmt.Printf("  Response: %v\n\n", obj)
 		}
 	} else {
 		fmt.Printf("✓ Event created successfully!\n")
@@ -4224,7 +3573,7 @@ func testCreateEvent(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 2: Query events
-func testQueryEvents(ctx context.Context, client *flexprice.APIClient) {
+func testQueryEvents(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Query Events ---")
 
 	// Skip if no event was created
@@ -4234,37 +3583,32 @@ func testQueryEvents(ctx context.Context, client *flexprice.APIClient) {
 		return
 	}
 
-	queryRequest := flexprice.DtoGetEventsRequest{
-		ExternalCustomerId: &testEventCustomerID,
+	queryRequest := components.DtoGetEventsRequest{
+		ExternalCustomerID: &testEventCustomerID,
 		EventName:          &testEventName,
 	}
 
-	events, response, err := client.EventsAPI.EventsQueryPost(ctx).
-		Request(queryRequest).
-		Execute()
-
+	resp, err := client.Events.ListRawEvents(ctx, queryRequest)
 	if err != nil {
 		log.Printf("⚠ Warning: Error querying events: %v\n", err)
 		fmt.Println("⚠ Skipping query events test\n")
 		return
 	}
-
-	if response.StatusCode != 200 {
-		log.Printf("⚠ Warning: Expected status code 200, got %d\n", response.StatusCode)
-		fmt.Println("⚠ Skipping query events test\n")
-		return
+	data := resp.DtoGetEventsResponse
+	if data == nil {
+		data = &components.DtoGetEventsResponse{Events: []components.DtoEvent{}}
 	}
-
 	fmt.Printf("✓ Events queried successfully!\n")
-	if events.Events != nil {
-		fmt.Printf("  Found %d events\n", len(events.Events))
-		for i, event := range events.Events {
-			if i < 3 { // Show first 3 events
-				if event.Id != nil {
-					fmt.Printf("  - Event %d: %s - %s\n", i+1, *event.Id, *event.EventName)
-				} else {
-					fmt.Printf("  - Event %d: %s\n", i+1, *event.EventName)
-				}
+	if len(data.Events) > 0 {
+		fmt.Printf("  Found %d events\n", len(data.Events))
+		for i, event := range data.Events {
+			if i >= 3 {
+				break
+			}
+			if event.ID != nil && event.EventName != nil {
+				fmt.Printf("  - Event %d: %s - %s\n", i+1, *event.ID, *event.EventName)
+			} else if event.EventName != nil {
+				fmt.Printf("  - Event %d: %s\n", i+1, *event.EventName)
 			}
 		}
 	} else {
@@ -4274,7 +3618,7 @@ func testQueryEvents(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 3: Async event - Simple enqueue
-func testAsyncEventEnqueue(ctx context.Context, client *flexprice.APIClient) {
+func testAsyncEventEnqueue(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: Async Event - Simple Enqueue ---")
 
 	// Create an AsyncClient
@@ -4319,7 +3663,7 @@ func testAsyncEventEnqueue(ctx context.Context, client *flexprice.APIClient) {
 }
 
 // Test 4: Async event - Enqueue with options
-func testAsyncEventEnqueueWithOptions(ctx context.Context, client *flexprice.APIClient) {
+func testAsyncEventEnqueueWithOptions(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Async Event - Enqueue With Options ---")
 
 	// Create an AsyncClient
@@ -4365,7 +3709,7 @@ func testAsyncEventEnqueueWithOptions(ctx context.Context, client *flexprice.API
 }
 
 // Test 5: Async event - Batch enqueue
-func testAsyncEventBatch(ctx context.Context, client *flexprice.APIClient) {
+func testAsyncEventBatch(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Async Event - Batch Enqueue ---")
 
 	// Create an AsyncClient

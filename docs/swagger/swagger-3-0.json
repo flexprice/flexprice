@@ -5441,15 +5441,15 @@
                 "archived"
               ],
               "x-enum-varnames": [
-                "StatusPublished",
-                "StatusDeleted",
-                "StatusArchived"
+                "Published",
+                "Deleted",
+                "Archived"
               ]
             },
             "x-enum-varnames": [
-              "StatusPublished",
-              "StatusDeleted",
-              "StatusArchived"
+              "Published",
+              "Deleted",
+              "Archived"
             ]
           }
         ],
@@ -9401,15 +9401,15 @@
                 "archived"
               ],
               "x-enum-varnames": [
-                "StatusPublished",
-                "StatusDeleted",
-                "StatusArchived"
+                "Published",
+                "Deleted",
+                "Archived"
               ]
             },
             "x-enum-varnames": [
-              "StatusPublished",
-              "StatusDeleted",
-              "StatusArchived"
+              "Published",
+              "Deleted",
+              "Archived"
             ]
           },
           {
@@ -10365,6 +10365,14 @@
             }
           },
           {
+            "name": "external_customer_id",
+            "in": "query",
+            "description": "External Customer ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "tax_rate_id",
             "in": "query",
             "description": "Tax Rate ID",
@@ -10713,15 +10721,15 @@
                 "ONETIME"
               ],
               "x-enum-varnames": [
-                "TaxRateScopeInternal",
-                "TaxRateScopeExternal",
-                "TaxRateScopeOneTime"
+                "Internal",
+                "External",
+                "OneTime"
               ]
             },
             "x-enum-varnames": [
-              "TaxRateScopeInternal",
-              "TaxRateScopeExternal",
-              "TaxRateScopeOneTime"
+              "Internal",
+              "External",
+              "OneTime"
             ]
           },
           {
@@ -10742,15 +10750,15 @@
                 "archived"
               ],
               "x-enum-varnames": [
-                "StatusPublished",
-                "StatusDeleted",
-                "StatusArchived"
+                "Published",
+                "Deleted",
+                "Archived"
               ]
             },
             "x-enum-varnames": [
-              "StatusPublished",
-              "StatusDeleted",
-              "StatusArchived"
+              "Published",
+              "Deleted",
+              "Archived"
             ]
           },
           {
@@ -12250,15 +12258,15 @@
                 "archived"
               ],
               "x-enum-varnames": [
-                "StatusPublished",
-                "StatusDeleted",
-                "StatusArchived"
+                "Published",
+                "Deleted",
+                "Archived"
               ]
             },
             "x-enum-varnames": [
-              "StatusPublished",
-              "StatusDeleted",
-              "StatusArchived"
+              "Published",
+              "Deleted",
+              "Archived"
             ]
           },
           {
@@ -15443,8 +15451,6 @@
       },
       "dto.CreateTaxAssociationRequest": {
         "required": [
-          "entity_id",
-          "entity_type",
           "tax_rate_code"
         ],
         "type": "object",
@@ -15460,6 +15466,9 @@
           },
           "entity_type": {
             "$ref": "#/components/schemas/types.TaxRateEntityType"
+          },
+          "external_customer_id": {
+            "type": "string"
           },
           "metadata": {
             "type": "object",
@@ -22412,7 +22421,8 @@
           "AddonAssociationEntityTypeSubscription",
           "AddonAssociationEntityTypePlan",
           "AddonAssociationEntityTypeAddon"
-        ]
+        ],
+        "x-speakeasy-name-override": "AddonAssociationEntityType"
       },
       "types.AddonFilter": {
         "type": "object",
@@ -22473,7 +22483,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "AddonFilter"
       },
       "types.AddonStatus": {
         "type": "string",
@@ -22483,10 +22494,11 @@
           "paused"
         ],
         "x-enum-varnames": [
-          "AddonStatusActive",
-          "AddonStatusCancelled",
-          "AddonStatusPaused"
-        ]
+          "Active",
+          "Cancelled",
+          "Paused"
+        ],
+        "x-speakeasy-name-override": "AddonStatus"
       },
       "types.AddonType": {
         "type": "string",
@@ -22495,9 +22507,10 @@
           "multiple_instance"
         ],
         "x-enum-varnames": [
-          "AddonTypeOnetime",
-          "AddonTypeMultipleInstance"
-        ]
+          "Onetime",
+          "MultipleInstance"
+        ],
+        "x-speakeasy-name-override": "AddonType"
       },
       "types.AggregationType": {
         "type": "string",
@@ -22533,7 +22546,8 @@
           "AggregationSumWithMultiplier",
           "AggregationMax",
           "AggregationWeightedSum"
-        ]
+        ],
+        "x-speakeasy-name-override": "AggregationType"
       },
       "types.AlertCondition": {
         "type": "string",
@@ -22544,7 +22558,8 @@
         "x-enum-varnames": [
           "AlertConditionAbove",
           "AlertConditionBelow"
-        ]
+        ],
+        "x-speakeasy-name-override": "AlertCondition"
       },
       "types.AlertEntityType": {
         "type": "string",
@@ -22555,7 +22570,8 @@
         "x-enum-varnames": [
           "AlertEntityTypeWallet",
           "AlertEntityTypeFeature"
-        ]
+        ],
+        "x-speakeasy-name-override": "AlertEntityType"
       },
       "types.AlertInfo": {
         "type": "object",
@@ -22569,7 +22585,8 @@
           "value_at_time": {
             "type": "number"
           }
-        }
+        },
+        "x-speakeasy-name-override": "AlertInfo"
       },
       "types.AlertLogFilter": {
         "type": "object",
@@ -22630,7 +22647,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "AlertLogFilter"
       },
       "types.AlertSettings": {
         "type": "object",
@@ -22647,7 +22665,8 @@
           "warning": {
             "$ref": "#/components/schemas/types.AlertThreshold"
           }
-        }
+        },
+        "x-speakeasy-name-override": "AlertSettings"
       },
       "types.AlertState": {
         "type": "string",
@@ -22662,7 +22681,8 @@
           "AlertStateInfo",
           "AlertStateWarning",
           "AlertStateInAlarm"
-        ]
+        ],
+        "x-speakeasy-name-override": "AlertState"
       },
       "types.AlertThreshold": {
         "type": "object",
@@ -22673,7 +22693,8 @@
           "threshold": {
             "type": "number"
           }
-        }
+        },
+        "x-speakeasy-name-override": "AlertThreshold"
       },
       "types.AlertType": {
         "type": "string",
@@ -22686,7 +22707,8 @@
           "AlertTypeLowOngoingBalance",
           "AlertTypeLowCreditBalance",
           "AlertTypeFeatureWalletBalance"
-        ]
+        ],
+        "x-speakeasy-name-override": "AlertType"
       },
       "types.ApplicationStatus": {
         "type": "string",
@@ -22703,7 +22725,8 @@
           "ApplicationStatusPending",
           "ApplicationStatusSkipped",
           "ApplicationStatusCancelled"
-        ]
+        ],
+        "x-speakeasy-name-override": "ApplicationStatus"
       },
       "types.AutoTopup": {
         "type": "object",
@@ -22720,7 +22743,8 @@
           "threshold": {
             "type": "number"
           }
-        }
+        },
+        "x-speakeasy-name-override": "AutoTopup"
       },
       "types.BillingCadence": {
         "type": "string",
@@ -22731,7 +22755,8 @@
         "x-enum-varnames": [
           "BILLING_CADENCE_RECURRING",
           "BILLING_CADENCE_ONETIME"
-        ]
+        ],
+        "x-speakeasy-name-override": "BillingCadence"
       },
       "types.BillingCycle": {
         "type": "string",
@@ -22742,7 +22767,8 @@
         "x-enum-varnames": [
           "BillingCycleAnniversary",
           "BillingCycleCalendar"
-        ]
+        ],
+        "x-speakeasy-name-override": "BillingCycle"
       },
       "types.BillingModel": {
         "type": "string",
@@ -22755,7 +22781,8 @@
           "BILLING_MODEL_FLAT_FEE",
           "BILLING_MODEL_PACKAGE",
           "BILLING_MODEL_TIERED"
-        ]
+        ],
+        "x-speakeasy-name-override": "BillingModel"
       },
       "types.BillingPeriod": {
         "type": "string",
@@ -22774,7 +22801,8 @@
           "BILLING_PERIOD_DAILY",
           "BILLING_PERIOD_QUARTER",
           "BILLING_PERIOD_HALF_YEAR"
-        ]
+        ],
+        "x-speakeasy-name-override": "BillingPeriod"
       },
       "types.BillingTier": {
         "type": "string",
@@ -22785,7 +22813,8 @@
         "x-enum-varnames": [
           "BILLING_TIER_VOLUME",
           "BILLING_TIER_SLAB"
-        ]
+        ],
+        "x-speakeasy-name-override": "BillingTier"
       },
       "types.CancelImmediatelyInvoicePolicy": {
         "type": "string",
@@ -22796,7 +22825,8 @@
         "x-enum-varnames": [
           "CancelImmediatelyInvoicePolicyGenerateInvoice",
           "CancelImmediatelyInvoicePolicySkip"
-        ]
+        ],
+        "x-speakeasy-name-override": "CancelImmediatelyInvoicePolicy"
       },
       "types.CancellationType": {
         "type": "string",
@@ -22807,7 +22837,8 @@
         "x-enum-varnames": [
           "CancellationTypeImmediate",
           "CancellationTypeEndOfPeriod"
-        ]
+        ],
+        "x-speakeasy-name-override": "CancellationType"
       },
       "types.CollectionMethod": {
         "type": "string",
@@ -22818,7 +22849,8 @@
         "x-enum-varnames": [
           "CollectionMethodChargeAutomatically",
           "CollectionMethodSendInvoice"
-        ]
+        ],
+        "x-speakeasy-name-override": "CollectionMethod"
       },
       "types.CommitmentInfo": {
         "type": "object",
@@ -22855,7 +22887,8 @@
           "type": {
             "$ref": "#/components/schemas/types.CommitmentType"
           }
-        }
+        },
+        "x-speakeasy-name-override": "CommitmentInfo"
       },
       "types.CommitmentType": {
         "type": "string",
@@ -22866,7 +22899,8 @@
         "x-enum-varnames": [
           "COMMITMENT_TYPE_AMOUNT",
           "COMMITMENT_TYPE_QUANTITY"
-        ]
+        ],
+        "x-speakeasy-name-override": "CommitmentType"
       },
       "types.CouponCadence": {
         "type": "string",
@@ -22876,10 +22910,11 @@
           "forever"
         ],
         "x-enum-varnames": [
-          "CouponCadenceOnce",
-          "CouponCadenceRepeated",
-          "CouponCadenceForever"
-        ]
+          "Once",
+          "Repeated",
+          "Forever"
+        ],
+        "x-speakeasy-name-override": "CouponCadence"
       },
       "types.CouponFilter": {
         "type": "object",
@@ -22924,7 +22959,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "CouponFilter"
       },
       "types.CouponType": {
         "type": "string",
@@ -22933,9 +22969,10 @@
           "percentage"
         ],
         "x-enum-varnames": [
-          "CouponTypeFixed",
-          "CouponTypePercentage"
-        ]
+          "Fixed",
+          "Percentage"
+        ],
+        "x-speakeasy-name-override": "CouponType"
       },
       "types.CreditBreakdown": {
         "type": "object",
@@ -22946,7 +22983,8 @@
           "purchased": {
             "type": "string"
           }
-        }
+        },
+        "x-speakeasy-name-override": "CreditBreakdown"
       },
       "types.CreditGrantApplicationReason": {
         "type": "string",
@@ -22959,7 +22997,8 @@
           "ApplicationReasonFirstTimeRecurringCreditGrant",
           "ApplicationReasonRecurringCreditGrant",
           "ApplicationReasonOnetimeCreditGrant"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditGrantApplicationReason"
       },
       "types.CreditGrantCadence": {
         "type": "string",
@@ -22970,7 +23009,8 @@
         "x-enum-varnames": [
           "CreditGrantCadenceOneTime",
           "CreditGrantCadenceRecurring"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditGrantCadence"
       },
       "types.CreditGrantExpiryDurationUnit": {
         "type": "string",
@@ -22985,7 +23025,8 @@
           "CreditGrantExpiryDurationUnitWeeks",
           "CreditGrantExpiryDurationUnitMonths",
           "CreditGrantExpiryDurationUnitYears"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditGrantExpiryDurationUnit"
       },
       "types.CreditGrantExpiryType": {
         "type": "string",
@@ -22998,7 +23039,8 @@
           "CreditGrantExpiryTypeNever",
           "CreditGrantExpiryTypeDuration",
           "CreditGrantExpiryTypeBillingCycle"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditGrantExpiryType"
       },
       "types.CreditGrantPeriod": {
         "type": "string",
@@ -23017,7 +23059,8 @@
           "CREDIT_GRANT_PERIOD_ANNUAL",
           "CREDIT_GRANT_PERIOD_QUARTER",
           "CREDIT_GRANT_PERIOD_HALF_YEARLY"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditGrantPeriod"
       },
       "types.CreditGrantScope": {
         "type": "string",
@@ -23028,7 +23071,8 @@
         "x-enum-varnames": [
           "CreditGrantScopePlan",
           "CreditGrantScopeSubscription"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditGrantScope"
       },
       "types.CreditNoteReason": {
         "type": "string",
@@ -23049,7 +23093,8 @@
           "CreditNoteReasonService",
           "CreditNoteReasonBillingError",
           "CreditNoteReasonSubscriptionCancellation"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditNoteReason"
       },
       "types.CreditNoteStatus": {
         "type": "string",
@@ -23062,7 +23107,8 @@
           "CreditNoteStatusDraft",
           "CreditNoteStatusFinalized",
           "CreditNoteStatusVoided"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditNoteStatus"
       },
       "types.CreditNoteType": {
         "type": "string",
@@ -23073,7 +23119,8 @@
         "x-enum-varnames": [
           "CreditNoteTypeAdjustment",
           "CreditNoteTypeRefund"
-        ]
+        ],
+        "x-speakeasy-name-override": "CreditNoteType"
       },
       "types.CustomerFilter": {
         "type": "object",
@@ -23142,7 +23189,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "CustomerFilter"
       },
       "types.DataType": {
         "type": "string",
@@ -23157,7 +23205,8 @@
           "DataTypeNumber",
           "DataTypeDate",
           "DataTypeArray"
-        ]
+        ],
+        "x-speakeasy-name-override": "DataType"
       },
       "types.DebugTrackerStatus": {
         "type": "string",
@@ -23172,7 +23221,8 @@
           "DebugTrackerStatusNotFound",
           "DebugTrackerStatusFound",
           "DebugTrackerStatusError"
-        ]
+        ],
+        "x-speakeasy-name-override": "DebugTrackerStatus"
       },
       "types.EntitlementEntityType": {
         "type": "string",
@@ -23185,7 +23235,8 @@
           "ENTITLEMENT_ENTITY_TYPE_PLAN",
           "ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION",
           "ENTITLEMENT_ENTITY_TYPE_ADDON"
-        ]
+        ],
+        "x-speakeasy-name-override": "EntitlementEntityType"
       },
       "types.EntitlementFilter": {
         "type": "object",
@@ -23258,7 +23309,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "EntitlementFilter"
       },
       "types.EntitlementUsageResetPeriod": {
         "type": "string",
@@ -23279,7 +23331,8 @@
           "ENTITLEMENT_USAGE_RESET_PERIOD_QUARTER",
           "ENTITLEMENT_USAGE_RESET_PERIOD_HALF_YEAR",
           "ENTITLEMENT_USAGE_RESET_PERIOD_NEVER"
-        ]
+        ],
+        "x-speakeasy-name-override": "EntitlementUsageResetPeriod"
       },
       "types.EntityType": {
         "type": "string",
@@ -23294,7 +23347,8 @@
           "EntityTypePrices",
           "EntityTypeCustomers",
           "EntityTypeFeatures"
-        ]
+        ],
+        "x-speakeasy-name-override": "EntityType"
       },
       "types.EventProcessingStatusType": {
         "type": "string",
@@ -23307,7 +23361,8 @@
           "EventProcessingStatusTypeProcessed",
           "EventProcessingStatusTypeProcessing",
           "EventProcessingStatusTypeFailed"
-        ]
+        ],
+        "x-speakeasy-name-override": "EventProcessingStatusType"
       },
       "types.FailurePoint": {
         "type": "object",
@@ -23318,7 +23373,8 @@
           "failure_point_type": {
             "$ref": "#/components/schemas/types.FailurePointType"
           }
-        }
+        },
+        "x-speakeasy-name-override": "FailurePoint"
       },
       "types.FailurePointType": {
         "type": "string",
@@ -23333,7 +23389,8 @@
           "FailurePointTypeMeterLookup",
           "FailurePointTypePriceLookup",
           "FailurePointTypeSubscriptionLineItemLookup"
-        ]
+        ],
+        "x-speakeasy-name-override": "FailurePointType"
       },
       "types.FeatureFilter": {
         "type": "object",
@@ -23404,7 +23461,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "FeatureFilter"
       },
       "types.FeatureType": {
         "type": "string",
@@ -23414,10 +23472,11 @@
           "static"
         ],
         "x-enum-varnames": [
-          "FeatureTypeMetered",
-          "FeatureTypeBoolean",
-          "FeatureTypeStatic"
-        ]
+          "Metered",
+          "Boolean",
+          "Static"
+        ],
+        "x-speakeasy-name-override": "FeatureType"
       },
       "types.FileType": {
         "type": "string",
@@ -23428,7 +23487,8 @@
         "x-enum-varnames": [
           "FileTypeCSV",
           "FileTypeJSON"
-        ]
+        ],
+        "x-speakeasy-name-override": "FileType"
       },
       "types.FilterCondition": {
         "type": "object",
@@ -23445,7 +23505,8 @@
           "value": {
             "$ref": "#/components/schemas/github_com_flexprice_flexprice_internal_types.Value"
           }
-        }
+        },
+        "x-speakeasy-name-override": "FilterCondition"
       },
       "types.FilterOperatorType": {
         "type": "string",
@@ -23470,7 +23531,8 @@
           "NOT_IN",
           "BEFORE",
           "AFTER"
-        ]
+        ],
+        "x-speakeasy-name-override": "FilterOperatorType"
       },
       "types.GroupFilter": {
         "type": "object",
@@ -23532,7 +23594,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "GroupFilter"
       },
       "types.IntegrationEntityType": {
         "type": "string",
@@ -23559,7 +23622,8 @@
           "IntegrationEntityTypeItem",
           "IntegrationEntityTypeItemPrice",
           "IntegrationEntityTypePrice"
-        ]
+        ],
+        "x-speakeasy-name-override": "IntegrationEntityType"
       },
       "types.InvoiceBilling": {
         "type": "string",
@@ -23570,7 +23634,8 @@
         "x-enum-varnames": [
           "InvoiceBillingInvoiceToParent",
           "InvoiceBillingInvoiceToSelf"
-        ]
+        ],
+        "x-speakeasy-name-override": "InvoiceBilling"
       },
       "types.InvoiceBillingReason": {
         "type": "string",
@@ -23587,7 +23652,8 @@
           "InvoiceBillingReasonSubscriptionUpdate",
           "InvoiceBillingReasonProration",
           "InvoiceBillingReasonManual"
-        ]
+        ],
+        "x-speakeasy-name-override": "InvoiceBillingReason"
       },
       "types.InvoiceCadence": {
         "type": "string",
@@ -23598,7 +23664,8 @@
         "x-enum-varnames": [
           "InvoiceCadenceArrear",
           "InvoiceCadenceAdvance"
-        ]
+        ],
+        "x-speakeasy-name-override": "InvoiceCadence"
       },
       "types.InvoiceFilter": {
         "type": "object",
@@ -23707,7 +23774,8 @@
             "type": "string",
             "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing"
           }
-        }
+        },
+        "x-speakeasy-name-override": "InvoiceFilter"
       },
       "types.InvoiceStatus": {
         "type": "string",
@@ -23720,7 +23788,8 @@
           "InvoiceStatusDraft",
           "InvoiceStatusFinalized",
           "InvoiceStatusVoided"
-        ]
+        ],
+        "x-speakeasy-name-override": "InvoiceStatus"
       },
       "types.InvoiceType": {
         "type": "string",
@@ -23733,7 +23802,8 @@
           "InvoiceTypeSubscription",
           "InvoiceTypeOneOff",
           "InvoiceTypeCredit"
-        ]
+        ],
+        "x-speakeasy-name-override": "InvoiceType"
       },
       "types.ListResponse-dto_WalletResponse": {
         "type": "object",
@@ -23747,13 +23817,15 @@
           "pagination": {
             "$ref": "#/components/schemas/types.PaginationResponse"
           }
-        }
+        },
+        "x-speakeasy-name-override": "ListResponse-dto_WalletResponse"
       },
       "types.Metadata": {
         "type": "object",
         "additionalProperties": {
           "type": "string"
-        }
+        },
+        "x-speakeasy-name-override": "Metadata"
       },
       "types.PaginationResponse": {
         "type": "object",
@@ -23767,7 +23839,8 @@
           "total": {
             "type": "integer"
           }
-        }
+        },
+        "x-speakeasy-name-override": "PaginationResponse"
       },
       "types.PauseMode": {
         "type": "string",
@@ -23780,7 +23853,8 @@
           "PauseModeImmediate",
           "PauseModeScheduled",
           "PauseModePeriodEnd"
-        ]
+        ],
+        "x-speakeasy-name-override": "PauseMode"
       },
       "types.PauseStatus": {
         "type": "string",
@@ -23797,7 +23871,8 @@
           "PauseStatusScheduled",
           "PauseStatusCompleted",
           "PauseStatusCancelled"
-        ]
+        ],
+        "x-speakeasy-name-override": "PauseStatus"
       },
       "types.PaymentBehavior": {
         "type": "string",
@@ -23812,7 +23887,8 @@
           "PaymentBehaviorDefaultIncomplete",
           "PaymentBehaviorErrorIfIncomplete",
           "PaymentBehaviorDefaultActive"
-        ]
+        ],
+        "x-speakeasy-name-override": "PaymentBehavior"
       },
       "types.PaymentDestinationType": {
         "type": "string",
@@ -23821,7 +23897,8 @@
         ],
         "x-enum-varnames": [
           "PaymentDestinationTypeInvoice"
-        ]
+        ],
+        "x-speakeasy-name-override": "PaymentDestinationType"
       },
       "types.PaymentGatewayType": {
         "type": "string",
@@ -23836,7 +23913,8 @@
           "PaymentGatewayTypeRazorpay",
           "PaymentGatewayTypeNomod",
           "PaymentGatewayTypeMoyasar"
-        ]
+        ],
+        "x-speakeasy-name-override": "PaymentGatewayType"
       },
       "types.PaymentMethodType": {
         "type": "string",
@@ -23853,7 +23931,8 @@
           "PaymentMethodTypeOffline",
           "PaymentMethodTypeCredits",
           "PaymentMethodTypePaymentLink"
-        ]
+        ],
+        "x-speakeasy-name-override": "PaymentMethodType"
       },
       "types.PaymentStatus": {
         "type": "string",
@@ -23876,7 +23955,8 @@
           "PaymentStatusFailed",
           "PaymentStatusRefunded",
           "PaymentStatusPartiallyRefunded"
-        ]
+        ],
+        "x-speakeasy-name-override": "PaymentStatus"
       },
       "types.PaymentTerms": {
         "type": "string",
@@ -23895,7 +23975,8 @@
           "PaymentTerms60Net",
           "PaymentTerms75Net",
           "PaymentTerms90Net"
-        ]
+        ],
+        "x-speakeasy-name-override": "PaymentTerms"
       },
       "types.PlanFilter": {
         "type": "object",
@@ -23950,7 +24031,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "PlanFilter"
       },
       "types.PriceEntityType": {
         "type": "string",
@@ -23967,7 +24049,8 @@
           "PRICE_ENTITY_TYPE_ADDON",
           "PRICE_ENTITY_TYPE_PRICE",
           "PRICE_ENTITY_TYPE_COSTSHEET"
-        ]
+        ],
+        "x-speakeasy-name-override": "PriceEntityType"
       },
       "types.PriceFilter": {
         "type": "object",
@@ -24051,7 +24134,8 @@
           "subscription_id": {
             "type": "string"
           }
-        }
+        },
+        "x-speakeasy-name-override": "PriceFilter"
       },
       "types.PriceType": {
         "type": "string",
@@ -24062,7 +24146,8 @@
         "x-enum-varnames": [
           "PRICE_TYPE_USAGE",
           "PRICE_TYPE_FIXED"
-        ]
+        ],
+        "x-speakeasy-name-override": "PriceType"
       },
       "types.PriceUnitFilter": {
         "type": "object",
@@ -24114,7 +24199,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "PriceUnitFilter"
       },
       "types.PriceUnitType": {
         "type": "string",
@@ -24125,7 +24211,8 @@
         "x-enum-varnames": [
           "PRICE_UNIT_TYPE_FIAT",
           "PRICE_UNIT_TYPE_CUSTOM"
-        ]
+        ],
+        "x-speakeasy-name-override": "PriceUnitType"
       },
       "types.ProrationBehavior": {
         "type": "string",
@@ -24144,7 +24231,8 @@
         "x-enum-varnames": [
           "ProrationBehaviorCreateProrations",
           "ProrationBehaviorNone"
-        ]
+        ],
+        "x-speakeasy-name-override": "ProrationBehavior"
       },
       "types.QueryFilter": {
         "type": "object",
@@ -24174,7 +24262,8 @@
           "status": {
             "$ref": "#/components/schemas/types.Status"
           }
-        }
+        },
+        "x-speakeasy-name-override": "QueryFilter"
       },
       "types.ResetUsage": {
         "type": "string",
@@ -24185,7 +24274,8 @@
         "x-enum-varnames": [
           "ResetUsageBillingPeriod",
           "ResetUsageNever"
-        ]
+        ],
+        "x-speakeasy-name-override": "ResetUsage"
       },
       "types.ResumeMode": {
         "type": "string",
@@ -24198,7 +24288,8 @@
           "ResumeModeImmediate",
           "ResumeModeScheduled",
           "ResumeModeAuto"
-        ]
+        ],
+        "x-speakeasy-name-override": "ResumeMode"
       },
       "types.RoundType": {
         "type": "string",
@@ -24209,7 +24300,8 @@
         "x-enum-varnames": [
           "ROUND_UP",
           "ROUND_DOWN"
-        ]
+        ],
+        "x-speakeasy-name-override": "RoundType"
       },
       "types.S3CompressionType": {
         "type": "string",
@@ -24220,7 +24312,8 @@
         "x-enum-varnames": [
           "S3CompressionTypeNone",
           "S3CompressionTypeGzip"
-        ]
+        ],
+        "x-speakeasy-name-override": "S3CompressionType"
       },
       "types.S3EncryptionType": {
         "type": "string",
@@ -24233,7 +24326,8 @@
           "S3EncryptionTypeAES256",
           "S3EncryptionTypeAwsKms",
           "S3EncryptionTypeAwsKmsDsse"
-        ]
+        ],
+        "x-speakeasy-name-override": "S3EncryptionType"
       },
       "types.S3JobConfig": {
         "type": "object",
@@ -24264,7 +24358,8 @@
             "type": "boolean",
             "description": "Use path-style addressing instead of virtual-hosted-style (required for MinIO)"
           }
-        }
+        },
+        "x-speakeasy-name-override": "S3JobConfig"
       },
       "types.ScheduleStatus": {
         "type": "string",
@@ -24281,7 +24376,8 @@
           "ScheduleStatusExecuted",
           "ScheduleStatusCancelled",
           "ScheduleStatusFailed"
-        ]
+        ],
+        "x-speakeasy-name-override": "ScheduleStatus"
       },
       "types.ScheduleType": {
         "type": "string",
@@ -24292,7 +24388,8 @@
         "x-enum-varnames": [
           "ScheduleTypeImmediate",
           "ScheduleTypePeriodEnd"
-        ]
+        ],
+        "x-speakeasy-name-override": "ScheduleType"
       },
       "types.ScheduledTaskEntityType": {
         "type": "string",
@@ -24307,7 +24404,8 @@
           "ScheduledTaskEntityTypeInvoice",
           "ScheduledTaskEntityTypeCreditTopups",
           "ScheduledTaskEntityTypeCreditUsage"
-        ]
+        ],
+        "x-speakeasy-name-override": "ScheduledTaskEntityType"
       },
       "types.ScheduledTaskInterval": {
         "type": "string",
@@ -24331,7 +24429,8 @@
           "ScheduledTaskIntervalCustom",
           "ScheduledTaskIntervalHourly",
           "ScheduledTaskIntervalDaily"
-        ]
+        ],
+        "x-speakeasy-name-override": "ScheduledTaskInterval"
       },
       "types.SecretProvider": {
         "type": "string",
@@ -24356,7 +24455,8 @@
           "SecretProviderQuickBooks",
           "SecretProviderNomod",
           "SecretProviderMoyasar"
-        ]
+        ],
+        "x-speakeasy-name-override": "SecretProvider"
       },
       "types.SecretType": {
         "type": "string",
@@ -24369,7 +24469,8 @@
           "SecretTypePrivateKey",
           "SecretTypePublishableKey",
           "SecretTypeIntegration"
-        ]
+        ],
+        "x-speakeasy-name-override": "SecretType"
       },
       "types.SortCondition": {
         "type": "object",
@@ -24380,7 +24481,8 @@
           "field": {
             "type": "string"
           }
-        }
+        },
+        "x-speakeasy-name-override": "SortCondition"
       },
       "types.SortDirection": {
         "type": "string",
@@ -24391,7 +24493,8 @@
         "x-enum-varnames": [
           "SortDirectionAsc",
           "SortDirectionDesc"
-        ]
+        ],
+        "x-speakeasy-name-override": "SortDirection"
       },
       "types.Status": {
         "type": "string",
@@ -24401,10 +24504,11 @@
           "archived"
         ],
         "x-enum-varnames": [
-          "StatusPublished",
-          "StatusDeleted",
-          "StatusArchived"
-        ]
+          "Published",
+          "Deleted",
+          "Archived"
+        ],
+        "x-speakeasy-name-override": "Status"
       },
       "types.SubscriptionChangeType": {
         "type": "string",
@@ -24417,7 +24521,8 @@
           "SubscriptionChangeTypeUpgrade",
           "SubscriptionChangeTypeDowngrade",
           "SubscriptionChangeTypeLateral"
-        ]
+        ],
+        "x-speakeasy-name-override": "SubscriptionChangeType"
       },
       "types.SubscriptionFilter": {
         "type": "object",
@@ -24523,7 +24628,8 @@
             "type": "boolean",
             "description": "WithLineItems includes line items in the response"
           }
-        }
+        },
+        "x-speakeasy-name-override": "SubscriptionFilter"
       },
       "types.SubscriptionLineItemEntityType": {
         "type": "string",
@@ -24536,7 +24642,8 @@
           "SubscriptionLineItemEntityTypePlan",
           "SubscriptionLineItemEntityTypeAddon",
           "SubscriptionLineItemEntityTypeSubscription"
-        ]
+        ],
+        "x-speakeasy-name-override": "SubscriptionLineItemEntityType"
       },
       "types.SubscriptionScheduleChangeType": {
         "type": "string",
@@ -24547,7 +24654,8 @@
         "x-enum-varnames": [
           "SubscriptionScheduleChangeTypePlanChange",
           "SubscriptionScheduleChangeTypeCancellation"
-        ]
+        ],
+        "x-speakeasy-name-override": "SubscriptionScheduleChangeType"
       },
       "types.SubscriptionStatus": {
         "type": "string",
@@ -24566,7 +24674,8 @@
           "SubscriptionStatusIncomplete",
           "SubscriptionStatusTrialing",
           "SubscriptionStatusDraft"
-        ]
+        ],
+        "x-speakeasy-name-override": "SubscriptionStatus"
       },
       "types.TaskStatus": {
         "type": "string",
@@ -24581,7 +24690,8 @@
           "TaskStatusProcessing",
           "TaskStatusCompleted",
           "TaskStatusFailed"
-        ]
+        ],
+        "x-speakeasy-name-override": "TaskStatus"
       },
       "types.TaskType": {
         "type": "string",
@@ -24592,7 +24702,8 @@
         "x-enum-varnames": [
           "TaskTypeImport",
           "TaskTypeExport"
-        ]
+        ],
+        "x-speakeasy-name-override": "TaskType"
       },
       "types.TaxRateEntityType": {
         "type": "string",
@@ -24603,11 +24714,12 @@
           "tenant"
         ],
         "x-enum-varnames": [
-          "TaxRateEntityTypeCustomer",
-          "TaxRateEntityTypeSubscription",
-          "TaxRateEntityTypeInvoice",
-          "TaxRateEntityTypeTenant"
-        ]
+          "Customer",
+          "Subscription",
+          "Invoice",
+          "Tenant"
+        ],
+        "x-speakeasy-name-override": "TaxRateEntityType"
       },
       "types.TaxRateScope": {
         "type": "string",
@@ -24617,10 +24729,11 @@
           "ONETIME"
         ],
         "x-enum-varnames": [
-          "TaxRateScopeInternal",
-          "TaxRateScopeExternal",
-          "TaxRateScopeOneTime"
-        ]
+          "Internal",
+          "External",
+          "OneTime"
+        ],
+        "x-speakeasy-name-override": "TaxRateScope"
       },
       "types.TaxRateStatus": {
         "type": "string",
@@ -24629,9 +24742,10 @@
           "INACTIVE"
         ],
         "x-enum-varnames": [
-          "TaxRateStatusActive",
-          "TaxRateStatusInactive"
-        ]
+          "Active",
+          "Inactive"
+        ],
+        "x-speakeasy-name-override": "TaxRateStatus"
       },
       "types.TaxRateType": {
         "type": "string",
@@ -24640,9 +24754,10 @@
           "fixed"
         ],
         "x-enum-varnames": [
-          "TaxRateTypePercentage",
-          "TaxRateTypeFixed"
-        ]
+          "Percentage",
+          "Fixed"
+        ],
+        "x-speakeasy-name-override": "TaxRateType"
       },
       "types.TimeRangeFilter": {
         "type": "object",
@@ -24653,7 +24768,8 @@
           "start_time": {
             "type": "string"
           }
-        }
+        },
+        "x-speakeasy-name-override": "TimeRangeFilter"
       },
       "types.TransactionReason": {
         "type": "string",
@@ -24680,7 +24796,8 @@
           "TransactionReasonWalletTermination",
           "TransactionReasonManualBalanceDebit",
           "TransactionReasonCreditAdjustment"
-        ]
+        ],
+        "x-speakeasy-name-override": "TransactionReason"
       },
       "types.TransactionStatus": {
         "type": "string",
@@ -24693,7 +24810,8 @@
           "TransactionStatusPending",
           "TransactionStatusCompleted",
           "TransactionStatusFailed"
-        ]
+        ],
+        "x-speakeasy-name-override": "TransactionStatus"
       },
       "types.TransactionType": {
         "type": "string",
@@ -24704,7 +24822,8 @@
         "x-enum-varnames": [
           "TransactionTypeCredit",
           "TransactionTypeDebit"
-        ]
+        ],
+        "x-speakeasy-name-override": "TransactionType"
       },
       "types.UserFilter": {
         "type": "object",
@@ -24766,7 +24885,8 @@
               "type": "string"
             }
           }
-        }
+        },
+        "x-speakeasy-name-override": "UserFilter"
       },
       "types.UserType": {
         "type": "string",
@@ -24777,7 +24897,8 @@
         "x-enum-varnames": [
           "UserTypeUser",
           "UserTypeServiceAccount"
-        ]
+        ],
+        "x-speakeasy-name-override": "UserType"
       },
       "types.WalletConfig": {
         "type": "object",
@@ -24789,7 +24910,8 @@
               "$ref": "#/components/schemas/types.WalletConfigPriceType"
             }
           }
-        }
+        },
+        "x-speakeasy-name-override": "WalletConfig"
       },
       "types.WalletConfigPriceType": {
         "type": "string",
@@ -24802,7 +24924,8 @@
           "WalletConfigPriceTypeAll",
           "WalletConfigPriceTypeUsage",
           "WalletConfigPriceTypeFixed"
-        ]
+        ],
+        "x-speakeasy-name-override": "WalletConfigPriceType"
       },
       "types.WalletFilter": {
         "type": "object",
@@ -24841,7 +24964,8 @@
               "type": "string"
             }
           }
-        }
+        },
+        "x-speakeasy-name-override": "WalletFilter"
       },
       "types.WalletStatus": {
         "type": "string",
@@ -24854,7 +24978,8 @@
           "WalletStatusActive",
           "WalletStatusFrozen",
           "WalletStatusClosed"
-        ]
+        ],
+        "x-speakeasy-name-override": "WalletStatus"
       },
       "types.WalletTransactionFilter": {
         "type": "object",
@@ -24933,7 +25058,8 @@
           "type": {
             "$ref": "#/components/schemas/types.TransactionType"
           }
-        }
+        },
+        "x-speakeasy-name-override": "WalletTransactionFilter"
       },
       "types.WalletTxReferenceType": {
         "type": "string",
@@ -24948,7 +25074,8 @@
           "WalletTxReferenceTypeExternal",
           "WalletTxReferenceTypeRequest",
           "WalletTxReferenceTypeInvoice"
-        ]
+        ],
+        "x-speakeasy-name-override": "WalletTxReferenceType"
       },
       "types.WalletType": {
         "type": "string",
@@ -24959,7 +25086,8 @@
         "x-enum-varnames": [
           "WalletTypePrePaid",
           "WalletTypePostPaid"
-        ]
+        ],
+        "x-speakeasy-name-override": "WalletType"
       },
       "types.WindowSize": {
         "type": "string",
@@ -24988,7 +25116,8 @@
           "WindowSizeWeek",
           "WindowSizeMonth",
           "DefaultWindowSize"
-        ]
+        ],
+        "x-speakeasy-name-override": "WindowSize"
       },
       "types.WorkflowExecutionFilter": {
         "type": "object",
@@ -25056,7 +25185,8 @@
           "workflow_type": {
             "type": "string"
           }
-        }
+        },
+        "x-speakeasy-name-override": "WorkflowExecutionFilter"
       }
     },
     "securitySchemes": {

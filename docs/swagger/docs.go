@@ -4532,9 +4532,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
+                            "Published",
+                            "Deleted",
+                            "Archived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -7845,9 +7845,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
+                            "Published",
+                            "Deleted",
+                            "Archived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -8640,6 +8640,12 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "description": "External Customer ID",
+                        "name": "external_customer_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
                         "description": "Tax Rate ID",
                         "name": "tax_rate_id",
                         "in": "query"
@@ -8932,9 +8938,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "TaxRateScopeInternal",
-                            "TaxRateScopeExternal",
-                            "TaxRateScopeOneTime"
+                            "Internal",
+                            "External",
+                            "OneTime"
                         ],
                         "name": "scope",
                         "in": "query"
@@ -8952,9 +8958,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
+                            "Published",
+                            "Deleted",
+                            "Archived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -10228,9 +10234,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
+                            "Published",
+                            "Deleted",
+                            "Archived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -13492,8 +13498,6 @@ const docTemplate = `{
         "dto.CreateTaxAssociationRequest": {
             "type": "object",
             "required": [
-                "entity_id",
-                "entity_type",
                 "tax_rate_code"
             ],
             "properties": {
@@ -13508,6 +13512,9 @@ const docTemplate = `{
                 },
                 "entity_type": {
                     "$ref": "#/definitions/types.TaxRateEntityType"
+                },
+                "external_customer_id": {
+                    "type": "string"
                 },
                 "metadata": {
                     "type": "object",
@@ -20970,9 +20977,9 @@ const docTemplate = `{
                 "paused"
             ],
             "x-enum-varnames": [
-                "AddonStatusActive",
-                "AddonStatusCancelled",
-                "AddonStatusPaused"
+                "Active",
+                "Cancelled",
+                "Paused"
             ]
         },
         "types.AddonType": {
@@ -20982,8 +20989,8 @@ const docTemplate = `{
                 "multiple_instance"
             ],
             "x-enum-varnames": [
-                "AddonTypeOnetime",
-                "AddonTypeMultipleInstance"
+                "Onetime",
+                "MultipleInstance"
             ]
         },
         "types.AggregationType": {
@@ -21363,9 +21370,9 @@ const docTemplate = `{
                 "forever"
             ],
             "x-enum-varnames": [
-                "CouponCadenceOnce",
-                "CouponCadenceRepeated",
-                "CouponCadenceForever"
+                "Once",
+                "Repeated",
+                "Forever"
             ]
         },
         "types.CouponFilter": {
@@ -21420,8 +21427,8 @@ const docTemplate = `{
                 "percentage"
             ],
             "x-enum-varnames": [
-                "CouponTypeFixed",
-                "CouponTypePercentage"
+                "Fixed",
+                "Percentage"
             ]
         },
         "types.CreditBreakdown": {
@@ -21901,9 +21908,9 @@ const docTemplate = `{
                 "static"
             ],
             "x-enum-varnames": [
-                "FeatureTypeMetered",
-                "FeatureTypeBoolean",
-                "FeatureTypeStatic"
+                "Metered",
+                "Boolean",
+                "Static"
             ]
         },
         "types.FileType": {
@@ -22903,9 +22910,9 @@ const docTemplate = `{
                 "archived"
             ],
             "x-enum-varnames": [
-                "StatusPublished",
-                "StatusDeleted",
-                "StatusArchived"
+                "Published",
+                "Deleted",
+                "Archived"
             ]
         },
         "types.SubscriptionChangeType": {
@@ -23105,10 +23112,10 @@ const docTemplate = `{
                 "tenant"
             ],
             "x-enum-varnames": [
-                "TaxRateEntityTypeCustomer",
-                "TaxRateEntityTypeSubscription",
-                "TaxRateEntityTypeInvoice",
-                "TaxRateEntityTypeTenant"
+                "Customer",
+                "Subscription",
+                "Invoice",
+                "Tenant"
             ]
         },
         "types.TaxRateScope": {
@@ -23119,9 +23126,9 @@ const docTemplate = `{
                 "ONETIME"
             ],
             "x-enum-varnames": [
-                "TaxRateScopeInternal",
-                "TaxRateScopeExternal",
-                "TaxRateScopeOneTime"
+                "Internal",
+                "External",
+                "OneTime"
             ]
         },
         "types.TaxRateStatus": {
@@ -23131,8 +23138,8 @@ const docTemplate = `{
                 "INACTIVE"
             ],
             "x-enum-varnames": [
-                "TaxRateStatusActive",
-                "TaxRateStatusInactive"
+                "Active",
+                "Inactive"
             ]
         },
         "types.TaxRateType": {
@@ -23142,8 +23149,8 @@ const docTemplate = `{
                 "fixed"
             ],
             "x-enum-varnames": [
-                "TaxRateTypePercentage",
-                "TaxRateTypeFixed"
+                "Percentage",
+                "Fixed"
             ]
         },
         "types.TimeRangeFilter": {

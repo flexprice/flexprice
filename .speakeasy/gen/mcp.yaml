@@ -27,37 +27,29 @@ generation:
   versioningStrategy: automatic
   persistentEdits: {}
   tests:
-    generateTests: false
-    generateNewTests: true
+    generateTests: true
+    generateNewTests: false
     skipResponseBodyAssertions: false
-go:
-  version: 0.0.43
-  additionalDependencies: {}
+mcp-typescript:
+  version: 0.0.48
+  additionalDependencies:
+    dependencies: {}
+    devDependencies: {}
+    peerDependencies: {}
+  advancedFlags: []
+  author: flexprice
   baseErrorName: FlexpriceError
-  clientServerStatusCodesAsErrors: true
-  defaultErrorName: APIError
-  flattenGlobalSecurity: true
-  forwardCompatibleEnumsByDefault: true
-  forwardCompatibleUnionsByDefault: tagged-and-untagged
-  imports:
-    option: openapi
-    paths:
-      callbacks: models/callbacks
-      errors: models/apierrors
-      operations: models/operations
-      shared: models/components
-      webhooks: models/webhooks
-  includeEmptyObjects: true
+  cloudflareEnabled: false
+  defaultErrorName: FlexpriceDefaultError
+  formStringArrayEncodeMode: array
+  gramEnabled: false
   inferUnionDiscriminators: true
   inputModelSuffix: input
-  maxMethodParams: 4
-  methodArguments: require-security-and-request
-  modulePath: github.com/flexprice/flexprice-go
+  maxMethodParams: 0
+  mcpbManifestOverlay:
+    displayName: Flexprice
   multipartArrayFormat: standard
-  nullableOptionalWrapper: true
   outputModelSuffix: output
-  respectRequiredFields: false
-  respectTitlesForPrimitiveUnionMembers: true
-  responseFormat: envelope-http
-  sdkPackageName: flexprice
-  unionStrategy: populated-fields
+  packageName: '@omkar273/mcp-temp'
+  responseFormat: flat
+  validateResponse: false

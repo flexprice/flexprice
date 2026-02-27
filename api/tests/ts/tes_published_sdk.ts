@@ -1,12 +1,15 @@
 #!/usr/bin/env ts-node
 
 /**
- * FlexPrice TypeScript SDK - Local SDK tests (unpublished SDK from api/typescript).
- * Run from api/tests/ts: npx ts-node test_local_sdk_js.ts
- * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST. Build SDK first: make sdk-all (then build api/typescript if needed).
+ * FlexPrice TypeScript SDK - Published SDK tests (npm install flexprice-ts-temp).
+ * Run from api/tests/ts: npm install flexprice-ts-temp && npx ts-node test_sdk_js.ts
+ * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
+ * Package: https://www.npmjs.com/package/flexprice-ts-temp
+ * Repo: https://github.com/flexprice/js-sdk-temp
  */
 
-import { FlexPrice } from 'flexprice-ts';
+import { FlexPrice } from 'flexprice-ts-temp';
+import { TypesFeatureType } from 'flexprice-ts-temp';
 
 // Global test entity IDs
 let testCustomerID = '';
@@ -298,7 +301,7 @@ async function testCreateFeature(client: FlexPrice) {
             name: testFeatureName,
             lookupKey: featureKey,
             description: 'This is a test feature created by SDK tests',
-            type: 'boolean',
+            type: TypesFeatureType.Boolean,
             metadata: {
                 source: 'sdk_test',
                 test_run: new Date().toISOString(),
@@ -1539,7 +1542,7 @@ async function testAttemptPayment(client: FlexPrice) {
             billingReason: 'MANUAL',
             invoiceStatus: 'DRAFT',
             paymentStatus: 'PENDING',
-            lineItems: [{ displayName: 'Attempt Payment Test', amount: '25.00',quantity:'1' }],
+            lineItems: [{ displayName: 'Attempt Payment Test', amount: '25.00', quantity: '1' }],
         });
 
         const attemptID = (attemptInvoice && 'id' in attemptInvoice && attemptInvoice.id) ? attemptInvoice.id : '';
@@ -1762,7 +1765,7 @@ async function testCreatePayment(client: FlexPrice) {
     }
 
     let paymentInvoiceID = '';
-    
+
     try {
         // Create a draft invoice with explicit payment status to prevent auto-payment
         const draftInvoice = await client.invoices.createInvoice({
@@ -1855,7 +1858,7 @@ async function testCreatePayment(client: FlexPrice) {
         }
     } catch (error: any) {
         console.log(`❌ Error creating payment: ${error.message || error}`);
-        
+
         // Enhanced error logging - try to capture all possible error properties
         // The SDK might structure errors differently (Fetch API vs Axios)
         if (error.response) {
@@ -1874,22 +1877,22 @@ async function testCreatePayment(client: FlexPrice) {
                 });
             }
         }
-        
+
         if (error.body) {
             console.log(`  Error Body: ${JSON.stringify(error.body, null, 2)}`);
         }
-        
+
         if (error.status) {
             console.log(`  Status Code: ${error.status}`);
         }
-        
+
         if (error.statusCode) {
             console.log(`  Status Code: ${error.statusCode}`);
         }
-        
+
         // Log the entire error object structure for debugging
         console.log('  Error Object Keys:', Object.keys(error));
-        
+
         // Try to get response body if it's a Response object
         if (error instanceof Response) {
             error.text().then((text) => {
@@ -1898,7 +1901,7 @@ async function testCreatePayment(client: FlexPrice) {
                 console.log(`  Could not read response text: ${e}`);
             });
         }
-        
+
         // Also check if error has a json() method (common in Fetch API)
         if (error.json && typeof error.json === 'function') {
             error.json().then((data: any) => {
@@ -1907,7 +1910,7 @@ async function testCreatePayment(client: FlexPrice) {
                 // Ignore if json() fails
             });
         }
-        
+
         // Log payment request details for debugging
         console.log('  Payment Request Details:');
         console.log('    Amount: 100.00');
@@ -2251,7 +2254,7 @@ async function testCreateCreditGrant(client: FlexPrice) {
         }
     } catch (error: any) {
         console.log(`❌ Error creating credit grant: ${error.message || error}`);
-        
+
         // Enhanced error logging to match Go test
         if (error.response) {
             console.log(`  Response Status Code: ${error.response.status || error.response.statusCode || 'unknown'}`);
@@ -2262,22 +2265,22 @@ async function testCreateCreditGrant(client: FlexPrice) {
                 console.log(`  Response Body: ${JSON.stringify(error.response.body, null, 2)}`);
             }
         }
-        
+
         if (error.body) {
             console.log(`  Error Body: ${JSON.stringify(error.body, null, 2)}`);
         }
-        
+
         if (error.status) {
             console.log(`  Status Code: ${error.status}`);
         }
-        
+
         if (error.statusCode) {
             console.log(`  Status Code: ${error.statusCode}`);
         }
-        
+
         // Log the entire error object structure for debugging
         console.log('  Error Object Keys:', Object.keys(error));
-        
+
         // Log request details for debugging
         console.log('  Credit Grant Request Details:');
         console.log('    Name: Test Credit Grant');
@@ -2480,19 +2483,19 @@ async function testCreateCreditNote(client: FlexPrice) {
         }
     } catch (error: any) {
         console.log(`❌ Error creating credit note: ${error.message || error}`);
-        
+
         // Enhanced error logging to match Go test - try to get actual error message
         if (error.response) {
             const statusCode = error.response.status || error.response.statusCode || 'unknown';
             console.log(`  Response Status Code: ${statusCode}`);
-            
+
             if (error.response.data) {
                 console.log(`  Response Data: ${JSON.stringify(error.response.data, null, 2)}`);
             }
             if (error.response.body) {
                 console.log(`  Response Body: ${JSON.stringify(error.response.body, null, 2)}`);
             }
-            
+
             // Try to get response text if it's a Response object
             if (error.response.text && typeof error.response.text === 'function') {
                 error.response.text().then((text: string) => {
@@ -2501,7 +2504,7 @@ async function testCreateCreditNote(client: FlexPrice) {
                     // Ignore if text() fails
                 });
             }
-            
+
             // Try to get JSON if available
             if (error.response.json && typeof error.response.json === 'function') {
                 error.response.json().then((data: any) => {
@@ -2511,19 +2514,19 @@ async function testCreateCreditNote(client: FlexPrice) {
                 });
             }
         }
-        
+
         if (error.body) {
             console.log(`  Error Body: ${JSON.stringify(error.body, null, 2)}`);
         }
-        
+
         if (error.status) {
             console.log(`  Status Code: ${error.status}`);
         }
-        
+
         if (error.statusCode) {
             console.log(`  Status Code: ${error.statusCode}`);
         }
-        
+
         // Try to get response body if it's a Response object
         if (error instanceof Response) {
             error.text().then((text) => {
@@ -2532,7 +2535,7 @@ async function testCreateCreditNote(client: FlexPrice) {
                 console.log(`  Could not read response text: ${e}`);
             });
         }
-        
+
         // Also check if error has a json() method (common in Fetch API)
         if (error.json && typeof error.json === 'function') {
             error.json().then((data: any) => {
@@ -2541,13 +2544,13 @@ async function testCreateCreditNote(client: FlexPrice) {
                 // Ignore if json() fails
             });
         }
-        
+
         // Log the entire error object structure for debugging
         console.log('  Error Object Keys:', Object.keys(error));
         if (error.response) {
             console.log('  Error Response Keys:', Object.keys(error.response));
         }
-        
+
         // Log request details for debugging
         console.log('  Credit Note Request Details:');
         console.log(`    InvoiceId: ${testInvoiceID}`);
@@ -2928,7 +2931,7 @@ async function testAsyncEventBatch(client: FlexPrice) {
         console.log('  Event Name: batch_example');
         console.log(`  Customer ID: ${customerID}`);
         console.log('  Waiting for events to be processed...\n');
-        
+
         // Wait for background processing
         await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (error: any) {

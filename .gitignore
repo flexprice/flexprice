@@ -99,19 +99,11 @@ api/tests/**/node_modules/
 !api/scripts/**
 !api/README.md
 !api/publish.sh
-# Track .speakeasy gen.yaml and README so SDK config (packageName, version, etc.) is in git
-!api/go/.speakeasy/
-!api/go/.speakeasy/gen.yaml
-!api/go/.speakeasy/README.md
-!api/typescript/.speakeasy/
-!api/typescript/.speakeasy/gen.yaml
-!api/typescript/.speakeasy/README.md
-!api/python/.speakeasy/
-!api/python/.speakeasy/gen.yaml
-!api/python/.speakeasy/README.md
-!api/mcp/.speakeasy/
-!api/mcp/.speakeasy/gen.yaml
-!api/mcp/.speakeasy/README.md
+# SDK config: central gen in .speakeasy/gen/*.yaml (tracked). api/<lang>/.speakeasy/ is recreated at build (sync-gen-to-output copies gen.yaml; Speakeasy writes gen.lock).
+api/go/.speakeasy/
+api/typescript/.speakeasy/
+api/python/.speakeasy/
+api/mcp/.speakeasy/
 
 # =============================================================================
 # Misc

@@ -26,26 +26,38 @@ generation:
   requestBodyFieldName: body
   versioningStrategy: automatic
   persistentEdits: {}
-mcp-typescript:
-  version: 0.0.43
-  additionalDependencies:
-    dependencies: {}
-    devDependencies: {}
-    peerDependencies: {}
-  advancedFlags: []
-  author: flexprice
+  tests:
+    generateTests: false
+    generateNewTests: true
+    skipResponseBodyAssertions: false
+go:
+  version: 0.0.48
+  additionalDependencies: {}
   baseErrorName: FlexpriceError
-  cloudflareEnabled: false
-  defaultErrorName: FlexpriceDefaultError
-  formStringArrayEncodeMode: array
-  gramEnabled: false
+  clientServerStatusCodesAsErrors: true
+  defaultErrorName: APIError
+  flattenGlobalSecurity: true
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-and-untagged
+  imports:
+    option: openapi
+    paths:
+      callbacks: models/callbacks
+      errors: models/apierrors
+      operations: models/operations
+      shared: models/components
+      webhooks: models/webhooks
+  includeEmptyObjects: true
   inferUnionDiscriminators: true
   inputModelSuffix: input
-  maxMethodParams: 0
-  mcpbManifestOverlay:
-    displayName: Flexprice
+  maxMethodParams: 4
+  methodArguments: require-security-and-request
+  modulePath: github.com/flexprice/flexprice-go
   multipartArrayFormat: standard
+  nullableOptionalWrapper: true
   outputModelSuffix: output
-  packageName: '@omkar273/mcp-temp'
-  responseFormat: flat
-  validateResponse: false
+  respectRequiredFields: false
+  respectTitlesForPrimitiveUnionMembers: true
+  responseFormat: envelope-http
+  sdkPackageName: flexprice
+  unionStrategy: populated-fields

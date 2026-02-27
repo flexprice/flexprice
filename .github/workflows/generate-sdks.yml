@@ -1,7 +1,7 @@
 # Generate OpenAPI spec and all SDKs (Go, TypeScript, Python) + MCP.
 #
-# Flow: trigger -> version-check (skip if .speakeasy/sdk-version.json equals api/go/.speakeasy/gen.yaml) -> generate (swagger, Speakeasy, upload artifacts) -> push to GitHub -> publish to npm/PyPI.
-# Version source: .speakeasy/sdk-version.json only. To release: update that file, then trigger.
+# Flow: trigger -> version-check (skip if .speakeasy/sdk-version.json equals .speakeasy/gen/go.yaml version) -> generate (swagger, Speakeasy, upload artifacts) -> push to GitHub -> publish to npm/PyPI.
+# Version source: .speakeasy/sdk-version.json and .speakeasy/gen/*.yaml (central config). To release: update sdk-version.json, then trigger.
 #
 # Triggers: push to main (path-filtered); workflow_dispatch. When version unchanged, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Compare .speakeasy/sdk-version.json with api/go/.speakeasy/gen.yaml; skip generate/publish if equal.
+  # Compare .speakeasy/sdk-version.json with .speakeasy/gen/go.yaml version; skip generate/publish if equal.
   # ---------------------------------------------------------------------------
   version-check:
     runs-on: ubuntu-latest
@@ -52,16 +52,16 @@ jobs:
           SDK_VERSION=$(jq -r .version .speakeasy/sdk-version.json 2>/dev/null || echo "")
           [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ] && SDK_VERSION="0.0.0"
           GEN_VERSION=""
-          if [ -f api/go/.speakeasy/gen.yaml ]; then
-            GEN_VERSION=$(sed -n '/^go:/,/^[a-z]/p' api/go/.speakeasy/gen.yaml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | xargs)
+          if [ -f .speakeasy/gen/go.yaml ]; then
+            GEN_VERSION=$(sed -n '/^go:/,/^[a-z]/p' .speakeasy/gen/go.yaml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | xargs)
           fi
           [ -z "$GEN_VERSION" ] && GEN_VERSION=""
           if [ "$SDK_VERSION" = "$GEN_VERSION" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Version unchanged (sdk-version.json=$SDK_VERSION, gen.yaml=$GEN_VERSION); skipping generate and publish."
+            echo "Version unchanged (sdk-version.json=$SDK_VERSION, gen/go.yaml=$GEN_VERSION); skipping generate and publish."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Version changed (sdk-version.json=$SDK_VERSION, gen.yaml=$GEN_VERSION); will generate and publish."
+            echo "Version changed (sdk-version.json=$SDK_VERSION, gen/go.yaml=$GEN_VERSION); will generate and publish."
           fi
           echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
 
@@ -69,7 +69,7 @@ jobs:
         if: steps.version-check.outputs.skip == 'true'
         run: |
           echo "## Skipped generate and publish" >> $GITHUB_STEP_SUMMARY
-          echo "Version in \`.speakeasy/sdk-version.json\` matches \`api/go/.speakeasy/gen.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
+          echo "Version in \`.speakeasy/sdk-version.json\` matches \`.speakeasy/gen/go.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Setup → OpenAPI → SDK tooling → Generate → Upload artifacts
@@ -136,13 +136,9 @@ jobs:
       - name: Generate SDKs and MCP
         run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
 
-      # Overwrite Speakeasy version in artifacts so publish never gets 0.0.1
+      # Overwrite Speakeasy version in artifacts so publish never gets 0.0.1 (version already set in central gen before generate)
       - name: Apply version from sdk-version.json to SDK artifacts
         run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
-
-      - name: Sync version to gen.yaml
-        run: |
-          ./scripts/sync-sdk-version-to-gen.sh "${{ needs.version-check.outputs.version }}"
 
       - name: Generate job summary
         run: |

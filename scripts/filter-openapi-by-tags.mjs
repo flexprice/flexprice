@@ -4,7 +4,7 @@
  * with a configured allowed list. Used to generate a smaller spec for MCP so
  * only tools for specific tag groups are exposed.
  *
- * Input: docs/swagger/swagger-3-0.json, api/mcp/.speakeasy/allowed-tags.yaml
+ * Input: docs/swagger/swagger-3-0.json, .speakeasy/mcp/allowed-tags.yaml
  * Output: docs/swagger/swagger-3-0-mcp.json
  *
  * Usage: node scripts/filter-openapi-by-tags.mjs [--spec path] [--allowed path] [--out path]
@@ -49,7 +49,7 @@ function parseAllowedTags(content) {
 function main() {
   const args = process.argv.slice(2);
   let specPath = resolve(repoRoot, 'docs/swagger/swagger-3-0.json');
-  let allowedPath = resolve(repoRoot, 'api/mcp/.speakeasy/allowed-tags.yaml');
+  let allowedPath = resolve(repoRoot, '.speakeasy/mcp/allowed-tags.yaml');
   let outPath = resolve(repoRoot, 'docs/swagger/swagger-3-0-mcp.json');
 
   for (let i = 0; i < args.length; i++) {

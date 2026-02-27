@@ -329,8 +329,8 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			wallet.GET("/:id/balance/real-time-cached", handlers.Wallet.GetWalletBalanceForceCached)
 			wallet.PUT("/:id", handlers.Wallet.UpdateWallet)
 			wallet.POST("/:id/debit", handlers.Wallet.ManualBalanceDebit)
-wallet.POST("/transactions/search", handlers.Wallet.QueryWalletTransactions)
-		wallet.POST("/search", handlers.Wallet.QueryWallets)
+			wallet.POST("/transactions/search", handlers.Wallet.QueryWalletTransactions)
+			wallet.POST("/search", handlers.Wallet.QueryWallets)
 		}
 		// Tenant routes
 		tenantRoutes := v1Private.Group("/tenants")

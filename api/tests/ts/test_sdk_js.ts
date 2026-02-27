@@ -1,12 +1,14 @@
 #!/usr/bin/env ts-node
 
 /**
- * FlexPrice TypeScript SDK - Local SDK tests (unpublished SDK from api/typescript).
- * Run from api/tests/ts: npx ts-node test_local_sdk_js.ts
- * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST. Build SDK first: make sdk-all (then build api/typescript if needed).
+ * Flexprice TypeScript SDK - Published SDK tests (npm install flexprice-ts-temp).
+ * Run from api/tests/ts: npm install flexprice-ts-temp && npx ts-node test_sdk_js.ts
+ * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
+ * Package: https://www.npmjs.com/package/flexprice-ts-temp
+ * Repo: https://github.com/flexprice/js-sdk-temp
  */
 
-import { FlexPrice } from '../../typescript';
+import { Flexprice } from 'flexprice-ts-temp';
 
 // Global test entity IDs
 let testCustomerID = '';
@@ -41,10 +43,21 @@ let testEventName = '';
 let testEventCustomerID = '';
 
 // ========================================
+// HELPERS (published SDK may return { result } or { data } wrapper)
+// ========================================
+
+function unwrap<T extends Record<string, unknown>>(response: unknown): T | null {
+    if (response == null) return null;
+    const r = response as Record<string, unknown>;
+    const body = (r.result ?? r.data ?? r) as T;
+    return (body && typeof body === 'object') ? body : null;
+}
+
+// ========================================
 // CLIENT
 // ========================================
 
-function getClient(): FlexPrice {
+function getClient(): Flexprice {
     const apiKey = process.env.FLEXPRICE_API_KEY;
     const apiHost = process.env.FLEXPRICE_API_HOST;
 
@@ -57,7 +70,7 @@ function getClient(): FlexPrice {
         process.exit(1);
     }
 
-    console.log('=== FlexPrice TypeScript SDK - API Tests (local api/typescript) ===\n');
+    console.log('=== Flexprice TypeScript SDK - API Tests (local api/typescript) ===\n');
     console.log(`✓ API Key: ${apiKey.substring(0, 8)}...${apiKey.slice(-4)}`);
     console.log(`✓ API Host: ${apiHost}\n`);
 
@@ -66,7 +79,7 @@ function getClient(): FlexPrice {
         serverURL = `https://${serverURL}`;
     }
 
-    return new FlexPrice({
+    return new Flexprice({
         serverURL,
         apiKeyAuth: apiKey,
     });
@@ -76,7 +89,7 @@ function getClient(): FlexPrice {
 // CUSTOMERS API TESTS
 // ========================================
 
-async function testCreateCustomer(client: FlexPrice) {
+async function testCreateCustomer(client: Flexprice) {
     console.log('--- Test 1: Create Customer ---');
 
     try {
@@ -84,7 +97,7 @@ async function testCreateCustomer(client: FlexPrice) {
         testCustomerName = `Test Customer ${timestamp}`;
         const externalId = `test-customer-${timestamp}`;
 
-        const response = await client.customers.createCustomer({
+        const raw = await client.customers.createCustomer({
             name: testCustomerName,
             email: `test-${timestamp}@example.com`,
             externalId,
@@ -94,6 +107,7 @@ async function testCreateCustomer(client: FlexPrice) {
                 environment: 'test',
             },
         });
+        const response = unwrap<{ id: string; name?: string; externalId?: string; email?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testCustomerID = response.id;
@@ -110,11 +124,12 @@ async function testCreateCustomer(client: FlexPrice) {
     }
 }
 
-async function testGetCustomer(client: FlexPrice) {
+async function testGetCustomer(client: Flexprice) {
     console.log('--- Test 2: Get Customer by ID ---');
 
     try {
-        const response = await client.customers.getCustomer({ id: testCustomerID });
+        const raw = await client.customers.getCustomer({ id: testCustomerID });
+        const response = unwrap<{ id: string; name?: string }>(raw);
 
         if (response && 'id' in response) {
             console.log('✓ Customer retrieved successfully!');
@@ -129,7 +144,7 @@ async function testGetCustomer(client: FlexPrice) {
     }
 }
 
-async function testListCustomers(client: FlexPrice) {
+async function testListCustomers(client: Flexprice) {
     console.log('--- Test 3: List Customers ---');
 
     try {
@@ -151,11 +166,11 @@ async function testListCustomers(client: FlexPrice) {
     }
 }
 
-async function testUpdateCustomer(client: FlexPrice) {
+async function testUpdateCustomer(client: Flexprice) {
     console.log('--- Test 4: Update Customer ---');
 
     try {
-        const response = await client.customers.updateCustomer({
+        const raw = await client.customers.updateCustomer({
             id: testCustomerID,
             dtoUpdateCustomerRequest: {
                 name: `${testCustomerName} (Updated)`,
@@ -165,6 +180,7 @@ async function testUpdateCustomer(client: FlexPrice) {
                 },
             },
         });
+        const response = unwrap<{ id: string; name?: string; updatedAt?: string }>(raw);
 
         if (response && 'id' in response) {
             console.log('✓ Customer updated successfully!');
@@ -179,7 +195,7 @@ async function testUpdateCustomer(client: FlexPrice) {
     }
 }
 
-async function testLookupCustomer(client: FlexPrice) {
+async function testLookupCustomer(client: Flexprice) {
     console.log('--- Test 5: Lookup Customer by External ID ---');
 
     try {
@@ -188,7 +204,8 @@ async function testLookupCustomer(client: FlexPrice) {
             console.log('⚠ No external ID available\n');
             return;
         }
-        const response = await client.customers.getCustomerByExternalId({ externalId });
+        const raw = await client.customers.getCustomerByExternalId({ externalId });
+        const response = unwrap<{ id: string; name?: string }>(raw);
 
         if (response && 'id' in response) {
             console.log('✓ Customer found by external ID!');
@@ -203,7 +220,7 @@ async function testLookupCustomer(client: FlexPrice) {
     }
 }
 
-async function testSearchCustomers(client: FlexPrice) {
+async function testSearchCustomers(client: Flexprice) {
     console.log('--- Test 6: Search Customers ---');
 
     try {
@@ -231,7 +248,7 @@ async function testSearchCustomers(client: FlexPrice) {
     }
 }
 
-async function testGetCustomerEntitlements(client: FlexPrice) {
+async function testGetCustomerEntitlements(client: Flexprice) {
     console.log('--- Test 7: Get Customer Entitlements ---');
 
     try {
@@ -248,7 +265,7 @@ async function testGetCustomerEntitlements(client: FlexPrice) {
     }
 }
 
-async function testGetCustomerUpcomingGrants(client: FlexPrice) {
+async function testGetCustomerUpcomingGrants(client: Flexprice) {
     console.log('--- Test 8: Get Customer Upcoming Grants ---');
 
     try {
@@ -265,7 +282,7 @@ async function testGetCustomerUpcomingGrants(client: FlexPrice) {
     }
 }
 
-async function testGetCustomerUsage(client: FlexPrice) {
+async function testGetCustomerUsage(client: Flexprice) {
     console.log('--- Test 9: Get Customer Usage ---');
 
     try {
@@ -286,7 +303,7 @@ async function testGetCustomerUsage(client: FlexPrice) {
 // FEATURES API TESTS
 // ========================================
 
-async function testCreateFeature(client: FlexPrice) {
+async function testCreateFeature(client: Flexprice) {
     console.log('--- Test 1: Create Feature ---');
 
     try {
@@ -294,17 +311,18 @@ async function testCreateFeature(client: FlexPrice) {
         testFeatureName = `Test Feature ${timestamp}`;
         const featureKey = `test_feature_${timestamp}`;
 
-        const response = await client.features.createFeature({
+        const raw = await client.features.createFeature({
             name: testFeatureName,
             lookupKey: featureKey,
             description: 'This is a test feature created by SDK tests',
-            type: 'boolean',
+            type: 'boolean' as const,
             metadata: {
                 source: 'sdk_test',
                 test_run: new Date().toISOString(),
                 environment: 'test',
             },
         });
+        const response = unwrap<{ id: string; name?: string; lookupKey?: string; type?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testFeatureID = response.id;
@@ -321,7 +339,7 @@ async function testCreateFeature(client: FlexPrice) {
     }
 }
 
-async function testGetFeature(client: FlexPrice) {
+async function testGetFeature(client: Flexprice) {
     console.log('--- Test 2: Get Feature by ID ---');
 
     try {
@@ -342,7 +360,7 @@ async function testGetFeature(client: FlexPrice) {
     }
 }
 
-async function testListFeatures(client: FlexPrice) {
+async function testListFeatures(client: Flexprice) {
     console.log('--- Test 3: List Features ---');
 
     try {
@@ -364,7 +382,7 @@ async function testListFeatures(client: FlexPrice) {
     }
 }
 
-async function testUpdateFeature(client: FlexPrice) {
+async function testUpdateFeature(client: Flexprice) {
     console.log('--- Test 4: Update Feature ---');
 
     try {
@@ -394,7 +412,7 @@ async function testUpdateFeature(client: FlexPrice) {
     }
 }
 
-async function testSearchFeatures(client: FlexPrice) {
+async function testSearchFeatures(client: Flexprice) {
     console.log('--- Test 5: Search Features ---');
 
     try {
@@ -422,7 +440,7 @@ async function testSearchFeatures(client: FlexPrice) {
 // PLANS API TESTS
 // ========================================
 
-async function testCreatePlan(client: FlexPrice) {
+async function testCreatePlan(client: Flexprice) {
     console.log('--- Test 1: Create Plan ---');
 
     try {
@@ -430,7 +448,7 @@ async function testCreatePlan(client: FlexPrice) {
         testPlanName = `Test Plan ${timestamp}`;
         const lookupKey = `test_plan_${timestamp}`;
 
-        const response = await client.plans.createPlan({
+        const raw = await client.plans.createPlan({
             name: testPlanName,
             lookupKey,
             description: 'This is a test plan created by SDK tests',
@@ -440,6 +458,7 @@ async function testCreatePlan(client: FlexPrice) {
                 environment: 'test',
             },
         });
+        const response = unwrap<{ id: string; name?: string; lookupKey?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testPlanID = response.id;
@@ -455,7 +474,7 @@ async function testCreatePlan(client: FlexPrice) {
     }
 }
 
-async function testGetPlan(client: FlexPrice) {
+async function testGetPlan(client: Flexprice) {
     console.log('--- Test 2: Get Plan by ID ---');
 
     try {
@@ -475,7 +494,7 @@ async function testGetPlan(client: FlexPrice) {
     }
 }
 
-async function testListPlans(client: FlexPrice) {
+async function testListPlans(client: Flexprice) {
     console.log('--- Test 3: List Plans ---');
 
     try {
@@ -497,7 +516,7 @@ async function testListPlans(client: FlexPrice) {
     }
 }
 
-async function testUpdatePlan(client: FlexPrice) {
+async function testUpdatePlan(client: Flexprice) {
     console.log('--- Test 4: Update Plan ---');
 
     try {
@@ -527,7 +546,7 @@ async function testUpdatePlan(client: FlexPrice) {
     }
 }
 
-async function testSearchPlans(client: FlexPrice) {
+async function testSearchPlans(client: Flexprice) {
     console.log('--- Test 5: Search Plans ---');
 
     try {
@@ -554,7 +573,7 @@ async function testSearchPlans(client: FlexPrice) {
 // ADDONS API TESTS
 // ========================================
 
-async function testCreateAddon(client: FlexPrice) {
+async function testCreateAddon(client: Flexprice) {
     console.log('--- Test 1: Create Addon ---');
 
     try {
@@ -562,7 +581,7 @@ async function testCreateAddon(client: FlexPrice) {
         testAddonName = `Test Addon ${timestamp}`;
         testAddonLookupKey = `test_addon_${timestamp}`;
 
-        const response = await client.addons.createAddon({
+        const raw = await client.addons.createAddon({
             name: testAddonName,
             lookupKey: testAddonLookupKey,
             description: 'This is a test addon created by SDK tests',
@@ -573,6 +592,7 @@ async function testCreateAddon(client: FlexPrice) {
                 environment: 'test',
             },
         });
+        const response = unwrap<{ id: string; name?: string; lookupKey?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testAddonID = response.id;
@@ -588,7 +608,7 @@ async function testCreateAddon(client: FlexPrice) {
     }
 }
 
-async function testGetAddon(client: FlexPrice) {
+async function testGetAddon(client: Flexprice) {
     console.log('--- Test 2: Get Addon by ID ---');
 
     try {
@@ -608,7 +628,7 @@ async function testGetAddon(client: FlexPrice) {
     }
 }
 
-async function testListAddons(client: FlexPrice) {
+async function testListAddons(client: Flexprice) {
     console.log('--- Test 3: List Addons ---');
 
     try {
@@ -630,7 +650,7 @@ async function testListAddons(client: FlexPrice) {
     }
 }
 
-async function testUpdateAddon(client: FlexPrice) {
+async function testUpdateAddon(client: Flexprice) {
     console.log('--- Test 4: Update Addon ---');
 
     try {
@@ -660,7 +680,7 @@ async function testUpdateAddon(client: FlexPrice) {
     }
 }
 
-async function testLookupAddon(client: FlexPrice) {
+async function testLookupAddon(client: Flexprice) {
     console.log('--- Test 5: Lookup Addon by Lookup Key ---');
 
     if (!testAddonLookupKey) {
@@ -686,7 +706,7 @@ async function testLookupAddon(client: FlexPrice) {
     }
 }
 
-async function testSearchAddons(client: FlexPrice) {
+async function testSearchAddons(client: Flexprice) {
     console.log('--- Test 6: Search Addons ---');
 
     try {
@@ -713,17 +733,18 @@ async function testSearchAddons(client: FlexPrice) {
 // ENTITLEMENTS API TESTS
 // ========================================
 
-async function testCreateEntitlement(client: FlexPrice) {
+async function testCreateEntitlement(client: Flexprice) {
     console.log('--- Test 1: Create Entitlement ---');
 
     try {
-        const response = await client.entitlements.createEntitlement({
+        const raw = await client.entitlements.createEntitlement({
             featureId: testFeatureID,
             featureType: 'boolean',
             planId: testPlanID,
             isEnabled: true,
             usageResetPeriod: 'MONTHLY',
         });
+        const response = unwrap<{ id: string; featureId?: string; planId?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testEntitlementID = response.id;
@@ -739,7 +760,7 @@ async function testCreateEntitlement(client: FlexPrice) {
     }
 }
 
-async function testGetEntitlement(client: FlexPrice) {
+async function testGetEntitlement(client: Flexprice) {
     console.log('--- Test 2: Get Entitlement by ID ---');
 
     try {
@@ -759,7 +780,7 @@ async function testGetEntitlement(client: FlexPrice) {
     }
 }
 
-async function testListEntitlements(client: FlexPrice) {
+async function testListEntitlements(client: Flexprice) {
     console.log('--- Test 3: List Entitlements ---');
 
     try {
@@ -781,7 +802,7 @@ async function testListEntitlements(client: FlexPrice) {
     }
 }
 
-async function testUpdateEntitlement(client: FlexPrice) {
+async function testUpdateEntitlement(client: Flexprice) {
     console.log('--- Test 4: Update Entitlement ---');
 
     try {
@@ -802,7 +823,7 @@ async function testUpdateEntitlement(client: FlexPrice) {
     }
 }
 
-async function testSearchEntitlements(client: FlexPrice) {
+async function testSearchEntitlements(client: Flexprice) {
     console.log('--- Test 5: Search Entitlements ---');
 
     try {
@@ -831,7 +852,7 @@ async function testSearchEntitlements(client: FlexPrice) {
 // CONNECTIONS API TESTS
 // ========================================
 
-async function testListConnections(client: FlexPrice) {
+async function testListConnections(client: Flexprice) {
     console.log('--- Test 1: List Connections ---');
 
     try {
@@ -857,7 +878,7 @@ async function testListConnections(client: FlexPrice) {
     }
 }
 
-async function testSearchConnections(client: FlexPrice) {
+async function testSearchConnections(client: Flexprice) {
     console.log('--- Test 2: Search Connections ---');
 
     try {
@@ -879,7 +900,7 @@ async function testSearchConnections(client: FlexPrice) {
 // SUBSCRIPTIONS API TESTS
 // ========================================
 
-async function testCreateSubscription(client: FlexPrice) {
+async function testCreateSubscription(client: Flexprice) {
     console.log('--- Test 1: Create Subscription ---');
 
     try {
@@ -897,7 +918,7 @@ async function testCreateSubscription(client: FlexPrice) {
             displayName: 'Monthly Subscription Price',
         });
 
-        const response = await client.subscriptions.createSubscription({
+        const raw = await client.subscriptions.createSubscription({
             customerId: testCustomerID,
             planId: testPlanID,
             currency: 'USD',
@@ -911,6 +932,7 @@ async function testCreateSubscription(client: FlexPrice) {
                 test_run: new Date().toISOString(),
             },
         });
+        const response = unwrap<{ id: string; customerId?: string; planId?: string; subscriptionStatus?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testSubscriptionID = response.id;
@@ -927,7 +949,7 @@ async function testCreateSubscription(client: FlexPrice) {
     }
 }
 
-async function testGetSubscription(client: FlexPrice) {
+async function testGetSubscription(client: Flexprice) {
     console.log('--- Test 2: Get Subscription by ID ---');
 
     if (!testSubscriptionID) {
@@ -952,12 +974,12 @@ async function testGetSubscription(client: FlexPrice) {
     }
 }
 
-async function testUpdateSubscription(client: FlexPrice) {
+async function testUpdateSubscription(client: Flexprice) {
     console.log('--- Test 4: Update Subscription ---');
     console.log('⚠ Skipping update subscription test (endpoint not available in SDK)\n');
 }
 
-async function testListSubscriptions(client: FlexPrice) {
+async function testListSubscriptions(client: Flexprice) {
     console.log('--- Test 3: List Subscriptions ---');
 
     try {
@@ -979,7 +1001,7 @@ async function testListSubscriptions(client: FlexPrice) {
     }
 }
 
-async function testSearchSubscriptions(client: FlexPrice) {
+async function testSearchSubscriptions(client: Flexprice) {
     console.log('--- Test 4: Search Subscriptions ---');
 
     try {
@@ -996,7 +1018,7 @@ async function testSearchSubscriptions(client: FlexPrice) {
     }
 }
 
-async function testActivateSubscription(client: FlexPrice) {
+async function testActivateSubscription(client: Flexprice) {
     console.log('--- Test 5: Activate Subscription ---');
 
     try {
@@ -1029,7 +1051,7 @@ async function testActivateSubscription(client: FlexPrice) {
     }
 }
 
-async function testPauseSubscription(client: FlexPrice) {
+async function testPauseSubscription(client: Flexprice) {
     console.log('--- Test 7: Pause Subscription ---');
 
     if (!testSubscriptionID) {
@@ -1060,7 +1082,7 @@ async function testPauseSubscription(client: FlexPrice) {
     }
 }
 
-async function testResumeSubscription(client: FlexPrice) {
+async function testResumeSubscription(client: Flexprice) {
     console.log('--- Test 8: Resume Subscription ---');
 
     if (!testSubscriptionID) {
@@ -1091,7 +1113,7 @@ async function testResumeSubscription(client: FlexPrice) {
     }
 }
 
-async function testGetPauseHistory(client: FlexPrice) {
+async function testGetPauseHistory(client: Flexprice) {
     console.log('--- Test 9: Get Pause History ---');
 
     if (!testSubscriptionID) {
@@ -1122,7 +1144,7 @@ async function testGetPauseHistory(client: FlexPrice) {
     }
 }
 
-async function testAddAddonToSubscription(client: FlexPrice) {
+async function testAddAddonToSubscription(client: Flexprice) {
     console.log('--- Test 6: Add Addon to Subscription ---');
 
     if (!testSubscriptionID || !testAddonID) {
@@ -1158,12 +1180,12 @@ async function testAddAddonToSubscription(client: FlexPrice) {
     }
 }
 
-async function testRemoveAddonFromSubscription(client: FlexPrice) {
+async function testRemoveAddonFromSubscription(client: Flexprice) {
     console.log('--- Test 7: Remove Addon from Subscription ---');
     console.log('⚠ Skipping remove addon test (requires addon association ID)\n');
 }
 
-async function testPreviewSubscriptionChange(client: FlexPrice) {
+async function testPreviewSubscriptionChange(client: Flexprice) {
     console.log('--- Test 13: Preview Subscription Change ---');
 
     if (!testSubscriptionID) {
@@ -1205,12 +1227,12 @@ async function testPreviewSubscriptionChange(client: FlexPrice) {
     }
 }
 
-async function testExecuteSubscriptionChange(client: FlexPrice) {
+async function testExecuteSubscriptionChange(client: Flexprice) {
     console.log('--- Test 8: Execute Subscription Change ---');
     console.log('⚠ Skipping execute change test (would modify active subscription)\n');
 }
 
-async function testGetSubscriptionEntitlements(client: FlexPrice) {
+async function testGetSubscriptionEntitlements(client: Flexprice) {
     console.log('--- Test 9: Get Subscription Entitlements ---');
 
     if (!testSubscriptionID) {
@@ -1231,7 +1253,7 @@ async function testGetSubscriptionEntitlements(client: FlexPrice) {
     }
 }
 
-async function testGetUpcomingGrants(client: FlexPrice) {
+async function testGetUpcomingGrants(client: Flexprice) {
     console.log('--- Test 10: Get Upcoming Grants ---');
 
     if (!testSubscriptionID) {
@@ -1253,7 +1275,7 @@ async function testGetUpcomingGrants(client: FlexPrice) {
     }
 }
 
-async function testReportUsage(client: FlexPrice) {
+async function testReportUsage(client: Flexprice) {
     console.log('--- Test 11: Report Usage ---');
 
     if (!testSubscriptionID) {
@@ -1271,17 +1293,17 @@ async function testReportUsage(client: FlexPrice) {
     }
 }
 
-async function testUpdateLineItem(client: FlexPrice) {
+async function testUpdateLineItem(client: Flexprice) {
     console.log('--- Test 12: Update Line Item ---');
     console.log('⚠ Skipping update line item test (requires line item ID)\n');
 }
 
-async function testDeleteLineItem(client: FlexPrice) {
+async function testDeleteLineItem(client: Flexprice) {
     console.log('--- Test 13: Delete Line Item ---');
     console.log('⚠ Skipping delete line item test (requires line item ID)\n');
 }
 
-async function testCancelSubscription(client: FlexPrice) {
+async function testCancelSubscription(client: Flexprice) {
     console.log('--- Test 14: Cancel Subscription ---');
 
     if (!testSubscriptionID) {
@@ -1306,7 +1328,7 @@ async function testCancelSubscription(client: FlexPrice) {
 // INVOICES API TESTS
 // ========================================
 
-async function testListInvoices(client: FlexPrice) {
+async function testListInvoices(client: Flexprice) {
     console.log('--- Test 1: List Invoices ---');
 
     try {
@@ -1331,7 +1353,7 @@ async function testListInvoices(client: FlexPrice) {
     }
 }
 
-async function testSearchInvoices(client: FlexPrice) {
+async function testSearchInvoices(client: Flexprice) {
     console.log('--- Test 2: Search Invoices ---');
 
     try {
@@ -1348,7 +1370,7 @@ async function testSearchInvoices(client: FlexPrice) {
     }
 }
 
-async function testCreateInvoice(client: FlexPrice) {
+async function testCreateInvoice(client: Flexprice) {
     console.log('--- Test 3: Create Invoice ---');
 
     if (!testCustomerID) {
@@ -1384,7 +1406,7 @@ async function testCreateInvoice(client: FlexPrice) {
     }
 }
 
-async function testGetInvoice(client: FlexPrice) {
+async function testGetInvoice(client: Flexprice) {
     console.log('--- Test 4: Get Invoice by ID ---');
 
     if (!testInvoiceID) {
@@ -1407,7 +1429,7 @@ async function testGetInvoice(client: FlexPrice) {
     }
 }
 
-async function testUpdateInvoice(client: FlexPrice) {
+async function testUpdateInvoice(client: Flexprice) {
     console.log('--- Test 5: Update Invoice ---');
 
     if (!testInvoiceID) {
@@ -1435,7 +1457,7 @@ async function testUpdateInvoice(client: FlexPrice) {
     }
 }
 
-async function testPreviewInvoice(client: FlexPrice) {
+async function testPreviewInvoice(client: Flexprice) {
     console.log('--- Test 6: Preview Invoice ---');
 
     if (!testCustomerID) {
@@ -1465,7 +1487,7 @@ async function testPreviewInvoice(client: FlexPrice) {
     }
 }
 
-async function testFinalizeInvoice(client: FlexPrice) {
+async function testFinalizeInvoice(client: Flexprice) {
     console.log('--- Test 7: Finalize Invoice ---');
 
     try {
@@ -1497,12 +1519,12 @@ async function testFinalizeInvoice(client: FlexPrice) {
     }
 }
 
-async function testRecalculateInvoice(client: FlexPrice) {
+async function testRecalculateInvoice(client: Flexprice) {
     console.log('--- Test 8: Recalculate Invoice ---');
     console.log('⚠ Skipping recalculate invoice test (requires subscription invoice)\n');
 }
 
-async function testRecordPayment(client: FlexPrice) {
+async function testRecordPayment(client: Flexprice) {
     console.log('--- Test 9: Record Payment ---');
 
     if (!testInvoiceID) {
@@ -1524,7 +1546,7 @@ async function testRecordPayment(client: FlexPrice) {
     }
 }
 
-async function testAttemptPayment(client: FlexPrice) {
+async function testAttemptPayment(client: Flexprice) {
     console.log('--- Test 10: Attempt Payment ---');
 
     try {
@@ -1539,7 +1561,7 @@ async function testAttemptPayment(client: FlexPrice) {
             billingReason: 'MANUAL',
             invoiceStatus: 'DRAFT',
             paymentStatus: 'PENDING',
-            lineItems: [{ displayName: 'Attempt Payment Test', amount: '25.00',quantity:'1' }],
+            lineItems: [{ displayName: 'Attempt Payment Test', amount: '25.00', quantity: '1' }],
         });
 
         const attemptID = (attemptInvoice && 'id' in attemptInvoice && attemptInvoice.id) ? attemptInvoice.id : '';
@@ -1557,7 +1579,7 @@ async function testAttemptPayment(client: FlexPrice) {
     }
 }
 
-async function testDownloadInvoicePDF(client: FlexPrice) {
+async function testDownloadInvoicePDF(client: Flexprice) {
     console.log('--- Test 11: Download Invoice PDF ---');
 
     if (!testInvoiceID) {
@@ -1575,7 +1597,7 @@ async function testDownloadInvoicePDF(client: FlexPrice) {
     }
 }
 
-async function testTriggerInvoiceComms(client: FlexPrice) {
+async function testTriggerInvoiceComms(client: Flexprice) {
     console.log('--- Test 12: Trigger Invoice Communications ---');
 
     if (!testInvoiceID) {
@@ -1593,7 +1615,7 @@ async function testTriggerInvoiceComms(client: FlexPrice) {
     }
 }
 
-async function testGetCustomerInvoiceSummary(client: FlexPrice) {
+async function testGetCustomerInvoiceSummary(client: Flexprice) {
     console.log('--- Test 13: Get Customer Invoice Summary ---');
 
     if (!testCustomerID) {
@@ -1611,7 +1633,7 @@ async function testGetCustomerInvoiceSummary(client: FlexPrice) {
     }
 }
 
-async function testVoidInvoice(client: FlexPrice) {
+async function testVoidInvoice(client: Flexprice) {
     console.log('--- Test 14: Void Invoice ---');
 
     if (!testInvoiceID) {
@@ -1633,7 +1655,7 @@ async function testVoidInvoice(client: FlexPrice) {
 // PRICES API TESTS
 // ========================================
 
-async function testCreatePrice(client: FlexPrice) {
+async function testCreatePrice(client: Flexprice) {
     console.log('--- Test 1: Create Price ---');
 
     if (!testPlanID) {
@@ -1642,7 +1664,7 @@ async function testCreatePrice(client: FlexPrice) {
     }
 
     try {
-        const response = await client.prices.createPrice({
+        const raw = await client.prices.createPrice({
             entityId: testPlanID,
             entityType: 'PLAN',
             currency: 'USD',
@@ -1656,6 +1678,7 @@ async function testCreatePrice(client: FlexPrice) {
             displayName: 'Monthly Subscription',
             description: 'Standard monthly subscription price',
         });
+        const response = unwrap<{ id: string; amount?: string; currency?: string; billingModel?: string }>(raw);
 
         if (response && 'id' in response && response.id) {
             testPriceID = response.id;
@@ -1671,7 +1694,7 @@ async function testCreatePrice(client: FlexPrice) {
     }
 }
 
-async function testGetPrice(client: FlexPrice) {
+async function testGetPrice(client: Flexprice) {
     console.log('--- Test 2: Get Price by ID ---');
 
     if (!testPriceID) {
@@ -1696,7 +1719,7 @@ async function testGetPrice(client: FlexPrice) {
     }
 }
 
-async function testListPrices(client: FlexPrice) {
+async function testListPrices(client: Flexprice) {
     console.log('--- Test 3: List Prices ---');
 
     try {
@@ -1719,7 +1742,7 @@ async function testListPrices(client: FlexPrice) {
     }
 }
 
-async function testUpdatePrice(client: FlexPrice) {
+async function testUpdatePrice(client: Flexprice) {
     console.log('--- Test 4: Update Price ---');
 
     if (!testPriceID) {
@@ -1753,7 +1776,7 @@ async function testUpdatePrice(client: FlexPrice) {
 // PAYMENTS API TESTS
 // ========================================
 
-async function testCreatePayment(client: FlexPrice) {
+async function testCreatePayment(client: Flexprice) {
     console.log('--- Test 1: Create Payment ---');
 
     if (!testCustomerID) {
@@ -1762,7 +1785,7 @@ async function testCreatePayment(client: FlexPrice) {
     }
 
     let paymentInvoiceID = '';
-    
+
     try {
         // Create a draft invoice with explicit payment status to prevent auto-payment
         const draftInvoice = await client.invoices.createInvoice({
@@ -1855,7 +1878,7 @@ async function testCreatePayment(client: FlexPrice) {
         }
     } catch (error: any) {
         console.log(`❌ Error creating payment: ${error.message || error}`);
-        
+
         // Enhanced error logging - try to capture all possible error properties
         // The SDK might structure errors differently (Fetch API vs Axios)
         if (error.response) {
@@ -1874,22 +1897,22 @@ async function testCreatePayment(client: FlexPrice) {
                 });
             }
         }
-        
+
         if (error.body) {
             console.log(`  Error Body: ${JSON.stringify(error.body, null, 2)}`);
         }
-        
+
         if (error.status) {
             console.log(`  Status Code: ${error.status}`);
         }
-        
+
         if (error.statusCode) {
             console.log(`  Status Code: ${error.statusCode}`);
         }
-        
+
         // Log the entire error object structure for debugging
         console.log('  Error Object Keys:', Object.keys(error));
-        
+
         // Try to get response body if it's a Response object
         if (error instanceof Response) {
             error.text().then((text) => {
@@ -1898,7 +1921,7 @@ async function testCreatePayment(client: FlexPrice) {
                 console.log(`  Could not read response text: ${e}`);
             });
         }
-        
+
         // Also check if error has a json() method (common in Fetch API)
         if (error.json && typeof error.json === 'function') {
             error.json().then((data: any) => {
@@ -1907,7 +1930,7 @@ async function testCreatePayment(client: FlexPrice) {
                 // Ignore if json() fails
             });
         }
-        
+
         // Log payment request details for debugging
         console.log('  Payment Request Details:');
         console.log('    Amount: 100.00');
@@ -1920,7 +1943,7 @@ async function testCreatePayment(client: FlexPrice) {
     }
 }
 
-async function testGetPayment(client: FlexPrice) {
+async function testGetPayment(client: Flexprice) {
     console.log('--- Test 2: Get Payment by ID ---');
 
     if (!testPaymentID) {
@@ -1945,7 +1968,7 @@ async function testGetPayment(client: FlexPrice) {
     }
 }
 
-async function testListPayments(client: FlexPrice) {
+async function testListPayments(client: Flexprice) {
     console.log('--- Test 3: List Payments ---');
 
     try {
@@ -1968,12 +1991,12 @@ async function testListPayments(client: FlexPrice) {
     }
 }
 
-async function testSearchPayments(client: FlexPrice) {
+async function testSearchPayments(client: Flexprice) {
     console.log('--- Test 2: Search Payments ---');
     console.log('⚠ Skipping search payments test (endpoint not available in SDK)\n');
 }
 
-async function testUpdatePayment(client: FlexPrice) {
+async function testUpdatePayment(client: Flexprice) {
     console.log('--- Test 4: Update Payment ---');
 
     if (!testPaymentID) {
@@ -2001,7 +2024,7 @@ async function testUpdatePayment(client: FlexPrice) {
     }
 }
 
-async function testProcessPayment(client: FlexPrice) {
+async function testProcessPayment(client: Flexprice) {
     console.log('--- Test 5: Process Payment ---');
 
     if (!testPaymentID) {
@@ -2023,7 +2046,7 @@ async function testProcessPayment(client: FlexPrice) {
 // WALLETS API TESTS
 // ========================================
 
-async function testCreateWallet(client: FlexPrice) {
+async function testCreateWallet(client: Flexprice) {
     console.log('--- Test 1: Create Wallet ---');
 
     if (!testCustomerID) {
@@ -2052,7 +2075,7 @@ async function testCreateWallet(client: FlexPrice) {
     }
 }
 
-async function testGetWallet(client: FlexPrice) {
+async function testGetWallet(client: Flexprice) {
     console.log('--- Test 2: Get Wallet by ID ---');
 
     if (!testWalletID) {
@@ -2076,7 +2099,7 @@ async function testGetWallet(client: FlexPrice) {
     }
 }
 
-async function testListWallets(client: FlexPrice) {
+async function testListWallets(client: Flexprice) {
     console.log('--- Test 3: List Wallets ---');
 
     try {
@@ -2099,7 +2122,7 @@ async function testListWallets(client: FlexPrice) {
     }
 }
 
-async function testUpdateWallet(client: FlexPrice) {
+async function testUpdateWallet(client: Flexprice) {
     console.log('--- Test 4: Update Wallet ---');
 
     if (!testWalletID) {
@@ -2125,7 +2148,7 @@ async function testUpdateWallet(client: FlexPrice) {
     }
 }
 
-async function testGetWalletBalance(client: FlexPrice) {
+async function testGetWalletBalance(client: Flexprice) {
     console.log('--- Test 5: Get Wallet Balance ---');
 
     if (!testWalletID) {
@@ -2147,7 +2170,7 @@ async function testGetWalletBalance(client: FlexPrice) {
     }
 }
 
-async function testTopUpWallet(client: FlexPrice) {
+async function testTopUpWallet(client: Flexprice) {
     console.log('--- Test 6: Top Up Wallet ---');
 
     if (!testWalletID) {
@@ -2169,12 +2192,12 @@ async function testTopUpWallet(client: FlexPrice) {
     }
 }
 
-async function testDebitWallet(client: FlexPrice) {
+async function testDebitWallet(client: Flexprice) {
     console.log('--- Test 7: Debit Wallet ---');
     console.log('⚠ Skipping debit test (no debit endpoint in SDK)\n');
 }
 
-async function testGetWalletTransactions(client: FlexPrice) {
+async function testGetWalletTransactions(client: Flexprice) {
     console.log('--- Test 8: Get Wallet Transactions ---');
 
     if (!testWalletID) {
@@ -2196,7 +2219,7 @@ async function testGetWalletTransactions(client: FlexPrice) {
     }
 }
 
-async function testSearchWallets(client: FlexPrice) {
+async function testSearchWallets(client: Flexprice) {
     console.log('--- Test 9: Search Wallets ---');
 
     try {
@@ -2217,7 +2240,7 @@ async function testSearchWallets(client: FlexPrice) {
 // CREDIT GRANTS API TESTS
 // ========================================
 
-async function testCreateCreditGrant(client: FlexPrice) {
+async function testCreateCreditGrant(client: Flexprice) {
     console.log('--- Test 1: Create Credit Grant ---');
 
     // Skip if no plan available (matching Go test)
@@ -2251,7 +2274,7 @@ async function testCreateCreditGrant(client: FlexPrice) {
         }
     } catch (error: any) {
         console.log(`❌ Error creating credit grant: ${error.message || error}`);
-        
+
         // Enhanced error logging to match Go test
         if (error.response) {
             console.log(`  Response Status Code: ${error.response.status || error.response.statusCode || 'unknown'}`);
@@ -2262,22 +2285,22 @@ async function testCreateCreditGrant(client: FlexPrice) {
                 console.log(`  Response Body: ${JSON.stringify(error.response.body, null, 2)}`);
             }
         }
-        
+
         if (error.body) {
             console.log(`  Error Body: ${JSON.stringify(error.body, null, 2)}`);
         }
-        
+
         if (error.status) {
             console.log(`  Status Code: ${error.status}`);
         }
-        
+
         if (error.statusCode) {
             console.log(`  Status Code: ${error.statusCode}`);
         }
-        
+
         // Log the entire error object structure for debugging
         console.log('  Error Object Keys:', Object.keys(error));
-        
+
         // Log request details for debugging
         console.log('  Credit Grant Request Details:');
         console.log('    Name: Test Credit Grant');
@@ -2291,7 +2314,7 @@ async function testCreateCreditGrant(client: FlexPrice) {
     }
 }
 
-async function testGetCreditGrant(client: FlexPrice) {
+async function testGetCreditGrant(client: Flexprice) {
     console.log('--- Test 2: Get Credit Grant by ID ---');
 
     if (!testCreditGrantID) {
@@ -2315,7 +2338,7 @@ async function testGetCreditGrant(client: FlexPrice) {
     }
 }
 
-async function testListCreditGrants(client: FlexPrice) {
+async function testListCreditGrants(client: Flexprice) {
     console.log('--- Test 3: List Credit Grants ---');
 
     if (!testPlanID) {
@@ -2339,7 +2362,7 @@ async function testListCreditGrants(client: FlexPrice) {
     }
 }
 
-async function testUpdateCreditGrant(client: FlexPrice) {
+async function testUpdateCreditGrant(client: Flexprice) {
     console.log('--- Test 4: Update Credit Grant ---');
 
     if (!testCreditGrantID) {
@@ -2365,7 +2388,7 @@ async function testUpdateCreditGrant(client: FlexPrice) {
     }
 }
 
-async function testDeleteCreditGrant(client: FlexPrice) {
+async function testDeleteCreditGrant(client: Flexprice) {
     console.log('--- Cleanup: Delete Credit Grant ---');
 
     if (!testCreditGrantID) {
@@ -2387,7 +2410,7 @@ async function testDeleteCreditGrant(client: FlexPrice) {
 // CREDIT NOTES API TESTS
 // ========================================
 
-async function testCreateCreditNote(client: FlexPrice) {
+async function testCreateCreditNote(client: Flexprice) {
     console.log('--- Test 1: Create Credit Note ---');
 
     // Skip if no customer available (matching Go test)
@@ -2480,19 +2503,19 @@ async function testCreateCreditNote(client: FlexPrice) {
         }
     } catch (error: any) {
         console.log(`❌ Error creating credit note: ${error.message || error}`);
-        
+
         // Enhanced error logging to match Go test - try to get actual error message
         if (error.response) {
             const statusCode = error.response.status || error.response.statusCode || 'unknown';
             console.log(`  Response Status Code: ${statusCode}`);
-            
+
             if (error.response.data) {
                 console.log(`  Response Data: ${JSON.stringify(error.response.data, null, 2)}`);
             }
             if (error.response.body) {
                 console.log(`  Response Body: ${JSON.stringify(error.response.body, null, 2)}`);
             }
-            
+
             // Try to get response text if it's a Response object
             if (error.response.text && typeof error.response.text === 'function') {
                 error.response.text().then((text: string) => {
@@ -2501,7 +2524,7 @@ async function testCreateCreditNote(client: FlexPrice) {
                     // Ignore if text() fails
                 });
             }
-            
+
             // Try to get JSON if available
             if (error.response.json && typeof error.response.json === 'function') {
                 error.response.json().then((data: any) => {
@@ -2511,19 +2534,19 @@ async function testCreateCreditNote(client: FlexPrice) {
                 });
             }
         }
-        
+
         if (error.body) {
             console.log(`  Error Body: ${JSON.stringify(error.body, null, 2)}`);
         }
-        
+
         if (error.status) {
             console.log(`  Status Code: ${error.status}`);
         }
-        
+
         if (error.statusCode) {
             console.log(`  Status Code: ${error.statusCode}`);
         }
-        
+
         // Try to get response body if it's a Response object
         if (error instanceof Response) {
             error.text().then((text) => {
@@ -2532,7 +2555,7 @@ async function testCreateCreditNote(client: FlexPrice) {
                 console.log(`  Could not read response text: ${e}`);
             });
         }
-        
+
         // Also check if error has a json() method (common in Fetch API)
         if (error.json && typeof error.json === 'function') {
             error.json().then((data: any) => {
@@ -2541,13 +2564,13 @@ async function testCreateCreditNote(client: FlexPrice) {
                 // Ignore if json() fails
             });
         }
-        
+
         // Log the entire error object structure for debugging
         console.log('  Error Object Keys:', Object.keys(error));
         if (error.response) {
             console.log('  Error Response Keys:', Object.keys(error.response));
         }
-        
+
         // Log request details for debugging
         console.log('  Credit Note Request Details:');
         console.log(`    InvoiceId: ${testInvoiceID}`);
@@ -2565,7 +2588,7 @@ async function testCreateCreditNote(client: FlexPrice) {
     }
 }
 
-async function testGetCreditNote(client: FlexPrice) {
+async function testGetCreditNote(client: Flexprice) {
     console.log('--- Test 2: Get Credit Note by ID ---');
 
     if (!testCreditNoteID) {
@@ -2589,12 +2612,12 @@ async function testGetCreditNote(client: FlexPrice) {
     }
 }
 
-async function testListCreditNotes(client: FlexPrice) {
+async function testListCreditNotes(client: Flexprice) {
     console.log('--- Test 3: List Credit Notes ---');
     console.log('⚠ Skipping list credit notes (no query endpoint in SDK)\n');
 }
 
-async function testFinalizeCreditNote(client: FlexPrice) {
+async function testFinalizeCreditNote(client: Flexprice) {
     console.log('--- Test 4: Finalize Credit Note ---');
 
     if (!testCreditNoteID) {
@@ -2616,7 +2639,7 @@ async function testFinalizeCreditNote(client: FlexPrice) {
 // CLEANUP TESTS
 // ========================================
 
-async function testDeletePayment(client: FlexPrice) {
+async function testDeletePayment(client: Flexprice) {
     console.log('--- Cleanup: Delete Payment ---');
 
     if (!testPaymentID) {
@@ -2634,7 +2657,7 @@ async function testDeletePayment(client: FlexPrice) {
     }
 }
 
-async function testDeletePrice(client: FlexPrice) {
+async function testDeletePrice(client: Flexprice) {
     console.log('--- Cleanup: Delete Price ---');
 
     if (!testPriceID) {
@@ -2653,7 +2676,7 @@ async function testDeletePrice(client: FlexPrice) {
     }
 }
 
-async function testDeleteEntitlement(client: FlexPrice) {
+async function testDeleteEntitlement(client: Flexprice) {
     console.log('--- Cleanup: Delete Entitlement ---');
 
     if (!testEntitlementID) {
@@ -2671,7 +2694,7 @@ async function testDeleteEntitlement(client: FlexPrice) {
     }
 }
 
-async function testDeleteAddon(client: FlexPrice) {
+async function testDeleteAddon(client: Flexprice) {
     console.log('--- Cleanup: Delete Addon ---');
 
     if (!testAddonID) {
@@ -2689,7 +2712,7 @@ async function testDeleteAddon(client: FlexPrice) {
     }
 }
 
-async function testDeletePlan(client: FlexPrice) {
+async function testDeletePlan(client: Flexprice) {
     console.log('--- Cleanup: Delete Plan ---');
 
     if (!testPlanID) {
@@ -2707,7 +2730,7 @@ async function testDeletePlan(client: FlexPrice) {
     }
 }
 
-async function testDeleteFeature(client: FlexPrice) {
+async function testDeleteFeature(client: Flexprice) {
     console.log('--- Cleanup: Delete Feature ---');
 
     if (!testFeatureID) {
@@ -2725,7 +2748,7 @@ async function testDeleteFeature(client: FlexPrice) {
     }
 }
 
-async function testDeleteCustomer(client: FlexPrice) {
+async function testDeleteCustomer(client: Flexprice) {
     console.log('--- Cleanup: Delete Customer ---');
 
     if (!testCustomerID) {
@@ -2747,7 +2770,7 @@ async function testDeleteCustomer(client: FlexPrice) {
 // EVENTS API TESTS
 // ========================================
 
-async function testCreateEvent(client: FlexPrice) {
+async function testCreateEvent(client: Flexprice) {
     console.log('--- Test 1: Create Event ---');
 
     // Use test customer external ID if available, otherwise generate a unique one
@@ -2791,7 +2814,7 @@ async function testCreateEvent(client: FlexPrice) {
     }
 }
 
-async function testQueryEvents(client: FlexPrice) {
+async function testQueryEvents(client: Flexprice) {
     console.log('--- Test 2: Query Events ---');
 
     if (!testEventName) {
@@ -2826,7 +2849,7 @@ async function testQueryEvents(client: FlexPrice) {
     }
 }
 
-async function testAsyncEventEnqueue(client: FlexPrice) {
+async function testAsyncEventEnqueue(client: Flexprice) {
     console.log('--- Test 3: Async Event - Simple Enqueue ---');
 
     // Use test customer external ID if available
@@ -2860,7 +2883,7 @@ async function testAsyncEventEnqueue(client: FlexPrice) {
     }
 }
 
-async function testAsyncEventEnqueueWithOptions(client: FlexPrice) {
+async function testAsyncEventEnqueueWithOptions(client: Flexprice) {
     console.log('--- Test 4: Async Event - Enqueue With Options ---');
 
     // Use test customer external ID if available
@@ -2895,7 +2918,7 @@ async function testAsyncEventEnqueueWithOptions(client: FlexPrice) {
     }
 }
 
-async function testAsyncEventBatch(client: FlexPrice) {
+async function testAsyncEventBatch(client: Flexprice) {
     console.log('--- Test 5: Async Event - Batch Enqueue ---');
 
     // Use test customer external ID if available
@@ -2928,7 +2951,7 @@ async function testAsyncEventBatch(client: FlexPrice) {
         console.log('  Event Name: batch_example');
         console.log(`  Customer ID: ${customerID}`);
         console.log('  Waiting for events to be processed...\n');
-        
+
         // Wait for background processing
         await new Promise(resolve => setTimeout(resolve, 2000));
     } catch (error: any) {

@@ -28,6 +28,20 @@ Then in your code:
 import { FlexPrice } from "@flexprice/sdk";
 ```
 
+**All generated modules** (shared models, enums, errors, operation types, SDK types) are re-exported from the package root so you can import everything from one place. Run `npm run build` before publishing so both ESM and CommonJS entry points (`dist/esm/index.js` and `dist/commonjs/index.js`) include these re-exports; then `import` and `require("flexprice-ts-temp")` both expose types/enums from the root.
+
+```typescript
+import {
+  FlexPrice,
+  FeatureType,
+  Status,
+  FlexpriceError,
+  CreateCustomerRequest,
+  createPageIterator,
+} from "@flexprice/sdk";
+// No need for: .../dist/sdk/models/shared, .../errors, .../operations, .../types
+```
+
 Runnable samples are in the `examples/` directory.
 
 ## Quick start

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Sync the SDK version from generated output (e.g. package.json) back into all
-# gen.yaml files and .speakeasy/sdk-version.json so the next run starts from
-# the bumped version. Run after 'make sdk-all'.
+# Sync the SDK version into central gen.yaml files (.speakeasy/gen/*.yaml) and
+# .speakeasy/sdk-version.json so the next run starts from the bumped version.
+# Run after 'make sdk-all'. Source of truth for gen is .speakeasy/gen/.
 # Usage: ./scripts/sync-sdk-version-to-gen.sh <VERSION>
 set -euo pipefail
 
@@ -16,9 +16,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
-# Update gen.yaml files: replace the first "  version: ..." line in the language section.
-# Each file has a single "  version:" under go/python/typescript/mcp-typescript.
-for path in api/go/.speakeasy/gen.yaml api/python/.speakeasy/gen.yaml api/typescript/.speakeasy/gen.yaml api/mcp/.speakeasy/gen.yaml; do
+# Update central gen.yaml files: replace the first "  version: ..." in each.
+for path in .speakeasy/gen/go.yaml .speakeasy/gen/typescript.yaml .speakeasy/gen/python.yaml .speakeasy/gen/mcp.yaml; do
   if [ -f "$path" ]; then
     if sed -i.bak "s/^  version: .*$/  version: $VERSION/" "$path"; then
       rm -f "${path}.bak"
