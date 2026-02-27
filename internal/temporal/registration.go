@@ -195,6 +195,7 @@ func buildWorkerConfig(
 			workflows.HubSpotQuoteSyncWorkflow,
 			workflows.NomodInvoiceSyncWorkflow,
 			workflows.MoyasarInvoiceSyncWorkflow,
+			workflows.PrepareProcessedEventsWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			taskActivities.ProcessTask,
@@ -204,6 +205,8 @@ func buildWorkerConfig(
 			hubspotQuoteSyncActivities.CreateQuoteAndLineItems,
 			nomodInvoiceSyncActivities.SyncInvoiceToNomod,
 			moyasarInvoiceSyncActivities.SyncInvoiceToMoyasar,
+			prepareEventsActivities.CreateFeatureAndPriceActivity,
+			prepareEventsActivities.RolloutToSubscriptionsActivity,
 		)
 
 	case types.TemporalTaskQueuePrice:

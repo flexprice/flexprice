@@ -21,6 +21,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
 	"github.com/flexprice/flexprice/internal/domain/meter"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -83,12 +84,13 @@ type FeatureUsageTrackingService interface {
 
 type featureUsageTrackingService struct {
 	ServiceParams
-	pubSub           pubsub.PubSub // Regular PubSub for normal processing
-	backfillPubSub   pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
-	lazyPubSub       pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
-	replayPubSub     pubsub.PubSub // Dedicated Kafka PubSub for replay processing
-	eventRepo        events.Repository
-	featureUsageRepo events.FeatureUsageRepository
+	pubSub              pubsub.PubSub // Regular PubSub for normal processing
+	backfillPubSub      pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
+	lazyPubSub          pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
+	replayPubSub        pubsub.PubSub // Dedicated Kafka PubSub for replay processing
+	eventRepo           events.Repository
+	featureUsageRepo    events.FeatureUsageRepository
+	expressionEvaluator expression.Evaluator
 }
 
 // NewFeatureUsageTrackingService creates a new feature usage tracking service
@@ -98,9 +100,10 @@ func NewFeatureUsageTrackingService(
 	featureUsageRepo events.FeatureUsageRepository,
 ) FeatureUsageTrackingService {
 	ev := &featureUsageTrackingService{
-		ServiceParams:    params,
-		eventRepo:        eventRepo,
-		featureUsageRepo: featureUsageRepo,
+		ServiceParams:       params,
+		eventRepo:           eventRepo,
+		featureUsageRepo:    featureUsageRepo,
+		expressionEvaluator: expression.NewCELEvaluator(),
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -790,7 +793,10 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			}
 
 			// Extract quantity based on meter aggregation
-			quantity, _ := s.extractQuantityFromEvent(event, match.Meter, sub.Subscription, periodID)
+			quantity, _, err := s.extractQuantityFromEvent(event, match.Meter, sub.Subscription, periodID)
+			if err != nil {
+				return nil, err
+			}
 
 			// Validate the quantity is positive and within reasonable bounds
 			if quantity.IsNegative() {
@@ -886,7 +892,11 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		return results, err
 	}
 
-	if len(meters) == 0 {
+	// Fetch workflow config once when we might need it; avoids duplicate lookups in handleMissingFeature.
+	workflowConfig, hasPrepareProcessedEventsConfig := s.getPrepareProcessedEventsConfig(ctx)
+	// When config is off, no meters means nothing to do. When config is on, we still run the helper
+	// so it can create the feature/meter via workflow (e.g. token/audio events from workflow.go) and re-fetch.
+	if !hasPrepareProcessedEventsConfig && len(meters) == 0 {
 		s.Logger.Debugw("no meters found for event name, skipping",
 			"event_id", event.ID,
 			"event_name", event.EventName,
@@ -894,16 +904,24 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		return results, nil
 	}
 
-	// Build meter map and collect meter IDs
-	meterMap := make(map[string]*meter.Meter)
-	meterIDs := make([]string, 0, len(meters))
-	for _, m := range meters {
-		// Check meter filters before including
-		if !s.checkMeterFilters(event, m.Filters) {
-			continue
+	var meterMap map[string]*meter.Meter
+	var meterIDs []string
+	if hasPrepareProcessedEventsConfig {
+		meterMap, meterIDs, err = s.matchMetersWithFeatureCreationSupport(ctx, event, meters, meterFilter, workflowConfig)
+		if err != nil {
+			return results, err
 		}
-		meterMap[m.ID] = m
-		meterIDs = append(meterIDs, m.ID)
+	} else {
+		// Original pipeline: match by event filters only (no required aggregation field, no auto-creation)
+		meterMap = make(map[string]*meter.Meter)
+		meterIDs = make([]string, 0, len(meters))
+		for _, m := range meters {
+			if !s.checkMeterFilters(event, m.Filters) {
+				continue
+			}
+			meterMap[m.ID] = m
+			meterIDs = append(meterIDs, m.ID)
+		}
 	}
 
 	if len(meterIDs) == 0 {
@@ -1092,7 +1110,10 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		}
 
 		// Extract quantity based on meter aggregation
-		quantity, _ := s.extractQuantityFromEvent(event, m, sub, periodID)
+		quantity, _, err := s.extractQuantityFromEvent(event, m, sub, periodID)
+		if err != nil {
+			return nil, err
+		}
 
 		// Validate the quantity is positive
 		if quantity.IsNegative() {
@@ -1408,17 +1429,48 @@ func (s *featureUsageTrackingService) checkMeterFilters(event *events.Event, fil
 }
 
 // Extract quantity from event based on meter aggregation
-// Returns the quantity and the string representation of the field value
+// Returns the quantity, the string representation of the field value, and an error.
+// Callers must propagate errors and must not treat evaluation failures as zero.
 func (s *featureUsageTrackingService) extractQuantityFromEvent(
 	event *events.Event,
 	meter *meter.Meter,
 	subscription *subscription.Subscription,
 	periodID uint64,
-) (decimal.Decimal, string) {
+) (decimal.Decimal, string, error) {
+	// When expression is set, use CEL for per-event quantity (works with most aggregation types)
+	if meter.Aggregation.Expression != "" {
+		// Expression is not supported with COUNT_UNIQUE
+		if meter.Aggregation.Type == types.AggregationCountUnique {
+			err := fmt.Errorf("expression is not supported with aggregation type COUNT_UNIQUE")
+			s.Logger.Errorw("unsupported meter configuration: expression with count_unique",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"expression", meter.Aggregation.Expression,
+				"error", err,
+			)
+			return decimal.Zero, "", err
+		}
+
+		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
+		if err != nil {
+			s.Logger.Errorw("CEL evaluation failed, event rejected",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"expression", meter.Aggregation.Expression,
+				"error", err,
+			)
+			return decimal.Zero, "", fmt.Errorf("CEL evaluation failed for event %s meter %s: %w", event.ID, meter.ID, err)
+		}
+		if meter.Aggregation.Multiplier != nil {
+			qty = qty.Mul(*meter.Aggregation.Multiplier)
+		}
+		return qty, qty.String(), nil
+	}
+
 	switch meter.Aggregation.Type {
 	case types.AggregationCount:
 		// For count, always return 1 and empty string for field value
-		return decimal.NewFromInt(1), ""
+		return decimal.NewFromInt(1), "", nil
 
 	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if meter.Aggregation.Field == "" {
@@ -1427,7 +1479,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"aggregation_type", meter.Aggregation.Type,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1438,12 +1490,12 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"field", meter.Aggregation.Field,
 				"aggregation_type", meter.Aggregation.Type,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// Convert value to decimal and string with detailed error handling
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
-		return decimalValue, stringValue
+		return decimalValue, stringValue, nil
 
 	case types.AggregationSumWithMultiplier:
 		if meter.Aggregation.Field == "" {
@@ -1451,7 +1503,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		if meter.Aggregation.Multiplier == nil {
@@ -1459,7 +1511,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1469,18 +1521,18 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// Convert value to decimal and apply multiplier
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
 		if decimalValue.IsZero() {
-			return decimal.Zero, stringValue
+			return decimal.Zero, stringValue, nil
 		}
 
 		// Apply multiplier
 		result := decimalValue.Mul(*meter.Aggregation.Multiplier)
-		return result, stringValue
+		return result, stringValue, nil
 
 	case types.AggregationCountUnique:
 		if meter.Aggregation.Field == "" {
@@ -1488,7 +1540,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1498,20 +1550,20 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// For count_unique, we return 1 if the value exists (uniqueness is handled at aggregation level)
 		// and convert the value to string for tracking
 		stringValue := s.convertValueToString(val)
-		return decimal.NewFromInt(1), stringValue
+		return decimal.NewFromInt(1), stringValue, nil
 	case types.AggregationWeightedSum:
 		if meter.Aggregation.Field == "" {
 			s.Logger.Warnw("weighted_sum aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1521,28 +1573,28 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// Convert value to decimal and apply multiplier
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
 		if decimalValue.IsZero() {
-			return decimal.Zero, stringValue
+			return decimal.Zero, stringValue, nil
 		}
 
 		// Apply multiplier
 		result, err := s.getTotalUsageForWeightedSumAggregation(subscription, event, decimalValue, periodID)
 		if err != nil {
-			return decimal.Zero, stringValue
+			return decimal.Zero, stringValue, nil
 		}
-		return result, stringValue
+		return result, stringValue, nil
 	default:
 		s.Logger.Warnw("unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
 		)
-		return decimal.Zero, ""
+		return decimal.Zero, "", nil
 	}
 }
 
@@ -4336,4 +4388,309 @@ func (s *featureUsageTrackingService) getCustomAnalyticsConfig(ctx context.Conte
 	}
 
 	return &config, nil
+}
+
+// getPrepareProcessedEventsConfig fetches the prepare_processed_events workflow setting once.
+// Returns (config, true) when the setting exists and has actions, (nil, false) otherwise.
+// Callers can pass the config to matchMetersWithFeatureCreationSupport and handleMissingFeature to avoid redundant fetches.
+func (s *featureUsageTrackingService) getPrepareProcessedEventsConfig(ctx context.Context) (*workflowModels.WorkflowConfig, bool) {
+	settingsService := &settingsService{ServiceParams: s.ServiceParams}
+	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](settingsService, ctx, types.SettingKeyPrepareProcessedEvents)
+	if err != nil || workflowConfig == nil || len(workflowConfig.Actions) == 0 {
+		return nil, false
+	}
+	return workflowConfig, true
+}
+
+// matchMetersWithFeatureCreationSupport runs the required-aggregation-field matching and optional feature auto-creation.
+// Use when prepare_processed_events config is enabled. Returns (meterMap, meterIDs, err); if meterIDs is empty caller should skip.
+func (s *featureUsageTrackingService) matchMetersWithFeatureCreationSupport(
+	ctx context.Context,
+	event *events.Event,
+	meters []*meter.Meter,
+	meterFilter *types.MeterFilter,
+	workflowConfig *workflowModels.WorkflowConfig,
+) (map[string]*meter.Meter, []string, error) {
+	required := workflowModels.RequiredAggregationFields(event.EventName, event.Properties)
+	meterMap, meterIDs, existing := s.matchMetersForEvent(meters, event, required)
+	missing := lo.Filter(required, func(f string, _ int) bool { _, ok := existing[f]; return !ok })
+
+	if len(meterIDs) == 0 {
+		if len(required) == 0 {
+			s.Logger.Debugw("no meters found for event name and no required aggregation fields, skipping", "event_id", event.ID, "event_name", event.EventName)
+			return nil, nil, nil
+		}
+		s.Logger.Debugw("no meters found for event name, attempting auto-creation", "event_id", event.ID, "event_name", event.EventName, "required", required)
+		workflowResult, err := s.handleMissingFeature(ctx, event, nil, workflowConfig)
+		if err != nil {
+			s.Logger.Errorw("failed to handle missing feature", "event_id", event.ID, "event_name", event.EventName, "error", err)
+			return nil, nil, err
+		}
+		if workflowResult == nil {
+			s.Logger.Debugw("skipping event - no auto-creation workflow configured", "event_id", event.ID, "event_name", event.EventName)
+			return nil, nil, nil
+		}
+		s.Logger.Debugw("feature/meter/price auto-created via workflow", "event_id", event.ID, "event_name", event.EventName, "feature_id", workflowResult.ID, "meter_id", workflowResult.MeterID)
+		meters, err = s.MeterRepo.List(ctx, meterFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to re-fetch meters after auto-creation", "event_id", event.ID, "event_name", event.EventName, "error", err)
+			return nil, nil, err
+		}
+		meterMap, meterIDs, _ = s.matchMetersForEvent(meters, event, required)
+		if len(meterIDs) == 0 {
+			s.Logger.Warnw("no meters found even after auto-creation, skipping", "event_id", event.ID, "event_name", event.EventName)
+			return nil, nil, nil
+		}
+	} else if len(missing) > 0 {
+		s.Logger.Infow("creating only missing aggregation fields (skipping existing)", "event_id", event.ID, "event_name", event.EventName, "existing", lo.Keys(existing), "missing", missing)
+		if _, err := s.handleMissingFeature(ctx, event, missing, workflowConfig); err != nil {
+			s.Logger.Errorw("failed to create missing aggregation fields",
+				"event_id", event.ID,
+				"event_name", event.EventName,
+				"missing", missing,
+				"error", err,
+			)
+			// Continue with existing meters; do not fail the event
+		}
+	}
+
+	if len(meterIDs) == 0 {
+		s.Logger.Debugw("no meters match event filters and required aggregation fields, skipping", "event_id", event.ID, "event_name", event.EventName)
+		return nil, nil, nil
+	}
+	return meterMap, meterIDs, nil
+}
+
+// matchMetersForEvent returns meters that pass event filters and have aggregation field in required.
+// Returns meterMap, meterIDs, and set of existing aggregation fields.
+func (s *featureUsageTrackingService) matchMetersForEvent(meters []*meter.Meter, event *events.Event, required []string) (map[string]*meter.Meter, []string, map[string]struct{}) {
+	meterMap := make(map[string]*meter.Meter)
+	meterIDs := make([]string, 0, len(meters))
+	existing := make(map[string]struct{})
+	for _, m := range meters {
+		if !s.checkMeterFilters(event, m.Filters) || !lo.Contains(required, m.Aggregation.Field) {
+			continue
+		}
+		meterMap[m.ID] = m
+		meterIDs = append(meterIDs, m.ID)
+		existing[m.Aggregation.Field] = struct{}{}
+	}
+	return meterMap, meterIDs, existing
+}
+
+func (s *featureUsageTrackingService) handleMissingFeature(
+	ctx context.Context,
+	event *events.Event,
+	onlyCreateAggregationFields []string,
+	workflowConfig *workflowModels.WorkflowConfig,
+) (*feature.Feature, error) {
+
+	var err error
+
+	if workflowConfig == nil || len(workflowConfig.Actions) == 0 {
+		s.Logger.Debugw("no workflow config found for prepare processed events",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return nil, nil // No config, skip auto-creation
+	}
+
+	// Check if workflow has create_feature_and_price action as the first action
+	hasCreateFeatureAndPrice := false
+	if len(workflowConfig.Actions) > 0 {
+		if workflowConfig.Actions[0].GetAction() == workflowModels.WorkflowActionCreateFeatureAndPrice {
+			hasCreateFeatureAndPrice = true
+		}
+	}
+
+	if !hasCreateFeatureAndPrice {
+		s.Logger.Debugw("workflow config does not have create_feature_and_price as first action",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"actions", workflowConfig.Actions,
+		)
+		return nil, nil // No create_feature_and_price action, skip auto-creation
+	}
+
+	// Extract plan_id from the create_feature_and_price action
+	var planID string
+	for _, action := range workflowConfig.Actions {
+		if action.GetAction() == workflowModels.WorkflowActionCreateFeatureAndPrice {
+			if featureAction, ok := action.(*workflowModels.CreateFeatureAndPriceActionConfig); ok {
+				planID = featureAction.PlanID
+				break
+			}
+		}
+	}
+
+	// plan_id is required to run this workflow
+	if planID == "" {
+		s.Logger.Debugw("workflow config missing plan_id in create_feature_and_price action; skipping auto-creation",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return nil, nil
+	}
+
+	s.Logger.Debugw("executing prepare processed events workflow",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"plan_id", planID,
+	)
+
+	// Validate that plan exists for this tenant and environment
+	_, err = s.PlanRepo.Get(ctx, planID)
+	if err != nil {
+		s.Logger.Errorw("plan does not exist for prepare processed events workflow",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"plan_id", planID,
+		)
+		return nil, ierr.WithError(err).
+			WithHint("Plan does not exist for the specified tenant and environment").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+				"plan_id":    planID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	input := &workflowModels.PrepareProcessedEventsWorkflowInput{
+		EventID:                     event.ID,
+		EventName:                   event.EventName,
+		EventTimestamp:              event.Timestamp,
+		EventProperties:             event.Properties,
+		TenantID:                    types.GetTenantID(ctx),
+		EnvironmentID:               types.GetEnvironmentID(ctx),
+		WorkflowConfig:              *workflowConfig,
+		OnlyCreateAggregationFields: onlyCreateAggregationFields,
+	}
+
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for prepare processed events",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid workflow input for prepare processed events").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return nil, ierr.NewError("temporal service not available").
+			WithHint("Prepare processed events workflow requires Temporal service").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	result, err := temporalSvc.ExecuteWorkflowSync(
+		ctx,
+		types.TemporalPrepareProcessedEventsWorkflow,
+		input,
+		300, // 5 minutes timeout
+	)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute prepare processed events workflow").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	workflowResult, ok := result.(*workflowModels.PrepareProcessedEventsWorkflowResult)
+	if !ok {
+		return nil, ierr.NewError("invalid workflow result type").
+			WithHint("Expected PrepareProcessedEventsWorkflowResult").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	if workflowResult.Status != workflowModels.WorkflowStatusCompleted {
+		errorMsg := "workflow did not complete successfully"
+		if workflowResult.ErrorSummary != nil {
+			errorMsg = *workflowResult.ErrorSummary
+		}
+		return nil, ierr.NewError(errorMsg).
+			WithHint("Prepare processed events workflow failed").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":         event.ID,
+				"event_name":       event.EventName,
+				"workflow_status":  workflowResult.Status,
+				"actions_executed": workflowResult.ActionsExecuted,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	// Extract feature_id from workflow results
+	var featureID string
+	for _, actionResult := range workflowResult.Results {
+		if actionResult.ActionType == workflowModels.WorkflowActionCreateFeatureAndPrice &&
+			actionResult.Status == workflowModels.WorkflowStatusCompleted &&
+			actionResult.ResourceID != "" {
+			featureID = actionResult.ResourceID
+			break
+		}
+	}
+
+	if featureID == "" {
+		return nil, ierr.NewError("feature_id not found in workflow results").
+			WithHint("Workflow completed but feature was not created").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	// Fetch the created feature
+	createdFeature, err := s.FeatureRepo.Get(ctx, featureID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch created feature").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+				"feature_id": featureID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Check if rollout_to_subscriptions action was executed
+	var rolloutExecuted bool
+	var rolloutPlanID string
+	for _, actionResult := range workflowResult.Results {
+		if actionResult.ActionType == workflowModels.WorkflowActionRolloutToSubscriptions &&
+			actionResult.Status == workflowModels.WorkflowStatusCompleted {
+			rolloutExecuted = true
+			rolloutPlanID = actionResult.ResourceID
+			break
+		}
+	}
+
+	s.Logger.Infow("prepare processed events workflow completed successfully",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"feature_id", featureID,
+		"actions_executed", workflowResult.ActionsExecuted,
+		"rollout_to_subscriptions_executed", rolloutExecuted,
+		"rollout_plan_id", rolloutPlanID,
+	)
+
+	return createdFeature, nil
 }
