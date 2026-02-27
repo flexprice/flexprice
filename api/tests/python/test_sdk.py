@@ -881,6 +881,7 @@ def test_create_subscription(client: Flexprice):
             billing_model=BILLING_MODEL_FLAT_FEE,
             billing_cadence=BILLING_CADENCE_RECURRING,
             billing_period=BILLING_PERIOD_MONTHLY,
+            billing_period_count=1,
             invoice_cadence=INVOICE_CADENCE_ARREAR,
             price_unit_type=PRICE_UNIT_TYPE_FIAT,
             amount="29.99",
@@ -1077,6 +1078,7 @@ def test_add_addon_to_subscription(client: Flexprice):
                 billing_model=BILLING_MODEL_FLAT_FEE,
                 billing_cadence=BILLING_CADENCE_RECURRING,
                 billing_period=BILLING_PERIOD_MONTHLY,
+                billing_period_count=1,  # required: must be > 0
                 invoice_cadence=INVOICE_CADENCE_ARREAR,
                 price_unit_type=PRICE_UNIT_TYPE_FIAT,
                 amount="5.00",
