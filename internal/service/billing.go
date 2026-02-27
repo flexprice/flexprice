@@ -1897,6 +1897,7 @@ func (s *billingService) calculateFeatureUsageCharges(
 			SubscriptionID: sub.ID,
 			StartTime:      periodStart,
 			EndTime:        periodEnd,
+			Source:         string(types.UsageSourceInvoiceCreation),
 		})
 		if err != nil {
 			return nil, err
@@ -2543,6 +2544,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 		usageReq := &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: subscriptionID,
+			Source:         string(types.UsageSourceAnalytics),
 		}
 
 		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)

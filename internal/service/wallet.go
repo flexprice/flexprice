@@ -2407,6 +2407,7 @@ func (s *walletService) GetWalletBalanceV2(ctx context.Context, walletID string)
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
 				EndTime:        periodEnd,
+				Source:         string(types.UsageSourceWallet),
 			})
 			if err != nil {
 				return nil, err
@@ -2574,6 +2575,7 @@ func (s *walletService) GetWalletBalanceFromCache(ctx context.Context, walletID 
 				SubscriptionID: sub.ID,
 				StartTime:      periodStart,
 				EndTime:        periodEnd,
+				Source:         string(types.UsageSourceWallet),
 			})
 			if err != nil {
 				return nil, err

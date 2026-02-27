@@ -1993,8 +1993,9 @@ func (r *FeatureUsageRepository) getAnalyticsPoints(
 	return points, nil
 }
 
-// GetFeatureUsageBySubscription gets usage data for a subscription using a single optimized query
-func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType) (map[string]*events.UsageByFeatureResult, error) {
+// GetFeatureUsageBySubscription gets usage data for a subscription using a single optimized query.
+// When opts.Source is InvoiceCreation, the query uses FINAL for correct ReplacingMergeTree deduplication.
+func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType, opts *events.GetFeatureUsageBySubscriptionOpts) (map[string]*events.UsageByFeatureResult, error) {
 	// Extract tenantID and environmentID from context
 	tenantID := types.GetTenantID(ctx)
 	environmentID := types.GetEnvironmentID(ctx)
@@ -2013,6 +2014,11 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 	// Build conditional aggregation columns
 	aggColumns := buildConditionalAggregationColumnsForSubscription(aggTypes)
 
+	tableRef := "feature_usage"
+	if opts != nil && opts.Source.UseFinal() {
+		tableRef = "feature_usage FINAL"
+	}
+
 	query := fmt.Sprintf(`
 		SELECT 
 			sub_line_item_id,
@@ -2020,7 +2026,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			meter_id,
 			price_id,
 			%s
-		FROM feature_usage
+		FROM %s
 		WHERE 
 			subscription_id = ?
 			AND customer_id = ?
@@ -2030,7 +2036,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			AND "timestamp" < ?
 			AND sign != 0
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
-	`, strings.Join(aggColumns, ",\n\t\t\t"))
+	`, strings.Join(aggColumns, ",\n\t\t\t"), tableRef)
 
 	r.logger.Debugw("executing subscription usage query",
 		"subscription_id", subscriptionID,

@@ -93,8 +93,9 @@ func (s *InMemoryFeatureUsageStore) GetDetailedUsageAnalytics(ctx context.Contex
 	return []*events.DetailedUsageAnalytic{}, nil
 }
 
-// GetFeatureUsageBySubscription gets feature usage by subscription
-func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType) (map[string]*events.UsageByFeatureResult, error) {
+// GetFeatureUsageBySubscription gets feature usage by subscription.
+// opts is ignored (in-memory has no FINAL concept).
+func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType, opts *events.GetFeatureUsageBySubscriptionOpts) (map[string]*events.UsageByFeatureResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
