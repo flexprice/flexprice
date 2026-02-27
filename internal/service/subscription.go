@@ -4897,15 +4897,16 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		// Create charge response
 		charge := &dto.SubscriptionUsageByMetersResponse{
-			Amount:           cost.InexactFloat64(),
-			Currency:         priceObj.Currency,
-			DisplayAmount:    fmt.Sprintf("%.2f %s", cost.InexactFloat64(), priceObj.Currency),
-			Quantity:         quantity.InexactFloat64(),
-			FilterValues:     make(price.JSONBFilters),
-			MeterID:          meterID,
-			MeterDisplayName: meterDisplayNames[meterID],
-			Price:            priceObj,
-			IsOverage:        false,
+			SubscriptionLineItemID: subLineItemID,
+			Amount:                 cost.InexactFloat64(),
+			Currency:               priceObj.Currency,
+			DisplayAmount:          fmt.Sprintf("%.2f %s", cost.InexactFloat64(), priceObj.Currency),
+			Quantity:               quantity.InexactFloat64(),
+			FilterValues:           make(price.JSONBFilters),
+			MeterID:                meterID,
+			MeterDisplayName:       meterDisplayNames[meterID],
+			Price:                  priceObj,
+			IsOverage:              false,
 		}
 
 		// Add filter values from meter
@@ -4951,15 +4952,16 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 
 		// Create zero-quantity, zero-cost charge for this line item
 		charge := &dto.SubscriptionUsageByMetersResponse{
-			Amount:           0.0,
-			Currency:         priceObj.Currency,
-			DisplayAmount:    fmt.Sprintf("0.00 %s", priceObj.Currency),
-			Quantity:         0.0,
-			FilterValues:     make(price.JSONBFilters),
-			MeterID:          item.MeterID,
-			MeterDisplayName: meterDisplayNames[item.MeterID],
-			Price:            priceObj,
-			IsOverage:        false,
+			SubscriptionLineItemID: item.ID,
+			Amount:                 0.0,
+			Currency:               priceObj.Currency,
+			DisplayAmount:          fmt.Sprintf("0.00 %s", priceObj.Currency),
+			Quantity:               0.0,
+			FilterValues:           make(price.JSONBFilters),
+			MeterID:                item.MeterID,
+			MeterDisplayName:       meterDisplayNames[item.MeterID],
+			Price:                  priceObj,
+			IsOverage:              false,
 		}
 
 		// Add filter values from meter

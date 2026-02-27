@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"time"
@@ -2021,7 +2020,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 			meter_id,
 			price_id,
 			%s
-		FROM feature_usage
+		FROM feature_usage FINAL
 		WHERE 
 			subscription_id = ?
 			AND customer_id = ?
@@ -2033,8 +2032,13 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		GROUP BY sub_line_item_id, feature_id, meter_id, price_id
 	`, strings.Join(aggColumns, ",\n\t\t\t"))
 
-	log.Printf("Executing query: %s", query)
-	log.Printf("Params: %v", []interface{}{subscriptionID, customerID, environmentID, tenantID, startTime, endTime})
+	r.logger.Debugw("executing subscription usage query",
+		"subscription_id", subscriptionID,
+		"customer_id", customerID,
+		"environment_id", environmentID,
+		"start_time", startTime,
+		"end_time", endTime,
+	)
 
 	rows, err := r.store.GetConn().Query(ctx, query, subscriptionID, customerID, environmentID, tenantID, startTime, endTime)
 	if err != nil {
@@ -2233,7 +2237,10 @@ func (r *FeatureUsageRepository) GetUsageForMaxMetersWithBuckets(ctx context.Con
 	defer FinishSpan(span)
 
 	query := r.getWindowedQuery(ctx, params)
-	log.Printf("Executing query: %s", query)
+	r.logger.Debugw("executing windowed usage query",
+		"meter_id", params.MeterID,
+		"window_size", params.WindowSize,
+	)
 
 	rows, err := r.store.GetConn().Query(ctx, query)
 	if err != nil {
@@ -2337,7 +2344,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 					%s as bucket_start,
 					%s as group_key,
 					%s(qty_total) as group_value
-				FROM feature_usage
+				FROM feature_usage FINAL
 				PREWHERE tenant_id = '%s'
 					AND environment_id = '%s'
 					AND sign != 0
