@@ -14,7 +14,7 @@ env:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 1: Build the Docker image and push it to ECR (single region)
+  # Job 1: Build the Docker image and push it to ECR
   # ──────────────────────────────────────────────────────────────────────────
   build:
     name: Build & Push Docker Image
@@ -52,27 +52,85 @@ jobs:
         run: echo "image=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
 
   # ──────────────────────────────────────────────────────────────────────────
-  # Job 2: Deploy to ECS — one run per region in DEPLOY_REGIONS
+  # Job 2: Resolve deployment config based on branch
   #
-  # Required GitHub Actions variables:
-  #   ECS_CLUSTER          - ECS cluster name          (default: prod-cluster-v1)
-  #   API_SERVICE_NAME     - ECS service name for API
-  #   CONSUMER_SERVICE_NAME- ECS service name for Consumer
-  #   WORKER_SERVICE_NAME  - ECS service name for Temporal Worker
-  #   DEPLOY_REGIONS       - JSON array of regions     (default: ["ap-south-1"])
+  #   develop → staging environment
+  #   main    → production environment
   #
-  # Optional GitHub Actions variables (if not set, family is derived from service):
-  #   API_TASK_FAMILY      - Task definition family for API
-  #   CONSUMER_TASK_FAMILY - Task definition family for Consumer
-  #   WORKER_TASK_FAMILY   - Task definition family for Temporal Worker
+  # GitHub Actions variables required:
+  #
+  #   Production  (main branch):
+  #     PROD_ECS_CLUSTER           - ECS cluster name  (default: prod-cluster-v1)
+  #     PROD_API_SERVICE_NAME      - ECS service name for API
+  #     PROD_CONSUMER_SERVICE_NAME - ECS service name for Consumer
+  #     PROD_WORKER_SERVICE_NAME   - ECS service name for Temporal Worker
+  #     PROD_DEPLOY_REGIONS        - JSON array, e.g. ["ap-south-1","us-east-1"]
+  #                                  (default: ["ap-south-1"])
+  #
+  #   Staging  (develop branch):
+  #     STAGING_ECS_CLUSTER           - ECS cluster name
+  #     STAGING_API_SERVICE_NAME      - ECS service name for API
+  #     STAGING_CONSUMER_SERVICE_NAME - ECS service name for Consumer
+  #     STAGING_WORKER_SERVICE_NAME   - ECS service name for Temporal Worker
+  #     STAGING_DEPLOY_REGIONS        - JSON array  (default: ["ap-south-1"])
+  #
+  # Task definition families are always resolved from the ECS service —
+  # no separate variable is needed.
+  # ──────────────────────────────────────────────────────────────────────────
+  resolve-config:
+    name: Resolve deployment config
+    runs-on: self-hosted
+    outputs:
+      cluster:          ${{ steps.config.outputs.cluster }}
+      api_service:      ${{ steps.config.outputs.api_service }}
+      consumer_service: ${{ steps.config.outputs.consumer_service }}
+      worker_service:   ${{ steps.config.outputs.worker_service }}
+      regions:          ${{ steps.config.outputs.regions }}
+
+    steps:
+      - name: Set config based on branch
+        id: config
+        env:
+          # Production variables
+          PROD_CLUSTER:   ${{ vars.PROD_ECS_CLUSTER }}
+          PROD_API:       ${{ vars.PROD_API_SERVICE_NAME }}
+          PROD_CONSUMER:  ${{ vars.PROD_CONSUMER_SERVICE_NAME }}
+          PROD_WORKER:    ${{ vars.PROD_WORKER_SERVICE_NAME }}
+          PROD_REGIONS:   ${{ vars.PROD_DEPLOY_REGIONS }}
+          # Staging variables
+          STAGING_CLUSTER:  ${{ vars.STAGING_ECS_CLUSTER }}
+          STAGING_API:      ${{ vars.STAGING_API_SERVICE_NAME }}
+          STAGING_CONSUMER: ${{ vars.STAGING_CONSUMER_SERVICE_NAME }}
+          STAGING_WORKER:   ${{ vars.STAGING_WORKER_SERVICE_NAME }}
+          STAGING_REGIONS:  ${{ vars.STAGING_DEPLOY_REGIONS }}
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "cluster=${PROD_CLUSTER:-prod-cluster-v1}"       >> $GITHUB_OUTPUT
+            echo "api_service=$PROD_API"                          >> $GITHUB_OUTPUT
+            echo "consumer_service=$PROD_CONSUMER"                >> $GITHUB_OUTPUT
+            echo "worker_service=$PROD_WORKER"                    >> $GITHUB_OUTPUT
+            echo "regions=${PROD_REGIONS:-[\"ap-south-1\"]}"     >> $GITHUB_OUTPUT
+          else
+            echo "cluster=${STAGING_CLUSTER}"                     >> $GITHUB_OUTPUT
+            echo "api_service=$STAGING_API"                       >> $GITHUB_OUTPUT
+            echo "consumer_service=$STAGING_CONSUMER"             >> $GITHUB_OUTPUT
+            echo "worker_service=$STAGING_WORKER"                 >> $GITHUB_OUTPUT
+            echo "regions=${STAGING_REGIONS:-[\"ap-south-1\"]}"  >> $GITHUB_OUTPUT
+          fi
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 3: Deploy — one run per region (matrix), after build + config resolve
+  #
+  # For each service the task definition family is always derived from the
+  # running ECS service (describe-services → taskDefinition ARN → family name).
   # ──────────────────────────────────────────────────────────────────────────
   deploy:
     name: Deploy to ECS (${{ matrix.region }})
-    needs: build
+    needs: [build, resolve-config]
     runs-on: self-hosted
     strategy:
       matrix:
-        region: ${{ fromJson(vars.DEPLOY_REGIONS || '["ap-south-1"]') }}
+        region: ${{ fromJson(needs.resolve-config.outputs.regions) }}
       fail-fast: false
 
     steps:
@@ -84,17 +142,20 @@ jobs:
 
       - name: Deploy all ECS services
         env:
-          IMAGE: ${{ needs.build.outputs.image }}
-          CLUSTER: ${{ vars.ECS_CLUSTER || 'prod-cluster-v1' }}
-          REGION: ${{ matrix.region }}
-          ECR_REPO_PREFIX: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          IMAGE:            ${{ needs.build.outputs.image }}
+          CLUSTER:          ${{ needs.resolve-config.outputs.cluster }}
+          REGION:           ${{ matrix.region }}
+          ECR_REPO_PREFIX:  ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          API_SERVICE:      ${{ needs.resolve-config.outputs.api_service }}
+          CONSUMER_SERVICE: ${{ needs.resolve-config.outputs.consumer_service }}
+          WORKER_SERVICE:   ${{ needs.resolve-config.outputs.worker_service }}
         run: |
           set -euo pipefail
 
           # ---------------------------------------------------------------
-          # deploy_service <service-name> <task-family-or-empty>
+          # deploy_service <service-name>
           #
-          # 1. Resolves the task definition family (from arg or service)
+          # 1. Derives task definition family from the running ECS service
           # 2. Fetches current task definition
           # 3. Replaces the image for any container whose current image
           #    starts with the ECR repo prefix
@@ -103,24 +164,20 @@ jobs:
           # ---------------------------------------------------------------
           deploy_service() {
             local SERVICE="$1"
-            local TASK_FAMILY="$2"
 
             echo ""
-            echo "==> Deploying: $SERVICE  |  region: $REGION"
+            echo "==> Deploying: $SERVICE  |  region: $REGION  |  cluster: $CLUSTER"
 
-            # Resolve task definition family from service if not explicitly provided
-            if [ -z "$TASK_FAMILY" ]; then
-              echo "  No task family supplied — resolving from service..."
-              TASK_ARN=$(aws ecs describe-services \
-                --cluster "$CLUSTER" \
-                --services "$SERVICE" \
-                --region "$REGION" \
-                --query 'services[0].taskDefinition' \
-                --output text)
-              # Strip ARN prefix and revision suffix: arn:.../family:42 -> family
-              TASK_FAMILY=$(echo "$TASK_ARN" | sed 's|.*/||' | sed 's|:[0-9]*$||')
-              echo "  Resolved task family: $TASK_FAMILY"
-            fi
+            # Derive task definition family from the service
+            TASK_ARN=$(aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --region "$REGION" \
+              --query 'services[0].taskDefinition' \
+              --output text)
+            # Strip ARN prefix and revision suffix  e.g. arn:.../family:42 → family
+            TASK_FAMILY=$(echo "$TASK_ARN" | sed 's|.*/||' | sed 's|:[0-9]*$||')
+            echo "  Task family: $TASK_FAMILY"
 
             # Fetch the latest task definition JSON
             TASK_DEF=$(aws ecs describe-task-definition \
@@ -129,7 +186,7 @@ jobs:
               --query 'taskDefinition')
 
             # Update image for containers that use this ECR repository,
-            # and strip fields that are not accepted by register-task-definition
+            # and strip read-only fields not accepted by register-task-definition
             NEW_TASK_DEF=$(echo "$TASK_DEF" | python3 -c "
 import json, sys
 
@@ -141,7 +198,6 @@ for c in td.get('containerDefinitions', []):
     if c.get('image', '').startswith(ecr_prefix):
         c['image'] = new_image
 
-# Fields not accepted by register-task-definition
 for f in [
     'taskDefinitionArn', 'revision', 'status',
     'requiresAttributes', 'compatibilities',
@@ -174,9 +230,9 @@ print(json.dumps(td))
           }
 
           # Deploy all three services
-          deploy_service "${{ vars.API_SERVICE_NAME }}"       "${{ vars.API_TASK_FAMILY }}"
-          deploy_service "${{ vars.CONSUMER_SERVICE_NAME }}"  "${{ vars.CONSUMER_TASK_FAMILY }}"
-          deploy_service "${{ vars.WORKER_SERVICE_NAME }}"    "${{ vars.WORKER_TASK_FAMILY }}"
+          deploy_service "$API_SERVICE"
+          deploy_service "$CONSUMER_SERVICE"
+          deploy_service "$WORKER_SERVICE"
 
           echo ""
           echo "All services deployed in $REGION"
