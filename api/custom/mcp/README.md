@@ -44,7 +44,7 @@ Use this if you want to change code or run without npm:
 1. Clone the repository and go to the MCP server directory (e.g. `api/mcp` or the repo that contains it).
 2. Install dependencies: `npm install`
 3. Create a `.env` file (from `.env.example` if present) with:
-   - `BASE_URL=https://us.api.flexprice.io/v1` (must include `/v1`, no trailing slash)
+   - `BASE_URL=https://us.api.flexprice.io/v1` (must include `/v1`; no trailing space or trailing slash)
    - `API_KEY_APIKEYAUTH=your_api_key_here`
 4. Build: `npm run build`
 5. Start: `npm start`
@@ -238,7 +238,7 @@ Use `read` for read-only access when the server defines a `read` scope.
 ### "Invalid URL" or request errors
 
 - The server builds request URLs from `BASE_URL` + path. If `BASE_URL` is unset or wrong, requests fail.
-- **Fix:** Set `BASE_URL=https://us.api.flexprice.io/v1` (no trailing slash after `v1`). For npx, pass `--server-url https://us.api.flexprice.io/v1`.
+- **Fix:** Set `BASE_URL=https://us.api.flexprice.io/v1` (no trailing space or slash after `v1`). For npx, pass `--server-url https://us.api.flexprice.io/v1`.
 - If you get **404** on tool calls, ensure the base URL includes `/v1`.
 
 ### API connection issues

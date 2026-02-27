@@ -2,7 +2,7 @@
 """
 FlexPrice Python SDK - Published SDK tests (pip install flexprice-temp).
 Run from api/tests/python: pip install flexprice-temp && python test_sdk.py
-Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
+Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
 Uses the Flexprice client (server_url, api_key_auth) and namespaced APIs (client.customers, client.events, etc.).
 Package: https://pypi.org/project/flexprice-temp/
 Repo: https://github.com/flexprice/python-sdk-temp

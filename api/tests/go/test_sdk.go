@@ -17,7 +17,7 @@ import (
 
 // test_local_sdk.go - Local SDK tests (unpublished SDK from api/go).
 // Run from api/tests/go: go run test_local_sdk.go
-// Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
+// Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
 // SDK repo: update defaultGoSDKRepo when you change where the Go SDK is hosted.
 
 // defaultGoSDKRepo is the Go SDK repo (module path). Change this when you host the SDK elsewhere.

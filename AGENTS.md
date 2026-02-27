@@ -136,6 +136,7 @@ make merge-custom
 Once services are running:
 
 - **FlexPrice API**: http://localhost:8080
+- **API base URL:** When configuring SDKs or MCP, always include `/v1` (e.g. `https://us.api.flexprice.io/v1` or `http://localhost:8080/v1`); no trailing space or slash.
 - **Temporal UI**: http://localhost:8088
 - **Kafka UI**: http://localhost:8084 (requires `--profile dev`)
 - **ClickHouse**: http://localhost:8123

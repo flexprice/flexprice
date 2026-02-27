@@ -3,7 +3,7 @@
 /**
  * Flexprice TypeScript SDK - API tests (uses local api/typescript by default).
  * Run from api/tests/ts: npm install && npx ts-node test_sdk_js.ts
- * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST
+ * Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
  * Debug: FLEXPRICE_DEBUG=1 logs every request/response for Customer, Entitlement, Subscription, Price
  *        and full error details (message, stack, response, body) on failure.
  */

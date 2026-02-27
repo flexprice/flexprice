@@ -19,14 +19,16 @@ Install the SDK from the registry, set credentials, and run the test for your la
 
 You must **export** base URL and API key so the tests can call the API. Set these before running any test (or `make test-sdk`):
 
-| Variable             | Required | Description                                                                                                 |
-| -------------------- | -------- | ----------------------------------------------------------------------------------------------------------- |
-| `FLEXPRICE_API_KEY`  | **Yes**  | Your FlexPrice API key.                                                                                     |
-| `FLEXPRICE_API_HOST` | **Yes**  | API host only (no `https://`). Use `us.api.flexprice.io` for cloud, or `localhost:8080` for a local server. |
+| Variable             | Required | Description                                                                                                                                 |
+| -------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FLEXPRICE_API_KEY`  | **Yes**  | Your FlexPrice API key.                                                                                                                     |
+| `FLEXPRICE_API_HOST` | **Yes**  | API host and version path (no `https://`). Must include `/v1` (e.g. `us.api.flexprice.io/v1` or `localhost:8080/v1`). No trailing space or slash. |
 
 ```bash
 export FLEXPRICE_API_KEY="your-api-key"
-export FLEXPRICE_API_HOST="us.api.flexprice.io"
+export FLEXPRICE_API_HOST="us.api.flexprice.io/v1"
+# For local server:
+# export FLEXPRICE_API_HOST="localhost:8080/v1"
 ```
 
 If you run `make test-sdk` without these set, the Makefile will exit with instructions to set them.

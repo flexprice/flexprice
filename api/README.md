@@ -28,7 +28,7 @@ See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md
 
 ## Usage (high level)
 
-- **API base URL:** Use `https://us.api.flexprice.io` for all SDKs and the MCP server (strictly).
+- **API base URL:** Use `https://us.api.flexprice.io/v1` for all SDKs and the MCP server. Always include `/v1` in the base URL; no trailing space or trailing slash.
 - **Go:** `flexprice.New(serverURL, flexprice.WithSecurity(apiKey))` – see `api/go/README.md` and `api/go/examples/`.
 - **TypeScript:** Import from the built package; optional custom `CustomerPortal` in `src/sdk/customer-portal.ts`.
 - **Python:** Use the generated package; examples in `api/python/examples/` (may need updates for current SDK).
