@@ -42,11 +42,11 @@ go:
   imports:
     option: openapi
     paths:
-      callbacks: models/callbacks
-      errors: models/apierrors
-      operations: models/operations
-      shared: models/components
-      webhooks: models/webhooks
+      callbacks: callbacks
+      errors: errors
+      operations: dtos
+      shared: types
+      webhooks: webhooks
   includeEmptyObjects: true
   inferUnionDiscriminators: true
   inputModelSuffix: input
