@@ -135,7 +135,6 @@ async function testGetCustomer(client: Flexprice) {
             console.log('✓ Customer retrieved successfully!');
             console.log(`  ID: ${response.id}`);
             console.log(`  Name: ${response.name}`);
-            console.log(`  Created At: ${response.createdAt}\n`);
         } else {
             console.log(`❌ Unexpected response shape\n`);
         }
