@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 async def main():
     api_key = os.getenv("FLEXPRICE_API_KEY")
-    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io")
+    api_host = os.getenv("FLEXPRICE_API_HOST", "us.api.flexprice.io/v1")
 
     if not api_key:
         raise SystemExit("Set FLEXPRICE_API_KEY in .env or environment")
