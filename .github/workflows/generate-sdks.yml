@@ -193,9 +193,9 @@ jobs:
           - lang: typescript
             artifact: api-typescript
             default_repo: flexprice/javascript-sdk
-          # - lang: mcp
-          #   artifact: api-mcp
-          #   default_repo: flexprice/mcp-server
+          - lang: mcp
+            artifact: api-mcp
+            default_repo: flexprice/mcp-server
     env:
       SDK_DEPLOY_GIT_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
       SDK_GO_REPO: ${{ vars.SDK_GO_REPO }}
