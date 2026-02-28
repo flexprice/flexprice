@@ -25,7 +25,8 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 }
 
 // @Summary Pause a subscription
-// @Description Pause a subscription with the specified parameters
+// @ID pauseSubscription
+// @Description Use when temporarily stopping a subscription (e.g. customer hold or seasonal pause). Billing and access pause; resume when ready.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -33,9 +34,9 @@ func NewSubscriptionPauseHandler(service service.SubscriptionService, log *logge
 // @Param id path string true "Subscription ID"
 // @Param request body dto.PauseSubscriptionRequest true "Pause subscription request"
 // @Success 200 {object} dto.SubscriptionPauseResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/pause [post]
 func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 	subscriptionID := c.Param("id")
@@ -89,7 +90,8 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 }
 
 // @Summary Resume a paused subscription
-// @Description Resume a paused subscription with the specified parameters
+// @ID resumeSubscription
+// @Description Use when reactivating a paused subscription (e.g. end of hold). Billing and access resume from the resume date.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -97,9 +99,9 @@ func (h *SubscriptionPauseHandler) PauseSubscription(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param request body dto.ResumeSubscriptionRequest true "Resume subscription request"
 // @Success 200 {object} dto.SubscriptionPauseResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/resume [post]
 func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 	subscriptionID := c.Param("id")
@@ -152,14 +154,15 @@ func (h *SubscriptionPauseHandler) ResumeSubscription(c *gin.Context) {
 }
 
 // @Summary List all pauses for a subscription
-// @Description List all pauses for a subscription
+// @ID listSubscriptionPauses
+// @Description Use when showing pause history for a subscription (e.g. support or audit). Returns all past and future pauses.
 // @Tags Subscriptions
 // @Produce json
 // @Param id path string true "Subscription ID"
 // @Success 200 {array} dto.ListSubscriptionPausesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/pauses [get]
 func (h *SubscriptionPauseHandler) ListPauses(c *gin.Context) {
 	subscriptionID := c.Param("id")

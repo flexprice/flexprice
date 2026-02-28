@@ -1,0 +1,370 @@
+# Generate OpenAPI spec and all SDKs (Go, TypeScript, Python) + MCP.
+#
+# Flow: trigger -> version-check (skip if .speakeasy/sdk-version.json equals .speakeasy/gen/go.yaml version) -> generate (swagger, Speakeasy, upload artifacts) -> push to GitHub -> publish to npm/PyPI.
+# Version source: .speakeasy/sdk-version.json and .speakeasy/gen/*.yaml (central config). To release: update sdk-version.json, then trigger.
+#
+# Triggers: push to main (path-filtered); workflow_dispatch. When version unchanged, generate and publish are skipped.
+# Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
+# Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
+# Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
+#
+# Full pipeline runs on GitHub. Local act may fail at upload-artifact unless act's artifact server is configured (ACTIONS_RUNTIME_TOKEN, ACTIONS_RUNTIME_URL, ACTIONS_RESULTS_URL).
+
+name: Generate SDKs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/swagger/**"
+      - ".speakeasy/**"
+      - "api/custom/**"
+      - "cmd/**"
+      - "internal/api/**"
+      - "Makefile"
+  workflow_dispatch:
+
+concurrency:
+  group: sdk-generate-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Compare .speakeasy/sdk-version.json with .speakeasy/gen/go.yaml version; skip generate/publish if equal.
+  # ---------------------------------------------------------------------------
+  version-check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version-check.outputs.version }}
+      skip: ${{ steps.version-check.outputs.skip }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compare versions and set outputs
+        id: version-check
+        run: |
+          SDK_VERSION=$(jq -r .version .speakeasy/sdk-version.json 2>/dev/null || echo "")
+          [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ] && SDK_VERSION="0.0.0"
+          GEN_VERSION=""
+          if [ -f .speakeasy/gen/go.yaml ]; then
+            GEN_VERSION=$(sed -n '/^go:/,/^[a-z]/p' .speakeasy/gen/go.yaml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | xargs)
+          fi
+          [ -z "$GEN_VERSION" ] && GEN_VERSION=""
+          if [ "$SDK_VERSION" = "$GEN_VERSION" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Version unchanged (sdk-version.json=$SDK_VERSION, gen/go.yaml=$GEN_VERSION); skipping generate and publish."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+            echo "Version changed (sdk-version.json=$SDK_VERSION, gen/go.yaml=$GEN_VERSION); will generate and publish."
+          fi
+          echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Skip summary
+        if: steps.version-check.outputs.skip == 'true'
+        run: |
+          echo "## Skipped generate and publish" >> $GITHUB_STEP_SUMMARY
+          echo "Version in \`.speakeasy/sdk-version.json\` matches \`.speakeasy/gen/go.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Setup → OpenAPI → SDK tooling → Generate → Upload artifacts
+  # ---------------------------------------------------------------------------
+  generate:
+    needs: version-check
+    if: needs.version-check.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SPEAKEASY_API_KEY: ${{ secrets.SPEAKEASY_API_KEY }}
+    steps:
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.SPEAKEASY_API_KEY }}" ]; then
+            echo "::error::SPEAKEASY_API_KEY secret is not set. Add it in repository Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          echo "SPEAKEASY_API_KEY is set."
+
+      # Setup
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          restore-keys: go-${{ runner.os }}-
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      # OpenAPI
+      - name: Generate OpenAPI spec
+        run: make swagger
+
+      - name: Verify OpenAPI spec exists
+        run: |
+          if [ ! -f "docs/swagger/swagger-3-0.json" ]; then
+            echo "ERROR: docs/swagger/swagger-3-0.json not found after make swagger"
+            exit 1
+          fi
+          echo "OpenAPI spec size: $(wc -c < docs/swagger/swagger-3-0.json) bytes"
+
+      # SDK tooling
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Speakeasy install.sh uses VERSION for CLI version; our workflow sets VERSION for SDK. Unset so install fetches latest CLI.
+      - name: Install Speakeasy CLI
+        run: |
+          unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
+
+      # SDKs: generate with version from .speakeasy/sdk-version.json (set by version-check job)
+      - name: Generate SDKs and MCP
+        run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
+
+      # Overwrite Speakeasy version in artifacts so publish never gets 0.0.1 (version already set in central gen before generate)
+      - name: Apply version from sdk-version.json to SDK artifacts
+        run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
+
+      - name: Generate job summary
+        run: |
+          echo "## Generate SDKs" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ needs.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload api-go artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-go
+          path: api/go/
+
+      - name: Upload api-typescript artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-typescript
+          path: api/typescript/
+
+      - name: Upload api-python artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-python
+          path: api/python/
+
+      - name: Upload api-mcp artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-mcp
+          path: api/mcp/
+
+  # ---------------------------------------------------------------------------
+  # Publish: one matrix cell per SDK/MCP (parallel push to GitHub repos)
+  # ---------------------------------------------------------------------------
+  publish-to-github:
+    needs: [version-check, generate]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lang: go
+            artifact: api-go
+            default_repo: flexprice/go-sdk
+          - lang: python
+            artifact: api-python
+            default_repo: flexprice/python-sdk
+          - lang: typescript
+            artifact: api-typescript
+            default_repo: flexprice/javascript-sdk
+          - lang: mcp
+            artifact: api-mcp
+            default_repo: flexprice/mcp-server
+    env:
+      SDK_DEPLOY_GIT_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+      SDK_GO_REPO: ${{ vars.SDK_GO_REPO }}
+      SDK_PYTHON_REPO: ${{ vars.SDK_PYTHON_REPO }}
+      SDK_TYPESCRIPT_REPO: ${{ vars.SDK_TYPESCRIPT_REPO }}
+      SDK_MCP_REPO: ${{ vars.SDK_MCP_REPO }}
+      VERSION: ${{ needs.version-check.outputs.version }}
+    steps:
+      - name: Checkout (for LICENSE)
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+      - name: Set target repo
+        run: |
+          case "${{ matrix.lang }}" in
+            go)         echo "REPO=${SDK_GO_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
+            python)     echo "REPO=${SDK_PYTHON_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
+            typescript) echo "REPO=${SDK_TYPESCRIPT_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
+            mcp)        echo "REPO=${SDK_MCP_REPO:-${{ matrix.default_repo }}}" >> $GITHUB_ENV ;;
+          esac
+
+      - name: Push SDK to repo
+        run: |
+          # Ensure VERSION is never empty so commit message and tag always include version number
+          VERSION="${{ env.VERSION }}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
+          git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/${{ env.REPO }}.git /tmp/sdk-repo
+          cd /tmp/sdk-repo
+          find . -mindepth 1 -maxdepth 1 ! -name '.git' -exec rm -rf {} +
+          cp -r "$GITHUB_WORKSPACE/${{ matrix.artifact }}/." /tmp/sdk-repo/
+          [ -f "$GITHUB_WORKSPACE/LICENSE" ] && cp "$GITHUB_WORKSPACE/LICENSE" /tmp/sdk-repo/
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add .
+            git commit -m "Release ${{ matrix.lang }} SDK v${VERSION}"
+            if ! git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+              git tag -a "v${VERSION}" -m "${{ matrix.lang }} SDK version ${VERSION}"
+            fi
+            git push origin main
+            git push origin "v${VERSION}" 2>/dev/null || true
+          fi
+          echo "Pushed ${{ matrix.lang }} SDK to ${{ env.REPO }}"
+
+  # ---------------------------------------------------------------------------
+  # Summary (runs once after all publish matrix cells)
+  # ---------------------------------------------------------------------------
+  publish-summary:
+    needs: [version-check, generate, publish-to-github]
+    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SDK_GO_REPO: ${{ vars.SDK_GO_REPO }}
+      SDK_PYTHON_REPO: ${{ vars.SDK_PYTHON_REPO }}
+      SDK_TYPESCRIPT_REPO: ${{ vars.SDK_TYPESCRIPT_REPO }}
+      SDK_MCP_REPO: ${{ vars.SDK_MCP_REPO }}
+      VERSION: ${{ needs.version-check.outputs.version }}
+    steps:
+      - name: Summary
+        run: |
+          GO_REPO="${SDK_GO_REPO:-flexprice/go-sdk}"
+          PY_REPO="${SDK_PYTHON_REPO:-flexprice/python-sdk}"
+          TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/javascript-sdk}"
+          MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-server}"
+          echo "## SDKs pushed to GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
+          echo "- Python: https://github.com/$PY_REPO" >> $GITHUB_STEP_SUMMARY
+          echo "- TypeScript: https://github.com/$TS_REPO" >> $GITHUB_STEP_SUMMARY
+          echo "- MCP: https://github.com/$MCP_REPO" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Install (published packages)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Python:** \`pip install flexprice\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **TypeScript:** \`npm i @flexprice/sdk\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **MCP:** \`npm i @flexprice/mcp-server\`" >> $GITHUB_STEP_SUMMARY
+
+  # ---------------------------------------------------------------------------
+  # Publishes via npm/twine here; .speakeasy/workflow.yaml publish config is for Speakeasy CLI/action only and is not used by this workflow.
+  # ---------------------------------------------------------------------------
+  publish-to-registries:
+    needs: [generate, publish-to-github]
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lang: typescript
+            artifact: api-typescript
+          - lang: python
+            artifact: api-python
+          - lang: mcp
+            artifact: api-mcp
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: sdk
+
+      - name: Show package name (npm/PyPI)
+        run: |
+          if [ -f sdk/package.json ]; then
+            echo "package.json name: $(jq -r .name sdk/package.json)"
+            echo "package.json version: $(jq -r .version sdk/package.json)"
+          fi
+          if [ -f sdk/pyproject.toml ]; then
+            echo "pyproject.toml: $(grep -E '^name\s*=' sdk/pyproject.toml || true)"
+          fi
+
+      - name: Set up Node (TypeScript)
+        if: matrix.lang == 'typescript'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish TypeScript to npm
+        if: matrix.lang == 'typescript'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Add it in repository Secrets or in .secrets for act."
+            exit 1
+          fi
+          cd sdk
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+          npm install --ignore-scripts
+          npm run build
+          npm publish --access public
+
+      - name: Publish MCP to npm
+        if: matrix.lang == 'mcp'
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is not set. Add it in repository Secrets or in .secrets for act."
+            exit 1
+          fi
+          cd sdk
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> .npmrc
+          npm install --ignore-scripts
+          [ -f node_modules/bun/install.js ] && node node_modules/bun/install.js || true
+          npm run build
+          npm publish --access public
+
+      - name: Set up Python
+        if: matrix.lang == 'python'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Publish Python to PyPI
+        if: matrix.lang == 'python'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: |
+          cd sdk
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine upload dist/*

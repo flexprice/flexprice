@@ -1,0 +1,4 @@
+# Published SDK tests: pin flexprice to avoid circular-import / UnrecognizedStr issues in newer releases
+flexprice>=2.0.1
+pydantic>=2
+httpx>=0.28

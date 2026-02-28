@@ -9,140 +9,26 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "contact": {
+            "name": "API Support"
+        },
+        "license": {
+            "name": "AGPL-3.0",
+            "url": "https://www.gnu.org/licenses/agpl-3.0.html"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
         "/addons": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get addons with optional filtering",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Addons"
-                ],
-                "summary": "List addons",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "addon_ids",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "onetime",
-                            "multiple_instance"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "AddonTypeOnetime",
-                            "AddonTypeMultipleInstance"
-                        ],
-                        "name": "addon_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "lookup_keys",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListAddonsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new addon",
+                "description": "Use when defining an optional purchasable item (e.g. extra storage or support tier). Ideal for add-ons that customers can attach to a subscription.",
                 "consumes": [
                     "application/json"
                 ],
@@ -153,6 +39,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Create addon",
+                "operationId": "createAddon",
                 "parameters": [
                     {
                         "description": "Addon Request",
@@ -172,13 +59,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -193,7 +80,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get an addon by lookup key",
+                "description": "Use when resolving an addon by external id (e.g. from your product catalog). Ideal for integrations.",
                 "produces": [
                     "application/json"
                 ],
@@ -201,6 +88,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Get addon by lookup key",
+                "operationId": "getAddonByLookupKey",
                 "parameters": [
                     {
                         "type": "string",
@@ -218,13 +106,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -239,7 +127,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List addons by filter",
+                "description": "Use when listing or searching addons (e.g. catalog or subscription builder). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -249,7 +137,8 @@ const docTemplate = `{
                 "tags": [
                     "Addons"
                 ],
-                "summary": "List addons by filter",
+                "summary": "Query addons",
+                "operationId": "queryAddon",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -269,13 +158,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -290,7 +179,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get an addon by ID",
+                "description": "Use when you need to load a single addon (e.g. for display or to attach to a subscription).",
                 "produces": [
                     "application/json"
                 ],
@@ -298,6 +187,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Get addon",
+                "operationId": "getAddon",
                 "parameters": [
                     {
                         "type": "string",
@@ -315,13 +205,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -334,7 +224,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an existing addon",
+                "description": "Use when changing addon details (e.g. name, pricing, or metadata).",
                 "consumes": [
                     "application/json"
                 ],
@@ -345,6 +235,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Update addon",
+                "operationId": "updateAddon",
                 "parameters": [
                     {
                         "type": "string",
@@ -371,13 +262,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -390,7 +281,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete an addon",
+                "description": "Use when retiring an addon (e.g. end-of-life). Returns 200 with success message.",
                 "produces": [
                     "application/json"
                 ],
@@ -398,6 +289,7 @@ const docTemplate = `{
                     "Addons"
                 ],
                 "summary": "Delete addon",
+                "operationId": "deleteAddon",
                 "parameters": [
                     {
                         "type": "string",
@@ -415,13 +307,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -436,10 +328,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all entitlements for an addon",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when checking what features or limits an addon grants (e.g. for display or entitlement logic).",
                 "produces": [
                     "application/json"
                 ],
@@ -447,6 +336,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get addon entitlements",
+                "operationId": "getAddonEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -464,19 +354,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -484,14 +374,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/alert/search": {
+        "/alerts/search": {
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List alert logs by filter with optional expand for customer, wallet, and feature",
+                "description": "Use when viewing or searching alert history (e.g. support triage or customer-facing alert log). Returns a paginated list; supports filtering by type, customer, subscription.",
                 "consumes": [
                     "application/json"
                 ],
@@ -499,9 +389,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Alert Logs"
+                    "Alerts"
                 ],
-                "summary": "List alert logs by filter",
+                "summary": "Query alert logs",
+                "operationId": "queryAlertLog",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -521,441 +412,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/auth/login": {
-            "post": {
-                "description": "Login a user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Login",
-                "parameters": [
-                    {
-                        "description": "Login request",
-                        "name": "login",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.LoginRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.AuthResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/auth/signup": {
-            "post": {
-                "description": "Sign up a new user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Auth"
-                ],
-                "summary": "Sign up",
-                "parameters": [
-                    {
-                        "description": "Sign up request",
-                        "name": "signup",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.SignUpRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.AuthResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/connections": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a list of connections",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Connections"
-                ],
-                "summary": "Get connections",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "connection_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "flexprice",
-                            "stripe",
-                            "s3",
-                            "hubspot",
-                            "razorpay",
-                            "chargebee",
-                            "quickbooks",
-                            "nomod",
-                            "moyasar"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "SecretProviderFlexPrice",
-                            "SecretProviderStripe",
-                            "SecretProviderS3",
-                            "SecretProviderHubSpot",
-                            "SecretProviderRazorpay",
-                            "SecretProviderChargebee",
-                            "SecretProviderQuickBooks",
-                            "SecretProviderNomod",
-                            "SecretProviderMoyasar"
-                        ],
-                        "name": "provider_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListConnectionsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/connections/search": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "List connections by filter",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Connections"
-                ],
-                "summary": "List connections by filter",
-                "parameters": [
-                    {
-                        "description": "Filter",
-                        "name": "filter",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/types.ConnectionFilter"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListConnectionsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/connections/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a connection by ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Connections"
-                ],
-                "summary": "Get a connection",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Connection ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ConnectionResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Update a connection by ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Connections"
-                ],
-                "summary": "Update a connection",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Connection ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Connection",
-                        "name": "connection",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateConnectionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ConnectionResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Delete a connection by ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Connections"
-                ],
-                "summary": "Delete a connection",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Connection ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "No Content"
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -970,7 +433,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new costsheet with the specified name",
+                "description": "Use when setting up a new pricing configuration (e.g. a new product or region). Costsheets group prices and define the default for the environment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -980,7 +443,8 @@ const docTemplate = `{
                 "tags": [
                     "Costs"
                 ],
-                "summary": "Create a new costsheet",
+                "summary": "Create costsheet",
+                "operationId": "createCostsheet",
                 "parameters": [
                     {
                         "description": "Costsheet configuration",
@@ -994,13 +458,13 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Created costsheet",
                         "schema": {
                             "$ref": "#/definitions/dto.CreateCostsheetResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1012,7 +476,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1027,32 +491,30 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get the active costsheet for the current tenant",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need the tenant's default pricing configuration (e.g. for checkout or plan display). Returns the active costsheet for the environment.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Costs"
                 ],
-                "summary": "Get active costsheet for tenant",
+                "summary": "Get active costsheet",
+                "operationId": "getActiveCostsheet",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Active costsheet",
                         "schema": {
                             "$ref": "#/definitions/dto.CostsheetResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "No active costsheet",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1067,7 +529,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.",
+                "description": "Use when building dashboards or reports that need revenue vs cost, ROI, and margin over a time period (e.g. finance views or executive summaries).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1078,6 +540,7 @@ const docTemplate = `{
                     "Costs"
                 ],
                 "summary": "Get combined revenue and cost analytics",
+                "operationId": "getDetailedCostAnalytics",
                 "parameters": [
                     {
                         "description": "Combined analytics request (start_time/end_time optional - defaults to last 7 days)",
@@ -1097,13 +560,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1118,7 +581,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.",
+                "description": "Use when you need the same revenue/cost/ROI analytics but computed from the costsheet usage-tracking pipeline (e.g. for consistency with usage-based cost data).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1128,7 +591,8 @@ const docTemplate = `{
                 "tags": [
                     "Costs"
                 ],
-                "summary": "Get combined revenue and cost analytics",
+                "summary": "Get combined revenue and cost analytics (V2)",
+                "operationId": "getDetailedCostAnalyticsV2",
                 "parameters": [
                     {
                         "description": "Combined analytics request (start_time/end_time optional - defaults to last 7 days)",
@@ -1148,13 +612,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1169,7 +633,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List costsheet records by filter with POST body",
+                "description": "Use when listing or searching costsheets (e.g. admin catalog). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1179,7 +643,8 @@ const docTemplate = `{
                 "tags": [
                     "Costs"
                 ],
-                "summary": "List costsheets by filter",
+                "summary": "Query costsheets",
+                "operationId": "queryCostsheet",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -1193,19 +658,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Paginated costsheets",
                         "schema": {
                             "$ref": "#/definitions/dto.ListCostsheetResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1220,17 +685,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a costsheet by ID with optional price expansion",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single costsheet (e.g. for editing or display). Supports optional expand for related prices.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Costs"
                 ],
-                "summary": "Get a costsheet by ID",
+                "summary": "Get costsheet",
+                "operationId": "getCostsheet",
                 "parameters": [
                     {
                         "type": "string",
@@ -1248,25 +711,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Costsheet details",
                         "schema": {
                             "$ref": "#/definitions/dto.GetCostsheetResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Costsheet not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1279,7 +742,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a costsheet with the specified configuration",
+                "description": "Use when changing costsheet name or metadata.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1289,7 +752,8 @@ const docTemplate = `{
                 "tags": [
                     "Costs"
                 ],
-                "summary": "Update a costsheet",
+                "summary": "Update costsheet",
+                "operationId": "updateCostsheet",
                 "parameters": [
                     {
                         "type": "string",
@@ -1310,19 +774,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Updated costsheet",
                         "schema": {
                             "$ref": "#/definitions/dto.UpdateCostsheetResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Costsheet not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1334,7 +798,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1347,7 +811,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Soft delete a costsheet by setting its status to deleted",
+                "description": "Use when retiring a costsheet (e.g. end-of-life product). Soft-deletes; status set to deleted.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1357,7 +821,8 @@ const docTemplate = `{
                 "tags": [
                     "Costs"
                 ],
-                "summary": "Delete a costsheet",
+                "summary": "Delete costsheet",
+                "operationId": "deleteCostsheet",
                 "parameters": [
                     {
                         "type": "string",
@@ -1369,25 +834,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Costsheet deleted",
                         "schema": {
                             "$ref": "#/definitions/dto.DeleteCostsheetResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Costsheet not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1396,118 +861,6 @@ const docTemplate = `{
             }
         },
         "/coupons": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Lists coupons with filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Coupons"
-                ],
-                "summary": "List coupons with filtering",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "coupon_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListCouponsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -1517,7 +870,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new coupon",
+                "description": "Use when creating a discount (e.g. promo code or referral). Ideal for percent or fixed value, with optional validity and usage limits.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1527,7 +880,8 @@ const docTemplate = `{
                 "tags": [
                     "Coupons"
                 ],
-                "summary": "Create a new coupon",
+                "summary": "Create coupon",
+                "operationId": "createCoupon",
                 "parameters": [
                     {
                         "description": "Coupon request",
@@ -1547,7 +901,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1565,13 +919,65 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/coupons/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing or searching coupons (e.g. promo management). Returns a paginated list; supports filtering and sorting.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Coupons"
+                ],
+                "summary": "Query coupons",
+                "operationId": "queryCoupon",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.CouponFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListCouponsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1584,22 +990,17 @@ const docTemplate = `{
                 "security": [
                     {
                         "ApiKeyAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves a coupon by ID",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single coupon (e.g. for display or to validate a code).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Coupons"
                 ],
-                "summary": "Get a coupon by ID",
+                "summary": "Get coupon",
+                "operationId": "getCoupon",
                 "parameters": [
                     {
                         "type": "string",
@@ -1617,31 +1018,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1657,7 +1046,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Updates an existing coupon",
+                "description": "Use when changing coupon config (e.g. value, validity, or usage limits).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1667,7 +1056,8 @@ const docTemplate = `{
                 "tags": [
                     "Coupons"
                 ],
-                "summary": "Update a coupon",
+                "summary": "Update coupon",
+                "operationId": "updateCoupon",
                 "parameters": [
                     {
                         "type": "string",
@@ -1694,7 +1084,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1712,13 +1102,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1734,7 +1124,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Deletes a coupon",
+                "description": "Use when retiring a coupon (e.g. campaign ended). Returns 200 with success message.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1744,7 +1134,8 @@ const docTemplate = `{
                 "tags": [
                     "Coupons"
                 ],
-                "summary": "Delete a coupon",
+                "summary": "Delete coupon",
+                "operationId": "deleteCoupon",
                 "parameters": [
                     {
                         "type": "string",
@@ -1765,7 +1156,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1783,13 +1174,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1798,151 +1189,13 @@ const docTemplate = `{
             }
         },
         "/creditgrants": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get credit grants with the specified filter",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "CreditGrants"
-                ],
-                "summary": "Get credit grants",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "credit_grant_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "Specific filters for credit grants",
-                        "name": "plan_ids",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "PLAN",
-                            "SUBSCRIPTION"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "CreditGrantScopePlan",
-                            "CreditGrantScopeSubscription"
-                        ],
-                        "name": "scope",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "subscription_ids",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListCreditGrantsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new credit grant with the specified configuration",
+                "description": "Use when giving a customer or plan credits (e.g. prepaid balance or promotional credits). Scope can be plan or subscription; supports start/end dates.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1950,9 +1203,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "CreditGrants"
+                    "Credit Grants"
                 ],
-                "summary": "Create a new credit grant",
+                "summary": "Create credit grant",
+                "operationId": "createCreditGrant",
                 "parameters": [
                     {
                         "description": "Credit Grant configuration",
@@ -1972,13 +1226,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -1993,17 +1247,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a credit grant by ID",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single credit grant (e.g. for display or to check balance).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "CreditGrants"
+                    "Credit Grants"
                 ],
-                "summary": "Get a credit grant by ID",
+                "summary": "Get credit grant",
+                "operationId": "getCreditGrant",
                 "parameters": [
                     {
                         "type": "string",
@@ -2021,13 +1273,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2040,7 +1292,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a credit grant with the specified configuration",
+                "description": "Use when changing a credit grant (e.g. amount or end date). Request body contains the fields to update.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2048,9 +1300,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "CreditGrants"
+                    "Credit Grants"
                 ],
-                "summary": "Update a credit grant",
+                "summary": "Update credit grant",
+                "operationId": "updateCreditGrant",
                 "parameters": [
                     {
                         "type": "string",
@@ -2077,13 +1330,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2096,7 +1349,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a credit grant. Plan-scoped grants are archived; subscription-scoped grants have their end date set (optional body with effective_date). Request body is optional.",
+                "description": "Use when removing or ending a credit grant (e.g. revoke promo or close prepaid). Plan-scoped grants are archived; subscription-scoped supports optional effective_date in body.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2104,9 +1357,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "CreditGrants"
+                    "Credit Grants"
                 ],
-                "summary": "Delete a credit grant",
+                "summary": "Delete credit grant",
+                "operationId": "deleteCreditGrant",
                 "parameters": [
                     {
                         "type": "string",
@@ -2132,13 +1386,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2147,165 +1401,6 @@ const docTemplate = `{
             }
         },
         "/creditnotes": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Lists credit notes with filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Credit Notes"
-                ],
-                "summary": "List credit notes with filtering",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "credit_note_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "DRAFT",
-                                "FINALIZED",
-                                "VOIDED"
-                            ],
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "credit_note_status",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "ADJUSTMENT",
-                            "REFUND"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "CreditNoteTypeAdjustment",
-                            "CreditNoteTypeRefund"
-                        ],
-                        "name": "credit_note_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "invoice_id",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListCreditNotesResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
@@ -2315,7 +1410,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Creates a new credit note",
+                "description": "Use when issuing a refund or adjustment (e.g. customer dispute or proration). Links to an invoice; create as draft then finalize.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2325,7 +1420,8 @@ const docTemplate = `{
                 "tags": [
                     "Credit Notes"
                 ],
-                "summary": "Create a new credit note",
+                "summary": "Create credit note",
+                "operationId": "createCreditNote",
                 "parameters": [
                     {
                         "description": "Credit note request",
@@ -2345,7 +1441,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2363,13 +1459,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2382,22 +1478,17 @@ const docTemplate = `{
                 "security": [
                     {
                         "ApiKeyAuth": []
-                    },
-                    {
-                        "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieves a credit note by ID",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single credit note (e.g. for display or reconciliation).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Credit Notes"
                 ],
-                "summary": "Get a credit note by ID",
+                "summary": "Get credit note",
+                "operationId": "getCreditNote",
                 "parameters": [
                     {
                         "type": "string",
@@ -2415,31 +1506,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error\" \"Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2457,7 +1536,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Processes a draft credit note",
+                "description": "Use when locking a draft credit note and applying the credit (e.g. after approval). Once finalized, applied per billing provider.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2467,7 +1546,8 @@ const docTemplate = `{
                 "tags": [
                     "Credit Notes"
                 ],
-                "summary": "Process a draft credit note",
+                "summary": "Finalize credit note",
+                "operationId": "processCreditNote",
                 "parameters": [
                     {
                         "type": "string",
@@ -2485,7 +1565,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2503,13 +1583,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2527,7 +1607,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Voids a credit note",
+                "description": "Use when cancelling a draft credit note (e.g. created by mistake). Only draft credit notes can be voided.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2537,7 +1617,8 @@ const docTemplate = `{
                 "tags": [
                     "Credit Notes"
                 ],
-                "summary": "Void a credit note",
+                "summary": "Void credit note",
+                "operationId": "voidCreditNote",
                 "parameters": [
                     {
                         "type": "string",
@@ -2555,7 +1636,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2573,13 +1654,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2588,142 +1669,13 @@ const docTemplate = `{
             }
         },
         "/customers": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get customers",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Customers"
-                ],
-                "summary": "Get customers",
-                "parameters": [
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "customer_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "email",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "external_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "external_ids",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "parent_customer_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListCustomersResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a customer by id or external_customer_id",
+                "description": "Use when updating customer details (e.g. name, email, or metadata). Identify by id or external_customer_id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2733,7 +1685,8 @@ const docTemplate = `{
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Update a customer",
+                "summary": "Update customer",
+                "operationId": "updateCustomer",
                 "parameters": [
                     {
                         "type": "string",
@@ -2765,13 +1718,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2784,7 +1737,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a customer",
+                "description": "Use when onboarding a new billing customer (e.g. sign-up or CRM sync). Ideal for linking via external_customer_id to your app's user id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2794,7 +1747,8 @@ const docTemplate = `{
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Create a customer",
+                "summary": "Create customer",
+                "operationId": "createCustomer",
                 "parameters": [
                     {
                         "description": "Customer",
@@ -2814,13 +1768,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2835,17 +1789,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer by external id",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when resolving a customer by your app's id (e.g. from your user table). Ideal for integrations that key by external id.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Get a customer by external id",
+                "summary": "Get customer by external ID",
+                "operationId": "getCustomerByExternalId",
                 "parameters": [
                     {
                         "type": "string",
@@ -2863,19 +1815,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2890,7 +1842,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List customers by filter",
+                "description": "Use when listing or searching customers (e.g. admin CRM or reporting). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2900,7 +1852,8 @@ const docTemplate = `{
                 "tags": [
                     "Customers"
                 ],
-                "summary": "List customers by filter",
+                "summary": "Query customers",
+                "operationId": "queryCustomer",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -2920,13 +1873,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -2941,7 +1894,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get customer usage summary by customer_id or customer_lookup_key (external_customer_id)",
+                "description": "Use when showing a customer's usage (e.g. portal or overage alerts). Identify by customer_id or customer_lookup_key; supports filters.",
                 "consumes": [
                     "application/json"
                 ],
@@ -2952,6 +1905,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customer usage summary",
+                "operationId": "getCustomerUsageSummary",
                 "parameters": [
                     {
                         "type": "string",
@@ -2999,13 +1953,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3020,7 +1974,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all wallets for a customer by lookup key or id",
+                "description": "Use when resolving wallets by external customer id or lookup key (e.g. from your app's user id). Supports optional real-time balance and expand.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3031,6 +1985,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get Customer Wallets",
+                "operationId": "getCustomerWallets",
                 "parameters": [
                     {
                         "type": "integer",
@@ -3077,19 +2032,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3104,17 +2059,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single customer (e.g. for a billing portal or to attach a subscription).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Get a customer",
+                "summary": "Get customer",
+                "operationId": "getCustomer",
                 "parameters": [
                     {
                         "type": "string",
@@ -3132,13 +2085,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3151,7 +2104,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a customer",
+                "description": "Use when removing a customer (e.g. GDPR or churn). Returns 204 No Content on success.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3161,7 +2114,8 @@ const docTemplate = `{
                 "tags": [
                     "Customers"
                 ],
-                "summary": "Delete a customer",
+                "summary": "Delete customer",
+                "operationId": "deleteCustomer",
                 "parameters": [
                     {
                         "type": "string",
@@ -3176,13 +2130,13 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3197,10 +2151,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get customer entitlements",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when checking what a customer can access (e.g. feature gating or usage limits). Supports optional filters (feature_ids, subscription_ids).",
                 "produces": [
                     "application/json"
                 ],
@@ -3208,6 +2159,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get customer entitlements",
+                "operationId": "getCustomerEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -3215,24 +2167,6 @@ const docTemplate = `{
                         "name": "id",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "feature_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "subscription_ids",
-                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -3243,13 +2177,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3264,7 +2198,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get upcoming credit grant applications for a customer",
+                "description": "Use when showing upcoming or pending credits for a customer (e.g. in a portal or for forecasting).",
                 "produces": [
                     "application/json"
                 ],
@@ -3272,6 +2206,7 @@ const docTemplate = `{
                     "Customers"
                 ],
                 "summary": "Get upcoming credit grant applications",
+                "operationId": "getCustomerUpcomingGrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -3289,19 +2224,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3316,7 +2251,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a customer invoice summary",
+                "description": "Use when showing a customer's invoice overview (e.g. billing portal or balance summary). Includes totals and multi-currency breakdown.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3326,7 +2261,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Get a customer invoice summary",
+                "summary": "Get customer invoice summary",
+                "operationId": "getCustomerInvoiceSummary",
                 "parameters": [
                     {
                         "type": "string",
@@ -3344,13 +2280,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3365,7 +2301,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all wallets for a customer",
+                "description": "Use when showing a customer's wallets (e.g. balance overview by currency or in a billing portal). Supports optional expand for balance breakdown.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3376,6 +2312,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallets by customer ID",
+                "operationId": "getWalletsByCustomerId",
                 "parameters": [
                     {
                         "type": "string",
@@ -3396,13 +2333,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3411,167 +2348,13 @@ const docTemplate = `{
             }
         },
         "/entitlements": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get entitlements with the specified filter",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Entitlements"
-                ],
-                "summary": "Get entitlements",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "entity_ids",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "PLAN",
-                            "SUBSCRIPTION",
-                            "ADDON"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "ENTITLEMENT_ENTITY_TYPE_PLAN",
-                            "ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION",
-                            "ENTITLEMENT_ENTITY_TYPE_ADDON"
-                        ],
-                        "name": "entity_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "feature_ids",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "metered",
-                            "boolean",
-                            "static"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "FeatureTypeMetered",
-                            "FeatureTypeBoolean",
-                            "FeatureTypeStatic"
-                        ],
-                        "name": "feature_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "name": "is_enabled",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "plan_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListEntitlementsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new entitlement with the specified configuration",
+                "description": "Use when attaching a feature (and its limit) to a plan or addon (e.g. \"10 seats\" or \"1000 API calls\"). Defines what the plan/addon includes.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3581,7 +2364,8 @@ const docTemplate = `{
                 "tags": [
                     "Entitlements"
                 ],
-                "summary": "Create a new entitlement",
+                "summary": "Create entitlement",
+                "operationId": "createEntitlement",
                 "parameters": [
                     {
                         "description": "Entitlement configuration",
@@ -3601,13 +2385,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3622,7 +2406,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create multiple entitlements with the specified configurations",
+                "description": "Use when attaching many features to a plan or addon at once (e.g. initial plan setup or import). Bulk version of create entitlement.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3632,7 +2416,8 @@ const docTemplate = `{
                 "tags": [
                     "Entitlements"
                 ],
-                "summary": "Create multiple entitlements in bulk",
+                "summary": "Create entitlements in bulk",
+                "operationId": "createEntitlementsBulk",
                 "parameters": [
                     {
                         "description": "Bulk entitlement configuration",
@@ -3652,13 +2437,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3673,7 +2458,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List entitlements by filter",
+                "description": "Use when listing or searching entitlements (e.g. plan editor or audit). Returns a paginated list; supports filtering by plan, addon, feature.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3683,7 +2468,8 @@ const docTemplate = `{
                 "tags": [
                     "Entitlements"
                 ],
-                "summary": "List entitlements by filter",
+                "summary": "Query entitlements",
+                "operationId": "queryEntitlement",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -3703,13 +2489,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3724,17 +2510,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get an entitlement by ID",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single entitlement (e.g. to display or edit a feature limit).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Entitlements"
                 ],
-                "summary": "Get an entitlement by ID",
+                "summary": "Get entitlement",
+                "operationId": "getEntitlement",
                 "parameters": [
                     {
                         "type": "string",
@@ -3752,13 +2536,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3771,7 +2555,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an entitlement with the specified configuration",
+                "description": "Use when changing an entitlement (e.g. increasing or decreasing a limit). Request body contains the fields to update.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3781,7 +2565,8 @@ const docTemplate = `{
                 "tags": [
                     "Entitlements"
                 ],
-                "summary": "Update an entitlement",
+                "summary": "Update entitlement",
+                "operationId": "updateEntitlement",
                 "parameters": [
                     {
                         "type": "string",
@@ -3808,13 +2593,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3827,7 +2612,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete an entitlement",
+                "description": "Use when removing a feature from a plan or addon (e.g. deprecating a capability). Returns 200 with success message.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3837,7 +2622,8 @@ const docTemplate = `{
                 "tags": [
                     "Entitlements"
                 ],
-                "summary": "Delete an entitlement",
+                "summary": "Delete entitlement",
+                "operationId": "deleteEntitlement",
                 "parameters": [
                     {
                         "type": "string",
@@ -3855,13 +2641,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -3870,95 +2656,13 @@ const docTemplate = `{
             }
         },
         "/entity-integration-mappings": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieve a list of entity integration mappings with optional filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Entity Integration Mappings"
-                ],
-                "summary": "List entity integration mappings",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by FlexPrice entity ID",
-                        "name": "entity_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by entity type",
-                        "name": "entity_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by provider type",
-                        "name": "provider_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by provider entity ID",
-                        "name": "provider_entity_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of results to return (default: 20, max: 100)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Pagination offset (default: 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListEntityIntegrationMappingsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new entity integration mapping",
+                "description": "Use when linking a FlexPrice entity to an external system (e.g. CRM or payment provider) so you can sync or reconcile by external ID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -3969,6 +2673,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Create entity integration mapping",
+                "operationId": "createEntityIntegrationMapping",
                 "parameters": [
                     {
                         "description": "Entity integration mapping data",
@@ -3988,7 +2693,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4006,7 +2711,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4015,72 +2720,13 @@ const docTemplate = `{
             }
         },
         "/entity-integration-mappings/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieve a specific entity integration mapping by ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Entity Integration Mappings"
-                ],
-                "summary": "Get entity integration mapping",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Entity integration mapping ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.EntityIntegrationMappingResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "delete": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete an entity integration mapping",
+                "description": "Use when unlinking a FlexPrice entity from an external system or cleaning up stale integration mappings.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4091,6 +2737,7 @@ const docTemplate = `{
                     "Entity Integration Mappings"
                 ],
                 "summary": "Delete entity integration mapping",
+                "operationId": "deleteEntityIntegrationMapping",
                 "parameters": [
                     {
                         "type": "string",
@@ -4105,7 +2752,7 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4117,13 +2764,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4132,93 +2779,13 @@ const docTemplate = `{
             }
         },
         "/environments": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get environments",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Get environments",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListEnvironmentsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create an environment",
+                "description": "Use when setting up a new environment (e.g. production, staging) for the tenant. Ideal for separating billing or config per environment.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4228,7 +2795,8 @@ const docTemplate = `{
                 "tags": [
                     "Environments"
                 ],
-                "summary": "Create an environment",
+                "summary": "Create environment",
+                "operationId": "createEnvironment",
                 "parameters": [
                     {
                         "description": "Environment",
@@ -4248,13 +2816,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4263,66 +2831,13 @@ const docTemplate = `{
             }
         },
         "/environments/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get an environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Get an environment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.EnvironmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an environment",
+                "description": "Use when changing environment name or settings (e.g. renaming or updating metadata).",
                 "consumes": [
                     "application/json"
                 ],
@@ -4332,7 +2847,8 @@ const docTemplate = `{
                 "tags": [
                     "Environments"
                 ],
-                "summary": "Update an environment",
+                "summary": "Update environment",
+                "operationId": "updateEnvironment",
                 "parameters": [
                     {
                         "type": "string",
@@ -4359,19 +2875,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4386,7 +2902,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Ingest a new event into the system",
+                "description": "Use when sending a single usage event from your app (e.g. one API call or one GB stored). Events are processed asynchronously; returns 202 with event_id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4397,6 +2913,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Ingest event",
+                "operationId": "ingestEvent",
                 "parameters": [
                     {
                         "description": "Event data",
@@ -4419,13 +2936,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4440,7 +2957,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve comprehensive usage analytics with filtering, grouping, and time-series data",
+                "description": "Use when building analytics views (e.g. usage by feature or customer over time). Supports filtering, grouping, and time-series breakdown.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4448,6 +2968,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage analytics",
+                "operationId": "getUsageAnalytics",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4467,13 +2988,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4488,7 +3009,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Ingest bulk events into the system",
+                "description": "Use when batching usage events (e.g. backfill or high-volume ingestion). More efficient than single event calls; returns 202 when accepted.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4498,7 +3019,8 @@ const docTemplate = `{
                 "tags": [
                     "Events"
                 ],
-                "summary": "Bulk Ingest events",
+                "summary": "Bulk ingest events",
+                "operationId": "ingestEventsBulk",
                 "parameters": [
                     {
                         "description": "Event data",
@@ -4521,13 +3043,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4542,14 +3064,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve hugging face inference data for events",
+                "description": "Use when fetching Hugging Face inference usage or billing data (e.g. for HF-specific reporting or reconciliation).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Get hugging face inference data",
+                "summary": "Get Hugging Face inference data",
+                "operationId": "getHuggingfaceInferenceData",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -4558,52 +3081,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/events/monitoring": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Retrieve monitoring data for events including consumer lag and event metrics (last 24 hours by default)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Events"
-                ],
-                "summary": "Get monitoring data",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Window size for time series data (e.g., 'HOUR', 'DAY') - optional",
-                        "name": "window_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.GetMonitoringDataResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Validation error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4618,7 +3096,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve raw events with pagination and filtering",
+                "description": "Use when debugging ingestion or exporting raw event data (e.g. support or audit). Returns a paginated list; supports time range and sorting.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4626,6 +3107,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "List raw events",
+                "operationId": "listRawEvents",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4645,13 +3127,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4666,7 +3148,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve aggregated usage statistics for events",
+                "description": "Use when building usage reports or dashboards across events. Supports filters and grouping; defaults to last 7 days if no range provided.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4674,6 +3159,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage statistics",
+                "operationId": "getUsageStatistics",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4693,13 +3179,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4714,7 +3200,10 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve aggregated usage statistics using meter configuration",
+                "description": "Use when showing usage for a specific meter (e.g. dashboard or overage check). Supports time range, filters, and grouping by customer or subscription.",
+                "consumes": [
+                    "application/json"
+                ],
                 "produces": [
                     "application/json"
                 ],
@@ -4722,6 +3211,7 @@ const docTemplate = `{
                     "Events"
                 ],
                 "summary": "Get usage by meter",
+                "operationId": "getUsageByMeter",
                 "parameters": [
                     {
                         "description": "Request body",
@@ -4741,19 +3231,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4768,14 +3258,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve event details and processing status with debug information",
+                "description": "Use when debugging a specific event (e.g. why it failed or how it was aggregated). Includes processing status and debug info.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Get event by ID",
+                "summary": "Get event",
+                "operationId": "getEvent",
                 "parameters": [
                     {
                         "type": "string",
@@ -4799,7 +3290,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4808,143 +3299,13 @@ const docTemplate = `{
             }
         },
         "/features": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "List features with optional filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Features"
-                ],
-                "summary": "List features",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "Feature specific filters",
-                        "name": "feature_ids",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "lookup_key",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "lookup_keys",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "meter_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "name_contains",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListFeaturesResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new feature",
+                "description": "Use when defining a new feature or capability to gate or meter (e.g. feature flags or usage-based limits). Ideal for boolean or usage features.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4954,7 +3315,8 @@ const docTemplate = `{
                 "tags": [
                     "Features"
                 ],
-                "summary": "Create a new feature",
+                "summary": "Create feature",
+                "operationId": "createFeature",
                 "parameters": [
                     {
                         "description": "Feature to create",
@@ -4974,13 +3336,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4995,7 +3357,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List features by filter",
+                "description": "Use when listing or searching features (e.g. catalog or entitlement setup). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5005,7 +3367,8 @@ const docTemplate = `{
                 "tags": [
                     "Features"
                 ],
-                "summary": "List features by filter",
+                "summary": "Query features",
+                "operationId": "queryFeature",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -5025,13 +3388,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5040,66 +3403,13 @@ const docTemplate = `{
             }
         },
         "/features/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get a feature by ID",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Features"
-                ],
-                "summary": "Get a feature by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Feature ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.FeatureResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "put": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a feature by ID",
+                "description": "Use when changing feature definition (e.g. name, type, or meter). Request body contains the fields to update.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5109,7 +3419,8 @@ const docTemplate = `{
                 "tags": [
                     "Features"
                 ],
-                "summary": "Update a feature",
+                "summary": "Update feature",
+                "operationId": "updateFeature",
                 "parameters": [
                     {
                         "type": "string",
@@ -5136,19 +3447,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5161,7 +3472,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a feature by ID",
+                "description": "Use when retiring a feature (e.g. deprecated capability). Returns 200 with success message.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5171,7 +3482,8 @@ const docTemplate = `{
                 "tags": [
                     "Features"
                 ],
-                "summary": "Delete a feature",
+                "summary": "Delete feature",
+                "operationId": "deleteFeature",
                 "parameters": [
                     {
                         "type": "string",
@@ -5189,19 +3501,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5216,7 +3528,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new group for organizing entities (prices, plans, customers, etc.)",
+                "description": "Use when organizing entities into a group (e.g. for filtering prices or plans by product line or region).",
                 "consumes": [
                     "application/json"
                 ],
@@ -5226,7 +3538,8 @@ const docTemplate = `{
                 "tags": [
                     "Groups"
                 ],
-                "summary": "Create a group",
+                "summary": "Create group",
+                "operationId": "createGroup",
                 "parameters": [
                     {
                         "description": "Group",
@@ -5246,13 +3559,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5267,7 +3580,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get groups with optional filtering via query parameters",
+                "description": "Use when listing or searching groups (e.g. admin catalog). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5277,49 +3590,17 @@ const docTemplate = `{
                 "tags": [
                     "Groups"
                 ],
-                "summary": "Get groups",
+                "summary": "Query groups",
+                "operationId": "queryGroup",
                 "parameters": [
                     {
-                        "type": "string",
-                        "description": "Filter by entity type (e.g., 'price')",
-                        "name": "entity_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by group name (contains search)",
-                        "name": "name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by lookup key (exact match)",
-                        "name": "lookup_key",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of items to return (default: 20)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Number of items to skip (default: 0)",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Field to sort by (name, created_at, updated_at)",
-                        "name": "sort_by",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Sort order (asc, desc)",
-                        "name": "sort_order",
-                        "in": "query"
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.GroupFilter"
+                        }
                     }
                 ],
                 "responses": {
@@ -5330,13 +3611,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5351,7 +3632,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a group by ID",
+                "description": "Use when you need to load a single group (e.g. for display or to assign entities).",
                 "consumes": [
                     "application/json"
                 ],
@@ -5361,7 +3642,8 @@ const docTemplate = `{
                 "tags": [
                     "Groups"
                 ],
-                "summary": "Get a group",
+                "summary": "Get group",
+                "operationId": "getGroup",
                 "parameters": [
                     {
                         "type": "string",
@@ -5379,19 +3661,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5404,7 +3686,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a group and remove all entity associations",
+                "description": "Use when removing a group and clearing its entity associations (e.g. retiring a product line). Returns 204 or 200 on success.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5414,7 +3696,8 @@ const docTemplate = `{
                 "tags": [
                     "Groups"
                 ],
-                "summary": "Delete a group",
+                "summary": "Delete group",
+                "operationId": "deleteGroup",
                 "parameters": [
                     {
                         "type": "string",
@@ -5429,19 +3712,19 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5450,226 +3733,13 @@ const docTemplate = `{
             }
         },
         "/invoices": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "List invoices with optional filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Invoices"
-                ],
-                "summary": "List invoices",
-                "parameters": [
-                    {
-                        "type": "number",
-                        "description": "amount_due_gt filters invoices with a total amount due greater than the specified value\nUseful for finding invoices above a certain threshold or identifying high-value invoices",
-                        "name": "amount_due_gt",
-                        "in": "query"
-                    },
-                    {
-                        "type": "number",
-                        "description": "amount_remaining_gt filters invoices with an outstanding balance greater than the specified value\nUseful for finding invoices that still have significant unpaid amounts",
-                        "name": "amount_remaining_gt",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "customer_id filters invoices for a specific customer using FlexPrice's internal customer ID\nThis is the ID returned by FlexPrice when creating or retrieving customers",
-                        "name": "customer_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "external_customer_id filters invoices for a customer using your system's customer identifier\nThis is the ID you provided when creating the customer in FlexPrice",
-                        "name": "external_customer_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "invoice_ids restricts results to invoices with the specified IDs\nUse this to retrieve specific invoices when you know their exact identifiers",
-                        "name": "invoice_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "DRAFT",
-                                "FINALIZED",
-                                "VOIDED"
-                            ],
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "invoice_status filters by the current state of invoices in their lifecycle\nMultiple statuses can be specified to include invoices in any of the listed states",
-                        "name": "invoice_status",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "SUBSCRIPTION",
-                            "ONE_OFF",
-                            "CREDIT"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "InvoiceTypeSubscription",
-                            "InvoiceTypeOneOff",
-                            "InvoiceTypeCredit"
-                        ],
-                        "description": "invoice_type filters by the nature of the invoice (SUBSCRIPTION, ONE_OFF, or CREDIT)\nUse this to separate recurring charges from one-time fees or credit adjustments",
-                        "name": "invoice_type",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "INITIATED",
-                                "PENDING",
-                                "PROCESSING",
-                                "SUCCEEDED",
-                                "OVERPAID",
-                                "FAILED",
-                                "REFUNDED",
-                                "PARTIALLY_REFUNDED"
-                            ],
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "payment_status filters by the payment state of invoices\nMultiple statuses can be specified to include invoices with any of the listed payment states",
-                        "name": "payment_status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "period_end_gte filters invoices with period_end \u003e= value",
-                        "name": "period_end_gte",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "period_end_lte filters invoices with period_end \u003c= value",
-                        "name": "period_end_lte",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "period_start_gte filters invoices with period_start \u003e= value",
-                        "name": "period_start_gte",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "period_start_lte filters invoices with period_start \u003c= value",
-                        "name": "period_start_lte",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "SkipLineItems if true, will not include line items in the response",
-                        "name": "skip_line_items",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "subscription_id filters invoices generated for a specific subscription\nOnly returns invoices that were created as part of the specified subscription's billing",
-                        "name": "subscription_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListInvoicesResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new one off invoice with the provided details",
+                "description": "Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5679,7 +3749,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Create a new one off invoice",
+                "summary": "Create one-off invoice",
+                "operationId": "createInvoice",
                 "parameters": [
                     {
                         "description": "Invoice details",
@@ -5699,13 +3770,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5720,7 +3791,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a preview invoice",
+                "description": "Use when showing a customer what they will be charged (e.g. preview before checkout or plan change). No invoice is created.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5730,7 +3801,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Get a preview invoice",
+                "summary": "Get invoice preview",
+                "operationId": "getInvoicePreview",
                 "parameters": [
                     {
                         "description": "Preview Invoice Request",
@@ -5750,13 +3822,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5771,7 +3843,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List invoices by filter",
+                "description": "Use when listing or searching invoices (e.g. admin view or customer history). Returns a paginated list; supports filtering by customer, status, date range.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5781,7 +3853,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "List invoices by filter",
+                "summary": "Query invoices",
+                "operationId": "queryInvoice",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -5801,13 +3874,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5822,7 +3895,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get detailed information about an invoice",
+                "description": "Use when loading an invoice for display or editing (e.g. portal or reconciliation). Supports group_by for usage breakdown and force_runtime_recalculation.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5832,7 +3905,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Get an invoice by ID",
+                "summary": "Get invoice",
+                "operationId": "getInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -5866,13 +3940,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5885,7 +3959,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update invoice details like PDF URL and due date.",
+                "description": "Use when updating invoice metadata or due date (e.g. PDF URL, net terms). For paid invoices only safe fields can be updated.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5895,7 +3969,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Update an invoice",
+                "summary": "Update invoice",
+                "operationId": "updateInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -5922,19 +3997,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -5949,7 +4024,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Triggers a communication webhook event containing all information about the invoice",
+                "description": "Use when sending an invoice to the customer (e.g. trigger email or Slack). Payload includes full invoice details for your integration.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5959,7 +4034,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Trigger communication webhook for an invoice",
+                "summary": "Trigger invoice communication webhook",
+                "operationId": "triggerInvoiceCommsWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -5977,19 +4053,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6004,7 +4080,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Finalize a draft invoice",
+                "description": "Use when locking an invoice for payment (e.g. after review). Once finalized, line items are locked; invoice can be paid or voided.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6014,7 +4090,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Finalize an invoice",
+                "summary": "Finalize invoice",
+                "operationId": "finalizeInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -6032,13 +4109,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6053,7 +4130,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update the payment status of an invoice",
+                "description": "Use when reconciling payment status from an external gateway or manual entry (e.g. mark paid after bank confirmation).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6064,6 +4141,7 @@ const docTemplate = `{
                     "Invoices"
                 ],
                 "summary": "Update invoice payment status",
+                "operationId": "updateInvoicePaymentStatus",
                 "parameters": [
                     {
                         "type": "string",
@@ -6090,19 +4168,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6117,7 +4195,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Attempt to pay an invoice using customer's available wallets",
+                "description": "Use when paying an invoice with the customer's wallet balance (e.g. prepaid credits or balance applied at checkout).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6127,7 +4205,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Attempt payment for an invoice",
+                "summary": "Attempt invoice payment",
+                "operationId": "attemptInvoicePayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6145,19 +4224,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6172,11 +4251,12 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Retrieve the PDF document for a specific invoice by its ID",
+                "description": "Use when delivering an invoice PDF to the customer (e.g. email attachment or download). Use url=true for a presigned URL instead of binary.",
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Get PDF for an invoice",
+                "summary": "Get invoice PDF",
+                "operationId": "getInvoicePdf",
                 "parameters": [
                     {
                         "type": "string",
@@ -6200,19 +4280,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6227,7 +4307,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Recalculate totals and line items for a draft invoice, useful when subscription line items or usage data has changed",
+                "description": "Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6237,7 +4317,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Recalculate invoice totals and line items",
+                "summary": "Recalculate invoice",
+                "operationId": "recalculateInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -6261,19 +4342,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6288,7 +4369,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Void an invoice that hasn't been paid",
+                "description": "Use when cancelling an invoice (e.g. order cancelled or duplicate). Only unpaid invoices can be voided.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6298,7 +4379,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Void an invoice",
+                "summary": "Void invoice",
+                "operationId": "voidInvoice",
                 "parameters": [
                     {
                         "type": "string",
@@ -6316,13 +4398,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6337,7 +4419,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List payments with the specified filter",
+                "description": "Use when listing or searching payments (e.g. reconciliation UI or customer payment history). Returns a paginated list; supports filtering by customer, invoice, status.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6348,6 +4430,7 @@ const docTemplate = `{
                     "Payments"
                 ],
                 "summary": "List payments",
+                "operationId": "listPayments",
                 "parameters": [
                     {
                         "type": "string",
@@ -6459,19 +4542,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Paginated payments",
                         "schema": {
                             "$ref": "#/definitions/dto.ListPaymentsResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6484,7 +4567,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new payment with the specified configuration",
+                "description": "Use when recording a payment against an invoice (e.g. after receiving funds via a gateway or manual entry).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6494,7 +4577,8 @@ const docTemplate = `{
                 "tags": [
                     "Payments"
                 ],
-                "summary": "Create a new payment",
+                "summary": "Create payment",
+                "operationId": "createPayment",
                 "parameters": [
                     {
                         "description": "Payment configuration",
@@ -6508,19 +4592,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Created payment",
                         "schema": {
                             "$ref": "#/definitions/dto.PaymentResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6535,7 +4619,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a payment by ID",
+                "description": "Use when you need to load a single payment (e.g. for a receipt view or reconciliation).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6545,7 +4629,8 @@ const docTemplate = `{
                 "tags": [
                     "Payments"
                 ],
-                "summary": "Get a payment by ID",
+                "summary": "Get payment",
+                "operationId": "getPayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6557,19 +4642,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Payment details",
                         "schema": {
                             "$ref": "#/definitions/dto.PaymentResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Payment not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6582,7 +4673,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a payment with the specified configuration",
+                "description": "Use when updating payment status or metadata (e.g. after reconciliation or adding a reference).",
                 "consumes": [
                     "application/json"
                 ],
@@ -6592,7 +4683,8 @@ const docTemplate = `{
                 "tags": [
                     "Payments"
                 ],
-                "summary": "Update a payment",
+                "summary": "Update payment",
+                "operationId": "updatePayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6613,19 +4705,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Updated payment",
                         "schema": {
                             "$ref": "#/definitions/dto.PaymentResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6638,7 +4730,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a payment",
+                "description": "Use when removing or voiding a payment record (e.g. correcting erroneous entries). Returns 200 with success message.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6648,7 +4740,8 @@ const docTemplate = `{
                 "tags": [
                     "Payments"
                 ],
-                "summary": "Delete a payment",
+                "summary": "Delete payment",
+                "operationId": "deletePayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6660,19 +4753,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Payment deleted",
                         "schema": {
                             "$ref": "#/definitions/dto.SuccessResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Payment not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6687,7 +4786,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Process a payment",
+                "description": "Use when you need to charge or process a payment (e.g. trigger the payment provider to capture funds). Returns updated payment with status.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6697,7 +4796,8 @@ const docTemplate = `{
                 "tags": [
                     "Payments"
                 ],
-                "summary": "Process a payment",
+                "summary": "Process payment",
+                "operationId": "processPayment",
                 "parameters": [
                     {
                         "type": "string",
@@ -6709,19 +4809,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Processed payment",
                         "schema": {
                             "$ref": "#/definitions/dto.PaymentResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Payment not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6730,119 +4836,13 @@ const docTemplate = `{
             }
         },
         "/plans": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get plans with optional filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Plans"
-                ],
-                "summary": "Get plans",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "lookup_key",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "plan_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListPlansResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new plan with the specified configuration",
+                "description": "Use when defining a new pricing plan (e.g. Free, Pro, Enterprise). Attach prices and entitlements; customers subscribe to plans.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6852,7 +4852,8 @@ const docTemplate = `{
                 "tags": [
                     "Plans"
                 ],
-                "summary": "Create a new plan",
+                "summary": "Create plan",
+                "operationId": "createPlan",
                 "parameters": [
                     {
                         "description": "Plan configuration",
@@ -6872,13 +4873,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6893,7 +4894,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List plans by filter",
+                "description": "Use when listing or searching plans (e.g. plan picker or admin catalog). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -6903,7 +4904,8 @@ const docTemplate = `{
                 "tags": [
                     "Plans"
                 ],
-                "summary": "List plans by filter",
+                "summary": "Query plans",
+                "operationId": "queryPlan",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -6923,13 +4925,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6944,17 +4946,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a plan by ID",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when you need to load a single plan (e.g. for display or to create a subscription).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Plans"
                 ],
-                "summary": "Get a plan",
+                "summary": "Get plan",
+                "operationId": "getPlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -6972,19 +4972,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -6997,7 +4997,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a plan by ID",
+                "description": "Use when changing plan details (e.g. name, interval, or metadata). Partial update supported.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7007,7 +5007,8 @@ const docTemplate = `{
                 "tags": [
                     "Plans"
                 ],
-                "summary": "Update a plan",
+                "summary": "Update plan",
+                "operationId": "updatePlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -7034,19 +5035,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7059,7 +5060,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a plan by ID",
+                "description": "Use when retiring a plan (e.g. end-of-life). Existing subscriptions may be affected. Returns 200 with success message.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7069,7 +5070,8 @@ const docTemplate = `{
                 "tags": [
                     "Plans"
                 ],
-                "summary": "Delete a plan",
+                "summary": "Delete plan",
+                "operationId": "deletePlan",
                 "parameters": [
                     {
                         "type": "string",
@@ -7087,19 +5089,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7184,17 +5186,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all credit grants for a plan",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when listing credits attached to a plan (e.g. included prepaid or promo credits).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "CreditGrants"
+                    "Credit Grants"
                 ],
                 "summary": "Get plan credit grants",
+                "operationId": "getPlanCreditGrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -7212,19 +5212,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7239,10 +5239,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all entitlements for a plan",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use when checking what a plan includes (e.g. feature list or limits for display or gating).",
                 "produces": [
                     "application/json"
                 ],
@@ -7250,6 +5247,7 @@ const docTemplate = `{
                     "Entitlements"
                 ],
                 "summary": "Get plan entitlements",
+                "operationId": "getPlanEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -7267,19 +5265,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7294,7 +5292,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Synchronize current plan prices with all existing active subscriptions",
+                "description": "Use when you have changed plan prices and need to push them to all active subscriptions (e.g. global price update). Returns workflow ID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7305,6 +5303,7 @@ const docTemplate = `{
                     "Plans"
                 ],
                 "summary": "Synchronize plan prices",
+                "operationId": "syncPlanPrices",
                 "parameters": [
                     {
                         "type": "string",
@@ -7348,243 +5347,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/portal/{external_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Generate a dashboard URL/token for a customer to access their billing information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "CustomerPortal"
-                ],
-                "summary": "Create a customer portal session",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Customer External ID",
-                        "name": "external_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.PortalSessionResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/prices": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get prices with the specified filter",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Prices"
-                ],
-                "summary": "Get prices",
-                "parameters": [
-                    {
-                        "type": "boolean",
-                        "default": false,
-                        "name": "allow_expired_prices",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "entity_ids",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "PLAN",
-                            "SUBSCRIPTION",
-                            "ADDON",
-                            "PRICE",
-                            "COSTSHEET"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "PRICE_ENTITY_TYPE_PLAN",
-                            "PRICE_ENTITY_TYPE_SUBSCRIPTION",
-                            "PRICE_ENTITY_TYPE_ADDON",
-                            "PRICE_ENTITY_TYPE_PRICE",
-                            "PRICE_ENTITY_TYPE_COSTSHEET"
-                        ],
-                        "name": "entity_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "meter_ids",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "parent_price_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "Price override filtering fields",
-                        "name": "plan_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "price_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_date_lt",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "subscription_id",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListPricesResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new price with the specified configuration. Supports both regular and price unit configurations.",
+                "description": "Use when adding a new price to a plan or catalog (e.g. per-seat, flat, or metered). Ideal for both simple and usage-based pricing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7594,7 +5364,8 @@ const docTemplate = `{
                 "tags": [
                     "Prices"
                 ],
-                "summary": "Create a new price",
+                "summary": "Create price",
+                "operationId": "createPrice",
                 "parameters": [
                     {
                         "description": "Price configuration",
@@ -7614,13 +5385,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7635,7 +5406,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create multiple prices with the specified configurations. Supports both regular and price unit configurations.",
+                "description": "Use when creating many prices at once (e.g. importing a catalog or setting up a plan with multiple tiers).",
                 "consumes": [
                     "application/json"
                 ],
@@ -7645,7 +5416,8 @@ const docTemplate = `{
                 "tags": [
                     "Prices"
                 ],
-                "summary": "Create multiple prices in bulk",
+                "summary": "Create prices in bulk",
+                "operationId": "createPricesBulk",
                 "parameters": [
                     {
                         "description": "Bulk price configuration",
@@ -7665,13 +5437,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7686,7 +5458,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get price by lookup key",
+                "description": "Use when resolving a price by external id (e.g. from your catalog or CMS). Ideal for integrations.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7697,6 +5469,7 @@ const docTemplate = `{
                     "Prices"
                 ],
                 "summary": "Get price by lookup key",
+                "operationId": "getPriceByLookupKey",
                 "parameters": [
                     {
                         "type": "string",
@@ -7714,13 +5487,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7735,7 +5508,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List prices with filter",
+                "description": "Use when listing or searching prices (e.g. plan builder or catalog). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7745,10 +5518,11 @@ const docTemplate = `{
                 "tags": [
                     "Prices"
                 ],
-                "summary": "List prices by filter",
+                "summary": "Query prices",
+                "operationId": "queryPrice",
                 "parameters": [
                     {
-                        "description": "Filter with DSL support",
+                        "description": "Filter",
                         "name": "filter",
                         "in": "body",
                         "required": true,
@@ -7765,13 +5539,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7786,7 +5560,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a paginated list of price units with optional filtering",
+                "description": "Use when listing price units (e.g. in a catalog or when creating prices). Returns a paginated list; supports status, sort, and pagination.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7797,6 +5571,7 @@ const docTemplate = `{
                     "Price Units"
                 ],
                 "summary": "List price units",
+                "operationId": "listPriceUnits",
                 "parameters": [
                     {
                         "type": "string",
@@ -7805,13 +5580,18 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "maximum": 1000,
+                        "minimum": 1,
                         "type": "integer",
+                        "default": 50,
                         "description": "Limit number of results",
                         "name": "limit",
                         "in": "query"
                     },
                     {
+                        "minimum": 0,
                         "type": "integer",
+                        "default": 0,
                         "description": "Offset for pagination",
                         "name": "offset",
                         "in": "query"
@@ -7823,8 +5603,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
                         "type": "string",
-                        "description": "Sort order (asc/desc)",
+                        "description": "Sort order",
                         "name": "order",
                         "in": "query"
                     }
@@ -7837,7 +5621,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7850,7 +5640,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new price unit with the provided details",
+                "description": "Use when defining a new unit of measure for pricing (e.g. GB, API call, seat). Ideal for metered or usage-based prices.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7860,7 +5650,8 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "Create a new price unit",
+                "summary": "Create price unit",
+                "operationId": "createPriceUnit",
                 "parameters": [
                     {
                         "description": "Price unit details",
@@ -7880,7 +5671,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7895,7 +5692,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a price unit by code",
+                "description": "Use when resolving a price unit by code (e.g. from an external catalog or config). Ideal for integrations.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7905,7 +5702,8 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "Get a price unit by code",
+                "summary": "Get price unit by code",
+                "operationId": "getPriceUnitByCode",
                 "parameters": [
                     {
                         "type": "string",
@@ -7923,19 +5721,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -7950,7 +5748,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List price units by filter",
+                "description": "Use when searching or listing price units (e.g. admin catalog). Returns a paginated list; supports filtering and sorting.",
                 "consumes": [
                     "application/json"
                 ],
@@ -7960,7 +5758,8 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "List price units by filter",
+                "summary": "Query price units",
+                "operationId": "queryPriceUnit",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -7968,7 +5767,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/types.Filter"
+                            "$ref": "#/definitions/types.PriceUnitFilter"
                         }
                     }
                 ],
@@ -7980,13 +5779,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8001,7 +5800,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a price unit by ID",
+                "description": "Use when you need to load a single price unit (e.g. for display or when creating a price).",
                 "consumes": [
                     "application/json"
                 ],
@@ -8011,7 +5810,8 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "Get a price unit by ID",
+                "summary": "Get price unit",
+                "operationId": "getPriceUnit",
                 "parameters": [
                     {
                         "type": "string",
@@ -8048,7 +5848,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update an existing price unit with the provided details. Only name and metadata can be updated.",
+                "description": "Use when renaming or updating metadata for a price unit. Code is immutable once created.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8058,7 +5858,8 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "Update a price unit",
+                "summary": "Update price unit",
+                "operationId": "updatePriceUnit",
                 "parameters": [
                     {
                         "type": "string",
@@ -8104,7 +5905,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete an existing price unit.",
+                "description": "Use when removing a price unit that is no longer needed. Fails if any price references this unit.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8114,7 +5915,8 @@ const docTemplate = `{
                 "tags": [
                     "Price Units"
                 ],
-                "summary": "Delete a price unit",
+                "summary": "Delete price unit",
+                "operationId": "deletePriceUnit",
                 "parameters": [
                     {
                         "type": "string",
@@ -8153,7 +5955,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a price by ID with expanded meter and price unit information",
+                "description": "Use when you need to load a single price (e.g. for display or editing). Response includes expanded meter and price unit when applicable.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8163,7 +5965,8 @@ const docTemplate = `{
                 "tags": [
                     "Prices"
                 ],
-                "summary": "Get a price by ID",
+                "summary": "Get price",
+                "operationId": "getPrice",
                 "parameters": [
                     {
                         "type": "string",
@@ -8181,13 +5984,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8200,7 +6003,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a price with the specified configuration",
+                "description": "Use when changing price configuration (e.g. amount, billing scheme, or metadata).",
                 "consumes": [
                     "application/json"
                 ],
@@ -8210,7 +6013,8 @@ const docTemplate = `{
                 "tags": [
                     "Prices"
                 ],
-                "summary": "Update a price",
+                "summary": "Update price",
+                "operationId": "updatePrice",
                 "parameters": [
                     {
                         "type": "string",
@@ -8237,13 +6041,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8256,7 +6060,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a price",
+                "description": "Use when retiring a price (e.g. end-of-life or replacement). Optional effective date or cascade for subscriptions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8266,7 +6070,8 @@ const docTemplate = `{
                 "tags": [
                     "Prices"
                 ],
-                "summary": "Delete a price",
+                "summary": "Delete price",
+                "operationId": "deletePrice",
                 "parameters": [
                     {
                         "type": "string",
@@ -8293,13 +6098,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8314,7 +6119,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns all available roles with their permissions, names, and descriptions",
+                "description": "Use when building role pickers or permission UIs. Returns all roles with permissions and descriptions.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8325,6 +6130,7 @@ const docTemplate = `{
                     "RBAC"
                 ],
                 "summary": "List all RBAC roles",
+                "operationId": "listRbacRoles",
                 "responses": {
                     "200": {
                         "description": "List of roles",
@@ -8352,7 +6158,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Returns details of a specific role including permissions, name, and description",
+                "description": "Use when you need to show or edit a single role (e.g. role detail page). Includes permissions, name, and description.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8363,6 +6169,7 @@ const docTemplate = `{
                     "RBAC"
                 ],
                 "summary": "Get a specific RBAC role",
+                "operationId": "getRbacRole",
                 "parameters": [
                     {
                         "type": "string",
@@ -8399,7 +6206,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a paginated list of API keys",
+                "description": "Use when listing API keys (e.g. admin view or rotating keys). Returns a paginated list.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8407,9 +6214,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "secrets"
+                    "Secrets"
                 ],
                 "summary": "List API keys",
+                "operationId": "listApiKeys",
                 "parameters": [
                     {
                         "type": "integer",
@@ -8438,13 +6246,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8457,7 +6265,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new API key. Provide 'service_account_id' in body to create API key for a service account, otherwise creates for authenticated user.",
+                "description": "Use when issuing a new API key (e.g. for a service account or for the current user). Provide service_account_id to create for a service account.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8465,12 +6273,13 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "secrets"
+                    "Secrets"
                 ],
                 "summary": "Create a new API key",
+                "operationId": "createApiKey",
                 "parameters": [
                     {
-                        "description": "API key creation request\\",
+                        "description": "API key creation request",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -8487,13 +6296,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8508,7 +6317,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete an API key by ID",
+                "description": "Use when revoking an API key (e.g. rotation or compromise). Permanently invalidates the key.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8516,9 +6325,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "secrets"
+                    "Secrets"
                 ],
                 "summary": "Delete an API key",
+                "operationId": "deleteApiKey",
                 "parameters": [
                     {
                         "type": "string",
@@ -8533,13 +6343,13 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8554,7 +6364,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get details of a specific integration",
+                "description": "Use when you need to check or display integration config (e.g. which provider is linked). Sensitive values may be redacted.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8565,6 +6375,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Get integration details",
+                "operationId": "getIntegration",
                 "parameters": [
                     {
                         "type": "string",
@@ -8582,13 +6393,13 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8603,7 +6414,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create or update integration credentials",
+                "description": "Use when storing or updating credentials for an external integration (e.g. Stripe, HubSpot). Secrets are encrypted at rest.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8614,6 +6425,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Create or update an integration",
+                "operationId": "createOrUpdateIntegration",
                 "parameters": [
                     {
                         "type": "string",
@@ -8640,13 +6452,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8661,7 +6473,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a list of unique providers which have a valid linked integration secret",
+                "description": "Use when showing which integrations are connected (e.g. settings page). Returns providers that have valid linked credentials.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8672,6 +6484,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "List linked integrations",
+                "operationId": "listLinkedIntegrations",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -8680,7 +6493,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8695,7 +6508,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete integration credentials",
+                "description": "Use when disconnecting an integration (e.g. switching provider or removing OAuth). Deletes stored credentials.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8706,6 +6519,7 @@ const docTemplate = `{
                     "Integrations"
                 ],
                 "summary": "Delete an integration",
+                "operationId": "deleteIntegration",
                 "parameters": [
                     {
                         "type": "string",
@@ -8720,13 +6534,13 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8735,211 +6549,13 @@ const docTemplate = `{
             }
         },
         "/subscriptions": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get subscriptions with optional filtering",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Subscriptions"
-                ],
-                "summary": "List subscriptions",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "ActiveAt filters subscriptions that are active at the given time",
-                        "name": "active_at",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "RECURRING",
-                                "ONETIME"
-                            ],
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "BillingCadence filters by billing cadence",
-                        "name": "billing_cadence",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "MONTHLY",
-                                "ANNUAL",
-                                "WEEKLY",
-                                "DAILY",
-                                "QUARTERLY",
-                                "HALF_YEARLY"
-                            ],
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "BillingPeriod filters by billing period",
-                        "name": "billing_period",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "CustomerID filters by customer ID",
-                        "name": "customer_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "ExternalCustomerID filters by external customer ID",
-                        "name": "external_customer_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "InvoicingCustomerIDs filters by invoicing customer ID",
-                        "name": "invoicing_customer_ids",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "ParentSubscriptionIDs filters by parent subscription IDs",
-                        "name": "parent_subscription_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "PlanID filters by plan ID",
-                        "name": "plan_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "published",
-                            "deleted",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "StatusPublished",
-                            "StatusDeleted",
-                            "StatusArchived"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "subscription_ids",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "enum": [
-                                "active",
-                                "paused",
-                                "cancelled",
-                                "incomplete",
-                                "trialing",
-                                "draft"
-                            ],
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "description": "SubscriptionStatus filters by subscription status",
-                        "name": "subscription_status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "WithLineItems includes line items in the response",
-                        "name": "with_line_items",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.ListSubscriptionsResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new subscription",
+                "description": "Use when onboarding a customer to a plan or starting a new subscription. Ideal for draft subscriptions (activate later) or active from start.",
                 "consumes": [
                     "application/json"
                 ],
@@ -8950,6 +6566,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Create subscription",
+                "operationId": "createSubscription",
                 "parameters": [
                     {
                         "description": "Subscription Request",
@@ -8969,13 +6586,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -8990,7 +6607,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Add an addon to a subscription",
+                "description": "Use when adding an optional product or add-on to an existing subscription (e.g. extra storage or support tier).",
                 "consumes": [
                     "application/json"
                 ],
@@ -9001,6 +6618,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Add addon to subscription",
+                "operationId": "addSubscriptionAddon",
                 "parameters": [
                     {
                         "description": "Add Addon Request",
@@ -9020,13 +6638,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9039,7 +6657,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Remove an addon from a subscription",
+                "description": "Use when removing an add-on from a subscription (e.g. downgrade or opt-out).",
                 "consumes": [
                     "application/json"
                 ],
@@ -9050,6 +6668,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Remove addon from subscription",
+                "operationId": "removeSubscriptionAddon",
                 "parameters": [
                     {
                         "description": "Remove Addon Request",
@@ -9069,13 +6688,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9090,7 +6709,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a subscription line item by terminating the existing one and creating a new one",
+                "description": "Use when changing a subscription line item (e.g. quantity or price). Implemented by ending the current line and creating a new one for clean billing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9101,6 +6720,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Update subscription line item",
+                "operationId": "updateSubscriptionLineItem",
                 "parameters": [
                     {
                         "type": "string",
@@ -9127,13 +6747,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9146,7 +6766,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a subscription line item by setting its end date",
+                "description": "Use when removing a charge or seat from a subscription (e.g. downgrade). Line item ends; retained for history but no longer billed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9157,6 +6777,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Delete subscription line item",
+                "operationId": "deleteSubscriptionLineItem",
                 "parameters": [
                     {
                         "type": "string",
@@ -9183,13 +6804,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9204,7 +6825,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List subscriptions by filter",
+                "description": "Use when listing or searching subscriptions (e.g. admin view or customer subscription list). Returns a paginated list; supports filtering by customer, plan, status.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9214,7 +6835,8 @@ const docTemplate = `{
                 "tags": [
                     "Subscriptions"
                 ],
-                "summary": "List subscriptions by filter",
+                "summary": "Query subscriptions",
+                "operationId": "querySubscription",
                 "parameters": [
                     {
                         "description": "Filter",
@@ -9234,13 +6856,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9255,7 +6877,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get usage for a subscription",
+                "description": "Use when showing usage for a subscription (e.g. in a portal or for overage checks). Supports time range and filters.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9266,6 +6888,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get usage by subscription",
+                "operationId": "getSubscriptionUsage",
                 "parameters": [
                     {
                         "description": "Usage request",
@@ -9285,13 +6908,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9306,7 +6929,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a subscription by ID",
+                "description": "Use when you need to load a single subscription (e.g. for a billing portal or to check status).",
                 "produces": [
                     "application/json"
                 ],
@@ -9314,6 +6937,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription",
+                "operationId": "getSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9331,13 +6955,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9350,7 +6974,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a subscription. parent_subscription_id can be set to another subscription ID, cleared by sending \"\", or left unchanged if omitted.",
+                "description": "Use when changing subscription details (e.g. quantity, billing anchor, or parent). Supports partial update; send \"\" to clear parent_subscription_id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9361,6 +6985,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Update subscription",
+                "operationId": "updateSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9387,13 +7012,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9408,7 +7033,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Activate a draft subscription with a new start date",
+                "description": "Use when turning a draft subscription live (e.g. after collecting payment or completing setup). Once activated, billing and entitlements apply.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9419,6 +7044,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Activate draft subscription",
+                "operationId": "activateSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9445,13 +7071,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9466,7 +7092,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get active addon associations for a subscription",
+                "description": "Use when listing which add-ons are currently attached to a subscription (e.g. for display or editing).",
                 "produces": [
                     "application/json"
                 ],
@@ -9474,6 +7100,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get active addon associations",
+                "operationId": "getSubscriptionAddonAssociations",
                 "parameters": [
                     {
                         "type": "string",
@@ -9494,19 +7121,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9521,7 +7148,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Cancel a subscription with enhanced proration support",
+                "description": "Use when a customer churns or downgrades. Supports immediate or end-of-period cancellation and proration. Ideal for self-serve or support-driven cancellations.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9532,6 +7159,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Cancel subscription",
+                "operationId": "cancelSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9558,13 +7186,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9579,7 +7207,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Execute a subscription plan change, including proration and invoice generation",
+                "description": "Use when applying a plan change (e.g. upgrade or downgrade). Executes proration and generates invoice or credit as needed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9590,6 +7218,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Execute subscription plan change",
+                "operationId": "executeSubscriptionChange",
                 "parameters": [
                     {
                         "type": "string",
@@ -9616,19 +7245,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9643,7 +7272,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Preview the impact of changing a subscription's plan, including proration calculations",
+                "description": "Use when showing a customer the cost of a plan change before they confirm (e.g. upgrade/downgrade preview with proration).",
                 "consumes": [
                     "application/json"
                 ],
@@ -9654,6 +7283,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Preview subscription plan change",
+                "operationId": "previewSubscriptionChange",
                 "parameters": [
                     {
                         "type": "string",
@@ -9680,19 +7310,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9707,7 +7337,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get all entitlements for a subscription",
+                "description": "Use when checking what features or limits a subscription has (e.g. entitlement checks or feature gating). Optional feature_ids to filter.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9718,6 +7348,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription entitlements",
+                "operationId": "getSubscriptionEntitlements",
                 "parameters": [
                     {
                         "type": "string",
@@ -9745,19 +7376,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9772,7 +7403,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get upcoming credit grant applications for a subscription",
+                "description": "Use when showing upcoming or pending credits for a subscription (e.g. in a portal or for forecasting).",
                 "produces": [
                     "application/json"
                 ],
@@ -9780,6 +7411,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get upcoming credit grant applications",
+                "operationId": "getSubscriptionUpcomingGrants",
                 "parameters": [
                     {
                         "type": "string",
@@ -9797,19 +7429,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9824,7 +7456,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Add a new line item to an existing subscription (price_id or inline price)",
+                "description": "Use when adding a new charge or seat to a subscription (e.g. extra seat or one-time add). Supports price_id or inline price.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9835,6 +7467,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Create subscription line item",
+                "operationId": "createSubscriptionLineItem",
                 "parameters": [
                     {
                         "type": "string",
@@ -9861,19 +7494,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9888,7 +7521,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Pause a subscription with the specified parameters",
+                "description": "Use when temporarily stopping a subscription (e.g. customer hold or seasonal pause). Billing and access pause; resume when ready.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9899,6 +7532,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Pause a subscription",
+                "operationId": "pauseSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -9925,19 +7559,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -9947,7 +7581,7 @@ const docTemplate = `{
         },
         "/subscriptions/{id}/pauses": {
             "get": {
-                "description": "List all pauses for a subscription",
+                "description": "Use when showing pause history for a subscription (e.g. support or audit). Returns all past and future pauses.",
                 "produces": [
                     "application/json"
                 ],
@@ -9955,6 +7589,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List all pauses for a subscription",
+                "operationId": "listSubscriptionPauses",
                 "parameters": [
                     {
                         "type": "string",
@@ -9975,19 +7610,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10002,7 +7637,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Resume a paused subscription with the specified parameters",
+                "description": "Use when reactivating a paused subscription (e.g. end of hold). Billing and access resume from the resume date.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10013,6 +7648,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Resume a paused subscription",
+                "operationId": "resumeSubscription",
                 "parameters": [
                     {
                         "type": "string",
@@ -10039,19 +7675,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10066,14 +7702,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a subscription by ID with optional expand parameters",
+                "description": "Use when you need a subscription with related data (line items, prices, plan). Supports expand for detailed payloads without extra round-trips.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Subscriptions"
                 ],
-                "summary": "Get subscription V2",
+                "summary": "Get subscription (V2)",
+                "operationId": "getSubscriptionV2",
                 "parameters": [
                     {
                         "type": "string",
@@ -10097,13 +7734,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10118,7 +7755,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List tasks with optional filtering",
+                "description": "Use when listing or searching async tasks (e.g. admin queue view). Returns list with optional filtering.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10129,6 +7766,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "List tasks",
+                "operationId": "listTasks",
                 "parameters": [
                     {
                         "type": "string",
@@ -10253,13 +7891,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10272,7 +7910,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new task for processing files asynchronously",
+                "description": "Use when submitting a file or job for async processing (e.g. export or import). Returns task ID to poll for status and result.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10283,6 +7921,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Create a new task",
+                "operationId": "createTask",
                 "parameters": [
                     {
                         "description": "Task configuration",
@@ -10302,13 +7941,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10323,7 +7962,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get the result of a task processing workflow",
+                "description": "Use when fetching the outcome of a completed task (e.g. export URL or error message). Call after task status is complete.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10334,6 +7973,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Get task processing result",
+                "operationId": "getTaskResult",
                 "parameters": [
                     {
                         "type": "string",
@@ -10351,19 +7991,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10378,7 +8018,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a list of scheduled tasks with optional filters",
+                "description": "Use when listing or managing scheduled tasks in an admin UI. Returns a list; supports filtering by status, type, and pagination.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10386,9 +8026,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
                 "summary": "List scheduled tasks",
+                "operationId": "listScheduledTasks",
                 "parameters": [
                     {
                         "type": "integer",
@@ -10435,13 +8076,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10454,7 +8095,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new scheduled task for data export",
+                "description": "Use when setting up recurring data exports or other scheduled jobs. Ideal for report generation or syncing data on a schedule.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10462,9 +8103,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
-                "summary": "Create a scheduled task",
+                "summary": "Create scheduled task",
+                "operationId": "createScheduledTask",
                 "parameters": [
                     {
                         "description": "Scheduled Task",
@@ -10484,13 +8126,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10505,7 +8147,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Schedule an update billing period workflow",
+                "description": "Use when you need to trigger a billing-period update workflow (e.g. to recalculate or sync billing windows).",
                 "consumes": [
                     "application/json"
                 ],
@@ -10513,9 +8155,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
                 "summary": "Schedule update billing period",
+                "operationId": "scheduleUpdateBillingPeriod",
                 "parameters": [
                     {
                         "description": "Schedule Update Billing Period Request",
@@ -10535,13 +8178,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10556,7 +8199,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a scheduled task by ID",
+                "description": "Use when you need to load a single scheduled task (e.g. to show details in a UI or check its configuration).",
                 "consumes": [
                     "application/json"
                 ],
@@ -10564,9 +8207,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
-                "summary": "Get a scheduled task",
+                "summary": "Get scheduled task",
+                "operationId": "getScheduledTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10584,19 +8228,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10609,7 +8253,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a scheduled task by ID - Only enabled field can be changed (pause/resume)",
+                "description": "Use when pausing or resuming a scheduled task. Only the enabled field can be changed.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10617,9 +8261,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
                 "summary": "Update a scheduled task",
+                "operationId": "updateScheduledTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10671,7 +8316,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Archive a scheduled task by ID (soft delete) - Sets status to archived and deletes from Temporal",
+                "description": "Use when removing a scheduled task from the active roster. Archives the task and removes it from the scheduler (soft delete).",
                 "consumes": [
                     "application/json"
                 ],
@@ -10679,9 +8324,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
                 "summary": "Delete a scheduled task",
+                "operationId": "deleteScheduledTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10723,7 +8369,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Trigger a force run export immediately for a scheduled task with optional custom time range",
+                "description": "Use when you need to run a scheduled export immediately (e.g. on-demand report or catch-up). Supports optional custom time range.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10731,9 +8377,10 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "ScheduledTasks"
+                    "Scheduled Tasks"
                 ],
                 "summary": "Trigger force run",
+                "operationId": "triggerScheduledTaskRun",
                 "parameters": [
                     {
                         "type": "string",
@@ -10759,19 +8406,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10786,7 +8433,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a task by ID",
+                "description": "Use when checking task status or progress (e.g. polling after create). Returns task by ID.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10797,6 +8444,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Get a task",
+                "operationId": "getTask",
                 "parameters": [
                     {
                         "type": "string",
@@ -10814,19 +8462,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10841,7 +8489,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Generate a presigned URL for downloading an exported file (supports both Flexprice-managed and customer-owned S3)",
+                "description": "Use when letting a user download an exported file (e.g. report or data export). Returns a presigned URL; supports FlexPrice or customer-owned S3.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10852,6 +8500,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Download task export file",
+                "operationId": "downloadTaskExport",
                 "parameters": [
                     {
                         "type": "string",
@@ -10872,19 +8521,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10899,7 +8548,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a task's status",
+                "description": "Use when updating task status (e.g. marking complete or failed from a worker). Typically called by backend processors.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10910,6 +8559,7 @@ const docTemplate = `{
                     "Tasks"
                 ],
                 "summary": "Update task status",
+                "operationId": "updateTaskStatus",
                 "parameters": [
                     {
                         "type": "string",
@@ -10936,19 +8586,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -10963,7 +8613,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List tax associations",
+                "description": "Use when listing tax associations (e.g. tax config or audit). Returns list with optional filtering.",
                 "consumes": [
                     "application/json"
                 ],
@@ -10974,6 +8624,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "List tax associations",
+                "operationId": "listTaxAssociations",
                 "parameters": [
                     {
                         "type": "string",
@@ -10985,6 +8636,12 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Entity ID",
                         "name": "entity_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "External Customer ID",
+                        "name": "external_customer_id",
                         "in": "query"
                     },
                     {
@@ -11002,13 +8659,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11021,7 +8678,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new tax association",
+                "description": "Use when linking a tax rate to an entity (e.g. customer, product, or region) so that rate applies on invoices.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11032,6 +8689,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Create Tax Association",
+                "operationId": "createTaxAssociation",
                 "parameters": [
                     {
                         "description": "Tax Config Request",
@@ -11051,13 +8709,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11072,7 +8730,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a tax association by ID",
+                "description": "Use when you need to load a single tax association (e.g. for display or editing).",
                 "consumes": [
                     "application/json"
                 ],
@@ -11083,6 +8741,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Get Tax Association",
+                "operationId": "getTaxAssociation",
                 "parameters": [
                     {
                         "type": "string",
@@ -11100,13 +8759,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11119,7 +8778,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a tax association by ID",
+                "description": "Use when changing a tax association (e.g. switch rate or entity). Request body contains the fields to update.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11130,6 +8789,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Update tax association",
+                "operationId": "updateTaxAssociation",
                 "parameters": [
                     {
                         "type": "string",
@@ -11156,13 +8816,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11175,7 +8835,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a tax association by ID",
+                "description": "Use when removing a tax association (e.g. entity no longer subject to that rate).",
                 "consumes": [
                     "application/json"
                 ],
@@ -11186,6 +8846,7 @@ const docTemplate = `{
                     "Tax Associations"
                 ],
                 "summary": "Delete tax association",
+                "operationId": "deleteTaxAssociation",
                 "parameters": [
                     {
                         "type": "string",
@@ -11203,13 +8864,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11224,7 +8885,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get tax rates",
+                "description": "Use when listing tax rates (e.g. tax config UI). Returns tax rates with optional filters.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11235,6 +8896,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Get tax rates",
+                "operationId": "getTaxRates",
                 "parameters": [
                     {
                         "type": "string",
@@ -11333,13 +8995,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11352,7 +9014,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a tax rate",
+                "description": "Use when defining a new tax rate (e.g. VAT or sales tax) for use in invoices. Attach to customers or products via tax associations.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11363,6 +9025,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Create a tax rate",
+                "operationId": "createTaxRate",
                 "parameters": [
                     {
                         "description": "Tax rate to create",
@@ -11382,13 +9045,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11403,7 +9066,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a tax rate",
+                "description": "Use when you need to load a single tax rate (e.g. for display or when creating an association).",
                 "consumes": [
                     "application/json"
                 ],
@@ -11414,6 +9077,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Get a tax rate",
+                "operationId": "getTaxRate",
                 "parameters": [
                     {
                         "type": "string",
@@ -11431,13 +9095,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11450,7 +9114,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a tax rate",
+                "description": "Use when changing a tax rate (e.g. rate value or name). Request body contains the fields to update.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11461,6 +9125,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Update a tax rate",
+                "operationId": "updateTaxRate",
                 "parameters": [
                     {
                         "type": "string",
@@ -11487,13 +9152,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11506,7 +9171,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Delete a tax rate",
+                "description": "Use when retiring a tax rate (e.g. no longer applicable). Fails if still referenced by associations.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11517,6 +9182,7 @@ const docTemplate = `{
                     "Tax Rates"
                 ],
                 "summary": "Delete a tax rate",
+                "operationId": "deleteTaxRate",
                 "parameters": [
                     {
                         "type": "string",
@@ -11531,13 +9197,13 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11552,7 +9218,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get the subscription and usage details for the current tenant",
+                "description": "Use when showing the current tenant's billing usage (e.g. admin billing page or usage caps). Returns subscription and usage for the tenant.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11563,27 +9229,28 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Get billing usage for the current tenant",
+                "operationId": "getTenantBillingUsage",
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Tenant billing usage",
                         "schema": {
                             "$ref": "#/definitions/dto.TenantBillingUsage"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Tenant not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11598,7 +9265,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a tenant's details including name and billing information",
+                "description": "Use when changing tenant details (e.g. name or billing info). Request body contains the fields to update.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11609,6 +9276,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Update a tenant",
+                "operationId": "updateTenant",
                 "parameters": [
                     {
                         "description": "Update tenant request",
@@ -11622,25 +9290,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Updated tenant",
                         "schema": {
                             "$ref": "#/definitions/dto.TenantResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Tenant not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11666,6 +9334,7 @@ const docTemplate = `{
                     "Tenants"
                 ],
                 "summary": "Get tenant by ID",
+                "operationId": "getTenantById",
                 "parameters": [
                     {
                         "type": "string",
@@ -11677,19 +9346,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Tenant details",
                         "schema": {
                             "$ref": "#/definitions/dto.TenantResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Tenant not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11704,7 +9373,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new service account with required roles. Only service accounts can be created via this endpoint.",
+                "description": "Use when provisioning API access for automation, CI/CD pipelines, or headless integrations that need scoped API keys.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11715,6 +9384,7 @@ const docTemplate = `{
                     "Users"
                 ],
                 "summary": "Create service account",
+                "operationId": "createUser",
                 "parameters": [
                     {
                         "description": "Create service account request (type must be 'service_account', roles are required)",
@@ -11734,13 +9404,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11755,17 +9425,15 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get the current user's information",
-                "consumes": [
-                    "application/json"
-                ],
+                "description": "Use to show the logged-in user's profile in the UI or to check permissions and roles for the current session.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Users"
                 ],
-                "summary": "Get user info",
+                "summary": "Get current user",
+                "operationId": "getUserInfo",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -11780,7 +9448,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11795,7 +9463,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Search and filter users by type (user/service_account), roles, etc.",
+                "description": "Use when listing or searching service accounts in an admin UI, or when auditing who has API access and which roles they have.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11805,10 +9473,11 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "List users with filters",
+                "summary": "Query users",
+                "operationId": "queryUser",
                 "parameters": [
                     {
-                        "description": "Filter parameters",
+                        "description": "Filter",
                         "name": "filter",
                         "in": "body",
                         "required": true,
@@ -11825,13 +9494,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -11841,7 +9510,7 @@ const docTemplate = `{
         },
         "/v1/subscription-schedules": {
             "get": {
-                "description": "Retrieves subscription schedules with optional filtering",
+                "description": "Use when listing or searching scheduled changes across subscriptions (e.g. admin view). Returns schedules with optional filtering.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11852,6 +9521,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List all subscription schedules",
+                "operationId": "listAllSubscriptionSchedules",
                 "parameters": [
                     {
                         "type": "boolean",
@@ -11890,7 +9560,7 @@ const docTemplate = `{
         },
         "/v1/subscription-schedules/{id}": {
             "get": {
-                "description": "Retrieves details of a specific subscription schedule",
+                "description": "Use when you need to load a single scheduled change (e.g. to show when a plan change or renewal takes effect).",
                 "consumes": [
                     "application/json"
                 ],
@@ -11901,6 +9571,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Get subscription schedule",
+                "operationId": "getSubscriptionSchedule",
                 "parameters": [
                     {
                         "type": "string",
@@ -11922,7 +9593,7 @@ const docTemplate = `{
         },
         "/v1/subscriptions/schedules/{schedule_id}/cancel": {
             "post": {
-                "description": "Cancels a pending subscription schedule. Supports two modes: 1) By schedule ID in path, or 2) By subscription ID + schedule type in request body",
+                "description": "Use when cancelling a scheduled change (e.g. customer changed mind). Identify by schedule ID in path or by subscription ID + schedule type in body.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11933,6 +9604,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "Cancel subscription schedule",
+                "operationId": "cancelSubscriptionSchedule",
                 "parameters": [
                     {
                         "type": "string",
@@ -11961,7 +9633,7 @@ const docTemplate = `{
         },
         "/v1/subscriptions/{subscription_id}/schedules": {
             "get": {
-                "description": "Retrieves all schedules for a specific subscription",
+                "description": "Use when listing scheduled changes for a subscription (e.g. upcoming plan change or renewal). Returns all schedules for that subscription.",
                 "consumes": [
                     "application/json"
                 ],
@@ -11972,6 +9644,7 @@ const docTemplate = `{
                     "Subscriptions"
                 ],
                 "summary": "List subscription schedules",
+                "operationId": "listSubscriptionSchedules",
                 "parameters": [
                     {
                         "type": "string",
@@ -11992,114 +9665,13 @@ const docTemplate = `{
             }
         },
         "/wallets": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "List wallets with optional filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Wallets"
-                ],
-                "summary": "List wallets",
-                "parameters": [
-                    {
-                        "type": "boolean",
-                        "name": "alert_enabled",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "expand",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 1000,
-                        "minimum": 1,
-                        "type": "integer",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 0,
-                        "type": "integer",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "asc",
-                            "desc"
-                        ],
-                        "type": "string",
-                        "name": "order",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "name": "sort",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "active",
-                            "frozen",
-                            "closed"
-                        ],
-                        "type": "string",
-                        "x-enum-varnames": [
-                            "WalletStatusActive",
-                            "WalletStatusFrozen",
-                            "WalletStatusClosed"
-                        ],
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        },
-                        "collectionFormat": "csv",
-                        "name": "wallet_ids",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/types.ListResponse-dto_WalletResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "security": [
                     {
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Create a new wallet for a customer",
+                "description": "Use when giving a customer a prepaid or credit balance (e.g. prepaid plans or promotional credits).",
                 "consumes": [
                     "application/json"
                 ],
@@ -12110,6 +9682,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Create a new wallet",
+                "operationId": "createWallet",
                 "parameters": [
                     {
                         "description": "Create wallet request",
@@ -12129,13 +9702,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12150,7 +9723,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List wallets by filter",
+                "description": "Use when listing or searching wallets (e.g. admin view or reporting). Returns a paginated list; supports filtering by customer and status.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12160,12 +9733,14 @@ const docTemplate = `{
                 "tags": [
                     "Wallets"
                 ],
-                "summary": "List wallets by filter",
+                "summary": "Query wallets",
+                "operationId": "queryWallet",
                 "parameters": [
                     {
                         "description": "Filter",
                         "name": "filter",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/types.WalletFilter"
                         }
@@ -12179,13 +9754,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12200,7 +9775,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "List wallet transactions by filter",
+                "description": "Use when searching or reporting on wallet transactions (e.g. cross-wallet history or reconciliation). Returns a paginated list; supports filtering by wallet, customer, type, date range.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12210,21 +9785,17 @@ const docTemplate = `{
                 "tags": [
                     "Wallets"
                 ],
-                "summary": "List wallet transactions by filter",
+                "summary": "Query wallet transactions",
+                "operationId": "queryWalletTransaction",
                 "parameters": [
                     {
                         "description": "Filter",
                         "name": "filter",
                         "in": "body",
+                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/types.WalletTransactionFilter"
                         }
-                    },
-                    {
-                        "type": "string",
-                        "description": "Expand fields (e.g., customer,created_by_user,wallet)",
-                        "name": "expand",
-                        "in": "query"
                     }
                 ],
                 "responses": {
@@ -12235,13 +9806,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12256,7 +9827,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get a wallet by its ID",
+                "description": "Use when you need to load a single wallet (e.g. for a balance or settings view).",
                 "consumes": [
                     "application/json"
                 ],
@@ -12266,7 +9837,8 @@ const docTemplate = `{
                 "tags": [
                     "Wallets"
                 ],
-                "summary": "Get wallet by ID",
+                "summary": "Get wallet",
+                "operationId": "getWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12284,19 +9856,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12309,7 +9881,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Update a wallet's details including auto top-up configuration",
+                "description": "Use when changing wallet settings (e.g. enabling or updating auto top-up thresholds).",
                 "consumes": [
                     "application/json"
                 ],
@@ -12320,6 +9892,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Update a wallet",
+                "operationId": "updateWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12346,19 +9919,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12373,7 +9946,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get real-time balance of a wallet",
+                "description": "Use when displaying or checking current wallet balance (e.g. before charging or in a portal). Supports optional expand for credits breakdown and from_cache.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12384,6 +9957,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet balance",
+                "operationId": "getWalletBalance",
                 "parameters": [
                     {
                         "type": "string",
@@ -12407,19 +9981,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12434,7 +10008,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Terminates a wallet by closing it and debiting remaining balance",
+                "description": "Use when closing a customer wallet (e.g. churn or migration). Closes the wallet and applies remaining balance per policy (refund or forfeit).",
                 "consumes": [
                     "application/json"
                 ],
@@ -12445,6 +10019,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Terminate a wallet",
+                "operationId": "terminateWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12462,19 +10037,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12489,7 +10064,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Add credits to a wallet",
+                "description": "Use when adding funds to a wallet (e.g. top-up, refund, or manual credit). Supports optional idempotency via reference.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12500,6 +10075,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Top up wallet",
+                "operationId": "topUpWallet",
                 "parameters": [
                     {
                         "type": "string",
@@ -12526,19 +10102,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12553,7 +10129,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Get transactions for a wallet with pagination",
+                "description": "Use when showing transaction history for a wallet (e.g. credit/debit log or audit). Returns a paginated list; supports limit, offset, and filters.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12564,6 +10140,7 @@ const docTemplate = `{
                     "Wallets"
                 ],
                 "summary": "Get wallet transactions",
+                "operationId": "getWalletTransactions",
                 "parameters": [
                     {
                         "type": "string",
@@ -12730,19 +10307,19 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "404": {
-                        "description": "Not Found",
+                        "description": "Resource not found",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -12752,7 +10329,7 @@ const docTemplate = `{
         },
         "/webhooks/chargebee/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming Chargebee webhook events for payment status updates",
+                "description": "Use as the Chargebee webhook endpoint URL. Receives payment and subscription events from Chargebee to sync status into FlexPrice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12763,6 +10340,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Chargebee webhook events",
+                "operationId": "handleChargebeeWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12819,7 +10397,7 @@ const docTemplate = `{
         },
         "/webhooks/hubspot/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming HubSpot webhook events for deal closed won and customer creation",
+                "description": "Use as the HubSpot webhook endpoint URL. Receives deal and customer events (e.g. deal closed won) to create or update customers in FlexPrice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12830,6 +10408,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle HubSpot webhook events",
+                "operationId": "handleHubspotWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12866,7 +10445,7 @@ const docTemplate = `{
         },
         "/webhooks/moyasar/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming Moyasar webhook events for payment status updates",
+                "description": "Use as the Moyasar webhook endpoint URL. Receives payment events from Moyasar to update payment status in FlexPrice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12877,6 +10456,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Moyasar webhook events",
+                "operationId": "handleMoyasarWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12912,7 +10492,7 @@ const docTemplate = `{
         },
         "/webhooks/nomod/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming Nomod webhook events for payment and invoice payments",
+                "description": "Use as the Nomod webhook endpoint URL. Receives payment and invoice events from Nomod to keep FlexPrice in sync.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12923,6 +10503,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Nomod webhook events",
+                "operationId": "handleNomodWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -12965,7 +10546,7 @@ const docTemplate = `{
         },
         "/webhooks/quickbooks/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming QuickBooks webhook events for payment sync",
+                "description": "Use as the QuickBooks webhook endpoint URL. Receives payment events from QuickBooks to sync payment status into FlexPrice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -12976,6 +10557,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle QuickBooks webhook events",
+                "operationId": "handleQuickbooksWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -13032,7 +10614,7 @@ const docTemplate = `{
         },
         "/webhooks/razorpay/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming Razorpay webhook events for payment capture and failure",
+                "description": "Use as the Razorpay webhook endpoint URL. Receives payment capture and failure events to update invoice or payment status in FlexPrice.",
                 "consumes": [
                     "application/json"
                 ],
@@ -13043,6 +10625,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Razorpay webhook events",
+                "operationId": "handleRazorpayWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -13079,7 +10662,7 @@ const docTemplate = `{
         },
         "/webhooks/stripe/{tenant_id}/{environment_id}": {
             "post": {
-                "description": "Process incoming Stripe webhook events for payment status updates and customer creation",
+                "description": "Use as the Stripe webhook endpoint URL. Receives payment and customer events from Stripe to keep FlexPrice in sync (e.g. payment succeeded, customer created).",
                 "consumes": [
                     "application/json"
                 ],
@@ -13090,6 +10673,7 @@ const docTemplate = `{
                     "Webhooks"
                 ],
                 "summary": "Handle Stripe webhook events",
+                "operationId": "handleStripeWebhook",
                 "parameters": [
                     {
                         "type": "string",
@@ -13133,6 +10717,58 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/workflows/search": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Use when listing or auditing workflow runs (e.g. ops dashboard or debugging). Returns a paginated list; supports filtering by workflow type and status.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workflows"
+                ],
+                "summary": "Query workflows",
+                "operationId": "queryWorkflow",
+                "parameters": [
+                    {
+                        "description": "Filter",
+                        "name": "filter",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/types.WorkflowExecutionFilter"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ListWorkflowsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
                 }
@@ -13711,20 +11347,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.AuthResponse": {
-            "type": "object",
-            "properties": {
-                "tenant_id": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.BillingCycleInfo": {
             "type": "object",
             "properties": {
@@ -13940,48 +11562,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "Name is required and must be different from the source plan's name",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.ConnectionResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "environment_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "provider_type": {
-                    "$ref": "#/definitions/types.SecretProvider"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                },
-                "sync_config": {
-                    "$ref": "#/definitions/types.SyncConfig"
-                },
-                "tenant_id": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "updated_by": {
                     "type": "string"
                 }
             }
@@ -15918,8 +13498,6 @@ const docTemplate = `{
         "dto.CreateTaxAssociationRequest": {
             "type": "object",
             "required": [
-                "entity_id",
-                "entity_type",
                 "tax_rate_code"
             ],
             "properties": {
@@ -15934,6 +13512,9 @@ const docTemplate = `{
                 },
                 "entity_type": {
                     "$ref": "#/definitions/types.TaxRateEntityType"
+                },
+                "external_customer_id": {
+                    "type": "string"
                 },
                 "metadata": {
                     "type": "object",
@@ -16898,17 +14479,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.EventCountPoint": {
-            "type": "object",
-            "properties": {
-                "event_count": {
-                    "type": "integer"
-                },
-                "timestamp": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.FeatureResponse": {
             "type": "object",
             "properties": {
@@ -17242,26 +14812,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/dto.EventCostInfo"
                     }
-                }
-            }
-        },
-        "dto.GetMonitoringDataResponse": {
-            "type": "object",
-            "properties": {
-                "consumption_lag": {
-                    "type": "integer"
-                },
-                "points": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.EventCountPoint"
-                    }
-                },
-                "post_processing_lag": {
-                    "type": "integer"
-                },
-                "total_count": {
-                    "type": "integer"
                 }
             }
         },
@@ -18207,26 +15757,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ListConnectionsResponse": {
-            "type": "object",
-            "properties": {
-                "connections": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.ConnectionResponse"
-                    }
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                }
-            }
-        },
         "dto.ListCostsheetResponse": {
             "type": "object",
             "properties": {
@@ -18283,20 +15813,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.ListCreditNotesResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.CreditNoteResponse"
-                    }
-                },
-                "pagination": {
-                    "$ref": "#/definitions/types.PaginationResponse"
-                }
-            }
-        },
         "dto.ListCustomersResponse": {
             "description": "Response object for listing customers with pagination",
             "type": "object",
@@ -18323,40 +15839,6 @@ const docTemplate = `{
                 },
                 "pagination": {
                     "$ref": "#/definitions/types.PaginationResponse"
-                }
-            }
-        },
-        "dto.ListEntityIntegrationMappingsResponse": {
-            "type": "object",
-            "properties": {
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.EntityIntegrationMappingResponse"
-                    }
-                },
-                "pagination": {
-                    "$ref": "#/definitions/types.PaginationResponse"
-                }
-            }
-        },
-        "dto.ListEnvironmentsResponse": {
-            "type": "object",
-            "properties": {
-                "environments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/dto.EnvironmentResponse"
-                    }
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
                 }
             }
         },
@@ -18573,22 +16055,17 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.LoginRequest": {
+        "dto.ListWorkflowsResponse": {
             "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
             "properties": {
-                "email": {
-                    "type": "string"
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.WorkflowExecutionDTO"
+                    }
                 },
-                "password": {
-                    "type": "string",
-                    "minLength": 8
-                },
-                "token": {
-                    "type": "string"
+                "pagination": {
+                    "$ref": "#/definitions/types.PaginationResponse"
                 }
             }
         },
@@ -19047,20 +16524,6 @@ const docTemplate = `{
                 },
                 "name": {
                     "description": "name of the plan",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.PortalSessionResponse": {
-            "type": "object",
-            "properties": {
-                "expires_at": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
-                },
-                "url": {
                     "type": "string"
                 }
             }
@@ -19544,27 +17007,6 @@ const docTemplate = `{
                             "$ref": "#/definitions/types.UserType"
                         }
                     ]
-                }
-            }
-        },
-        "dto.SignUpRequest": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 8
-                },
-                "tenant_name": {
-                    "type": "string"
-                },
-                "token": {
-                    "type": "string"
                 }
             }
         },
@@ -21332,30 +18774,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateConnectionRequest": {
-            "type": "object",
-            "properties": {
-                "encrypted_secret_data": {
-                    "description": "For updating webhook tokens, etc.",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.ConnectionMetadata"
-                        }
-                    ]
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 255
-                },
-                "sync_config": {
-                    "$ref": "#/definitions/types.SyncConfig"
-                }
-            }
-        },
         "dto.UpdateCostsheetRequest": {
             "type": "object",
             "properties": {
@@ -22388,6 +19806,49 @@ const docTemplate = `{
                     "$ref": "#/definitions/dto.WalletResponse"
                 },
                 "wallet_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "dto.WorkflowExecutionDTO": {
+            "type": "object",
+            "properties": {
+                "close_time": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "entity": {
+                    "description": "e.g. plan, invoice, subscription",
+                    "type": "string"
+                },
+                "entity_id": {
+                    "description": "e.g. plan ID, invoice ID",
+                    "type": "string"
+                },
+                "run_id": {
+                    "type": "string"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "task_queue": {
+                    "type": "string"
+                },
+                "total_duration": {
+                    "type": "string"
+                },
+                "workflow_id": {
+                    "type": "string"
+                },
+                "workflow_type": {
                     "type": "string"
                 }
             }
@@ -23842,31 +21303,6 @@ const docTemplate = `{
                 "CancellationTypeEndOfPeriod"
             ]
         },
-        "types.ChargebeeConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "description": "Chargebee API key (encrypted)",
-                    "type": "string"
-                },
-                "site": {
-                    "description": "Chargebee site name (not encrypted)",
-                    "type": "string"
-                },
-                "webhook_password": {
-                    "description": "Basic Auth password for webhooks (encrypted)",
-                    "type": "string"
-                },
-                "webhook_secret": {
-                    "description": "Chargebee Webhook Secret (encrypted, optional, NOT USED in v2)",
-                    "type": "string"
-                },
-                "webhook_username": {
-                    "description": "Basic Auth username for webhooks (encrypted)",
-                    "type": "string"
-                }
-            }
-        },
         "types.CollectionMethod": {
             "type": "string",
             "enum": [
@@ -23926,17 +21362,27 @@ const docTemplate = `{
                 "COMMITMENT_TYPE_QUANTITY"
             ]
         },
-        "types.ConnectionFilter": {
+        "types.CouponCadence": {
+            "type": "string",
+            "enum": [
+                "once",
+                "repeated",
+                "forever"
+            ],
+            "x-enum-varnames": [
+                "CouponCadenceOnce",
+                "CouponCadenceRepeated",
+                "CouponCadenceForever"
+            ]
+        },
+        "types.CouponFilter": {
             "type": "object",
             "properties": {
-                "connection_ids": {
+                "coupon_ids": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
-                },
-                "end_time": {
-                    "type": "string"
                 },
                 "expand": {
                     "type": "string"
@@ -23963,78 +21409,16 @@ const docTemplate = `{
                         "desc"
                     ]
                 },
-                "provider_type": {
-                    "$ref": "#/definitions/types.SecretProvider"
-                },
                 "sort": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/types.SortCondition"
                     }
                 },
-                "start_time": {
-                    "type": "string"
-                },
                 "status": {
                     "$ref": "#/definitions/types.Status"
                 }
             }
-        },
-        "types.ConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "chargebee": {
-                    "$ref": "#/definitions/types.ChargebeeConnectionMetadata"
-                },
-                "generic": {
-                    "$ref": "#/definitions/types.GenericConnectionMetadata"
-                },
-                "hubspot": {
-                    "$ref": "#/definitions/types.HubSpotConnectionMetadata"
-                },
-                "moyasar": {
-                    "$ref": "#/definitions/types.MoyasarConnectionMetadata"
-                },
-                "nomod": {
-                    "$ref": "#/definitions/types.NomodConnectionMetadata"
-                },
-                "quickbooks": {
-                    "$ref": "#/definitions/types.QuickBooksConnectionMetadata"
-                },
-                "razorpay": {
-                    "$ref": "#/definitions/types.RazorpayConnectionMetadata"
-                },
-                "s3": {
-                    "$ref": "#/definitions/types.S3ConnectionMetadata"
-                },
-                "settings": {
-                    "$ref": "#/definitions/types.ConnectionSettings"
-                },
-                "stripe": {
-                    "$ref": "#/definitions/types.StripeConnectionMetadata"
-                }
-            }
-        },
-        "types.ConnectionSettings": {
-            "type": "object",
-            "properties": {
-                "invoice_sync_enable": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "types.CouponCadence": {
-            "type": "string",
-            "enum": [
-                "once",
-                "repeated",
-                "forever"
-            ],
-            "x-enum-varnames": [
-                "CouponCadenceOnce",
-                "CouponCadenceRepeated",
-                "CouponCadenceForever"
-            ]
         },
         "types.CouponType": {
             "type": "string",
@@ -24391,19 +21775,6 @@ const docTemplate = `{
                 "ENTITLEMENT_USAGE_RESET_PERIOD_NEVER"
             ]
         },
-        "types.EntitySyncConfig": {
-            "type": "object",
-            "properties": {
-                "inbound": {
-                    "description": "Inbound from external provider to FlexPrice",
-                    "type": "boolean"
-                },
-                "outbound": {
-                    "description": "Outbound from FlexPrice to external provider",
-                    "type": "boolean"
-                }
-            }
-        },
         "types.EntityType": {
             "type": "string",
             "enum": [
@@ -24553,29 +21924,6 @@ const docTemplate = `{
                 "FileTypeJSON"
             ]
         },
-        "types.Filter": {
-            "type": "object",
-            "properties": {
-                "expand": {
-                    "type": "string"
-                },
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "order": {
-                    "type": "string"
-                },
-                "sort": {
-                    "type": "string"
-                },
-                "status": {
-                    "$ref": "#/definitions/types.Status"
-                }
-            }
-        },
         "types.FilterCondition": {
             "type": "object",
             "properties": {
@@ -24618,29 +21966,65 @@ const docTemplate = `{
                 "AFTER"
             ]
         },
-        "types.GenericConnectionMetadata": {
+        "types.GroupFilter": {
             "type": "object",
             "properties": {
-                "data": {
-                    "type": "object",
-                    "additionalProperties": true
-                }
-            }
-        },
-        "types.HubSpotConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "description": "Private App Access Token (encrypted)",
+                "end_time": {
                     "type": "string"
                 },
-                "app_id": {
-                    "description": "HubSpot App ID (optional, not encrypted)",
+                "entity_type": {
                     "type": "string"
                 },
-                "client_secret": {
-                    "description": "Private App Client Secret for webhook verification (encrypted)",
+                "expand": {
                     "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "group_ids": {
+                    "description": "Group specific filters",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
                 }
             }
         },
@@ -24868,36 +22252,6 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
-            }
-        },
-        "types.MoyasarConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "publishable_key": {
-                    "description": "Moyasar Publishable Key (encrypted, for frontend use)",
-                    "type": "string"
-                },
-                "secret_key": {
-                    "description": "Moyasar Secret Key (encrypted)",
-                    "type": "string"
-                },
-                "webhook_secret": {
-                    "description": "Moyasar Webhook Secret (encrypted, optional)",
-                    "type": "string"
-                }
-            }
-        },
-        "types.NomodConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "api_key": {
-                    "description": "Nomod API Key (encrypted)",
-                    "type": "string"
-                },
-                "webhook_secret": {
-                    "description": "Basic Auth secret for webhooks (encrypted, optional)",
-                    "type": "string"
-                }
             }
         },
         "types.PaginationResponse": {
@@ -25209,6 +22563,58 @@ const docTemplate = `{
                 "PRICE_TYPE_FIXED"
             ]
         },
+        "types.PriceUnitFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "price_unit_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                }
+            }
+        },
         "types.PriceUnitType": {
             "type": "string",
             "enum": [
@@ -25269,72 +22675,6 @@ const docTemplate = `{
                 }
             }
         },
-        "types.QuickBooksConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "description": "Managed internally - set after auth code exchange or token refresh",
-                    "type": "string"
-                },
-                "auth_code": {
-                    "description": "Optional - for initial setup via auth code (will be cleared after token exchange)",
-                    "type": "string"
-                },
-                "client_id": {
-                    "description": "Required for initial connection setup",
-                    "type": "string"
-                },
-                "client_secret": {
-                    "description": "OAuth Client Secret (encrypted)",
-                    "type": "string"
-                },
-                "environment": {
-                    "description": "\"sandbox\" or \"production\"",
-                    "type": "string"
-                },
-                "income_account_id": {
-                    "description": "Optional configuration",
-                    "type": "string"
-                },
-                "oauth_session_data": {
-                    "description": "Temporary OAuth session data (only used during OAuth flow, cleared after completion)",
-                    "type": "string"
-                },
-                "realm_id": {
-                    "description": "QuickBooks Company ID (not encrypted)",
-                    "type": "string"
-                },
-                "redirect_uri": {
-                    "description": "OAuth Redirect URI (temporary)",
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "description": "OAuth Refresh Token (encrypted)",
-                    "type": "string"
-                },
-                "webhook_verifier_token": {
-                    "description": "Webhook security",
-                    "type": "string"
-                }
-            }
-        },
-        "types.RazorpayConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "key_id": {
-                    "description": "Razorpay Key ID (encrypted)",
-                    "type": "string"
-                },
-                "secret_key": {
-                    "description": "Razorpay Secret Key (encrypted)",
-                    "type": "string"
-                },
-                "webhook_secret": {
-                    "description": "Razorpay Webhook Secret (encrypted, optional)",
-                    "type": "string"
-                }
-            }
-        },
         "types.ResetUsage": {
             "type": "string",
             "enum": [
@@ -25381,23 +22721,6 @@ const docTemplate = `{
                 "S3CompressionTypeGzip"
             ]
         },
-        "types.S3ConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "aws_access_key_id": {
-                    "description": "AWS access key (encrypted)",
-                    "type": "string"
-                },
-                "aws_secret_access_key": {
-                    "description": "AWS secret access key (encrypted)",
-                    "type": "string"
-                },
-                "aws_session_token": {
-                    "description": "AWS session token for temporary credentials (encrypted)",
-                    "type": "string"
-                }
-            }
-        },
         "types.S3EncryptionType": {
             "type": "string",
             "enum": [
@@ -25410,43 +22733,6 @@ const docTemplate = `{
                 "S3EncryptionTypeAwsKms",
                 "S3EncryptionTypeAwsKmsDsse"
             ]
-        },
-        "types.S3ExportConfig": {
-            "type": "object",
-            "properties": {
-                "bucket": {
-                    "description": "S3 bucket name",
-                    "type": "string"
-                },
-                "compression": {
-                    "description": "Compression type: \"gzip\", \"none\" (default: \"none\")",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.S3CompressionType"
-                        }
-                    ]
-                },
-                "encryption": {
-                    "description": "Encryption type: \"AES256\", \"aws:kms\", \"aws:kms:dsse\" (default: \"AES256\")",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.S3EncryptionType"
-                        }
-                    ]
-                },
-                "is_flexprice_managed": {
-                    "description": "If true, use Flexprice-managed S3 credentials instead of user-provided",
-                    "type": "boolean"
-                },
-                "key_prefix": {
-                    "description": "Optional prefix for S3 keys (e.g., \"flexprice-exports/\")",
-                    "type": "string"
-                },
-                "region": {
-                    "description": "AWS region (e.g., \"us-west-2\")",
-                    "type": "string"
-                }
-            }
         },
         "types.S3JobConfig": {
             "type": "object",
@@ -25629,23 +22915,6 @@ const docTemplate = `{
                 "StatusArchived"
             ]
         },
-        "types.StripeConnectionMetadata": {
-            "type": "object",
-            "properties": {
-                "account_id": {
-                    "type": "string"
-                },
-                "publishable_key": {
-                    "type": "string"
-                },
-                "secret_key": {
-                    "type": "string"
-                },
-                "webhook_secret": {
-                    "type": "string"
-                }
-            }
-        },
         "types.SubscriptionChangeType": {
             "type": "string",
             "enum": [
@@ -25807,52 +23076,6 @@ const docTemplate = `{
                 "SubscriptionStatusTrialing",
                 "SubscriptionStatusDraft"
             ]
-        },
-        "types.SyncConfig": {
-            "type": "object",
-            "properties": {
-                "deal": {
-                    "description": "CRM sync (HubSpot, Salesforce, etc.)",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.EntitySyncConfig"
-                        }
-                    ]
-                },
-                "invoice": {
-                    "$ref": "#/definitions/types.EntitySyncConfig"
-                },
-                "payment": {
-                    "description": "Payment sync (QuickBooks bidirectional)",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.EntitySyncConfig"
-                        }
-                    ]
-                },
-                "plan": {
-                    "description": "Integration sync (Stripe, Razorpay, QuickBooks, etc.)",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.EntitySyncConfig"
-                        }
-                    ]
-                },
-                "quote": {
-                    "$ref": "#/definitions/types.EntitySyncConfig"
-                },
-                "s3": {
-                    "description": "S3 connection metadata (for Flexprice-managed S3 connections)",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/types.S3ExportConfig"
-                        }
-                    ]
-                },
-                "subscription": {
-                    "$ref": "#/definitions/types.EntitySyncConfig"
-                }
-            }
         },
         "types.TaskStatus": {
             "type": "string",
@@ -26283,6 +23506,74 @@ const docTemplate = `{
                 "WindowSizeWeek",
                 "WindowSizeMonth"
             ]
+        },
+        "types.WorkflowExecutionFilter": {
+            "type": "object",
+            "properties": {
+                "end_time": {
+                    "type": "string"
+                },
+                "entity": {
+                    "description": "e.g. plan, invoice, subscription",
+                    "type": "string"
+                },
+                "entity_id": {
+                    "description": "e.g. plan_01ABC123",
+                    "type": "string"
+                },
+                "expand": {
+                    "type": "string"
+                },
+                "filters": {
+                    "description": "filters allows complex filtering based on multiple fields (same as FeatureFilter)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.FilterCondition"
+                    }
+                },
+                "limit": {
+                    "type": "integer",
+                    "maximum": 1000,
+                    "minimum": 1
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "order": {
+                    "type": "string",
+                    "enum": [
+                        "asc",
+                        "desc"
+                    ]
+                },
+                "sort": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/types.SortCondition"
+                    }
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "task_queue": {
+                    "type": "string"
+                },
+                "workflow_id": {
+                    "description": "Workflow-specific filters",
+                    "type": "string"
+                },
+                "workflow_status": {
+                    "description": "e.g. Running, Completed, Failed",
+                    "type": "string"
+                },
+                "workflow_type": {
+                    "type": "string"
+                }
+            }
         }
     },
     "securityDefinitions": {
@@ -26301,8 +23592,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "",
 	BasePath:         "/v1",
 	Schemes:          []string{"http", "https"},
-	Title:            "FlexPrice API",
-	Description:      "FlexPrice API Service",
+	Title:            "Flexprice API",
+	Description:      "Flexprice API provides billing, metering, and subscription management for SaaS and usage-based products. Use it to manage customers, plans, invoices, payments, usage events, and entitlements. Authenticate with an API key in the x-api-key header.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

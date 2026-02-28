@@ -26,15 +26,6 @@ func NewAuthHandler(cfg *config.Configuration, authService service.AuthService, 
 	}
 }
 
-// @Summary Sign up
-// @Description Sign up a new user
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param signup body dto.SignUpRequest true "Sign up request"
-// @Success 200 {object} dto.AuthResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Router /auth/signup [post]
 func (h *AuthHandler) SignUp(c *gin.Context) {
 	var req dto.SignUpRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -62,15 +53,6 @@ func (h *AuthHandler) SignUp(c *gin.Context) {
 	c.JSON(http.StatusOK, authResponse)
 }
 
-// @Summary Login
-// @Description Login a user
-// @Tags Auth
-// @Accept json
-// @Produce json
-// @Param login body dto.LoginRequest true "Login request"
-// @Success 200 {object} dto.AuthResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req dto.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
