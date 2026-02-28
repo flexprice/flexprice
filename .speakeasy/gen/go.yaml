@@ -31,7 +31,7 @@ generation:
     generateNewTests: true
     skipResponseBodyAssertions: false
 go:
-  version: 0.0.50
+  version: 2.0.0
   additionalDependencies: {}
   baseErrorName: FlexpriceError
   clientServerStatusCodesAsErrors: true
