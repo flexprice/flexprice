@@ -1532,6 +1532,9 @@ type GetUsageBySubscriptionRequest struct {
 	StartTime      time.Time `json:"start_time" example:"2024-03-13T00:00:00Z"`
 	EndTime        time.Time `json:"end_time" example:"2024-03-20T00:00:00Z"`
 	LifetimeUsage  bool      `json:"lifetime_usage" example:"false"`
+	// Source indicates the caller context. When "invoice_creation", ClickHouse queries use FINAL.
+	// Optional; omit for default (no FINAL).
+	Source string `json:"-"`
 }
 
 type GetUsageBySubscriptionResponse struct {
@@ -1552,14 +1555,14 @@ type SubscriptionUsageByMetersResponse struct {
 	SubscriptionLineItemID string             `json:"subscription_line_item_id,omitempty"` // For feature_usage: direct match by sub_line_item_id
 	Amount                 float64            `json:"amount"`
 	Currency               string             `json:"currency"`
-	DisplayAmount    string             `json:"display_amount"`
-	Quantity         float64            `json:"quantity"`
-	FilterValues     price.JSONBFilters `json:"filter_values"`
-	MeterID          string             `json:"meter_id"`
-	MeterDisplayName string             `json:"meter_display_name"`
-	Price            *price.Price       `json:"price"`
-	IsOverage        bool               `json:"is_overage"`               // Whether this charge is at overage rate
-	OverageFactor    float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
+	DisplayAmount          string             `json:"display_amount"`
+	Quantity               float64            `json:"quantity"`
+	FilterValues           price.JSONBFilters `json:"filter_values"`
+	MeterID                string             `json:"meter_id"`
+	MeterDisplayName       string             `json:"meter_display_name"`
+	Price                  *price.Price       `json:"price"`
+	IsOverage              bool               `json:"is_overage"`               // Whether this charge is at overage rate
+	OverageFactor          float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
 }
 
 type SubscriptionUpdatePeriodResponse struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/addonassociation"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/entitlement"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
@@ -4827,7 +4828,10 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 	aggTypes = lo.Uniq(aggTypes)
 
 	// Use the optimized single query with conditional aggregation
-	usageResults, err := s.FeatureUsageRepo.GetFeatureUsageBySubscription(ctx, req.SubscriptionID, customer.ID, usageStartTime, usageEndTime, aggTypes)
+	opts := &events.GetFeatureUsageBySubscriptionOpts{
+		Source: types.UsageSource(req.Source),
+	}
+	usageResults, err := s.FeatureUsageRepo.GetFeatureUsageBySubscription(ctx, req.SubscriptionID, customer.ID, usageStartTime, usageEndTime, aggTypes, opts)
 
 	if err != nil {
 		return nil, err

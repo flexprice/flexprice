@@ -265,7 +265,7 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	windowsWithTrueUp := 0
 
 	// Process each window independently
-	for i, bucketValue := range bucketedValues {
+	for _, bucketValue := range bucketedValues {
 		// Calculate cost for this window
 		windowCost := c.priceService.CalculateCost(ctx, priceObj, bucketValue)
 
@@ -280,15 +280,6 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 			totalCommitmentUtilized = totalCommitmentUtilized.Add(commitmentAmountPerWindow)
 			totalOverage = totalOverage.Add(overageCharge) // Storing charge, not amount
 			windowsWithOverage++
-
-			c.logger.Debugw("window usage exceeds commitment",
-				"line_item_id", lineItem.ID,
-				"window_index", i,
-				"bucket_value", bucketValue,
-				"window_cost", windowCost,
-				"commitment", commitmentAmountPerWindow,
-				"overage", overage,
-				"window_charge", windowCharge)
 		} else {
 			// Window usage is less than commitment
 			if lineItem.CommitmentTrueUpEnabled {
@@ -298,24 +289,9 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 				totalTrueUp = totalTrueUp.Add(trueUp)
 				windowsWithTrueUp++
 
-				c.logger.Debugw("window usage below commitment, applying true-up",
-					"line_item_id", lineItem.ID,
-					"window_index", i,
-					"bucket_value", bucketValue,
-					"window_cost", windowCost,
-					"commitment", commitmentAmountPerWindow,
-					"true_up", trueUp,
-					"window_charge", windowCharge)
 			} else {
 				// Charge only actual usage for this window
 				windowCharge = windowCost
-
-				c.logger.Debugw("window usage below commitment, no true-up",
-					"line_item_id", lineItem.ID,
-					"window_index", i,
-					"bucket_value", bucketValue,
-					"window_cost", windowCost,
-					"window_charge", windowCharge)
 			}
 
 			totalCommitmentUtilized = totalCommitmentUtilized.Add(windowCost)

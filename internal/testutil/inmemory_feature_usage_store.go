@@ -93,8 +93,9 @@ func (s *InMemoryFeatureUsageStore) GetDetailedUsageAnalytics(ctx context.Contex
 	return []*events.DetailedUsageAnalytic{}, nil
 }
 
-// GetFeatureUsageBySubscription gets feature usage by subscription
-func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType) (map[string]*events.UsageByFeatureResult, error) {
+// GetFeatureUsageBySubscription gets feature usage by subscription.
+// opts is ignored (in-memory has no FINAL concept).
+func (s *InMemoryFeatureUsageStore) GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType, opts *events.GetFeatureUsageBySubscriptionOpts) (map[string]*events.UsageByFeatureResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -137,7 +138,7 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageForExport(ctx context.Context
 	return result, nil
 }
 
-func (s *InMemoryFeatureUsageStore) GetUsageForMaxMetersWithBuckets(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
+func (s *InMemoryFeatureUsageStore) GetUsageForBucketedMeters(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
 	return &events.AggregationResult{
 		Results: make([]events.UsageResult, 0),
 		Value:   decimal.NewFromInt(0),
