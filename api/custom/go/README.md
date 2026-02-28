@@ -9,13 +9,13 @@ Type-safe Go client for the FlexPrice API: billing, metering, and subscription m
 ## Installation
 
 ```bash
-go get github.com/flexprice/flexprice-go
+go get github.com/flexprice/flexprice-go/v2
 ```
 
 Then in your code:
 
 ```go
-import "github.com/flexprice/flexprice-go"
+import "github.com/flexprice/flexprice-go/v2"
 ```
 
 ## Quick start
@@ -32,8 +32,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flexprice/flexprice-go"
-	"github.com/flexprice/flexprice-go/models/components"
+	"github.com/flexprice/flexprice-go/v2"
+	"github.com/flexprice/flexprice-go/v2/models/types"
 	"github.com/joho/godotenv"
 )
 
@@ -56,7 +56,7 @@ func main() {
 	customerID := fmt.Sprintf("sample-customer-%d", time.Now().Unix())
 
 	// Ingest an event
-	req := components.DtoIngestEventRequest{
+	req := types.DtoIngestEventRequest{
 		EventName:          "Sample Event",
 		ExternalCustomerID: customerID,
 		Properties:         map[string]string{"source": "sample_app", "environment": "test"},
