@@ -75,8 +75,14 @@ type BillingService interface {
 	// GetCustomerUsageSummary returns usage summaries for a customer's features
 	GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
 
-	// CalculateFeatureUsageCharges calculates usage charges for a subscription
-	CalculateFeatureUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+	// CalculateFeatureUsageCharges calculates usage charges for a subscription.
+	// When opts.QuerySource is InvoiceCreation, ClickHouse uses FINAL for feature_usage; pass nil or another source (e.g. wallet) to avoid FINAL.
+	CalculateFeatureUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, opts *CalculateFeatureUsageChargesOpts) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+}
+
+// CalculateFeatureUsageChargesOpts controls how usage is queried (e.g. FINAL for invoice creation).
+type CalculateFeatureUsageChargesOpts struct {
+	Source types.UsageSource
 }
 
 type billingService struct {
@@ -872,10 +878,16 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart,
 	periodEnd time.Time,
+	opts *CalculateFeatureUsageChargesOpts,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
 
 	if usage == nil {
 		return nil, decimal.Zero, nil
+	}
+
+	var querySource types.UsageSource
+	if opts != nil {
+		querySource = opts.Source
 	}
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -979,6 +991,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				usageRequest := &events.FeatureUsageParams{
 					PriceID: item.PriceID,
 					MeterID: item.MeterID,
+					Source:  querySource,
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationMax,
@@ -991,7 +1004,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				}
 
 				// Get usage data with buckets
-				usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
+				usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
@@ -1019,6 +1032,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				usageRequest := &events.FeatureUsageParams{
 					PriceID: item.PriceID,
 					MeterID: item.MeterID,
+					Source:  querySource,
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationSum,
@@ -1030,7 +1044,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				}
 
 				// Get usage data with buckets from feature_usage table (optimized, pre-aggregated)
-				usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
+				usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
@@ -1255,6 +1269,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							PriceID:       item.PriceID,
 							MeterID:       item.MeterID,
 							SubLineItemID: item.ID,
+							Source:        querySource,
 							UsageParams: &events.UsageParams{
 								ExternalCustomerID: customer.ExternalID,
 								AggregationType:    meter.Aggregation.Type,
@@ -1266,7 +1281,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 							},
 						}
 
-						usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
+						usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
 						if err != nil {
 							return nil, decimal.Zero, err
 						}
@@ -1477,8 +1492,7 @@ func (s *billingService) calculateAllFeatureUsageCharges(
 		return nil, err
 	}
 
-	// Calculate usage charges
-	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, &CalculateFeatureUsageChargesOpts{Source: types.UsageSourceInvoiceCreation})
 	if err != nil {
 		return nil, err
 	}

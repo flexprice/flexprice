@@ -138,7 +138,7 @@ func (s *InMemoryFeatureUsageStore) GetFeatureUsageForExport(ctx context.Context
 	return result, nil
 }
 
-func (s *InMemoryFeatureUsageStore) GetUsageForMaxMetersWithBuckets(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
+func (s *InMemoryFeatureUsageStore) GetUsageForBucketedMeters(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
 	return &events.AggregationResult{
 		Results: make([]events.UsageResult, 0),
 		Value:   decimal.NewFromInt(0),

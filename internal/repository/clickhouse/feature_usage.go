@@ -2229,7 +2229,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 	return results, nil
 }
 
-// GetUsageForMaxMetersWithBuckets queries the feature_usage table for bucketed aggregations.
+// GetUsageForBucketedMeters queries the feature_usage table for bucketed aggregations.
 // Despite its name (kept for backward compatibility), this method supports both MAX and SUM aggregations.
 // The aggregation type is determined by params.UsageParams.AggregationType.
 //
@@ -2237,7 +2237,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageForExport(ctx context.Context, s
 // For SUM aggregation: Calculates the sum of values within each bucket (window), then sums all bucket sums
 //
 // This method queries the optimized feature_usage table (pre-aggregated data) rather than raw events.
-func (r *FeatureUsageRepository) GetUsageForMaxMetersWithBuckets(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
+func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, params *events.FeatureUsageParams) (*events.AggregationResult, error) {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "event", "get_usage", map[string]interface{}{
 		"price_id":    params.PriceID,
@@ -2341,6 +2341,12 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketColumnName = "bucket_sum"
 	}
 
+	// Use FINAL only for invoice generation so ReplacingMergeTree deduplication is correct; other callers (analytics, preview) do not.
+	tableRef := "feature_usage"
+	if params.QuerySource.UseFinal() {
+		tableRef = "feature_usage FINAL"
+	}
+
 	// When group_by is specified, we need a 3-level aggregation:
 	// 1. Inner CTE: aggregate per group per bucket (e.g., MAX per krn per hour)
 	// 2. Middle CTE: SUM across groups per bucket (e.g., SUM of group maxes per hour)
@@ -2354,7 +2360,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 					%s as bucket_start,
 					%s as group_key,
 					%s(qty_total) as group_value
-				FROM feature_usage
+				FROM %s
 				PREWHERE tenant_id = '%s'
 					AND environment_id = '%s'
 					AND sign != 0
@@ -2385,6 +2391,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			bucketWindow,
 			groupByExpr,
 			aggFunc,
+			tableRef,
 			types.GetTenantID(ctx),
 			types.GetEnvironmentID(ctx),
 			externalCustomerFilter,
@@ -2408,7 +2415,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			SELECT
 				%s as bucket_start,
 				%s(qty_total) as %s
-			FROM feature_usage
+			FROM %s
 			PREWHERE tenant_id = '%s'
 				AND environment_id = '%s'
 				AND sign != 0
@@ -2432,6 +2439,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 		bucketTableName,
 		bucketWindow,
 		aggFunc, bucketColumnName,
+		tableRef,
 		types.GetTenantID(ctx),
 		types.GetEnvironmentID(ctx),
 		externalCustomerFilter,

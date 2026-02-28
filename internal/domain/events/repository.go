@@ -215,6 +215,8 @@ type FeatureUsageParams struct {
 	PriceID       string `json:"price_id"`
 	MeterID       string `json:"meter_id"`
 	SubLineItemID string `json:"sub_line_item_id"`
+	// QuerySource: when InvoiceCreation, ClickHouse uses FINAL for ReplacingMergeTree deduplication; other sources do not.
+	Source types.UsageSource `json:"query_source,omitempty"`
 }
 
 // Cost Usage Params
