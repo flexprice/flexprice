@@ -88,7 +88,7 @@ export class CustomerPortal {
     };
 
     const customer = await safe("Customer lookup", () =>
-      this.sdk.customers.getCustomerByExternalId({ externalId: customerExternalId }),
+      this.sdk.customers.getCustomerByExternalId(customerExternalId),
     );
 
     const customerData =
@@ -113,7 +113,7 @@ export class CustomerPortal {
         : undefined,
       opts.includeEntitlements
         ? safe("Entitlements", () =>
-          this.sdk.customers.getCustomerEntitlements({ id: customerId }),
+          this.sdk.customers.getCustomerEntitlements(customerId),
         )
         : undefined,
       opts.includeWalletBalance
@@ -143,7 +143,7 @@ export class CustomerPortal {
         : undefined,
       opts.includeSummary
         ? safe("Summary", () =>
-          this.sdk.invoices.getCustomerInvoiceSummary({ id: customerId }),
+          this.sdk.invoices.getCustomerInvoiceSummary(customerId),
         )
         : undefined,
     ]);
