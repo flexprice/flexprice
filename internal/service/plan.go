@@ -851,10 +851,17 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	if req.Description != nil {
 		description = *req.Description
 	}
-	metadata := sourcePlan.Metadata
-	if req.Metadata != nil {
-		metadata = req.Metadata
+	// Merge metadata: source plan first, then req overlay (req overwrites/adds), then source_plan_id
+	merged := make(types.Metadata, len(sourcePlan.Metadata)+len(req.Metadata)+1)
+	for k, v := range sourcePlan.Metadata {
+		merged[k] = v
 	}
+	for k, v := range req.Metadata {
+		merged[k] = v
+	}
+	merged["source_plan_id"] = id
+	metadata := merged
+
 	displayOrder := sourcePlan.DisplayOrder
 	if req.DisplayOrder != nil {
 		displayOrder = req.DisplayOrder
