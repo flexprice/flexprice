@@ -62,11 +62,11 @@ python:
   imports:
     option: openapi
     paths:
-      callbacks: callbacks
-      errors: errors
-      operations: dtos
-      shared: types
-      webhooks: webhooks
+      callbacks: models
+      errors: models/errors
+      operations: models
+      shared: models
+      webhooks: models
   inferUnionDiscriminators: true
   inputModelSuffix: input
   license: Apache-2.0

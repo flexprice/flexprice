@@ -109,3 +109,7 @@ api/mcp/.speakeasy/
 # Misc
 # =============================================================================
 CLAUDE.m
+
+
+# test venvs
+api/tests/python/.venv/

@@ -474,7 +474,7 @@ test-sdk test-sdks:
 	@echo "Running SDK tests (Go, Python, TypeScript)..."
 	@echo "  FLEXPRICE_API_HOST=$$FLEXPRICE_API_HOST"
 	@echo "--- Go (install deps + test) ---"; (cd api/tests/go && go mod tidy && go mod download && go run -tags published test_sdk.go) || true
-	@echo "--- Python (install deps + test) ---"; (cd api/tests/python && ( [ -d .venv ] || python3 -m venv .venv ) && .venv/bin/pip install -q flexprice-temp && .venv/bin/python test_sdk.py) || true
+	@echo "--- Python (install deps + test) ---"; (cd api/tests/python && ( [ -d .venv ] || python3 -m venv .venv ) && .venv/bin/pip install -q pydantic httpx flexprice && .venv/bin/python test_sdk.py) || true
 	@echo "--- TypeScript (install deps + test) ---"; (cd api/tests/ts && npm install && npx ts-node test_sdk_js.ts) || true
 	@echo "✓ All SDK tests finished"
 
