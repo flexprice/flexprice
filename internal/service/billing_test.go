@@ -870,7 +870,7 @@ func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
 	s.True(total2.Equal(decimal.NewFromInt(10)), "total = 10 (monthly only)")
 }
 
-// scenario1DailyExpectedTotals is the expected fixed charge total for each of 12 daily invoices (Orb-style:
+// scenario1DailyExpectedTotals is the expected fixed charge total for each of 12 daily invoices
 // advance at period start, arrear at period end; ProrationBehavior=None in test). Invoice i uses period [Jan i, Jan i+1).
 // Invoice 1: advance 1500 + arrear 200 (daily arrear period end Jan 2 included by current logic) = 1700.
 var scenario1DailyExpectedTotals = []int{1700, 300, 300, 300, 300, 300, 300, 800, 300, 300, 300, 300}
@@ -1022,7 +1022,7 @@ func (s *BillingServiceSuite) setupScenario2MonthlySub(ctx context.Context) (*su
 		BillingPeriodCount: 1,
 		SubscriptionStatus: types.SubscriptionStatusActive,
 		CustomerTimezone:   "UTC",
-		ProrationBehavior:   types.ProrationBehaviorNone, // Orb-style: full amounts in tests
+		ProrationBehavior:   types.ProrationBehaviorNone, // full amounts in tests
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	for _, spec := range specs {
@@ -1067,7 +1067,7 @@ func (s *BillingServiceSuite) setupScenario2MonthlySub(ctx context.Context) (*su
 	return sub, prices
 }
 
-// TestScenario1_DailySub_12Invoices asserts Orb-style fixed charges for 12 daily invoices:
+// TestScenario1_DailySub_12Invoices asserts fixed charges for 12 daily invoices:
 // advance at period start, arrear at period end. Expected totals from Orb doc.
 func (s *BillingServiceSuite) TestScenario1_DailySub_12Invoices() {
 	ctx := s.GetContext()

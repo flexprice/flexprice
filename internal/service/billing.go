@@ -140,7 +140,7 @@ func (s *billingService) CalculateFixedCharges(
 					"period_end", periodEnd)
 				continue
 			}
-			// Full amount for the matched period (Orb-style: no proration for longer-cadence full period)
+			// Full amount for the matched period
 			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
 			linePeriodStart, linePeriodEnd = matchedStart, matchedEnd
 		} else {
