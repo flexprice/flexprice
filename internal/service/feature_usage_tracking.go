@@ -1888,12 +1888,92 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 		}
 	}
 
-	// 6. Enrich with metadata if we have analytics data
-	if len(analytics) > 0 {
+	// 6. Inject synthetic zero-usage analytics entries for committed line items
+	// that have no usage data in ClickHouse. Without this, the commitment fill
+	// logic in calculateCosts never fires for these line items.
+	existingLineItemIDs := make(map[string]bool, len(data.Analytics))
+	for _, item := range data.Analytics {
+		if item.SubLineItemID != "" {
+			existingLineItemIDs[item.SubLineItemID] = true
+		}
+	}
+
+	missingMeterIDs := make(map[string]bool)
+	type missingLineItemInfo struct {
+		lineItem       *subscription.SubscriptionLineItem
+		subscriptionID string
+	}
+	var missingLineItems []missingLineItemInfo
+	for _, sub := range subscriptions {
+		for _, li := range sub.LineItems {
+			if existingLineItemIDs[li.ID] || !li.HasCommitment() || !li.IsUsage() {
+				continue
+			}
+			periodStart := li.GetPeriodStart(params.StartTime)
+			periodEnd := li.GetPeriodEnd(params.EndTime)
+			if !periodEnd.After(periodStart) {
+				continue
+			}
+			missingLineItems = append(missingLineItems, missingLineItemInfo{lineItem: li, subscriptionID: sub.ID})
+			missingMeterIDs[li.MeterID] = true
+		}
+	}
+
+	if len(missingLineItems) > 0 {
+		meterIDList := lo.Keys(missingMeterIDs)
+		featureFilter := types.NewNoLimitFeatureFilter()
+		featureFilter.MeterIDs = meterIDList
+		missingFeatures, err := s.FeatureRepo.List(ctx, featureFilter)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch features for committed line items with zero usage",
+				"error", err,
+				"meter_ids", meterIDList,
+			)
+		} else {
+			meterToFeature := make(map[string]*feature.Feature, len(missingFeatures))
+			for _, f := range missingFeatures {
+				if f.MeterID != "" {
+					meterToFeature[f.MeterID] = f
+				}
+			}
+
+			featureIDFilter := make(map[string]bool, len(params.FeatureIDs))
+			for _, fid := range params.FeatureIDs {
+				featureIDFilter[fid] = true
+			}
+
+			for _, info := range missingLineItems {
+				li := info.lineItem
+				feat, ok := meterToFeature[li.MeterID]
+				if !ok {
+					continue
+				}
+				// Respect feature ID filter if specified
+				if len(featureIDFilter) > 0 && !featureIDFilter[feat.ID] {
+					continue
+				}
+				data.Analytics = append(data.Analytics, &events.DetailedUsageAnalytic{
+					FeatureID:      feat.ID,
+					MeterID:        li.MeterID,
+					PriceID:        li.PriceID,
+					SubLineItemID:  li.ID,
+					SubscriptionID: info.subscriptionID,
+					TotalUsage:     decimal.Zero,
+					MaxUsage:       decimal.Zero,
+					LatestUsage:    decimal.Zero,
+					Points:         []events.UsageAnalyticPoint{},
+					Properties:     make(map[string]string),
+				})
+			}
+		}
+	}
+
+	// 7. Enrich with metadata if we have analytics data
+	if len(data.Analytics) > 0 {
 		if err := s.enrichWithMetadata(ctx, data, req); err != nil {
 			s.Logger.Warnw("failed to enrich analytics with metadata",
 				"error", err,
-				"analytics_count", len(analytics),
+				"analytics_count", len(data.Analytics),
 			)
 			// Continue with partial data rather than failing completely
 		}
@@ -2505,6 +2585,30 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, cost)
 				}
 			}
+		} else if item.SubLineItemID != "" {
+			// Zero usage — apply commitment charge if the line item has commitment configured
+			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
+			if lineItem != nil && lineItem.HasCommitment() {
+				if lineItem.CommitmentWindowed && lineItem.CommitmentTrueUpEnabled {
+					if m := data.Meters[item.MeterID]; m != nil && m.Aggregation.BucketSize != "" {
+						periodStart := lineItem.GetPeriodStart(data.Params.StartTime)
+						periodEnd := lineItem.GetPeriodEnd(data.Params.EndTime)
+						var billingAnchor *time.Time
+						if sub := data.SubscriptionsMap[lineItem.SubscriptionID]; sub != nil {
+							billingAnchor = &sub.BillingAnchor
+						}
+						expectedStarts := generateBucketStarts(periodStart, periodEnd, m.Aggregation.BucketSize, billingAnchor)
+						filled := make([]decimal.Decimal, len(expectedStarts))
+						commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
+						if filledCost, commitmentInfo, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, lineItem, filled, price); err == nil {
+							cost = filledCost
+							item.CommitmentInfo = commitmentInfo
+						}
+					}
+				} else {
+					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, nil, decimal.Zero)
+				}
+			}
 		}
 	}
 
@@ -2642,8 +2746,6 @@ func (s *featureUsageTrackingService) calculateSumWithBucketCost(ctx context.Con
 
 			// Check for line item commitment
 			if item.SubLineItemID != "" {
-				// Find the line item
-
 				lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 
 				if lineItem != nil && lineItem.HasCommitment() {
@@ -2653,6 +2755,28 @@ func (s *featureUsageTrackingService) calculateSumWithBucketCost(ctx context.Con
 				}
 			} else {
 				cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
+			}
+		} else if item.SubLineItemID != "" {
+			// Zero usage — apply commitment charge if the line item has commitment configured
+			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
+			if lineItem != nil && lineItem.HasCommitment() {
+				if lineItem.CommitmentWindowed && lineItem.CommitmentTrueUpEnabled && meter.Aggregation.BucketSize != "" {
+					periodStart := lineItem.GetPeriodStart(data.Params.StartTime)
+					periodEnd := lineItem.GetPeriodEnd(data.Params.EndTime)
+					var billingAnchor *time.Time
+					if sub := data.SubscriptionsMap[lineItem.SubscriptionID]; sub != nil {
+						billingAnchor = &sub.BillingAnchor
+					}
+					expectedStarts := generateBucketStarts(periodStart, periodEnd, meter.Aggregation.BucketSize, billingAnchor)
+					filled := make([]decimal.Decimal, len(expectedStarts))
+					commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
+					if filledCost, commitmentInfo, err := commitmentCalc.applyWindowCommitmentToLineItem(ctx, lineItem, filled, price); err == nil {
+						cost = filledCost
+						item.CommitmentInfo = commitmentInfo
+					}
+				} else {
+					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, nil, decimal.Zero)
+				}
 			}
 		}
 	}
