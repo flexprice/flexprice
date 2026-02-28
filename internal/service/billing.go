@@ -995,9 +995,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			if meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
-					PriceID: item.PriceID,
-					MeterID: item.MeterID,
-					Source:  querySource,
+					PriceID:       item.PriceID,
+					MeterID:       item.MeterID,
+					Source:        querySource,
+					SubLineItemID: item.ID,
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationMax,
@@ -1037,9 +1038,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				// Handle sum with bucket meters - uses optimized feature_usage table
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
-					PriceID: item.PriceID,
-					MeterID: item.MeterID,
-					Source:  querySource,
+					PriceID:       item.PriceID,
+					MeterID:       item.MeterID,
+					Source:        querySource,
+					SubLineItemID: item.ID,
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationSum,
