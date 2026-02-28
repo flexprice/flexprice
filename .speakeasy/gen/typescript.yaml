@@ -1,9 +1,22 @@
 configVersion: 2.0.0
+
 generation:
   sdkClassName: Flexprice
+  versioningStrategy: semantic
+  requestBodyFieldName: body
+
   usageSnippets:
     optionalPropertyRendering: withExample
     sdkInitStyle: constructor
+
+  auth:
+    hoistGlobalSecurity: true
+    oAuth2ClientCredentialsEnabled: false
+    oAuth2PasswordEnabled: false
+
+  schemas:
+    allOfMergeStrategy: deepMerge
+
   fixes:
     nameResolutionDec2023: true
     nameResolutionFeb2025: true
@@ -13,46 +26,70 @@ generation:
     sharedErrorComponentsApr2025: true
     sharedNestedComponentsJan2026: true
     nameOverrideFeb2026: true
-  auth:
-    oAuth2ClientCredentialsEnabled: false
-    oAuth2PasswordEnabled: false
-    hoistGlobalSecurity: true
-  schemas:
-    allOfMergeStrategy: shallowMerge
-  requestBodyFieldName: ""
-  versioningStrategy: automatic
-  persistentEdits: {}
+
   tests:
     generateTests: true
     generateNewTests: false
     skipResponseBodyAssertions: false
+
 typescript:
   version: 2.0.0
-  acceptHeaderEnum: true
-  additionalDependencies:
-    dependencies: {}
-    devDependencies: {}
-    peerDependencies: {}
-  additionalPackageJSON: {}
-  additionalScripts: {}
-  alwaysIncludeInboundAndOutbound: false
-  author: Speakeasy
-  baseErrorName: FlexPriceError
-  clientServerStatusCodesAsErrors: false
-  constFieldsAlwaysOptional: false
-  defaultErrorName: SDKError
-  enableCustomCodeRegions: false
-  enableMCPServer: false
-  enableReactQuery: false
+  packageName: "@flexprice/sdk"
+  author: FlexPrice
+
+  # Packaging
+  moduleFormat: esm
+  useIndexModules: true
+  templateVersion: v2
+
+  additionalPackageJSON:
+    sideEffects: false
+    type: module
+    engines:
+      node: ">=18"
+    exports:
+      ".": "./dist/index.js"
+
+  # Typing strategy
   enumFormat: union
+  inferUnionDiscriminators: true
+  preApplyUnionDiscriminators: true
+  unionStrategy: left-to-right
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-only
+
+  # Error modeling
+  baseErrorName: FlexPriceError
+  defaultErrorName: SDKError
+  clientServerStatusCodesAsErrors: true
+
+  # Models
+  modelPropertyCasing: camel
+  inputModelSuffix: Input
+  outputModelSuffix: Output
+  constFieldsAlwaysOptional: false
+
+  # Validation: lax = tolerate null/missing/mistyped fields (recommended); strict = fail on mismatch
+  laxMode: lax
+  # Do not export Zod schema namespace
   exportZodModelNamespace: false
-  flatAdditionalProperties: false
-  flattenGlobalSecurity: true
+
+  # Method ergonomics
+  maxMethodParams: 4
+  methodArguments: infer-optional-args
   flatteningOrder: parameters-first
+
+  # Request behavior
+  acceptHeaderEnum: true
   formStringArrayEncodeMode: encoded-string
-  forwardCompatibleEnumsByDefault: false
-  forwardCompatibleUnionsByDefault: "false"
+  multipartArrayFormat: legacy
+
+  # Features
+  enableCustomCodeRegions: false
+  enableReactQuery: false
+  enableMCPServer: false
   generateExamples: true
+
   imports:
     option: openapi
     paths:
@@ -61,24 +98,3 @@ typescript:
       operations: sdk/models
       shared: sdk/models
       webhooks: sdk/models
-  inferUnionDiscriminators: true
-  inputModelSuffix: input
-  jsonpath: legacy
-  laxMode: strict
-  legacyFileNaming: true
-  maxMethodParams: 0
-  methodArguments: infer-optional-args
-  modelPropertyCasing: camel
-  moduleFormat: dual
-  multipartArrayFormat: legacy
-  outputModelSuffix: output
-  packageName: "@flexprice/sdk"
-  preApplyUnionDiscriminators: true
-  preserveModelFieldNames: false
-  responseFormat: flat
-  sseFlatResponse: false
-  templateVersion: v2
-  unionStrategy: left-to-right
-  usageSDKInitImports: []
-  useIndexModules: true
-  zodVersion: v3
