@@ -34,6 +34,8 @@ See [AGENTS.md](../AGENTS.md) and [.speakeasy/README.md](../.speakeasy/README.md
 - **Python:** `pip install flexprice` then `from flexprice import Flexprice`; examples in `api/python/examples/`.
 - **MCP:** `npm i @flexprice/mcp-server`; run with `npx @flexprice/mcp-server start` (or from `api/mcp`); set `FLEXPRICE_API_KEY` or per-README auth.
 
+**Verified integration tests:** The same flows as the examples are exercised and verified in **api/tests/** (Go: `test_sdk.go`, Python: `test_sdk.py`, TypeScript: `test_sdk.ts`). See [api/tests/README.md](tests/README.md) for the test access structure and run instructions (`make test-sdk` from repo root).
+
 ## CI/CD
 
 Use the **Generate SDKs** workflow (`.github/workflows/generate-sdks.yml`) for SDK generation (`make sdk-all`), merge-custom, and publish. See **Publishing** below.

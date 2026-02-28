@@ -2,7 +2,17 @@
 
 Integration tests for the **published** FlexPrice SDKs. See [SDK PR #1288](https://github.com/flexprice/flexprice/pull/1288).
 
-Install the SDK from the registry, set credentials, and run the test for your language.
+Install the SDK from the registry, set credentials, and run the test for your language. These tests are the **verified reference** for the same API flows used in SDK examples.
+
+## Test access structure (verified)
+
+| Language   | Test entrypoint              | Notes |
+| ---------- | ----------------------------- | ----- |
+| **Go**     | `api/tests/go/test_sdk.go`    | Run with `go run -tags published test_sdk.go`. SDK via `replace` in `go.mod` (local `api/go`) or published module. |
+| **Python** | `api/tests/python/test_sdk.py`| Pin flexprice in `api/tests/python/requirements.txt` (e.g. `flexprice==2.0.1`). Use `.venv` and `pip install -r requirements.txt`. |
+| **TypeScript** | `api/tests/ts/test_sdk.ts` | Run with `npm test` (runs `npx ts-node test_sdk.ts`). Depends on `@flexprice/sdk` in `package.json`. |
+
+All three run the same flow: Customers, Features, Plans, Addons, Entitlements, Subscriptions, Invoices, Prices, Payments, Wallets, Credit Grants, Credit Notes, Integrations, **Events** (sync + async), then cleanup. Events ingested via the SDK are stored in ClickHouse (`migrations/clickhouse/000006_create_raw_events.sql`).
 
 ## Packages and repos (canonical)
 
@@ -67,7 +77,7 @@ cd api/tests/python
 cd api/tests/ts
 npm install
 npm test
-# or: npx ts-node test_sdk_js.ts
+# runs: npx ts-node test_sdk.ts
 ```
 
 ---
