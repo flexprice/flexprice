@@ -47,66 +47,69 @@ except ImportError as e:
     print(f"   Error: {e}")
     sys.exit(1)
 
-# Enum values derived from flexprice.models types (Union[Literal[...], UnrecognizedStr]).
-# Single source of truth: SDK type definitions.
+# Enum values strictly from flexprice.types (SDK v2: dtos, types, errors, utils).
+# See https://github.com/flexprice/python-sdk — no fallbacks; all values from SDK.
 from typing import get_args
 
-from flexprice.models import (
-    types_addontype,
-    types_billingcadence,
-    types_billingcycle,
-    types_billingmodel,
-    types_billingperiod,
-    types_creditgrantcadence,
-    types_creditgrantexpirydurationunit,
-    types_creditgrantexpirytype,
-    types_creditgrantscope,
-    types_creditnotereason,
-    types_invoicecadence,
-    types_invoicestatus,
-    types_invoicetype,
-    types_paymentstatus,
-    types_priceentitytype,
-    types_pricetype,
-    types_priceunittype,
-    types_subscriptionstatus,
-    types_transactionreason,
+from flexprice.types import (
+    addontype,
+    billingcadence,
+    billingcycle,
+    billingmodel,
+    billingperiod,
+    creditgrantcadence,
+    creditgrantexpirydurationunit,
+    creditgrantexpirytype,
+    creditgrantscope,
+    creditnotereason,
+    invoicecadence,
+    invoicestatus,
+    invoicetype,
+    paymentstatus,
+    priceentitytype,
+    pricetype,
+    priceunittype,
+    subscriptionstatus,
+    transactionreason,
 )
 
 
 def _literals(union_type):
-    """Return the Literal options from SDK Union[Literal[...], UnrecognizedStr]."""
-    return get_args(get_args(union_type)[0])
+    """Literal options from Union[Literal[...], UnrecognizedStr] in flexprice.types."""
+    args = get_args(union_type)
+    if not args:
+        return ()
+    return get_args(args[0])
 
 
 _l = _literals
 # Billing
-BILLING_PERIOD_MONTHLY = _l(types_billingperiod.TypesBillingPeriod)[0]
-BILLING_CADENCE_RECURRING = _l(types_billingcadence.TypesBillingCadence)[0]
-BILLING_MODEL_FLAT_FEE = _l(types_billingmodel.TypesBillingModel)[0]
-INVOICE_CADENCE_ARREAR = _l(types_invoicecadence.TypesInvoiceCadence)[0]
-INVOICE_CADENCE_ADVANCE = _l(types_invoicecadence.TypesInvoiceCadence)[1]
+BILLING_PERIOD_MONTHLY = _l(billingperiod.BillingPeriod)[0]
+BILLING_CADENCE_RECURRING = _l(billingcadence.BillingCadence)[0]
+BILLING_MODEL_FLAT_FEE = _l(billingmodel.BillingModel)[0]
+INVOICE_CADENCE_ARREAR = _l(invoicecadence.InvoiceCadence)[0]
+INVOICE_CADENCE_ADVANCE = _l(invoicecadence.InvoiceCadence)[1]
 # Price
-PRICE_ENTITY_TYPE_PLAN = _l(types_priceentitytype.TypesPriceEntityType)[0]
-PRICE_ENTITY_TYPE_ADDON = _l(types_priceentitytype.TypesPriceEntityType)[2]
-PRICE_TYPE_FIXED = _l(types_pricetype.TypesPriceType)[1]
-PRICE_UNIT_TYPE_FIAT = _l(types_priceunittype.TypesPriceUnitType)[0]
+PRICE_ENTITY_TYPE_PLAN = _l(priceentitytype.PriceEntityType)[0]
+PRICE_ENTITY_TYPE_ADDON = _l(priceentitytype.PriceEntityType)[2]
+PRICE_TYPE_FIXED = _l(pricetype.PriceType)[1]
+PRICE_UNIT_TYPE_FIAT = _l(priceunittype.PriceUnitType)[0]
 # Invoice / Payment
-INVOICE_TYPE_ONE_OFF = _l(types_invoicetype.TypesInvoiceType)[1]
-INVOICE_STATUS_DRAFT = _l(types_invoicestatus.TypesInvoiceStatus)[0]
-PAYMENT_STATUS_SUCCEEDED = _l(types_paymentstatus.TypesPaymentStatus)[3]
-PAYMENT_STATUS_PENDING = _l(types_paymentstatus.TypesPaymentStatus)[1]
-# Addon / Subscription / Billing cycle (lowercase in OpenAPI)
-ADDON_TYPE_ONETIME = _l(types_addontype.TypesAddonType)[0]
-SUBSCRIPTION_STATUS_DRAFT = _l(types_subscriptionstatus.TypesSubscriptionStatus)[5]
-BILLING_CYCLE_ANNIVERSARY = _l(types_billingcycle.TypesBillingCycle)[0]
+INVOICE_TYPE_ONE_OFF = _l(invoicetype.InvoiceType)[1]
+INVOICE_STATUS_DRAFT = _l(invoicestatus.InvoiceStatus)[0]
+PAYMENT_STATUS_SUCCEEDED = _l(paymentstatus.PaymentStatus)[3]
+PAYMENT_STATUS_PENDING = _l(paymentstatus.PaymentStatus)[1]
+# Addon / Subscription / Billing cycle
+ADDON_TYPE_ONETIME = _l(addontype.AddonType)[0]
+SUBSCRIPTION_STATUS_DRAFT = _l(subscriptionstatus.SubscriptionStatus)[5]
+BILLING_CYCLE_ANNIVERSARY = _l(billingcycle.BillingCycle)[0]
 # Wallet / Credit grant / Credit note
-TRANSACTION_REASON_PURCHASED_CREDIT_DIRECT = _l(types_transactionreason.TypesTransactionReason)[4]
-CREDIT_GRANT_SCOPE_PLAN = _l(types_creditgrantscope.TypesCreditGrantScope)[0]
-CREDIT_GRANT_CADENCE_ONETIME = _l(types_creditgrantcadence.TypesCreditGrantCadence)[0]
-CREDIT_GRANT_EXPIRY_TYPE_NEVER = _l(types_creditgrantexpirytype.TypesCreditGrantExpiryType)[0]
-CREDIT_GRANT_EXPIRY_DURATION_UNIT_DAY = _l(types_creditgrantexpirydurationunit.TypesCreditGrantExpiryDurationUnit)[0]
-CREDIT_NOTE_REASON_BILLING_ERROR = _l(types_creditnotereason.TypesCreditNoteReason)[5]
+TRANSACTION_REASON_PURCHASED_CREDIT_DIRECT = _l(transactionreason.TransactionReason)[4]
+CREDIT_GRANT_SCOPE_PLAN = _l(creditgrantscope.CreditGrantScope)[0]
+CREDIT_GRANT_CADENCE_ONETIME = _l(creditgrantcadence.CreditGrantCadence)[0]
+CREDIT_GRANT_EXPIRY_TYPE_NEVER = _l(creditgrantexpirytype.CreditGrantExpiryType)[0]
+CREDIT_GRANT_EXPIRY_DURATION_UNIT_DAY = _l(creditgrantexpirydurationunit.CreditGrantExpiryDurationUnit)[0]
+CREDIT_NOTE_REASON_BILLING_ERROR = _l(creditnotereason.CreditNoteReason)[5]
 
 # Optional: Load environment variables from .env file
 try:
