@@ -1,7 +1,7 @@
 /*
 Custom async client for the FlexPrice Go SDK.
 Merged from api/custom/go/ after each generation.
-Depends on SDK types: *Flexprice, components.DtoIngestEventRequest, Events.IngestEvent.
+Depends on SDK types: *Flexprice, types.DtoIngestEventRequest, Events.IngestEvent.
 */
 
 // nolint
@@ -13,7 +13,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/flexprice/flexprice-go/models/components"
+	"github.com/flexprice/flexprice-go/v2/models/types"
 )
 
 // AsyncConfig provides configuration options for the enhanced FlexPrice client
@@ -271,7 +271,7 @@ func (c *AsyncClient) sendBatch(batch []EventOptions) {
 
 		for _, event := range events {
 			// Create the event request
-			req := components.DtoIngestEventRequest{
+			req := types.DtoIngestEventRequest{
 				EventName:          event.EventName,
 				ExternalCustomerID: event.ExternalCustomerID,
 			}

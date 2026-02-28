@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flexprice/flexprice-go"
-	"github.com/flexprice/flexprice-go/models/components"
-	"github.com/flexprice/flexprice-go/models/operations"
+	"github.com/flexprice/flexprice-go/v2"
+	"github.com/flexprice/flexprice-go/v2/models/dtos"
+	"github.com/flexprice/flexprice-go/v2/models/types"
 )
 
 // test_local_sdk.go - Local SDK tests (unpublished SDK from api/go).
@@ -20,8 +20,14 @@ import (
 // Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
 // SDK repo: update defaultGoSDKRepo when you change where the Go SDK is hosted.
 
-// defaultGoSDKRepo is the Go SDK repo (module path). Change this when you host the SDK elsewhere.
-const defaultGoSDKRepo = "github.com/flexprice/go-sdk-temp"
+// defaultGoSDKRepo is the Go SDK module path (local api/go when using replace in go.mod).
+const defaultGoSDKRepo = "github.com/flexprice/flexprice-go/v2 (local api/go)"
+
+// strPtr returns a *string for optional SDK fields (SDK models use *string, not types.String).
+func strPtr(s string) *string { return &s }
+
+// int64Ptr returns a *int64 for optional SDK fields (SDK models use *int64, not types.Int64).
+func int64Ptr(n int64) *int64 { return &n }
 
 var (
 	testCustomerID   string
@@ -342,10 +348,10 @@ func testCreateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	testCustomerName = fmt.Sprintf("Test Customer %d", timestamp)
 	testExternalID = fmt.Sprintf("test-customer-%d", timestamp)
 
-	request := components.DtoCreateCustomerRequest{
+	request := types.DtoCreateCustomerRequest{
 		ExternalID: testExternalID,
-		Name:       flexprice.String(testCustomerName),
-		Email:      flexprice.String(fmt.Sprintf("test-%d@example.com", timestamp)),
+		Name:       strPtr(testCustomerName),
+		Email:      strPtr(fmt.Sprintf("test-%d@example.com", timestamp)),
 		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -399,7 +405,7 @@ func testGetCustomer(ctx context.Context, client *flexprice.Flexprice) {
 func testListCustomers(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Customers ---")
 
-	filter := components.TypesCustomerFilter{Limit: flexprice.Int64(10)}
+	filter := types.CustomerFilter{Limit: int64Ptr(10)}
 	resp, err := client.Customers.QueryCustomer(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing customers: %v", err)
@@ -413,7 +419,7 @@ func testListCustomers(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	items := listResp.Items
 	if items == nil {
-		items = []components.DtoCustomerResponse{}
+		items = []types.DtoCustomerResponse{}
 	}
 	fmt.Printf("✓ Retrieved %d customers\n", len(items))
 	if len(items) > 0 {
@@ -430,15 +436,15 @@ func testUpdateCustomer(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Customer ---")
 
 	updatedName := fmt.Sprintf("%s (Updated)", testCustomerName)
-	body := components.DtoUpdateCustomerRequest{
-		Name: flexprice.String(updatedName),
+	body := types.DtoUpdateCustomerRequest{
+		Name: strPtr(updatedName),
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
 		},
 	}
 
-	resp, err := client.Customers.UpdateCustomer(ctx, body, flexprice.String(testCustomerID), nil)
+	resp, err := client.Customers.UpdateCustomer(ctx, body, strPtr(testCustomerID), nil)
 	if err != nil {
 		log.Printf("❌ Error updating customer: %v", err)
 		fmt.Println()
@@ -482,7 +488,7 @@ func testLookupCustomer(ctx context.Context, client *flexprice.Flexprice) {
 func testSearchCustomers(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Search Customers ---")
 
-	searchFilter := components.TypesCustomerFilter{ExternalID: flexprice.String(testExternalID)}
+	searchFilter := types.CustomerFilter{ExternalID: strPtr(testExternalID)}
 	resp, err := client.Customers.QueryCustomer(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching customers: %v", err)
@@ -490,7 +496,7 @@ func testSearchCustomers(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListCustomersResponse
-	items := []components.DtoCustomerResponse{}
+	items := []types.DtoCustomerResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -557,7 +563,7 @@ func testGetCustomerUpcomingGrants(ctx context.Context, client *flexprice.Flexpr
 func testGetCustomerUsage(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 9: Get Customer Usage ---")
 
-	req := operations.GetCustomerUsageSummaryRequest{CustomerID: flexprice.String(testCustomerID)}
+	req := dtos.GetCustomerUsageSummaryRequest{CustomerID: strPtr(testCustomerID)}
 	resp, err := client.Customers.GetCustomerUsageSummary(ctx, req)
 	if err != nil {
 		log.Printf("⚠ Warning: Error getting customer usage: %v\n", err)
@@ -599,11 +605,11 @@ func testCreateFeature(ctx context.Context, client *flexprice.Flexprice) {
 	testFeatureName = fmt.Sprintf("Test Feature %d", timestamp)
 	featureKey := fmt.Sprintf("test_feature_%d", timestamp)
 
-	request := components.DtoCreateFeatureRequest{
+	request := types.DtoCreateFeatureRequest{
 		Name:        testFeatureName,
-		LookupKey:   flexprice.String(featureKey),
-		Description: flexprice.String("This is a test feature created by SDK tests"),
-		Type:        components.TypesFeatureTypeBoolean,
+		LookupKey:   strPtr(featureKey),
+		Description: strPtr("This is a test feature created by SDK tests"),
+		Type:        types.FeatureTypeBoolean,
 		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -635,7 +641,7 @@ func testCreateFeature(ctx context.Context, client *flexprice.Flexprice) {
 func testGetFeature(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Get Feature by ID ---")
 
-	filter := components.TypesFeatureFilter{FeatureIds: []string{testFeatureID}}
+	filter := types.FeatureFilter{FeatureIds: []string{testFeatureID}}
 	resp, err := client.Features.QueryFeature(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error getting feature: %v", err)
@@ -660,7 +666,7 @@ func testGetFeature(ctx context.Context, client *flexprice.Flexprice) {
 func testListFeatures(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Features ---")
 
-	filter := components.TypesFeatureFilter{Limit: flexprice.Int64(10)}
+	filter := types.FeatureFilter{Limit: int64Ptr(10)}
 	resp, err := client.Features.QueryFeature(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing features: %v", err)
@@ -668,7 +674,7 @@ func testListFeatures(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListFeaturesResponse
-	items := []components.DtoFeatureResponse{}
+	items := []types.DtoFeatureResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -688,9 +694,9 @@ func testUpdateFeature(ctx context.Context, client *flexprice.Flexprice) {
 
 	updatedName := fmt.Sprintf("%s (Updated)", testFeatureName)
 	updatedDescription := "Updated description for test feature"
-	body := components.DtoUpdateFeatureRequest{
-		Name:        flexprice.String(updatedName),
-		Description: flexprice.String(updatedDescription),
+	body := types.DtoUpdateFeatureRequest{
+		Name:        strPtr(updatedName),
+		Description: strPtr(updatedDescription),
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -720,7 +726,7 @@ func testUpdateFeature(ctx context.Context, client *flexprice.Flexprice) {
 func testSearchFeatures(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Features ---")
 
-	searchFilter := components.TypesFeatureFilter{FeatureIds: []string{testFeatureID}}
+	searchFilter := types.FeatureFilter{FeatureIds: []string{testFeatureID}}
 	resp, err := client.Features.QueryFeature(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching features: %v", err)
@@ -728,7 +734,7 @@ func testSearchFeatures(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListFeaturesResponse
-	items := []components.DtoFeatureResponse{}
+	items := []types.DtoFeatureResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -770,11 +776,11 @@ func testCreateAddon(ctx context.Context, client *flexprice.Flexprice) {
 	testAddonName = fmt.Sprintf("Test Addon %d", timestamp)
 	testAddonLookupKey = fmt.Sprintf("test_addon_%d", timestamp)
 
-	request := components.DtoCreateAddonRequest{
+	request := types.DtoCreateAddonRequest{
 		Name:        testAddonName,
 		LookupKey:   testAddonLookupKey,
-		Description: flexprice.String("This is a test addon created by SDK tests"),
-		Type:        components.TypesAddonTypeOnetime,
+		Description: strPtr("This is a test addon created by SDK tests"),
+		Type:        types.AddonTypeOnetime,
 		Metadata: map[string]any{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -828,7 +834,7 @@ func testGetAddon(ctx context.Context, client *flexprice.Flexprice) {
 func testListAddons(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Addons ---")
 
-	filter := components.TypesAddonFilter{Limit: flexprice.Int64(10)}
+	filter := types.AddonFilter{Limit: int64Ptr(10)}
 	resp, err := client.Addons.QueryAddon(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing addons: %v", err)
@@ -836,7 +842,7 @@ func testListAddons(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListAddonsResponse
-	items := []components.DtoAddonResponse{}
+	items := []types.DtoAddonResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -856,9 +862,9 @@ func testUpdateAddon(ctx context.Context, client *flexprice.Flexprice) {
 
 	updatedName := fmt.Sprintf("%s (Updated)", testAddonName)
 	updatedDescription := "Updated description for test addon"
-	body := components.DtoUpdateAddonRequest{
-		Name:        flexprice.String(updatedName),
-		Description: flexprice.String(updatedDescription),
+	body := types.DtoUpdateAddonRequest{
+		Name:        strPtr(updatedName),
+		Description: strPtr(updatedDescription),
 		Metadata: map[string]any{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -919,7 +925,7 @@ func testLookupAddon(ctx context.Context, client *flexprice.Flexprice) {
 func testSearchAddons(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 6: Search Addons ---")
 
-	searchFilter := components.TypesAddonFilter{AddonIds: []string{testAddonID}}
+	searchFilter := types.AddonFilter{AddonIds: []string{testAddonID}}
 	resp, err := client.Addons.QueryAddon(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching addons: %v", err)
@@ -927,7 +933,7 @@ func testSearchAddons(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListAddonsResponse
-	items := []components.DtoAddonResponse{}
+	items := []types.DtoAddonResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -963,13 +969,13 @@ func testDeleteAddon(ctx context.Context, client *flexprice.Flexprice) {
 func testCreateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Entitlement ---")
 
-	request := components.DtoCreateEntitlementRequest{
+	request := types.DtoCreateEntitlementRequest{
 		FeatureID:   testFeatureID,
-		FeatureType: components.TypesFeatureTypeBoolean,
-		PlanID:      flexprice.String(testPlanID),
+		FeatureType: types.FeatureTypeBoolean,
+		PlanID:      strPtr(testPlanID),
 		IsEnabled:   flexprice.Bool(true),
-		UsageResetPeriod: func() *components.TypesEntitlementUsageResetPeriod {
-			v := components.TypesEntitlementUsageResetPeriodMonthly
+		UsageResetPeriod: func() *types.EntitlementUsageResetPeriod {
+			v := types.EntitlementUsageResetPeriodMonthly
 			return &v
 		}(),
 	}
@@ -1019,7 +1025,7 @@ func testGetEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 func testListEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Entitlements ---")
 
-	filter := components.TypesEntitlementFilter{Limit: flexprice.Int64(10)}
+	filter := types.EntitlementFilter{Limit: int64Ptr(10)}
 	resp, err := client.Entitlements.QueryEntitlement(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing entitlements: %v", err)
@@ -1027,7 +1033,7 @@ func testListEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListEntitlementsResponse
-	items := []components.DtoEntitlementResponse{}
+	items := []types.DtoEntitlementResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1045,7 +1051,7 @@ func testListEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 func testUpdateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 4: Update Entitlement ---")
 
-	body := components.DtoUpdateEntitlementRequest{IsEnabled: flexprice.Bool(false)}
+	body := types.DtoUpdateEntitlementRequest{IsEnabled: flexprice.Bool(false)}
 	resp, err := client.Entitlements.UpdateEntitlement(ctx, testEntitlementID, body)
 	if err != nil {
 		log.Printf("❌ Error updating entitlement: %v", err)
@@ -1068,7 +1074,7 @@ func testUpdateEntitlement(ctx context.Context, client *flexprice.Flexprice) {
 func testSearchEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Entitlements ---")
 
-	searchFilter := components.TypesEntitlementFilter{FeatureIds: []string{testFeatureID}}
+	searchFilter := types.EntitlementFilter{FeatureIds: []string{testFeatureID}}
 	resp, err := client.Entitlements.QueryEntitlement(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching entitlements: %v", err)
@@ -1076,7 +1082,7 @@ func testSearchEntitlements(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListEntitlementsResponse
-	items := []components.DtoEntitlementResponse{}
+	items := []types.DtoEntitlementResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1117,10 +1123,10 @@ func testCreatePlan(ctx context.Context, client *flexprice.Flexprice) {
 	testPlanName = fmt.Sprintf("Test Plan %d", timestamp)
 	lookupKey := fmt.Sprintf("test_plan_%d", timestamp)
 
-	request := components.DtoCreatePlanRequest{
+	request := types.DtoCreatePlanRequest{
 		Name:        testPlanName,
-		LookupKey:   flexprice.String(lookupKey),
-		Description: flexprice.String("This is a test plan created by SDK tests"),
+		LookupKey:   strPtr(lookupKey),
+		Description: strPtr("This is a test plan created by SDK tests"),
 		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -1174,7 +1180,7 @@ func testGetPlan(ctx context.Context, client *flexprice.Flexprice) {
 func testListPlans(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Plans ---")
 
-	filter := components.TypesPlanFilter{Limit: flexprice.Int64(10)}
+	filter := types.PlanFilter{Limit: int64Ptr(10)}
 	resp, err := client.Plans.QueryPlan(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing plans: %v", err)
@@ -1182,7 +1188,7 @@ func testListPlans(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListPlansResponse
-	items := []components.DtoPlanResponse{}
+	items := []types.DtoPlanResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1202,9 +1208,9 @@ func testUpdatePlan(ctx context.Context, client *flexprice.Flexprice) {
 
 	updatedName := fmt.Sprintf("%s (Updated)", testPlanName)
 	updatedDescription := "Updated description for test plan"
-	body := components.DtoUpdatePlanRequest{
-		Name:        flexprice.String(updatedName),
-		Description: flexprice.String(updatedDescription),
+	body := types.DtoUpdatePlanRequest{
+		Name:        strPtr(updatedName),
+		Description: strPtr(updatedDescription),
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -1234,7 +1240,7 @@ func testUpdatePlan(ctx context.Context, client *flexprice.Flexprice) {
 func testSearchPlans(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 5: Search Plans ---")
 
-	searchFilter := components.TypesPlanFilter{PlanIds: []string{testPlanID}}
+	searchFilter := types.PlanFilter{PlanIds: []string{testPlanID}}
 	resp, err := client.Plans.QueryPlan(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching plans: %v", err)
@@ -1242,7 +1248,7 @@ func testSearchPlans(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListPlansResponse
-	items := []components.DtoPlanResponse{}
+	items := []types.DtoPlanResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1309,19 +1315,19 @@ func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: Create Subscription ---")
 
 	// First, create a price for the plan (required for subscription creation)
-	priceRequest := components.DtoCreatePriceRequest{
+	priceRequest := types.DtoCreatePriceRequest{
 		EntityID:           testPlanID,
-		EntityType:         components.TypesPriceEntityTypePlan,
-		Type:               components.TypesPriceTypeFixed,
-		BillingModel:       components.TypesBillingModelFlatFee,
-		BillingCadence:     components.TypesBillingCadenceRecurring,
-		BillingPeriod:      components.TypesBillingPeriodMonthly,
-		BillingPeriodCount: flexprice.Int64(1),
-		InvoiceCadence:     components.TypesInvoiceCadenceArrear,
-		PriceUnitType:      components.TypesPriceUnitTypeFiat,
-		Amount:             flexprice.String("29.99"),
+		EntityType:         types.PriceEntityTypePlan,
+		Type:               types.PriceTypeFixed,
+		BillingModel:       types.BillingModelFlatFee,
+		BillingCadence:     types.BillingCadenceRecurring,
+		BillingPeriod:      types.BillingPeriodMonthly,
+		BillingPeriodCount: int64Ptr(1),
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		PriceUnitType:      types.PriceUnitTypeFiat,
+		Amount:             strPtr("29.99"),
 		Currency:           "USD",
-		DisplayName:        flexprice.String("Monthly Subscription Price"),
+		DisplayName:        strPtr("Monthly Subscription Price"),
 	}
 
 	priceResp, err := client.Prices.CreatePrice(ctx, priceRequest)
@@ -1333,15 +1339,15 @@ func testCreateSubscription(ctx context.Context, client *flexprice.Flexprice) {
 	_ = priceResp
 
 	startDate := time.Now().Format(time.RFC3339)
-	subscriptionRequest := components.DtoCreateSubscriptionRequest{
-		CustomerID:         flexprice.String(testCustomerID),
+	subscriptionRequest := types.DtoCreateSubscriptionRequest{
+		CustomerID:         strPtr(testCustomerID),
 		PlanID:             testPlanID,
 		Currency:           "USD",
-		BillingCadence:     components.TypesBillingCadenceRecurring,
-		BillingPeriod:      components.TypesBillingPeriodMonthly,
-		BillingPeriodCount: flexprice.Int64(1),
-		BillingCycle:       func() *components.TypesBillingCycle { v := components.TypesBillingCycleAnniversary; return &v }(),
-		StartDate:          flexprice.String(startDate),
+		BillingCadence:     types.BillingCadenceRecurring,
+		BillingPeriod:      types.BillingPeriodMonthly,
+		BillingPeriodCount: int64Ptr(1),
+		BillingCycle:       func() *types.BillingCycle { v := types.BillingCycleAnniversary; return &v }(),
+		StartDate:          strPtr(startDate),
 		Metadata: map[string]string{
 			"source":      "sdk_test",
 			"test_run":    time.Now().Format(time.RFC3339),
@@ -1410,7 +1416,7 @@ func testListSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	filter := components.TypesSubscriptionFilter{Limit: flexprice.Int64(10)}
+	filter := types.SubscriptionFilter{Limit: int64Ptr(10)}
 	resp, err := client.Subscriptions.QuerySubscription(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing subscriptions: %v", err)
@@ -1418,7 +1424,7 @@ func testListSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListSubscriptionsResponse
-	items := []components.DtoSubscriptionResponse{}
+	items := []types.DtoSubscriptionResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1451,7 +1457,7 @@ func testSearchSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	searchFilter := components.TypesSubscriptionFilter{}
+	searchFilter := types.SubscriptionFilter{}
 	resp, err := client.Subscriptions.QuerySubscription(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching subscriptions: %v", err)
@@ -1459,7 +1465,7 @@ func testSearchSubscriptions(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListSubscriptionsResponse
-	items := []components.DtoSubscriptionResponse{}
+	items := []types.DtoSubscriptionResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1482,15 +1488,15 @@ func testActivateSubscription(ctx context.Context, client *flexprice.Flexprice) 
 	fmt.Println("--- Test 6: Activate Subscription ---")
 
 	// Create a dedicated draft subscription for this test
-	draftSubscriptionRequest := components.DtoCreateSubscriptionRequest{
-		CustomerID:         flexprice.String(testCustomerID),
+	draftSubscriptionRequest := types.DtoCreateSubscriptionRequest{
+		CustomerID:         strPtr(testCustomerID),
 		PlanID:             testPlanID,
 		Currency:           "USD",
-		BillingCadence:     components.TypesBillingCadenceRecurring,
-		BillingPeriod:      components.TypesBillingPeriodMonthly,
-		BillingPeriodCount: flexprice.Int64(1),
-		StartDate:          flexprice.String(time.Now().Format(time.RFC3339)),
-		SubscriptionStatus: func() *components.TypesSubscriptionStatus { v := components.TypesSubscriptionStatusDraft; return &v }(),
+		BillingCadence:     types.BillingCadenceRecurring,
+		BillingPeriod:      types.BillingPeriodMonthly,
+		BillingPeriodCount: int64Ptr(1),
+		StartDate:          strPtr(time.Now().Format(time.RFC3339)),
+		SubscriptionStatus: func() *types.SubscriptionStatus { v := types.SubscriptionStatusDraft; return &v }(),
 	}
 
 	draftResp, err := client.Subscriptions.CreateSubscription(ctx, draftSubscriptionRequest)
@@ -1508,7 +1514,7 @@ func testActivateSubscription(ctx context.Context, client *flexprice.Flexprice) 
 	draftSubscriptionID := *draftSub.ID
 	fmt.Printf("  Created draft subscription: %s\n", draftSubscriptionID)
 
-	activateBody := components.DtoActivateDraftSubscriptionRequest{StartDate: time.Now().Format(time.RFC3339)}
+	activateBody := types.DtoActivateDraftSubscriptionRequest{StartDate: time.Now().Format(time.RFC3339)}
 	_, err = client.Subscriptions.ActivateSubscription(ctx, draftSubscriptionID, activateBody)
 	if err != nil {
 		log.Printf("⚠ Warning: Error activating subscription (may already be active): %v\n", err)
@@ -1531,8 +1537,8 @@ func testPauseSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	pauseRequest := components.DtoPauseSubscriptionRequest{
-		PauseMode: components.TypesPauseModeImmediate,
+	pauseRequest := types.DtoPauseSubscriptionRequest{
+		PauseMode: types.PauseModeImmediate,
 	}
 
 	resp, err := client.Subscriptions.PauseSubscription(ctx, testSubscriptionID, pauseRequest)
@@ -1563,7 +1569,7 @@ func testResumeSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	resumeRequest := components.DtoResumeSubscriptionRequest{ResumeMode: components.TypesResumeModeImmediate}
+	resumeRequest := types.DtoResumeSubscriptionRequest{ResumeMode: types.ResumeModeImmediate}
 
 	resp, err := client.Subscriptions.ResumeSubscription(ctx, testSubscriptionID, resumeRequest)
 	if err != nil {
@@ -1600,7 +1606,7 @@ func testGetPauseHistory(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	pauses := resp.DtoListSubscriptionPausesResponses
 	if pauses == nil {
-		pauses = []components.DtoListSubscriptionPausesResponse{}
+		pauses = []types.DtoListSubscriptionPausesResponse{}
 	}
 	fmt.Printf("✓ Retrieved pause history!\n")
 	fmt.Printf("  Total pauses: %d\n\n", len(pauses))
@@ -1622,19 +1628,19 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.Flexprice
 	}
 
 	// Create a price for the addon first (required)
-	priceRequest := components.DtoCreatePriceRequest{
+	priceRequest := types.DtoCreatePriceRequest{
 		EntityID:           testAddonID,
-		EntityType:         components.TypesPriceEntityTypeAddon,
-		Type:               components.TypesPriceTypeFixed,
-		BillingModel:       components.TypesBillingModelFlatFee,
-		BillingCadence:     components.TypesBillingCadenceRecurring,
-		BillingPeriod:      components.TypesBillingPeriodMonthly,
-		BillingPeriodCount: flexprice.Int64(1),
-		InvoiceCadence:     components.TypesInvoiceCadenceArrear,
-		PriceUnitType:      components.TypesPriceUnitTypeFiat,
-		Amount:             flexprice.String("5.00"),
+		EntityType:         types.PriceEntityTypeAddon,
+		Type:               types.PriceTypeFixed,
+		BillingModel:       types.BillingModelFlatFee,
+		BillingCadence:     types.BillingCadenceRecurring,
+		BillingPeriod:      types.BillingPeriodMonthly,
+		BillingPeriodCount: int64Ptr(1),
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		PriceUnitType:      types.PriceUnitTypeFiat,
+		Amount:             strPtr("5.00"),
 		Currency:           "USD",
-		DisplayName:        flexprice.String("Addon Monthly Price"),
+		DisplayName:        strPtr("Addon Monthly Price"),
 	}
 
 	_, err := client.Prices.CreatePrice(ctx, priceRequest)
@@ -1645,7 +1651,7 @@ func testAddAddonToSubscription(ctx context.Context, client *flexprice.Flexprice
 		fmt.Printf("  Created price for addon: %s\n", testAddonID)
 	}
 
-	addAddonRequest := components.DtoAddAddonRequest{
+	addAddonRequest := types.DtoAddAddonRequest{
 		SubscriptionID: testSubscriptionID,
 		AddonID:        testAddonID,
 	}
@@ -1742,12 +1748,12 @@ func testPreviewSubscriptionChange(ctx context.Context, client *flexprice.Flexpr
 		return
 	}
 
-	changeRequest := components.DtoSubscriptionChangeRequest{
+	changeRequest := types.DtoSubscriptionChangeRequest{
 		TargetPlanID:      testPlanID,
-		BillingCadence:    components.TypesBillingCadenceRecurring,
-		BillingPeriod:     components.TypesBillingPeriodMonthly,
-		BillingCycle:      components.TypesBillingCycleAnniversary,
-		ProrationBehavior: components.TypesProrationBehaviorCreateProrations,
+		BillingCadence:    types.BillingCadenceRecurring,
+		BillingPeriod:     types.BillingPeriodMonthly,
+		BillingCycle:      types.BillingCycleAnniversary,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
 	}
 
 	previewResp, err := client.Subscriptions.PreviewSubscriptionChange(ctx, testSubscriptionID, changeRequest)
@@ -1793,7 +1799,7 @@ func testGetSubscriptionEntitlements(ctx context.Context, client *flexprice.Flex
 		return
 	}
 	entitlements := entitlementsResp.DtoSubscriptionEntitlementsResponse
-	features := []components.DtoAggregatedFeature{}
+	features := []types.DtoAggregatedFeature{}
 	if entitlements != nil && entitlements.Features != nil {
 		features = entitlements.Features
 	}
@@ -1825,7 +1831,7 @@ func testGetUpcomingGrants(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := grantsResp.DtoListCreditGrantApplicationsResponse
-	items := []components.DtoCreditGrantApplicationResponse{}
+	items := []types.DtoCreditGrantApplicationResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1851,7 +1857,7 @@ func testReportUsage(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	usageRequest := components.DtoGetUsageBySubscriptionRequest{
+	usageRequest := types.DtoGetUsageBySubscriptionRequest{
 		SubscriptionID: testSubscriptionID,
 	}
 
@@ -1897,8 +1903,8 @@ func testCancelSubscription(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	cancelRequest := components.DtoCancelSubscriptionRequest{
-		CancellationType: components.TypesCancellationTypeEndOfPeriod,
+	cancelRequest := types.DtoCancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeEndOfPeriod,
 	}
 
 	cancelResp, err := client.Subscriptions.CancelSubscription(ctx, testSubscriptionID, cancelRequest)
@@ -1930,7 +1936,7 @@ func testCancelSubscription(ctx context.Context, client *flexprice.Flexprice) {
 func testListInvoices(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 1: List Invoices ---")
 
-	filter := components.TypesInvoiceFilter{Limit: flexprice.Int64(10)}
+	filter := types.InvoiceFilter{Limit: int64Ptr(10)}
 	resp, err := client.Invoices.QueryInvoice(ctx, filter)
 	if err != nil {
 		log.Printf("⚠ Warning: Error listing invoices: %v\n", err)
@@ -1938,7 +1944,7 @@ func testListInvoices(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListInvoicesResponse
-	items := []components.DtoInvoiceResponse{}
+	items := []types.DtoInvoiceResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1960,7 +1966,7 @@ func testListInvoices(ctx context.Context, client *flexprice.Flexprice) {
 func testSearchInvoices(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 2: Search Invoices ---")
 
-	searchFilter := components.TypesInvoiceFilter{}
+	searchFilter := types.InvoiceFilter{}
 	resp, err := client.Invoices.QueryInvoice(ctx, searchFilter)
 	if err != nil {
 		log.Printf("⚠ Warning: Error searching invoices: %v\n", err)
@@ -1968,7 +1974,7 @@ func testSearchInvoices(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListInvoicesResponse
-	items := []components.DtoInvoiceResponse{}
+	items := []types.DtoInvoiceResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -1997,22 +2003,22 @@ func testCreateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	draftStatus := components.TypesInvoiceStatusDraft
-	invoiceRequest := components.DtoCreateInvoiceRequest{
+	draftStatus := types.InvoiceStatusDraft
+	invoiceRequest := types.DtoCreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "100.00",
 		Subtotal:    "100.00",
 		Total:       "100.00",
-		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
-		BillingReason: func() *components.TypesInvoiceBillingReason {
-			v := components.TypesInvoiceBillingReasonManual
+		InvoiceType: func() *types.InvoiceType { v := types.InvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *types.InvoiceBillingReason {
+			v := types.InvoiceBillingReasonManual
 			return &v
 		}(),
 		InvoiceStatus: &draftStatus,
-		LineItems: []components.DtoCreateInvoiceLineItemRequest{
+		LineItems: []types.DtoCreateInvoiceLineItemRequest{
 			{
-				DisplayName: flexprice.String("Test Service"),
+				DisplayName: strPtr("Test Service"),
 				Quantity:    "1",
 				Amount:      "100.00",
 			},
@@ -2076,7 +2082,7 @@ func testUpdateInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := components.DtoUpdateInvoiceRequest{
+	updateRequest := types.DtoUpdateInvoiceRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -2115,7 +2121,7 @@ func testPreviewInvoice(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Println()
 		return
 	}
-	previewRequest := components.DtoGetPreviewInvoiceRequest{SubscriptionID: subsID}
+	previewRequest := types.DtoGetPreviewInvoiceRequest{SubscriptionID: subsID}
 
 	previewResp, err := client.Invoices.GetInvoicePreview(ctx, previewRequest)
 	if err != nil {
@@ -2136,21 +2142,21 @@ func testPreviewInvoice(ctx context.Context, client *flexprice.Flexprice) {
 func testFinalizeInvoice(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 7: Finalize Invoice ---")
 
-	draftStatus := components.TypesInvoiceStatusDraft
-	invoiceRequest := components.DtoCreateInvoiceRequest{
+	draftStatus := types.InvoiceStatusDraft
+	invoiceRequest := types.DtoCreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "50.00",
 		Subtotal:    "50.00",
 		Total:       "50.00",
-		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
-		BillingReason: func() *components.TypesInvoiceBillingReason {
-			v := components.TypesInvoiceBillingReasonManual
+		InvoiceType: func() *types.InvoiceType { v := types.InvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *types.InvoiceBillingReason {
+			v := types.InvoiceBillingReasonManual
 			return &v
 		}(),
 		InvoiceStatus: &draftStatus,
-		LineItems: []components.DtoCreateInvoiceLineItemRequest{
-			{DisplayName: flexprice.String("Finalize Test Service"), Quantity: "1", Amount: "50.00"},
+		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+			{DisplayName: strPtr("Finalize Test Service"), Quantity: "1", Amount: "50.00"},
 		},
 		Metadata: map[string]string{"source": "sdk_test_finalize"},
 	}
@@ -2201,9 +2207,9 @@ func testRecordPayment(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	paymentRequest := components.DtoUpdatePaymentStatusRequest{
-		PaymentStatus: components.TypesPaymentStatusSucceeded,
-		Amount:        flexprice.String("100.00"),
+	paymentRequest := types.DtoUpdatePaymentStatusRequest{
+		PaymentStatus: types.PaymentStatusSucceeded,
+		Amount:        strPtr("100.00"),
 	}
 
 	_, err := client.Invoices.UpdateInvoicePaymentStatus(ctx, testInvoiceID, paymentRequest)
@@ -2222,24 +2228,24 @@ func testRecordPayment(ctx context.Context, client *flexprice.Flexprice) {
 func testAttemptPayment(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 10: Attempt Payment ---")
 
-	draftStatus := components.TypesInvoiceStatusDraft
-	pendingStatus := components.TypesPaymentStatusPending
-	invoiceRequest := components.DtoCreateInvoiceRequest{
+	draftStatus := types.InvoiceStatusDraft
+	pendingStatus := types.PaymentStatusPending
+	invoiceRequest := types.DtoCreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "25.00",
 		Subtotal:    "25.00",
 		Total:       "25.00",
-		AmountPaid:  flexprice.String("0.00"),
-		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
-		BillingReason: func() *components.TypesInvoiceBillingReason {
-			v := components.TypesInvoiceBillingReasonManual
+		AmountPaid:  strPtr("0.00"),
+		InvoiceType: func() *types.InvoiceType { v := types.InvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *types.InvoiceBillingReason {
+			v := types.InvoiceBillingReasonManual
 			return &v
 		}(),
 		InvoiceStatus: &draftStatus,
 		PaymentStatus: &pendingStatus,
-		LineItems: []components.DtoCreateInvoiceLineItemRequest{
-			{DisplayName: flexprice.String("Attempt Payment Test Service"), Quantity: "1", Amount: "25.00"},
+		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+			{DisplayName: strPtr("Attempt Payment Test Service"), Quantity: "1", Amount: "25.00"},
 		},
 		Metadata: map[string]string{"source": "sdk_test_attempt_payment"},
 	}
@@ -2384,20 +2390,20 @@ func testCreatePrice(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	priceRequest := components.DtoCreatePriceRequest{
+	priceRequest := types.DtoCreatePriceRequest{
 		EntityID:           testPlanID,
-		EntityType:         components.TypesPriceEntityTypePlan,
+		EntityType:         types.PriceEntityTypePlan,
 		Currency:           "USD",
-		Amount:             flexprice.String("99.00"),
-		BillingModel:       components.TypesBillingModelFlatFee,
-		BillingCadence:     components.TypesBillingCadenceRecurring,
-		BillingPeriod:      components.TypesBillingPeriodMonthly,
-		BillingPeriodCount: flexprice.Int64(1), // required: must be > 0
-		InvoiceCadence:     components.TypesInvoiceCadenceAdvance,
-		PriceUnitType:      components.TypesPriceUnitTypeFiat,
-		Type:               components.TypesPriceTypeFixed,
-		DisplayName:        flexprice.String("Monthly Subscription"),
-		Description:        flexprice.String("Standard monthly subscription price"),
+		Amount:             strPtr("99.00"),
+		BillingModel:       types.BillingModelFlatFee,
+		BillingCadence:     types.BillingCadenceRecurring,
+		BillingPeriod:      types.BillingPeriodMonthly,
+		BillingPeriodCount: int64Ptr(1), // required: must be > 0
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		PriceUnitType:      types.PriceUnitTypeFiat,
+		Type:               types.PriceTypeFixed,
+		DisplayName:        strPtr("Monthly Subscription"),
+		Description:        strPtr("Standard monthly subscription price"),
 	}
 
 	resp, err := client.Prices.CreatePrice(ctx, priceRequest)
@@ -2450,7 +2456,7 @@ func testGetPrice(ctx context.Context, client *flexprice.Flexprice) {
 func testListPrices(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Prices ---")
 
-	filter := components.TypesPriceFilter{Limit: flexprice.Int64(10)}
+	filter := types.PriceFilter{Limit: int64Ptr(10)}
 	resp, err := client.Prices.QueryPrice(ctx, filter)
 
 	if err != nil {
@@ -2459,7 +2465,7 @@ func testListPrices(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListPricesResponse
-	items := []components.DtoPriceResponse{}
+	items := []types.DtoPriceResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -2484,8 +2490,8 @@ func testUpdatePrice(ctx context.Context, client *flexprice.Flexprice) {
 	}
 
 	updatedDescription := "Updated price description for testing"
-	updateRequest := components.DtoUpdatePriceRequest{
-		Description: flexprice.String(updatedDescription),
+	updateRequest := types.DtoUpdatePriceRequest{
+		Description: strPtr(updatedDescription),
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -2520,7 +2526,7 @@ func testDeletePrice(ctx context.Context, client *flexprice.Flexprice) {
 	}
 
 	futureDate := time.Now().Add(24 * time.Hour).Format(time.RFC3339)
-	deleteRequest := components.DtoDeletePriceRequest{EndDate: flexprice.String(futureDate)}
+	deleteRequest := types.DtoDeletePriceRequest{EndDate: strPtr(futureDate)}
 
 	_, err := client.Prices.DeletePrice(ctx, testPriceID, deleteRequest)
 	if err != nil {
@@ -2543,24 +2549,24 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 	// Create a fresh invoice for this payment test
 	// This is necessary because previous tests might have already paid the shared testInvoiceID
 
-	draftStatus := components.TypesInvoiceStatusDraft
-	pendingStatus := components.TypesPaymentStatusPending
-	invoiceRequest := components.DtoCreateInvoiceRequest{
+	draftStatus := types.InvoiceStatusDraft
+	pendingStatus := types.PaymentStatusPending
+	invoiceRequest := types.DtoCreateInvoiceRequest{
 		CustomerID:  testCustomerID,
 		Currency:    "USD",
 		AmountDue:   "100.00",
 		Subtotal:    "100.00",
 		Total:       "100.00",
-		AmountPaid:  flexprice.String("0.00"),
-		InvoiceType: func() *components.TypesInvoiceType { v := components.TypesInvoiceTypeOneOff; return &v }(),
-		BillingReason: func() *components.TypesInvoiceBillingReason {
-			v := components.TypesInvoiceBillingReasonManual
+		AmountPaid:  strPtr("0.00"),
+		InvoiceType: func() *types.InvoiceType { v := types.InvoiceTypeOneOff; return &v }(),
+		BillingReason: func() *types.InvoiceBillingReason {
+			v := types.InvoiceBillingReasonManual
 			return &v
 		}(),
 		InvoiceStatus: &draftStatus,
 		PaymentStatus: &pendingStatus,
-		LineItems: []components.DtoCreateInvoiceLineItemRequest{
-			{DisplayName: flexprice.String("Payment Test Service"), Quantity: "1", Amount: "100.00"},
+		LineItems: []types.DtoCreateInvoiceLineItemRequest{
+			{DisplayName: strPtr("Payment Test Service"), Quantity: "1", Amount: "100.00"},
 		},
 		Metadata: map[string]string{"source": "sdk_test_payment"},
 	}
@@ -2614,7 +2620,7 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		fmt.Printf("  Invoice before finalization - AmountDue: %s, Total: %s\n", *currentInvoice.AmountDue, *currentInvoice.Total)
 	}
 
-	if currentInvoice.InvoiceStatus != nil && *currentInvoice.InvoiceStatus == components.TypesInvoiceStatusDraft {
+	if currentInvoice.InvoiceStatus != nil && *currentInvoice.InvoiceStatus == types.InvoiceStatusDraft {
 		_, err = client.Invoices.FinalizeInvoice(ctx, paymentInvoiceID)
 		if err != nil {
 			errStr := err.Error()
@@ -2693,12 +2699,12 @@ func testCreatePayment(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	fmt.Printf("  Invoice is unpaid and ready for payment (status: %s, total: %s)\n", paymentStatusStr, totalStr)
 
-	paymentRequest := components.DtoCreatePaymentRequest{
+	paymentRequest := types.DtoCreatePaymentRequest{
 		Amount:            "100.00",
 		Currency:          "USD",
 		DestinationID:     paymentInvoiceID,
-		DestinationType:   components.TypesPaymentDestinationTypeInvoice,
-		PaymentMethodType: components.TypesPaymentMethodTypeOffline,
+		DestinationType:   types.PaymentDestinationTypeInvoice,
+		PaymentMethodType: types.PaymentMethodTypeOffline,
 		ProcessPayment:    flexprice.Bool(false),
 		Metadata: map[string]string{
 			"source":   "sdk_test",
@@ -2767,7 +2773,7 @@ func testListPayments(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	req := operations.ListPaymentsRequest{PaymentIds: []string{testPaymentID}, Limit: flexprice.Int64(10)}
+	req := dtos.ListPaymentsRequest{PaymentIds: []string{testPaymentID}, Limit: int64Ptr(10)}
 	resp, err := client.Payments.ListPayments(ctx, req)
 	if err != nil {
 		log.Printf("⚠ Warning: Error listing payments: %v\n", err)
@@ -2775,7 +2781,7 @@ func testListPayments(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 	listResp := resp.DtoListPaymentsResponse
-	items := []components.DtoPaymentResponse{}
+	items := []types.DtoPaymentResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -2810,7 +2816,7 @@ func testUpdatePayment(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := components.DtoUpdatePaymentRequest{
+	updateRequest := types.DtoUpdatePaymentRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -2933,8 +2939,8 @@ func testCreateWallet(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	walletRequest := components.DtoCreateWalletRequest{
-		CustomerID: flexprice.String(testCustomerID),
+	walletRequest := types.DtoCreateWalletRequest{
+		CustomerID: strPtr(testCustomerID),
 		Currency:   "USD",
 		Metadata: map[string]string{
 			"source":   "sdk_test",
@@ -2992,15 +2998,15 @@ func testGetWallet(ctx context.Context, client *flexprice.Flexprice) {
 func testListWallets(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 3: List Wallets ---")
 
-	filter := components.TypesWalletFilter{Limit: flexprice.Int64(10)}
+	filter := types.WalletFilter{Limit: int64Ptr(10)}
 	resp, err := client.Wallets.QueryWallet(ctx, filter)
 	if err != nil {
 		log.Printf("❌ Error listing wallets: %v\n", err)
 		fmt.Println()
 		return
 	}
-	listResp := resp.TypesListResponseDtoWalletResponse
-	items := []components.DtoWalletResponse{}
+	listResp := resp.ListResponseDtoWalletResponse
+	items := []types.DtoWalletResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -3024,7 +3030,7 @@ func testUpdateWallet(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := components.DtoUpdateWalletRequest{
+	updateRequest := types.DtoUpdateWalletRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -3082,10 +3088,10 @@ func testTopUpWallet(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	topUpRequest := components.DtoTopUpWalletRequest{
-		Amount:            flexprice.String("100.00"),
-		TransactionReason: components.TypesTransactionReasonPurchasedCreditDirect,
-		Description:       flexprice.String("Test top-up from SDK"),
+	topUpRequest := types.DtoTopUpWalletRequest{
+		Amount:            strPtr("100.00"),
+		TransactionReason: types.TransactionReasonPurchasedCreditDirect,
+		Description:       strPtr("Test top-up from SDK"),
 	}
 
 	_, err := client.Wallets.TopUpWallet(ctx, testWalletID, topUpRequest)
@@ -3117,7 +3123,7 @@ func testGetWalletTransactions(ctx context.Context, client *flexprice.Flexprice)
 		return
 	}
 
-	req := operations.GetWalletTransactionsRequest{IDPathParameter: testWalletID, Limit: flexprice.Int64(10)}
+	req := dtos.GetWalletTransactionsRequest{IDPathParameter: testWalletID, Limit: int64Ptr(10)}
 	resp, err := client.Wallets.GetWalletTransactions(ctx, req)
 	if err != nil {
 		log.Printf("❌ Error getting wallet transactions: %v\n", err)
@@ -3125,7 +3131,7 @@ func testGetWalletTransactions(ctx context.Context, client *flexprice.Flexprice)
 		return
 	}
 	listResp := resp.DtoListWalletTransactionsResponse
-	items := []components.DtoWalletTransactionResponse{}
+	items := []types.DtoWalletTransactionResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -3140,15 +3146,15 @@ func testGetWalletTransactions(ctx context.Context, client *flexprice.Flexprice)
 func testSearchWallets(ctx context.Context, client *flexprice.Flexprice) {
 	fmt.Println("--- Test 9: Search Wallets ---")
 
-	searchFilter := components.TypesWalletFilter{Limit: flexprice.Int64(10)}
+	searchFilter := types.WalletFilter{Limit: int64Ptr(10)}
 	resp, err := client.Wallets.QueryWallet(ctx, searchFilter)
 	if err != nil {
 		log.Printf("❌ Error searching wallets: %v\n", err)
 		fmt.Println()
 		return
 	}
-	listResp := resp.TypesListResponseDtoWalletResponse
-	items := []components.DtoWalletResponse{}
+	listResp := resp.ListResponseDtoWalletResponse
+	items := []types.DtoWalletResponse{}
 	if listResp != nil && listResp.Items != nil {
 		items = listResp.Items
 	}
@@ -3165,8 +3171,8 @@ func testCancelSubscriptionCleanup(ctx context.Context, client *flexprice.Flexpr
 		fmt.Println()
 		return
 	}
-	req := components.DtoCancelSubscriptionRequest{
-		CancellationType: components.TypesCancellationTypeImmediate,
+	req := types.DtoCancelSubscriptionRequest{
+		CancellationType: types.CancellationTypeImmediate,
 	}
 	_, err := client.Subscriptions.CancelSubscription(ctx, testSubscriptionID, req)
 	if err != nil {
@@ -3210,14 +3216,14 @@ func testCreateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	grantRequest := components.DtoCreateCreditGrantRequest{
-		Scope:                  components.TypesCreditGrantScopePlan,
-		PlanID:                 flexprice.String(testPlanID),
+	grantRequest := types.DtoCreateCreditGrantRequest{
+		Scope:                  types.CreditGrantScopePlan,
+		PlanID:                 strPtr(testPlanID),
 		Credits:                "500.00",
 		Name:                   "Test Credit Grant",
-		Cadence:                components.TypesCreditGrantCadenceOnetime,
-		ExpirationType:         func() *components.TypesCreditGrantExpiryType { v := components.TypesCreditGrantExpiryTypeNever; return &v }(),
-		ExpirationDurationUnit: func() *components.TypesCreditGrantExpiryDurationUnit { v := components.TypesCreditGrantExpiryDurationUnitDay; return &v }(),
+		Cadence:                types.CreditGrantCadenceOnetime,
+		ExpirationType:         func() *types.CreditGrantExpiryType { v := types.CreditGrantExpiryTypeNever; return &v }(),
+		ExpirationDurationUnit: func() *types.CreditGrantExpiryDurationUnit { v := types.CreditGrantExpiryDurationUnitDay; return &v }(),
 		Metadata: map[string]string{
 			"source":   "sdk_test",
 			"test_run": time.Now().Format(time.RFC3339),
@@ -3288,7 +3294,7 @@ func testListCreditGrants(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	list := resp.DtoListCreditGrantsResponse
 	if list == nil {
-		list = &components.DtoListCreditGrantsResponse{Items: []components.DtoCreditGrantResponse{}}
+		list = &types.DtoListCreditGrantsResponse{Items: []types.DtoCreditGrantResponse{}}
 	}
 	fmt.Printf("✓ Retrieved %d credit grants\n", len(list.Items))
 	if len(list.Items) > 0 {
@@ -3313,7 +3319,7 @@ func testUpdateCreditGrant(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	updateRequest := components.DtoUpdateCreditGrantRequest{
+	updateRequest := types.DtoUpdateCreditGrantRequest{
 		Metadata: map[string]string{
 			"updated_at": time.Now().Format(time.RFC3339),
 			"status":     "updated",
@@ -3408,11 +3414,11 @@ func testCreateCreditNote(ctx context.Context, client *flexprice.Flexprice) {
 		displayName = *firstLineItem.DisplayName
 	}
 
-	noteRequest := components.DtoCreateCreditNoteRequest{
+	noteRequest := types.DtoCreateCreditNoteRequest{
 		InvoiceID: testInvoiceID,
-		Reason:    components.TypesCreditNoteReasonBillingError,
-		Memo:      flexprice.String("Test credit note from SDK"),
-		LineItems: []components.DtoCreateCreditNoteLineItemRequest{
+		Reason:    types.CreditNoteReasonBillingError,
+		Memo:      strPtr("Test credit note from SDK"),
+		LineItems: []types.DtoCreateCreditNoteLineItemRequest{
 			{
 				InvoiceLineItemID: *firstLineItem.ID,
 				Amount:            creditAmount,
@@ -3533,7 +3539,7 @@ func testCreateEvent(ctx context.Context, client *flexprice.Flexprice) {
 
 	testEventName = fmt.Sprintf("Test Event %d", time.Now().Unix())
 
-	eventRequest := components.DtoIngestEventRequest{
+	eventRequest := types.DtoIngestEventRequest{
 		EventName:          testEventName,
 		ExternalCustomerID: testEventCustomerID,
 		Properties: map[string]string{
@@ -3541,8 +3547,8 @@ func testCreateEvent(ctx context.Context, client *flexprice.Flexprice) {
 			"environment": "test",
 			"test_run":    time.Now().Format(time.RFC3339),
 		},
-		Source:    flexprice.String("sdk_test"),
-		Timestamp: flexprice.String(time.Now().Format(time.RFC3339)),
+		Source:    strPtr("sdk_test"),
+		Timestamp: strPtr(time.Now().Format(time.RFC3339)),
 	}
 
 	resp, err := client.Events.IngestEvent(ctx, eventRequest)
@@ -3583,7 +3589,7 @@ func testQueryEvents(ctx context.Context, client *flexprice.Flexprice) {
 		return
 	}
 
-	queryRequest := components.DtoGetEventsRequest{
+	queryRequest := types.DtoGetEventsRequest{
 		ExternalCustomerID: &testEventCustomerID,
 		EventName:          &testEventName,
 	}
@@ -3596,7 +3602,7 @@ func testQueryEvents(ctx context.Context, client *flexprice.Flexprice) {
 	}
 	data := resp.DtoGetEventsResponse
 	if data == nil {
-		data = &components.DtoGetEventsResponse{Events: []components.DtoEvent{}}
+		data = &types.DtoGetEventsResponse{Events: []types.DtoEvent{}}
 	}
 	fmt.Printf("✓ Events queried successfully!\n")
 	if len(data.Events) > 0 {

@@ -14,7 +14,7 @@ name: Generate SDKs
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/speakeasy-v2]
     paths:
       - "docs/swagger/**"
       - ".speakeasy/**"

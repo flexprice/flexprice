@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/flexprice/flexprice-go"
-	"github.com/flexprice/flexprice-go/models/components"
+	"github.com/flexprice/flexprice-go/v2"
+	"github.com/flexprice/flexprice-go/v2/models/types"
 	"github.com/joho/godotenv"
 )
 
@@ -33,7 +33,7 @@ func main() {
 
 	// Sync: ingest one event
 	customerID := fmt.Sprintf("sample-customer-%d", time.Now().Unix())
-	req := components.DtoIngestEventRequest{
+	req := types.DtoIngestEventRequest{
 		EventName:          "Sample Event",
 		ExternalCustomerID: customerID,
 		Properties:         map[string]string{"source": "sample_app", "environment": "test"},

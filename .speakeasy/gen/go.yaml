@@ -42,20 +42,20 @@ go:
   imports:
     option: openapi
     paths:
-      callbacks: callbacks
-      errors: errors
-      operations: dtos
-      shared: types
-      webhooks: webhooks
+      callbacks: models/callbacks
+      errors: models/errors
+      operations: models/dtos
+      shared: models/types
+      webhooks: models/webhooks
   includeEmptyObjects: true
   inferUnionDiscriminators: true
-  inputModelSuffix: input
+  inputModelSuffix: Input
   maxMethodParams: 4
   methodArguments: require-security-and-request
   modulePath: github.com/flexprice/flexprice-go
   multipartArrayFormat: standard
   nullableOptionalWrapper: true
-  outputModelSuffix: output
+  outputModelSuffix: Output
   respectRequiredFields: false
   respectTitlesForPrimitiveUnionMembers: true
   responseFormat: envelope-http
