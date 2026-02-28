@@ -48,9 +48,17 @@ go run -tags published test_sdk.go
 ### Python
 
 ```bash
-python3 -m pip install flexprice
 cd api/tests/python
-python3 test_sdk.py
+.venv/bin/pip install -e ../../python
+.venv/bin/python test_sdk.py
+```
+
+**Published SDK (pip):**
+
+```bash
+cd api/tests/python
+.venv/bin/pip install pydantic httpx flexprice
+.venv/bin/python test_sdk.py
 ```
 
 ### TypeScript

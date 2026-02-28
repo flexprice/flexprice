@@ -38,20 +38,10 @@ def check_dependencies():
 
 check_dependencies()
 
-# Use published package (pip install flexprice)
-try:
-    from flexprice import Flexprice
-    from flexprice import errors as sdk_errors
-except ImportError as e:
-    print("❌ SDK not found. Install with: pip install flexprice")
-    print(f"   Error: {e}")
-    sys.exit(1)
-
-# Enum values strictly from flexprice.types (SDK v2: dtos, types, errors, utils).
-# See https://github.com/flexprice/python-sdk — no fallbacks; all values from SDK.
-from typing import get_args
-
-from flexprice.types import (
+# SDK: Flexprice + errors. Enum values and errors from flexprice.models.
+from flexprice import Flexprice
+from flexprice import errors as sdk_errors
+from flexprice.models import (
     addontype,
     billingcadence,
     billingcycle,
@@ -65,6 +55,8 @@ from flexprice.types import (
     invoicecadence,
     invoicestatus,
     invoicetype,
+    paymentdestinationtype,
+    paymentmethodtype,
     paymentstatus,
     priceentitytype,
     pricetype,
@@ -72,10 +64,11 @@ from flexprice.types import (
     subscriptionstatus,
     transactionreason,
 )
+from typing import get_args
 
 
 def _literals(union_type):
-    """Literal options from Union[Literal[...], UnrecognizedStr] in flexprice.types."""
+    """Literal options from Union[Literal[...], UnrecognizedStr] in SDK types."""
     args = get_args(union_type)
     if not args:
         return ()
@@ -110,6 +103,9 @@ CREDIT_GRANT_CADENCE_ONETIME = _l(creditgrantcadence.CreditGrantCadence)[0]
 CREDIT_GRANT_EXPIRY_TYPE_NEVER = _l(creditgrantexpirytype.CreditGrantExpiryType)[0]
 CREDIT_GRANT_EXPIRY_DURATION_UNIT_DAY = _l(creditgrantexpirydurationunit.CreditGrantExpiryDurationUnit)[0]
 CREDIT_NOTE_REASON_BILLING_ERROR = _l(creditnotereason.CreditNoteReason)[5]
+# Payment (create_payment)
+PAYMENT_DESTINATION_TYPE_INVOICE = get_args(paymentdestinationtype.PaymentDestinationType)[0]
+PAYMENT_METHOD_TYPE_OFFLINE = _l(paymentmethodtype.PaymentMethodType)[2]
 
 # Optional: Load environment variables from .env file
 try:
@@ -1683,8 +1679,8 @@ def test_create_payment(client: Flexprice):
             amount="100.00",
             currency="USD",
             destination_id=payment_invoice_id,
-            destination_type="invoice",
-            payment_method_type="offline",
+            destination_type=PAYMENT_DESTINATION_TYPE_INVOICE,
+            payment_method_type=PAYMENT_METHOD_TYPE_OFFLINE,
             process_payment=False,
             metadata={"source": "sdk_test", "test_run": datetime.now().isoformat()},
         )
