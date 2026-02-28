@@ -1049,6 +1049,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						EndTime:            item.GetPeriodEnd(periodEnd),
 						WindowSize:         meter.Aggregation.BucketSize, // Use the meter's bucket size
 						BillingAnchor:      &sub.BillingAnchor,
+						GroupByProperty:    meter.Aggregation.GroupBy,
 					},
 				}
 
