@@ -75,8 +75,14 @@ type BillingService interface {
 	// GetCustomerUsageSummary returns usage summaries for a customer's features
 	GetCustomerUsageSummary(ctx context.Context, customerID string, req *dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
 
-	// CalculateFeatureUsageCharges calculates usage charges for a subscription
-	CalculateFeatureUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+	// CalculateFeatureUsageCharges calculates usage charges for a subscription.
+	// When opts.QuerySource is InvoiceCreation, ClickHouse uses FINAL for feature_usage; pass nil or another source (e.g. wallet) to avoid FINAL.
+	CalculateFeatureUsageCharges(ctx context.Context, sub *subscription.Subscription, usage *dto.GetUsageBySubscriptionResponse, periodStart, periodEnd time.Time, opts *CalculateFeatureUsageChargesOpts) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error)
+}
+
+// CalculateFeatureUsageChargesOpts controls how usage is queried (e.g. FINAL for invoice creation).
+type CalculateFeatureUsageChargesOpts struct {
+	Source types.UsageSource
 }
 
 type billingService struct {
@@ -872,10 +878,16 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	usage *dto.GetUsageBySubscriptionResponse,
 	periodStart,
 	periodEnd time.Time,
+	opts *CalculateFeatureUsageChargesOpts,
 ) ([]dto.CreateInvoiceLineItemRequest, decimal.Decimal, error) {
 
 	if usage == nil {
 		return nil, decimal.Zero, nil
+	}
+
+	var querySource types.UsageSource
+	if opts != nil {
+		querySource = opts.Source
 	}
 
 	usageCharges := make([]dto.CreateInvoiceLineItemRequest, 0)
@@ -972,13 +984,21 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
 			matchingEntitlement, entitlementOk := entitlementsByMeterID[item.MeterID]
 
+			// Cache bucketed usage result to avoid a duplicate ClickHouse call when the same
+			// line item also has windowed commitment. The bucketed meter section and the
+			// windowed commitment section query feature_usage with the same parameters
+			// (price, meter, customer, time range, window size), so we reuse the result.
+			var cachedBucketedUsageResult *events.AggregationResult
+
 			// Handle bucketed max meters first - this should always be checked regardless of entitlements
 			// But skip overage charges as they already have the correct amount with overage factor applied
 			if meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
-					PriceID: item.PriceID,
-					MeterID: item.MeterID,
+					PriceID:       item.PriceID,
+					MeterID:       item.MeterID,
+					Source:        querySource,
+					SubLineItemID: item.ID,
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationMax,
@@ -991,10 +1011,11 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				}
 
 				// Get usage data with buckets
-				usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
+				usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
+				cachedBucketedUsageResult = usageResult
 
 				// Extract bucket values
 				bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
@@ -1017,8 +1038,10 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				// Handle sum with bucket meters - uses optimized feature_usage table
 				// Get usage with bucketed values
 				usageRequest := &events.FeatureUsageParams{
-					PriceID: item.PriceID,
-					MeterID: item.MeterID,
+					PriceID:       item.PriceID,
+					MeterID:       item.MeterID,
+					Source:        querySource,
+					SubLineItemID: item.ID,
 					UsageParams: &events.UsageParams{
 						ExternalCustomerID: customer.ExternalID,
 						AggregationType:    types.AggregationSum,
@@ -1026,14 +1049,16 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						EndTime:            item.GetPeriodEnd(periodEnd),
 						WindowSize:         meter.Aggregation.BucketSize, // Use the meter's bucket size
 						BillingAnchor:      &sub.BillingAnchor,
+						GroupByProperty:    meter.Aggregation.GroupBy,
 					},
 				}
 
 				// Get usage data with buckets from feature_usage table (optimized, pre-aggregated)
-				usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
+				usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
+				cachedBucketedUsageResult = usageResult
 
 				// Extract bucket values (each bucket contains the sum for that window)
 				bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
@@ -1239,8 +1264,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 					// Check if this is window-based commitment
 					if item.CommitmentWindowed {
-						// For window commitment, we need bucketed values
-						// Get meter to access bucket configuration
+						// For window commitment, we need bucketed values from feature_usage table
 						meter, ok := meterMap[item.MeterID]
 						if !ok {
 							return nil, decimal.Zero, ierr.NewError("meter not found for window commitment").
@@ -1252,25 +1276,37 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								Mark(ierr.ErrNotFound)
 						}
 
-						// Fetch bucketed usage values
-						usageRequest := &dto.GetUsageByMeterRequest{
-							MeterID:            item.MeterID,
-							PriceID:            item.PriceID,
-							ExternalCustomerID: customer.ExternalID,
-							StartTime:          item.GetPeriodStart(periodStart),
-							EndTime:            item.GetPeriodEnd(periodEnd),
-							WindowSize:         meter.Aggregation.BucketSize,
-							BillingAnchor:      &sub.BillingAnchor,
-						}
+						// Reuse the bucketed usage result already fetched for bucketed meter
+						// pricing (IsBucketedMaxMeter/IsBucketedSumMeter) to avoid a redundant
+						// ClickHouse round-trip with the same parameters.
+						commitmentUsageResult := cachedBucketedUsageResult
+						if commitmentUsageResult == nil {
+							usageRequest := &events.FeatureUsageParams{
+								PriceID:       item.PriceID,
+								MeterID:       item.MeterID,
+								SubLineItemID: item.ID,
+								Source:        querySource,
+								UsageParams: &events.UsageParams{
+									ExternalCustomerID: customer.ExternalID,
+									AggregationType:    meter.Aggregation.Type,
+									StartTime:          item.GetPeriodStart(periodStart),
+									EndTime:            item.GetPeriodEnd(periodEnd),
+									WindowSize:         meter.Aggregation.BucketSize,
+									BillingAnchor:      &sub.BillingAnchor,
+									GroupByProperty:    meter.Aggregation.GroupBy,
+								},
+							}
 
-						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
-						if err != nil {
-							return nil, decimal.Zero, err
+							fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+							if fetchErr != nil {
+								return nil, decimal.Zero, fetchErr
+							}
+							commitmentUsageResult = fetchedResult
 						}
 
 						bucketedValues := s.fillBucketedValuesForWindowedCommitment(
 							item,
-							usageResult,
+							commitmentUsageResult,
 							item.GetPeriodStart(periodStart),
 							item.GetPeriodEnd(periodEnd),
 							meter.Aggregation.BucketSize,
@@ -1474,8 +1510,7 @@ func (s *billingService) calculateAllFeatureUsageCharges(
 		return nil, err
 	}
 
-	// Calculate usage charges
-	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd)
+	usageCharges, usageTotal, err := s.CalculateFeatureUsageCharges(ctx, sub, usage, periodStart, periodEnd, &CalculateFeatureUsageChargesOpts{Source: types.UsageSourceInvoiceCreation})
 	if err != nil {
 		return nil, err
 	}
@@ -1547,7 +1582,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		calculationResult, err = s.CalculateCharges(
+		calculationResult, err = s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1582,7 +1617,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1595,7 +1630,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
+		advanceResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1665,7 +1700,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1897,6 +1932,7 @@ func (s *billingService) calculateFeatureUsageCharges(
 			SubscriptionID: sub.ID,
 			StartTime:      periodStart,
 			EndTime:        periodEnd,
+			Source:         string(types.UsageSourceInvoiceCreation),
 		})
 		if err != nil {
 			return nil, err
@@ -2543,6 +2579,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 		usageReq := &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: subscriptionID,
+			Source:         string(types.UsageSourceAnalytics),
 		}
 
 		usage, err := subscriptionService.GetFeatureUsageBySubscription(ctx, usageReq)

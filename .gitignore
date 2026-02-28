@@ -1,146 +1,115 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# FlexPrice .gitignore
+# Go template: https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+
+# =============================================================================
+# Binaries & build output
+# =============================================================================
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Test binary, built with `go test -c`
 *.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+build/
+server
 
-# Dependency directories (remove the comment below to include it)
+# =============================================================================
+# Dependencies
+# =============================================================================
 # vendor/
+node_modules/
+**/node_modules/
 
-# Go workspace file
+# =============================================================================
+# Go
+# =============================================================================
 go.work
 go.work.sum
-
-# env file
-.env
-
-# secrets file
-.secrets
-.secrets.git
-
-# macOS-specific files
-.DS_Store
-
-# Coverage report
-coverage.out
-coverage.html
-
-# Local Research docs
-research/*
-
-# windsurf rules
-.windsurfrules
-.cursorrules
-
-# local adhoc scripts not production ready
-scripts/hacks/*
-.env*
-.flaskenv*
-!.env.project
-!.env.vault
-
-# continue / cursor rules
-.continue/*
-.cursorrules
-
-# build directory
-build/
-
-# =============================================================================
-# API SDK GENERATION RULES
-# =============================================================================
-
-# Generated SDK code - ignore all generated files in language-specific directories
-api/*/*
-
-# But keep configuration and build files for each language
-!api/go/go.mod
-!api/go/go.sum
-!api/go/README.md
-!api/go/helpers.go
-!api/go/custom/
-
-!api/javascript/package.json
-!api/javascript/package-lock.json
-!api/javascript/tsconfig.json
-!api/javascript/tsconfig.esm.json
-!api/javascript/tsconfig.node.json
-!api/javascript/tsconfig.app.json
-!api/javascript/jest.config.js
-!api/javascript/.eslintrc.js
-!api/javascript/.gitignore
-!api/javascript/.npmignore
-!api/javascript/.openapi-generator-ignore
-!api/javascript/README.md
-
-!api/python/pyproject.toml
-!api/python/setup.py
-!api/python/requirements.txt
-!api/python/README.md
-
-# Custom code directory - always track
-!api/custom/
-!api/custom/**
-
-# Scripts directory - always track
-!api/scripts/
-!api/scripts/**
-
-# Root API files - always track
-!api/README.md
-!api/publish.sh
-!api/ci-cd-example.yml
-
-# =============================================================================
-# END API SDK RULES
-# =============================================================================
-
-CLAUDE.m
-
-# temp files and script logs
-temp/*
-
-# Additional Go coverage formats
 *.cover
 *.coverprofile
 *.cov
-
-# Go build cache & module download cache
+coverage.out
+coverage.html
 **/pkg/
 **/bin/
+.gocache/
+.gomodcache/
 
-# Logs
-*.log
+# =============================================================================
+# Environment & secrets
+# =============================================================================
+.env
+.env*
+!.env.project
+!.env.vault
+.flaskenv*
+.secrets
+.secrets.git
 
-# IDE/editor junk
+# =============================================================================
+# IDE / editor / OS
+# =============================================================================
+.DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
 *~
+.windsurfrules
+.cursorrules
+.continue/*
+.cursor/plans/**/*
 
-# OS junk
-Thumbs.db
+# =============================================================================
+# Logs & temp
+# =============================================================================
+*.log
+temp/*
+.speakeasy/temp/*
+scripts/bash/logs/*
 
-server
+# =============================================================================
+# Artifacts
+# =============================================================================
+artifacts/*
+.artifacts/*
 
-# custom local files
+# =============================================================================
+# Project-specific (local / adhoc)
+# =============================================================================
+research/*
+scripts/hacks/*
 lambdas/*
 
+# =============================================================================
+# API SDK generation
+# =============================================================================
+api/*/*
+!api/go/
+!api/typescript/
+!api/python/
+!api/tests/
+!api/tests/**
+# Re-ignore node_modules under tests (negations above would otherwise track them)
+api/tests/**/node_modules/
+!api/custom/
+!api/custom/**
+!api/scripts/
+!api/scripts/**
+!api/README.md
+!api/publish.sh
+# SDK config: central gen in .speakeasy/gen/*.yaml (tracked). api/<lang>/.speakeasy/ is recreated at build (sync-gen-to-output copies gen.yaml; Speakeasy writes gen.lock).
+api/go/.speakeasy/
+api/typescript/.speakeasy/
+api/python/.speakeasy/
+api/mcp/.speakeasy/
 
-# gocache
-.gocache/
-.gomodcache/
+# =============================================================================
+# Misc
+# =============================================================================
+CLAUDE.m
 
 
-# bash scripts logs
-scripts/bash/logs/* 
+# test venvs
+api/tests/python/.venv/

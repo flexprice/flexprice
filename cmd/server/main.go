@@ -48,9 +48,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// @title FlexPrice API
+// @title Flexprice API
 // @version 1.0
-// @description FlexPrice API Service
+// @description Flexprice API provides billing, metering, and subscription management for SaaS and usage-based products. Use it to manage customers, plans, invoices, payments, usage events, and entitlements. Authenticate with an API key in the x-api-key header.
+// @contact.name API Support
+// @license.name AGPL-3.0
+// @license.url https://www.gnu.org/licenses/agpl-3.0.html
 // @BasePath /v1
 // @schemes http https
 // @securityDefinitions.apikey ApiKeyAuth

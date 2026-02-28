@@ -1,0 +1,100 @@
+configVersion: 2.0.0
+
+generation:
+  sdkClassName: Flexprice
+  versioningStrategy: semantic
+  requestBodyFieldName: body
+
+  usageSnippets:
+    optionalPropertyRendering: withExample
+    sdkInitStyle: constructor
+
+  auth:
+    hoistGlobalSecurity: true
+    oAuth2ClientCredentialsEnabled: false
+    oAuth2PasswordEnabled: false
+
+  schemas:
+    allOfMergeStrategy: deepMerge
+
+  fixes:
+    nameResolutionDec2023: true
+    nameResolutionFeb2025: true
+    parameterOrderingFeb2024: true
+    requestResponseComponentNamesFeb2024: true
+    securityFeb2025: true
+    sharedErrorComponentsApr2025: true
+    sharedNestedComponentsJan2026: true
+    nameOverrideFeb2026: true
+
+  tests:
+    generateTests: true
+    generateNewTests: false
+    skipResponseBodyAssertions: false
+
+typescript:
+  version: 2.0.0
+  packageName: "@flexprice/sdk"
+  author: FlexPrice
+
+  # Packaging
+  moduleFormat: esm
+  useIndexModules: true
+  templateVersion: v2
+
+  additionalPackageJSON:
+    sideEffects: false
+    type: module
+    engines:
+      node: ">=18"
+    exports:
+      ".": "./dist/index.js"
+
+  # Typing strategy
+  enumFormat: union
+  inferUnionDiscriminators: true
+  preApplyUnionDiscriminators: true
+  unionStrategy: left-to-right
+  forwardCompatibleEnumsByDefault: true
+  forwardCompatibleUnionsByDefault: tagged-only
+
+  # Error modeling
+  baseErrorName: FlexPriceError
+  defaultErrorName: SDKError
+  clientServerStatusCodesAsErrors: true
+
+  # Models
+  modelPropertyCasing: camel
+  inputModelSuffix: Input
+  outputModelSuffix: Output
+  constFieldsAlwaysOptional: false
+
+  # Validation: lax = tolerate null/missing/mistyped fields (recommended); strict = fail on mismatch
+  laxMode: lax
+  # Do not export Zod schema namespace
+  exportZodModelNamespace: false
+
+  # Method ergonomics
+  maxMethodParams: 4
+  methodArguments: infer-optional-args
+  flatteningOrder: parameters-first
+
+  # Request behavior
+  acceptHeaderEnum: true
+  formStringArrayEncodeMode: encoded-string
+  multipartArrayFormat: legacy
+
+  # Features
+  enableCustomCodeRegions: false
+  enableReactQuery: false
+  enableMCPServer: false
+  generateExamples: true
+
+  imports:
+    option: openapi
+    paths:
+      callbacks: sdk/models
+      errors: sdk/models
+      operations: sdk/models
+      shared: sdk/models
+      webhooks: sdk/models

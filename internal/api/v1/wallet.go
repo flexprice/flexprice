@@ -29,15 +29,16 @@ func NewWalletHandler(walletService service.WalletService, logger *logger.Logger
 
 // CreateWallet godoc
 // @Summary Create a new wallet
-// @Description Create a new wallet for a customer
+// @ID createWallet
+// @Description Use when giving a customer a prepaid or credit balance (e.g. prepaid plans or promotional credits).
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.CreateWalletRequest true "Create wallet request"
 // @Success 200 {object} dto.WalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets [post]
 func (h *WalletHandler) CreateWallet(c *gin.Context) {
 	var req dto.CreateWalletRequest
@@ -61,15 +62,16 @@ func (h *WalletHandler) CreateWallet(c *gin.Context) {
 
 // GetWalletsByCustomerID godoc
 // @Summary Get wallets by customer ID
-// @Description Get all wallets for a customer
+// @ID getWalletsByCustomerId
+// @Description Use when showing a customer's wallets (e.g. balance overview by currency or in a billing portal). Supports optional expand for balance breakdown.
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
 // @Success 200 {array} dto.WalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /customers/{id}/wallets [get]
 func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 	customerID := c.Param("id")
@@ -118,16 +120,17 @@ func (h *WalletHandler) GetWalletsByCustomerID(c *gin.Context) {
 
 // GetCustomerWallets godoc
 // @Summary Get Customer Wallets
-// @Description Get all wallets for a customer by lookup key or id
+// @ID getCustomerWallets
+// @Description Use when resolving wallets by external customer id or lookup key (e.g. from your app's user id). Supports optional real-time balance and expand.
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request query dto.GetCustomerWalletsRequest true "Get customer wallets request"
 // @Success 200 {array} dto.WalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /customers/wallets [get]
 func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 	var req dto.GetCustomerWalletsRequest
@@ -185,17 +188,18 @@ func (h *WalletHandler) GetCustomerWallets(c *gin.Context) {
 }
 
 // GetWalletByID godoc
-// @Summary Get wallet by ID
-// @Description Get a wallet by its ID
+// @Summary Get wallet
+// @ID getWallet
+// @Description Use when you need to load a single wallet (e.g. for a balance or settings view).
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Wallet ID"
 // @Success 200 {object} dto.WalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id} [get]
 func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 	walletID := c.Param("id")
@@ -218,7 +222,8 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 
 // GetWalletTransactions godoc
 // @Summary Get wallet transactions
-// @Description Get transactions for a wallet with pagination
+// @ID getWalletTransactions
+// @Description Use when showing transaction history for a wallet (e.g. credit/debit log or audit). Returns a paginated list; supports limit, offset, and filters.
 // @Tags Wallets
 // @Accept json
 // @Produce json
@@ -226,9 +231,9 @@ func (h *WalletHandler) GetWalletByID(c *gin.Context) {
 // @Param id path string true "Wallet ID"
 // @Param filter query types.WalletTransactionFilter false "Filter"
 // @Success 200 {object} dto.ListWalletTransactionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id}/transactions [get]
 func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 	walletID := c.Param("id")
@@ -264,7 +269,8 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 
 // TopUpWallet godoc
 // @Summary Top up wallet
-// @Description Add credits to a wallet
+// @ID topUpWallet
+// @Description Use when adding funds to a wallet (e.g. top-up, refund, or manual credit). Supports optional idempotency via reference.
 // @Tags Wallets
 // @Accept json
 // @Produce json
@@ -272,9 +278,9 @@ func (h *WalletHandler) GetWalletTransactions(c *gin.Context) {
 // @Param id path string true "Wallet ID"
 // @Param request body dto.TopUpWalletRequest true "Top up request"
 // @Success 200 {object} dto.TopUpWalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id}/top-up [post]
 func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 	walletID := c.Param("id")
@@ -306,7 +312,8 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 
 // GetWalletBalance godoc
 // @Summary Get wallet balance
-// @Description Get real-time balance of a wallet
+// @ID getWalletBalance
+// @Description Use when displaying or checking current wallet balance (e.g. before charging or in a portal). Supports optional expand for credits breakdown and from_cache.
 // @Tags Wallets
 // @Accept json
 // @Produce json
@@ -314,9 +321,9 @@ func (h *WalletHandler) TopUpWallet(c *gin.Context) {
 // @Param id path string true "Wallet ID"
 // @Param expand query string false "Expand fields (e.g., credits_available_breakdown)"
 // @Success 200 {object} dto.WalletBalanceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id}/balance/real-time [get]
 func (h *WalletHandler) GetWalletBalance(c *gin.Context) {
 	walletID := c.Param("id")
@@ -422,16 +429,17 @@ func (h *WalletHandler) GetWalletBalanceForceCached(c *gin.Context) {
 
 // TerminateWallet godoc
 // @Summary Terminate a wallet
-// @Description Terminates a wallet by closing it and debiting remaining balance
+// @ID terminateWallet
+// @Description Use when closing a customer wallet (e.g. churn or migration). Closes the wallet and applies remaining balance per policy (refund or forfeit).
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Wallet ID"
 // @Success 200 {object} dto.WalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id}/terminate [post]
 func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 	walletID := c.Param("id")
@@ -454,7 +462,8 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 
 // UpdateWallet godoc
 // @Summary Update a wallet
-// @Description Update a wallet's details including auto top-up configuration
+// @ID updateWallet
+// @Description Use when changing wallet settings (e.g. enabling or updating auto top-up thresholds).
 // @Tags Wallets
 // @Accept json
 // @Produce json
@@ -462,9 +471,9 @@ func (h *WalletHandler) TerminateWallet(c *gin.Context) {
 // @Param id path string true "Wallet ID"
 // @Param request body dto.UpdateWalletRequest true "Update wallet request"
 // @Success 200 {object} dto.WalletResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/{id} [put]
 func (h *WalletHandler) UpdateWallet(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -517,20 +526,19 @@ func (h *WalletHandler) ManualBalanceDebit(c *gin.Context) {
 	c.JSON(http.StatusOK, wallet)
 }
 
-// ListWalletTransactionsByFilter godoc
-// @Summary List wallet transactions by filter
-// @Description List wallet transactions by filter
+// @Summary Query wallet transactions
+// @ID queryWalletTransaction
+// @Description Use when searching or reporting on wallet transactions (e.g. cross-wallet history or reconciliation). Returns a paginated list; supports filtering by wallet, customer, type, date range.
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter body types.WalletTransactionFilter false "Filter"
-// @Param expand query string false "Expand fields (e.g., customer,created_by_user,wallet)"
+// @Param filter body types.WalletTransactionFilter true "Filter"
 // @Success 200 {object} dto.ListWalletTransactionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/transactions/search [post]
-func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
+func (h *WalletHandler) QueryWalletTransactions(c *gin.Context) {
 	var filter types.WalletTransactionFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -560,17 +568,6 @@ func (h *WalletHandler) ListWalletTransactionsByFilter(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary List wallets
-// @Description List wallets with optional filtering
-// @Tags Wallets
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.WalletFilter false "Filter (includes expand, limit, offset, etc)"
-// @Success 200 {object} types.ListResponse[dto.WalletResponse]
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /wallets [get]
 func (h *WalletHandler) ListWallets(c *gin.Context) {
 	var filter types.WalletFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -635,19 +632,19 @@ func (h *WalletHandler) ListWallets(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ListWalletsByFilter godoc
-// @Summary List wallets by filter
-// @Description List wallets by filter
+// @Summary Query wallets
+// @ID queryWallet
+// @Description Use when listing or searching wallets (e.g. admin view or reporting). Returns a paginated list; supports filtering by customer and status.
 // @Tags Wallets
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter body types.WalletFilter false "Filter"
+// @Param filter body types.WalletFilter true "Filter"
 // @Success 200 {object} types.ListResponse[dto.WalletResponse]
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /wallets/search [post]
-func (h *WalletHandler) ListWalletsByFilter(c *gin.Context) {
+func (h *WalletHandler) QueryWallets(c *gin.Context) {
 	var filter types.WalletFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

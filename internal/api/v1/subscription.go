@@ -24,15 +24,16 @@ func NewSubscriptionHandler(service service.SubscriptionService, log *logger.Log
 }
 
 // @Summary Create subscription
-// @Description Create a new subscription
+// @ID createSubscription
+// @Description Use when onboarding a customer to a plan or starting a new subscription. Ideal for draft subscriptions (activate later) or active from start.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param subscription body dto.CreateSubscriptionRequest true "Subscription Request"
 // @Success 201 {object} dto.SubscriptionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions [post]
 func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	var req dto.CreateSubscriptionRequest
@@ -55,14 +56,15 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 }
 
 // @Summary Get subscription
-// @Description Get a subscription by ID
+// @ID getSubscription
+// @Description Use when you need to load a single subscription (e.g. for a billing portal or to check status).
 // @Tags Subscriptions
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
 // @Success 200 {object} dto.SubscriptionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id} [get]
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	id := c.Param("id")
@@ -84,7 +86,8 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 }
 
 // @Summary Update subscription
-// @Description Update a subscription. parent_subscription_id can be set to another subscription ID, cleared by sending "", or left unchanged if omitted.
+// @ID updateSubscription
+// @Description Use when changing subscription details (e.g. quantity, billing anchor, or parent). Supports partial update; send "" to clear parent_subscription_id.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -92,8 +95,8 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param request body dto.UpdateSubscriptionRequest true "Update Subscription Request"
 // @Success 200 {object} dto.SubscriptionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id} [put]
 func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	id := c.Param("id")
@@ -123,16 +126,17 @@ func (h *SubscriptionHandler) UpdateSubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get subscription V2
-// @Description Get a subscription by ID with optional expand parameters
+// @Summary Get subscription (V2)
+// @ID getSubscriptionV2
+// @Description Use when you need a subscription with related data (line items, prices, plan). Supports expand for detailed payloads without extra round-trips.
 // @Tags Subscriptions
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
 // @Param expand query string false "Comma-separated list of fields to expand (e.g., 'subscription_line_items,prices,plan')"
 // @Success 200 {object} dto.SubscriptionResponseV2
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/v2 [get]
 func (h *SubscriptionHandler) GetSubscriptionV2(c *gin.Context) {
 	id := c.Param("id")
@@ -157,17 +161,7 @@ func (h *SubscriptionHandler) GetSubscriptionV2(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary List subscriptions
-// @Description Get subscriptions with optional filtering
-// @Tags Subscriptions
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.SubscriptionFilter false "Filter"
-// @Success 200 {object} dto.ListSubscriptionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /subscriptions [get]
-func (h *SubscriptionHandler) GetSubscriptions(c *gin.Context) {
+func (h *SubscriptionHandler) ListSubscriptions(c *gin.Context) {
 	var filter types.SubscriptionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		h.log.Error("Failed to bind query", "error", err)
@@ -188,7 +182,8 @@ func (h *SubscriptionHandler) GetSubscriptions(c *gin.Context) {
 }
 
 // @Summary Cancel subscription
-// @Description Cancel a subscription with enhanced proration support
+// @ID cancelSubscription
+// @Description Use when a customer churns or downgrades. Supports immediate or end-of-period cancellation and proration. Ideal for self-serve or support-driven cancellations.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -196,8 +191,8 @@ func (h *SubscriptionHandler) GetSubscriptions(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param request body dto.CancelSubscriptionRequest true "Cancel Subscription Request"
 // @Success 200 {object} dto.CancelSubscriptionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/cancel [post]
 func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 	id := c.Param("id")
@@ -229,7 +224,8 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 }
 
 // @Summary Activate draft subscription
-// @Description Activate a draft subscription with a new start date
+// @ID activateSubscription
+// @Description Use when turning a draft subscription live (e.g. after collecting payment or completing setup). Once activated, billing and entitlements apply.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -237,8 +233,8 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param request body dto.ActivateDraftSubscriptionRequest true "Activate Draft Subscription Request"
 // @Success 200 {object} dto.SubscriptionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/activate [post]
 func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 	id := c.Param("id")
@@ -269,15 +265,16 @@ func (h *SubscriptionHandler) ActivateDraftSubscription(c *gin.Context) {
 }
 
 // @Summary Get usage by subscription
-// @Description Get usage for a subscription
+// @ID getSubscriptionUsage
+// @Description Use when showing usage for a subscription (e.g. in a portal or for overage checks). Supports time range and filters.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetUsageBySubscriptionRequest true "Usage request"
 // @Success 200 {object} dto.GetUsageBySubscriptionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/usage [post]
 func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 	var req dto.GetUsageBySubscriptionRequest
@@ -299,19 +296,19 @@ func (h *SubscriptionHandler) GetUsageBySubscription(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// ListSubscriptionsByFilter godoc
-// @Summary List subscriptions by filter
-// @Description List subscriptions by filter
+// @Summary Query subscriptions
+// @ID querySubscription
+// @Description Use when listing or searching subscriptions (e.g. admin view or customer subscription list). Returns a paginated list; supports filtering by customer, plan, status.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.SubscriptionFilter true "Filter"
 // @Success 200 {object} dto.ListSubscriptionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/search [post]
-func (h *SubscriptionHandler) ListSubscriptionsByFilter(c *gin.Context) {
+func (h *SubscriptionHandler) QuerySubscriptions(c *gin.Context) {
 	var filter types.SubscriptionFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		h.log.Error("Failed to bind JSON", "error", err)
@@ -340,15 +337,16 @@ func (h *SubscriptionHandler) ListSubscriptionsByFilter(c *gin.Context) {
 }
 
 // @Summary Add addon to subscription
-// @Description Add an addon to a subscription
+// @ID addSubscriptionAddon
+// @Description Use when adding an optional product or add-on to an existing subscription (e.g. extra storage or support tier).
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.AddAddonRequest true "Add Addon Request"
 // @Success 200 {object} dto.AddonAssociationResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/addon [post]
 func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 	var req dto.AddAddonRequest
@@ -371,15 +369,16 @@ func (h *SubscriptionHandler) AddAddonToSubscription(c *gin.Context) {
 }
 
 // @Summary Remove addon from subscription
-// @Description Remove an addon from a subscription
+// @ID removeSubscriptionAddon
+// @Description Use when removing an add-on from a subscription (e.g. downgrade or opt-out).
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.RemoveAddonRequest true "Remove Addon Request"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/addon [delete]
 func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 	var req dto.RemoveAddonRequest
@@ -401,7 +400,8 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 }
 
 // @Summary Get subscription entitlements
-// @Description Get all entitlements for a subscription
+// @ID getSubscriptionEntitlements
+// @Description Use when checking what features or limits a subscription has (e.g. entitlement checks or feature gating). Optional feature_ids to filter.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -409,9 +409,9 @@ func (h *SubscriptionHandler) RemoveAddonToSubscription(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param feature_ids query []string false "Feature IDs to filter by"
 // @Success 200 {object} dto.SubscriptionEntitlementsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/entitlements [get]
 func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 	id := c.Param("id")
@@ -442,7 +442,8 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 }
 
 // @Summary Create subscription line item
-// @Description Add a new line item to an existing subscription (price_id or inline price)
+// @ID createSubscriptionLineItem
+// @Description Use when adding a new charge or seat to a subscription (e.g. extra seat or one-time add). Supports price_id or inline price.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -450,9 +451,9 @@ func (h *SubscriptionHandler) GetSubscriptionEntitlements(c *gin.Context) {
 // @Param id path string true "Subscription ID"
 // @Param request body dto.CreateSubscriptionLineItemRequest true "Create Line Item Request"
 // @Success 201 {object} dto.SubscriptionLineItemResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/lineitems [post]
 func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
 	subscriptionID := c.Param("id")
@@ -483,7 +484,8 @@ func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
 }
 
 // @Summary Update subscription line item
-// @Description Update a subscription line item by terminating the existing one and creating a new one
+// @ID updateSubscriptionLineItem
+// @Description Use when changing a subscription line item (e.g. quantity or price). Implemented by ending the current line and creating a new one for clean billing.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -491,8 +493,8 @@ func (h *SubscriptionHandler) AddSubscriptionLineItem(c *gin.Context) {
 // @Param id path string true "Line Item ID"
 // @Param request body dto.UpdateSubscriptionLineItemRequest true "Update Line Item Request"
 // @Success 200 {object} dto.SubscriptionLineItemResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/lineitems/{id} [put]
 func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 	lineItemID := c.Param("id")
@@ -523,7 +525,8 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 }
 
 // @Summary Delete subscription line item
-// @Description Delete a subscription line item by setting its end date
+// @ID deleteSubscriptionLineItem
+// @Description Use when removing a charge or seat from a subscription (e.g. downgrade). Line item ends; retained for history but no longer billed.
 // @Tags Subscriptions
 // @Accept json
 // @Produce json
@@ -531,8 +534,8 @@ func (h *SubscriptionHandler) UpdateSubscriptionLineItem(c *gin.Context) {
 // @Param id path string true "Line Item ID"
 // @Param request body dto.DeleteSubscriptionLineItemRequest true "Delete Line Item Request"
 // @Success 200 {object} dto.SubscriptionLineItemResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/lineitems/{id} [delete]
 func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 	lineItemID := c.Param("id")
@@ -563,15 +566,16 @@ func (h *SubscriptionHandler) DeleteSubscriptionLineItem(c *gin.Context) {
 }
 
 // @Summary Get upcoming credit grant applications
-// @Description Get upcoming credit grant applications for a subscription
+// @ID getSubscriptionUpcomingGrants
+// @Description Use when showing upcoming or pending credits for a subscription (e.g. in a portal or for forecasting).
 // @Tags Subscriptions
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
 // @Success 200 {object} dto.ListCreditGrantApplicationsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/grants/upcoming [get]
 func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context) {
 	id := c.Param("id")
@@ -598,15 +602,16 @@ func (h *SubscriptionHandler) GetUpcomingCreditGrantApplications(c *gin.Context)
 }
 
 // @Summary Get active addon associations
-// @Description Get active addon associations for a subscription
+// @ID getSubscriptionAddonAssociations
+// @Description Use when listing which add-ons are currently attached to a subscription (e.g. for display or editing).
 // @Tags Subscriptions
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Subscription ID"
 // @Success 200 {array} dto.AddonAssociationResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /subscriptions/{id}/addons/associations [get]
 func (h *SubscriptionHandler) GetActiveAddonAssociations(c *gin.Context) {
 	id := c.Param("id")

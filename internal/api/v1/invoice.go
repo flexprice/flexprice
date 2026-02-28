@@ -27,16 +27,17 @@ func NewInvoiceHandler(invoiceService service.InvoiceService, logger *logger.Log
 }
 
 // CreateOneOffInvoice godoc
-// @Summary Create a new one off invoice
-// @Description Create a new one off invoice with the provided details
+// @Summary Create one-off invoice
+// @ID createInvoice
+// @Description Use when creating a manual or one-off invoice (e.g. custom charge or non-recurring billing). Invoice is created in draft; finalize when ready.
 // @Tags Invoices
 // @Accept json
 // @Security ApiKeyAuth
 // @Produce json
 // @Param invoice body dto.CreateInvoiceRequest true "Invoice details"
 // @Success 201 {object} dto.InvoiceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices [post]
 func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 	var req dto.CreateInvoiceRequest
@@ -57,8 +58,9 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 }
 
 // GetInvoice godoc
-// @Summary Get an invoice by ID
-// @Description Get detailed information about an invoice
+// @Summary Get invoice
+// @ID getInvoice
+// @Description Use when loading an invoice for display or editing (e.g. portal or reconciliation). Supports group_by for usage breakdown and force_runtime_recalculation.
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -67,8 +69,8 @@ func (h *InvoiceHandler) CreateOneOffInvoice(c *gin.Context) {
 // @Param expand_by_source query bool false "Include source-level price breakdown for usage line items (legacy)"
 // @Param group_by query []string false "Group usage breakdown by specified fields (e.g., source, feature_id, properties.org_id)"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id} [get]
 func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -97,18 +99,6 @@ func (h *InvoiceHandler) GetInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, invoice)
 }
 
-// ListInvoices godoc
-// @Summary List invoices
-// @Description List invoices with optional filtering
-// @Tags Invoices
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.InvoiceFilter false "Filter"
-// @Success 200 {object} dto.ListInvoicesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /invoices [get]
 func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 	var filter types.InvoiceFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -139,16 +129,17 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 }
 
 // FinalizeInvoice godoc
-// @Summary Finalize an invoice
-// @Description Finalize a draft invoice
+// @Summary Finalize invoice
+// @ID finalizeInvoice
+// @Description Use when locking an invoice for payment (e.g. after review). Once finalized, line items are locked; invoice can be paid or voided.
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/finalize [post]
 func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -167,16 +158,17 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 }
 
 // VoidInvoice godoc
-// @Summary Void an invoice
-// @Description Void an invoice that hasn't been paid
+// @Summary Void invoice
+// @ID voidInvoice
+// @Description Use when cancelling an invoice (e.g. order cancelled or duplicate). Only unpaid invoices can be voided.
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/void [post]
 func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -211,7 +203,8 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 
 // UpdatePaymentStatus godoc
 // @Summary Update invoice payment status
-// @Description Update the payment status of an invoice
+// @ID updateInvoicePaymentStatus
+// @Description Use when reconciling payment status from an external gateway or manual entry (e.g. mark paid after bank confirmation).
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -219,9 +212,9 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 // @Param id path string true "Invoice ID"
 // @Param request body dto.UpdatePaymentStatusRequest true "Payment Status Update Request"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/payment [put]
 func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 	id := c.Param("id")
@@ -265,16 +258,17 @@ func (h *InvoiceHandler) UpdatePaymentStatus(c *gin.Context) {
 }
 
 // GetPreviewInvoice godoc
-// @Summary Get a preview invoice
-// @Description Get a preview invoice
+// @Summary Get invoice preview
+// @ID getInvoicePreview
+// @Description Use when showing a customer what they will be charged (e.g. preview before checkout or plan change). No invoice is created.
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetPreviewInvoiceRequest true "Preview Invoice Request"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/preview [post]
 func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 	var req dto.GetPreviewInvoiceRequest
@@ -295,16 +289,17 @@ func (h *InvoiceHandler) GetPreviewInvoice(c *gin.Context) {
 }
 
 // GetCustomerInvoiceSummary godoc
-// @Summary Get a customer invoice summary
-// @Description Get a customer invoice summary
+// @Summary Get customer invoice summary
+// @ID getCustomerInvoiceSummary
+// @Description Use when showing a customer's invoice overview (e.g. billing portal or balance summary). Includes totals and multi-currency breakdown.
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Customer ID"
 // @Success 200 {object} dto.CustomerMultiCurrencyInvoiceSummary
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /customers/{id}/invoices/summary [get]
 func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 	id := c.Param("id")
@@ -320,17 +315,18 @@ func (h *InvoiceHandler) GetCustomerInvoiceSummary(c *gin.Context) {
 }
 
 // AttemptPayment godoc
-// @Summary Attempt payment for an invoice
-// @Description Attempt to pay an invoice using customer's available wallets
+// @Summary Attempt invoice payment
+// @ID attemptInvoicePayment
+// @Description Use when paying an invoice with the customer's wallet balance (e.g. prepaid credits or balance applied at checkout).
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/payment/attempt [post]
 func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 	id := c.Param("id")
@@ -352,16 +348,17 @@ func (h *InvoiceHandler) AttemptPayment(c *gin.Context) {
 }
 
 // GetInvoicePDF godoc
-// @Summary Get PDF for an invoice
-// @Description Retrieve the PDF document for a specific invoice by its ID
+// @Summary Get invoice PDF
+// @ID getInvoicePdf
+// @Description Use when delivering an invoice PDF to the customer (e.g. email attachment or download). Use url=true for a presigned URL instead of binary.
 // @Tags Invoices
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Param url query bool false "Return presigned URL from s3 instead of PDF"
 // @Success 200 {file} application/pdf
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/pdf [get]
 func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 	id := c.Param("id")
@@ -392,8 +389,9 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 }
 
 // RecalculateInvoice godoc
-// @Summary Recalculate invoice totals and line items
-// @Description Recalculate totals and line items for a draft invoice, useful when subscription line items or usage data has changed
+// @Summary Recalculate invoice
+// @ID recalculateInvoice
+// @Description Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -401,9 +399,9 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 // @Param id path string true "Invoice ID"
 // @Param finalize query bool false "Whether to finalize the invoice after recalculation (default: true)"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/recalculate [post]
 func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -427,9 +425,9 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 }
 
 // UpdateInvoice godoc
-// @Summary Update an invoice
-// @Description Update invoice details like PDF URL and due date.
-// Works for draft, finalized, and paid invoices. Only safe fields like PDF URL and due date can be updated for paid invoices.
+// @Summary Update invoice
+// @ID updateInvoice
+// @Description Use when updating invoice metadata or due date (e.g. PDF URL, net terms). For paid invoices only safe fields can be updated.
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -437,9 +435,9 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 // @Param id path string true "Invoice ID"
 // @Param request body dto.UpdateInvoiceRequest true "Invoice Update Request"
 // @Success 200 {object} dto.InvoiceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id} [put]
 func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
 	id := c.Param("id")
@@ -465,19 +463,19 @@ func (h *InvoiceHandler) UpdateInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, invoice)
 }
 
-// ListInvoicesByFilter godoc
-// @Summary List invoices by filter
-// @Description List invoices by filter
+// @Summary Query invoices
+// @ID queryInvoice
+// @Description Use when listing or searching invoices (e.g. admin view or customer history). Returns a paginated list; supports filtering by customer, status, date range.
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.InvoiceFilter true "Filter"
 // @Success 200 {object} dto.ListInvoicesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/search [post]
-func (h *InvoiceHandler) ListInvoicesByFilter(c *gin.Context) {
+func (h *InvoiceHandler) QueryInvoices(c *gin.Context) {
 	var filter types.InvoiceFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		h.logger.Error("Failed to bind request body", "error", err)
@@ -502,17 +500,18 @@ func (h *InvoiceHandler) ListInvoicesByFilter(c *gin.Context) {
 }
 
 // TriggerCommunication godoc
-// @Summary Trigger communication webhook for an invoice
-// @Description Triggers a communication webhook event containing all information about the invoice
+// @Summary Trigger invoice communication webhook
+// @ID triggerInvoiceCommsWebhook
+// @Description Use when sending an invoice to the customer (e.g. trigger email or Slack). Payload includes full invoice details for your integration.
 // @Tags Invoices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /invoices/{id}/comms/trigger [post]
 func (h *InvoiceHandler) TriggerCommunication(c *gin.Context) {
 	id := c.Param("id")

@@ -1,0 +1,17 @@
+{
+  "name": "flexprice-sdk-tests",
+  "private": true,
+  "description": "SDK integration tests for @flexprice/sdk (published or local api/typescript)",
+  "scripts": {
+    "test": "npx ts-node test_sdk.ts",
+    "test:local": "npm install --no-save file:../../typescript && npx ts-node test_sdk.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@flexprice/sdk": "latest"
+  }
+}

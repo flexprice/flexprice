@@ -1787,6 +1787,7 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_SkipsInactiveLine
 		usage,
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
+		nil,
 	)
 
 	s.NoError(err)
@@ -1822,6 +1823,7 @@ func (s *BillingServiceSuite) TestCalculateFeatureUsageCharges_MatchesActiveLine
 		usage,
 		s.testData.subscription.CurrentPeriodStart,
 		s.testData.subscription.CurrentPeriodEnd,
+		nil,
 	)
 
 	s.NoError(err)
