@@ -984,6 +984,12 @@ func (s *billingService) CalculateFeatureUsageCharges(
 			quantityForCalculation := decimal.NewFromFloat(matchingCharge.Quantity)
 			matchingEntitlement, entitlementOk := entitlementsByMeterID[item.MeterID]
 
+			// Cache bucketed usage result to avoid a duplicate ClickHouse call when the same
+			// line item also has windowed commitment. The bucketed meter section and the
+			// windowed commitment section query feature_usage with the same parameters
+			// (price, meter, customer, time range, window size), so we reuse the result.
+			var cachedBucketedUsageResult *events.AggregationResult
+
 			// Handle bucketed max meters first - this should always be checked regardless of entitlements
 			// But skip overage charges as they already have the correct amount with overage factor applied
 			if meter.IsBucketedMaxMeter() && matchingCharge.Price != nil {
@@ -1008,6 +1014,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
+				cachedBucketedUsageResult = usageResult
 
 				// Extract bucket values
 				bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
@@ -1048,6 +1055,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				if err != nil {
 					return nil, decimal.Zero, err
 				}
+				cachedBucketedUsageResult = usageResult
 
 				// Extract bucket values (each bucket contains the sum for that window)
 				bucketedValues := make([]decimal.Decimal, len(usageResult.Results))
@@ -1253,7 +1261,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 					// Check if this is window-based commitment
 					if item.CommitmentWindowed {
-						// For window commitment, fetch bucketed values from feature_usage table
+						// For window commitment, we need bucketed values from feature_usage table
 						meter, ok := meterMap[item.MeterID]
 						if !ok {
 							return nil, decimal.Zero, ierr.NewError("meter not found for window commitment").
@@ -1265,30 +1273,37 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								Mark(ierr.ErrNotFound)
 						}
 
-						usageRequest := &events.FeatureUsageParams{
-							PriceID:       item.PriceID,
-							MeterID:       item.MeterID,
-							SubLineItemID: item.ID,
-							Source:        querySource,
-							UsageParams: &events.UsageParams{
-								ExternalCustomerID: customer.ExternalID,
-								AggregationType:    meter.Aggregation.Type,
-								StartTime:          item.GetPeriodStart(periodStart),
-								EndTime:            item.GetPeriodEnd(periodEnd),
-								WindowSize:         meter.Aggregation.BucketSize,
-								BillingAnchor:      &sub.BillingAnchor,
-								GroupByProperty:    meter.Aggregation.GroupBy,
-							},
-						}
+						// Reuse the bucketed usage result already fetched for bucketed meter
+						// pricing (IsBucketedMaxMeter/IsBucketedSumMeter) to avoid a redundant
+						// ClickHouse round-trip with the same parameters.
+						commitmentUsageResult := cachedBucketedUsageResult
+						if commitmentUsageResult == nil {
+							usageRequest := &events.FeatureUsageParams{
+								PriceID:       item.PriceID,
+								MeterID:       item.MeterID,
+								SubLineItemID: item.ID,
+								Source:        querySource,
+								UsageParams: &events.UsageParams{
+									ExternalCustomerID: customer.ExternalID,
+									AggregationType:    meter.Aggregation.Type,
+									StartTime:          item.GetPeriodStart(periodStart),
+									EndTime:            item.GetPeriodEnd(periodEnd),
+									WindowSize:         meter.Aggregation.BucketSize,
+									BillingAnchor:      &sub.BillingAnchor,
+									GroupByProperty:    meter.Aggregation.GroupBy,
+								},
+							}
 
-						usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
-						if err != nil {
-							return nil, decimal.Zero, err
+							fetchedResult, fetchErr := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+							if fetchErr != nil {
+								return nil, decimal.Zero, fetchErr
+							}
+							commitmentUsageResult = fetchedResult
 						}
 
 						bucketedValues := s.fillBucketedValuesForWindowedCommitment(
 							item,
-							usageResult,
+							commitmentUsageResult,
 							item.GetPeriodStart(periodStart),
 							item.GetPeriodEnd(periodEnd),
 							meter.Aggregation.BucketSize,

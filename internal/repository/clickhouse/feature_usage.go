@@ -2343,7 +2343,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 
 	// Use FINAL only for invoice generation so ReplacingMergeTree deduplication is correct; other callers (analytics, preview) do not.
 	tableRef := "feature_usage"
-	if params.QuerySource.UseFinal() {
+	if params.Source.UseFinal() {
 		tableRef = "feature_usage FINAL"
 	}
 
