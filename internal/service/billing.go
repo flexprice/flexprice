@@ -1239,8 +1239,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 
 					// Check if this is window-based commitment
 					if item.CommitmentWindowed {
-						// For window commitment, we need bucketed values
-						// Get meter to access bucket configuration
+						// For window commitment, fetch bucketed values from feature_usage table
 						meter, ok := meterMap[item.MeterID]
 						if !ok {
 							return nil, decimal.Zero, ierr.NewError("meter not found for window commitment").
@@ -1252,18 +1251,22 @@ func (s *billingService) CalculateFeatureUsageCharges(
 								Mark(ierr.ErrNotFound)
 						}
 
-						// Fetch bucketed usage values
-						usageRequest := &dto.GetUsageByMeterRequest{
-							MeterID:            item.MeterID,
-							PriceID:            item.PriceID,
-							ExternalCustomerID: customer.ExternalID,
-							StartTime:          item.GetPeriodStart(periodStart),
-							EndTime:            item.GetPeriodEnd(periodEnd),
-							WindowSize:         meter.Aggregation.BucketSize,
-							BillingAnchor:      &sub.BillingAnchor,
+						usageRequest := &events.FeatureUsageParams{
+							PriceID:       item.PriceID,
+							MeterID:       item.MeterID,
+							SubLineItemID: item.ID,
+							UsageParams: &events.UsageParams{
+								ExternalCustomerID: customer.ExternalID,
+								AggregationType:    meter.Aggregation.Type,
+								StartTime:          item.GetPeriodStart(periodStart),
+								EndTime:            item.GetPeriodEnd(periodEnd),
+								WindowSize:         meter.Aggregation.BucketSize,
+								BillingAnchor:      &sub.BillingAnchor,
+								GroupByProperty:    meter.Aggregation.GroupBy,
+							},
 						}
 
-						usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+						usageResult, err := s.FeatureUsageRepo.GetUsageForMaxMetersWithBuckets(ctx, usageRequest)
 						if err != nil {
 							return nil, decimal.Zero, err
 						}
@@ -1547,7 +1550,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		calculationResult, err = s.CalculateCharges(
+		calculationResult, err = s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1582,7 +1585,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1595,7 +1598,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
+		advanceResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1665,7 +1668,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,

@@ -2019,6 +2019,8 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		tableRef = "feature_usage FINAL"
 	}
 
+	r.logger.Debugw("subscription usage query", "aggColumns", aggColumns, "tableRef", tableRef, "opts", opts)
+
 	query := fmt.Sprintf(`
 		SELECT 
 			sub_line_item_id,
@@ -2045,6 +2047,8 @@ func (r *FeatureUsageRepository) GetFeatureUsageBySubscription(ctx context.Conte
 		"start_time", startTime,
 		"end_time", endTime,
 	)
+
+	r.logger.Debugw("subscription usage query", "query", query, "params", []interface{}{subscriptionID, customerID, environmentID, tenantID, startTime, endTime})
 
 	rows, err := r.store.GetConn().Query(ctx, query, subscriptionID, customerID, environmentID, tenantID, startTime, endTime)
 	if err != nil {
@@ -2457,7 +2461,7 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 			id, tenant_id, external_customer_id, customer_id, event_name, source, 
 			timestamp, ingested_at, properties, processed_at, environment_id,
 			subscription_id, sub_line_item_id, price_id, meter_id, feature_id, period_id,
-			unique_hash, qty_total, version, sign, processing_lag_ms
+			unique_hash, qty_total, version, sign
 		FROM feature_usage FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
@@ -2512,7 +2516,6 @@ func (r *FeatureUsageRepository) GetFeatureUsageByEventIDs(ctx context.Context, 
 			&record.QtyTotal,
 			&record.Version,
 			&record.Sign,
-			&record.ProcessingLagMs,
 		)
 		if err != nil {
 			return nil, ierr.WithError(err).
