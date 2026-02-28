@@ -46,6 +46,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 	// so that inline Price create is rolled back if validations or line item create fail
 	var lineItem *subscription.SubscriptionLineItem
 	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+
 		if usedInlinePrice && inlineCreatePriceReq != nil {
 			createdPrice, createErr := NewPriceService(s.ServiceParams).CreatePrice(txCtx, *inlineCreatePriceReq)
 			if createErr != nil {
@@ -55,13 +56,28 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 			params.Price = createdPrice
 			resolvedReq.PriceID = createdPrice.ID
 		}
+
 		lineItem = resolvedReq.ToSubscriptionLineItem(txCtx, *params)
 		if usedInlinePrice {
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
+
+		if types.BillingPeriodGreaterThan(sub.BillingPeriod, lineItem.BillingPeriod) {
+			return ierr.NewError("line item billing period cannot be shorter than subscription billing period").
+				WithHint("The line item's billing period must be equal to or longer than the subscription").
+				WithReportableDetails(map[string]interface{}{
+					"subscription_id":             sub.ID,
+					"subscription_billing_period": sub.BillingPeriod,
+					"line_item_id":                lineItem.ID,
+					"line_item_billing_period":    lineItem.BillingPeriod,
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
 		if err := s.validateLineItemCommitment(txCtx, lineItem); err != nil {
 			return err
 		}
+
 		sub.LineItems = append(sub.LineItems, lineItem)
 		if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
 			return err
