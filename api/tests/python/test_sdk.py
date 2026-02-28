@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-FlexPrice Python SDK - Published SDK tests (pip install flexprice).
-Run from api/tests/python: pip install flexprice && python test_sdk.py
+FlexPrice Python SDK - Published SDK tests (pip install flexprice==2.0.1).
+Run from api/tests/python: pip install -r requirements.txt && python test_sdk.py
+Uses flexprice 2.0.1 (see api/tests/python/requirements.txt).
 Requires: FLEXPRICE_API_KEY, FLEXPRICE_API_HOST (must include /v1, e.g. api.cloud.flexprice.io/v1; no trailing space or slash).
 Uses the Flexprice client (server_url, api_key_auth) and namespaced APIs (client.customers, client.events, etc.).
 Package: https://pypi.org/project/flexprice/
@@ -40,7 +41,7 @@ check_dependencies()
 
 # SDK: Flexprice + errors. Enum values and errors from flexprice.models.
 from flexprice import Flexprice
-from flexprice import errors as sdk_errors
+from flexprice.models import errors as sdk_errors
 from flexprice.models import (
     addontype,
     billingcadence,

@@ -53,11 +53,11 @@ cd api/tests/python
 .venv/bin/python test_sdk.py
 ```
 
-**Published SDK (pip):**
+**Published SDK (pip, pinned to flexprice 2.0.1):**
 
 ```bash
 cd api/tests/python
-.venv/bin/pip install pydantic httpx flexprice
+.venv/bin/pip install -r requirements.txt
 .venv/bin/python test_sdk.py
 ```
 
