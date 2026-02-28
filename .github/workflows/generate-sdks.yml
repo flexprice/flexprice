@@ -14,15 +14,14 @@ name: Generate SDKs
 
 on:
   push:
-    branches: [main, develop, feat/speakeasy-v2]
-    # TODO: Uncomment these paths when we have a way to test the workflow without pushing to main
-    # paths:
-    #   - "docs/swagger/**"
-    #   - ".speakeasy/**"
-    #   - "api/custom/**"
-    #   - "cmd/**"
-    #   - "internal/api/**"
-    #   - "Makefile"
+    branches: [main]
+    paths:
+      - "docs/swagger/**"
+      - ".speakeasy/**"
+      - "api/custom/**"
+      - "cmd/**"
+      - "internal/api/**"
+      - "Makefile"
   workflow_dispatch:
 
 concurrency:
