@@ -1,5 +1,5 @@
 
-module github.com/flexprice/flexprice-go
+module github.com/flexprice/flexprice-go/v2
 
 go 1.22
 

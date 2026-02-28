@@ -1,5 +1,0 @@
-# Prevent Speakeasy from overwriting gen.yaml so our overrides (packageName, moduleName, etc.) persist.
-.speakeasy/gen.yaml
-
-# README is maintained in api/custom/python/README.md and overwritten by make merge-custom.
-README.md

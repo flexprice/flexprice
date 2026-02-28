@@ -1,6 +1,6 @@
 [project]
 name = "flexprice"
-version = "2.0.0"
+version = "2.0.2"
 description = "Python Client SDK for the FlexPrice API."
 authors = [{ name = "Flexprice" },]
 readme = "README.md"

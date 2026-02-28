@@ -4532,9 +4532,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "Published",
-                            "Deleted",
-                            "Archived"
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -7845,9 +7845,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "Published",
-                            "Deleted",
-                            "Archived"
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -8938,9 +8938,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "Internal",
-                            "External",
-                            "OneTime"
+                            "TaxRateScopeInternal",
+                            "TaxRateScopeExternal",
+                            "TaxRateScopeOneTime"
                         ],
                         "name": "scope",
                         "in": "query"
@@ -8958,9 +8958,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "Published",
-                            "Deleted",
-                            "Archived"
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -10234,9 +10234,9 @@ const docTemplate = `{
                         ],
                         "type": "string",
                         "x-enum-varnames": [
-                            "Published",
-                            "Deleted",
-                            "Archived"
+                            "StatusPublished",
+                            "StatusDeleted",
+                            "StatusArchived"
                         ],
                         "name": "status",
                         "in": "query"
@@ -20977,9 +20977,9 @@ const docTemplate = `{
                 "paused"
             ],
             "x-enum-varnames": [
-                "Active",
-                "Cancelled",
-                "Paused"
+                "AddonStatusActive",
+                "AddonStatusCancelled",
+                "AddonStatusPaused"
             ]
         },
         "types.AddonType": {
@@ -20989,8 +20989,8 @@ const docTemplate = `{
                 "multiple_instance"
             ],
             "x-enum-varnames": [
-                "Onetime",
-                "MultipleInstance"
+                "AddonTypeOnetime",
+                "AddonTypeMultipleInstance"
             ]
         },
         "types.AggregationType": {
@@ -21370,9 +21370,9 @@ const docTemplate = `{
                 "forever"
             ],
             "x-enum-varnames": [
-                "Once",
-                "Repeated",
-                "Forever"
+                "CouponCadenceOnce",
+                "CouponCadenceRepeated",
+                "CouponCadenceForever"
             ]
         },
         "types.CouponFilter": {
@@ -21427,8 +21427,8 @@ const docTemplate = `{
                 "percentage"
             ],
             "x-enum-varnames": [
-                "Fixed",
-                "Percentage"
+                "CouponTypeFixed",
+                "CouponTypePercentage"
             ]
         },
         "types.CreditBreakdown": {
@@ -21908,9 +21908,9 @@ const docTemplate = `{
                 "static"
             ],
             "x-enum-varnames": [
-                "Metered",
-                "Boolean",
-                "Static"
+                "FeatureTypeMetered",
+                "FeatureTypeBoolean",
+                "FeatureTypeStatic"
             ]
         },
         "types.FileType": {
@@ -22910,9 +22910,9 @@ const docTemplate = `{
                 "archived"
             ],
             "x-enum-varnames": [
-                "Published",
-                "Deleted",
-                "Archived"
+                "StatusPublished",
+                "StatusDeleted",
+                "StatusArchived"
             ]
         },
         "types.SubscriptionChangeType": {
@@ -23112,10 +23112,10 @@ const docTemplate = `{
                 "tenant"
             ],
             "x-enum-varnames": [
-                "Customer",
-                "Subscription",
-                "Invoice",
-                "Tenant"
+                "TaxRateEntityTypeCustomer",
+                "TaxRateEntityTypeSubscription",
+                "TaxRateEntityTypeInvoice",
+                "TaxRateEntityTypeTenant"
             ]
         },
         "types.TaxRateScope": {
@@ -23126,9 +23126,9 @@ const docTemplate = `{
                 "ONETIME"
             ],
             "x-enum-varnames": [
-                "Internal",
-                "External",
-                "OneTime"
+                "TaxRateScopeInternal",
+                "TaxRateScopeExternal",
+                "TaxRateScopeOneTime"
             ]
         },
         "types.TaxRateStatus": {
@@ -23138,8 +23138,8 @@ const docTemplate = `{
                 "INACTIVE"
             ],
             "x-enum-varnames": [
-                "Active",
-                "Inactive"
+                "TaxRateStatusActive",
+                "TaxRateStatusInactive"
             ]
         },
         "types.TaxRateType": {
@@ -23149,8 +23149,8 @@ const docTemplate = `{
                 "fixed"
             ],
             "x-enum-varnames": [
-                "Percentage",
-                "Fixed"
+                "TaxRateTypePercentage",
+                "TaxRateTypeFixed"
             ]
         },
         "types.TimeRangeFilter": {
@@ -23481,6 +23481,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -23490,10 +23491,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -23503,8 +23504,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         },
         "types.WorkflowExecutionFilter": {

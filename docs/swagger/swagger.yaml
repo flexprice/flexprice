@@ -7360,17 +7360,17 @@ definitions:
     - paused
     type: string
     x-enum-varnames:
-    - Active
-    - Cancelled
-    - Paused
+    - AddonStatusActive
+    - AddonStatusCancelled
+    - AddonStatusPaused
   types.AddonType:
     enum:
     - onetime
     - multiple_instance
     type: string
     x-enum-varnames:
-    - Onetime
-    - MultipleInstance
+    - AddonTypeOnetime
+    - AddonTypeMultipleInstance
   types.AggregationType:
     enum:
     - COUNT
@@ -7649,9 +7649,9 @@ definitions:
     - forever
     type: string
     x-enum-varnames:
-    - Once
-    - Repeated
-    - Forever
+    - CouponCadenceOnce
+    - CouponCadenceRepeated
+    - CouponCadenceForever
   types.CouponFilter:
     properties:
       coupon_ids:
@@ -7689,8 +7689,8 @@ definitions:
     - percentage
     type: string
     x-enum-varnames:
-    - Fixed
-    - Percentage
+    - CouponTypeFixed
+    - CouponTypePercentage
   types.CreditBreakdown:
     properties:
       free:
@@ -8044,9 +8044,9 @@ definitions:
     - static
     type: string
     x-enum-varnames:
-    - Metered
-    - Boolean
-    - Static
+    - FeatureTypeMetered
+    - FeatureTypeBoolean
+    - FeatureTypeStatic
   types.FileType:
     enum:
     - CSV
@@ -8805,9 +8805,9 @@ definitions:
     - archived
     type: string
     x-enum-varnames:
-    - Published
-    - Deleted
-    - Archived
+    - StatusPublished
+    - StatusDeleted
+    - StatusArchived
   types.SubscriptionChangeType:
     enum:
     - upgrade
@@ -8955,10 +8955,10 @@ definitions:
     - tenant
     type: string
     x-enum-varnames:
-    - Customer
-    - Subscription
-    - Invoice
-    - Tenant
+    - TaxRateEntityTypeCustomer
+    - TaxRateEntityTypeSubscription
+    - TaxRateEntityTypeInvoice
+    - TaxRateEntityTypeTenant
   types.TaxRateScope:
     enum:
     - INTERNAL
@@ -8966,25 +8966,25 @@ definitions:
     - ONETIME
     type: string
     x-enum-varnames:
-    - Internal
-    - External
-    - OneTime
+    - TaxRateScopeInternal
+    - TaxRateScopeExternal
+    - TaxRateScopeOneTime
   types.TaxRateStatus:
     enum:
     - ACTIVE
     - INACTIVE
     type: string
     x-enum-varnames:
-    - Active
-    - Inactive
+    - TaxRateStatusActive
+    - TaxRateStatusInactive
   types.TaxRateType:
     enum:
     - percentage
     - fixed
     type: string
     x-enum-varnames:
-    - Percentage
-    - Fixed
+    - TaxRateTypePercentage
+    - TaxRateTypeFixed
   types.TimeRangeFilter:
     properties:
       end_time:
@@ -9222,6 +9222,7 @@ definitions:
     - WalletTypePostPaid
   types.WindowSize:
     enum:
+    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -9232,9 +9233,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
-    - MONTH
     type: string
     x-enum-varnames:
+    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -9245,7 +9246,6 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
-    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -12279,9 +12279,9 @@ paths:
         name: status
         type: string
         x-enum-varnames:
-        - Published
-        - Deleted
-        - Archived
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
       produces:
       - application/json
       responses:
@@ -14474,9 +14474,9 @@ paths:
         name: status
         type: string
         x-enum-varnames:
-        - Published
-        - Deleted
-        - Archived
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
       - enum:
         - PENDING
         - PROCESSING
@@ -15200,9 +15200,9 @@ paths:
         name: scope
         type: string
         x-enum-varnames:
-        - Internal
-        - External
-        - OneTime
+        - TaxRateScopeInternal
+        - TaxRateScopeExternal
+        - TaxRateScopeOneTime
       - in: query
         name: start_time
         type: string
@@ -15214,9 +15214,9 @@ paths:
         name: status
         type: string
         x-enum-varnames:
-        - Published
-        - Deleted
-        - Archived
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
       - collectionFormat: csv
         in: query
         items:
@@ -15991,9 +15991,9 @@ paths:
         name: status
         type: string
         x-enum-varnames:
-        - Published
-        - Deleted
-        - Archived
+        - StatusPublished
+        - StatusDeleted
+        - StatusArchived
       - enum:
         - INVOICE_PAYMENT
         - FREE_CREDIT_GRANT
