@@ -1,9 +1,20 @@
-# .github/workflows/deploy.yml
-name: Build and push image to Flexprice ECR
+name: Build, Push & Deploy to AWS ECS
 
 on:
   push:
     branches: [develop, main]
+  # Manual trigger: lets you validate config or force-deploy without a push
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        type: choice
+        default: staging
+        options: [staging, production]
+      dry_run:
+        description: 'Dry run — validate config & print plan, skip register/deploy'
+        type: boolean
+        default: true
 
 permissions:
   id-token: write
@@ -14,8 +25,16 @@ env:
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
 jobs:
-  deploy:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 1: Build the Docker image and push it to ECR
+  # Skipped on dry-run dispatches (no code change, no reason to rebuild)
+  # ──────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build & Push Docker Image
     runs-on: self-hosted
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+    outputs:
+      image: ${{ steps.set-image.outputs.image }}
 
     steps:
       - uses: actions/checkout@v3
@@ -32,7 +51,7 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push image (without cache)
+      - name: Build & push image
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -41,3 +60,243 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+
+      - name: Set image output
+        id: set-image
+        run: echo "image=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 2: Resolve deployment targets from branch or manual input
+  #
+  # Targets are stored as a single JSON variable per environment so that
+  # each region can have its own cluster and service names:
+  #
+  #   PROD_DEPLOY_TARGETS / STAGING_DEPLOY_TARGETS
+  #   (GitHub Actions → Settings → Variables)
+  #
+  #   Format (one object per region):
+  #   [
+  #     {
+  #       "region":           "ap-south-1",
+  #       "cluster":          "fp-prod-backend",
+  #       "api_service":      "flexprice-api-v4",
+  #       "consumer_service": "flexprice-consumer-v1",
+  #       "worker_service":   "temporal-worker"
+  #     },
+  #     {
+  #       "region":           "us-west-2",
+  #       "cluster":          "prod-flexprice-v1",
+  #       "api_service":      "prod-flexprice-v1",
+  #       "consumer_service": "flexprice-consumer-v1",
+  #       "worker_service":   "flexprice-temporal-worker-v1"
+  #     }
+  #   ]
+  #
+  #   Trigger mapping:
+  #     push to main    → production targets
+  #     push to develop → staging targets
+  #     workflow_dispatch → chosen via "environment" input
+  # ──────────────────────────────────────────────────────────────────────────
+  resolve-config:
+    name: Resolve deployment targets
+    runs-on: self-hosted
+    outputs:
+      targets: ${{ steps.config.outputs.targets }}
+      dry_run: ${{ steps.config.outputs.dry_run }}
+
+    steps:
+      - name: Select targets based on branch / input
+        id: config
+        env:
+          PROD_TARGETS:    ${{ vars.PROD_DEPLOY_TARGETS }}
+          STAGING_TARGETS: ${{ vars.STAGING_DEPLOY_TARGETS }}
+        run: |
+          # Determine environment
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+            DRY_RUN="${{ github.event.inputs.dry_run }}"
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            ENV="production"
+            DRY_RUN="false"
+          else
+            ENV="staging"
+            DRY_RUN="false"
+          fi
+
+          echo "Environment : $ENV"
+          echo "Dry run     : $DRY_RUN"
+
+          if [ "$ENV" = "production" ]; then
+            printf "targets=%s\n" "$PROD_TARGETS" >> $GITHUB_OUTPUT
+          else
+            printf "targets=%s\n" "$STAGING_TARGETS" >> $GITHUB_OUTPUT
+          fi
+
+          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 3: Deploy — one parallel run per target (region × cluster)
+  #
+  # Each target matrix entry carries: region, cluster, api_service,
+  # consumer_service, worker_service.
+  #
+  # Task definition family is always resolved by describing the ECS service
+  # and extracting the family name from the running taskDefinition ARN —
+  # no separate variable needed.
+  #
+  # DRY RUN: prints what would happen (describe + image diff) without
+  # calling register-task-definition or update-service.
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy → ${{ matrix.target.cluster }} (${{ matrix.target.region }})
+    needs: [build, resolve-config]
+    # build is skipped on dry-run, so allow this job to run even if build is skipped
+    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+      fail-fast: false
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Deploy / validate ECS services
+        env:
+          # On dry-run the build job was skipped, so use a placeholder image
+          IMAGE:            ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          CLUSTER:          ${{ matrix.target.cluster }}
+          REGION:           ${{ matrix.target.region }}
+          ECR_REPO_PREFIX:  ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          API_SERVICE:      ${{ matrix.target.api_service }}
+          CONSUMER_SERVICE: ${{ matrix.target.consumer_service }}
+          WORKER_SERVICE:   ${{ matrix.target.worker_service }}
+          DRY_RUN:          ${{ needs.resolve-config.outputs.dry_run }}
+        run: |
+          set -euo pipefail
+
+          # ---------------------------------------------------------------
+          # deploy_service <service-name>
+          #
+          # 1. Derives task definition family from the running ECS service
+          # 2. Fetches current task definition
+          # 3. Replaces the image for any container whose current image
+          #    starts with the ECR repo prefix
+          # 4. [LIVE] Registers new revision + forces new deployment
+          #    [DRY ] Prints the plan and exits
+          # ---------------------------------------------------------------
+          deploy_service() {
+            local SERVICE="$1"
+
+            echo ""
+            echo "==> Service  : $SERVICE"
+            echo "    Cluster  : $CLUSTER"
+            echo "    Region   : $REGION"
+
+            # Derive task definition family from the running service
+            TASK_ARN=$(aws ecs describe-services \
+              --cluster "$CLUSTER" \
+              --services "$SERVICE" \
+              --region "$REGION" \
+              --query 'services[0].taskDefinition' \
+              --output text)
+
+            if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+              echo "  ERROR: service '$SERVICE' not found in cluster '$CLUSTER' ($REGION)" >&2
+              return 1
+            fi
+
+            # Strip ARN prefix and revision suffix  e.g. arn:.../family:42 → family
+            TASK_FAMILY=$(echo "$TASK_ARN" | sed 's|.*/||' | sed 's|:[0-9]*$||')
+            echo "    Task family: $TASK_FAMILY"
+
+            # Fetch the latest task definition JSON
+            TASK_DEF=$(aws ecs describe-task-definition \
+              --task-definition "$TASK_FAMILY" \
+              --region "$REGION" \
+              --query 'taskDefinition')
+
+            # Show current image(s) that will be updated
+            CURRENT_IMAGES=$(echo "$TASK_DEF" | python3 -c "
+import json, sys
+td = json.load(sys.stdin)
+prefix = '$ECR_REPO_PREFIX'
+for c in td.get('containerDefinitions', []):
+    img = c.get('image', '')
+    if img.startswith(prefix):
+        print(f\"    Container  : {c['name']}\\n    Current    : {img}\")
+")
+            echo "$CURRENT_IMAGES"
+            echo "    New image  : $IMAGE"
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "  [DRY RUN] Would register new task definition revision"
+              echo "  [DRY RUN] Would force-deploy $SERVICE"
+              return 0
+            fi
+
+            # Build updated task definition — replace matching container images
+            # and strip read-only fields not accepted by register-task-definition
+            NEW_TASK_DEF=$(echo "$TASK_DEF" | python3 -c "
+import json, sys
+
+td = json.load(sys.stdin)
+ecr_prefix = '$ECR_REPO_PREFIX'
+new_image   = '$IMAGE'
+
+for c in td.get('containerDefinitions', []):
+    if c.get('image', '').startswith(ecr_prefix):
+        c['image'] = new_image
+
+for f in [
+    'taskDefinitionArn', 'revision', 'status',
+    'requiresAttributes', 'compatibilities',
+    'registeredAt', 'registeredBy',
+]:
+    td.pop(f, None)
+
+print(json.dumps(td))
+")
+
+            # Register new task definition revision
+            NEW_ARN=$(aws ecs register-task-definition \
+              --cli-input-json "$NEW_TASK_DEF" \
+              --region "$REGION" \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text)
+            echo "    New revision: $NEW_ARN"
+
+            # Force a new deployment on the service
+            aws ecs update-service \
+              --cluster "$CLUSTER" \
+              --service "$SERVICE" \
+              --task-definition "$NEW_ARN" \
+              --force-new-deployment \
+              --region "$REGION" \
+              --query 'service.{status:status,running:runningCount,desired:desiredCount}' \
+              --output table
+
+            echo "    Deployment triggered ✓"
+          }
+
+          echo "============================================================"
+          echo "DRY_RUN  = $DRY_RUN"
+          echo "CLUSTER  = $CLUSTER  ($REGION)"
+          echo "IMAGE    = $IMAGE"
+          echo "============================================================"
+
+          # Deploy all three services
+          deploy_service "$API_SERVICE"
+          deploy_service "$CONSUMER_SERVICE"
+          deploy_service "$WORKER_SERVICE"
+
+          echo ""
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run complete — no changes made in $REGION"
+          else
+            echo "All services deployed in $REGION"
+          fi
