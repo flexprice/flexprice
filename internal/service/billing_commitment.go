@@ -143,12 +143,6 @@ func (c *commitmentCalculator) normalizeCommitmentToAmount(
 		// This handles all pricing models: flat_fee, tiered, package
 		commitmentAmount := c.priceService.CalculateCost(ctx, priceObj, commitmentQuantity)
 
-		c.logger.Debugw("normalized quantity commitment to amount",
-			"line_item_id", lineItem.ID,
-			"commitment_quantity", commitmentQuantity,
-			"commitment_amount", commitmentAmount,
-			"price_id", priceObj.ID)
-
 		return commitmentAmount, nil
 	}
 
