@@ -8,6 +8,7 @@ import (
 	watermillKafka "github.com/ThreeDotsLabs/watermill-kafka/v2/pkg/kafka"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
+	"github.com/ThreeDotsLabs/watermill/pubsub/gochannel"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -32,14 +33,28 @@ func NewRouter(cfg *config.Configuration, logger *logger.Logger, sentry *sentry.
 		return nil, err
 	}
 
-	// Create Kafka publisher for DLQ (reuses main Kafka config)
-	dlqPublisher, err := createDLQPublisher(cfg, logger)
-	if err != nil {
-		return nil, err
+	// Create publisher for PoisonQueue middleware
+	var poisonQueuePublisher message.Publisher
+	var dlqTopicName string
+
+	if cfg.Kafka.TopicDLQ != "" {
+		// Use real Kafka DLQ when configured
+		var err error
+		poisonQueuePublisher, err = createDLQPublisher(cfg, logger)
+		if err != nil {
+			return nil, err
+		}
+		dlqTopicName = cfg.Kafka.TopicDLQ
+		logger.Infow("DLQ enabled with Kafka", "dlq_topic", cfg.Kafka.TopicDLQ)
+	} else {
+		// Use in-memory DLQ (original behavior) when not configured
+		poisonQueuePublisher = getTempDLQ()
+		dlqTopicName = "poison_queue"
+		logger.Infow("DLQ using in-memory queue (no topic_dlq configured)")
 	}
 
-	// PoisonQueue with real Kafka DLQ topic
-	poisonQueue, err := middleware.PoisonQueue(dlqPublisher, "events_dlq")
+	// PoisonQueue middleware (always present, just with different publisher)
+	poisonQueue, err := middleware.PoisonQueue(poisonQueuePublisher, dlqTopicName)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +110,7 @@ func createDLQPublisher(cfg *config.Configuration, logger *logger.Logger) (messa
 		return nil, err
 	}
 
-	logger.Infow("DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", "events_dlq")
+	logger.Infow("DLQ publisher initialized", "brokers", cfg.Kafka.Brokers, "dlq_topic", cfg.Kafka.TopicDLQ)
 	return publisher, nil
 }
 
@@ -142,4 +157,14 @@ func (r *Router) Run() error {
 func (r *Router) Close() error {
 	r.logger.Info("closing router")
 	return r.router.Close()
+}
+
+// getTempDLQ returns a temporary in-memory DLQ (original behavior when topic_dlq not configured)
+func getTempDLQ() *gochannel.GoChannel {
+	return gochannel.NewGoChannel(
+		gochannel.Config{
+			Persistent: false,
+		},
+		watermill.NewStdLogger(true, false),
+	)
 }

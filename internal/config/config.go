@@ -107,6 +107,7 @@ type KafkaConfig struct {
 	ConsumerGroup          string               `mapstructure:"consumer_group" validate:"required"`
 	Topic                  string               `mapstructure:"topic" validate:"required"`
 	TopicLazy              string               `mapstructure:"topic_lazy" validate:"required"`
+	TopicDLQ               string               `mapstructure:"topic_dlq" default:""`
 	TLS                    bool                 `mapstructure:"tls"` // set to true if using 9094 port else can set to false
 	UseSASL                bool                 `mapstructure:"use_sasl"`
 	SASLMechanism          sarama.SASLMechanism `mapstructure:"sasl_mechanism"`
@@ -203,7 +204,6 @@ type EventProcessingConfig struct {
 	// Rate limit in messages consumed per second
 	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events"`
-	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
 	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_event_processing"`
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_backfill"`
@@ -225,7 +225,6 @@ type EventPostProcessingConfig struct {
 type EventProcessingLazyConfig struct {
 	Enabled               bool   `mapstructure:"enabled" default:"true"`
 	Topic                 string `mapstructure:"topic" default:"events_lazy"`
-	TopicDLQ              string `mapstructure:"topic_dlq" default:""`
 	RateLimit             int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup         string `mapstructure:"consumer_group" default:"v1_event_processing_lazy"`
 	TopicBackfill         string `mapstructure:"topic_backfill" default:"event_processing_lazy_backfill"`
@@ -236,7 +235,6 @@ type EventProcessingLazyConfig struct {
 type EventProcessingReplayConfig struct {
 	Enabled       bool   `mapstructure:"enabled" default:"true"`
 	Topic         string `mapstructure:"topic" default:"v1_event_processing_replay"`
-	TopicDLQ      string `mapstructure:"topic_dlq" default:""`
 	RateLimit     int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup string `mapstructure:"consumer_group" default:"v1_event_processing_replay"`
 }
@@ -251,7 +249,6 @@ type FeatureUsageTrackingConfig struct {
 	// Rate limit in messages consumed per second
 	Enabled                bool   `mapstructure:"enabled" default:"true"`
 	Topic                  string `mapstructure:"topic" default:"events"`
-	TopicDLQ               string `mapstructure:"topic_dlq" default:""`
 	RateLimit              int64  `mapstructure:"rate_limit" default:"1"`
 	ConsumerGroup          string `mapstructure:"consumer_group" default:"v1_feature_tracking_service"`
 	TopicBackfill          string `mapstructure:"topic_backfill" default:"v1_feature_tracking_service_backfill"`
