@@ -774,8 +774,10 @@ func (s *scheduledTaskService) CalculateIntervalBoundaries(currentTime time.Time
 func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) (string, error) {
 
 	scheduleID := types.GenerateUUIDWithPrefix("schtask_billing")
-	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery15Minutes)
+	// Subscription billing schedule runs every 10 minutes; cap at 500 workflows per run
 
+	// get cron expression
+	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery10Minutes)
 	scheduleSpec := client.ScheduleSpec{
 		CronExpressions: []string{cronExpr},
 	}
@@ -784,7 +786,8 @@ func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) 
 		Workflow: subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
 		Args: []interface{}{
 			subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{
-				BatchSize: types.DEFAULT_BATCH_SIZE,
+				BatchSize:    types.DEFAULT_BATCH_SIZE,
+				MaxWorkflows: types.DEFAULT_MAX_SUBSCRIPTION_BILLING_WORKFLOWS,
 			},
 		},
 		TaskQueue:                string(types.TemporalTaskQueueSubscription),

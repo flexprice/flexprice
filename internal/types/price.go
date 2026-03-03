@@ -203,6 +203,9 @@ const (
 
 	// DEFAULT_BATCH_SIZE is the default batch size for fetching subscriptions
 	DEFAULT_BATCH_SIZE = 100
+
+	// DEFAULT_MAX_SUBSCRIPTION_BILLING_WORKFLOWS is the maximum number of subscription billing workflows to start per scheduler run
+	DEFAULT_MAX_SUBSCRIPTION_BILLING_WORKFLOWS = 500
 )
 
 func (b BillingCadence) Validate() error {
