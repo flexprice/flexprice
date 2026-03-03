@@ -113,3 +113,7 @@ CLAUDE.m
 
 # test venvs
 api/tests/python/.venv/
+
+# Python
+__pycache__/
+*.pyc
