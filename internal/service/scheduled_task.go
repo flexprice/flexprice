@@ -777,7 +777,7 @@ func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) 
 	// Subscription billing schedule runs every 10 minutes; cap at 500 workflows per run
 
 	// get cron expression
-	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalEvery10Minutes)
+	cronExpr := s.getCronExpression(types.ScheduledTaskIntervalCustom)
 	scheduleSpec := client.ScheduleSpec{
 		CronExpressions: []string{cronExpr},
 	}
