@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/service"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -13,116 +14,113 @@ import (
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 )
 
-const ActivityPrefix = "SubscriptionActivities"
-
 const (
-	// Workflow name - must match the function name
+	ActivityPrefix                     = "SubscriptionActivities"
 	WorkflowProcessSubscriptionBilling = "ProcessSubscriptionBillingWorkflow"
 )
 
-// SubscriptionActivities contains all subscription-related activities
-// When registered with Temporal, methods will be called as "SubscriptionActivities.ScheduleBillingActivity"
 type SubscriptionActivities struct {
 	subscriptionService service.SubscriptionService
 }
 
-// NewSubscriptionActivities creates a new SubscriptionActivities instance
 func NewSubscriptionActivities(subscriptionService service.SubscriptionService) *SubscriptionActivities {
-	return &SubscriptionActivities{
-		subscriptionService: subscriptionService,
-	}
+	return &SubscriptionActivities{subscriptionService: subscriptionService}
 }
 
-// ScheduleBillingActivity schedules billing workflows for subscriptions
-// This method will be registered as "ScheduleBillingActivity" in Temporal
-func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, input subscriptionModels.ScheduleSubscriptionBillingWorkflowInput) (*subscriptionModels.ScheduleSubscriptionBillingWorkflowResult, error) {
+// ScheduleBillingActivity fetches active subscriptions in batches and starts a billing
+// workflow for each. Processing stops when MaxWorkflows is reached; the next cron run
+// picks up remaining subscriptions.
+func (a *SubscriptionActivities) ScheduleBillingActivity(
+	ctx context.Context,
+	input subscriptionModels.ScheduleSubscriptionBillingWorkflowInput,
+) (*subscriptionModels.ScheduleSubscriptionBillingWorkflowResult, error) {
 	logger := activity.GetLogger(ctx)
-	response := &subscriptionModels.ScheduleSubscriptionBillingWorkflowResult{
-		SubscriptionIDs: make([]string, 0),
-	}
 
-	// Validate input
 	if err := input.Validate(); err != nil {
-		return response, err
+		return &subscriptionModels.ScheduleSubscriptionBillingWorkflowResult{}, err
 	}
 
+	temporalSvc := temporalService.GetGlobalTemporalService()
 	now := time.Now().UTC()
+
+	var scheduledIDs []string
 	offset := 0
-	batchSize := input.BatchSize
-	totalProcessed := 0
 
-	// Loop through all subscriptions with pagination
-	for {
-		filter := &types.SubscriptionFilter{
-			QueryFilter: &types.QueryFilter{
-				Limit:  lo.ToPtr(batchSize),
-				Offset: lo.ToPtr(offset),
-				Status: lo.ToPtr(types.StatusPublished),
-			},
-			SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
-			TimeRangeFilter: &types.TimeRangeFilter{
-				EndTime: &now,
-			},
-		}
-
-		subs, err := s.subscriptionService.ListAllTenantSubscriptions(ctx, filter)
+	for len(scheduledIDs) < input.MaxWorkflows {
+		// Fetch next batch of subscriptions.
+		subs, err := a.listActiveSubscriptions(ctx, now, input.BatchSize, offset)
 		if err != nil {
 			logger.Error("Failed to list subscriptions", "offset", offset, "error", err)
-			return response, err
+			return &subscriptionModels.ScheduleSubscriptionBillingWorkflowResult{SubscriptionIDs: scheduledIDs}, err
 		}
-
-		// No more subscriptions to process
-		if len(subs.Items) == 0 {
+		if len(subs) == 0 {
 			break
 		}
 
-		logger.Info("Processing subscription batch",
-			"offset", offset,
-			"batch_size", len(subs.Items),
-			"total_processed", totalProcessed)
+		logger.Info("Processing batch", "offset", offset, "batch_size", len(subs), "scheduled_so_far", len(scheduledIDs))
 
-		temporalSvc := temporalService.GetGlobalTemporalService()
-		subItems := subs.Items
-		for _, sub := range subItems {
-			// update context to include the tenant id
-			ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
-			ctx = context.WithValue(ctx, types.CtxEnvironmentID, sub.EnvironmentID)
-			ctx = context.WithValue(ctx, types.CtxUserID, sub.CreatedBy)
+		// Start workflows for each subscription in this batch.
+		for _, sub := range subs {
+			if len(scheduledIDs) >= input.MaxWorkflows {
+				break
+			}
 
-			// Here we need to launch a new workflow to update the billing period
-			_, err := temporalSvc.ExecuteWorkflow(
-				ctx,
-				WorkflowProcessSubscriptionBilling,
-				subscriptionModels.ProcessSubscriptionBillingWorkflowInput{
-					SubscriptionID: sub.ID,
-					TenantID:       sub.TenantID,
-					EnvironmentID:  sub.EnvironmentID,
-					UserID:         sub.CreatedBy,
-					PeriodStart:    sub.CurrentPeriodStart,
-					PeriodEnd:      sub.CurrentPeriodEnd,
-				},
-			)
-			if err != nil {
-				// Log error but continue processing other subscriptions
-				logger.Error("Failed to start workflow for subscription",
-					"subscription_id", sub.ID,
-					"error", err)
+			workflowCtx := a.buildWorkflowContext(ctx, sub)
+			workflowInput := subscriptionModels.ProcessSubscriptionBillingWorkflowInput{
+				SubscriptionID: sub.ID,
+				TenantID:       sub.TenantID,
+				EnvironmentID:  sub.EnvironmentID,
+				UserID:         sub.CreatedBy,
+				PeriodStart:    sub.CurrentPeriodStart,
+				PeriodEnd:      sub.CurrentPeriodEnd,
+			}
+
+			if _, err := temporalSvc.ExecuteWorkflow(workflowCtx, WorkflowProcessSubscriptionBilling, workflowInput); err != nil {
+				logger.Error("Failed to start workflow", "subscription_id", sub.ID, "error", err)
 				continue
 			}
-			response.SubscriptionIDs = append(response.SubscriptionIDs, sub.ID)
-			totalProcessed++
+			scheduledIDs = append(scheduledIDs, sub.ID)
 		}
 
-		// Check if we got fewer results than batch size (last page)
-		if len(subs.Items) < batchSize {
-			logger.Info("Reached last page of subscriptions", "total_processed", totalProcessed)
+		// Exit if this was the last page.
+		if len(subs) < input.BatchSize {
 			break
 		}
-
-		// Move to next page
-		offset += batchSize
+		offset += input.BatchSize
 	}
 
-	logger.Info("Completed processing all subscriptions", "total_processed", totalProcessed)
-	return response, nil
+	// Log completion summary.
+	if len(scheduledIDs) >= input.MaxWorkflows {
+		logger.Info("Hit workflow cap; remaining subscriptions deferred to next cron", "scheduled", len(scheduledIDs), "max", input.MaxWorkflows)
+	} else {
+		logger.Info("Processed all eligible subscriptions", "scheduled", len(scheduledIDs))
+	}
+
+	return &subscriptionModels.ScheduleSubscriptionBillingWorkflowResult{SubscriptionIDs: scheduledIDs}, nil
+}
+
+// listActiveSubscriptions returns a page of active subscriptions whose current billing period has ended.
+func (a *SubscriptionActivities) listActiveSubscriptions(ctx context.Context, now time.Time, limit, offset int) ([]*dto.SubscriptionResponse, error) {
+	filter := &types.SubscriptionFilter{
+		QueryFilter: &types.QueryFilter{
+			Limit:  lo.ToPtr(limit),
+			Offset: lo.ToPtr(offset),
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+		TimeRangeFilter:    &types.TimeRangeFilter{EndTime: &now},
+	}
+	resp, err := a.subscriptionService.ListAllTenantSubscriptions(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Items, nil
+}
+
+// buildWorkflowContext attaches tenant, environment, and user IDs to the context.
+func (a *SubscriptionActivities) buildWorkflowContext(ctx context.Context, sub *dto.SubscriptionResponse) context.Context {
+	ctx = context.WithValue(ctx, types.CtxTenantID, sub.TenantID)
+	ctx = context.WithValue(ctx, types.CtxEnvironmentID, sub.EnvironmentID)
+	ctx = context.WithValue(ctx, types.CtxUserID, sub.CreatedBy)
+	return ctx
 }
