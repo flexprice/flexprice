@@ -2454,15 +2454,37 @@ type bucketedCostParams struct {
 	data         *AnalyticsData
 	aggType      types.AggregationType
 	bucketSize   types.WindowSize
+	hasGroupBy   bool // whether the meter uses group_by property (e.g. per KRN)
 }
 
 // calculateBucketedCost calculates cost for bucketed max meters
 func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter, data *AnalyticsData) {
-	params := &bucketedCostParams{ctx, priceService, item, price, data, meter.Aggregation.Type, meter.Aggregation.BucketSize}
+	hasGroupBy := meter.Aggregation.GroupBy != ""
+	params := &bucketedCostParams{ctx, priceService, item, price, data, meter.Aggregation.Type, meter.Aggregation.BucketSize, hasGroupBy}
 	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
 	hasCommitment := lineItem != nil && lineItem.HasCommitment()
 	isWindowed := hasCommitment && lineItem.CommitmentWindowed
 	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
+
+	// For grouped meters with tiered pricing and no commitment, fetch per-group usage
+	// and calculate cost independently per group (e.g. per KRN) to match billing behavior.
+	if hasGroupBy && price.BillingModel == types.BILLING_MODEL_TIERED && !hasCommitment {
+		usageResult, err := s.fetchGroupedBucketedUsage(ctx, item, meter, data)
+		if err == nil && usageResult != nil && len(usageResult.Results) > 0 {
+			item.TotalCost = priceService.CalculateCostFromUsageResults(ctx, price, usageResult.Results)
+			item.Currency = price.Currency
+			// Still calculate per-point costs for time-series display using flat pricing
+			s.calculatePointCosts(params, lineItem, isWindowed)
+			// Merge bucket-level points to request window level
+			params.item.Points = s.mergeBucketPointsByWindow(params.item.Points, params.aggType)
+			return
+		}
+		// Fall through to regular bucketed calculation if fetch fails
+		s.Logger.Warnw("failed to fetch grouped bucketed usage for analytics, falling back to flat calculation",
+			"error", err,
+			"feature_id", item.FeatureID,
+			"meter_id", meter.ID)
+	}
 
 	var cost decimal.Decimal
 
@@ -2474,6 +2496,48 @@ func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context,
 
 	item.TotalCost = cost
 	item.Currency = price.Currency
+}
+
+// fetchGroupedBucketedUsage fetches per-group bucketed usage results for a meter with group_by.
+// This enables per-group tiered pricing in analytics, matching the billing path behavior.
+func (s *featureUsageTrackingService) fetchGroupedBucketedUsage(
+	ctx context.Context,
+	item *events.DetailedUsageAnalytic,
+	m *meter.Meter,
+	data *AnalyticsData,
+) (*events.AggregationResult, error) {
+	if data.Params == nil {
+		return nil, fmt.Errorf("analytics params not available")
+	}
+
+	// Build the feature_usage bucketed query params with group_by
+	usageParams := &events.UsageParams{
+		ExternalCustomerID: data.Params.ExternalCustomerID,
+		EventName:          m.EventName,
+		PropertyName:       m.Aggregation.Field,
+		AggregationType:    m.Aggregation.Type,
+		WindowSize:         m.Aggregation.BucketSize,
+		StartTime:          data.Params.StartTime,
+		EndTime:            data.Params.EndTime,
+		GroupByProperty:    m.Aggregation.GroupBy,
+	}
+
+	// Set billing anchor from subscription if available
+	if item.SubscriptionID != "" {
+		if sub, ok := data.SubscriptionsMap[item.SubscriptionID]; ok {
+			usageParams.BillingAnchor = &sub.BillingAnchor
+		}
+	}
+
+	featureUsageParams := &events.FeatureUsageParams{
+		UsageParams:   usageParams,
+		FeatureID:     item.FeatureID,
+		PriceID:       item.PriceID,
+		MeterID:       item.MeterID,
+		SubLineItemID: item.SubLineItemID,
+	}
+
+	return s.featureUsageRepo.GetUsageForBucketedMeters(ctx, featureUsageParams)
 }
 
 // processPointsWithBuckets handles the case where we have time-series points to process.
@@ -2488,6 +2552,9 @@ func (s *featureUsageTrackingService) processPointsWithBuckets(
 	var cost decimal.Decimal
 	switch {
 	case !hasCommitment:
+		// Note: grouped+tiered without commitment is handled earlier in calculateBucketedCost
+		// via fetchGroupedBucketedUsage + CalculateCostFromUsageResults.
+		// This path only executes for non-grouped meters or non-tiered pricing.
 		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
 	case isWindowed:
 		cost = decimal.Zero // Will be summed from points after processing
