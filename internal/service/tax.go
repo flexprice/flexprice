@@ -1038,9 +1038,21 @@ func (s *taxService) calculateTaxAmount(taxRate *dto.TaxRateResponse, taxableAmo
 
 	switch taxRate.TaxRateType {
 	case types.TaxRateTypePercentage:
+		if taxRate.PercentageValue == nil {
+			s.Logger.Warnw("percentage tax rate missing percentage_value, skipping",
+				"tax_rate_id", taxRate.ID,
+			)
+			return nil
+		}
 		// For percentage tax: taxable_amount * (percentage / 100)
 		taxAmount = taxableAmount.Mul(*taxRate.PercentageValue).Div(decimal.NewFromInt(100))
 	case types.TaxRateTypeFixed:
+		if taxRate.FixedValue == nil {
+			s.Logger.Warnw("fixed tax rate missing fixed_value, skipping",
+				"tax_rate_id", taxRate.ID,
+			)
+			return nil
+		}
 		// For fixed tax: use the fixed value directly
 		taxAmount = *taxRate.FixedValue
 	default:
