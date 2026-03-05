@@ -976,25 +976,41 @@ func (r *EventRepository) FindUnprocessedEventsFromFeatureUsage(ctx context.Cont
 // within the specified time range. This is used for performance optimization
 // to filter meter requests to only those that have actual events.
 func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCustomerID string, startTime, endTime time.Time) ([]string, error) {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "event", "get_distinct_event_names", map[string]interface{}{
+		"tenant_id":            tenantID,
+		"environment_id":      environmentID,
 		"external_customer_id": externalCustomerID,
 		"start_time":           startTime,
 		"end_time":             endTime,
 	})
 	defer FinishSpan(span)
 
+	if tenantID == "" || environmentID == "" {
+		return nil, ierr.NewError("tenant_id and environment_id are required for distinct event names query").
+			WithHint("Ensure the context has tenant and environment set (e.g. from subscription or request middleware).").
+			WithReportableDetails(map[string]interface{}{
+				"external_customer_id": externalCustomerID,
+				"has_tenant_id":        tenantID != "",
+				"has_environment_id":  environmentID != "",
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
 	query := `
 		SELECT DISTINCT event_name 
-		FROM events
+		FROM events FINAL
 		WHERE tenant_id = ?
 		AND environment_id = ?
 		AND external_customer_id = ?
 	`
 
 	args := []interface{}{
-		types.GetTenantID(ctx),
-		types.GetEnvironmentID(ctx),
+		tenantID,
+		environmentID,
 		externalCustomerID,
 	}
 
@@ -1014,6 +1030,8 @@ func (r *EventRepository) GetDistinctEventNames(ctx context.Context, externalCus
 
 	r.logger.Debugw("executing get distinct event names query",
 		"query", query,
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
 		"external_customer_id", externalCustomerID,
 		"start_time", startTime,
 		"end_time", endTime)

@@ -344,6 +344,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			invoices.POST("/search", handlers.Invoice.QueryInvoices)
 			invoices.POST("", handlers.Invoice.CreateOneOffInvoice)
+			invoices.POST("/generate-for-period", handlers.Invoice.GenerateSubscriptionInvoiceForPeriod)
 			invoices.GET("", handlers.Invoice.ListInvoices)
 			invoices.GET("/:id", handlers.Invoice.GetInvoice)
 			invoices.PUT("/:id", handlers.Invoice.UpdateInvoice)
