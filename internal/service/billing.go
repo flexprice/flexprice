@@ -38,6 +38,21 @@ type LineItemClassification struct {
 	HasUsageCharges      bool
 }
 
+// FindMatchingLineItemPeriodInput is the input for FindMatchingLineItemPeriodForInvoice.
+type FindMatchingLineItemPeriodInput struct {
+	Item           *subscription.SubscriptionLineItem
+	PeriodStart    time.Time
+	PeriodEnd      time.Time
+	InvoiceCadence types.InvoiceCadence
+}
+
+// FindMatchingLineItemPeriodResult is the result of FindMatchingLineItemPeriodForInvoice.
+type FindMatchingLineItemPeriodResult struct {
+	LineItemPeriodStart time.Time
+	LineItemPeriodEnd   time.Time
+	Ok                  bool
+}
+
 // BillingService handles all billing calculations
 type BillingService interface {
 	// CalculateFixedCharges calculates all fixed charges for a subscription
@@ -95,73 +110,6 @@ func NewBillingService(params ServiceParams) BillingService {
 	}
 }
 
-// FixedLineItemInclusion is the result of Algorithm A/B for a fixed line item.
-type FixedLineItemInclusion string
-
-const (
-	FixedLineItemInclusionExclude         FixedLineItemInclusion = "EXCLUDE"
-	FixedLineItemInclusionFull            FixedLineItemInclusion = "INCLUDE_FULL"
-	FixedLineItemInclusionProratedShorter FixedLineItemInclusion = "INCLUDE_PRORATED_SHORTER"
-	FixedLineItemInclusionLongerAligned   FixedLineItemInclusion = "INCLUDE_LONGER_ALIGNED"
-)
-
-// computeFixedLineItemInclusion decides whether and how to include a fixed line item on an
-// invoice for the given period (mixed-interval billing).
-//
-// Core logic: compare the line item's billing interval length to the invoice period length.
-// The line item's interval is derived from item.StartDate and its cadence (BillingPeriod +
-// BillingPeriodCount), e.g. one week, one month, one quarter.
-//
-//   - Shorter: Line item interval is noticeably shorter than the invoice period (e.g. weekly
-//     line, monthly invoice). Include with proration (INCLUDE_PRORATED_SHORTER): charge only
-//     for the fraction of the interval that falls inside the invoice period.
-//
-//   - Equal: Line item interval is roughly the same length as the invoice period (within a
-//     small tolerance, e.g. ±3 days to handle 28 vs 31). Include full (INCLUDE_FULL): charge
-//     for the invoice period with standard proration if needed.
-//
-//   - Longer: Line item interval is noticeably longer than the invoice period (e.g. quarterly
-//     line, monthly invoice). Include only when one of the line item's interval boundaries
-//     (interval end) falls inside this invoice period (IsLineItemIntervalEndInPeriod). If
-//     yes → INCLUDE_LONGER_ALIGNED (charge for that full line-item interval; period start/end
-//     come from LineItemIntervalInInvoicePeriod). If no → EXCLUDE (no line this time).
-//
-// Returns: (inclusion type, invoicePeriodDays, lineItemIntervalDays, error).
-func (s *billingService) computeFixedLineItemInclusion(
-	item *subscription.SubscriptionLineItem,
-	_ *subscription.Subscription,
-	periodStart, periodEnd time.Time,
-) (*FixedLineItemInclusion, int, int, error) {
-
-	invoicePeriodDays := types.CalendarDaysBetween(periodStart, periodEnd)
-	lineItemIntervalDays, err := types.LineItemIntervalDays(item.StartDate, item.StartDate, item.BillingPeriodCount, item.BillingPeriod)
-	if err != nil {
-		return nil, 0, 0, err
-	}
-
-	const equalToleranceDays = 3 // treat as same interval when within 3 days (e.g. 28 vs 31)
-
-	// Shorter than invoice period → include with proration.
-	if lineItemIntervalDays < invoicePeriodDays-equalToleranceDays {
-		return lo.ToPtr(FixedLineItemInclusionProratedShorter), invoicePeriodDays, lineItemIntervalDays, nil
-	}
-
-	// Longer than invoice period → include only if a line-item interval end falls in this period.
-	if lineItemIntervalDays > invoicePeriodDays+equalToleranceDays {
-		aligned, err := types.IsLineItemIntervalEndInPeriod(item.StartDate, item.StartDate, item.BillingPeriodCount, item.BillingPeriod, periodStart, periodEnd)
-		if err != nil {
-			return nil, 0, 0, err
-		}
-		if aligned {
-			return lo.ToPtr(FixedLineItemInclusionLongerAligned), invoicePeriodDays, lineItemIntervalDays, nil
-		}
-		return lo.ToPtr(FixedLineItemInclusionExclude), 0, 0, nil
-	}
-
-	// Roughly equal → include full for the invoice period.
-	return lo.ToPtr(FixedLineItemInclusionFull), invoicePeriodDays, lineItemIntervalDays, nil
-}
-
 func (s *billingService) CalculateFixedCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -195,21 +143,52 @@ func (s *billingService) CalculateFixedCharges(
 			return nil, fixedCost, err
 		}
 
-		amount := priceService.CalculateCost(ctx, price.Price, item.Quantity)
+		var amount decimal.Decimal
+		var linePeriodStart, linePeriodEnd time.Time
 
-		// Apply proration if applicable
-		proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
-		if err != nil {
-			s.Logger.Warnw("failed to apply proration to line item, using original amount",
-				"error", err,
-				"subscription_id", sub.ID,
-				"line_item_id", item.ID,
-				"price_id", item.PriceID)
-			proratedAmount = amount
+		// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
+		// Advance: include when line-item period start falls in [periodStart, periodEnd).
+		// Arrear: include when line-item period end falls in [periodStart, periodEnd).
+		if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+				Item:           item,
+				PeriodStart:    periodStart,
+				PeriodEnd:      periodEnd,
+				InvoiceCadence: item.InvoiceCadence,
+			})
+			if err != nil {
+				return nil, fixedCost, err
+			}
+			if !res.Ok {
+				s.Logger.Debugw("skipping fixed charge line item: no matching line-item period in invoice period",
+					"subscription_id", sub.ID,
+					"line_item_id", item.ID,
+					"price_id", item.PriceID,
+					"invoice_cadence", item.InvoiceCadence,
+					"period_start", periodStart,
+					"period_end", periodEnd)
+				continue
+			}
+			// Full amount for the matched period
+			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			linePeriodStart, linePeriodEnd = res.LineItemPeriodStart, res.LineItemPeriodEnd
+		} else {
+			// Same or shorter cadence: proration, invoice period as service period
+			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			proratedAmount, err := s.applyProrationToLineItem(ctx, sub, item, price.Price, amount, &periodStart, &periodEnd)
+			if err != nil {
+				s.Logger.Warnw("failed to apply proration to line item, using original amount",
+					"error", err,
+					"subscription_id", sub.ID,
+					"line_item_id", item.ID,
+					"price_id", item.PriceID)
+				proratedAmount = amount
+			}
+			amount = proratedAmount
+			linePeriodStart, linePeriodEnd = periodStart, periodEnd
 		}
-		amount = proratedAmount
 
-		// Calculate price unit amount if price unit is available
+		// Shared: price unit amount, round, build and append invoice line item
 		var priceUnitAmount decimal.Decimal
 		if item.PriceUnit != nil {
 			priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
@@ -221,7 +200,6 @@ func (s *billingService) CalculateFixedCharges(
 					"line_item_id", item.ID)
 				continue
 			}
-
 			priceUnitAmount, err = priceunit.ConvertToPriceUnitAmount(ctx, amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
 			if err != nil {
 				s.Logger.Warnw("failed to convert amount to price unit",
@@ -249,17 +227,89 @@ func (s *billingService) CalculateFixedCharges(
 			DisplayName:     lo.ToPtr(item.DisplayName),
 			Amount:          roundedAmount,
 			Quantity:        item.Quantity,
-			PeriodStart:     lo.ToPtr(periodStart),
-			PeriodEnd:       lo.ToPtr(periodEnd),
+			PeriodStart:     lo.ToPtr(linePeriodStart),
+			PeriodEnd:       lo.ToPtr(linePeriodEnd),
 			Metadata: types.Metadata{
 				"description": fmt.Sprintf("%s (Fixed Charge)", item.DisplayName),
 			},
 		})
-
 		fixedCost = fixedCost.Add(roundedAmount)
 	}
 
 	return fixedCostLineItems, fixedCost, nil
+}
+
+// endDateBoundaryForMatching returns periodEnd + one billing period length so that
+// CalculateBillingPeriods generates enough periods to cover the invoice window without
+// generating an excessive number (e.g. 365 for daily with a 1-year buffer).
+func endDateBoundaryForMatching(periodEnd time.Time, billingPeriod types.BillingPeriod, periodCount int) time.Time {
+	if periodCount <= 0 {
+		periodCount = 1
+	}
+	switch billingPeriod {
+	case types.BILLING_PERIOD_DAILY:
+		return periodEnd.AddDate(0, 0, periodCount)
+	case types.BILLING_PERIOD_WEEKLY:
+		return periodEnd.AddDate(0, 0, 7*periodCount)
+	case types.BILLING_PERIOD_MONTHLY:
+		return periodEnd.AddDate(0, periodCount, 0)
+	case types.BILLING_PERIOD_QUARTER:
+		return periodEnd.AddDate(0, 3*periodCount, 0)
+	case types.BILLING_PERIOD_HALF_YEAR:
+		return periodEnd.AddDate(0, 6*periodCount, 0)
+	case types.BILLING_PERIOD_ANNUAL:
+		return periodEnd.AddDate(periodCount, 0, 0)
+	default:
+		return periodEnd.AddDate(1, 0, 0) // fallback: 1 year
+	}
+}
+
+// Used when the line item has a longer cadence than the subscription (e.g. quarterly on monthly).
+// Anchor and initial period start are the line item's StartDate.
+// Window bounds are symmetric: advance uses inclusive start / exclusive end, arrear the reverse.
+// - Advance: include when period start is in [periodStart, periodEnd) — start inclusive, end exclusive.
+// - Arrear: include when period end is in (periodStart, periodEnd] — start exclusive, end inclusive.
+//
+// Boundary for generating periods is periodEnd + one line-item period (billing-period aware)
+// so future windows are covered without excess (e.g. daily → +1 day, quarterly → +3 months).
+func FindMatchingLineItemPeriodForInvoice(in FindMatchingLineItemPeriodInput) (FindMatchingLineItemPeriodResult, error) {
+	item := in.Item
+	periodStart := in.PeriodStart
+	periodEnd := in.PeriodEnd
+	invoiceCadence := in.InvoiceCadence
+
+	periodCount := item.BillingPeriodCount
+	if periodCount <= 0 {
+		periodCount = 1
+	}
+	endDate := endDateBoundaryForMatching(periodEnd, item.BillingPeriod, periodCount)
+	if !item.EndDate.IsZero() && item.EndDate.Before(endDate) {
+		endDate = item.EndDate
+	}
+	periods, err := types.CalculateBillingPeriods(item.StartDate, &endDate, item.StartDate, periodCount, item.BillingPeriod)
+	if err != nil {
+		return FindMatchingLineItemPeriodResult{}, err
+	}
+	for _, p := range periods {
+		if invoiceCadence == types.InvoiceCadenceAdvance {
+			// Advance: period start in [periodStart, periodEnd); second precision for boundaries
+			startSec := p.Start.Truncate(time.Second)
+			winStartSec := periodStart.Truncate(time.Second)
+			winEndSec := periodEnd.Truncate(time.Second)
+			if !startSec.Before(winStartSec) && startSec.Before(winEndSec) {
+				return FindMatchingLineItemPeriodResult{LineItemPeriodStart: p.Start, LineItemPeriodEnd: p.End, Ok: true}, nil
+			}
+		} else {
+			// Arrear: period end in (periodStart, periodEnd]; start exclusive, end inclusive; second precision
+			endSec := p.End.Truncate(time.Second)
+			winStartSec := periodStart.Truncate(time.Second)
+			winEndSec := periodEnd.Truncate(time.Second)
+			if endSec.After(winStartSec) && !endSec.After(winEndSec) {
+				return FindMatchingLineItemPeriodResult{LineItemPeriodStart: p.Start, LineItemPeriodEnd: p.End, Ok: true}, nil
+			}
+		}
+	}
+	return FindMatchingLineItemPeriodResult{}, nil
 }
 
 func (s *billingService) CalculateUsageCharges(
@@ -1530,12 +1580,6 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	periodEnd time.Time,
 	referencePoint types.InvoiceReferencePoint,
 ) (*dto.CreateInvoiceRequest, error) {
-	s.Logger.Infow("preparing subscription invoice request",
-		"subscription_id", sub.ID,
-		"period_start", periodStart,
-		"period_end", periodEnd,
-		"reference_point", referencePoint)
-
 	// Validate that the billing period respects subscription end date
 	if err := s.validatePeriodAgainstSubscriptionEndDate(sub, periodStart, periodEnd); err != nil {
 		return nil, err
@@ -1762,16 +1806,6 @@ func (s *billingService) validatePeriodAgainstSubscriptionEndDate(
 			Mark(ierr.ErrValidation)
 	}
 
-	// If period end is after subscription end date, that's acceptable for final billing
-	// but we should log it for transparency
-	if periodEnd.After(*sub.EndDate) {
-		s.Logger.Infow("billing period extends beyond subscription end date - will be handled appropriately",
-			"subscription_id", sub.ID,
-			"period_start", periodStart,
-			"period_end", periodEnd,
-			"subscription_end_date", *sub.EndDate)
-	}
-
 	return nil
 }
 func (s *billingService) checkIfChargeInvoiced(
@@ -1781,14 +1815,23 @@ func (s *billingService) checkIfChargeInvoiced(
 	periodEnd time.Time,
 ) bool {
 	for _, item := range invoice.LineItems {
-		// match the price id
-		if lo.FromPtr(item.PriceID) == charge.PriceID {
-			// match the period start and end
-			if item.PeriodStart.Equal(periodStart) &&
-				item.PeriodEnd.Equal(periodEnd) {
-				return true
-			}
+		if lo.FromPtr(item.PriceID) != charge.PriceID {
+			continue
 		}
+		if item.PeriodStart == nil || item.PeriodEnd == nil {
+			continue
+		}
+		/*
+			Match when the invoice line's period equals the given window (original behaviour) or overlaps it.
+			Equal: lineStart == periodStart && lineEnd == periodEnd (e.g. monthly line on monthly sub).
+			Overlap: lineStart < periodEnd && lineEnd > periodStart (e.g. quarterly line Jan–Mar vs window Jan 1–31).
+		*/
+		exactMatch := item.PeriodStart.Equal(periodStart) && item.PeriodEnd.Equal(periodEnd)
+		overlap := item.PeriodStart.Before(periodEnd) && item.PeriodEnd.After(periodStart)
+		if !exactMatch && !overlap {
+			continue
+		}
+		return true
 	}
 	return false
 }
@@ -1808,25 +1851,79 @@ func (s *billingService) ClassifyLineItems(
 		HasUsageCharges:      false,
 	}
 
+	/*
+		Classify each line item into advance/arrear buckets for the current (and next) invoice period.
+
+		Fixed charges:
+		- Equal period (line item = sub, e.g. both monthly): include by cadence; no period-matching.
+		- Longer period (line item > sub, e.g. quarterly on monthly): use FindMatchingLineItemPeriodForInvoice
+		  to see if a line-item period falls in the invoice window. Advance = period start in window;
+		  arrear = period end in window. No match for current → skip current; advance items can still match next → NextPeriodAdvance.
+	*/
 	for _, item := range sub.LineItems {
-		// Current period advance charges (fixed only)
-		// TODO: add support for usage charges with advance cadence later
-		if item.InvoiceCadence == types.InvoiceCadenceAdvance &&
-			item.PriceType == types.PRICE_TYPE_FIXED {
-			result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
-
-			// Also add to next period advance for preview purposes
-			result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
-		}
-
-		// Current period arrear charges (fixed and usage)
-		if item.InvoiceCadence == types.InvoiceCadenceArrear {
-			result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
-		}
-
-		// Check if there are any usage charges
+		// Usage: always set flag; arrear usage goes to CurrentPeriodArrear (no period-matching for usage here).
 		if item.PriceType == types.PRICE_TYPE_USAGE {
 			result.HasUsageCharges = true
+			if item.InvoiceCadence == types.InvoiceCadenceArrear {
+				result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
+			}
+			continue
+		}
+
+		if item.PriceType != types.PRICE_TYPE_FIXED {
+			continue
+		}
+
+		/*
+			Fixed, longer billing period than subscription (e.g. quarterly line on monthly sub).
+			Check once whether the line item has a period in the current window, and for advance items once for the next window.
+			Match current → add to CurrentPeriodAdvance or CurrentPeriodArrear by cadence; if advance and matches next → also add to NextPeriodAdvance.
+			No match for current → skip for current; no match for next → add only to NextPeriodAdvance.
+		*/
+		if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+			resCurrent, errCurrent := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+				Item:           item,
+				PeriodStart:    currentPeriodStart,
+				PeriodEnd:      currentPeriodEnd,
+				InvoiceCadence: item.InvoiceCadence,
+			})
+			hasPeriodInCurrentWindow := errCurrent == nil && resCurrent.Ok
+			var hasPeriodInNextWindow bool
+			if item.InvoiceCadence == types.InvoiceCadenceAdvance {
+				resNext, errNext := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+					Item:           item,
+					PeriodStart:    nextPeriodStart,
+					PeriodEnd:      nextPeriodEnd,
+					InvoiceCadence: types.InvoiceCadenceAdvance,
+				})
+				hasPeriodInNextWindow = errNext == nil && resNext.Ok
+			}
+			// No match for current: skip current; advance items that match next go to NextPeriodAdvance only.
+			if !hasPeriodInCurrentWindow {
+				if item.InvoiceCadence == types.InvoiceCadenceAdvance && hasPeriodInNextWindow {
+					result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
+				}
+				continue
+			}
+			// Match for current: add to current by cadence; advance items that match next also go to NextPeriodAdvance.
+			if item.InvoiceCadence == types.InvoiceCadenceAdvance {
+				result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
+				if hasPeriodInNextWindow {
+					result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
+				}
+			} else {
+				result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
+			}
+			continue
+		}
+
+		// Fixed, equal billing period: existing behavior (advance → both slices; arrear → CurrentPeriodArrear).
+		if item.InvoiceCadence == types.InvoiceCadenceAdvance {
+			result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
+			result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
+		}
+		if item.InvoiceCadence == types.InvoiceCadenceArrear {
+			result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
 		}
 	}
 

@@ -250,6 +250,32 @@ func (b BillingPeriod) String() string {
 	return string(b)
 }
 
+// BillingPeriodOrder returns a numeric ordering for BillingPeriod (smaller = shorter cadence).
+// DAILY=1, WEEKLY=2, MONTHLY=3, QUARTERLY=4, HALF_YEARLY=5, ANNUAL=6. Unknown/empty returns 0.
+func BillingPeriodOrder(b BillingPeriod) int {
+	switch b {
+	case BILLING_PERIOD_DAILY:
+		return 1
+	case BILLING_PERIOD_WEEKLY:
+		return 2
+	case BILLING_PERIOD_MONTHLY:
+		return 3
+	case BILLING_PERIOD_QUARTER:
+		return 4
+	case BILLING_PERIOD_HALF_YEAR:
+		return 5
+	case BILLING_PERIOD_ANNUAL:
+		return 6
+	default:
+		return 0
+	}
+}
+
+// BillingPeriodGreaterThan returns true when a has a longer cadence than b (Order(a) > Order(b)).
+func BillingPeriodGreaterThan(a, b BillingPeriod) bool {
+	return BillingPeriodOrder(a) > BillingPeriodOrder(b)
+}
+
 func (b BillingModel) Validate() error {
 	allowed := []BillingModel{
 		BILLING_MODEL_FLAT_FEE,

@@ -1,7 +1,7 @@
-
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -721,6 +721,739 @@ func (s *BillingServiceSuite) validateNextPeriodAdvanceOnly(req *dto.CreateInvoi
 	s.Equal(sub.CurrentPeriodEnd, *req.PeriodEnd)
 }
 
+// TestCalculateFixedCharges_MixedCadence tests mixed cadence (line item period > subscription period).
+// When a line item has longer cadence (e.g. quarterly) than the subscription (e.g. monthly), it is
+// included only when a line-item period end falls in [periodStart, periodEnd); that period's start/end
+// become the invoice line's service period.
+func (s *BillingServiceSuite) TestCalculateFixedCharges_MixedCadence() {
+	ctx := s.GetContext()
+	// Use fixed dates for predictable quarter boundaries (anniversary from Jan 1 -> Apr 1, Jul 1, ...)
+	jan1 := time.Date(2024, time.January, 1, 0, 0, 0, 0, time.UTC)
+	mar1 := time.Date(2024, time.March, 1, 0, 0, 0, 0, time.UTC)
+	apr1 := time.Date(2024, time.April, 1, 0, 0, 0, 0, time.UTC)
+	may1 := time.Date(2024, time.May, 1, 0, 0, 0, 0, time.UTC)
+
+	s.BaseServiceTestSuite.ClearStores()
+	// Reuse customer and plan from test data (they may already exist from SetupTest)
+	cust := &customer.Customer{
+		ID:         "cust_mixed",
+		ExternalID: "ext_mixed",
+		Name:       "Mixed Cadence Customer",
+		Email:      "mixed@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_mixed",
+		Name:        "Mixed Plan",
+		Description: "Mixed cadence test",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	// Monthly fixed price
+	priceMonthly := &price.Price{
+		ID:                 "price_monthly_mixed",
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceMonthly))
+
+	// Quarterly fixed price
+	priceQuarterly := &price.Price{
+		ID:                 "price_quarterly_mixed",
+		Amount:             decimal.NewFromInt(300),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           pl.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceQuarterly))
+
+	// Subscription: monthly billing, period Apr 1 - May 1
+	sub := &subscription.Subscription{
+		ID:                 "sub_mixed",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          jan1,
+		BillingAnchor:      jan1,
+		CurrentPeriodStart: apr1,
+		CurrentPeriodEnd:   may1,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	// Line items: monthly fixed (same cadence as sub), quarterly fixed (longer cadence, start Jan 1)
+	liMonthly := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:    pl.Name,
+		PriceID:            priceMonthly.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Monthly Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           sub.Currency,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
+		StartDate:          jan1,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	liQuarterly := &subscription.SubscriptionLineItem{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:     sub.ID,
+		CustomerID:         sub.CustomerID,
+		EntityID:           pl.ID,
+		EntityType:         types.SubscriptionLineItemEntityTypePlan,
+		PlanDisplayName:    pl.Name,
+		PriceID:            priceQuarterly.ID,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		DisplayName:        "Quarterly Fee",
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           sub.Currency,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		StartDate:          jan1,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, []*subscription.SubscriptionLineItem{liMonthly, liQuarterly}))
+	sub.LineItems = []*subscription.SubscriptionLineItem{liMonthly, liQuarterly}
+
+	// Arrear rule: period end in (periodStart, periodEnd] (start exclusive, end inclusive).
+	// Excluded: invoice period Apr 1 - May 1. Quarter from Jan 1 ends Apr 1; Apr 1 is not in (Apr 1, May 1] -> no quarterly line
+	lineItems, total, err := s.service.CalculateFixedCharges(ctx, sub, apr1, may1)
+	s.NoError(err)
+	s.Require().Len(lineItems, 1, "expected 1 fixed line item (monthly only; quarterly arrear excluded when period end equals invoice start)")
+	s.Equal(priceMonthly.ID, lo.FromPtr(lineItems[0].PriceID))
+	s.True(total.GreaterThanOrEqual(decimal.NewFromInt(0)) && total.LessThanOrEqual(decimal.NewFromInt(10)), "total should be 0–10 (monthly only, may be prorated)")
+
+	// Included: invoice period Mar 1 - Apr 1. Quarter end Apr 1 is in (Mar 1, Apr 1] -> include quarterly with period Jan 1 - Apr 1
+	lineItems2, total2, err2 := s.service.CalculateFixedCharges(ctx, sub, mar1, apr1)
+	s.NoError(err2)
+	s.Require().Len(lineItems2, 2, "expected 2 fixed line items (monthly + quarterly)")
+	var monthlyLine, quarterlyLine *dto.CreateInvoiceLineItemRequest
+	for i := range lineItems2 {
+		if lo.FromPtr(lineItems2[i].PriceID) == priceMonthly.ID {
+			monthlyLine = &lineItems2[i]
+		} else if lo.FromPtr(lineItems2[i].PriceID) == priceQuarterly.ID {
+			quarterlyLine = &lineItems2[i]
+		}
+	}
+	s.Require().NotNil(monthlyLine, "monthly line should be present")
+	s.Require().NotNil(quarterlyLine, "quarterly line should be present")
+	s.True((*monthlyLine.PeriodStart).Equal(mar1) && (*monthlyLine.PeriodEnd).Equal(apr1), "monthly line should have period Mar 1 - Apr 1")
+	s.True((*quarterlyLine.PeriodStart).Equal(jan1) && (*quarterlyLine.PeriodEnd).Equal(apr1), "quarterly line should have period Jan 1 - Apr 1")
+	s.True(quarterlyLine.Amount.Equal(decimal.NewFromInt(300)), "quarterly line should be full amount 300")
+	s.True(total2.GreaterThanOrEqual(decimal.NewFromInt(300)), "total should be at least 300 (quarterly)")
+	s.True(total2.LessThanOrEqual(decimal.NewFromInt(310)), "total should be at most 310 (full monthly + quarterly)")
+}
+
+// scenario1DailyExpectedTotals is the expected fixed charge total for each of 12 daily invoices
+// (advance [start, end), arrear (start, end]; ProrationBehavior=None). Invoice i uses period [Jan i, Jan i+1).
+// Invoice 1: advance 1500 + arrear 200 (daily arrear end Jan 2 in (Jan 1, Jan 2]) = 1700.
+// Invoice 7: advance 100 (daily) + arrear 200 (daily) + 300 (weekly arrear end Jan 8 in (Jan 7, Jan 8]) = 600.
+// Invoice 8: advance 300 (daily+weekly) + arrear 200 (daily only; weekly end Jan 8 excluded from (Jan 8, Jan 9]) = 500.
+var scenario1DailyExpectedTotals = []int{1700, 300, 300, 300, 300, 300, 600, 500, 300, 300, 300, 300}
+
+// scenario2MonthlyExpectedTotals is the expected fixed charge total for each of 12 monthly invoices (advance only; proration_behavior=none).
+var scenario2MonthlyExpectedTotals = []int{1200, 300, 300, 700, 300, 300, 700, 300, 300, 700, 300, 300}
+
+// setupScenario1DailySub creates a daily subscription (start Jan 1 2026) with 10 fixed line items:
+// advance: daily 100, weekly 200, monthly 300, quarterly 400, annual 500;
+// arrear: daily 200, weekly 300, monthly 400, quarterly 500, annual 600.
+func (s *BillingServiceSuite) setupScenario1DailySub(ctx context.Context) (*subscription.Subscription, []*price.Price) {
+	jan1 := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	cust := &customer.Customer{
+		ID:         "cust_sc1",
+		ExternalID: "ext_sc1",
+		Name:       "Scenario 1 Customer",
+		Email:      "sc1@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_sc1",
+		Name:        "Scenario 1 Plan",
+		Description: "Daily sub with mixed cadences",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	specs := []struct {
+		id      string
+		period  types.BillingPeriod
+		amount  int
+		cadence types.InvoiceCadence
+		display string
+	}{
+		{"price_daily_adv", types.BILLING_PERIOD_DAILY, 100, types.InvoiceCadenceAdvance, "Daily Advance"},
+		{"price_weekly_adv", types.BILLING_PERIOD_WEEKLY, 200, types.InvoiceCadenceAdvance, "Weekly Advance"},
+		{"price_monthly_adv", types.BILLING_PERIOD_MONTHLY, 300, types.InvoiceCadenceAdvance, "Monthly Advance"},
+		{"price_quarterly_adv", types.BILLING_PERIOD_QUARTER, 400, types.InvoiceCadenceAdvance, "Quarterly Advance"},
+		{"price_annual_adv", types.BILLING_PERIOD_ANNUAL, 500, types.InvoiceCadenceAdvance, "Annual Advance"},
+		{"price_daily_arr", types.BILLING_PERIOD_DAILY, 200, types.InvoiceCadenceArrear, "Daily Arrear"},
+		{"price_weekly_arr", types.BILLING_PERIOD_WEEKLY, 300, types.InvoiceCadenceArrear, "Weekly Arrear"},
+		{"price_monthly_arr", types.BILLING_PERIOD_MONTHLY, 400, types.InvoiceCadenceArrear, "Monthly Arrear"},
+		{"price_quarterly_arr", types.BILLING_PERIOD_QUARTER, 500, types.InvoiceCadenceArrear, "Quarterly Arrear"},
+		{"price_annual_arr", types.BILLING_PERIOD_ANNUAL, 600, types.InvoiceCadenceArrear, "Annual Arrear"},
+	}
+	prices := make([]*price.Price, 0, len(specs))
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(specs))
+	sub := &subscription.Subscription{
+		ID:                 "sub_sc1",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          jan1,
+		BillingAnchor:      jan1,
+		CurrentPeriodStart: jan1,
+		CurrentPeriodEnd:   jan1.AddDate(0, 0, 1),
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_DAILY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone, // full amounts in tests
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	for _, spec := range specs {
+		p := &price.Price{
+			ID:                 spec.id,
+			Amount:             decimal.NewFromInt(int64(spec.amount)),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           pl.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     spec.cadence,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+		prices = append(prices, p)
+		li := &subscription.SubscriptionLineItem{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:     sub.ID,
+			CustomerID:         sub.CustomerID,
+			EntityID:           pl.ID,
+			EntityType:         types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:    pl.Name,
+			PriceID:            p.ID,
+			PriceType:          types.PRICE_TYPE_FIXED,
+			DisplayName:        spec.display,
+			Quantity:           decimal.NewFromInt(1),
+			Currency:           sub.Currency,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			InvoiceCadence:     spec.cadence,
+			StartDate:          jan1,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		lineItems = append(lineItems, li)
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
+	sub.LineItems = lineItems
+	return sub, prices
+}
+
+// setupScenario2MonthlySub creates a monthly subscription (start Jan 1 2026) with 3 advance-only fixed line items:
+// monthly 300, quarterly 400, annual 500.
+func (s *BillingServiceSuite) setupScenario2MonthlySub(ctx context.Context) (*subscription.Subscription, []*price.Price) {
+	jan1 := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	feb1 := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	cust := &customer.Customer{
+		ID:         "cust_sc2",
+		ExternalID: "ext_sc2",
+		Name:       "Scenario 2 Customer",
+		Email:      "sc2@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_sc2",
+		Name:        "Scenario 2 Plan",
+		Description: "Monthly sub with advance only",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+	specs := []struct {
+		id      string
+		period  types.BillingPeriod
+		amount  int
+		display string
+	}{
+		{"price_sc2_monthly", types.BILLING_PERIOD_MONTHLY, 300, "Monthly Advance"},
+		{"price_sc2_quarterly", types.BILLING_PERIOD_QUARTER, 400, "Quarterly Advance"},
+		{"price_sc2_annual", types.BILLING_PERIOD_ANNUAL, 500, "Annual Advance"},
+	}
+	prices := make([]*price.Price, 0, len(specs))
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(specs))
+	sub := &subscription.Subscription{
+		ID:                 "sub_sc2",
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          jan1,
+		BillingAnchor:      jan1,
+		CurrentPeriodStart: jan1,
+		CurrentPeriodEnd:   feb1,
+		Currency:           "usd",
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone, // full amounts in tests
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	for _, spec := range specs {
+		p := &price.Price{
+			ID:                 spec.id,
+			Amount:             decimal.NewFromInt(int64(spec.amount)),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           pl.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+		prices = append(prices, p)
+		li := &subscription.SubscriptionLineItem{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:     sub.ID,
+			CustomerID:         sub.CustomerID,
+			EntityID:           pl.ID,
+			EntityType:         types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:    pl.Name,
+			PriceID:            p.ID,
+			PriceType:          types.PRICE_TYPE_FIXED,
+			DisplayName:        spec.display,
+			Quantity:           decimal.NewFromInt(1),
+			Currency:           sub.Currency,
+			BillingPeriod:      spec.period,
+			BillingPeriodCount: 1,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			StartDate:          jan1,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		lineItems = append(lineItems, li)
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
+	sub.LineItems = lineItems
+	return sub, prices
+}
+
+// TestScenario1_DailySub_12Invoices asserts fixed charges for 12 daily invoices:
+// advance at period start, arrear at period end. Expected totals from Orb doc.
+func (s *BillingServiceSuite) TestScenario1_DailySub_12Invoices() {
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+	sub, _ := s.setupScenario1DailySub(ctx)
+	var advanceItems, arrearItems []*subscription.SubscriptionLineItem
+	for _, li := range sub.LineItems {
+		if li.InvoiceCadence == types.InvoiceCadenceAdvance {
+			advanceItems = append(advanceItems, li)
+		} else {
+			arrearItems = append(arrearItems, li)
+		}
+	}
+	subAdvance := *sub
+	subAdvance.LineItems = advanceItems
+	subArrear := *sub
+	subArrear.LineItems = arrearItems
+
+	for i := 0; i < 12; i++ {
+		start := time.Date(2026, time.January, 1+i, 0, 0, 0, 0, time.UTC)
+		end := time.Date(2026, time.January, 2+i, 0, 0, 0, 0, time.UTC)
+		_, totalAdvance, err := s.service.CalculateFixedCharges(ctx, &subAdvance, start, end)
+		s.NoError(err, "invoice %d advance", i+1)
+		_, totalArrear, err := s.service.CalculateFixedCharges(ctx, &subArrear, start, end)
+		s.NoError(err, "invoice %d arrear", i+1)
+		got := totalAdvance.Add(totalArrear)
+		expected := decimal.NewFromInt(int64(scenario1DailyExpectedTotals[i]))
+		s.True(got.Equal(expected), "invoice %d: expected fixed total %s, got %s", i+1, expected, got)
+	}
+}
+
+// TestScenario2_MonthlySub_12Invoices asserts fixed charges for 12 monthly invoices (advance only). Expected totals from Orb.
+func (s *BillingServiceSuite) TestScenario2_MonthlySub_12Invoices() {
+	ctx := s.GetContext()
+	s.BaseServiceTestSuite.ClearStores()
+	sub, _ := s.setupScenario2MonthlySub(ctx)
+	monthStarts := []time.Time{
+		time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC),
+	}
+	monthEnds := []time.Time{
+		time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.June, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.August, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.October, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.November, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, time.December, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2027, time.January, 1, 0, 0, 0, 0, time.UTC),
+	}
+	for i := 0; i < 12; i++ {
+		_, total, err := s.service.CalculateFixedCharges(ctx, sub, monthStarts[i], monthEnds[i])
+		s.NoError(err, "invoice %d", i+1)
+		expected := decimal.NewFromInt(int64(scenario2MonthlyExpectedTotals[i]))
+		s.True(total.Equal(expected), "invoice %d: expected fixed total %s, got %s", i+1, expected, total)
+	}
+}
+
+// LineItemSpecForPeriodTests defines a fixed line item for sub/line period scenario tests.
+type LineItemSpecForPeriodTests struct {
+	PriceID        string
+	DisplayName    string
+	BillingPeriod  types.BillingPeriod
+	InvoiceCadence types.InvoiceCadence
+	Amount         int
+}
+
+// setupSubWithFixedLineItemsForPeriodTests creates a subscription with fixed-only line items
+// for testing sub-period × line-item period scenarios. refStart is the first period start (and billing anchor).
+// Returns the subscription (with LineItems populated) and a slice of created prices in spec order.
+func (s *BillingServiceSuite) setupSubWithFixedLineItemsForPeriodTests(
+	ctx context.Context,
+	scenarioName string,
+	subBillingPeriod types.BillingPeriod,
+	refStart time.Time,
+	specs []LineItemSpecForPeriodTests,
+) (*subscription.Subscription, []*price.Price) {
+	firstPeriodEnd, err := types.NextBillingDate(refStart, refStart, 1, subBillingPeriod, nil)
+	s.Require().NoError(err)
+
+	cust := &customer.Customer{
+		ID:         "cust_pl_" + scenarioName,
+		ExternalID: "ext_pl_" + scenarioName,
+		Name:       "Period Test Customer",
+		Email:      scenarioName + "@example.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+	pl := &plan.Plan{
+		ID:          "plan_pl_" + scenarioName,
+		Name:        "Period Test Plan",
+		Description: "Sub/line period test",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, pl))
+
+	sub := &subscription.Subscription{
+		ID:                 "sub_pl_" + scenarioName,
+		PlanID:             pl.ID,
+		CustomerID:         cust.ID,
+		StartDate:          refStart,
+		BillingAnchor:      refStart,
+		CurrentPeriodStart: refStart,
+		CurrentPeriodEnd:   firstPeriodEnd,
+		Currency:           "usd",
+		BillingPeriod:      subBillingPeriod,
+		BillingPeriodCount: 1,
+		SubscriptionStatus: types.SubscriptionStatusActive,
+		CustomerTimezone:   "UTC",
+		ProrationBehavior:  types.ProrationBehaviorNone,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+
+	prices := make([]*price.Price, 0, len(specs))
+	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(specs))
+	for _, spec := range specs {
+		p := &price.Price{
+			ID:                 spec.PriceID,
+			Amount:             decimal.NewFromInt(int64(spec.Amount)),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+			EntityID:           pl.ID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      spec.BillingPeriod,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     spec.InvoiceCadence,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+		prices = append(prices, p)
+		li := &subscription.SubscriptionLineItem{
+			ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:     sub.ID,
+			CustomerID:         sub.CustomerID,
+			EntityID:           pl.ID,
+			EntityType:         types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:    pl.Name,
+			PriceID:            p.ID,
+			PriceType:          types.PRICE_TYPE_FIXED,
+			DisplayName:        spec.DisplayName,
+			Quantity:           decimal.NewFromInt(1),
+			Currency:           sub.Currency,
+			BillingPeriod:      spec.BillingPeriod,
+			BillingPeriodCount: 1,
+			InvoiceCadence:     spec.InvoiceCadence,
+			StartDate:          refStart,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		lineItems = append(lineItems, li)
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, sub, lineItems))
+	sub.LineItems = lineItems
+	return sub, prices
+}
+
+// periodWindow is a single billing period [Start, End).
+type periodWindow struct {
+	Start, End time.Time
+}
+
+// nextPeriodsForSub returns the first n billing periods for a subscription from refStart,
+// using the same logic as production (NextBillingDate).
+func nextPeriodsForSub(refStart time.Time, subBillingPeriod types.BillingPeriod, n int) []periodWindow {
+	out := make([]periodWindow, 0, n)
+	start := refStart
+	for i := 0; i < n; i++ {
+		end, err := types.NextBillingDate(start, refStart, 1, subBillingPeriod, nil)
+		if err != nil {
+			return out
+		}
+		out = append(out, periodWindow{Start: start, End: end})
+		start = end
+	}
+	return out
+}
+
+// expectedLineForPeriodTests is one expected fixed line on an invoice (PriceID + period).
+type expectedLineForPeriodTests struct {
+	PriceID     string
+	PeriodStart time.Time
+	PeriodEnd   time.Time
+}
+
+// assertInvoiceRequestFixedLines asserts that req.LineItems contains exactly the expected fixed lines
+// (same PriceID and period for each). Order may differ.
+func (s *BillingServiceSuite) assertInvoiceRequestFixedLines(req *dto.CreateInvoiceRequest, expected []expectedLineForPeriodTests) {
+	s.Require().NotNil(req)
+	s.Require().Len(req.LineItems, len(expected), "expected %d line items", len(expected))
+	used := make([]bool, len(expected))
+	for _, li := range req.LineItems {
+		pid := lo.FromPtr(li.PriceID)
+		start := lo.FromPtr(li.PeriodStart)
+		end := lo.FromPtr(li.PeriodEnd)
+		found := false
+		for j, exp := range expected {
+			if used[j] {
+				continue
+			}
+			if exp.PriceID == pid && exp.PeriodStart.Equal(start) && exp.PeriodEnd.Equal(end) {
+				used[j] = true
+				found = true
+				break
+			}
+		}
+		s.True(found, "unexpected line item PriceID=%s PeriodStart=%s PeriodEnd=%s", pid, start, end)
+	}
+	for j, u := range used {
+		s.True(u, "missing expected line %d: PriceID=%s PeriodStart=%s PeriodEnd=%s",
+			j, expected[j].PriceID, expected[j].PeriodStart, expected[j].PeriodEnd)
+	}
+}
+
+// TestSubscriptionLineItemPeriodScenarios runs sub-period × line-item period tests: for each scenario
+// (daily, weekly, monthly sub with mixed line items), generates period-end and preview for the first
+// few periods and asserts correct line inclusion and correct PeriodStart/PeriodEnd on each invoice line.
+func (s *BillingServiceSuite) TestSubscriptionLineItemPeriodScenarios() {
+	ctx := s.GetContext()
+	jan1 := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	feb1 := time.Date(2026, time.February, 1, 0, 0, 0, 0, time.UTC)
+	mar1 := time.Date(2026, time.March, 1, 0, 0, 0, 0, time.UTC)
+	apr1 := time.Date(2026, time.April, 1, 0, 0, 0, 0, time.UTC)
+	may1 := time.Date(2026, time.May, 1, 0, 0, 0, 0, time.UTC)
+	jul1 := time.Date(2026, time.July, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name            string
+		subBilling      types.BillingPeriod
+		refStart        time.Time
+		specs           []LineItemSpecForPeriodTests
+		periodsToAssert int
+		// expectedPerPeriod[i] = expected fixed lines for period i (PeriodEnd and Preview same inclusion)
+		expectedPerPeriod [][]expectedLineForPeriodTests
+	}{
+		{
+			name:       "monthly_sub_monthly_quarterly_advance_arrear",
+			subBilling: types.BILLING_PERIOD_MONTHLY,
+			refStart:   jan1,
+			specs: []LineItemSpecForPeriodTests{
+				{PriceID: "p_mo_adv", DisplayName: "Monthly Advance", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 100},
+				{PriceID: "p_mo_arr", DisplayName: "Monthly Arrear", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 200},
+				{PriceID: "p_q_adv", DisplayName: "Quarterly Advance", BillingPeriod: types.BILLING_PERIOD_QUARTER, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 300},
+				{PriceID: "p_q_arr", DisplayName: "Quarterly Arrear", BillingPeriod: types.BILLING_PERIOD_QUARTER, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 400},
+			},
+			periodsToAssert: 3,
+			expectedPerPeriod: [][]expectedLineForPeriodTests{
+				// Period 1: Jan 1 - Feb 1. PeriodEnd = current arrear + next advance. Equal-period: monthly arrear (Jan1-Feb1), monthly advance next (Feb1-Mar1). Quarterly arrear end Apr1 not in [Jan1,Feb1); quarterly advance next period Feb1-Mar1 has no quarter start in window.
+				{
+					{"p_mo_arr", jan1, feb1},
+					{"p_mo_adv", feb1, mar1},
+				},
+				// Period 2: Feb 1 - Mar 1. Current arrear: monthly (Feb1-Mar1). Next advance: monthly (Mar1-Apr1). Quarter start Apr1 not in [Mar1,Apr1) so no quarterly advance.
+				{
+					{"p_mo_arr", feb1, mar1},
+					{"p_mo_adv", mar1, apr1},
+				},
+				// Period 3: Mar 1 - Apr 1. Current arrear: monthly (Mar1-Apr1), quarterly (Jan1-Apr1, end Apr1 in (Mar1,Apr1]). Next advance: monthly (Apr1-May1), quarterly (Apr1-Jul1, natural period end).
+				{
+					{"p_mo_arr", mar1, apr1},
+					{"p_q_arr", jan1, apr1},
+					{"p_mo_adv", apr1, may1},
+					{"p_q_adv", apr1, jul1},
+				},
+			},
+		},
+		{
+			name:       "daily_sub_daily_weekly_monthly_advance_arrear",
+			subBilling: types.BILLING_PERIOD_DAILY,
+			refStart:   jan1,
+			specs: []LineItemSpecForPeriodTests{
+				{PriceID: "p_d_adv", DisplayName: "Daily Advance", BillingPeriod: types.BILLING_PERIOD_DAILY, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 10},
+				{PriceID: "p_d_arr", DisplayName: "Daily Arrear", BillingPeriod: types.BILLING_PERIOD_DAILY, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 20},
+				{PriceID: "p_w_adv", DisplayName: "Weekly Advance", BillingPeriod: types.BILLING_PERIOD_WEEKLY, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 70},
+				{PriceID: "p_w_arr", DisplayName: "Weekly Arrear", BillingPeriod: types.BILLING_PERIOD_WEEKLY, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 80},
+				{PriceID: "p_m_adv", DisplayName: "Monthly Advance", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 300},
+				{PriceID: "p_m_arr", DisplayName: "Monthly Arrear", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 400},
+			},
+			periodsToAssert: 3,
+			expectedPerPeriod: [][]expectedLineForPeriodTests{
+				// Period 1: Jan 1 - Jan 2. Current arrear: daily (Jan1-Jan2). Next advance: daily (Jan2-Jan3). Weekly/monthly no match in these windows.
+				{
+					{"p_d_arr", jan1, jan1.AddDate(0, 0, 1)},
+					{"p_d_adv", jan1.AddDate(0, 0, 1), jan1.AddDate(0, 0, 2)},
+				},
+				// Period 2: Jan 2 - Jan 3.
+				{
+					{"p_d_arr", jan1.AddDate(0, 0, 1), jan1.AddDate(0, 0, 2)},
+					{"p_d_adv", jan1.AddDate(0, 0, 2), jan1.AddDate(0, 0, 3)},
+				},
+				// Period 3: Jan 3 - Jan 4.
+				{
+					{"p_d_arr", jan1.AddDate(0, 0, 2), jan1.AddDate(0, 0, 3)},
+					{"p_d_adv", jan1.AddDate(0, 0, 3), jan1.AddDate(0, 0, 4)},
+				},
+			},
+		},
+		{
+			name:       "weekly_sub_weekly_monthly_quarterly_advance_arrear",
+			subBilling: types.BILLING_PERIOD_WEEKLY,
+			refStart:   jan1, // Jan 1 2026 = Thursday; weeks: Jan 1-8, Jan 8-15, ...
+			specs: []LineItemSpecForPeriodTests{
+				{PriceID: "p_w_adv", DisplayName: "Weekly Advance", BillingPeriod: types.BILLING_PERIOD_WEEKLY, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 70},
+				{PriceID: "p_w_arr", DisplayName: "Weekly Arrear", BillingPeriod: types.BILLING_PERIOD_WEEKLY, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 80},
+				{PriceID: "p_m_adv", DisplayName: "Monthly Advance", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 300},
+				{PriceID: "p_m_arr", DisplayName: "Monthly Arrear", BillingPeriod: types.BILLING_PERIOD_MONTHLY, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 400},
+				{PriceID: "p_q_adv", DisplayName: "Quarterly Advance", BillingPeriod: types.BILLING_PERIOD_QUARTER, InvoiceCadence: types.InvoiceCadenceAdvance, Amount: 900},
+				{PriceID: "p_q_arr", DisplayName: "Quarterly Arrear", BillingPeriod: types.BILLING_PERIOD_QUARTER, InvoiceCadence: types.InvoiceCadenceArrear, Amount: 1000},
+			},
+			periodsToAssert: 4,
+			expectedPerPeriod: [][]expectedLineForPeriodTests{
+				// Period 1: Jan 1 - Jan 8. Equal-period: arrear uses invoice window (Jan1-Jan8), next advance (Jan8-Jan15).
+				{
+					{"p_w_arr", jan1, time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC)},
+					{"p_w_adv", time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+				},
+				// Period 2: Jan 8 - Jan 15. Current arrear: window (Jan8-Jan15). Next advance: weekly (Jan15-Jan22).
+				{
+					{"p_w_arr", time.Date(2026, 1, 8, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)},
+					{"p_w_adv", time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC)},
+				},
+				// Period 3: Jan 15 - Jan 22. Current arrear: (Jan15-Jan22). Next advance: (Jan22-Jan29).
+				{
+					{"p_w_arr", time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC)},
+					{"p_w_adv", time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 29, 0, 0, 0, 0, time.UTC)},
+				},
+				// Period 4: Jan 22 - Jan 29. Current arrear: (Jan22-Jan29). Next advance: weekly (Jan29-Feb5), monthly (Feb1-Mar1, natural period end).
+				{
+					{"p_w_arr", time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 29, 0, 0, 0, 0, time.UTC)},
+					{"p_w_adv", time.Date(2026, 1, 29, 0, 0, 0, 0, time.UTC), time.Date(2026, 2, 5, 0, 0, 0, 0, time.UTC)},
+					{"p_m_adv", feb1, mar1},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			s.BaseServiceTestSuite.ClearStores()
+			sub, _ := s.setupSubWithFixedLineItemsForPeriodTests(ctx, tt.name, tt.subBilling, tt.refStart, tt.specs)
+			periods := nextPeriodsForSub(tt.refStart, tt.subBilling, tt.periodsToAssert)
+			s.Require().Len(periods, tt.periodsToAssert)
+
+			for i, p := range periods {
+				// Period-end reference point
+				reqEnd, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodEnd)
+				s.NoError(err, "period %d PeriodEnd", i+1)
+				s.assertInvoiceRequestFixedLines(reqEnd, tt.expectedPerPeriod[i])
+
+				// Preview (same window; no already-invoiced filter)
+				reqPreview, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPreview)
+				s.NoError(err, "period %d Preview", i+1)
+				s.assertInvoiceRequestFixedLines(reqPreview, tt.expectedPerPeriod[i])
+			}
+
+			// For monthly scenario only: assert ReferencePointPeriodStart for first period (advance-only, correct periods)
+			if tt.name == "monthly_sub_monthly_quarterly_advance_arrear" {
+				p := periods[0]
+				reqStart, err := s.service.PrepareSubscriptionInvoiceRequest(ctx, sub, p.Start, p.End, types.ReferencePointPeriodStart)
+				s.NoError(err)
+				// Period start = only advance for current period: monthly (Jan1-Feb1), quarterly (Jan1-Apr1, natural period end)
+				s.assertInvoiceRequestFixedLines(reqStart, []expectedLineForPeriodTests{
+					{"p_mo_adv", jan1, feb1},
+					{"p_q_adv", jan1, apr1},
+				})
+			}
+		})
+	}
+}
+
 func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 	tests := []struct {
 		name                string
@@ -975,6 +1708,250 @@ func (s *BillingServiceSuite) TestFilterLineItemsToBeInvoiced() {
 	}
 }
 
+// newLineItemForFindMatching builds a minimal subscription line item for FindMatchingLineItemPeriodForInvoice tests.
+func newLineItemForFindMatching(startDate, endDate time.Time, period types.BillingPeriod, periodCount int, cadence types.InvoiceCadence) *subscription.SubscriptionLineItem {
+	return &subscription.SubscriptionLineItem{
+		StartDate:          startDate,
+		EndDate:            endDate,
+		BillingPeriod:      period,
+		BillingPeriodCount: periodCount,
+		InvoiceCadence:     cadence,
+		PriceType:          types.PRICE_TYPE_FIXED,
+		Quantity:           decimal.NewFromInt(1),
+		Currency:           "usd",
+	}
+}
+
+func (s *BillingServiceSuite) TestFindMatchingLineItemPeriodForInvoice() {
+	utc := time.UTC
+	// Quarterly from Jan 1 2025: first period Jan 1 - Apr 1, second Apr 1 - Jul 1 (from types.NextBillingDate +3 months).
+	jan1_2025 := time.Date(2025, 1, 1, 0, 0, 0, 0, utc)
+	apr1_2025 := time.Date(2025, 4, 1, 0, 0, 0, 0, utc)
+	jan31_2025 := time.Date(2025, 1, 31, 0, 0, 0, 0, utc)
+	feb1_2025 := time.Date(2025, 2, 1, 0, 0, 0, 0, utc)
+	feb28_2025 := time.Date(2025, 2, 28, 0, 0, 0, 0, utc)
+	mar1_2025 := time.Date(2025, 3, 1, 0, 0, 0, 0, utc)
+	mar31_2025 := time.Date(2025, 3, 31, 0, 0, 0, 0, utc)
+	apr30_2025 := time.Date(2025, 4, 30, 0, 0, 0, 0, utc)
+	jan1_2024 := time.Date(2024, 1, 1, 0, 0, 0, 0, utc)
+	jan31_2024 := time.Date(2024, 1, 31, 0, 0, 0, 0, utc)
+	jan1_2026 := time.Date(2026, 1, 1, 0, 0, 0, 0, utc)
+	jan31_2026 := time.Date(2026, 1, 31, 0, 0, 0, 0, utc)
+	apr1_2024 := time.Date(2024, 4, 1, 0, 0, 0, 0, utc)
+	apr1_2026 := time.Date(2026, 4, 1, 0, 0, 0, 0, utc)
+	jul1_2025 := time.Date(2025, 7, 1, 0, 0, 0, 0, utc)
+	may15_2025 := time.Date(2025, 5, 15, 0, 0, 0, 0, utc)
+	feb15_2025 := time.Date(2025, 2, 15, 0, 0, 0, 0, utc)
+
+	// Subsecond timestamps for "next period" / boundary truncation tests (Q Advanced on May 2 - Jun 2 preview)
+	mar2_143010_418 := time.Date(2025, 3, 2, 14, 30, 10, 418000000, utc)
+	jun2_143010_000 := time.Date(2025, 6, 2, 14, 30, 10, 0, utc)
+	jul2_143010_000 := time.Date(2025, 7, 2, 14, 30, 10, 0, utc)
+	sep2_143010_000 := time.Date(2025, 9, 2, 14, 30, 10, 0, utc)
+	jan1_143010_418 := time.Date(2025, 1, 1, 14, 30, 10, 418000000, utc)
+	apr1_143010_000 := time.Date(2025, 4, 1, 14, 30, 10, 0, utc)
+
+	tests := []struct {
+		name           string
+		item           *subscription.SubscriptionLineItem
+		periodStart    time.Time
+		periodEnd      time.Time
+		invoiceCadence types.InvoiceCadence
+		wantOK         bool
+		wantStart      time.Time
+		wantEnd        time.Time
+		wantErr        bool
+	}{
+		{
+			name:           "advance_quarterly_jan_window_match",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jan1_2025,
+			periodEnd:      jan31_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        apr1_2025, // natural quarter end, not clipped to window
+		},
+		{
+			name:           "advance_quarterly_feb_window_no_match",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    feb1_2025,
+			periodEnd:      feb28_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         false,
+		},
+		{
+			name:           "advance_quarterly_apr_window_match",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    apr1_2025,
+			periodEnd:      apr30_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      apr1_2025,
+			wantEnd:        jul1_2025, // natural quarter end (Apr 1 - Jul 1)
+		},
+		{
+			name:           "arrear_quarterly_mar_window_match",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceArrear),
+			periodStart:    mar1_2025,
+			periodEnd:      apr30_2025,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        apr1_2025,
+		},
+		{
+			name:           "arrear_quarterly_jan_window_no_match_quarter_ends_april",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceArrear),
+			periodStart:    jan1_2025,
+			periodEnd:      jan31_2025,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         false, // quarter ends Apr 1, not in Jan window
+		},
+		{
+			name:           "advance_past_window_2024_jan_match",
+			item:           newLineItemForFindMatching(jan1_2024, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jan1_2024,
+			periodEnd:      jan31_2024,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      jan1_2024,
+			wantEnd:        apr1_2024, // natural quarter end
+		},
+		{
+			name:           "advance_future_window_2026_jan_match",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jan1_2026,
+			periodEnd:      jan31_2026,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      jan1_2026,
+			wantEnd:        apr1_2026, // natural quarter end
+		},
+		{
+			name:           "advance_end_date_before_period_end_clips",
+			item:           newLineItemForFindMatching(jan1_2025, feb15_2025, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jan1_2025,
+			periodEnd:      mar31_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        feb15_2025,
+		},
+		{
+			name:           "arrear_end_date_before_period_end",
+			item:           newLineItemForFindMatching(jan1_2025, mar31_2025, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceArrear),
+			periodStart:    mar1_2025,
+			periodEnd:      apr1_2025,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        mar31_2025,
+		},
+		// Edge cases
+		{
+			name:           "edge_line_item_start_after_window_no_match",
+			item:           newLineItemForFindMatching(feb1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jan1_2025,
+			periodEnd:      jan31_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         false,
+		},
+		{
+			name:           "edge_mid_period_start_advance_match",
+			item:           newLineItemForFindMatching(feb15_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    feb15_2025,
+			periodEnd:      mar31_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      feb15_2025,
+			wantEnd:        may15_2025, // natural quarter end (Feb 15 - May 15)
+		},
+		{
+			name:           "edge_arrear_period_end_equals_window_end_included",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceArrear),
+			periodStart:    mar1_2025,
+			periodEnd:      apr1_2025,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        apr1_2025,
+		},
+		{
+			name:           "edge_arrear_monthly_period_end_equals_window_end_included",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_MONTHLY, 1, types.InvoiceCadenceArrear),
+			periodStart:    jan1_2025,
+			periodEnd:      feb1_2025,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        feb1_2025,
+		},
+		{
+			name:           "edge_advance_monthly_line_quarter_window_returns_first_period",
+			item:           newLineItemForFindMatching(jan1_2025, time.Time{}, types.BILLING_PERIOD_MONTHLY, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jan1_2025,
+			periodEnd:      mar31_2025,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      jan1_2025,
+			wantEnd:        feb1_2025,
+		},
+		// Second-level truncation: Q Advanced "next period" (window Jun 2 14:30:10.000 - Jul 2 14:30:10.0), line item start has .418ms; match uses truncation
+		{
+			name:           "advance_quarterly_next_period_window_subsecond_boundary_matches_with_truncation",
+			item:           newLineItemForFindMatching(mar2_143010_418, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceAdvance),
+			periodStart:    jun2_143010_000,
+			periodEnd:      jul2_143010_000,
+			invoiceCadence: types.InvoiceCadenceAdvance,
+			wantOK:         true,
+			wantStart:      jun2_143010_000, // NextBillingDate returns second precision
+			wantEnd:        sep2_143010_000,
+		},
+		// Second-level truncation: arrear quarter end Apr 1 14:30:10.418, window end Apr 1 14:30:10.000 — should match
+		{
+			name:           "arrear_quarterly_period_end_subsecond_boundary_matches_with_truncation",
+			item:           newLineItemForFindMatching(jan1_143010_418, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceArrear),
+			periodStart:    mar1_2025,
+			periodEnd:      apr1_143010_000,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         true,
+			wantStart:      jan1_143010_418, // period start preserves anchor; end from NextBillingDate is sec precision
+			wantEnd:        apr1_143010_000,
+		},
+		// Arrear excluded when period end equals invoice period start (quarter ends Jun 2, invoice is Jun 2–Jul 2)
+		{
+			name:           "arrear_quarterly_period_end_equals_invoice_start_excluded",
+			item:           newLineItemForFindMatching(mar2_143010_418, time.Time{}, types.BILLING_PERIOD_QUARTER, 1, types.InvoiceCadenceArrear),
+			periodStart:    jun2_143010_000,
+			periodEnd:      jul2_143010_000,
+			invoiceCadence: types.InvoiceCadenceArrear,
+			wantOK:         false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
+				Item:           tt.item,
+				PeriodStart:    tt.periodStart,
+				PeriodEnd:      tt.periodEnd,
+				InvoiceCadence: tt.invoiceCadence,
+			})
+			if tt.wantErr {
+				s.Error(err)
+				return
+			}
+			s.NoError(err)
+			s.Equal(tt.wantOK, res.Ok, "Ok mismatch")
+			if tt.wantOK {
+				s.True(res.LineItemPeriodStart.Equal(tt.wantStart), "LineItemPeriodStart: got %v want %v", res.LineItemPeriodStart, tt.wantStart)
+				s.True(res.LineItemPeriodEnd.Equal(tt.wantEnd), "LineItemPeriodEnd: got %v want %v", res.LineItemPeriodEnd, tt.wantEnd)
+			}
+		})
+	}
+}
+
 func (s *BillingServiceSuite) TestClassifyLineItems() {
 	// Get subscription with line items
 	sub, _, err := s.GetStores().SubscriptionRepo.GetWithLineItems(s.GetContext(), s.testData.subscription.ID)
@@ -1013,9 +1990,10 @@ func (s *BillingServiceSuite) TestClassifyLineItems() {
 		var fixedArrearItem *subscription.SubscriptionLineItem
 
 		for _, item := range classification.CurrentPeriodArrear {
-			if item.PriceType == types.PRICE_TYPE_USAGE {
+			switch item.PriceType {
+			case types.PRICE_TYPE_USAGE:
 				usageArrearItem = item
-			} else if item.PriceType == types.PRICE_TYPE_FIXED {
+			case types.PRICE_TYPE_FIXED:
 				fixedArrearItem = item
 			}
 		}
