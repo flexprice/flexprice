@@ -88,6 +88,28 @@ func (s *Service) CaptureException(err error) {
 	sentry.CaptureException(err)
 }
 
+// CaptureCriticalBillingError captures a billing-related error with critical severity.
+// This enables Sentry alert rules to specifically target billing failures (e.g. invoice generation).
+func (s *Service) CaptureCriticalBillingError(err error, category string, metadata map[string]string) {
+	if !s.IsEnabled() {
+		return
+	}
+	sentry.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		scope.SetTag("billing.severity", "critical")
+		scope.SetTag("billing.category", category)
+		for k, v := range metadata {
+			scope.SetTag(k, v)
+		}
+		errMsg := "unknown"
+		if err != nil {
+			errMsg = err.Error()
+		}
+		scope.SetFingerprint([]string{"billing", category, errMsg})
+		sentry.CaptureException(err)
+	})
+}
+
 // AddBreadcrumb adds a breadcrumb to the current scope
 func (s *Service) AddBreadcrumb(category, message string, data map[string]interface{}) {
 	return
