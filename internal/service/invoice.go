@@ -100,15 +100,27 @@ func (s *invoiceService) CreateOneOffInvoice(ctx context.Context, req dto.Create
 
 	req.InvoiceCoupons = validCoupons
 
-	// Validate tax rates
+	// Prepare tax rates - handle both tax_rates (IDs) and tax_rate_overrides (codes)
 	taxService := NewTaxService(s.ServiceParams)
 	finalTaxRates := make([]*dto.TaxRateResponse, 0)
-	for _, taxRate := range req.TaxRates {
-		taxRate, err := taxService.GetTaxRate(ctx, taxRate)
+
+	// First, check for tax_rate_overrides (by code) - this takes precedence
+	if len(req.TaxRateOverrides) > 0 {
+		preparedTaxRates, err := taxService.PrepareTaxRatesForInvoice(ctx, req)
 		if err != nil {
+			s.Logger.Errorw("failed to prepare tax rates from overrides", "error", err)
 			return nil, err
 		}
-		finalTaxRates = append(finalTaxRates, taxRate)
+		finalTaxRates = preparedTaxRates
+	} else if len(req.TaxRates) > 0 {
+		// Fall back to tax_rates (by ID)
+		for _, taxRateID := range req.TaxRates {
+			taxRate, err := taxService.GetTaxRate(ctx, taxRateID)
+			if err != nil {
+				return nil, err
+			}
+			finalTaxRates = append(finalTaxRates, taxRate)
+		}
 	}
 
 	req.PreparedTaxRates = finalTaxRates
