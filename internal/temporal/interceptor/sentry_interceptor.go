@@ -127,7 +127,20 @@ func (a *activityInboundInterceptor) ExecuteActivity(ctx context.Context, in *in
 
 	// Capture error if activity failed
 	if err != nil {
-		a.sentry.CaptureException(fmt.Errorf("temporal activity failed: %s - %w", activityInfo.ActivityType.Name, err))
+		if activityInfo.ActivityType.Name == "CreateDraftInvoicesActivity" {
+			a.sentry.CaptureCriticalBillingError(
+				fmt.Errorf("critical billing activity failed: %s - %w", activityInfo.ActivityType.Name, err),
+				"invoice_generation",
+				map[string]string{
+					"workflow_id":   activityInfo.WorkflowExecution.ID,
+					"workflow_type": activityInfo.WorkflowType.Name,
+					"activity":      activityInfo.ActivityType.Name,
+					"attempt":       fmt.Sprintf("%d", activityInfo.Attempt),
+				},
+			)
+		} else {
+			a.sentry.CaptureException(fmt.Errorf("temporal activity failed: %s - %w", activityInfo.ActivityType.Name, err))
+		}
 	}
 
 	return result, err
