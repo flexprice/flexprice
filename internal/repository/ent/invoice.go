@@ -651,6 +651,7 @@ func (r *invoiceRepository) GetByIdempotencyKey(ctx context.Context, key string)
 			invoice.TenantID(types.GetTenantID(ctx)),
 			invoice.StatusEQ(string(types.StatusPublished)),
 			invoice.InvoiceStatusNEQ(types.InvoiceStatusVoided),
+			invoice.InvoiceStatusNEQ(types.InvoiceStatusSkipped),
 		).
 		First(ctx)
 	if err != nil {

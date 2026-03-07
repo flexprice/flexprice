@@ -114,6 +114,15 @@ type CreateInvoiceRequest struct {
 
 	// invoice_pdf_url is the URL where customers can download the PDF version of this invoice
 	InvoicePDFURL *string `json:"invoice_pdf_url,omitempty"`
+
+	// skip_invoice_number when true, skips invoice number generation during CreateInvoice.
+	// Used for zero-dollar placeholder drafts where the number will be assigned later
+	// by CalculateAndPopulateInvoice once usage is confirmed to be non-zero.
+	SkipInvoiceNumber bool `json:"skip_invoice_number,omitempty"`
+
+	// SuppressWebhook when true, skips publishing the create-draft/finalized webhook after CreateInvoice.
+	// Used when creating placeholder drafts from the Temporal flow; the webhook is sent when the draft is populated.
+	SuppressWebhook bool `json:"-"`
 }
 
 // CreateProrationInvoiceRequest represents the request for creating a proration invoice

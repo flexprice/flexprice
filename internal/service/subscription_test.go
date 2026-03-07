@@ -1313,11 +1313,11 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 				StartDate:          &start,
 				EndDate:            &end,
 				Currency:           "usd",
-				BillingCadence:      types.BILLING_CADENCE_RECURRING,
-				BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingCycle:       types.BillingCycleAnniversary,
-				LineItems:           tt.lineItems,
+				LineItems:          tt.lineItems,
 			}
 			_, err := s.service.CreateSubscription(ctx, req)
 			s.Error(err)

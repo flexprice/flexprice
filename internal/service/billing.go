@@ -26,7 +26,7 @@ import (
 type BillingCalculationResult struct {
 	FixedCharges []dto.CreateInvoiceLineItemRequest
 	UsageCharges []dto.CreateInvoiceLineItemRequest
-	TotalAmount  decimal.Decimal
+	TotalAmount  decimal.Decimal // Pre-discount/pre-tax total; maps to CreateInvoiceRequest.Subtotal
 	Currency     string
 }
 
@@ -1582,7 +1582,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 			return zeroAmountInvoice, nil
 		}
 
-		calculationResult, err = s.CalculateCharges(
+		calculationResult, err = s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1617,7 +1617,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -1630,7 +1630,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.CalculateCharges(
+		advanceResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			advanceLineItems,
@@ -1700,7 +1700,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For current period arrear charges
-		arrearResult, err := s.CalculateCharges(
+		arrearResult, err := s.calculateFeatureUsageCharges(
 			ctx,
 			sub,
 			arrearLineItems,
@@ -2110,27 +2110,47 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	}
 	// Create invoice request
 	// Use invoicing customer ID if available, otherwise fallback to subscription customer ID
+	lineItems := append(result.FixedCharges, result.UsageCharges...)
+
+	// For zero-amount periods: skip invoice number generation and omit line items.
+	// The invoice will be a placeholder draft; CalculateAndPopulateInvoice will
+	// later either populate it or mark it as SKIPPED.
+	//
+	// NOTE: While CreateSubscriptionInvoice and CalculateAndPopulateInvoice bail
+	// out early when subtotal is zero (before consuming this request), other
+	// callers (GetPreviewInvoice, RecalculateInvoice) may pass through zero-amount
+	// results. This logic acts as a defensive guard for those paths.
+	//
+	// result.TotalAmount maps to Subtotal in the returned CreateInvoiceRequest
+	// (see below: Subtotal: result.TotalAmount). Callers that check
+	// invoiceReq.Subtotal.IsZero() are checking the same underlying value.
+	skipInvoiceNumber := result.TotalAmount.IsZero()
+	if skipInvoiceNumber {
+		lineItems = nil
+	}
+
 	req := &dto.CreateInvoiceRequest{
-		CustomerID:       invoicingCustomerID,
-		SubscriptionID:   lo.ToPtr(sub.ID),
-		InvoiceType:      types.InvoiceTypeSubscription,
-		InvoiceStatus:    lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus:    lo.ToPtr(types.PaymentStatusPending),
-		Currency:         sub.Currency,
-		AmountDue:        result.TotalAmount,
-		Total:            result.TotalAmount,
-		Subtotal:         result.TotalAmount,
-		Description:      description,
-		DueDate:          lo.ToPtr(invoiceDueDate),
-		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
-		PeriodStart:      &periodStart,
-		PeriodEnd:        &periodEnd,
-		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
-		Metadata:         metadata,
-		LineItems:        append(result.FixedCharges, result.UsageCharges...),
-		InvoiceCoupons:   validCoupons,
-		LineItemCoupons:  validLineItemCoupons,
-		PreparedTaxRates: preparedTaxRates,
+		CustomerID:        invoicingCustomerID,
+		SubscriptionID:    lo.ToPtr(sub.ID),
+		InvoiceType:       types.InvoiceTypeSubscription,
+		InvoiceStatus:     lo.ToPtr(types.InvoiceStatusDraft),
+		PaymentStatus:     lo.ToPtr(types.PaymentStatusPending),
+		Currency:          sub.Currency,
+		AmountDue:         result.TotalAmount,
+		Total:             result.TotalAmount,
+		Subtotal:          result.TotalAmount,
+		Description:       description,
+		DueDate:           lo.ToPtr(invoiceDueDate),
+		BillingPeriod:     lo.ToPtr(string(sub.BillingPeriod)),
+		PeriodStart:       &periodStart,
+		PeriodEnd:         &periodEnd,
+		BillingReason:     types.InvoiceBillingReasonSubscriptionCycle,
+		Metadata:          metadata,
+		LineItems:         lineItems,
+		InvoiceCoupons:    validCoupons,
+		LineItemCoupons:   validLineItemCoupons,
+		PreparedTaxRates:  preparedTaxRates,
+		SkipInvoiceNumber: skipInvoiceNumber,
 	}
 
 	return req, nil
