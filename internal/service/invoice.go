@@ -694,12 +694,6 @@ func (s *invoiceService) SkipInvoice(ctx context.Context, id string) error {
 		return err
 	}
 
-	if inv.InvoiceStatus != types.InvoiceStatusDraft {
-		return ierr.NewError("invoice is not in draft status").
-			WithHint("invoice must be in draft status to be skipped").
-			Mark(ierr.ErrValidation)
-	}
-
 	now := time.Now().UTC()
 	inv.InvoiceStatus = types.InvoiceStatusSkipped
 	inv.FinalizedAt = &now // record a closed timestamp for auditability
@@ -707,12 +701,6 @@ func (s *invoiceService) SkipInvoice(ctx context.Context, id string) error {
 	if err := s.InvoiceRepo.Update(ctx, inv); err != nil {
 		return err
 	}
-
-	s.Logger.Infow("invoice marked as skipped (zero usage period)",
-		"invoice_id", inv.ID,
-		"subscription_id", inv.SubscriptionID,
-		"period_start", inv.PeriodStart,
-		"period_end", inv.PeriodEnd)
 
 	return nil
 }
@@ -754,18 +742,16 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 	}
 
 	// 2. Load subscription with line items
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	subResp, err := subscriptionService.GetSubscription(ctx, *inv.SubscriptionID)
+	subResp, _, err := s.SubRepo.GetWithLineItems(ctx, *inv.SubscriptionID)
 	if err != nil {
 		return false, err
 	}
-	sub := subResp.Subscription
 
 	// 3. Calculate all charges via billing service
 	billingService := NewBillingService(s.ServiceParams)
 	invoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(
 		ctx,
-		sub,
+		subResp,
 		*inv.PeriodStart,
 		*inv.PeriodEnd,
 		types.ReferencePointPeriodEnd,
@@ -776,11 +762,6 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 
 	// 4. Zero usage → skip the invoice
 	if invoiceReq.Subtotal.IsZero() {
-		s.Logger.Infow("zero usage for period, marking invoice as skipped",
-			"invoice_id", inv.ID,
-			"subscription_id", *inv.SubscriptionID,
-			"period_start", *inv.PeriodStart,
-			"period_end", *inv.PeriodEnd)
 		if err := s.SkipInvoice(ctx, id); err != nil {
 			return false, err
 		}
@@ -844,13 +825,13 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			return err
 		}
 
-		// 5e. Update invoice header fields: invoice number, payment status, due date, description
+		// 5e. Update invoice header fields: invoice number, description, due date, payment status
 		inv.InvoiceNumber = &invoiceNumber
-		inv.Description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
+		inv.Description = invoiceReq.Description
 
 		// Compute due date from subscription payment terms or tenant invoice config
-		if sub.PaymentTerms != nil && *sub.PaymentTerms != "" {
-			if days, ok := types.PaymentTermsToDueDateDays(*sub.PaymentTerms); ok {
+		if subResp.PaymentTerms != nil && *subResp.PaymentTerms != "" {
+			if days, ok := types.PaymentTermsToDueDateDays(*subResp.PaymentTerms); ok {
 				dueDate := inv.PeriodEnd.Add(24 * time.Hour * time.Duration(days))
 				inv.DueDate = &dueDate
 			} else {
@@ -864,6 +845,11 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 
 		if inv.AmountRemaining.IsZero() {
 			inv.PaymentStatus = types.PaymentStatusSucceeded
+			// Match CreateInvoice: set PaidAt when fully covered by credits/coupons
+			if inv.PaidAt == nil {
+				now := time.Now().UTC()
+				inv.PaidAt = &now
+			}
 		} else {
 			inv.PaymentStatus = types.PaymentStatusPending
 		}
@@ -874,14 +860,10 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 		return false, err
 	}
 
-	s.Logger.Infow("calculated and populated invoice",
-		"invoice_id", inv.ID,
-		"subscription_id", *inv.SubscriptionID,
-		"amount", inv.AmountDue.String(),
-		"invoice_number", lo.FromPtrOr(inv.InvoiceNumber, ""),
-		"line_items_count", len(inv.LineItems))
-
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceCreateDraft, inv.ID)
+	// The draft was created earlier (with suppressed webhook). Now that it's
+	// populated with real line items/amounts, fire an update event — the invoice
+	// is still in DRAFT status; finalization happens in the next workflow step.
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID)
 	return false, nil
 }
 

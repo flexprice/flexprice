@@ -110,17 +110,17 @@ func (s *BillingActivities) CreateDraftInvoicesActivity(
 
 	subscriptionService := service.NewSubscriptionService(s.serviceParams)
 
-	invoices := make([]string, 0)
+	invoiceIDs := make([]string, 0)
 	for _, period := range input.Periods {
 		invoice, err := subscriptionService.CreateDraftInvoiceForSubscription(ctx, input.SubscriptionID, period)
 		if err != nil {
 			return nil, err
 		}
-		invoices = append(invoices, invoice.ID)
+		invoiceIDs = append(invoiceIDs, invoice.ID)
 	}
 
 	return &subscriptionModels.CreateInvoicesActivityOutput{
-		InvoiceIDs: invoices,
+		InvoiceIDs: invoiceIDs,
 	}, nil
 }
 
