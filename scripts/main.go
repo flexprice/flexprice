@@ -123,6 +123,11 @@ var commands = []Command{
 		Description: "Sync a price to all subscriptions with the same plan and start date by creating new line items",
 		Run:         internal.SyncPriceToSubscriptions,
 	},
+	{
+		Name:        "analytics-invoice-reconciliation",
+		Description: "Compare analytics total cost vs invoice subtotals for a period (default 1 Feb–1 Mar); output CSV of diffs",
+		Run:         internal.RunAnalyticsInvoiceReconciliation,
+	},
 }
 
 // runBulkReprocessEventsCommand wraps the bulk reprocess events with command line parameters
