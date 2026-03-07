@@ -2,10 +2,10 @@ package testutil
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/flexprice/flexprice/internal/domain/user"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -28,7 +28,7 @@ func (r *InMemoryUserStore) Create(ctx context.Context, user *user.User) error {
 	defer r.mu.Unlock()
 
 	if _, exists := r.users[user.Email]; exists {
-		return errors.New("user already exists")
+		return ierr.NewError("user already exists").Mark(ierr.ErrAlreadyExists)
 	}
 
 	r.users[user.Email] = user
@@ -42,7 +42,7 @@ func (r *InMemoryUserStore) GetByEmail(ctx context.Context, email string) (*user
 
 	user, exists := r.users[email]
 	if !exists {
-		return nil, errors.New("user not found")
+		return nil, ierr.NewError("user not found").Mark(ierr.ErrNotFound)
 	}
 
 	return user, nil
@@ -58,7 +58,7 @@ func (r *InMemoryUserStore) GetByID(ctx context.Context, userID string) (*user.U
 			return u, nil
 		}
 	}
-	return nil, errors.New("user not found")
+	return nil, ierr.NewError("user not found").Mark(ierr.ErrNotFound)
 }
 
 // ListByFilter is a minimal implementation for testing
@@ -69,7 +69,7 @@ func (r *InMemoryUserStore) ListByFilter(ctx context.Context, filter *types.User
 	// Get tenant ID from context
 	tenantID, ok := ctx.Value(types.CtxTenantID).(string)
 	if !ok {
-		return nil, 0, errors.New("tenant ID not found in context")
+		return nil, 0, ierr.NewError("tenant ID not found in context").Mark(ierr.ErrValidation)
 	}
 
 	var result []*user.User

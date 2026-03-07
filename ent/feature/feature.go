@@ -43,6 +43,12 @@ const (
 	FieldUnitSingular = "unit_singular"
 	// FieldUnitPlural holds the string denoting the unit_plural field in the database.
 	FieldUnitPlural = "unit_plural"
+	// FieldReportingUnitSingular holds the string denoting the reporting_unit_singular field in the database.
+	FieldReportingUnitSingular = "reporting_unit_singular"
+	// FieldReportingUnitPlural holds the string denoting the reporting_unit_plural field in the database.
+	FieldReportingUnitPlural = "reporting_unit_plural"
+	// FieldReportingUnitConversionRate holds the string denoting the reporting_unit_conversion_rate field in the database.
+	FieldReportingUnitConversionRate = "reporting_unit_conversion_rate"
 	// FieldAlertSettings holds the string denoting the alert_settings field in the database.
 	FieldAlertSettings = "alert_settings"
 	// Table holds the table name of the feature in the database.
@@ -67,6 +73,9 @@ var Columns = []string{
 	FieldMetadata,
 	FieldUnitSingular,
 	FieldUnitPlural,
+	FieldReportingUnitSingular,
+	FieldReportingUnitPlural,
+	FieldReportingUnitConversionRate,
 	FieldAlertSettings,
 }
 
@@ -175,4 +184,19 @@ func ByUnitSingular(opts ...sql.OrderTermOption) OrderOption {
 // ByUnitPlural orders the results by the unit_plural field.
 func ByUnitPlural(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUnitPlural, opts...).ToFunc()
+}
+
+// ByReportingUnitSingular orders the results by the reporting_unit_singular field.
+func ByReportingUnitSingular(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReportingUnitSingular, opts...).ToFunc()
+}
+
+// ByReportingUnitPlural orders the results by the reporting_unit_plural field.
+func ByReportingUnitPlural(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReportingUnitPlural, opts...).ToFunc()
+}
+
+// ByReportingUnitConversionRate orders the results by the reporting_unit_conversion_rate field.
+func ByReportingUnitConversionRate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReportingUnitConversionRate, opts...).ToFunc()
 }

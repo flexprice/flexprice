@@ -204,6 +204,11 @@ func (Invoice) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			Comment("Key for ensuring idempotent invoice creation"),
+
+		field.String("recalculated_invoice_id").
+			Optional().
+			Nillable().
+			Comment("ID of the replacement invoice created when this invoice was recalculated after voiding"),
 	}
 }
 

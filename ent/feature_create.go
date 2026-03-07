@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // FeatureCreate is the builder for creating a Feature entity.
@@ -187,6 +188,48 @@ func (fc *FeatureCreate) SetUnitPlural(s string) *FeatureCreate {
 func (fc *FeatureCreate) SetNillableUnitPlural(s *string) *FeatureCreate {
 	if s != nil {
 		fc.SetUnitPlural(*s)
+	}
+	return fc
+}
+
+// SetReportingUnitSingular sets the "reporting_unit_singular" field.
+func (fc *FeatureCreate) SetReportingUnitSingular(s string) *FeatureCreate {
+	fc.mutation.SetReportingUnitSingular(s)
+	return fc
+}
+
+// SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableReportingUnitSingular(s *string) *FeatureCreate {
+	if s != nil {
+		fc.SetReportingUnitSingular(*s)
+	}
+	return fc
+}
+
+// SetReportingUnitPlural sets the "reporting_unit_plural" field.
+func (fc *FeatureCreate) SetReportingUnitPlural(s string) *FeatureCreate {
+	fc.mutation.SetReportingUnitPlural(s)
+	return fc
+}
+
+// SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableReportingUnitPlural(s *string) *FeatureCreate {
+	if s != nil {
+		fc.SetReportingUnitPlural(*s)
+	}
+	return fc
+}
+
+// SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
+func (fc *FeatureCreate) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureCreate {
+	fc.mutation.SetReportingUnitConversionRate(d)
+	return fc
+}
+
+// SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureCreate {
+	if d != nil {
+		fc.SetReportingUnitConversionRate(*d)
 	}
 	return fc
 }
@@ -401,6 +444,18 @@ func (fc *FeatureCreate) createSpec() (*Feature, *sqlgraph.CreateSpec) {
 	if value, ok := fc.mutation.UnitPlural(); ok {
 		_spec.SetField(feature.FieldUnitPlural, field.TypeString, value)
 		_node.UnitPlural = &value
+	}
+	if value, ok := fc.mutation.ReportingUnitSingular(); ok {
+		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
+		_node.ReportingUnitSingular = &value
+	}
+	if value, ok := fc.mutation.ReportingUnitPlural(); ok {
+		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
+		_node.ReportingUnitPlural = &value
+	}
+	if value, ok := fc.mutation.ReportingUnitConversionRate(); ok {
+		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
+		_node.ReportingUnitConversionRate = &value
 	}
 	if value, ok := fc.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)

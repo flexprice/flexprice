@@ -201,6 +201,36 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "invoice voided successfully"})
 }
 
+// RecalculateInvoice godoc
+// @Summary Recalculate invoice (default: voided invoice)
+// @ID recalculateInvoice
+// @Description Creates a fresh replacement invoice for a voided SUBSCRIPTION invoice covering the same billing period. The original voided invoice is linked to the new invoice via recalculated_invoice_id. Can only be called once per voided invoice.
+// @Tags Invoices
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Invoice ID"
+// @Success 200 {object} dto.InvoiceResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request or invoice already recalculated"
+// @Failure 404 {object} ierr.ErrorResponse "Invoice not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /invoices/{id}/recalculate [post]
+func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.invoiceService.RecalculateInvoice(c.Request.Context(), id)
+	if err != nil {
+		h.logger.Errorw("failed to recalculate invoice", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // UpdatePaymentStatus godoc
 // @Summary Update invoice payment status
 // @ID updateInvoicePaymentStatus
@@ -388,10 +418,10 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdf)
 }
 
-// RecalculateInvoice godoc
-// @Summary Recalculate invoice
-// @ID recalculateInvoice
-// @Description Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.
+// RecalculateInvoiceV2 godoc
+// @Summary Recalculate draft invoice (v2)
+// @ID recalculateInvoiceV2
+// @Description Recalculates a draft SUBSCRIPTION invoice in-place (replaces line items, reapplies credits/coupons/taxes). Use when subscription or usage data changed before finalizing.
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -402,8 +432,8 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /invoices/{id}/recalculate [post]
-func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
+// @Router /invoices/{id}/recalculate-v2 [post]
+func (h *InvoiceHandler) RecalculateInvoiceV2(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
@@ -414,9 +444,9 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 	finalizeParam := c.DefaultQuery("finalize", "true")
 	finalize := finalizeParam == "true"
 
-	invoice, err := h.invoiceService.RecalculateInvoice(c.Request.Context(), id, finalize)
+	invoice, err := h.invoiceService.RecalculateInvoiceV2(c.Request.Context(), id, finalize)
 	if err != nil {
-		h.logger.Errorw("failed to recalculate invoice", "error", err, "invoice_id", id)
+		h.logger.Errorw("failed to recalculate invoice v2", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}

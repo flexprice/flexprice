@@ -354,6 +354,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 			invoices.POST("/:id/payment/attempt", handlers.Invoice.AttemptPayment)
 			invoices.GET("/:id/pdf", handlers.Invoice.GetInvoicePDF)
 			invoices.POST("/:id/recalculate", handlers.Invoice.RecalculateInvoice)
+			invoices.POST("/:id/recalculate-v2", handlers.Invoice.RecalculateInvoiceV2)
 			invoices.POST("/:id/comms/trigger", handlers.Invoice.TriggerCommunication)
 			invoices.POST("/:id/webhook/trigger", handlers.Invoice.TriggerWebhook)
 		}
@@ -568,6 +569,9 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		customerPortalAPI.POST("/wallets", handlers.CustomerPortal.GetWallets)
 		customerPortalAPI.GET("/wallets/:id", handlers.CustomerPortal.GetWallet)
 		customerPortalAPI.GET("/wallets/:id/transactions", handlers.CustomerPortal.GetWalletTransactions)
+
+		// Portal config (theme, sections, tabs)
+		customerPortalAPI.GET("/config", handlers.CustomerPortal.GetPortalConfig)
 
 		// Analytics
 		customerPortalAPI.POST("/analytics/revenue", handlers.CustomerPortal.GetAnalytics)

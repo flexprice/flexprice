@@ -41,6 +41,8 @@ type PortalCostAnalyticsRequest struct {
 	FeatureIDs []string  `json:"feature_ids,omitempty" example:"feat_123,feat_456"`
 	StartTime  time.Time `json:"start_time" binding:"required" example:"2024-01-01T00:00:00Z"`
 	EndTime    time.Time `json:"end_time" binding:"required" example:"2024-01-31T23:59:59Z"`
+	// Expand specifies which related entities to include. Supported values: "meter", "price"
+	Expand []string `json:"expand,omitempty" example:"meter,price"`
 }
 
 // ToInternalRequest converts the portal cost analytics request to an internal GetCostAnalyticsRequest
@@ -51,6 +53,7 @@ func (r *PortalCostAnalyticsRequest) ToInternalRequest(externalCustomerID string
 		FeatureIDs:         r.FeatureIDs,
 		StartTime:          r.StartTime,
 		EndTime:            r.EndTime,
+		Expand:             r.Expand,
 	}
 }
 

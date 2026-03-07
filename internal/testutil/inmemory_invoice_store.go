@@ -101,6 +101,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		Metadata:                   inv.Metadata,
 		Version:                    inv.Version,
 		EnvironmentID:              inv.EnvironmentID,
+		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		BaseModel:                  inv.BaseModel,
 	}
 }
@@ -186,6 +187,10 @@ func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key stri
 	}
 
 	for _, inv := range invoices {
+		// Exclude voided invoices to match PostgreSQL behaviour (WHERE invoice_status != 'VOIDED')
+		if inv.InvoiceStatus == types.InvoiceStatusVoided {
+			continue
+		}
 		if inv.IdempotencyKey != nil && *inv.IdempotencyKey == key {
 			return copyInvoice(inv), nil
 		}
@@ -203,6 +208,11 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 	}
 
 	for _, inv := range invoices {
+		// Exclude voided invoices to match PostgreSQL partial index:
+		// UNIQUE (subscription_id, period_start, period_end) WHERE invoice_status != 'VOIDED'
+		if inv.InvoiceStatus == types.InvoiceStatusVoided {
+			continue
+		}
 		if inv.PeriodStart != nil && inv.PeriodEnd != nil {
 			if (periodStart.Equal(*inv.PeriodStart) || periodStart.After(*inv.PeriodStart)) &&
 				(periodEnd.Equal(*inv.PeriodEnd) || periodEnd.Before(*inv.PeriodEnd)) {

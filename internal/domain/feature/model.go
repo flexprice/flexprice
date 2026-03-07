@@ -2,8 +2,10 @@ package feature
 
 import (
 	"github.com/flexprice/flexprice/ent"
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
 type Feature struct {
@@ -16,6 +18,7 @@ type Feature struct {
 	Type          types.FeatureType    `json:"type"`
 	UnitSingular  string               `json:"unit_singular"`
 	UnitPlural    string               `json:"unit_plural"`
+	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
 	EnvironmentID string               `json:"environment_id"`
 	types.BaseModel
@@ -34,6 +37,17 @@ func FromEnt(f *ent.Feature) *Feature {
 		alertSettings = &f.AlertSettings
 	}
 
+	var reportingUnit *types.ReportingUnit
+	if f.ReportingUnitSingular != nil && *f.ReportingUnitSingular != "" &&
+		f.ReportingUnitPlural != nil && *f.ReportingUnitPlural != "" &&
+		f.ReportingUnitConversionRate != nil {
+		reportingUnit = &types.ReportingUnit{
+			UnitSingular:   *f.ReportingUnitSingular,
+			UnitPlural:     *f.ReportingUnitPlural,
+			ConversionRate: f.ReportingUnitConversionRate,
+		}
+	}
+
 	return &Feature{
 		ID:            f.ID,
 		Name:          f.Name,
@@ -44,6 +58,7 @@ func FromEnt(f *ent.Feature) *Feature {
 		Type:          types.FeatureType(f.Type),
 		UnitSingular:  lo.FromPtr(f.UnitSingular),
 		UnitPlural:    lo.FromPtr(f.UnitPlural),
+		ReportingUnit: reportingUnit,
 		AlertSettings: alertSettings,
 		EnvironmentID: f.EnvironmentID,
 		BaseModel: types.BaseModel{
@@ -64,4 +79,23 @@ func FromEntList(features []*ent.Feature) []*Feature {
 		result[i] = FromEnt(f)
 	}
 	return result
+}
+
+// ToReportingValue converts a value from base units to reporting (display) units.
+// Formula: unit value = reporting value * conversion_rate.
+// Returns error if reporting unit is nil or conversion_rate is not set; otherwise returns the converted value
+// rounded to 2 decimal places.
+func (r *Feature) ToReportingValue(unitValue decimal.Decimal) (*decimal.Decimal, error) {
+	if r == nil || r.ReportingUnit == nil {
+		return nil, ierr.NewError("reporting_unit is required").
+			WithHint("Feature has no reporting unit; set reporting_unit with conversion_rate to convert values").
+			Mark(ierr.ErrValidation)
+	}
+	if r.ReportingUnit.ConversionRate == nil {
+		return nil, ierr.NewError("conversion_rate is required").
+			WithHint("Reporting unit must have a conversion_rate to convert unit value to reporting value").
+			Mark(ierr.ErrValidation)
+	}
+	result := unitValue.Div(*r.ReportingUnit.ConversionRate).Round(2)
+	return lo.ToPtr(result), nil
 }

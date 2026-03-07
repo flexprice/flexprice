@@ -8,9 +8,11 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
+	"github.com/shopspring/decimal"
 )
 
-// InMemoryFeatureStore implements feature.Repository
+// InMemoryFeatureStore implements feature.Repository.
+// It stores features by ID and preserves all fields, including ReportingUnit (unit_singular, unit_plural, conversion_rate).
 type InMemoryFeatureStore struct {
 	*InMemoryStore[*feature.Feature]
 }
@@ -19,6 +21,16 @@ type InMemoryFeatureStore struct {
 func NewInMemoryFeatureStore() *InMemoryFeatureStore {
 	return &InMemoryFeatureStore{
 		InMemoryStore: NewInMemoryStore[*feature.Feature](),
+	}
+}
+
+// NewReportingUnit returns a ReportingUnit for tests. All three fields must be set when used for create/update.
+func NewReportingUnit(unitSingular, unitPlural string, conversionRate string) *types.ReportingUnit {
+	rate := decimal.RequireFromString(conversionRate)
+	return &types.ReportingUnit{
+		UnitSingular:   unitSingular,
+		UnitPlural:     unitPlural,
+		ConversionRate: &rate,
 	}
 }
 

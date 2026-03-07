@@ -229,6 +229,13 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 		feature.UnitPlural = *req.UnitPlural
 	}
 
+	if req.ReportingUnit != nil {
+		if err := req.ReportingUnit.Validate(); err != nil {
+			return nil, err
+		}
+		feature.ReportingUnit = req.ReportingUnit
+	}
+
 	// Update alert settings if provided
 	if req.AlertSettings != nil {
 		// Start with existing settings (preserve what's not being updated)

@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Feature holds the schema definition for the Feature entity.
@@ -69,6 +70,25 @@ func (Feature) Fields() []ent.Field {
 		field.String("unit_plural").
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
+		// Reporting unit: application invariant is either all three null or all three set (validated at API layer).
+		field.String("reporting_unit_singular").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable(),
+		field.String("reporting_unit_plural").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable(),
+		field.Other("reporting_unit_conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,10)",
 			}).
 			Optional().
 			Nillable(),

@@ -41,15 +41,15 @@ func (h *UserHandler) GetUserInfo(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-// @Summary Create service account
+// @Summary Create user or service account
 // @ID createUser
-// @Description Use when provisioning API access for automation, CI/CD pipelines, or headless integrations that need scoped API keys.
+// @Description Create a user account (type=user, email required; returns user + password for login) or a service account (type=service_account, roles required) for API/automation access.
 // @Tags Users
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body dto.CreateUserRequest true "Create service account request (type must be 'service_account', roles are required)"
-// @Success 201 {object} dto.UserResponse
+// @Param request body dto.CreateUserRequest true "Create user (email, type=user) or service account (type=service_account, roles)"
+// @Success 201 {object} dto.CreateUserResponse
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /users [post]
@@ -58,19 +58,19 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Errorw("invalid request body", "error", err)
 		c.Error(ierr.WithError(err).
-			WithHint("Invalid request. Only 'type' and 'roles' fields are allowed").
+			WithHint("Invalid request. For user: type and email required. For service_account: type and roles required.").
 			Mark(ierr.ErrValidation))
 		return
 	}
 
-	user, err := h.userService.CreateUser(c.Request.Context(), &req)
+	resp, err := h.userService.CreateUser(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.Errorw("failed to create user", "error", err)
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusCreated, user)
+	c.JSON(http.StatusCreated, resp)
 }
 
 // @Summary Query users

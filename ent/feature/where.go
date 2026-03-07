@@ -7,6 +7,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/shopspring/decimal"
 )
 
 // ID filters vertices based on their ID field.
@@ -132,6 +133,21 @@ func UnitSingular(v string) predicate.Feature {
 // UnitPlural applies equality check predicate on the "unit_plural" field. It's identical to UnitPluralEQ.
 func UnitPlural(v string) predicate.Feature {
 	return predicate.Feature(sql.FieldEQ(FieldUnitPlural, v))
+}
+
+// ReportingUnitSingular applies equality check predicate on the "reporting_unit_singular" field. It's identical to ReportingUnitSingularEQ.
+func ReportingUnitSingular(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitPlural applies equality check predicate on the "reporting_unit_plural" field. It's identical to ReportingUnitPluralEQ.
+func ReportingUnitPlural(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitConversionRate applies equality check predicate on the "reporting_unit_conversion_rate" field. It's identical to ReportingUnitConversionRateEQ.
+func ReportingUnitConversionRate(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldReportingUnitConversionRate, v))
 }
 
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
@@ -1072,6 +1088,206 @@ func UnitPluralEqualFold(v string) predicate.Feature {
 // UnitPluralContainsFold applies the ContainsFold predicate on the "unit_plural" field.
 func UnitPluralContainsFold(v string) predicate.Feature {
 	return predicate.Feature(sql.FieldContainsFold(FieldUnitPlural, v))
+}
+
+// ReportingUnitSingularEQ applies the EQ predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularEQ(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularNEQ applies the NEQ predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularNEQ(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldNEQ(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularIn applies the In predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularIn(vs ...string) predicate.Feature {
+	return predicate.Feature(sql.FieldIn(FieldReportingUnitSingular, vs...))
+}
+
+// ReportingUnitSingularNotIn applies the NotIn predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularNotIn(vs ...string) predicate.Feature {
+	return predicate.Feature(sql.FieldNotIn(FieldReportingUnitSingular, vs...))
+}
+
+// ReportingUnitSingularGT applies the GT predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularGT(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldGT(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularGTE applies the GTE predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularGTE(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldGTE(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularLT applies the LT predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularLT(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldLT(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularLTE applies the LTE predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularLTE(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldLTE(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularContains applies the Contains predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularContains(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldContains(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularHasPrefix applies the HasPrefix predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularHasPrefix(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldHasPrefix(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularHasSuffix applies the HasSuffix predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularHasSuffix(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldHasSuffix(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularIsNil applies the IsNil predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularIsNil() predicate.Feature {
+	return predicate.Feature(sql.FieldIsNull(FieldReportingUnitSingular))
+}
+
+// ReportingUnitSingularNotNil applies the NotNil predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularNotNil() predicate.Feature {
+	return predicate.Feature(sql.FieldNotNull(FieldReportingUnitSingular))
+}
+
+// ReportingUnitSingularEqualFold applies the EqualFold predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularEqualFold(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEqualFold(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitSingularContainsFold applies the ContainsFold predicate on the "reporting_unit_singular" field.
+func ReportingUnitSingularContainsFold(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldContainsFold(FieldReportingUnitSingular, v))
+}
+
+// ReportingUnitPluralEQ applies the EQ predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralEQ(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralNEQ applies the NEQ predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralNEQ(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldNEQ(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralIn applies the In predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralIn(vs ...string) predicate.Feature {
+	return predicate.Feature(sql.FieldIn(FieldReportingUnitPlural, vs...))
+}
+
+// ReportingUnitPluralNotIn applies the NotIn predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralNotIn(vs ...string) predicate.Feature {
+	return predicate.Feature(sql.FieldNotIn(FieldReportingUnitPlural, vs...))
+}
+
+// ReportingUnitPluralGT applies the GT predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralGT(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldGT(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralGTE applies the GTE predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralGTE(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldGTE(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralLT applies the LT predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralLT(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldLT(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralLTE applies the LTE predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralLTE(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldLTE(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralContains applies the Contains predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralContains(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldContains(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralHasPrefix applies the HasPrefix predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralHasPrefix(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldHasPrefix(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralHasSuffix applies the HasSuffix predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralHasSuffix(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldHasSuffix(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralIsNil applies the IsNil predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralIsNil() predicate.Feature {
+	return predicate.Feature(sql.FieldIsNull(FieldReportingUnitPlural))
+}
+
+// ReportingUnitPluralNotNil applies the NotNil predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralNotNil() predicate.Feature {
+	return predicate.Feature(sql.FieldNotNull(FieldReportingUnitPlural))
+}
+
+// ReportingUnitPluralEqualFold applies the EqualFold predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralEqualFold(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEqualFold(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitPluralContainsFold applies the ContainsFold predicate on the "reporting_unit_plural" field.
+func ReportingUnitPluralContainsFold(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldContainsFold(FieldReportingUnitPlural, v))
+}
+
+// ReportingUnitConversionRateEQ applies the EQ predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateEQ(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldReportingUnitConversionRate, v))
+}
+
+// ReportingUnitConversionRateNEQ applies the NEQ predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateNEQ(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldNEQ(FieldReportingUnitConversionRate, v))
+}
+
+// ReportingUnitConversionRateIn applies the In predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateIn(vs ...decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldIn(FieldReportingUnitConversionRate, vs...))
+}
+
+// ReportingUnitConversionRateNotIn applies the NotIn predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateNotIn(vs ...decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldNotIn(FieldReportingUnitConversionRate, vs...))
+}
+
+// ReportingUnitConversionRateGT applies the GT predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateGT(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldGT(FieldReportingUnitConversionRate, v))
+}
+
+// ReportingUnitConversionRateGTE applies the GTE predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateGTE(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldGTE(FieldReportingUnitConversionRate, v))
+}
+
+// ReportingUnitConversionRateLT applies the LT predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateLT(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldLT(FieldReportingUnitConversionRate, v))
+}
+
+// ReportingUnitConversionRateLTE applies the LTE predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateLTE(v decimal.Decimal) predicate.Feature {
+	return predicate.Feature(sql.FieldLTE(FieldReportingUnitConversionRate, v))
+}
+
+// ReportingUnitConversionRateIsNil applies the IsNil predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateIsNil() predicate.Feature {
+	return predicate.Feature(sql.FieldIsNull(FieldReportingUnitConversionRate))
+}
+
+// ReportingUnitConversionRateNotNil applies the NotNil predicate on the "reporting_unit_conversion_rate" field.
+func ReportingUnitConversionRateNotNil() predicate.Feature {
+	return predicate.Feature(sql.FieldNotNull(FieldReportingUnitConversionRate))
 }
 
 // AlertSettingsIsNil applies the IsNil predicate on the "alert_settings" field.

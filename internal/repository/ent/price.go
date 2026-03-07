@@ -99,6 +99,10 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
 		SetNillableConversionRate(p.ConversionRate)
 
+	if p.GroupID != "" {
+		priceBuilder = priceBuilder.SetGroupID(p.GroupID)
+	}
+
 	price, err := priceBuilder.Save(ctx)
 
 	if err != nil {
@@ -278,7 +282,8 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Price.Update().
+	// Build the update query
+	update := client.Price.Update().
 		Where(
 			price.ID(p.ID),
 			price.TenantID(p.TenantID),
@@ -290,9 +295,16 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		SetNillableGroupID(lo.ToPtr(p.GroupID)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	// Handle group_id: empty string clears (NULL), non-empty sets the value
+	if p.GroupID == "" {
+		update = update.ClearGroupID()
+	} else {
+		update = update.SetNillableGroupID(lo.ToPtr(p.GroupID))
+	}
+
+	_, err := update.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)

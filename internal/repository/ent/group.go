@@ -5,7 +5,9 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
+	"github.com/flexprice/flexprice/internal/dsl"
 	domainGroup "github.com/flexprice/flexprice/internal/domain/group"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
@@ -354,6 +356,44 @@ func (o GroupQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types
 	}
 	if len(f.GroupIDs) > 0 {
 		query = query.Where(group.IDIn(f.GroupIDs...))
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(group.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(group.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	// Apply filters using the generic DSL (filter by lookup_key, name, entity_type, created_at)
+	if f.Filters != nil {
+		var err error
+		query, err = dsl.ApplyFilters[GroupQuery, predicate.Group](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.Group { return predicate.Group(p) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Apply sorts using the generic DSL (sort by updated_at, created_at, etc.)
+	if f.Sort != nil {
+		var err error
+		query, err = dsl.ApplySorts[GroupQuery, group.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) group.OrderOption { return group.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return query, nil

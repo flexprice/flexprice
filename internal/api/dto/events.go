@@ -324,6 +324,8 @@ type UsageAnalyticItem struct {
 	UnitPlural           string                             `json:"unit_plural,omitempty"`
 	AggregationType      types.AggregationType              `json:"aggregation_type,omitempty"`
 	TotalUsage           decimal.Decimal                    `json:"total_usage" swaggertype:"string"`
+	TotalUsageDisplay    string                             `json:"total_usage_display"` // Empty string when feature has no reporting unit; otherwise the value in reporting units
+	ReportingUnit        *types.ReportingUnit               `json:"reporting_unit,omitempty"` // Present when total_usage_display is set (unit_singular, unit_plural, conversion_rate)
 	TotalCost            decimal.Decimal                    `json:"total_cost" swaggertype:"string"`
 	Currency             string                             `json:"currency,omitempty"`
 	EventCount           uint64                             `json:"event_count"`          // Number of events that contributed to this aggregation

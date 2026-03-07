@@ -314,6 +314,7 @@ func (r *TopUpWalletRequest) Validate() error {
 		types.TransactionReasonPurchasedCreditDirect,
 		types.TransactionReasonSubscriptionCredit,
 		types.TransactionReasonCreditNote,
+		types.TransactionReasonInvoiceVoidRefund,
 	}
 
 	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {

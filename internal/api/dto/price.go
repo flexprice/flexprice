@@ -105,8 +105,11 @@ type UpdatePriceRequest struct {
 	// PriceUnitTiers are the price unit tiers (for CUSTOM price unit type, TIERED billing model)
 	PriceUnitTiers []CreatePriceTier `json:"price_unit_tiers,omitempty"`
 
-	// GroupID is the id of the group to update the price in
-	GroupID string `json:"group_id,omitempty"`
+	// GroupID is the id of the group to update the price in.
+	// If not provided (nil), the group will not be changed
+	// If provided as empty string (""), the group will be removed (price will be ungrouped)
+	// If provided as a group ID, the price will be assigned to that group (must exist and be published)
+	GroupID *string `json:"group_id,omitempty"`
 }
 
 type PriceResponse struct {
@@ -582,7 +585,12 @@ func (r *UpdatePriceRequest) ToCreatePriceRequest(existingPrice *price.Price) Cr
 	}
 
 	// Handle GroupID: use request value if provided, otherwise use existing
-	createReq.GroupID = lo.Ternary(r.GroupID != "", r.GroupID, existingPrice.GroupID)
+	// If GroupID is nil, keep existing group. If it's a pointer to empty string, clear it. Otherwise, use the new value.
+	if r.GroupID == nil {
+		createReq.GroupID = existingPrice.GroupID
+	} else {
+		createReq.GroupID = *r.GroupID
+	}
 
 	// Determine target billing model (use request billing model if provided, otherwise existing)
 	targetBillingModel := existingPrice.BillingModel

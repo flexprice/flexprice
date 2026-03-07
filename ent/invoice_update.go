@@ -542,6 +542,26 @@ func (iu *InvoiceUpdate) ClearIdempotencyKey() *InvoiceUpdate {
 	return iu
 }
 
+// SetRecalculatedInvoiceID sets the "recalculated_invoice_id" field.
+func (iu *InvoiceUpdate) SetRecalculatedInvoiceID(s string) *InvoiceUpdate {
+	iu.mutation.SetRecalculatedInvoiceID(s)
+	return iu
+}
+
+// SetNillableRecalculatedInvoiceID sets the "recalculated_invoice_id" field if the given value is not nil.
+func (iu *InvoiceUpdate) SetNillableRecalculatedInvoiceID(s *string) *InvoiceUpdate {
+	if s != nil {
+		iu.SetRecalculatedInvoiceID(*s)
+	}
+	return iu
+}
+
+// ClearRecalculatedInvoiceID clears the value of the "recalculated_invoice_id" field.
+func (iu *InvoiceUpdate) ClearRecalculatedInvoiceID() *InvoiceUpdate {
+	iu.mutation.ClearRecalculatedInvoiceID()
+	return iu
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iu *InvoiceUpdate) AddLineItemIDs(ids ...string) *InvoiceUpdate {
 	iu.mutation.AddLineItemIDs(ids...)
@@ -828,6 +848,12 @@ func (iu *InvoiceUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if iu.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(invoice.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := iu.mutation.RecalculatedInvoiceID(); ok {
+		_spec.SetField(invoice.FieldRecalculatedInvoiceID, field.TypeString, value)
+	}
+	if iu.mutation.RecalculatedInvoiceIDCleared() {
+		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
 	}
 	if iu.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1449,6 +1475,26 @@ func (iuo *InvoiceUpdateOne) ClearIdempotencyKey() *InvoiceUpdateOne {
 	return iuo
 }
 
+// SetRecalculatedInvoiceID sets the "recalculated_invoice_id" field.
+func (iuo *InvoiceUpdateOne) SetRecalculatedInvoiceID(s string) *InvoiceUpdateOne {
+	iuo.mutation.SetRecalculatedInvoiceID(s)
+	return iuo
+}
+
+// SetNillableRecalculatedInvoiceID sets the "recalculated_invoice_id" field if the given value is not nil.
+func (iuo *InvoiceUpdateOne) SetNillableRecalculatedInvoiceID(s *string) *InvoiceUpdateOne {
+	if s != nil {
+		iuo.SetRecalculatedInvoiceID(*s)
+	}
+	return iuo
+}
+
+// ClearRecalculatedInvoiceID clears the value of the "recalculated_invoice_id" field.
+func (iuo *InvoiceUpdateOne) ClearRecalculatedInvoiceID() *InvoiceUpdateOne {
+	iuo.mutation.ClearRecalculatedInvoiceID()
+	return iuo
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by IDs.
 func (iuo *InvoiceUpdateOne) AddLineItemIDs(ids ...string) *InvoiceUpdateOne {
 	iuo.mutation.AddLineItemIDs(ids...)
@@ -1765,6 +1811,12 @@ func (iuo *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err e
 	}
 	if iuo.mutation.IdempotencyKeyCleared() {
 		_spec.ClearField(invoice.FieldIdempotencyKey, field.TypeString)
+	}
+	if value, ok := iuo.mutation.RecalculatedInvoiceID(); ok {
+		_spec.SetField(invoice.FieldRecalculatedInvoiceID, field.TypeString, value)
+	}
+	if iuo.mutation.RecalculatedInvoiceIDCleared() {
+		_spec.ClearField(invoice.FieldRecalculatedInvoiceID, field.TypeString)
 	}
 	if iuo.mutation.LineItemsCleared() {
 		edge := &sqlgraph.EdgeSpec{

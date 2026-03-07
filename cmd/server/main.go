@@ -46,6 +46,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
+	"github.com/nedpals/supabase-go"
 )
 
 // @title Flexprice API
@@ -205,6 +206,7 @@ func main() {
 			service.NewOAuthService,
 			service.NewTenantService,
 			service.NewAuthService,
+			provideSupabaseClient,
 			service.NewUserService,
 			service.NewEnvAccessService,
 			service.NewEnvironmentService,
@@ -396,6 +398,13 @@ func provideHandlers(
 
 func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
 	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
+}
+
+func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {
+	if cfg == nil || cfg.Auth.Supabase.BaseURL == "" || cfg.Auth.Supabase.ServiceKey == "" {
+		return nil
+	}
+	return supabase.CreateClient(cfg.Auth.Supabase.BaseURL, cfg.Auth.Supabase.ServiceKey)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
