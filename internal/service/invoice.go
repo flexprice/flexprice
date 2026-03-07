@@ -319,12 +319,13 @@ func (s *invoiceService) CreateInvoice(ctx context.Context, req dto.CreateInvoic
 		return nil, err
 	}
 
-	eventName := types.WebhookEventInvoiceCreateDraft
-	if resp.InvoiceStatus == types.InvoiceStatusFinalized {
-		eventName = types.WebhookEventInvoiceUpdateFinalized
+	if !req.SuppressWebhook {
+		eventName := types.WebhookEventInvoiceCreateDraft
+		if resp.InvoiceStatus == types.InvoiceStatusFinalized {
+			eventName = types.WebhookEventInvoiceUpdateFinalized
+		}
+		s.publishInternalWebhookEvent(ctx, eventName, resp.ID)
 	}
-
-	s.publishInternalWebhookEvent(ctx, eventName, resp.ID)
 	return resp, nil
 }
 
@@ -829,13 +830,22 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			return err
 		}
 
-		// 5d. Update invoice header fields: amounts, invoice number, payment status, due date, description
-		inv.InvoiceNumber = &invoiceNumber
+		// 5d. Set subtotal and attach line items, then apply credits/coupons and taxes (same order as CreateInvoice)
 		inv.Subtotal = invoiceReq.Subtotal
-		inv.Total = invoiceReq.Total
-		inv.AmountDue = invoiceReq.AmountDue
-		inv.AmountRemaining = invoiceReq.AmountDue.Sub(inv.AmountPaid)
 		inv.LineItems = newLineItems
+
+		req := *invoiceReq
+		req.CustomerID = inv.CustomerID
+		req.SubscriptionID = inv.SubscriptionID
+		if err := s.applyCreditsAndCouponsToInvoice(tx, inv, req); err != nil {
+			return err
+		}
+		if err := s.applyTaxesToInvoice(tx, inv, req); err != nil {
+			return err
+		}
+
+		// 5e. Update invoice header fields: invoice number, payment status, due date, description
+		inv.InvoiceNumber = &invoiceNumber
 		inv.Description = fmt.Sprintf("Invoice for subscription %s", sub.ID)
 
 		// Compute due date from subscription payment terms or tenant invoice config
@@ -871,6 +881,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 		"invoice_number", lo.FromPtrOr(inv.InvoiceNumber, ""),
 		"line_items_count", len(inv.LineItems))
 
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceCreateDraft, inv.ID)
 	return false, nil
 }
 
@@ -2953,18 +2964,14 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 			return err
 		}
 
-		// STEP 6b: Apply credits and coupons (same order as CreateInvoice: coupons first, then credit adjustment)
-		newInvoiceReq.SubscriptionID = inv.SubscriptionID
-		newInvoiceReq.CustomerID = inv.CustomerID
-		if err := s.applyCreditsAndCouponsToInvoice(txCtx, inv, lo.FromPtr(newInvoiceReq)); err != nil {
+		// STEP 6b: Apply credits, coupons, and taxes (same order as CreateInvoice)
+		req := *newInvoiceReq
+		req.SubscriptionID = inv.SubscriptionID
+		req.CustomerID = inv.CustomerID
+		if err := s.finalizeInvoiceWithCreditsCouponsAndTaxes(txCtx, inv, req); err != nil {
 			return err
 		}
 		if err := s.InvoiceRepo.Update(txCtx, inv); err != nil {
-			return err
-		}
-
-		// STEP 7: Apply taxes after recalculation
-		if err := s.RecalculateTaxesOnInvoice(txCtx, inv); err != nil {
 			return err
 		}
 
@@ -3974,6 +3981,19 @@ func (s *invoiceService) SyncInvoiceToExternalVendors(ctx context.Context, invoi
 	// Sync to Nomod if Nomod connection is enabled (async via Temporal)
 	s.triggerNomodInvoiceSyncWorkflow(ctx, invoice.ID, invoice.CustomerID)
 
+	return nil
+}
+
+// finalizeInvoiceWithCreditsCouponsAndTaxes applies credits, coupons, and taxes to an invoice in the correct order.
+// It mutates inv in memory; the caller must persist changes via InvoiceRepo.Update.
+// Order: coupons first (affect taxable amount), then credits, then taxes.
+func (s *invoiceService) finalizeInvoiceWithCreditsCouponsAndTaxes(ctx context.Context, inv *invoice.Invoice, req dto.CreateInvoiceRequest) error {
+	if err := s.applyCreditsAndCouponsToInvoice(ctx, inv, req); err != nil {
+		return err
+	}
+	if err := s.applyTaxesToInvoice(ctx, inv, req); err != nil {
+		return err
+	}
 	return nil
 }
 

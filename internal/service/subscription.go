@@ -5760,7 +5760,31 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 // for the given billing period. No usage calculation, line-item population, due date,
 // or invoice number assignment happens here; all of that is deferred to
 // CalculateAndPopulateInvoice (called by CalculateInvoiceActivity in ProcessInvoiceWorkflow).
+// Idempotent: if an invoice already exists for this subscription and period (e.g. on workflow retry),
+// returns that invoice instead of creating a duplicate.
 func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
+	exists, err := s.InvoiceRepo.ExistsForPeriod(ctx, subscriptionID, period.Start, period.End)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		filter := &types.InvoiceFilter{
+			QueryFilter:    &types.QueryFilter{Limit: lo.ToPtr(1)},
+			SubscriptionID: subscriptionID,
+			PeriodStartGTE: &period.Start,
+			PeriodStartLTE: &period.Start,
+			PeriodEndGTE:   &period.End,
+			PeriodEndLTE:   &period.End,
+		}
+		invs, err := s.InvoiceRepo.List(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		if len(invs) > 0 {
+			return dto.NewInvoiceResponse(invs[0]), nil
+		}
+	}
+
 	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
@@ -5783,6 +5807,7 @@ func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Cont
 		PeriodEnd:         &period.End,
 		BillingReason:     types.InvoiceBillingReasonSubscriptionCycle,
 		SkipInvoiceNumber: true,
+		SuppressWebhook:   true, // Webhook is sent when draft is populated by CalculateAndPopulateInvoice
 	}
 
 	inv, err := invoiceService.CreateInvoice(ctx, invoiceReq)
