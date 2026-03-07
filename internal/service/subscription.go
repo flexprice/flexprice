@@ -5756,34 +5756,36 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 	return periods, nil
 }
 
-// Create Draft Invoice for Subscription
+// CreateDraftInvoiceForSubscription creates a zero-dollar placeholder draft invoice
+// for the given billing period. No usage calculation, line-item population, due date,
+// or invoice number assignment happens here; all of that is deferred to
+// CalculateAndPopulateInvoice (called by CalculateInvoiceActivity in ProcessInvoiceWorkflow).
 func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
 
-	billingService := NewBillingService(s.ServiceParams)
 	invoiceService := NewInvoiceService(s.ServiceParams)
 
-	// Prepare Invoice Request
-	invoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(
-		ctx,
-		sub,
-		period.Start,
-		period.End,
-		types.ReferencePointPeriodEnd,
-	)
-	if err != nil {
-		return nil, err
-	}
-	// Check if the invoice is zeroAmountInvoice
-	if invoiceReq.Subtotal.IsZero() {
-		return nil, nil
+	invoiceReq := dto.CreateInvoiceRequest{
+		CustomerID:        sub.GetInvoicingCustomerID(),
+		SubscriptionID:    lo.ToPtr(sub.ID),
+		InvoiceType:       types.InvoiceTypeSubscription,
+		InvoiceStatus:     lo.ToPtr(types.InvoiceStatusDraft),
+		PaymentStatus:     lo.ToPtr(types.PaymentStatusPending),
+		Currency:          sub.Currency,
+		AmountDue:         decimal.Zero,
+		Total:             decimal.Zero,
+		Subtotal:          decimal.Zero,
+		BillingPeriod:     lo.ToPtr(string(sub.BillingPeriod)),
+		PeriodStart:       &period.Start,
+		PeriodEnd:         &period.End,
+		BillingReason:     types.InvoiceBillingReasonSubscriptionCycle,
+		SkipInvoiceNumber: true,
 	}
 
-	// Create Invoice
-	inv, err := invoiceService.CreateInvoice(ctx, *invoiceReq)
+	inv, err := invoiceService.CreateInvoice(ctx, invoiceReq)
 	if err != nil {
 		return nil, err
 	}

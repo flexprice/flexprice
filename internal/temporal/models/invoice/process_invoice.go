@@ -148,6 +148,41 @@ type PaymentActivityOutput struct {
 	Success bool `json:"success"`
 }
 
+// ===================== Calculate Invoice Activity Models =====================
+
+// CalculateInvoiceActivityInput represents the input for calculating and populating an invoice
+type CalculateInvoiceActivityInput struct {
+	InvoiceID     string `json:"invoice_id"`
+	TenantID      string `json:"tenant_id"`
+	EnvironmentID string `json:"environment_id"`
+	UserID        string `json:"user_id"`
+}
+
+// Validate validates the calculate invoice activity input
+func (i *CalculateInvoiceActivityInput) Validate() error {
+	if i.InvoiceID == "" {
+		return ierr.NewError("invoice_id is required").
+			WithHint("Invoice ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.TenantID == "" {
+		return ierr.NewError("tenant_id is required").
+			WithHint("Tenant ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	if i.EnvironmentID == "" {
+		return ierr.NewError("environment_id is required").
+			WithHint("Environment ID is required").
+			Mark(ierr.ErrValidation)
+	}
+	return nil
+}
+
+// CalculateInvoiceActivityOutput represents the output for calculating an invoice
+type CalculateInvoiceActivityOutput struct {
+	Skipped bool `json:"skipped"`
+}
+
 // ===================== Trigger Invoice Workflow Activity Models =====================
 
 // TriggerInvoiceWorkflowActivityInput represents the input for triggering invoice workflows

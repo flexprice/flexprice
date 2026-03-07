@@ -116,10 +116,7 @@ func (s *BillingActivities) CreateDraftInvoicesActivity(
 		if err != nil {
 			return nil, err
 		}
-		// Skip nil invoices (zero-amount invoices)
-		if invoice != nil {
-			invoices = append(invoices, invoice.ID)
-		}
+		invoices = append(invoices, invoice.ID)
 	}
 
 	return &subscriptionModels.CreateInvoicesActivityOutput{

@@ -26,6 +26,44 @@ func NewInvoiceActivities(
 	}
 }
 
+// CalculateInvoiceActivity computes usage for a draft invoice and either
+// populates it with line items + invoice number, or marks it as SKIPPED.
+func (s *InvoiceActivities) CalculateInvoiceActivity(
+	ctx context.Context,
+	input invoiceModels.CalculateInvoiceActivityInput,
+) (*invoiceModels.CalculateInvoiceActivityOutput, error) {
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+
+	// Set context values
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	ctx = types.SetUserID(ctx, input.UserID)
+
+	invoiceService := service.NewInvoiceService(s.serviceParams)
+
+	skipped, err := invoiceService.CalculateAndPopulateInvoice(ctx, input.InvoiceID)
+	if err != nil {
+		s.logger.Errorw("failed to calculate and populate invoice",
+			"invoice_id", input.InvoiceID,
+			"error", err)
+		return nil, err
+	}
+
+	if skipped {
+		s.logger.Infow("invoice skipped (zero usage)",
+			"invoice_id", input.InvoiceID)
+	} else {
+		s.logger.Infow("invoice calculated and populated successfully",
+			"invoice_id", input.InvoiceID)
+	}
+
+	return &invoiceModels.CalculateInvoiceActivityOutput{
+		Skipped: skipped,
+	}, nil
+}
+
 // FinalizeInvoiceActivity finalizes an invoice
 func (s *InvoiceActivities) FinalizeInvoiceActivity(
 	ctx context.Context,

@@ -2110,27 +2110,38 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	}
 	// Create invoice request
 	// Use invoicing customer ID if available, otherwise fallback to subscription customer ID
+	lineItems := append(result.FixedCharges, result.UsageCharges...)
+
+	// For zero-amount periods: skip invoice number generation and omit line items.
+	// The invoice will be a placeholder draft; CalculateAndPopulateInvoice will
+	// later either populate it or mark it as SKIPPED.
+	skipInvoiceNumber := result.TotalAmount.IsZero()
+	if skipInvoiceNumber {
+		lineItems = nil
+	}
+
 	req := &dto.CreateInvoiceRequest{
-		CustomerID:       invoicingCustomerID,
-		SubscriptionID:   lo.ToPtr(sub.ID),
-		InvoiceType:      types.InvoiceTypeSubscription,
-		InvoiceStatus:    lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus:    lo.ToPtr(types.PaymentStatusPending),
-		Currency:         sub.Currency,
-		AmountDue:        result.TotalAmount,
-		Total:            result.TotalAmount,
-		Subtotal:         result.TotalAmount,
-		Description:      description,
-		DueDate:          lo.ToPtr(invoiceDueDate),
-		BillingPeriod:    lo.ToPtr(string(sub.BillingPeriod)),
-		PeriodStart:      &periodStart,
-		PeriodEnd:        &periodEnd,
-		BillingReason:    types.InvoiceBillingReasonSubscriptionCycle,
-		Metadata:         metadata,
-		LineItems:        append(result.FixedCharges, result.UsageCharges...),
-		InvoiceCoupons:   validCoupons,
-		LineItemCoupons:  validLineItemCoupons,
-		PreparedTaxRates: preparedTaxRates,
+		CustomerID:        invoicingCustomerID,
+		SubscriptionID:    lo.ToPtr(sub.ID),
+		InvoiceType:       types.InvoiceTypeSubscription,
+		InvoiceStatus:     lo.ToPtr(types.InvoiceStatusDraft),
+		PaymentStatus:     lo.ToPtr(types.PaymentStatusPending),
+		Currency:          sub.Currency,
+		AmountDue:         result.TotalAmount,
+		Total:             result.TotalAmount,
+		Subtotal:          result.TotalAmount,
+		Description:       description,
+		DueDate:           lo.ToPtr(invoiceDueDate),
+		BillingPeriod:     lo.ToPtr(string(sub.BillingPeriod)),
+		PeriodStart:       &periodStart,
+		PeriodEnd:         &periodEnd,
+		BillingReason:     types.InvoiceBillingReasonSubscriptionCycle,
+		Metadata:          metadata,
+		LineItems:         lineItems,
+		InvoiceCoupons:    validCoupons,
+		LineItemCoupons:   validLineItemCoupons,
+		PreparedTaxRates:  preparedTaxRates,
+		SkipInvoiceNumber: skipInvoiceNumber,
 	}
 
 	return req, nil
