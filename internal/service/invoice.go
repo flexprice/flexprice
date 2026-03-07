@@ -816,12 +816,10 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 		inv.LineItems = newLineItems
 
 		req := *invoiceReq
+
 		req.CustomerID = inv.CustomerID
 		req.SubscriptionID = inv.SubscriptionID
-		if err := s.applyCreditsAndCouponsToInvoice(tx, inv, req); err != nil {
-			return err
-		}
-		if err := s.applyTaxesToInvoice(tx, inv, req); err != nil {
+		if err := s.finalizeInvoiceWithCreditsCouponsAndTaxes(tx, inv, req); err != nil {
 			return err
 		}
 
@@ -843,13 +841,10 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			inv.DueDate = &dueDate
 		}
 
-		if inv.AmountRemaining.IsZero() {
+		if inv.AmountRemaining.IsZero() && inv.PaidAt == nil {
 			inv.PaymentStatus = types.PaymentStatusSucceeded
-			// Match CreateInvoice: set PaidAt when fully covered by credits/coupons
-			if inv.PaidAt == nil {
-				now := time.Now().UTC()
-				inv.PaidAt = &now
-			}
+			now := time.Now().UTC()
+			inv.PaidAt = &now
 		} else {
 			inv.PaymentStatus = types.PaymentStatusPending
 		}
@@ -863,7 +858,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 	// The draft was created earlier (with suppressed webhook). Now that it's
 	// populated with real line items/amounts, fire an update event — the invoice
 	// is still in DRAFT status; finalization happens in the next workflow step.
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceCreateDraft, inv.ID)
 	return false, nil
 }
 
