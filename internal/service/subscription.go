@@ -5775,6 +5775,13 @@ func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Cont
 			PeriodStartLTE: &period.Start,
 			PeriodEndGTE:   &period.End,
 			PeriodEndLTE:   &period.End,
+			// Only return actionable invoices (DRAFT or FINALIZED); exclude
+			// VOIDED and SKIPPED so the caller doesn't get a stale invoice
+			// that can't be processed further.
+			InvoiceStatus: []types.InvoiceStatus{
+				types.InvoiceStatusDraft,
+				types.InvoiceStatusFinalized,
+			},
 		}
 		invs, err := s.InvoiceRepo.List(ctx, filter)
 		if err != nil {

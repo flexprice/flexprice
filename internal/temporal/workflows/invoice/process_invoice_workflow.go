@@ -47,7 +47,7 @@ func ProcessInvoiceWorkflow(
 			InitialInterval:    time.Second * 10,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    time.Minute * 5,
-			MaximumAttempts:    1,
+			MaximumAttempts:    3, // Safe to retry: activities are idempotent (CalculateAndPopulateInvoice checks invoice number/SKIPPED, FinalizeInvoice validates DRAFT status)
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)

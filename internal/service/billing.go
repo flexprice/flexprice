@@ -26,7 +26,7 @@ import (
 type BillingCalculationResult struct {
 	FixedCharges []dto.CreateInvoiceLineItemRequest
 	UsageCharges []dto.CreateInvoiceLineItemRequest
-	TotalAmount  decimal.Decimal
+	TotalAmount  decimal.Decimal // Pre-discount/pre-tax total; maps to CreateInvoiceRequest.Subtotal
 	Currency     string
 }
 
@@ -2115,6 +2115,15 @@ func (s *billingService) CreateInvoiceRequestForCharges(
 	// For zero-amount periods: skip invoice number generation and omit line items.
 	// The invoice will be a placeholder draft; CalculateAndPopulateInvoice will
 	// later either populate it or mark it as SKIPPED.
+	//
+	// NOTE: While CreateSubscriptionInvoice and CalculateAndPopulateInvoice bail
+	// out early when subtotal is zero (before consuming this request), other
+	// callers (GetPreviewInvoice, RecalculateInvoice) may pass through zero-amount
+	// results. This logic acts as a defensive guard for those paths.
+	//
+	// result.TotalAmount maps to Subtotal in the returned CreateInvoiceRequest
+	// (see below: Subtotal: result.TotalAmount). Callers that check
+	// invoiceReq.Subtotal.IsZero() are checking the same underlying value.
 	skipInvoiceNumber := result.TotalAmount.IsZero()
 	if skipInvoiceNumber {
 		lineItems = nil

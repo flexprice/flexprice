@@ -668,11 +668,13 @@ func (s *invoiceService) performFinalizeInvoiceActions(ctx context.Context, inv 
 		return ierr.NewError("invoice is not in draft status").WithHint("invoice must be in draft status to be finalized").Mark(ierr.ErrValidation)
 	}
 
+	now := time.Now().UTC()
+
 	if inv.Total.IsZero() {
 		inv.PaymentStatus = types.PaymentStatusSucceeded
+		inv.PaidAt = &now
 	}
 
-	now := time.Now().UTC()
 	inv.InvoiceStatus = types.InvoiceStatusFinalized
 	inv.FinalizedAt = &now
 
@@ -692,6 +694,18 @@ func (s *invoiceService) SkipInvoice(ctx context.Context, id string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// Idempotent: already skipped → no-op
+	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+		return nil
+	}
+
+	// Only DRAFT invoices may be skipped
+	if inv.InvoiceStatus != types.InvoiceStatusDraft {
+		return ierr.NewError("invoice is not in draft status").
+			WithHint("only draft invoices can be skipped").
+			Mark(ierr.ErrValidation)
 	}
 
 	now := time.Now().UTC()
@@ -721,6 +735,20 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return false, err
+	}
+
+	// Idempotency guard: if the invoice was already skipped on a previous
+	// attempt (e.g. Temporal activity retry), treat as a successful skip.
+	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+		return true, nil
+	}
+
+	// Idempotency guard: if the invoice was already populated (has an invoice
+	// number) but is still in DRAFT (finalization is the next workflow step),
+	// treat as a successful populate. This prevents double credit/coupon
+	// deduction and invoice-number waste on retry.
+	if inv.InvoiceNumber != nil && *inv.InvoiceNumber != "" {
+		return false, nil
 	}
 
 	if inv.InvoiceStatus != types.InvoiceStatusDraft {
@@ -811,7 +839,12 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			return err
 		}
 
-		// 5d. Set subtotal and attach line items, then apply credits/coupons and taxes (same order as CreateInvoice)
+		// 5d. Set subtotal and attach line items, then apply credits/coupons and taxes (same order as CreateInvoice).
+		// NOTE: BillingReason is intentionally NOT overwritten here. The correct value
+		// (SubscriptionCreate for billingSeq==1, SubscriptionCycle otherwise) was set
+		// during draft creation by CreateInvoice, which checks the billing sequence.
+		// PrepareSubscriptionInvoiceRequest always returns SubscriptionCycle, so
+		// copying invoiceReq.BillingReason here would silently break the first-invoice case.
 		inv.Subtotal = invoiceReq.Subtotal
 		inv.LineItems = newLineItems
 
@@ -849,6 +882,11 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			inv.PaymentStatus = types.PaymentStatusPending
 		}
 
+		// Validate the fully populated invoice before persisting (mirrors CreateInvoice)
+		if err := inv.Validate(); err != nil {
+			return err
+		}
+
 		return s.InvoiceRepo.Update(tx, inv)
 	})
 	if err != nil {
@@ -858,7 +896,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 	// The draft was created earlier (with suppressed webhook). Now that it's
 	// populated with real line items/amounts, fire an update event — the invoice
 	// is still in DRAFT status; finalization happens in the next workflow step.
-	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceCreateDraft, inv.ID)
+	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceUpdate, inv.ID)
 	return false, nil
 }
 
@@ -2145,6 +2183,11 @@ func (s *invoiceService) AttemptPayment(ctx context.Context, id string) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {
 		return err
+	}
+
+	// SKIPPED invoices are zero-usage placeholders — payment is not applicable
+	if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+		return nil
 	}
 
 	// Use the new payment function with nil parameters to use subscription defaults

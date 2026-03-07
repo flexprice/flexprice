@@ -370,6 +370,30 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		}
 	}
 
+	// Filter by period start range
+	if f.PeriodStartGTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
+			return false
+		}
+	}
+	if f.PeriodStartLTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.After(*f.PeriodStartLTE) {
+			return false
+		}
+	}
+
+	// Filter by period end range
+	if f.PeriodEndGTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.PeriodEndGTE) {
+			return false
+		}
+	}
+	if f.PeriodEndLTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.PeriodEndLTE) {
+			return false
+		}
+	}
+
 	return true
 }
 
