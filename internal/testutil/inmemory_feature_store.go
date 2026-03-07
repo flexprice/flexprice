@@ -313,3 +313,40 @@ func (s *InMemoryFeatureStore) ListByIDs(ctx context.Context, featureIDs []strin
 	// Use the existing List method
 	return s.List(ctx, filter)
 }
+
+// GetByGroupIDs returns features that belong to any of the given group IDs.
+func (s *InMemoryFeatureStore) GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*feature.Feature, error) {
+	if len(groupIDs) == 0 {
+		return []*feature.Feature{}, nil
+	}
+	groupIDSet := make(map[string]bool)
+	for _, id := range groupIDs {
+		groupIDSet[id] = true
+	}
+	all, err := s.List(ctx, &types.FeatureFilter{QueryFilter: types.NewNoLimitQueryFilter()})
+	if err != nil {
+		return nil, err
+	}
+	var out []*feature.Feature
+	for _, f := range all {
+		if f.GroupID != "" && groupIDSet[f.GroupID] {
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// ClearByGroupID clears the group ID for all features in the given group.
+func (s *InMemoryFeatureStore) ClearByGroupID(ctx context.Context, groupID string) error {
+	features, err := s.GetByGroupIDs(ctx, []string{groupID})
+	if err != nil {
+		return err
+	}
+	for _, f := range features {
+		f.GroupID = ""
+		if err := s.Update(ctx, f); err != nil {
+			return err
+		}
+	}
+	return nil
+}

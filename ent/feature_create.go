@@ -248,6 +248,20 @@ func (fc *FeatureCreate) SetNillableAlertSettings(ts *types.AlertSettings) *Feat
 	return fc
 }
 
+// SetGroupID sets the "group_id" field.
+func (fc *FeatureCreate) SetGroupID(s string) *FeatureCreate {
+	fc.mutation.SetGroupID(s)
+	return fc
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableGroupID(s *string) *FeatureCreate {
+	if s != nil {
+		fc.SetGroupID(*s)
+	}
+	return fc
+}
+
 // SetID sets the "id" field.
 func (fc *FeatureCreate) SetID(s string) *FeatureCreate {
 	fc.mutation.SetID(s)
@@ -460,6 +474,10 @@ func (fc *FeatureCreate) createSpec() (*Feature, *sqlgraph.CreateSpec) {
 	if value, ok := fc.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 		_node.AlertSettings = value
+	}
+	if value, ok := fc.mutation.GroupID(); ok {
+		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
+		_node.GroupID = &value
 	}
 	return _node, _spec
 }

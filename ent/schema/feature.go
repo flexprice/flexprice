@@ -97,6 +97,12 @@ func (Feature) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.String("group_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -116,5 +122,7 @@ func (Feature) Indexes() []ent.Index {
 			StorageKey("idx_feature_tenant_env_status"),
 		index.Fields("tenant_id", "environment_id", "created_at").
 			StorageKey("idx_feature_tenant_env_created_at"),
+		index.Fields("tenant_id", "environment_id", "group_id").
+			StorageKey("idx_feature_tenant_env_group_id"),
 	}
 }
