@@ -15,6 +15,9 @@ type Repository interface {
 	Update(ctx context.Context, inv *Invoice) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
+	
+	// ListAllTenant lists invoices across all tenants (no tenant/env from context). For CRON/scheduled use only.
+	ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)
 	Count(ctx context.Context, filter *types.InvoiceFilter) (int, error)
 
 	// Edge-specific operations

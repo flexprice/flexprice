@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/temporal/models"
 	subscriptionModels "github.com/flexprice/flexprice/internal/temporal/models/subscription"
 	exportWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/export"
+	invoiceWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/invoice"
 	subscriptionWorkflows "github.com/flexprice/flexprice/internal/temporal/workflows/subscription"
 	"github.com/flexprice/flexprice/internal/types"
 	"go.temporal.io/api/serviceerror"
@@ -32,6 +33,7 @@ type ScheduledTaskService interface {
 
 	CalculateIntervalBoundaries(currentTime time.Time, interval types.ScheduledTaskInterval) (startTime, endTime time.Time)
 	ScheduleUpdateBillingPeriod(ctx context.Context) (string, error)
+	ScheduleRegenerateDraftInvoices(ctx context.Context) (string, error)
 }
 
 type scheduledTaskService struct {
@@ -809,4 +811,47 @@ func (s *scheduledTaskService) ScheduleUpdateBillingPeriod(ctx context.Context) 
 	}
 
 	return "Triggered update billing period workflow successfully", nil
+}
+
+// ScheduleRegenerateDraftInvoices creates a Temporal schedule that runs RegenerateDraftInvoicesScheduledWorkflow every 6 hours.
+// Schedule ID is fixed so repeated calls are idempotent (Temporal returns already exists if present).
+// Follows same convention as ScheduleUpdateBillingPeriod (resource-scoped route, trigger once). Fixed schedule ID for idempotent create.
+func (s *scheduledTaskService) ScheduleRegenerateDraftInvoices(ctx context.Context) (string, error) {
+	if s.temporalClient == nil {
+		return "", ierr.NewError("temporal client not configured").
+			WithHint("Temporal client is not available").
+			Mark(ierr.ErrInternal)
+	}
+
+	const scheduleID = "schtask_regenerate_draft_invoices"
+	// Cron: at minute 0 of every 6th hour (00:00, 06:00, 12:00, 18:00 UTC)
+	cronExpr := "0 */6 * * *"
+	scheduleSpec := client.ScheduleSpec{
+		CronExpressions: []string{cronExpr},
+	}
+	// Timeouts match schedule interval (6h): allow a run to complete before the next tick.
+	// Trade-off: a stuck workflow will take up to 6h to time out instead of failing sooner.
+	action := &client.ScheduleWorkflowAction{
+		Workflow:                 invoiceWorkflows.RegenerateDraftInvoicesScheduledWorkflow,
+		Args:                     []interface{}{},
+		TaskQueue:                string(types.TemporalTaskQueueInvoice),
+		WorkflowExecutionTimeout: 6 * time.Hour,
+		WorkflowRunTimeout:       6 * time.Hour,
+		WorkflowTaskTimeout:      1 * time.Hour, // workflow task is short; only activities run long
+	}
+	scheduleOptions := models.CreateScheduleOptions{
+		ID:     scheduleID,
+		Spec:   scheduleSpec,
+		Action: action,
+		Paused: false,
+	}
+	_, err := s.temporalClient.CreateSchedule(ctx, scheduleOptions)
+	if err != nil {
+		s.logger.Errorw("failed to create regenerate draft invoices schedule", "error", err)
+		return "", ierr.WithError(err).
+			WithHint("Failed to create Temporal schedule for regenerate draft invoices").
+			Mark(ierr.ErrInternal)
+	}
+	s.logger.Infow("created regenerate draft invoices schedule", "schedule_id", scheduleID, "cron", cronExpr)
+	return "Regenerate draft invoices schedule created (every 6 hours)", nil
 }

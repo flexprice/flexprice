@@ -511,6 +511,8 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildReprocessRawEventsInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessEventsForPlanWorkflow:
 		return s.buildReprocessEventsForPlanInput(ctx, tenantID, environmentID, userID, params)
+	case types.TemporalRegenerateDraftInvoicesBatchWorkflow:
+		return s.buildRegenerateDraftInvoicesBatchWorkflowInput(ctx, tenantID, environmentID, userID, params)
 	default:
 		return nil, errors.NewError("unsupported workflow type").
 			WithHintf("Workflow type %s is not supported", workflowType.String()).
@@ -802,6 +804,25 @@ func (s *temporalService) buildRecalculateInvoiceInput(_ context.Context, tenant
 	}
 	return nil, errors.NewError("invalid input for recalculate invoice workflow").
 		WithHint("Provide RecalculateInvoiceWorkflowInput with invoice_id, or invoice_id string, or map with invoice_id").
+		Mark(errors.ErrValidation)
+}
+
+// buildRegenerateDraftInvoicesBatchWorkflowInput builds input for the batch regenerate draft invoices workflow.
+func (s *temporalService) buildRegenerateDraftInvoicesBatchWorkflowInput(_ context.Context, _, _, _ string, params interface{}) (interface{}, error) {
+	if input, ok := params.(invoiceModels.RegenerateDraftInvoicesBatchWorkflowInput); ok {
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return input, nil
+	}
+	if input, ok := params.(*invoiceModels.RegenerateDraftInvoicesBatchWorkflowInput); ok {
+		if err := input.Validate(); err != nil {
+			return nil, err
+		}
+		return *input, nil
+	}
+	return nil, errors.NewError("invalid input for regenerate draft invoices batch workflow").
+		WithHint("Provide RegenerateDraftInvoicesBatchWorkflowInput with invoices list").
 		Mark(errors.ErrValidation)
 }
 

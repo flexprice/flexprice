@@ -19,7 +19,7 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// InvoiceVoidRecalculateSuite tests VoidInvoice, RecalculateInvoice and RecalculateInvoiceV2.
+// InvoiceVoidRecalculateSuite tests VoidInvoice, RecalculateInvoice and RegenerateDraftSubscriptionInvoice.
 type InvoiceVoidRecalculateSuite struct {
 	testutil.BaseServiceTestSuite
 	service     InvoiceService
@@ -797,10 +797,10 @@ func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoice_HappyPath() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RecalculateInvoiceV2 tests
+// RegenerateDraftSubscriptionInvoice tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_Validation() {
+func (s *InvoiceVoidRecalculateSuite) TestRegenerateDraftSubscriptionInvoice_Validation() {
 	tests := []struct {
 		name          string
 		setup         func() string // returns invoice ID
@@ -913,19 +913,19 @@ func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_Validation() {
 			s.setupTestData()
 
 			id := tt.setup()
-			_, err := s.service.RecalculateInvoiceV2(s.GetContext(), id, false)
+			_, err := s.service.RegenerateDraftSubscriptionInvoice(s.GetContext(), id, false)
 			s.Error(err)
 			s.Contains(err.Error(), tt.expectedError)
 		})
 	}
 }
 
-func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_HappyPath_KeepDraft() {
+func (s *InvoiceVoidRecalculateSuite) TestRegenerateDraftSubscriptionInvoice_HappyPath_KeepDraft() {
 	inv := s.buildDraftInvoice("inv_v2_draft_keep")
 
-	result, err := s.service.RecalculateInvoiceV2(s.GetContext(), inv.ID, false)
+	result, err := s.service.RegenerateDraftSubscriptionInvoice(s.GetContext(), inv.ID, false)
 	if err != nil {
-		s.T().Logf("RecalculateInvoiceV2 returned error (possible mock limitation): %v", err)
+		s.T().Logf("RegenerateDraftSubscriptionInvoice returned error (possible mock limitation): %v", err)
 		return
 	}
 
@@ -935,12 +935,12 @@ func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_HappyPath_KeepDra
 		"invoice must remain DRAFT when finalize=false")
 }
 
-func (s *InvoiceVoidRecalculateSuite) TestRecalculateInvoiceV2_HappyPath_Finalize() {
+func (s *InvoiceVoidRecalculateSuite) TestRegenerateDraftSubscriptionInvoice_HappyPath_Finalize() {
 	inv := s.buildDraftInvoice("inv_v2_draft_finalize")
 
-	result, err := s.service.RecalculateInvoiceV2(s.GetContext(), inv.ID, true)
+	result, err := s.service.RegenerateDraftSubscriptionInvoice(s.GetContext(), inv.ID, true)
 	if err != nil {
-		s.T().Logf("RecalculateInvoiceV2 returned error (possible mock limitation): %v", err)
+		s.T().Logf("RegenerateDraftSubscriptionInvoice returned error (possible mock limitation): %v", err)
 		return
 	}
 

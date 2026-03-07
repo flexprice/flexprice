@@ -606,6 +606,53 @@ func (r *invoiceRepository) List(ctx context.Context, filter *types.InvoiceFilte
 	return result, nil
 }
 
+// ListAllTenant retrieves all invoices across all tenants (no tenant/env from context).
+// NOTE: Expensive operation; use only for CRON/scheduled jobs.
+func (r *invoiceRepository) ListAllTenant(ctx context.Context, filter *types.InvoiceFilter) ([]*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "list_all_tenant", map[string]interface{}{
+		"filter": filter,
+	})
+	defer FinishSpan(span)
+
+	if filter == nil {
+		filter = types.NewInvoiceFilter()
+	}
+	if err := filter.Validate(); err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).WithHint("invalid filter").Mark(ierr.ErrValidation)
+	}
+
+	client := r.client.Reader(ctx)
+	query := client.Invoice.Query()
+
+	// Intentionally skip ApplyQueryOptions/ApplyBaseFilters so we do not restrict by tenant or environment.
+	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
+	if err != nil {
+		SetSpanError(span, err)
+		return nil, ierr.WithError(err).
+			WithHint("Failed to apply query options").
+			Mark(ierr.ErrDatabase)
+	}
+
+	query = ApplySorting(query, filter, r.queryOpts)
+	query = ApplyPagination(query, filter, r.queryOpts)
+	query = r.queryOpts.ApplyStatusFilter(query, filter.GetStatus())
+
+	invoices, err := query.All(ctx)
+	if err != nil {
+		SetSpanError(span, err)
+		r.logger.Errorw("failed to list invoices across tenants", "error", err)
+		return nil, ierr.WithError(err).WithHint("invoice list all tenant failed").Mark(ierr.ErrDatabase)
+	}
+
+	result := make([]*domainInvoice.Invoice, len(invoices))
+	for i, inv := range invoices {
+		result[i] = domainInvoice.FromEnt(inv)
+	}
+	SetSpanSuccess(span)
+	return result, nil
+}
+
 // Count returns the total number of invoices based on the filter
 func (r *invoiceRepository) Count(ctx context.Context, filter *types.InvoiceFilter) (int, error) {
 	// Start a span for this repository operation

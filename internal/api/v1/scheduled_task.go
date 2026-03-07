@@ -282,3 +282,22 @@ func (h *ScheduledTaskHandler) ScheduleUpdateBillingPeriod(c *gin.Context) {
 		"message": response,
 	})
 }
+
+// ScheduleRegenerateDraftInvoices godoc
+// @Summary Create schedule for regenerate draft invoices
+// @Description Creates a Temporal schedule that runs RegenerateDraftInvoicesScheduledWorkflow every 6 hours. Trigger once (e.g. deployment). Idempotent (fixed schedule ID). Same convention as POST /subscriptions/temporal/schedule-update-billing-period.
+// @Tags Invoices
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} object
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /invoices/temporal/schedule-regenerate-draft-invoices [post]
+func (h *ScheduledTaskHandler) ScheduleRegenerateDraftInvoices(c *gin.Context) {
+	response, err := h.service.ScheduleRegenerateDraftInvoices(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to create regenerate draft invoices schedule", "error", err)
+		c.Error(err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": response})
+}
