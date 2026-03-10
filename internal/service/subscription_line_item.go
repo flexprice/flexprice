@@ -59,7 +59,7 @@ func (s *subscriptionService) AddSubscriptionLineItem(ctx context.Context, subsc
 		if usedInlinePrice {
 			s.applySubscriptionScopedLineItemDefaults(lineItem, sub, price)
 		}
-		if err := s.validateLineItemCommitment(txCtx, lineItem); err != nil {
+		if err := s.validateLineItemCommitment(txCtx, lineItem, sub.BillingPeriod); err != nil {
 			return err
 		}
 		sub.LineItems = append(sub.LineItems, lineItem)
@@ -352,7 +352,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 			newLineItem.StartDate = endDate // Start where the old one ends
 
 			// Validate line item commitment if configured
-			if err := s.validateLineItemCommitment(ctx, newLineItem); err != nil {
+			if err := s.validateLineItemCommitment(ctx, newLineItem, sub.BillingPeriod); err != nil {
 				return err
 			}
 
@@ -409,7 +409,7 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 		}
 
 		// Validate line item commitment if configured
-		if err := s.validateLineItemCommitment(ctx, existingLineItem); err != nil {
+		if err := s.validateLineItemCommitment(ctx, existingLineItem, sub.BillingPeriod); err != nil {
 			return nil, err
 		}
 
@@ -430,8 +430,9 @@ func (s *subscriptionService) UpdateSubscriptionLineItem(ctx context.Context, li
 	}
 }
 
-// validateLineItemCommitment validates commitment configuration for a subscription line item
-func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, lineItem *subscription.SubscriptionLineItem) error {
+// validateLineItemCommitment validates commitment configuration for a subscription line item.
+// billingPeriod is the subscription's billing period, used to validate commitment_duration constraints.
+func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, lineItem *subscription.SubscriptionLineItem, billingPeriod ...types.BillingPeriod) error {
 	if lineItem == nil {
 		return nil
 	}
@@ -544,6 +545,31 @@ func (s *subscriptionService) validateLineItemCommitment(ctx context.Context, li
 			Mark(ierr.ErrValidation)
 	}
 
+	// Cross-period commitment validations (e.g., ANNUAL commitment on MONTHLY subscription)
+	if lineItem.CommitmentDuration != nil && len(billingPeriod) > 0 && *lineItem.CommitmentDuration != billingPeriod[0] {
+		// Rule: true-up is not supported when commitment_duration differs from billing_period
+		if lineItem.CommitmentTrueUpEnabled {
+			return ierr.NewError("true-up is not supported when commitment_duration differs from billing_period").
+				WithHint("Disable true-up for cross-period commitments (e.g., ANNUAL commitment on MONTHLY subscription)").
+				WithReportableDetails(map[string]interface{}{
+					"commitment_duration": *lineItem.CommitmentDuration,
+					"billing_period":      billingPeriod[0],
+				}).
+				Mark(ierr.ErrValidation)
+		}
+
+		// Rule: windowed commitment is not supported with cross-period commitment duration
+		if lineItem.CommitmentWindowed {
+			return ierr.NewError("windowed commitment is not supported with cross-period commitment duration").
+				WithHint("Disable windowed commitment for cross-period commitments (e.g., ANNUAL commitment on MONTHLY subscription)").
+				WithReportableDetails(map[string]interface{}{
+					"commitment_duration": *lineItem.CommitmentDuration,
+					"billing_period":      billingPeriod[0],
+				}).
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 
@@ -553,6 +579,7 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	ctx context.Context,
 	lineItem *subscription.SubscriptionLineItem,
 	commitments map[string]*dto.LineItemCommitmentConfig,
+	billingPeriod ...types.BillingPeriod,
 ) error {
 	if lineItem == nil || len(commitments) == 0 {
 		return nil
@@ -584,7 +611,7 @@ func (s *subscriptionService) applyLineItemCommitmentFromMap(
 	if cfg.CommitmentDuration != nil {
 		lineItem.CommitmentDuration = cfg.CommitmentDuration
 	}
-	if err := s.validateLineItemCommitment(ctx, lineItem); err != nil {
+	if err := s.validateLineItemCommitment(ctx, lineItem, billingPeriod...); err != nil {
 		return err
 	}
 

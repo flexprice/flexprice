@@ -665,6 +665,23 @@ func (s *billingService) CalculateUsageCharges(
 						lineItemAmount = adjustedAmount
 						matchingCharge.Amount = adjustedAmount.InexactFloat64()
 						commitmentInfo = info
+					} else if isCumulativeCommitment(item, sub.BillingPeriod) {
+						// Cumulative commitment: track usage across billing periods from subscription start
+						previousCumulativeCost, err := s.calculateCumulativeUsageCost(
+							ctx, sub, item, customer, eventService, priceService, matchingCharge.Price, periodStart)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
+
+						adjustedAmount, info, err := commitmentCalc.applyCumulativeCommitmentToLineItem(
+							ctx, item, lineItemAmount, previousCumulativeCost, matchingCharge.Price)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
+
+						lineItemAmount = adjustedAmount
+						matchingCharge.Amount = adjustedAmount.InexactFloat64()
+						commitmentInfo = info
 					} else {
 						// Non-window commitment: apply to aggregated usage cost
 						adjustedAmount, info, err := commitmentCalc.applyCommitmentToLineItem(
@@ -772,8 +789,64 @@ func (s *billingService) CalculateUsageCharges(
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
 
 	if hasCommitment {
-		// If there's overage, commitment is fully utilized, so no true-up needed
-		if !usage.HasOverage && sub.EnableTrueUp {
+		if isCumulativeSubscriptionCommitment(sub) {
+			// Cumulative subscription-level commitment (e.g., ANNUAL commitment on MONTHLY subscription).
+			// Calculate previous cumulative usage from past invoices and apply overage to the aggregate.
+			previousCumulativeTotal, err := s.calculateCumulativeSubscriptionUsageCostFromInvoices(ctx, sub, periodStart)
+			if err != nil {
+				return nil, decimal.Zero, err
+			}
+
+			overageAdjustment, adjustmentInfo := calculateSubscriptionCumulativeOverage(
+				totalUsageCost, previousCumulativeTotal, commitmentAmount, overageFactor)
+
+			if overageAdjustment.GreaterThan(decimal.Zero) {
+				planDisplayName := ""
+				for _, item := range sub.LineItems {
+					if item.PlanDisplayName != "" {
+						planDisplayName = item.PlanDisplayName
+						break
+					}
+				}
+
+				precision := types.GetCurrencyPrecision(sub.Currency)
+				roundedOverageAdjustment := overageAdjustment.Round(precision)
+
+				overageLineItem := dto.CreateInvoiceLineItemRequest{
+					EntityID:        lo.ToPtr(sub.PlanID),
+					EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
+					PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					PlanDisplayName: lo.ToPtr(planDisplayName),
+					DisplayName:     lo.ToPtr(fmt.Sprintf("%s Overage Adjustment", planDisplayName)),
+					Amount:          roundedOverageAdjustment,
+					Quantity:        decimal.NewFromInt(1),
+					PeriodStart:     &periodStart,
+					PeriodEnd:       &periodEnd,
+					PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+					Metadata: types.Metadata{
+						"is_cumulative_overage":      "true",
+						"description":                "Overage adjustment for cumulative commitment",
+						"commitment_amount":          commitmentAmount.String(),
+						"overage_factor":             overageFactor.String(),
+						"previous_cumulative_total":  previousCumulativeTotal.String(),
+						"current_period_total":       totalUsageCost.String(),
+						"overage_portion":            adjustmentInfo.overagePortion.String(),
+						"within_commitment_portion":  adjustmentInfo.withinCommitment.String(),
+					},
+				}
+
+				usageCharges = append(usageCharges, overageLineItem)
+				totalUsageCost = totalUsageCost.Add(roundedOverageAdjustment)
+			}
+
+			s.Logger.Debugw("applied cumulative subscription-level commitment",
+				"subscription_id", sub.ID,
+				"commitment_amount", commitmentAmount,
+				"previous_cumulative_total", previousCumulativeTotal,
+				"current_period_total", totalUsageCost,
+				"overage_adjustment", overageAdjustment)
+		} else if !usage.HasOverage && sub.EnableTrueUp {
+			// If there's overage, commitment is fully utilized, so no true-up needed
 			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
 
 			if remainingCommitment.GreaterThan(decimal.Zero) {
@@ -1323,6 +1396,23 @@ func (s *billingService) CalculateFeatureUsageCharges(
 						lineItemAmount = adjustedAmount
 						matchingCharge.Amount = adjustedAmount.InexactFloat64()
 						commitmentInfo = info
+					} else if isCumulativeCommitment(item, sub.BillingPeriod) {
+						// Cumulative commitment: track usage across billing periods from subscription start
+						previousCumulativeCost, err := s.calculateCumulativeUsageCostFromFeatureUsage(
+							ctx, sub, item, customer, priceService, matchingCharge.Price, meter, periodStart, querySource)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
+
+						adjustedAmount, info, err := commitmentCalc.applyCumulativeCommitmentToLineItem(
+							ctx, item, lineItemAmount, previousCumulativeCost, matchingCharge.Price)
+						if err != nil {
+							return nil, decimal.Zero, err
+						}
+
+						lineItemAmount = adjustedAmount
+						matchingCharge.Amount = adjustedAmount.InexactFloat64()
+						commitmentInfo = info
 					} else {
 						// Non-window commitment: apply to aggregated usage cost
 						adjustedAmount, info, err := commitmentCalc.applyCommitmentToLineItem(
@@ -1426,8 +1516,63 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
 
 	if hasCommitment {
-		// If there's overage, commitment is fully utilized, so no true-up needed
-		if !usage.HasOverage && sub.EnableTrueUp {
+		if isCumulativeSubscriptionCommitment(sub) {
+			// Cumulative subscription-level commitment (e.g., ANNUAL commitment on MONTHLY subscription).
+			previousCumulativeTotal, err := s.calculateCumulativeSubscriptionUsageCostFromInvoices(ctx, sub, periodStart)
+			if err != nil {
+				return nil, decimal.Zero, err
+			}
+
+			overageAdjustment, adjustmentInfo := calculateSubscriptionCumulativeOverage(
+				totalUsageCost, previousCumulativeTotal, commitmentAmount, overageFactor)
+
+			if overageAdjustment.GreaterThan(decimal.Zero) {
+				planDisplayName := ""
+				for _, item := range sub.LineItems {
+					if item.PlanDisplayName != "" {
+						planDisplayName = item.PlanDisplayName
+						break
+					}
+				}
+
+				precision := types.GetCurrencyPrecision(sub.Currency)
+				roundedOverageAdjustment := overageAdjustment.Round(precision)
+
+				overageLineItem := dto.CreateInvoiceLineItemRequest{
+					EntityID:        lo.ToPtr(sub.PlanID),
+					EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
+					PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+					PlanDisplayName: lo.ToPtr(planDisplayName),
+					DisplayName:     lo.ToPtr(fmt.Sprintf("%s Overage Adjustment", planDisplayName)),
+					Amount:          roundedOverageAdjustment,
+					Quantity:        decimal.NewFromInt(1),
+					PeriodStart:     &periodStart,
+					PeriodEnd:       &periodEnd,
+					PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+					Metadata: types.Metadata{
+						"is_cumulative_overage":      "true",
+						"description":                "Overage adjustment for cumulative commitment",
+						"commitment_amount":          commitmentAmount.String(),
+						"overage_factor":             overageFactor.String(),
+						"previous_cumulative_total":  previousCumulativeTotal.String(),
+						"current_period_total":       totalUsageCost.String(),
+						"overage_portion":            adjustmentInfo.overagePortion.String(),
+						"within_commitment_portion":  adjustmentInfo.withinCommitment.String(),
+					},
+				}
+
+				usageCharges = append(usageCharges, overageLineItem)
+				totalUsageCost = totalUsageCost.Add(roundedOverageAdjustment)
+			}
+
+			s.Logger.Debugw("applied cumulative subscription-level commitment (feature_usage)",
+				"subscription_id", sub.ID,
+				"commitment_amount", commitmentAmount,
+				"previous_cumulative_total", previousCumulativeTotal,
+				"current_period_total", totalUsageCost,
+				"overage_adjustment", overageAdjustment)
+		} else if !usage.HasOverage && sub.EnableTrueUp {
+			// If there's overage, commitment is fully utilized, so no true-up needed
 			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
 
 			if remainingCommitment.GreaterThan(decimal.Zero) {
@@ -2915,4 +3060,241 @@ func (s *billingService) calculateNeverResetUsage(
 		"billable_quantity", billableQuantity)
 
 	return billableQuantity, nil
+}
+
+// calculateCumulativeUsageCost fetches the cumulative usage cost from line item start
+// to the current period start, for use in cumulative commitment calculations.
+// Uses item.StartDate so that line items added mid-subscription only count their own usage.
+// This follows the same pattern as calculateNeverResetUsage but returns a monetary cost
+// rather than a billable quantity.
+func (s *billingService) calculateCumulativeUsageCost(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	customer *customer.Customer,
+	eventService EventService,
+	priceService PriceService,
+	priceObj *price.Price,
+	periodStart time.Time,
+) (decimal.Decimal, error) {
+	lineItemPeriodStart := item.GetPeriodStart(periodStart)
+
+	// If the period start is the same as line item start, there's no previous usage
+	if !lineItemPeriodStart.After(item.StartDate) {
+		return decimal.Zero, nil
+	}
+
+	// Fetch cumulative usage quantity from line item start to current period start.
+	// We use item.StartDate (not sub.StartDate) because a line item added mid-subscription
+	// should only count usage from when it was added.
+	usageRequest := &dto.GetUsageByMeterRequest{
+		MeterID:            item.MeterID,
+		PriceID:            item.PriceID,
+		ExternalCustomerID: customer.ExternalID,
+		StartTime:          item.StartDate,
+		EndTime:            lineItemPeriodStart,
+		BillingAnchor:      &sub.BillingAnchor,
+	}
+
+	usageResult, err := eventService.GetUsageByMeter(ctx, usageRequest)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	// Convert the cumulative usage quantity to a monetary cost
+	previousCumulativeCost := priceService.CalculateCost(ctx, priceObj, usageResult.Value)
+
+	s.Logger.Debugw("calculated cumulative usage cost for commitment",
+		"line_item_id", item.ID,
+		"meter_id", item.MeterID,
+		"line_item_start", item.StartDate,
+		"period_start", lineItemPeriodStart,
+		"cumulative_quantity", usageResult.Value,
+		"cumulative_cost", previousCumulativeCost)
+
+	return previousCumulativeCost, nil
+}
+
+// calculateCumulativeUsageCostFromFeatureUsage is the feature_usage table variant of
+// calculateCumulativeUsageCost, used by CalculateFeatureUsageCharges.
+// Uses item.StartDate so that line items added mid-subscription only count their own usage.
+func (s *billingService) calculateCumulativeUsageCostFromFeatureUsage(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	item *subscription.SubscriptionLineItem,
+	customer *customer.Customer,
+	priceService PriceService,
+	priceObj *price.Price,
+	meterObj *meter.Meter,
+	periodStart time.Time,
+	querySource types.UsageSource,
+) (decimal.Decimal, error) {
+	lineItemPeriodStart := item.GetPeriodStart(periodStart)
+
+	// If the period start is the same as line item start, there's no previous usage
+	if !lineItemPeriodStart.After(item.StartDate) {
+		return decimal.Zero, nil
+	}
+
+	// Fetch cumulative usage from feature_usage table.
+	// We use item.StartDate (not sub.StartDate) because a line item added mid-subscription
+	// should only count usage from when it was added.
+	usageRequest := &events.FeatureUsageParams{
+		PriceID:       item.PriceID,
+		MeterID:       item.MeterID,
+		SubLineItemID: item.ID,
+		Source:        querySource,
+		UsageParams: &events.UsageParams{
+			ExternalCustomerID: customer.ExternalID,
+			AggregationType:    meterObj.Aggregation.Type,
+			StartTime:          item.StartDate,
+			EndTime:            lineItemPeriodStart,
+			BillingAnchor:      &sub.BillingAnchor,
+			GroupByProperty:    meterObj.Aggregation.GroupBy,
+		},
+	}
+
+	usageResult, err := s.FeatureUsageRepo.GetUsageForBucketedMeters(ctx, usageRequest)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	// Sum all bucket values and convert to cost
+	totalQuantity := decimal.Zero
+	for _, result := range usageResult.Results {
+		totalQuantity = totalQuantity.Add(result.Value)
+	}
+
+	previousCumulativeCost := priceService.CalculateCost(ctx, priceObj, totalQuantity)
+
+	s.Logger.Debugw("calculated cumulative usage cost from feature_usage for commitment",
+		"line_item_id", item.ID,
+		"meter_id", item.MeterID,
+		"line_item_start", item.StartDate,
+		"period_start", lineItemPeriodStart,
+		"cumulative_quantity", totalQuantity,
+		"cumulative_cost", previousCumulativeCost)
+
+	return previousCumulativeCost, nil
+}
+
+// cumulativeOverageInfo holds the breakdown of a cumulative overage calculation.
+type cumulativeOverageInfo struct {
+	withinCommitment decimal.Decimal
+	overagePortion   decimal.Decimal
+}
+
+// calculateSubscriptionCumulativeOverage computes the overage adjustment amount for
+// subscription-level cumulative commitment. The adjustment is the ADDITIONAL charge
+// on top of the base usage cost (i.e., overagePortion × (overageFactor - 1)).
+//
+// Three cases:
+// 1. previousCumulative >= commitment: entire current period is overage
+// 2. previousCumulative + currentPeriod <= commitment: no overage
+// 3. Crosses boundary: split into within-commitment and overage portions
+func calculateSubscriptionCumulativeOverage(
+	currentPeriodTotal decimal.Decimal,
+	previousCumulativeTotal decimal.Decimal,
+	commitmentAmount decimal.Decimal,
+	overageFactor decimal.Decimal,
+) (decimal.Decimal, cumulativeOverageInfo) {
+	info := cumulativeOverageInfo{}
+
+	if previousCumulativeTotal.GreaterThanOrEqual(commitmentAmount) {
+		// Case 1: commitment fully consumed → entire current period is overage
+		info.overagePortion = currentPeriodTotal
+		info.withinCommitment = decimal.Zero
+		adjustment := currentPeriodTotal.Mul(overageFactor.Sub(decimal.NewFromInt(1)))
+		return adjustment, info
+	}
+
+	cumulativeTotal := previousCumulativeTotal.Add(currentPeriodTotal)
+	if cumulativeTotal.LessThanOrEqual(commitmentAmount) {
+		// Case 2: still within commitment → no overage
+		info.overagePortion = decimal.Zero
+		info.withinCommitment = currentPeriodTotal
+		return decimal.Zero, info
+	}
+
+	// Case 3: crosses the commitment boundary this period
+	info.withinCommitment = commitmentAmount.Sub(previousCumulativeTotal)
+	info.overagePortion = currentPeriodTotal.Sub(info.withinCommitment)
+	adjustment := info.overagePortion.Mul(overageFactor.Sub(decimal.NewFromInt(1)))
+	return adjustment, info
+}
+
+// calculateCumulativeSubscriptionUsageCostFromInvoices sums usage line item amounts
+// from all previous finalized invoices for this subscription, from subscription start
+// to the current period start. This is used for subscription-level cumulative commitment
+// to determine how much of the commitment has been consumed in prior billing periods.
+// Defined on ServiceParams so both billingService and subscriptionService can call it.
+func (s *ServiceParams) calculateCumulativeSubscriptionUsageCostFromInvoices(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	periodStart time.Time,
+) (decimal.Decimal, error) {
+	// Query finalized invoices for this subscription before the current period
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = sub.ID
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusFinalized}
+	filter.PeriodStartGTE = &sub.StartDate
+	filter.PeriodStartLTE = &periodStart
+
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	totalPreviousUsageCost := decimal.Zero
+	for _, inv := range invoices {
+		// Skip invoices that start at or after the current period
+		// (we only want strictly previous periods)
+		if inv.PeriodStart != nil && !inv.PeriodStart.Before(periodStart) {
+			continue
+		}
+
+		for _, li := range inv.LineItems {
+			// Skip true-up and overage adjustment line items — they are not base usage
+			if li.Metadata != nil {
+				if li.Metadata["is_commitment_trueup"] == "true" || li.Metadata["is_cumulative_overage"] == "true" {
+					continue
+				}
+			}
+
+			// Only count usage-type line items
+			if li.PriceType != nil && *li.PriceType == string(types.PRICE_TYPE_USAGE) {
+				// If the line item had commitment applied, use BaseUsageCost
+				// (the original usage cost before commitment adjustment) to avoid
+				// double-counting overage from previous periods.
+				if li.CommitmentInfo != nil && li.CommitmentInfo.BaseUsageCost.GreaterThan(decimal.Zero) {
+					totalPreviousUsageCost = totalPreviousUsageCost.Add(li.CommitmentInfo.BaseUsageCost)
+				} else if li.CommitmentInfo != nil && (li.CommitmentInfo.ComputedCommitmentUtilizedAmount.GreaterThan(decimal.Zero) || li.CommitmentInfo.ComputedOverageAmount.GreaterThan(decimal.Zero)) {
+					// Fallback: reverse-calculate BaseUsageCost from CommitmentInfo fields
+					// for old invoices that don't have BaseUsageCost stored.
+					// Formula: baseUsage = ComputedCommitmentUtilizedAmount + (ComputedOverageAmount / OverageFactor)
+					baseUsage := li.CommitmentInfo.ComputedCommitmentUtilizedAmount
+					if li.CommitmentInfo.ComputedOverageAmount.GreaterThan(decimal.Zero) {
+						overageFactor := decimal.NewFromInt(1)
+						if li.CommitmentInfo.OverageFactor != nil && li.CommitmentInfo.OverageFactor.GreaterThan(decimal.Zero) {
+							overageFactor = *li.CommitmentInfo.OverageFactor
+						}
+						baseUsage = baseUsage.Add(li.CommitmentInfo.ComputedOverageAmount.Div(overageFactor))
+					}
+					totalPreviousUsageCost = totalPreviousUsageCost.Add(baseUsage)
+				} else {
+					// No commitment was applied — the line item amount IS the base usage cost
+					totalPreviousUsageCost = totalPreviousUsageCost.Add(li.Amount)
+				}
+			}
+		}
+	}
+
+	s.Logger.Debugw("calculated cumulative subscription usage cost from invoices",
+		"subscription_id", sub.ID,
+		"subscription_start", sub.StartDate,
+		"period_start", periodStart,
+		"invoice_count", len(invoices),
+		"cumulative_usage_cost", totalPreviousUsageCost)
+
+	return totalPreviousUsageCost, nil
 }

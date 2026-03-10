@@ -40,4 +40,13 @@ type CommitmentInfo struct {
 	ComputedTrueUpAmount             decimal.Decimal `json:"computed_true_up_amount" swaggertype:"string"`
 	ComputedOverageAmount            decimal.Decimal `json:"computed_overage_amount" swaggertype:"string"`
 	ComputedCommitmentUtilizedAmount decimal.Decimal `json:"computed_commitment_utilized_amount" swaggertype:"string"`
+
+	// BaseUsageCost is the original usage cost before any commitment adjustment was applied.
+	// Used by subscription-level cumulative commitment to reconstruct actual usage from invoices.
+	BaseUsageCost decimal.Decimal `json:"base_usage_cost,omitempty" swaggertype:"string"`
+
+	// Cumulative tracking fields (populated only for cross-period commitments, e.g. ANNUAL commitment on MONTHLY subscription)
+	IsCumulative                bool            `json:"is_cumulative,omitempty"`
+	CumulativeUsageCost         decimal.Decimal `json:"cumulative_usage_cost,omitempty" swaggertype:"string"`
+	PreviousCumulativeUsageCost decimal.Decimal `json:"previous_cumulative_usage_cost,omitempty" swaggertype:"string"`
 }

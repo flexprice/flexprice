@@ -171,6 +171,7 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 		OverageFactor: lineItem.CommitmentOverageFactor,
 		TrueUpEnabled: lineItem.CommitmentTrueUpEnabled,
 		IsWindowed:    false,
+		BaseUsageCost: usageCost,
 	}
 
 	// Calculate final charge based on commitment logic
@@ -227,6 +228,115 @@ func (c *commitmentCalculator) applyCommitmentToLineItem(
 	return finalCharge, info, nil
 }
 
+// isCumulativeCommitment returns true when the commitment duration spans multiple billing periods
+// (e.g., ANNUAL commitment on a MONTHLY subscription), requiring cumulative usage tracking.
+func isCumulativeCommitment(lineItem *subscription.SubscriptionLineItem, subBillingPeriod types.BillingPeriod) bool {
+	return lineItem.CommitmentDuration != nil && *lineItem.CommitmentDuration != subBillingPeriod
+}
+
+// isCumulativeSubscriptionCommitment returns true when the subscription-level commitment duration
+// differs from the subscription's billing period.
+func isCumulativeSubscriptionCommitment(sub *subscription.Subscription) bool {
+	return sub.CommitmentDuration != nil && *sub.CommitmentDuration != sub.BillingPeriod
+}
+
+// applyCumulativeCommitmentToLineItem applies commitment logic with cumulative tracking across billing periods.
+// Instead of comparing current period usage against the full commitment, it tracks cumulative usage from
+// subscription start and only charges overage when the cumulative total exceeds the commitment amount.
+//
+// Three cases:
+// 1. previousCumulativeUsageCost >= commitmentAmount: entire current period is overage
+// 2. previousCumulativeUsageCost + currentPeriodUsageCost <= commitmentAmount: no overage
+// 3. Crosses boundary: split into within-commitment and overage portions
+func (c *commitmentCalculator) applyCumulativeCommitmentToLineItem(
+	ctx context.Context,
+	lineItem *subscription.SubscriptionLineItem,
+	currentPeriodUsageCost decimal.Decimal,
+	previousCumulativeUsageCost decimal.Decimal,
+	priceObj *price.Price,
+) (decimal.Decimal, *types.CommitmentInfo, error) {
+	// Normalize commitment to amount for comparison
+	commitmentAmount, err := c.normalizeCommitmentToAmount(ctx, lineItem, priceObj)
+	if err != nil {
+		return currentPeriodUsageCost, nil, err
+	}
+
+	overageFactor := lo.FromPtr(lineItem.CommitmentOverageFactor)
+	cumulativeUsageCost := previousCumulativeUsageCost.Add(currentPeriodUsageCost)
+
+	info := &types.CommitmentInfo{
+		Type:                        lineItem.CommitmentType,
+		Amount:                      commitmentAmount,
+		Quantity:                    lo.FromPtr(lineItem.CommitmentQuantity),
+		Duration:                    lo.FromPtr(lineItem.CommitmentDuration),
+		OverageFactor:               lineItem.CommitmentOverageFactor,
+		TrueUpEnabled:               false, // true-up is blocked for cumulative commitments
+		IsWindowed:                  false,
+		BaseUsageCost:               currentPeriodUsageCost,
+		IsCumulative:                true,
+		CumulativeUsageCost:         cumulativeUsageCost,
+		PreviousCumulativeUsageCost: previousCumulativeUsageCost,
+	}
+
+	var finalCharge decimal.Decimal
+
+	if previousCumulativeUsageCost.GreaterThanOrEqual(commitmentAmount) {
+		// Case 1: Commitment already fully consumed in previous periods.
+		// Entire current period usage is overage.
+		finalCharge = currentPeriodUsageCost.Mul(overageFactor)
+
+		info.ComputedCommitmentUtilizedAmount = decimal.Zero
+		info.ComputedOverageAmount = finalCharge
+		info.ComputedTrueUpAmount = decimal.Zero
+
+		c.logger.Debugw("cumulative commitment fully consumed, entire period is overage",
+			"line_item_id", lineItem.ID,
+			"current_period_cost", currentPeriodUsageCost,
+			"previous_cumulative_cost", previousCumulativeUsageCost,
+			"commitment_amount", commitmentAmount,
+			"overage_factor", overageFactor,
+			"final_charge", finalCharge)
+	} else if cumulativeUsageCost.LessThanOrEqual(commitmentAmount) {
+		// Case 2: Cumulative usage still within commitment.
+		// No overage, charge at base rate.
+		finalCharge = currentPeriodUsageCost
+
+		info.ComputedCommitmentUtilizedAmount = currentPeriodUsageCost
+		info.ComputedOverageAmount = decimal.Zero
+		info.ComputedTrueUpAmount = decimal.Zero
+
+		c.logger.Debugw("cumulative usage within commitment, no overage",
+			"line_item_id", lineItem.ID,
+			"current_period_cost", currentPeriodUsageCost,
+			"cumulative_cost", cumulativeUsageCost,
+			"commitment_amount", commitmentAmount,
+			"final_charge", finalCharge)
+	} else {
+		// Case 3: Crosses the commitment boundary this period.
+		// Split into within-commitment portion and overage portion.
+		withinCommitment := commitmentAmount.Sub(previousCumulativeUsageCost)
+		overagePortion := currentPeriodUsageCost.Sub(withinCommitment)
+		overageCharge := overagePortion.Mul(overageFactor)
+		finalCharge = withinCommitment.Add(overageCharge)
+
+		info.ComputedCommitmentUtilizedAmount = withinCommitment
+		info.ComputedOverageAmount = overageCharge
+		info.ComputedTrueUpAmount = decimal.Zero
+
+		c.logger.Debugw("cumulative commitment boundary crossed this period",
+			"line_item_id", lineItem.ID,
+			"current_period_cost", currentPeriodUsageCost,
+			"previous_cumulative_cost", previousCumulativeUsageCost,
+			"commitment_amount", commitmentAmount,
+			"within_commitment", withinCommitment,
+			"overage_portion", overagePortion,
+			"overage_factor", overageFactor,
+			"final_charge", finalCharge)
+	}
+
+	return finalCharge, info, nil
+}
+
 // applyWindowCommitmentToLineItem applies window-based commitment logic
 // Processes each bucket individually and applies commitment per window
 func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
@@ -252,6 +362,7 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	}
 
 	totalCharge := decimal.Zero
+	totalBaseUsageCost := decimal.Zero
 	totalCommitmentUtilized := decimal.Zero
 	totalOverage := decimal.Zero
 	totalTrueUp := decimal.Zero
@@ -262,6 +373,7 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 	for _, bucketValue := range bucketedValues {
 		// Calculate cost for this window
 		windowCost := c.priceService.CalculateCost(ctx, priceObj, bucketValue)
+		totalBaseUsageCost = totalBaseUsageCost.Add(windowCost)
 
 		var windowCharge decimal.Decimal
 
@@ -293,6 +405,7 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 		totalCharge = totalCharge.Add(windowCharge)
 	}
 
+	info.BaseUsageCost = totalBaseUsageCost
 	info.ComputedCommitmentUtilizedAmount = totalCommitmentUtilized
 	info.ComputedOverageAmount = totalOverage
 	info.ComputedTrueUpAmount = totalTrueUp

@@ -248,7 +248,7 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 		}
 
 		// Apply commitment configuration if provided for this price
-		if err := s.applyLineItemCommitmentFromMap(ctx, item, req.LineItemCommitments); err != nil {
+		if err := s.applyLineItemCommitmentFromMap(ctx, item, req.LineItemCommitments, sub.BillingPeriod); err != nil {
 			return nil, err
 		}
 
@@ -2296,8 +2296,23 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		// Add all fixed charges directly to the response
 		response.Charges = append(response.Charges, fixedCharges...)
 
-		// Track remaining commitment and process each usage charge
+		// For cumulative commitments, adjust remaining commitment by subtracting
+		// previous periods' usage from invoices
 		remainingCommitment := commitmentAmount
+		if isCumulativeSubscriptionCommitment(subscription) {
+			previousCumulativeTotal, err := s.calculateCumulativeSubscriptionUsageCostFromInvoices(ctx, subscription, usageStartTime)
+			if err != nil {
+				s.Logger.Warnw("failed to calculate cumulative subscription usage, falling back to full commitment",
+					"error", err, "subscription_id", subscription.ID)
+			} else {
+				remainingCommitment = commitmentAmount.Sub(previousCumulativeTotal)
+				if remainingCommitment.LessThan(decimal.Zero) {
+					remainingCommitment = decimal.Zero
+				}
+			}
+		}
+
+		// Track remaining commitment and process each usage charge
 		totalOverageAmount := decimal.Zero
 
 		for _, charge := range usageOnlyCharges {
@@ -3920,7 +3935,7 @@ func (s *subscriptionService) addAddonToSubscription(
 	lineItems := make([]*subscription.SubscriptionLineItem, 0, len(validPrices))
 	for _, priceResponse := range validPrices {
 		lineItem := s.createLineItemFromPrice(ctx, priceResponse, sub, req.AddonID, a.Addon.Name)
-		if err := s.applyLineItemCommitmentFromMap(ctx, lineItem, req.LineItemCommitments); err != nil {
+		if err := s.applyLineItemCommitmentFromMap(ctx, lineItem, req.LineItemCommitments, sub.BillingPeriod); err != nil {
 			return nil, err
 		}
 		lineItems = append(lineItems, lineItem)
@@ -5010,8 +5025,23 @@ func (s *subscriptionService) GetFeatureUsageBySubscription(ctx context.Context,
 		// Add all fixed charges directly to the response
 		finalCharges = append(finalCharges, fixedCharges...)
 
-		// Track remaining commitment and process each usage charge
+		// For cumulative commitments, adjust remaining commitment by subtracting
+		// previous periods' usage from invoices
 		remainingCommitment := commitmentAmount
+		if isCumulativeSubscriptionCommitment(subscription) {
+			previousCumulativeTotal, err := s.calculateCumulativeSubscriptionUsageCostFromInvoices(ctx, subscription, usageStartTime)
+			if err != nil {
+				s.Logger.Warnw("failed to calculate cumulative subscription usage, falling back to full commitment",
+					"error", err, "subscription_id", subscription.ID)
+			} else {
+				remainingCommitment = commitmentAmount.Sub(previousCumulativeTotal)
+				if remainingCommitment.LessThan(decimal.Zero) {
+					remainingCommitment = decimal.Zero
+				}
+			}
+		}
+
+		// Track remaining commitment and process each usage charge
 		totalOverageAmount := decimal.Zero
 
 		for _, charge := range usageOnlyCharges {
