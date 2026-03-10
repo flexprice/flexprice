@@ -93,8 +93,8 @@ logging:
 webhook:
   enabled: true
   topic: "system_events"
-  pubsub: "memory"
-  consumer_group: "webhook-consumer-local"
+  consumer_group: "system-events-consumer"
+  rate_limit: 5
   max_retries: 3
   initial_interval: 1s
   max_interval: 10s
