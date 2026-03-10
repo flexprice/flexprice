@@ -13,7 +13,7 @@ type Webhook struct {
 	InitialInterval time.Duration                  `mapstructure:"initial_interval" default:"1s"`
 	MaxInterval     time.Duration                  `mapstructure:"max_interval" default:"10s"`
 	Multiplier      float64                        `mapstructure:"multiplier" default:"2.0"`
-	RateLimit       int                            `mapstructure:"rate_limit" default:"5"`
+	RateLimit       int64                          `mapstructure:"rate_limit" default:"5"`
 	MaxElapsedTime  time.Duration                  `mapstructure:"max_elapsed_time" default:"2m"`
 	Tenants         map[string]TenantWebhookConfig `mapstructure:"tenants"`
 	Svix            Svix                           `mapstructure:"svix_config"`

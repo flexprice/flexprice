@@ -20,14 +20,31 @@ type WebhookPublisher interface {
 
 // webhookPublisher publishes webhook events to Kafka
 type webhookPublisher struct {
-	producer *kafka.Producer
+	producer message.Publisher
 	config   *config.Webhook
 	logger   *logger.Logger
 }
 
-// NewPublisher creates a new Kafka-backed webhook publisher
+// NewPublisher creates a new Kafka-backed webhook publisher using the shared Kafka producer
 func NewPublisher(
 	producer *kafka.Producer,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) (WebhookPublisher, error) {
+	return newPublisher(producer, cfg, logger)
+}
+
+// NewPublisherWithPublisher creates a webhook publisher with a custom message.Publisher (useful for testing)
+func NewPublisherWithPublisher(
+	producer message.Publisher,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) (WebhookPublisher, error) {
+	return newPublisher(producer, cfg, logger)
+}
+
+func newPublisher(
+	producer message.Publisher,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 ) (WebhookPublisher, error) {
