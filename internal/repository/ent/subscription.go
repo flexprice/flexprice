@@ -608,6 +608,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.IDIn(f.SubscriptionIDs...))
 	}
 
+	// Apply environment IDs filter
+	if len(f.EnvironmentIDs) > 0 {
+		query = query.Where(subscription.EnvironmentIDIn(f.EnvironmentIDs...))
+	}
+
 	// Apply parent subscription IDs filter
 	if len(f.ParentSubscriptionIDs) > 0 {
 		query = query.Where(subscription.ParentSubscriptionIDIn(f.ParentSubscriptionIDs...))

@@ -55,19 +55,21 @@ const (
 type CancellationType string
 
 const (
-	CancellationTypeImmediate   CancellationType = "immediate"
-	CancellationTypeEndOfPeriod CancellationType = "end_of_period"
+	CancellationTypeImmediate                  CancellationType = "immediate"
+	CancellationTypeEndOfPeriod                CancellationType = "end_of_period"
+	CancellationTypeSandboxSubscriptionCleanup CancellationType = "sandbox_subscription_cleanup"
 )
 
 var CancellationTypeValues = []CancellationType{
 	CancellationTypeImmediate,
 	CancellationTypeEndOfPeriod,
+	CancellationTypeSandboxSubscriptionCleanup,
 }
 
 func (c CancellationType) Validate() error {
 	if !lo.Contains(CancellationTypeValues, c) {
 		return ierr.NewError("invalid cancellation type").
-			WithHint("Cancellation type must be immediate, end_of_period, or specific_date").
+			WithHint("Cancellation type must be immediate, end_of_period, or sandbox_subscription_cleanup").
 			WithReportableDetails(map[string]any{
 				"allowed_values": CancellationTypeValues,
 				"provided_value": c,
