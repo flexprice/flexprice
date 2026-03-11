@@ -1,4 +1,3 @@
-
 package service
 
 import (
@@ -2103,4 +2102,112 @@ func (s *BillingServiceSuite) TestCalculateNeverResetUsage() {
 			s.T().Logf("   Usage allowed: %s, Billable quantity: %s", tt.usageAllowed, result)
 		})
 	}
+}
+
+// TestCalculateUsageCharges_CumulativeCommitmentDuration verifies subscription-level commitment
+// when commitment duration differs from billing period (e.g. annual $1000 commitment on monthly billing).
+// Previous invoices' subtotals consume the commitment; remaining is applied to current period; overage is charged at overage factor.
+func (s *BillingServiceSuite) TestCalculateUsageCharges_CumulativeCommitmentDuration() {
+	s.setupTestData()
+	ctx := s.GetContext()
+
+	// Subscription: monthly billing, annual commitment $1000, overage factor 2, start Jan 1 2024
+	jan1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	march1 := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+	april1 := time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC)
+	feb1 := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+
+	sub := *s.testData.subscription
+	sub.ID = "sub_cumulative_commitment"
+	sub.StartDate = jan1
+	sub.BillingAnchor = jan1
+	sub.CurrentPeriodStart = march1
+	sub.CurrentPeriodEnd = april1
+	sub.BillingPeriod = types.BILLING_PERIOD_MONTHLY
+	sub.CommitmentAmount = lo.ToPtr(decimal.NewFromInt(1000))
+	sub.CommitmentDuration = lo.ToPtr(types.BILLING_PERIOD_ANNUAL)
+	sub.OverageFactor = lo.ToPtr(decimal.NewFromInt(2))
+	sub.EnableTrueUp = true
+	sub.LineItems = []*subscription.SubscriptionLineItem{
+		{
+			ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+			SubscriptionID:   sub.ID,
+			CustomerID:       sub.CustomerID,
+			EntityID:         sub.PlanID,
+			EntityType:       types.SubscriptionLineItemEntityTypePlan,
+			PlanDisplayName:  s.testData.plan.Name,
+			PriceID:          s.testData.prices.apiCalls.ID,
+			PriceType:        types.PRICE_TYPE_USAGE,
+			MeterID:          s.testData.meters.apiCalls.ID,
+			MeterDisplayName: s.testData.meters.apiCalls.Name,
+			DisplayName:      "API Calls",
+			Quantity:         decimal.Zero,
+			Currency:         sub.Currency,
+			BillingPeriod:    sub.BillingPeriod,
+			StartDate:        sub.StartDate,
+			BaseModel:        types.GetDefaultBaseModel(ctx),
+		},
+	}
+	s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, &sub, sub.LineItems))
+
+	// Previous invoices in commitment window: Jan $200, Feb $600 → consumed $800, remaining $200 for March
+	invJan := &invoice.Invoice{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: lo.ToPtr(sub.ID),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusFinalized,
+		Currency:       sub.Currency,
+		Subtotal:       decimal.NewFromInt(200),
+		Total:          decimal.NewFromInt(200),
+		AmountDue:      decimal.NewFromInt(200),
+		PeriodStart:    lo.ToPtr(jan1),
+		PeriodEnd:      lo.ToPtr(feb1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, invJan))
+	invFeb := &invoice.Invoice{
+		ID:             types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+		CustomerID:     sub.CustomerID,
+		SubscriptionID: lo.ToPtr(sub.ID),
+		InvoiceType:    types.InvoiceTypeSubscription,
+		InvoiceStatus:  types.InvoiceStatusFinalized,
+		Currency:       sub.Currency,
+		Subtotal:       decimal.NewFromInt(600),
+		Total:          decimal.NewFromInt(600),
+		AmountDue:      decimal.NewFromInt(600),
+		PeriodStart:    lo.ToPtr(feb1),
+		PeriodEnd:      lo.ToPtr(march1),
+		BaseModel:      types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().InvoiceRepo.Create(ctx, invFeb))
+
+	// Raw usage for March: $300. With remaining $200: $200 normal + $100 overage * 2 = $200 overage charge → total $400
+	usage := &dto.GetUsageBySubscriptionResponse{
+		Charges: []*dto.SubscriptionUsageByMetersResponse{
+			{
+				SubscriptionLineItemID: sub.LineItems[0].ID,
+				Amount:                 300,
+				Quantity:               15000, // e.g. 15000 units at $0.02
+				Price:                  s.testData.prices.apiCalls,
+				IsOverage:              false,
+			},
+		},
+	}
+	// Ensure Price is set for the charge
+	if usage.Charges[0].Price == nil {
+		usage.Charges[0].Price = s.testData.prices.apiCalls
+	}
+
+	lineItems, total, err := s.service.CalculateUsageCharges(ctx, &sub, usage, march1, april1)
+	s.NoError(err)
+	s.Require().NotNil(lineItems)
+	// Expect: $200 (normal) + $200 (overage) = $400 total
+	s.True(total.Equal(decimal.NewFromInt(400)), "expected total 400, got %s", total.String())
+	// Should have 2 line items (normal + overage) or 1 with total 400
+	var sum decimal.Decimal
+	for _, li := range lineItems {
+		sum = sum.Add(li.Amount)
+	}
+	s.True(sum.Equal(decimal.NewFromInt(400)), "sum of line item amounts should be 400, got %s", sum.String())
 }

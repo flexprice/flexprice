@@ -326,6 +326,28 @@ func (s *billingService) CalculateUsageCharges(
 	}
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
+	// Subscription-level commitment: when duration != billing period, compute effective remaining from previous invoices
+	commitmentAmount := lo.FromPtr(sub.CommitmentAmount)
+	overageFactor := lo.FromPtr(sub.OverageFactor)
+	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
+	hasCumulativeCommitment := hasCommitment && sub.CommitmentDuration != nil && *sub.CommitmentDuration != sub.BillingPeriod
+	var remainingForPeriod decimal.Decimal
+	if hasCumulativeCommitment {
+		win, err := s.getCommitmentWindow(sub, periodStart)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+		consumed, err := s.getConsumedCommitmentFromInvoices(ctx, sub.ID, win.Start, win.End, periodStart)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+		effectiveRemaining := commitmentAmount.Sub(consumed)
+		if effectiveRemaining.LessThan(decimal.Zero) {
+			effectiveRemaining = decimal.Zero
+		}
+		remainingForPeriod = effectiveRemaining
+	}
+
 	// filter out line items that are not active
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
@@ -680,137 +702,176 @@ func (s *billingService) CalculateUsageCharges(
 				}
 			}
 
-			// Round line item amount to currency precision before creating invoice line item
-			// This ensures all line items use proper currency precision from the start
-			// Example: $10.278798 → $10.28 for USD (2 decimals), ¥1023.45 → ¥1023 for JPY (0 decimals)
-			roundedLineItemAmount := types.RoundToCurrencyPrecision(lineItemAmount, sub.Currency)
-
-			// Add rounded amount to total to ensure subtotal = sum of rounded line items
-			totalUsageCost = totalUsageCost.Add(roundedLineItemAmount)
-
-			// Create metadata for the line item, including overage information if applicable
-			metadata := types.Metadata{
-				"description": fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
+			// Apply subscription-level commitment: for cumulative (duration != period) allocate remaining across charges
+			var amountsToEmit []struct {
+				amount    decimal.Decimal
+				isOverage bool
+				quantity  decimal.Decimal
 			}
-
-			displayName := lo.ToPtr(item.DisplayName)
-
-			// Add overage specific information
-			if matchingCharge.IsOverage {
-				metadata["is_overage"] = "true"
-				metadata["overage_factor"] = fmt.Sprintf("%v", matchingCharge.OverageFactor)
-				metadata["description"] = fmt.Sprintf("%s (Overage Charge)", item.DisplayName)
-				displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
-			}
-
-			// Add usage reset period metadata if entitlement has daily, monthly, or never reset
-			if !matchingCharge.IsOverage && ok && matchingEntitlement.IsEnabled {
-				switch matchingEntitlement.UsageResetPeriod {
-				case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
-					metadata["usage_reset_period"] = "daily"
-				case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
-					metadata["usage_reset_period"] = "monthly"
-				case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
-					metadata["usage_reset_period"] = "never"
+			if hasCumulativeCommitment {
+				normalPart, overagePart := allocateChargeAgainstCommitment(lineItemAmount, &remainingForPeriod, overageFactor)
+				overageChargeAmount := overagePart.Mul(overageFactor)
+				if normalPart.GreaterThan(decimal.Zero) {
+					var qty decimal.Decimal
+					if lineItemAmount.IsZero() {
+						qty = quantityForCalculation
+					} else {
+						qty = quantityForCalculation.Mul(normalPart).Div(lineItemAmount)
+					}
+					amountsToEmit = append(amountsToEmit, struct {
+						amount    decimal.Decimal
+						isOverage bool
+						quantity  decimal.Decimal
+					}{normalPart, false, qty})
 				}
+				if overagePart.GreaterThan(decimal.Zero) {
+					var qty decimal.Decimal
+					if lineItemAmount.IsZero() {
+						qty = decimal.Zero
+					} else {
+						qty = quantityForCalculation.Mul(overagePart).Div(lineItemAmount)
+					}
+					amountsToEmit = append(amountsToEmit, struct {
+						amount    decimal.Decimal
+						isOverage bool
+						quantity  decimal.Decimal
+					}{overageChargeAmount, true, qty})
+				}
+			} else {
+				roundedLineItemAmount := types.RoundToCurrencyPrecision(lineItemAmount, sub.Currency)
+				isOverage := matchingCharge.IsOverage
+				amountsToEmit = append(amountsToEmit, struct {
+					amount    decimal.Decimal
+					isOverage bool
+					quantity  decimal.Decimal
+				}{roundedLineItemAmount, isOverage, quantityForCalculation})
 			}
 
-			s.Logger.Debugw("usage charges for line item",
-				"amount", matchingCharge.Amount,
-				"quantity", matchingCharge.Quantity,
-				"is_overage", matchingCharge.IsOverage,
-				"subscription_id", sub.ID,
-				"line_item_id", item.ID,
-				"price_id", item.PriceID)
+			for _, emit := range amountsToEmit {
+				roundedAmount := types.RoundToCurrencyPrecision(emit.amount, sub.Currency)
+				totalUsageCost = totalUsageCost.Add(roundedAmount)
 
-			// Calculate price unit amount if price unit is available
-			var priceUnitAmount decimal.Decimal
-			if item.PriceUnit != nil {
-				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
-				if err != nil {
-					s.Logger.Warnw("failed to get price unit",
-						"error", err,
-						"price_unit", lo.FromPtr(item.PriceUnit),
-						"amount", lineItemAmount)
-					continue
+				metadata := types.Metadata{
+					"description": fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
 				}
-				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
-				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
-						"error", err,
-						"price_unit", lo.FromPtr(item.PriceUnit),
-						"amount", lineItemAmount)
-					continue
+				displayName := lo.ToPtr(item.DisplayName)
+				if emit.isOverage {
+					metadata["is_overage"] = "true"
+					metadata["overage_factor"] = overageFactor.String()
+					metadata["description"] = fmt.Sprintf("%s (Overage Charge)", item.DisplayName)
+					displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
 				}
-				priceUnitAmount = convertedAmount
+				if !emit.isOverage && ok && matchingEntitlement.IsEnabled {
+					switch matchingEntitlement.UsageResetPeriod {
+					case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
+						metadata["usage_reset_period"] = "daily"
+					case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
+						metadata["usage_reset_period"] = "monthly"
+					case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
+						metadata["usage_reset_period"] = "never"
+					}
+				}
+
+				s.Logger.Debugw("usage charges for line item",
+					"amount", emit.amount.InexactFloat64(),
+					"quantity", emit.quantity.InexactFloat64(),
+					"is_overage", emit.isOverage,
+					"subscription_id", sub.ID,
+					"line_item_id", item.ID,
+					"price_id", item.PriceID)
+
+				var priceUnitAmount decimal.Decimal
+				if item.PriceUnit != nil {
+					priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
+					if err != nil {
+						s.Logger.Warnw("failed to get price unit",
+							"error", err,
+							"price_unit", lo.FromPtr(item.PriceUnit),
+							"amount", emit.amount)
+						continue
+					}
+					convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, emit.amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
+					if err != nil {
+						s.Logger.Warnw("failed to convert amount to price unit",
+							"error", err,
+							"price_unit", lo.FromPtr(item.PriceUnit),
+							"amount", emit.amount)
+						continue
+					}
+					priceUnitAmount = convertedAmount
+				}
+
+				usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
+					EntityID:         lo.ToPtr(item.EntityID),
+					EntityType:       lo.ToPtr(string(item.EntityType)),
+					PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
+					PriceType:        lo.ToPtr(string(item.PriceType)),
+					PriceID:          lo.ToPtr(item.PriceID),
+					MeterID:          lo.ToPtr(item.MeterID),
+					MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
+					PriceUnit:        item.PriceUnit,
+					PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
+					DisplayName:      displayName,
+					Amount:           roundedAmount,
+					Quantity:         emit.quantity,
+					PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
+					PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+					Metadata:         metadata,
+					CommitmentInfo:   commitmentInfo,
+				})
 			}
-
-			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				EntityID:         lo.ToPtr(item.EntityID),
-				EntityType:       lo.ToPtr(string(item.EntityType)),
-				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
-				PriceType:        lo.ToPtr(string(item.PriceType)),
-				PriceID:          lo.ToPtr(item.PriceID),
-				MeterID:          lo.ToPtr(item.MeterID),
-				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-				PriceUnit:        item.PriceUnit,
-				PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
-				DisplayName:      displayName,
-				Amount:           roundedLineItemAmount,
-				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
-				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
-				Metadata:         metadata,
-				CommitmentInfo:   commitmentInfo,
-			})
 		}
 	}
 
-	// Add commitment true-up line item if there's remaining commitment
-	commitmentAmount := lo.FromPtr(sub.CommitmentAmount)
-	overageFactor := lo.FromPtr(sub.OverageFactor)
-	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
-
+	// Add commitment true-up line item when applicable
 	if hasCommitment {
-		// If there's overage, commitment is fully utilized, so no true-up needed
-		if !usage.HasOverage && sub.EnableTrueUp {
-			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
-
-			if remainingCommitment.GreaterThan(decimal.Zero) {
-				// Get plan display name from line items
-				planDisplayName := ""
-				for _, item := range sub.LineItems {
-					if item.PlanDisplayName != "" {
-						planDisplayName = item.PlanDisplayName
-						break
-					}
-				}
-				// Round remaining commitment to currency precision (2 decimal places for most currencies)
-				precision := types.GetCurrencyPrecision(sub.Currency)
-				roundedRemainingCommitment := remainingCommitment.Round(precision)
-				commitmentUtilized := commitmentAmount.Sub(roundedRemainingCommitment)
-				trueUpLineItem := dto.CreateInvoiceLineItemRequest{
-					EntityID:        lo.ToPtr(sub.PlanID),
-					EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
-					PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
-					PlanDisplayName: lo.ToPtr(planDisplayName),
-					DisplayName:     lo.ToPtr(fmt.Sprintf("%s True Up", planDisplayName)), // Plan display name with true up suffix
-					Amount:          roundedRemainingCommitment,
-					Quantity:        decimal.NewFromInt(1),
-					PeriodStart:     &periodStart,
-					PeriodEnd:       &periodEnd,
-					PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
-					Metadata: types.Metadata{
-						"is_commitment_trueup": "true",
-						"description":          "Remaining commitment amount for billing period",
-						"commitment_amount":    commitmentAmount.String(),
-						"commitment_utilized":  commitmentUtilized.String(),
-					},
-				}
-
-				usageCharges = append(usageCharges, trueUpLineItem)
-				totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
+		var addTrueUp bool
+		var remainingCommitment decimal.Decimal
+		if hasCumulativeCommitment {
+			lastPeriod, err := s.isLastPeriodOfCommitment(sub, periodEnd)
+			if err != nil {
+				return nil, decimal.Zero, err
 			}
+			cancellation := s.isCancellationInvoice(sub, periodEnd)
+			addTrueUp = sub.EnableTrueUp && remainingForPeriod.GreaterThan(decimal.Zero) && (lastPeriod || cancellation)
+			remainingCommitment = remainingForPeriod
+		} else {
+			addTrueUp = !usage.HasOverage && sub.EnableTrueUp
+			remainingCommitment = s.calculateRemainingCommitment(usage, commitmentAmount)
+		}
+		if addTrueUp && remainingCommitment.GreaterThan(decimal.Zero) {
+			// Get plan display name from line items
+			planDisplayName := ""
+			for _, item := range sub.LineItems {
+				if item.PlanDisplayName != "" {
+					planDisplayName = item.PlanDisplayName
+					break
+				}
+			}
+			// Round remaining commitment to currency precision (2 decimal places for most currencies)
+			precision := types.GetCurrencyPrecision(sub.Currency)
+			roundedRemainingCommitment := remainingCommitment.Round(precision)
+			commitmentUtilized := commitmentAmount.Sub(roundedRemainingCommitment)
+			trueUpLineItem := dto.CreateInvoiceLineItemRequest{
+				EntityID:        lo.ToPtr(sub.PlanID),
+				EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
+				PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+				PlanDisplayName: lo.ToPtr(planDisplayName),
+				DisplayName:     lo.ToPtr(fmt.Sprintf("%s True Up", planDisplayName)),
+				Amount:          roundedRemainingCommitment,
+				Quantity:        decimal.NewFromInt(1),
+				PeriodStart:     &periodStart,
+				PeriodEnd:       &periodEnd,
+				PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+				Metadata: types.Metadata{
+					"is_commitment_trueup": "true",
+					"description":          "Remaining commitment amount for billing period",
+					"commitment_amount":    commitmentAmount.String(),
+					"commitment_utilized":  commitmentUtilized.String(),
+				},
+			}
+			usageCharges = append(usageCharges, trueUpLineItem)
+			totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
 		}
 	}
 
@@ -830,6 +891,98 @@ func (s *billingService) calculateRemainingCommitment(
 	commitmentUtilized := decimal.NewFromFloat(usage.CommitmentUtilized)
 	remainingCommitment := commitmentAmount.Sub(commitmentUtilized)
 	return decimal.Max(remainingCommitment, decimal.Zero)
+}
+
+// commitmentWindow contains the start and end of the commitment window that contains a given time.
+type commitmentWindow struct {
+	Start time.Time
+	End   time.Time
+}
+
+// getCommitmentWindow returns the commitment window (start, end) that contains periodStart,
+// using sub.StartDate and sub.CommitmentDuration. Only used when CommitmentDuration != BillingPeriod.
+func (s *billingService) getCommitmentWindow(sub *subscription.Subscription, periodStart time.Time) (commitmentWindow, error) {
+	duration := lo.FromPtr(sub.CommitmentDuration)
+	anchor := sub.BillingAnchor
+	windowStart := sub.StartDate
+	windowEnd, err := types.NextBillingDate(windowStart, anchor, 1, duration, nil)
+	if err != nil {
+		return commitmentWindow{}, err
+	}
+	for !periodStart.Before(windowEnd) {
+		windowStart = windowEnd
+		windowEnd, err = types.NextBillingDate(windowStart, anchor, 1, duration, nil)
+		if err != nil {
+			return commitmentWindow{}, err
+		}
+	}
+	return commitmentWindow{Start: windowStart, End: windowEnd}, nil
+}
+
+// getConsumedCommitmentFromInvoices returns the sum of subtotals of invoices for the subscription
+// that overlap the commitment window and have period_end < periodStart (previous invoices in the window).
+func (s *billingService) getConsumedCommitmentFromInvoices(
+	ctx context.Context,
+	subscriptionID string,
+	windowStart, windowEnd, periodStart time.Time,
+) (decimal.Decimal, error) {
+	filter := types.NewNoLimitInvoiceFilter()
+	filter.SubscriptionID = subscriptionID
+	filter.InvoiceType = types.InvoiceTypeSubscription
+	filter.InvoiceStatus = []types.InvoiceStatus{types.InvoiceStatusDraft, types.InvoiceStatusFinalized}
+	filter.PeriodEndGTE = &windowStart
+	filter.PeriodStartLTE = &windowEnd
+	beforePeriod := periodStart.Add(-time.Nanosecond)
+	filter.PeriodEndLTE = &beforePeriod
+	invoices, err := s.InvoiceRepo.List(ctx, filter)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	consumed := decimal.Zero
+	for _, inv := range invoices {
+		consumed = consumed.Add(inv.Subtotal)
+	}
+	return consumed, nil
+}
+
+// isLastPeriodOfCommitment returns true if periodEnd is at or past the end of the current commitment window.
+func (s *billingService) isLastPeriodOfCommitment(sub *subscription.Subscription, periodEnd time.Time) (bool, error) {
+	win, err := s.getCommitmentWindow(sub, periodEnd)
+	if err != nil {
+		return false, err
+	}
+	return !periodEnd.Before(win.End), nil
+}
+
+// isCancellationInvoice returns true if this invoice period includes or is after the subscription end (cancellation).
+func (s *billingService) isCancellationInvoice(sub *subscription.Subscription, periodEnd time.Time) bool {
+	if sub.EndDate == nil {
+		return false
+	}
+	return !periodEnd.Before(*sub.EndDate)
+}
+
+// allocateChargeAgainstCommitment splits chargeAmount into normal (covered by remaining commitment)
+// and overage parts. It updates remaining in place (consumes the normal part).
+// Returns (normalPart, overagePart).
+func allocateChargeAgainstCommitment(
+	chargeAmount decimal.Decimal,
+	remaining *decimal.Decimal,
+	overageFactor decimal.Decimal,
+) (normalPart, overagePart decimal.Decimal) {
+	if remaining == nil || remaining.LessThan(decimal.Zero) {
+		return decimal.Zero, chargeAmount
+	}
+	if remaining.LessThan(chargeAmount) {
+		normalPart = *remaining
+		overagePart = chargeAmount.Sub(*remaining)
+		*remaining = decimal.Zero
+		return normalPart, overagePart
+	}
+	normalPart = chargeAmount
+	overagePart = decimal.Zero
+	*remaining = remaining.Sub(chargeAmount)
+	return normalPart, overagePart
 }
 
 // fillBucketedValuesForWindowedCommitment returns one value per expected bucket in the period.
@@ -946,6 +1099,28 @@ func (s *billingService) CalculateFeatureUsageCharges(
 	chargesByLineItemID := make(map[string]*dto.SubscriptionUsageByMetersResponse)
 	for _, charge := range usage.Charges {
 		chargesByLineItemID[charge.SubscriptionLineItemID] = charge
+	}
+
+	// Subscription-level commitment: when duration != billing period, compute effective remaining from previous invoices
+	commitmentAmount := lo.FromPtr(sub.CommitmentAmount)
+	overageFactor := lo.FromPtr(sub.OverageFactor)
+	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
+	hasCumulativeCommitment := hasCommitment && sub.CommitmentDuration != nil && *sub.CommitmentDuration != sub.BillingPeriod
+	var remainingForPeriod decimal.Decimal
+	if hasCumulativeCommitment {
+		win, err := s.getCommitmentWindow(sub, periodStart)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+		consumed, err := s.getConsumedCommitmentFromInvoices(ctx, sub.ID, win.Start, win.End, periodStart)
+		if err != nil {
+			return nil, decimal.Zero, err
+		}
+		effectiveRemaining := commitmentAmount.Sub(consumed)
+		if effectiveRemaining.LessThan(decimal.Zero) {
+			effectiveRemaining = decimal.Zero
+		}
+		remainingForPeriod = effectiveRemaining
 	}
 
 	// filter out line items that are not active
@@ -1338,132 +1513,173 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				}
 			}
 
-			totalUsageCost = totalUsageCost.Add(lineItemAmount)
-
-			// Create metadata for the line item, including overage information if applicable
-			metadata := types.Metadata{
-				"description": fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
+			// Apply subscription-level commitment: for cumulative (duration != period) allocate remaining across charges
+			var amountsToEmit []struct {
+				amount    decimal.Decimal
+				isOverage bool
+				quantity  decimal.Decimal
 			}
-
-			displayName := lo.ToPtr(item.DisplayName)
-
-			// Add overage specific information
-			if matchingCharge.IsOverage {
-				metadata["is_overage"] = "true"
-				metadata["overage_factor"] = fmt.Sprintf("%v", matchingCharge.OverageFactor)
-				metadata["description"] = fmt.Sprintf("%s (Overage Charge)", item.DisplayName)
-				displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
-			}
-
-			// Add usage reset period metadata if entitlement has daily, monthly, or never reset
-			if !matchingCharge.IsOverage && entitlementOk && matchingEntitlement != nil && matchingEntitlement.IsEnabled {
-				switch matchingEntitlement.UsageResetPeriod {
-				case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
-					metadata["usage_reset_period"] = "daily"
-				case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
-					metadata["usage_reset_period"] = "monthly"
-				case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
-					metadata["usage_reset_period"] = "never"
+			if hasCumulativeCommitment {
+				normalPart, overagePart := allocateChargeAgainstCommitment(lineItemAmount, &remainingForPeriod, overageFactor)
+				overageChargeAmount := overagePart.Mul(overageFactor)
+				if normalPart.GreaterThan(decimal.Zero) {
+					var qty decimal.Decimal
+					if lineItemAmount.IsZero() {
+						qty = quantityForCalculation
+					} else {
+						qty = quantityForCalculation.Mul(normalPart).Div(lineItemAmount)
+					}
+					amountsToEmit = append(amountsToEmit, struct {
+						amount    decimal.Decimal
+						isOverage bool
+						quantity  decimal.Decimal
+					}{normalPart, false, qty})
 				}
+				if overagePart.GreaterThan(decimal.Zero) {
+					var qty decimal.Decimal
+					if lineItemAmount.IsZero() {
+						qty = decimal.Zero
+					} else {
+						qty = quantityForCalculation.Mul(overagePart).Div(lineItemAmount)
+					}
+					amountsToEmit = append(amountsToEmit, struct {
+						amount    decimal.Decimal
+						isOverage bool
+						quantity  decimal.Decimal
+					}{overageChargeAmount, true, qty})
+				}
+			} else {
+				roundedLineItemAmount := types.RoundToCurrencyPrecision(lineItemAmount, sub.Currency)
+				isOverage := matchingCharge.IsOverage
+				amountsToEmit = append(amountsToEmit, struct {
+					amount    decimal.Decimal
+					isOverage bool
+					quantity  decimal.Decimal
+				}{roundedLineItemAmount, isOverage, quantityForCalculation})
 			}
 
-			s.Logger.Debugw("usage charges for line item",
-				"amount", matchingCharge.Amount,
-				"quantity", matchingCharge.Quantity,
-				"is_overage", matchingCharge.IsOverage,
-				"subscription_id", sub.ID,
-				"line_item_id", item.ID,
-				"price_id", item.PriceID)
+			for _, emit := range amountsToEmit {
+				roundedAmount := types.RoundToCurrencyPrecision(emit.amount, sub.Currency)
+				totalUsageCost = totalUsageCost.Add(roundedAmount)
 
-			// Calculate price unit amount if price unit is available
-			var priceUnitAmount decimal.Decimal
-			if item.PriceUnit != nil {
-				// Get the price unit by code
-				priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
-				if err != nil {
-					s.Logger.Warnw("failed to get price unit",
-						"error", err,
-						"price_unit", lo.FromPtr(item.PriceUnit))
-					return nil, decimal.Zero, err
+				metadata := types.Metadata{
+					"description": fmt.Sprintf("%s (Usage Charge)", item.DisplayName),
+				}
+				displayName := lo.ToPtr(item.DisplayName)
+				if emit.isOverage {
+					metadata["is_overage"] = "true"
+					metadata["overage_factor"] = overageFactor.String()
+					metadata["description"] = fmt.Sprintf("%s (Overage Charge)", item.DisplayName)
+					displayName = lo.ToPtr(fmt.Sprintf("%s (Overage)", item.DisplayName))
+				}
+				if !emit.isOverage && entitlementOk && matchingEntitlement != nil && matchingEntitlement.IsEnabled {
+					switch matchingEntitlement.UsageResetPeriod {
+					case types.ENTITLEMENT_USAGE_RESET_PERIOD_DAILY:
+						metadata["usage_reset_period"] = "daily"
+					case types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY:
+						metadata["usage_reset_period"] = "monthly"
+					case types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER:
+						metadata["usage_reset_period"] = "never"
+					}
 				}
 
-				// Convert fiat currency amount to price unit amount
-				convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, lineItemAmount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
-				if err != nil {
-					s.Logger.Warnw("failed to convert amount to price unit",
-						"error", err,
-						"price_unit", lo.FromPtr(item.PriceUnit),
-						"amount", lineItemAmount)
-					return nil, decimal.Zero, err
+				s.Logger.Debugw("usage charges for line item",
+					"amount", emit.amount.InexactFloat64(),
+					"quantity", emit.quantity.InexactFloat64(),
+					"is_overage", emit.isOverage,
+					"subscription_id", sub.ID,
+					"line_item_id", item.ID,
+					"price_id", item.PriceID)
+
+				var priceUnitAmount decimal.Decimal
+				if item.PriceUnit != nil {
+					priceUnit, err := s.PriceUnitRepo.GetByCode(ctx, lo.FromPtr(item.PriceUnit))
+					if err != nil {
+						s.Logger.Warnw("failed to get price unit",
+							"error", err,
+							"price_unit", lo.FromPtr(item.PriceUnit))
+						return nil, decimal.Zero, err
+					}
+					convertedAmount, err := priceunit.ConvertToPriceUnitAmount(ctx, emit.amount, priceUnit.ConversionRate, priceUnit.BaseCurrency)
+					if err != nil {
+						s.Logger.Warnw("failed to convert amount to price unit",
+							"error", err,
+							"price_unit", lo.FromPtr(item.PriceUnit),
+							"amount", emit.amount)
+						return nil, decimal.Zero, err
+					}
+					priceUnitAmount = convertedAmount
 				}
-				priceUnitAmount = convertedAmount
+
+				usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
+					EntityID:         lo.ToPtr(item.EntityID),
+					EntityType:       lo.ToPtr(string(item.EntityType)),
+					PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
+					PriceType:        lo.ToPtr(string(item.PriceType)),
+					PriceID:          lo.ToPtr(item.PriceID),
+					MeterID:          lo.ToPtr(item.MeterID),
+					MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
+					PriceUnit:        item.PriceUnit,
+					PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
+					DisplayName:      displayName,
+					Amount:           roundedAmount,
+					Quantity:         emit.quantity,
+					PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
+					PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
+					Metadata:         metadata,
+					CommitmentInfo:   commitmentInfo,
+				})
 			}
-
-			usageCharges = append(usageCharges, dto.CreateInvoiceLineItemRequest{
-				EntityID:         lo.ToPtr(item.EntityID),
-				EntityType:       lo.ToPtr(string(item.EntityType)),
-				PlanDisplayName:  lo.ToPtr(item.PlanDisplayName),
-				PriceType:        lo.ToPtr(string(item.PriceType)),
-				PriceID:          lo.ToPtr(item.PriceID),
-				MeterID:          lo.ToPtr(item.MeterID),
-				MeterDisplayName: lo.ToPtr(item.MeterDisplayName),
-				PriceUnit:        item.PriceUnit,
-				PriceUnitAmount:  lo.ToPtr(priceUnitAmount),
-				DisplayName:      displayName,
-				Amount:           lineItemAmount,
-				Quantity:         quantityForCalculation,
-				PeriodStart:      lo.ToPtr(item.GetPeriodStart(periodStart)),
-				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
-				Metadata:         metadata,
-				CommitmentInfo:   commitmentInfo,
-			})
 		}
 	}
 
-	// Add commitment true-up line item if there's remaining commitment
-	commitmentAmount := lo.FromPtr(sub.CommitmentAmount)
-	overageFactor := lo.FromPtr(sub.OverageFactor)
-	hasCommitment := commitmentAmount.GreaterThan(decimal.Zero) && overageFactor.GreaterThan(decimal.NewFromInt(1))
-
+	// Add commitment true-up line item when applicable
 	if hasCommitment {
-		// If there's overage, commitment is fully utilized, so no true-up needed
-		if !usage.HasOverage && sub.EnableTrueUp {
-			remainingCommitment := s.calculateRemainingCommitment(usage, commitmentAmount)
-
-			if remainingCommitment.GreaterThan(decimal.Zero) {
-				planDisplayName := ""
-				for _, item := range sub.LineItems {
-					if item.PlanDisplayName != "" {
-						planDisplayName = item.PlanDisplayName
-						break
-					}
-				}
-				// Round remaining commitment to currency precision (2 decimal places for most currencies)
-				precision := types.GetCurrencyPrecision(sub.Currency)
-				roundedRemainingCommitment := remainingCommitment.Round(precision)
-				commitmentUtilized := commitmentAmount.Sub(roundedRemainingCommitment)
-				trueUpLineItem := dto.CreateInvoiceLineItemRequest{
-					EntityID:        lo.ToPtr(sub.PlanID),
-					EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
-					PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
-					PlanDisplayName: lo.ToPtr(planDisplayName),
-					DisplayName:     lo.ToPtr(fmt.Sprintf("%s True Up", planDisplayName)), // Plan display name with true up suffix
-					Amount:          roundedRemainingCommitment,
-					Quantity:        decimal.NewFromInt(1),
-					PeriodStart:     &periodStart,
-					PeriodEnd:       &periodEnd,
-					PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
-					Metadata: types.Metadata{
-						"is_commitment_trueup": "true",
-						"description":          "Remaining commitment amount for billing period",
-						"commitment_amount":    commitmentAmount.String(),
-						"commitment_utilized":  commitmentUtilized.String(),
-					},
-				}
-
-				usageCharges = append(usageCharges, trueUpLineItem)
-				totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
+		var addTrueUp bool
+		var remainingCommitment decimal.Decimal
+		if hasCumulativeCommitment {
+			lastPeriod, err := s.isLastPeriodOfCommitment(sub, periodEnd)
+			if err != nil {
+				return nil, decimal.Zero, err
 			}
+			cancellation := s.isCancellationInvoice(sub, periodEnd)
+			addTrueUp = sub.EnableTrueUp && remainingForPeriod.GreaterThan(decimal.Zero) && (lastPeriod || cancellation)
+			remainingCommitment = remainingForPeriod
+		} else {
+			addTrueUp = !usage.HasOverage && sub.EnableTrueUp
+			remainingCommitment = s.calculateRemainingCommitment(usage, commitmentAmount)
+		}
+		if addTrueUp && remainingCommitment.GreaterThan(decimal.Zero) {
+			planDisplayName := ""
+			for _, item := range sub.LineItems {
+				if item.PlanDisplayName != "" {
+					planDisplayName = item.PlanDisplayName
+					break
+				}
+			}
+			precision := types.GetCurrencyPrecision(sub.Currency)
+			roundedRemainingCommitment := remainingCommitment.Round(precision)
+			commitmentUtilized := commitmentAmount.Sub(roundedRemainingCommitment)
+			trueUpLineItem := dto.CreateInvoiceLineItemRequest{
+				EntityID:        lo.ToPtr(sub.PlanID),
+				EntityType:      lo.ToPtr(string(types.SubscriptionLineItemEntityTypePlan)),
+				PriceType:       lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+				PlanDisplayName: lo.ToPtr(planDisplayName),
+				DisplayName:     lo.ToPtr(fmt.Sprintf("%s True Up", planDisplayName)),
+				Amount:          roundedRemainingCommitment,
+				Quantity:        decimal.NewFromInt(1),
+				PeriodStart:     &periodStart,
+				PeriodEnd:       &periodEnd,
+				PriceID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+				Metadata: types.Metadata{
+					"is_commitment_trueup": "true",
+					"description":          "Remaining commitment amount for billing period",
+					"commitment_amount":    commitmentAmount.String(),
+					"commitment_utilized":  commitmentUtilized.String(),
+				},
+			}
+			usageCharges = append(usageCharges, trueUpLineItem)
+			totalUsageCost = totalUsageCost.Add(roundedRemainingCommitment)
 		}
 	}
 
@@ -1657,7 +1873,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		// but don't filter out already invoiced items
 
 		// For current period arrear charges
-		arrearResult, err := s.calculateFeatureUsageCharges(
+		arrearResult, err := s.CalculateCharges(
 			ctx,
 			sub,
 			classification.CurrentPeriodArrear,
@@ -1670,7 +1886,7 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		}
 
 		// For next period advance charges
-		advanceResult, err := s.calculateFeatureUsageCharges(
+		advanceResult, err := s.CalculateCharges(
 			ctx,
 			sub,
 			classification.NextPeriodAdvance,
