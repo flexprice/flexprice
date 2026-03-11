@@ -1313,11 +1313,11 @@ func (s *SubscriptionServiceSuite) TestCreateSubscriptionWithLineItems_Validatio
 				StartDate:          &start,
 				EndDate:            &end,
 				Currency:           "usd",
-				BillingCadence:      types.BILLING_CADENCE_RECURRING,
-				BillingPeriod:       types.BILLING_PERIOD_MONTHLY,
+				BillingCadence:     types.BILLING_CADENCE_RECURRING,
+				BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
 				BillingPeriodCount: 1,
 				BillingCycle:       types.BillingCycleAnniversary,
-				LineItems:           tt.lineItems,
+				LineItems:          tt.lineItems,
 			}
 			_, err := s.service.CreateSubscription(ctx, req)
 			s.Error(err)
@@ -1459,15 +1459,16 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			})
 		}
 
-		// Test cancelling already cancelled subscription using a separate instance
+		// Test cancelling already cancelled subscription is idempotent (returns success, not error)
 		s.Run("cancel_already_canceled_subscription", func() {
-			_, err := s.service.CancelSubscription(s.GetContext(), activeSub.ID, &dto.CancelSubscriptionRequest{
+			resp, err := s.service.CancelSubscription(s.GetContext(), activeSub.ID, &dto.CancelSubscriptionRequest{
 				CancellationType:  types.CancellationTypeImmediate,
 				ProrationBehavior: types.ProrationBehaviorNone,
 				Reason:            "test_cancellation",
 			})
-			s.Error(err)
-			s.Contains(err.Error(), "already cancelled")
+			s.NoError(err)
+			s.Require().NotNil(resp)
+			s.Contains(resp.Message, "already cancelled")
 		})
 	})
 
