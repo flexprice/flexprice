@@ -528,22 +528,15 @@ func (o PriceQueryOptions) ApplyPaginationFilter(query PriceQuery, limit int, of
 	return query
 }
 
+// GetFieldName returns the ent field name for price; resolves optional aliases then delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o PriceQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return price.FieldCreatedAt
-	case "updated_at":
-		return price.FieldUpdatedAt
-	case "lookup_key":
-		return price.FieldLookupKey
-	case "amount", "value":
-		return price.FieldAmount
-	case "display_name":
-		return price.FieldDisplayName
-	default:
-		// unknown field
-		return ""
+	if field == "value" {
+		field = "amount"
 	}
+	if price.ValidColumn(field) {
+		return field
+	}
+	return ""
 }
 
 func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PriceFilter, query PriceQuery) (PriceQuery, error) {

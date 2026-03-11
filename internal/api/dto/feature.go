@@ -22,6 +22,8 @@ type CreateFeatureRequest struct {
 	UnitPlural    string               `json:"unit_plural,omitempty"`
 	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	// GroupID is the id of the group to add the feature to
+	GroupID string `json:"group_id,omitempty"`
 }
 
 func (r *CreateFeatureRequest) Validate() error {
@@ -84,7 +86,7 @@ func (r *CreateFeatureRequest) ToFeature(ctx context.Context) (*feature.Feature,
 		UnitSingular:  r.UnitSingular,
 		UnitPlural:    r.UnitPlural,
 		ReportingUnit: r.ReportingUnit,
-
+		GroupID:       r.GroupID,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
@@ -107,11 +109,15 @@ type UpdateFeatureRequest struct {
 	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 	Filters       *[]meter.Filter      `json:"filters,omitempty"`
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	// GroupID is the id of the group to assign the feature to. Pass empty string to clear.
+	GroupID *string `json:"group_id,omitempty"`
 }
 
 type FeatureResponse struct {
 	*feature.Feature
 	Meter *MeterResponse `json:"meter,omitempty"`
+	// Group is the full group object when the feature belongs to a group (populated in response)
+	Group *GroupResponse `json:"group,omitempty"`
 }
 
 // ListFeaturesResponse represents a paginated list of features

@@ -455,24 +455,12 @@ func (o AddonQueryOptions) ApplyPaginationFilter(query AddonQuery, limit int, of
 	return query
 }
 
+// GetFieldName returns the ent field name for addon; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o AddonQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return addon.FieldCreatedAt
-	case "updated_at":
-		return addon.FieldUpdatedAt
-	case "name":
-		return addon.FieldName
-	case "lookup_key":
-		return addon.FieldLookupKey
-	case "type":
-		return addon.FieldType
-	case "status":
-		return addon.FieldStatus
-	default:
-		// unknown field
-		return ""
+	if addon.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o AddonQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.AddonFilter, query AddonQuery) (AddonQuery, error) {

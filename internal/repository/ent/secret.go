@@ -357,29 +357,12 @@ func (o SecretQueryOptions) ApplyPaginationFilter(query SecretQuery, limit int, 
 	return query
 }
 
+// GetFieldName returns the ent field name for secret; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o SecretQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "id":
-		return secret.FieldID
-	case "name":
-		return secret.FieldName
-	case "type":
-		return secret.FieldType
-	case "provider":
-		return secret.FieldProvider
-	case "display_id":
-		return secret.FieldDisplayID
-	case "expires_at":
-		return secret.FieldExpiresAt
-	case "last_used_at":
-		return secret.FieldLastUsedAt
-	case "created_at":
-		return secret.FieldCreatedAt
-	case "updated_at":
-		return secret.FieldUpdatedAt
-	default:
-		return ""
+	if secret.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o SecretQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.SecretFilter, query SecretQuery) SecretQuery {

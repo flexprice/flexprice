@@ -1,9 +1,9 @@
 # Generate OpenAPI spec and all SDKs (Go, TypeScript, Python) + MCP.
 #
-# Flow: trigger -> version-check (resolve version from sdk-version.json vs published npm; skip if resolved equals .speakeasy/gen/go.yaml) -> generate -> push to GitHub -> publish to npm/PyPI.
-# Version: resolved in version-check (sdk-version.json vs npm); if npm greater, use bumped npm; else use sdk-version.json. All downstream jobs use this resolved version only. Skip when resolved equals gen/go.yaml.
+# Flow: release published -> version-check (version from release tag only) -> generate -> push to GitHub -> publish to npm/PyPI.
+# Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
 #
-# Triggers: release published; workflow_dispatch. When version unchanged, generate and publish are skipped.
+# Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
@@ -15,7 +15,6 @@ name: Generate SDKs
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 concurrency:
   group: sdk-generate-publish
@@ -26,7 +25,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Resolve version: max(sdk-version.json, published npm). If npm > sdk, use bumped npm; else use sdk. Skip if resolved equals gen/go.yaml.
+  # Version from release tag only. Skip if equals gen/go.yaml.
   # ---------------------------------------------------------------------------
   version-check:
     runs-on: ubuntu-latest
@@ -39,41 +38,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve version (sdk-version.json vs npm) and set outputs
+      - name: Set version from release tag and set outputs
         id: version-check
         run: |
-          SDK_VERSION=$(jq -r .version .speakeasy/sdk-version.json 2>/dev/null || echo "")
-          [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ] && SDK_VERSION="0.0.0"
-
-          # Fetch published npm version for @flexprice/sdk (ignore failures for first publish or network)
-          NPM_VERSION=$(curl -sf "https://registry.npmjs.org/@flexprice/sdk" | jq -r '.["dist-tags"].latest // empty' 2>/dev/null || echo "")
-          [ -z "$NPM_VERSION" ] && NPM_VERSION="0.0.0"
-
-          # Semver compare: which is greater? (sort -V puts greater last)
-          GREATER=$(printf '%s\n%s\n' "$SDK_VERSION" "$NPM_VERSION" | sort -V | tail -1)
-
-          if [ "$GREATER" = "$NPM_VERSION" ] && [ "$NPM_VERSION" != "$SDK_VERSION" ]; then
-            # npm is greater: use bumped npm version (patch bump)
-            RESOLVED=$(echo "$NPM_VERSION" | awk -F. -v OFS=. '{ $3++; print $1, $2, $3 }')
-            echo "Using bumped npm version (npm=$NPM_VERSION -> $RESOLVED); sdk-version.json=$SDK_VERSION"
-          else
-            # sdk-version.json is greater or equal: use it directly
-            RESOLVED="$SDK_VERSION"
-            echo "Using sdk-version.json directly: $RESOLVED (npm=$NPM_VERSION)"
-          fi
+          RAW="${{ github.event.release.tag_name }}"
+          RESOLVED="${RAW#v}"
+          echo "Using release tag: $RAW -> $RESOLVED"
+          [ -z "$RESOLVED" ] && echo "::error::Version is empty (release tag)." && exit 1
 
           GEN_VERSION=""
           if [ -f .speakeasy/gen/go.yaml ]; then
             GEN_VERSION=$(sed -n '/^go:/,/^[a-z]/p' .speakeasy/gen/go.yaml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | xargs)
           fi
-          [ -z "$GEN_VERSION" ] && GEN_VERSION=""
 
           if [ "$RESOLVED" = "$GEN_VERSION" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Resolved version unchanged (resolved=$RESOLVED, gen/go.yaml=$GEN_VERSION); skipping generate and publish."
+            echo "Version unchanged (version=$RESOLVED, gen/go.yaml=$GEN_VERSION); skipping generate and publish."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Resolved version changed (resolved=$RESOLVED, gen/go.yaml=$GEN_VERSION); will generate and publish."
+            echo "Version: $RESOLVED (gen/go.yaml=$GEN_VERSION); will generate and publish."
           fi
           echo "version=$RESOLVED" >> $GITHUB_OUTPUT
 
@@ -81,7 +64,7 @@ jobs:
         if: steps.version-check.outputs.skip == 'true'
         run: |
           echo "## Skipped generate and publish" >> $GITHUB_STEP_SUMMARY
-          echo "Resolved version matches \`.speakeasy/gen/go.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
+          echo "Version matches \`.speakeasy/gen/go.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Setup → OpenAPI → SDK tooling → Generate → Upload artifacts
@@ -187,7 +170,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-to-github:
     needs: [version-check, generate]
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -261,7 +244,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-summary:
     needs: [version-check, generate, publish-to-github]
-    if: success() && (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    if: success() && github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -295,7 +278,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-to-registries:
     needs: [generate, publish-to-github]
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read

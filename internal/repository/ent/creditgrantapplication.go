@@ -478,34 +478,12 @@ func (o CreditGrantApplicationQueryOptions) ApplyPaginationFilter(query CreditGr
 	return query
 }
 
+// GetFieldName returns the ent field name for credit_grant_application; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o CreditGrantApplicationQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return cga.FieldCreatedAt
-	case "updated_at":
-		return cga.FieldUpdatedAt
-	case "scheduled_for":
-		return cga.FieldScheduledFor
-	case "applied_at":
-		return cga.FieldAppliedAt
-	case "period_start":
-		return cga.FieldPeriodStart
-	case "period_end":
-		return cga.FieldPeriodEnd
-	case "application_status":
-		return cga.FieldApplicationStatus
-	case "credits":
-		return cga.FieldCredits
-	case "credit_grant_id":
-		return cga.FieldCreditGrantID
-	case "subscription_id":
-		return cga.FieldSubscriptionID
-	case "status":
-		return cga.FieldStatus
-	default:
-		//unknown field
-		return ""
+	if cga.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o CreditGrantApplicationQueryOptions) GetFieldResolver(field string) (string, error) {

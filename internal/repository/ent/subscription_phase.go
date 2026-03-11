@@ -422,25 +422,12 @@ func (o SubscriptionPhaseQueryOptions) ApplyPaginationFilter(query SubscriptionP
 	return query
 }
 
+// GetFieldName returns the ent field name for subscription_phase; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o SubscriptionPhaseQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return subscriptionphase.FieldCreatedAt
-	case "updated_at":
-		return subscriptionphase.FieldUpdatedAt
-	case "start_date":
-		return subscriptionphase.FieldStartDate
-	case "end_date":
-		return subscriptionphase.FieldEndDate
-	case "status":
-		return subscriptionphase.FieldStatus
-	case "subscription_id":
-		return subscriptionphase.FieldSubscriptionID
-	case "metadata":
-		return subscriptionphase.FieldMetadata
-	default:
+	if subscriptionphase.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o SubscriptionPhaseQueryOptions) GetFieldResolver(field string) (string, error) {

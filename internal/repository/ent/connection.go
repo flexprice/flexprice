@@ -511,22 +511,12 @@ func (o ConnectionQueryOptions) ApplyPaginationFilter(query ConnectionQuery, lim
 	return query
 }
 
+// GetFieldName returns the ent field name for connection; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o ConnectionQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return connection.FieldCreatedAt
-	case "updated_at":
-		return connection.FieldUpdatedAt
-	case "name":
-		return connection.FieldName
-	case "provider_type":
-		return connection.FieldProviderType
-	case "status":
-		return connection.FieldStatus
-	default:
-		//unknown field
-		return ""
+	if connection.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o ConnectionQueryOptions) GetFieldResolver(field string) (string, error) {

@@ -131,9 +131,19 @@ func (s *groupService) ListGroups(ctx context.Context, filter *types.GroupFilter
 		return nil, err
 	}
 
+	// Fetch entity_ids for all groups in bulk (prices or features by entity_type)
+	entityIDsByGroup, err := s.getAssociatedEntitiesBulk(ctx, groups)
+	if err != nil {
+		return nil, err
+	}
+
 	responses := make([]*dto.GroupResponse, len(groups))
 	for i, groupObj := range groups {
-		responses[i] = dto.ToGroupResponse(groupObj)
+		ids := entityIDsByGroup[groupObj.ID]
+		if ids == nil {
+			ids = []string{}
+		}
+		responses[i] = dto.ToGroupResponseWithEntities(groupObj, ids)
 	}
 
 	return &dto.ListGroupsResponse{
@@ -154,6 +164,16 @@ func (s *groupService) getAssociatedEntities(ctx context.Context, entityType typ
 		entityIDs := make([]string, len(prices))
 		for i, price := range prices {
 			entityIDs[i] = price.ID
+		}
+		return entityIDs, nil
+	case types.GroupEntityTypeFeature:
+		features, err := s.FeatureRepo.GetByGroupIDs(ctx, []string{groupID})
+		if err != nil {
+			return nil, err
+		}
+		entityIDs := make([]string, len(features))
+		for i, f := range features {
+			entityIDs[i] = f.ID
 		}
 		return entityIDs, nil
 	default:
@@ -187,12 +207,22 @@ func (s *groupService) getAssociatedEntitiesBulk(ctx context.Context, groups []*
 			// Group prices by group ID
 			entityIDsByGroup := make(map[string][]string)
 			for _, price := range prices {
-				// Get the group ID from the price
-				// Note: This requires the Price domain to have a GroupID field
 				groupID := price.GroupID
 				entityIDsByGroup[groupID] = append(entityIDsByGroup[groupID], price.ID)
 			}
-			// Merge results
+			for groupID, entityIDs := range entityIDsByGroup {
+				result[groupID] = entityIDs
+			}
+		case types.GroupEntityTypeFeature:
+			features, err := s.FeatureRepo.GetByGroupIDs(ctx, groupIDs)
+			if err != nil {
+				return nil, err
+			}
+			entityIDsByGroup := make(map[string][]string)
+			for _, f := range features {
+				groupID := f.GroupID
+				entityIDsByGroup[groupID] = append(entityIDsByGroup[groupID], f.ID)
+			}
 			for groupID, entityIDs := range entityIDsByGroup {
 				result[groupID] = entityIDs
 			}
@@ -211,6 +241,8 @@ func (s *groupService) disassociateEntitiesByGroupID(ctx context.Context, entity
 	switch entityType {
 	case types.GroupEntityTypePrice:
 		return s.PriceRepo.ClearByGroupID(ctx, groupID)
+	case types.GroupEntityTypeFeature:
+		return s.FeatureRepo.ClearByGroupID(ctx, groupID)
 	default:
 		return ierr.NewError("unsupported entity type").
 			WithHint("Unsupported entity type: " + entityType.String()).

@@ -58,7 +58,9 @@ type Feature struct {
 	ReportingUnitConversionRate *decimal.Decimal `json:"reporting_unit_conversion_rate,omitempty"`
 	// AlertSettings holds the value of the "alert_settings" field.
 	AlertSettings types.AlertSettings `json:"alert_settings,omitempty"`
-	selectValues  sql.SelectValues
+	// GroupID holds the value of the "group_id" field.
+	GroupID      *string `json:"group_id,omitempty"`
+	selectValues sql.SelectValues
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -70,7 +72,7 @@ func (*Feature) scanValues(columns []string) ([]any, error) {
 			values[i] = &sql.NullScanner{S: new(decimal.Decimal)}
 		case feature.FieldMetadata, feature.FieldAlertSettings:
 			values[i] = new([]byte)
-		case feature.FieldID, feature.FieldTenantID, feature.FieldStatus, feature.FieldCreatedBy, feature.FieldUpdatedBy, feature.FieldEnvironmentID, feature.FieldLookupKey, feature.FieldName, feature.FieldDescription, feature.FieldType, feature.FieldMeterID, feature.FieldUnitSingular, feature.FieldUnitPlural, feature.FieldReportingUnitSingular, feature.FieldReportingUnitPlural:
+		case feature.FieldID, feature.FieldTenantID, feature.FieldStatus, feature.FieldCreatedBy, feature.FieldUpdatedBy, feature.FieldEnvironmentID, feature.FieldLookupKey, feature.FieldName, feature.FieldDescription, feature.FieldType, feature.FieldMeterID, feature.FieldUnitSingular, feature.FieldUnitPlural, feature.FieldReportingUnitSingular, feature.FieldReportingUnitPlural, feature.FieldGroupID:
 			values[i] = new(sql.NullString)
 		case feature.FieldCreatedAt, feature.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -220,6 +222,13 @@ func (f *Feature) assignValues(columns []string, values []any) error {
 					return fmt.Errorf("unmarshal field alert_settings: %w", err)
 				}
 			}
+		case feature.FieldGroupID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field group_id", values[i])
+			} else if value.Valid {
+				f.GroupID = new(string)
+				*f.GroupID = value.String
+			}
 		default:
 			f.selectValues.Set(columns[i], values[i])
 		}
@@ -326,6 +335,11 @@ func (f *Feature) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("alert_settings=")
 	builder.WriteString(fmt.Sprintf("%v", f.AlertSettings))
+	builder.WriteString(", ")
+	if v := f.GroupID; v != nil {
+		builder.WriteString("group_id=")
+		builder.WriteString(*v)
+	}
 	builder.WriteByte(')')
 	return builder.String()
 }

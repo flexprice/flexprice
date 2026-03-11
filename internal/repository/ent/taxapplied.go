@@ -377,45 +377,12 @@ func (o TaxAppliedQueryOptions) ApplyPaginationFilter(query TaxAppliedQuery, lim
 	return query.Limit(limit).Offset(offset)
 }
 
+// GetFieldName returns the ent field name for tax_applied; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o TaxAppliedQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "id":
-		return taxapplied.FieldID
-	case "tenant_id":
-		return taxapplied.FieldTenantID
-	case "status":
-		return taxapplied.FieldStatus
-	case "created_at":
-		return taxapplied.FieldCreatedAt
-	case "updated_at":
-		return taxapplied.FieldUpdatedAt
-	case "created_by":
-		return taxapplied.FieldCreatedBy
-	case "updated_by":
-		return taxapplied.FieldUpdatedBy
-	case "environment_id":
-		return taxapplied.FieldEnvironmentID
-	case "tax_rate_id":
-		return taxapplied.FieldTaxRateID
-	case "entity_type":
-		return taxapplied.FieldEntityType
-	case "entity_id":
-		return taxapplied.FieldEntityID
-	case "tax_association_id":
-		return taxapplied.FieldTaxAssociationID
-	case "taxable_amount":
-		return taxapplied.FieldTaxableAmount
-	case "tax_amount":
-		return taxapplied.FieldTaxAmount
-	case "currency":
-		return taxapplied.FieldCurrency
-	case "applied_at":
-		return taxapplied.FieldAppliedAt
-	case "metadata":
-		return taxapplied.FieldMetadata
-	default:
+	if taxapplied.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o TaxAppliedQueryOptions) GetFieldResolver(field string) (string, error) {

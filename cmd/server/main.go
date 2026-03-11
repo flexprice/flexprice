@@ -503,6 +503,11 @@ func startServer(
 		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
+		// Register webhook handler and start router so that webhook events
+		// published by temporal activities (e.g. invoice finalization) are
+		// consumed and delivered via Svix/native in the same process.
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, false)
+		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeConsumer:
 		if consumer == nil {

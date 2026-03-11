@@ -434,21 +434,12 @@ func (o CreditNoteLineItemQueryOptions) ApplyPaginationFilter(query CreditNoteLi
 	return query
 }
 
+// GetFieldName returns the ent field name for credit_note_line_item; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o CreditNoteLineItemQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return creditnotelineitem.FieldCreatedAt
-	case "updated_at":
-		return creditnotelineitem.FieldUpdatedAt
-	case "amount":
-		return creditnotelineitem.FieldAmount
-	case "display_name":
-		return creditnotelineitem.FieldDisplayName
-	case "currency":
-		return creditnotelineitem.FieldCurrency
-	default:
+	if creditnotelineitem.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o CreditNoteLineItemQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.CreditNoteLineItemFilter, query CreditNoteLineItemQuery) CreditNoteLineItemQuery {
