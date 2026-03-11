@@ -36,12 +36,11 @@ func NewSandboxSubscriptionCleanupActivities(subscriptionService service.Subscri
 	}
 }
 
-// BuildSandboxCleanupListActivity builds the sandboxCleanupList: lists tenants, builds tenantExpiryDays and sandbox env IDs,
-// lists all active subscriptions in those envs, filters to past cleanup window, returns SubsToTerminate. No termination; workflow
-// runs TerminateSandboxSubscriptionsBatchActivity over chunks of this list. Uses GetTenantConfig only (no hardcoded defaults).
-func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(ctx context.Context) (*subscriptionModels.BuildSandboxCleanupListResult, error) {
+// BuildSandboxCleanupListActivity fetches one page of active sandbox subs (offset/limit), filters to past cleanup window,
+// returns that page of SubsToTerminate and HasMore. Workflow calls this in a loop then runs TerminateBatch per page.
+func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(ctx context.Context, input subscriptionModels.BuildSandboxCleanupListInput) (*subscriptionModels.BuildSandboxCleanupListPageResult, error) {
 	logger := activity.GetLogger(ctx)
-	result := &subscriptionModels.BuildSandboxCleanupListResult{SubsToTerminate: nil}
+	result := &subscriptionModels.BuildSandboxCleanupListPageResult{Items: nil, HasMore: false}
 
 	tenants, err := s.params.TenantRepo.List(ctx)
 	if err != nil {
@@ -60,7 +59,7 @@ func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(c
 			Status: types.StatusPublished,
 		})
 		if err != nil {
-			s.params.Logger.Errorw("failed to list environments for tenant in sandbox cleanup", "tenant_id", t.ID, "error", err)
+			s.params.Logger.Errorw("sandbox cleanup: fetching environments for tenant failed, skipping tenant", "tenant_id", t.ID, "error", err)
 			continue
 		}
 		for _, env := range envs {
@@ -69,7 +68,7 @@ func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(c
 
 		tenantConfig, err := s.settingsService.GetTenantConfig(ctxTenant)
 		if err != nil {
-			s.params.Logger.Errorw("failed to get tenant config for sandbox cleanup", "tenant_id", t.ID, "error", err)
+			s.params.Logger.Errorw("sandbox cleanup: fetching tenant config failed, skipping tenant", "tenant_id", t.ID, "error", err)
 			continue
 		}
 		tenantExpiryDays[t.ID] = tenantConfig.SandboxSubscriptionExpiryDays
@@ -80,10 +79,26 @@ func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(c
 		return result, nil
 	}
 
-	filter := types.NewNoLimitSubscriptionFilter()
-	filter.EnvironmentIDs = sandboxEnvIDs
-	filter.SubscriptionStatus = []types.SubscriptionStatus{types.SubscriptionStatusActive}
-	filter.Status = lo.ToPtr(types.StatusPublished)
+	pageSize := input.Limit
+	if pageSize <= 0 {
+		pageSize = 500
+	}
+	offset := input.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	filter := &types.SubscriptionFilter{
+		QueryFilter: &types.QueryFilter{
+			Limit:  lo.ToPtr(pageSize),
+			Offset: lo.ToPtr(offset),
+			Sort:   lo.ToPtr("created_at"),
+			Order:  lo.ToPtr("asc"),
+			Status: lo.ToPtr(types.StatusPublished),
+		},
+		EnvironmentIDs:     sandboxEnvIDs,
+		SubscriptionStatus: []types.SubscriptionStatus{types.SubscriptionStatusActive},
+	}
 	subs, err := s.subscriptionService.ListAllTenantSubscriptions(ctx, filter)
 	if err != nil {
 		s.params.Logger.Errorw("failed to list subscriptions in dev envs for sandbox cleanup", "error", err)
@@ -99,22 +114,22 @@ func (s *SandboxSubscriptionCleanupActivities) BuildSandboxCleanupListActivity(c
 			continue
 		}
 		expiryDays := tenantExpiryDays[sub.TenantID]
-		if expiryDays < 1 {
-			continue
-		}
 		expiryAt := sub.StartDate.AddDate(0, 0, expiryDays)
 		if !now.After(expiryAt) {
 			continue
 		}
-		result.SubsToTerminate = append(result.SubsToTerminate, subscriptionModels.SubToTerminate{
+		result.Items = append(result.Items, subscriptionModels.SubToTerminate{
 			SubscriptionID: sub.ID,
 			TenantID:       sub.TenantID,
 			EnvironmentID:  sub.EnvironmentID,
 			CreatedBy:      sub.CreatedBy,
 		})
 	}
+	// HasMore = we got a full page from the DB, so there may be another page of raw subs to scan.
+	// We paginate the source list (all active sandbox subs); after filtering by expiry, result.Items may be smaller.
+	result.HasMore = len(subs.Items) == pageSize
 
-	logger.Info("Sandbox cleanup list built", "subs_to_terminate_count", len(result.SubsToTerminate))
+	logger.Info("Sandbox cleanup page fetched", "offset", offset, "limit", pageSize, "items_count", len(result.Items), "has_more", result.HasMore)
 	return result, nil
 }
 
@@ -130,11 +145,13 @@ func (s *SandboxSubscriptionCleanupActivities) TerminateSandboxSubscriptionsBatc
 		subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
 		_, err := s.subscriptionService.CancelSubscription(subCtx, sub.SubscriptionID, &dto.CancelSubscriptionRequest{
 			CancellationType: types.CancellationTypeSandboxSubscriptionCleanup,
-			Reason:           "Sandbox subscription auto-cancelled after expiry",
+			Reason:           "Sandbox subscription auto-cancelled after cleanup window",
 		})
 		if err != nil {
 			s.params.Logger.Errorw("failed to terminate sandbox subscription", "subscription_id", sub.SubscriptionID, "tenant_id", sub.TenantID, "environment_id", sub.EnvironmentID, "error", err)
-			continue
+			return nil, ierr.WithError(err).
+				WithHint("CancelSubscription failed; failing activity so Temporal can retry the batch").
+				Mark(ierr.ErrDatabase)
 		}
 		terminated = append(terminated, sub.SubscriptionID)
 	}

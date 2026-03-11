@@ -15,9 +15,9 @@ const (
 	TerminateBatchSize                         = 500
 )
 
-// SandboxSubscriptionCleanupWorkflow runs daily: builds sandboxCleanupList (subs past cleanup window) then terminates them in batches.
-// tenant_config.sandbox_subscription_expiry_days (default from types) controls the cleanup window. Schedule/workflow/activity timeouts
-// are set so a full run (build list + many batches) completes; each batch has its own timeout and retry.
+// SandboxSubscriptionCleanupWorkflow runs daily: fetches sandbox subs in pages (offset/limit), filters to past cleanup window
+// in the activity, and terminates each page in one batch. No single large payload; workflow never holds the full list.
+// tenant_config.sandbox_subscription_expiry_days (default 90) controls the cleanup window.
 func SandboxSubscriptionCleanupWorkflow(ctx workflow.Context) (*subscriptionModels.SandboxSubscriptionCleanupWorkflowResult, error) {
 	buildListOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 1 * time.Hour,
@@ -30,16 +30,6 @@ func SandboxSubscriptionCleanupWorkflow(ctx workflow.Context) (*subscriptionMode
 	}
 	buildCtx := workflow.WithActivityOptions(ctx, buildListOpts)
 
-	var listResult subscriptionModels.BuildSandboxCleanupListResult
-	if err := workflow.ExecuteActivity(buildCtx, ActivityBuildSandboxCleanupList).Get(buildCtx, &listResult); err != nil {
-		return nil, err
-	}
-
-	sandboxCleanupList := listResult.SubsToTerminate
-	if len(sandboxCleanupList) == 0 {
-		return &subscriptionModels.SandboxSubscriptionCleanupWorkflowResult{TerminatedSubscriptionIDs: []string{}}, nil
-	}
-
 	batchOpts := workflow.ActivityOptions{
 		StartToCloseTimeout: 10 * time.Minute,
 		RetryPolicy: &temporal.RetryPolicy{
@@ -51,19 +41,35 @@ func SandboxSubscriptionCleanupWorkflow(ctx workflow.Context) (*subscriptionMode
 	}
 	batchCtx := workflow.WithActivityOptions(ctx, batchOpts)
 
-	var allTerminated []string
-	for i := 0; i < len(sandboxCleanupList); i += TerminateBatchSize {
-		end := i + TerminateBatchSize
-		if end > len(sandboxCleanupList) {
-			end = len(sandboxCleanupList)
-		}
-		batch := sandboxCleanupList[i:end]
-		var batchIDs []string
-		if err := workflow.ExecuteActivity(batchCtx, ActivityTerminateSandboxSubscriptionsBatch, batch).Get(batchCtx, &batchIDs); err != nil {
+	wflog := workflow.GetLogger(ctx)
+	pageSize := TerminateBatchSize
+	offset := 0
+	totalTerminated := 0
+	batchCount := 0
+
+	for {
+		var pageResult subscriptionModels.BuildSandboxCleanupListPageResult
+		if err := workflow.ExecuteActivity(buildCtx, ActivityBuildSandboxCleanupList, subscriptionModels.BuildSandboxCleanupListInput{Offset: offset, Limit: pageSize}).Get(buildCtx, &pageResult); err != nil {
 			return nil, err
 		}
-		allTerminated = append(allTerminated, batchIDs...)
+		if len(pageResult.Items) == 0 && !pageResult.HasMore {
+			break
+		}
+		if len(pageResult.Items) > 0 {
+			// Batch activity returns terminated subscription IDs for this batch only (also visible in Temporal UI as activity result).
+			var terminatedSubscriptionIDs []string
+			if err := workflow.ExecuteActivity(batchCtx, ActivityTerminateSandboxSubscriptionsBatch, pageResult.Items).Get(batchCtx, &terminatedSubscriptionIDs); err != nil {
+				return nil, err
+			}
+			wflog.Info("Sandbox cleanup batch terminated", "batch_index", batchCount, "batch_size", len(terminatedSubscriptionIDs), "terminated_subscription_ids", terminatedSubscriptionIDs)
+			totalTerminated += len(terminatedSubscriptionIDs)
+			batchCount++
+		}
+		if !pageResult.HasMore {
+			break
+		}
+		offset += pageSize
 	}
 
-	return &subscriptionModels.SandboxSubscriptionCleanupWorkflowResult{TerminatedSubscriptionIDs: allTerminated}, nil
+	return &subscriptionModels.SandboxSubscriptionCleanupWorkflowResult{TerminatedCount: totalTerminated, BatchCount: batchCount}, nil
 }

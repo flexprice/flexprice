@@ -90,9 +90,9 @@ func (c InvoicePDFConfig) Validate() error {
 
 // TenantConfig represents environment creation limits, user limit, and sandbox expiry configuration
 type TenantConfig struct {
-	Production                   int `json:"production" validate:"omitempty,min=0"`
-	Development                  int `json:"development" validate:"omitempty,min=0"`
-	MaxUsers                     int `json:"max_users" validate:"omitempty,min=1"`
+	Production                    int `json:"production" validate:"omitempty,min=0"`
+	Development                   int `json:"development" validate:"omitempty,min=0"`
+	MaxUsers                      int `json:"max_users" validate:"omitempty,min=1"`
 	SandboxSubscriptionExpiryDays int `json:"sandbox_subscription_expiry_days" validate:"omitempty,min=1"`
 }
 
@@ -360,9 +360,9 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	defaultTenantConfig := TenantConfig{
-		Production:                   1,
-		Development:                  2,
-		MaxUsers:                     10,
+		Production:                    1,
+		Development:                   2,
+		MaxUsers:                      10,
 		SandboxSubscriptionExpiryDays: 90,
 	}
 

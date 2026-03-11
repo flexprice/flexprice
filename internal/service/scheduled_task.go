@@ -822,10 +822,10 @@ func (s *scheduledTaskService) ScheduleSandboxSubscriptionsCleanup(ctx context.C
 
 	// Workflow run timeout: build sandboxCleanupList (~1h) plus N batches of TerminateSandboxSubscriptionsBatch (10min each).
 	// For ~50k subs at 500/batch that is 100 batches → ~17h; set 18h so the full run can complete.
-	const sandboxCleanupRunTimeout = 3 * time.Hour
+	const sandboxCleanupRunTimeout = 18 * time.Hour
 	action := &client.ScheduleWorkflowAction{
-		Workflow: subscriptionWorkflows.SandboxSubscriptionCleanupWorkflow,
-		Args:     []interface{}{},
+		Workflow:                 subscriptionWorkflows.SandboxSubscriptionCleanupWorkflow,
+		Args:                     []interface{}{},
 		TaskQueue:                string(types.TemporalTaskQueueSubscription),
 		WorkflowExecutionTimeout: sandboxCleanupRunTimeout,
 		WorkflowRunTimeout:       sandboxCleanupRunTimeout,
