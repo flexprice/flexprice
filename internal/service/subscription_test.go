@@ -1459,7 +1459,7 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			})
 		}
 
-		// Test cancelling already cancelled subscription is idempotent (returns success, not error)
+		// Test cancelling already cancelled subscription is idempotent: module returns success with only SubscriptionID and Message set.
 		s.Run("cancel_already_canceled_subscription", func() {
 			resp, err := s.service.CancelSubscription(s.GetContext(), activeSub.ID, &dto.CancelSubscriptionRequest{
 				CancellationType:  types.CancellationTypeImmediate,
@@ -1468,7 +1468,8 @@ func (s *SubscriptionServiceSuite) TestCancelSubscription() {
 			})
 			s.NoError(err)
 			s.Require().NotNil(resp)
-			s.Contains(resp.Message, "already cancelled")
+			s.Equal(activeSub.ID, resp.SubscriptionID, "idempotent path returns subscription id")
+			s.Contains(resp.Message, "already cancelled", "idempotent path returns expected message")
 		})
 	})
 
