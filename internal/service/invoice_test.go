@@ -1137,6 +1137,137 @@ func (s *InvoiceServiceSuite) TestGetCustomerInvoiceSummary() {
 	}
 }
 
+func (s *InvoiceServiceSuite) TestGetUnpaidInvoicesToBePaid_Calculations() {
+	ctx := s.GetContext()
+
+	// Fresh customer to avoid interference with other suite fixtures.
+	cust := &customer.Customer{
+		ID:         "cust_unpaid_to_be_paid",
+		ExternalID: "ext_cust_unpaid_to_be_paid",
+		Name:       "Unpaid Invoices Customer",
+		Email:      "unpaid-invoices@test.com",
+		BaseModel:  types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().CustomerRepo.Create(ctx, cust))
+
+	// inv_1: unpaid finalized USD
+	// - AmountPaid=30, AmountRemaining=100 => AmountDue=130
+	// - usage line: 80 - prepaid 10 - discount 5 = 65 contribution
+	// - fixed line: 50 (does not affect unpaid usage charges)
+	inv1 := &invoice.Invoice{
+		ID:              "inv_unpaid_1",
+		CustomerID:      cust.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountPaid:      decimal.NewFromInt(30),
+		AmountRemaining: decimal.NewFromInt(100),
+		AmountDue:       decimal.NewFromInt(130),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:                    "inv1_li_usage",
+				CustomerID:            cust.ID,
+				Currency:              "usd",
+				Amount:                decimal.NewFromInt(80),
+				PriceType:             lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+				PrepaidCreditsApplied: decimal.NewFromInt(10),
+				LineItemDiscount:      decimal.NewFromInt(5),
+				BaseModel:             types.GetDefaultBaseModel(ctx),
+			},
+			{
+				ID:               "inv1_li_fixed",
+				CustomerID:       cust.ID,
+				Currency:         "usd",
+				Amount:           decimal.NewFromInt(50),
+				PriceType:        lo.ToPtr(string(types.PRICE_TYPE_FIXED)),
+				LineItemDiscount: decimal.Zero,
+				BaseModel:        types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv1))
+
+	// inv_2: unpaid finalized USD
+	// - AmountPaid=0, AmountRemaining=50
+	// - usage line: 50 contribution
+	inv2 := &invoice.Invoice{
+		ID:              "inv_unpaid_2",
+		CustomerID:      cust.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(50),
+		AmountDue:       decimal.NewFromInt(50),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+		LineItems: []*invoice.InvoiceLineItem{
+			{
+				ID:                    "inv2_li_usage",
+				CustomerID:            cust.ID,
+				Currency:              "usd",
+				Amount:                decimal.NewFromInt(50),
+				PriceType:             lo.ToPtr(string(types.PRICE_TYPE_USAGE)),
+				PrepaidCreditsApplied: decimal.Zero,
+				LineItemDiscount:      decimal.Zero,
+				BaseModel:             types.GetDefaultBaseModel(ctx),
+			},
+		},
+	}
+	s.NoError(s.invoiceRepo.CreateWithLineItems(ctx, inv2))
+
+	// inv_3: PAID invoice should be ignored.
+	inv3 := &invoice.Invoice{
+		ID:              "inv_paid_ignored",
+		CustomerID:      cust.ID,
+		Currency:        "usd",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusSucceeded,
+		AmountPaid:      decimal.NewFromInt(200),
+		AmountRemaining: decimal.Zero,
+		AmountDue:       decimal.NewFromInt(200),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.Create(ctx, inv3))
+
+	// inv_4: different currency should be ignored.
+	inv4 := &invoice.Invoice{
+		ID:              "inv_eur_ignored",
+		CustomerID:      cust.ID,
+		Currency:        "eur",
+		InvoiceType:     types.InvoiceTypeOneOff,
+		InvoiceStatus:   types.InvoiceStatusFinalized,
+		PaymentStatus:   types.PaymentStatusPending,
+		AmountPaid:      decimal.Zero,
+		AmountRemaining: decimal.NewFromInt(999),
+		AmountDue:       decimal.NewFromInt(999),
+		BaseModel:       types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.invoiceRepo.Create(ctx, inv4))
+
+	resp, err := s.service.GetUnpaidInvoicesToBePaid(ctx, dto.GetUnpaidInvoicesToBePaidRequest{
+		CustomerID: cust.ID,
+		Currency:   "usd",
+	})
+	s.NoError(err)
+	s.NotNil(resp)
+
+	s.True(decimal.NewFromInt(150).Equal(resp.TotalUnpaidAmount),
+		"TotalUnpaidAmount mismatch: expected 150, got %s", resp.TotalUnpaidAmount)
+	s.True(decimal.NewFromInt(115).Equal(resp.TotalUnpaidUsageCharges),
+		"TotalUnpaidUsageCharges mismatch: expected 115, got %s", resp.TotalUnpaidUsageCharges)
+	s.True(decimal.NewFromInt(30).Equal(resp.TotalPaidInvoiceAmount),
+		"TotalPaidInvoiceAmount mismatch: expected 30, got %s", resp.TotalPaidInvoiceAmount)
+
+	// Should return only the two unpaid USD invoices.
+	s.Len(resp.Invoices, 2)
+	gotIDs := lo.Map(resp.Invoices, func(i *dto.InvoiceResponse, _ int) string { return i.ID })
+	s.ElementsMatch([]string{inv1.ID, inv2.ID}, gotIDs)
+}
+
 func (s *InvoiceServiceSuite) setupWallets() {
 	// Clear all stores to prevent conflicts with previous tests
 	s.GetStores().WalletRepo.(*testutil.InMemoryWalletStore).Clear()
