@@ -40,7 +40,8 @@ func ScheduleSubscriptionBillingWorkflow(ctx workflow.Context, input subscriptio
 	var result subscriptionModels.ScheduleSubscriptionBillingWorkflowResult
 
 	activityInput := subscriptionModels.ScheduleSubscriptionBillingWorkflowInput{
-		BatchSize: input.BatchSize,
+		BatchSize:    input.BatchSize,
+		MaxWorkflows: input.MaxWorkflows,
 	}
 	err := workflow.ExecuteActivity(ctx, ActivityScheduleBilling, activityInput).Get(ctx, &result)
 
