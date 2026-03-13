@@ -931,6 +931,12 @@ func (o InvoiceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types
 	if f.PeriodEndLTE != nil {
 		query = query.Where(invoice.PeriodEndLTE(*f.PeriodEndLTE))
 	}
+	if f.CreatedAtGTE != nil {
+		query = query.Where(invoice.CreatedAtGTE(*f.CreatedAtGTE))
+	}
+	if f.CreatedAtLTE != nil {
+		query = query.Where(invoice.CreatedAtLTE(*f.CreatedAtLTE))
+	}
 
 	if f.Filters != nil {
 		query, err = dsl.ApplyFilters[InvoiceQuery, predicate.Invoice](
