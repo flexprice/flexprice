@@ -24,6 +24,7 @@ import (
 	"github.com/flexprice/flexprice/internal/interfaces"
 	"github.com/flexprice/flexprice/internal/s3"
 	"github.com/flexprice/flexprice/internal/temporal/models"
+	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -49,7 +50,7 @@ type InvoiceService interface {
 	GetInvoicePDF(ctx context.Context, id string) ([]byte, error)
 	GetInvoicePDFUrl(ctx context.Context, id string) (string, error)
 	RecalculateInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
-	RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
+	RegenerateDraftSubscriptionInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error)
 	RecalculateInvoiceAmounts(ctx context.Context, invoiceID string) error
 	CalculatePriceBreakdown(ctx context.Context, inv *dto.InvoiceResponse) (map[string][]dto.SourceUsageItem, error)
 	CalculateUsageBreakdown(ctx context.Context, inv *dto.InvoiceResponse, groupBy []string, forceRealtimeRecalculation bool) (map[string][]dto.UsageBreakdownItem, error)
@@ -60,6 +61,8 @@ type InvoiceService interface {
 
 	// Cron methods
 	SyncInvoiceToExternalVendors(ctx context.Context, invoiceID string) error
+	// TriggerRegenerateDraftInvoicesInBatches lists draft subscription invoices in batches of 500 and starts a RegenerateDraftInvoicesBatchWorkflow per batch (fire-and-forget). For use by scheduled Temporal activity only.
+	TriggerRegenerateDraftInvoicesInBatches(ctx context.Context) (batchesStarted, totalInvoices int, err error)
 
 	DistributeInvoiceLevelDiscount(ctx context.Context, lineItems []*invoice.InvoiceLineItem, invoiceDiscountAmount decimal.Decimal) error
 }
@@ -2600,9 +2603,17 @@ func (s *invoiceService) publishInternalWebhookEvent(ctx context.Context, eventN
 	)
 }
 
-// RecalculateInvoiceV2 recalculates a draft subscription invoice in-place (replaces line items, reapplies credits/coupons/taxes).
-func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error) {
-	s.Logger.Infow("recalculating invoice v2 (draft)", "invoice_id", id)
+// RegenerateDraftSubscriptionInvoice regenerates a draft subscription invoice in-place from current subscription and usage.
+//
+// Behavior:
+//   - Removes existing line items and recomputes them from the subscription (plan, prices, usage).
+//   - Reapplies credits, coupons, and taxes to the new line items.
+//   - Updates invoice totals, amount due, and payment status. The same invoice ID is kept.
+//
+// Use when subscription or usage data has changed after the draft was created but before finalizing.
+// If finalize is true, the invoice is finalized after regeneration; otherwise it remains in draft.
+func (s *invoiceService) RegenerateDraftSubscriptionInvoice(ctx context.Context, id string, finalize bool) (*dto.InvoiceResponse, error) {
+	s.Logger.Infow("regenerating draft subscription invoice", "invoice_id", id)
 
 	// Get the invoice
 	inv, err := s.InvoiceRepo.Get(ctx, id)
@@ -2766,42 +2777,105 @@ func (s *invoiceService) RecalculateInvoiceV2(ctx context.Context, id string, fi
 			return err
 		}
 
-		s.Logger.Infow("successfully recalculated invoice with fresh calculation",
+		s.Logger.Infow("successfully regenerated draft subscription invoice",
 			"invoice_id", inv.ID,
 			"subscription_id", *inv.SubscriptionID,
 			"old_amount_due", inv.AmountDue,
 			"new_amount_due", newInvoiceReq.AmountDue,
 			"old_line_items", len(existingLineItemIDs),
-			"new_line_items", len(newLineItems),
-			"recalculation_type", "complete_fresh_calculation")
+			"new_line_items", len(newLineItems))
 
 		return nil
 	})
 
 	if err != nil {
-		s.Logger.Errorw("failed to recalculate invoice",
+		s.Logger.Errorw("failed to regenerate draft subscription invoice",
 			"error", err,
 			"invoice_id", inv.ID,
 			"subscription_id", *inv.SubscriptionID)
 		return nil, err
 	}
 
-	// Publish webhook event for invoice recalculation
+	// Publish webhook event for invoice regeneration
 	s.publishInternalWebhookEvent(ctx, types.WebhookEventInvoiceCreateDraft, inv.ID)
 
 	// Finalize the invoice if requested
 	if finalize {
 		if err := s.FinalizeInvoice(ctx, id); err != nil {
-			s.Logger.Errorw("failed to finalize invoice after recalculation",
+			s.Logger.Errorw("failed to finalize invoice after regeneration",
 				"error", err,
 				"invoice_id", id)
 			return nil, err
 		}
-		s.Logger.Infow("successfully finalized invoice after recalculation", "invoice_id", id)
+		s.Logger.Infow("successfully finalized invoice after regeneration", "invoice_id", id)
 	}
 
 	// Return updated invoice
 	return s.GetInvoice(ctx, id)
+}
+
+const regenerateDraftInvoicesBatchSize = 500
+
+// TriggerRegenerateDraftInvoicesInBatches lists draft subscription invoices in batches and starts a RegenerateDraftInvoicesBatchWorkflow per batch (fire-and-forget).
+func (s *invoiceService) TriggerRegenerateDraftInvoicesInBatches(ctx context.Context) (batchesStarted, totalInvoices int, err error) {
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return 0, 0, ierr.NewError("temporal service not available").
+			WithHint("Cannot trigger regenerate draft invoices workflows").
+			Mark(ierr.ErrInternal)
+	}
+
+	queryFilter := types.NewDefaultQueryFilter()
+	queryFilter.Limit = lo.ToPtr(regenerateDraftInvoicesBatchSize)
+	filter := &types.InvoiceFilter{
+		QueryFilter:   queryFilter,
+		InvoiceStatus: []types.InvoiceStatus{types.InvoiceStatusDraft},
+		InvoiceType:   types.InvoiceTypeSubscription,
+		SkipLineItems: true,
+	}
+
+	for offset := 0; ; offset += regenerateDraftInvoicesBatchSize {
+		filter.QueryFilter.Offset = lo.ToPtr(offset)
+		invoices, listErr := s.InvoiceRepo.ListAllTenant(ctx, filter)
+		if listErr != nil {
+			s.Logger.Errorw("failed to list draft subscription invoices", "error", listErr, "offset", offset)
+			return batchesStarted, totalInvoices, listErr
+		}
+		if len(invoices) == 0 {
+			break
+		}
+
+		items := make([]invoiceModels.InvoiceTenantEnv, len(invoices))
+		for i, inv := range invoices {
+			items[i] = invoiceModels.InvoiceTenantEnv{
+				InvoiceID:     inv.ID,
+				TenantID:      inv.TenantID,
+				EnvironmentID: inv.EnvironmentID,
+			}
+		}
+		input := invoiceModels.RegenerateDraftInvoicesBatchWorkflowInput{Invoices: items}
+		if err := input.Validate(); err != nil {
+			s.Logger.Errorw("invalid batch input for regenerate draft invoices", "error", err, "offset", offset)
+			return batchesStarted, totalInvoices, err
+		}
+
+		_, startErr := temporalSvc.ExecuteWorkflow(ctx, types.TemporalRegenerateDraftInvoicesBatchWorkflow, input)
+		if startErr != nil {
+			s.Logger.Errorw("failed to start regenerate draft invoices batch workflow", "error", startErr, "offset", offset, "batch_size", len(items))
+			return batchesStarted, totalInvoices, startErr
+		}
+
+		batchesStarted++
+		totalInvoices += len(invoices)
+		s.Logger.Infow("started regenerate draft invoices batch workflow", "offset", offset, "batch_size", len(invoices), "batches_started", batchesStarted)
+
+		if len(invoices) < regenerateDraftInvoicesBatchSize {
+			break
+		}
+	}
+
+	s.Logger.Infow("triggered regenerate draft invoices in batches", "batches_started", batchesStarted, "total_invoices", totalInvoices)
+	return batchesStarted, totalInvoices, nil
 }
 
 // RecalculateVoidedInvoice creates a fresh replacement invoice for a voided subscription invoice
@@ -3134,24 +3208,6 @@ func (s *invoiceService) HandleIncompleteSubscriptionPayment(ctx context.Context
 		"subscription_id", *invoice.SubscriptionID)
 
 	return nil
-}
-
-// generateProrationInvoiceDescription creates a description for proration invoices
-func (s *invoiceService) generateProrationInvoiceDescription(cancellationType, cancellationReason string, totalAmount decimal.Decimal) string {
-	if totalAmount.IsNegative() {
-		// Credit invoice
-		switch cancellationType {
-		case "immediate":
-			return fmt.Sprintf("Credit for unused time - immediate cancellation (%s)", cancellationReason)
-		case "specific_date":
-			return fmt.Sprintf("Credit for unused time - scheduled cancellation (%s)", cancellationReason)
-		default:
-			return fmt.Sprintf("Cancellation credit (%s)", cancellationReason)
-		}
-	} else {
-		// Charge invoice (rare for cancellations, but possible)
-		return fmt.Sprintf("Proration charges - cancellation (%s)", cancellationReason)
-	}
 }
 
 // CalculateUsageBreakdown provides flexible usage breakdown with custom grouping
