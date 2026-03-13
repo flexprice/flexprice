@@ -329,3 +329,42 @@ func TestRoundTrip_TenantConfig(t *testing.T) {
 	assert.Equal(t, original.Production, result.Production)
 	assert.Equal(t, original.Development, result.Development)
 }
+
+// TestToStruct_RejectsUnknownKeys verifies that ToStruct fails when the map contains keys
+// that do not correspond to struct fields (e.g. typos), so settings request bodies are validated.
+func TestToStruct_RejectsUnknownKeys(t *testing.T) {
+	// Valid keys for SubscriptionConfig: grace_period_days, auto_cancellation_enabled
+	valid := map[string]interface{}{
+		"grace_period_days":         7,
+		"auto_cancellation_enabled": true,
+	}
+	_, err := utils.ToStruct[SubscriptionConfig](valid)
+	require.NoError(t, err)
+
+	// Typo in key: should be rejected
+	withTypo := map[string]interface{}{
+		"grace_period_days":         7,
+		"auto_cancellation_enabeld": true, // typo
+	}
+	_, err = utils.ToStruct[SubscriptionConfig](withTypo)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown")
+}
+
+// TestValidateSettingValue_RejectsWrongKeys verifies that wrong or unknown keys in the setting
+// value body cause validation to fail (no silent merge with defaults).
+func TestValidateSettingValue_RejectsWrongKeys(t *testing.T) {
+	// Valid subscription_config body
+	err := ValidateSettingValue(SettingKeySubscriptionConfig, map[string]interface{}{
+		"grace_period_days":         1,
+		"auto_cancellation_enabled": false,
+	})
+	require.NoError(t, err)
+
+	// Invalid: typo in key
+	err = ValidateSettingValue(SettingKeySubscriptionConfig, map[string]interface{}{
+		"grace_period_days":         1,
+		"auto_cancellation_enabeld": false, // typo
+	})
+	require.Error(t, err)
+}

@@ -1,14 +1,15 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
 
 	ierr "github.com/flexprice/flexprice/internal/errors"
 )
 
-// ToStruct converts a map[string]interface{} to a typed struct
-// Completely stateless - just give it a value and it returns the typed struct
-// Uses JSON marshal/unmarshal for better handling of nested structs, slices, and custom types
+// ToStruct converts a map[string]interface{} to a typed struct.
+// Uses JSON marshal then decode with DisallowUnknownFields so that keys in the map
+// that do not correspond to struct fields (e.g. typos) cause an error instead of being ignored.
 func ToStruct[T any](value map[string]interface{}) (T, error) {
 	var result T
 
@@ -28,7 +29,9 @@ func ToStruct[T any](value map[string]interface{}) (T, error) {
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := json.Unmarshal(jsonBytes, &result); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(jsonBytes))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&result); err != nil {
 		return result, ierr.WithError(err).
 			WithHint("Failed to unmarshal JSON to struct").
 			Mark(ierr.ErrValidation)

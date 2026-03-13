@@ -539,8 +539,15 @@ func IsValidSettingKey(key string) bool {
 	return exists
 }
 
-// ValidateSettingValue validates a setting value based on its key
-// Uses centralized conversion (inline to avoid import cycle)
+// workflowConfigBody is used to validate request body keys for workflow-based
+// settings (customer_onboarding, prepare_processed_events_config). ToStruct rejects unknown keys.
+type workflowConfigBody struct {
+	WorkflowType string        `json:"workflow_type"`
+	Actions      []interface{} `json:"actions"`
+}
+
+// ValidateSettingValue validates a setting value based on its key.
+// ToStruct uses DisallowUnknownFields so unknown or misspelled keys in the body are rejected.
 func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 	if err := key.Validate(); err != nil {
 		return err
@@ -552,7 +559,6 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 			Mark(ierr.ErrValidation)
 	}
 
-	// Use ToStruct from conversion.go (same package, no import cycle)
 	switch key {
 	case SettingKeyInvoiceConfig:
 		config, err := utils.ToStruct[InvoiceConfig](value)
@@ -583,14 +589,16 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return config.Validate()
 
 	case SettingKeyCustomerOnboarding:
-		// WorkflowConfig validation is handled in the service layer
-		// Here we just do basic structure validation
-		if _, ok := value["workflow_type"]; !ok {
+		body, err := utils.ToStruct[workflowConfigBody](value)
+		if err != nil {
+			return err
+		}
+		if body.WorkflowType == "" {
 			return ierr.NewError("workflow_type is required").
 				WithHint("Please provide a workflow_type").
 				Mark(ierr.ErrValidation)
 		}
-		if _, ok := value["actions"]; !ok {
+		if body.Actions == nil {
 			return ierr.NewError("actions field is required").
 				WithHint("Please provide an actions array").
 				Mark(ierr.ErrValidation)
@@ -605,11 +613,21 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		return config.Validate()
 
 	case SettingKeyPrepareProcessedEvents:
-		config, err := utils.ToStruct[PrepareProcessedEventsConfig](value)
+		body, err := utils.ToStruct[workflowConfigBody](value)
 		if err != nil {
 			return err
 		}
-		return config.Validate()
+		if body.WorkflowType == "" {
+			return ierr.NewError("workflow_type is required").
+				WithHint("Please provide a workflow_type").
+				Mark(ierr.ErrValidation)
+		}
+		if body.Actions == nil {
+			return ierr.NewError("actions field is required").
+				WithHint("Please provide an actions array").
+				Mark(ierr.ErrValidation)
+		}
+		return nil
 
 	case SettingKeyCustomAnalytics:
 		config, err := utils.ToStruct[CustomAnalyticsConfig](value)

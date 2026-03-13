@@ -75,7 +75,7 @@ func getDefaultValue[T any](key types.SettingKey) (T, error) {
 }
 
 // resolvedValueMap returns the effective setting value as a map: default (from typed config) with fetched overlaid.
-// Uses getDefaultValue[T] + ToMap so default is defined once; callers use the map as-is or ToStruct when they need a struct.
+// Rejects unexpected keys in fetched so we fail fast instead of dropping them and risking data loss on next write.
 func resolvedValueMap[T any](key types.SettingKey, fetched map[string]interface{}) (map[string]interface{}, error) {
 	config, err := getDefaultValue[T](key)
 	if err != nil {
@@ -86,7 +86,13 @@ func resolvedValueMap[T any](key types.SettingKey, fetched map[string]interface{
 		return nil, err
 	}
 	for k, v := range fetched {
-		resolvedSettingMap[k] = v
+		if _, ok := resolvedSettingMap[k]; ok {
+			resolvedSettingMap[k] = v
+		} else {
+			return nil, ierr.NewErrorf("setting %s has unexpected persisted key %q; fix or migrate the stored value", key, k).
+				WithHint("Remove the unknown key from the setting value or contact support.").
+				Mark(ierr.ErrValidation)
+		}
 	}
 	return resolvedSettingMap, nil
 }
