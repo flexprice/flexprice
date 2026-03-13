@@ -2,8 +2,10 @@ package subscription
 
 import (
 	"context"
+
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/service"
 	temporalService "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
@@ -51,6 +53,14 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 	batchSize := input.BatchSize
 	totalProcessed := 0
 
+	// Get global temporal service once before the loop
+	temporalSvc := temporalService.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return response, ierr.NewError("temporal service not available").
+			WithHint("Temporal service not available").
+			Mark(ierr.ErrInternal)
+	}
+
 	// Loop through all subscriptions with pagination
 	for {
 		filter := &types.SubscriptionFilter{
@@ -81,7 +91,6 @@ func (s *SubscriptionActivities) ScheduleBillingActivity(ctx context.Context, in
 			"batch_size", len(subs.Items),
 			"total_processed", totalProcessed)
 
-		temporalSvc := temporalService.GetGlobalTemporalService()
 		subItems := subs.Items
 		for _, sub := range subItems {
 			// update context to include the tenant id
