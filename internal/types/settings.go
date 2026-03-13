@@ -88,11 +88,12 @@ func (c InvoicePDFConfig) Validate() error {
 	return c.TemplateName.Validate()
 }
 
-// TenantConfig represents environment creation limits and user limit configuration
+// TenantConfig represents environment creation limits, user limit, and sandbox expiry configuration
 type TenantConfig struct {
-	Production  int `json:"production" validate:"omitempty,min=0"`
-	Development int `json:"development" validate:"omitempty,min=0"`
-	MaxUsers    int `json:"max_users" validate:"omitempty,min=1"`
+	Production                    int `json:"production" validate:"omitempty,min=0"`
+	Development                   int `json:"development" validate:"omitempty,min=0"`
+	MaxUsers                      int `json:"max_users" validate:"omitempty,min=1"`
+	SandboxSubscriptionExpiryDays int `json:"sandbox_subscription_expiry_days" validate:"omitempty,min=1"`
 }
 
 // Validate implements SettingConfig interface
@@ -359,9 +360,10 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	}
 
 	defaultTenantConfig := TenantConfig{
-		Production:  1,
-		Development: 2,
-		MaxUsers:    10,
+		Production:                    1,
+		Development:                   2,
+		MaxUsers:                      10,
+		SandboxSubscriptionExpiryDays: 90,
 	}
 
 	// Note: WorkflowConfig is now defined in service package to avoid import cycles

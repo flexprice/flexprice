@@ -1636,13 +1636,12 @@ func (s *subscriptionService) CancelSubscription(
 		return nil, err
 	}
 
+	// Idempotent: already-cancelled is success so batch/retry flows can safely retry.
 	if subscription.SubscriptionStatus == types.SubscriptionStatusCancelled {
-		return nil, ierr.NewError("subscription is already cancelled").
-			WithHint("The subscription is already cancelled").
-			WithReportableDetails(map[string]interface{}{
-				"subscription_id": subscriptionID,
-			}).
-			Mark(ierr.ErrValidation)
+		return &dto.CancelSubscriptionResponse{
+			SubscriptionID: subscription.ID,
+			Message:         "Subscription is already cancelled",
+		}, nil
 	}
 
 	// Step 4: Determine effective cancellation date
@@ -4526,6 +4525,10 @@ func (s *subscriptionService) determineEffectiveDate(
 
 	case types.CancellationTypeEndOfPeriod:
 		return subscription.CurrentPeriodEnd, nil
+
+	case types.CancellationTypeSandboxSubscriptionCleanup:
+		return now, nil
+
 	default:
 		return time.Time{}, ierr.NewError("invalid cancellation type").
 			WithHintf("Unsupported cancellation type: %s", cancellationType).
@@ -4638,6 +4641,12 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 		subscription.CancelAtPeriodEnd = true
 		subscription.CancelAt = &effectiveDate
 		// EndDate should NOT be set - will be set when actually cancelled at period end
+
+	case types.CancellationTypeSandboxSubscriptionCleanup:
+		subscription.SubscriptionStatus = types.SubscriptionStatusCancelled
+		subscription.CancelledAt = &now
+		subscription.EndDate = &now
+
 	default:
 		return ierr.NewError("invalid cancellation type").
 			WithHintf("Unsupported cancellation type: %s", cancellationType).
