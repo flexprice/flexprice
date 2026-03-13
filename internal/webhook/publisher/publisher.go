@@ -7,8 +7,8 @@ import (
 	"github.com/ThreeDotsLabs/watermill"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/kafka"
 	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/types"
 )
 
@@ -18,23 +18,40 @@ type WebhookPublisher interface {
 	Close() error
 }
 
-// Handler implements handler.Handler using watermill's gochannel
+// webhookPublisher publishes webhook events to Kafka
 type webhookPublisher struct {
-	pubSub pubsub.PubSub
-	config *config.Webhook
-	logger *logger.Logger
+	producer message.Publisher
+	config   *config.Webhook
+	logger   *logger.Logger
 }
 
-// NewHandler creates a new memory-based handler
+// NewPublisher creates a new Kafka-backed webhook publisher using the shared Kafka producer
 func NewPublisher(
-	pubSub pubsub.PubSub,
+	producer *kafka.Producer,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) (WebhookPublisher, error) {
+	return newPublisher(producer, cfg, logger)
+}
+
+// NewPublisherWithPublisher creates a webhook publisher with a custom message.Publisher (useful for testing)
+func NewPublisherWithPublisher(
+	producer message.Publisher,
+	cfg *config.Configuration,
+	logger *logger.Logger,
+) (WebhookPublisher, error) {
+	return newPublisher(producer, cfg, logger)
+}
+
+func newPublisher(
+	producer message.Publisher,
 	cfg *config.Configuration,
 	logger *logger.Logger,
 ) (WebhookPublisher, error) {
 	return &webhookPublisher{
-		pubSub: pubSub,
-		config: &cfg.Webhook,
-		logger: logger,
+		producer: producer,
+		config:   &cfg.Webhook,
+		logger:   logger,
 	}, nil
 }
 
@@ -62,7 +79,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 		"payload", string(payload),
 	)
 
-	if err := p.pubSub.Publish(ctx, p.config.Topic, msg); err != nil {
+	if err := p.producer.Publish(p.config.Topic, msg); err != nil {
 		p.logger.Errorw("failed to publish webhook event",
 			"error", err,
 			"event_id", event.ID,
@@ -81,7 +98,7 @@ func (p *webhookPublisher) PublishWebhook(ctx context.Context, event *types.Webh
 	return nil
 }
 
-// Close closes the publisher
+// Close is a no-op since the Kafka producer is shared and managed globally
 func (p *webhookPublisher) Close() error {
-	return p.pubSub.Close()
+	return nil
 }

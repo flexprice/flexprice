@@ -3,12 +3,15 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/httpclient"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/pubsub"
+	kafkaPubsub "github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/svix"
@@ -18,10 +21,10 @@ import (
 
 // Handler interface for processing webhook events
 type Handler interface {
-	RegisterHandler(router *pubsubRouter.Router)
+	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
 }
 
-// handler implements handler.Handler using watermill's gochannel
+// handler implements Handler using a dedicated Kafka consumer
 type handler struct {
 	pubSub     pubsub.PubSub
 	config     *config.Webhook
@@ -32,9 +35,8 @@ type handler struct {
 	svixClient *svix.Client
 }
 
-// NewHandler creates a new memory-based handler
+// NewHandler creates a new webhook handler with its own Kafka consumer
 func NewHandler(
-	pubSub pubsub.PubSub,
 	cfg *config.Configuration,
 	factory payload.PayloadBuilderFactory,
 	client httpclient.Client,
@@ -42,8 +44,13 @@ func NewHandler(
 	sentry *sentry.Service,
 	svixClient *svix.Client,
 ) (Handler, error) {
+	ps, err := kafkaPubsub.NewPubSubFromConfig(cfg, logger, cfg.Webhook.ConsumerGroup)
+	if err != nil {
+		return nil, err
+	}
+
 	return &handler{
-		pubSub:     pubSub,
+		pubSub:     ps,
 		config:     &cfg.Webhook,
 		factory:    factory,
 		client:     client,
@@ -53,12 +60,30 @@ func NewHandler(
 	}, nil
 }
 
-func (h *handler) RegisterHandler(router *pubsubRouter.Router) {
+func (h *handler) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	if !cfg.Webhook.Enabled {
+		h.logger.Infow("webhook handler disabled by configuration")
+		return
+	}
+
+	rateLimit := cfg.Webhook.RateLimit
+	if rateLimit <= 0 {
+		rateLimit = 5
+	}
+
+	throttle := middleware.NewThrottle(rateLimit, time.Second)
+
 	router.AddNoPublishHandler(
 		"webhook_handler",
 		h.config.Topic,
 		h.pubSub,
 		h.processMessage,
+		throttle.Middleware,
+	)
+
+	h.logger.Infow("registered webhook handler",
+		"topic", h.config.Topic,
+		"rate_limit", rateLimit,
 	)
 }
 

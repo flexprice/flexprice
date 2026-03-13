@@ -140,7 +140,7 @@ func (s *BaseServiceTestSuite) setupDependencies() {
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
 	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger)
+	webhookPublisher, err := webhookPublisher.NewPublisherWithPublisher(pubsub.AsPublisher(), s.config, s.logger)
 	if err != nil {
 		s.T().Fatalf("failed to create webhook publisher: %v", err)
 	}
@@ -234,7 +234,7 @@ func (s *BaseServiceTestSuite) setupStores() {
 	eventStore := s.stores.EventRepo.(*InMemoryEventStore)
 	s.publisher = NewInMemoryEventPublisher(eventStore)
 	pubsub := NewInMemoryPubSub()
-	webhookPublisher, err := webhookPublisher.NewPublisher(pubsub, s.config, s.logger)
+	webhookPublisher, err := webhookPublisher.NewPublisherWithPublisher(pubsub.AsPublisher(), s.config, s.logger)
 	if err != nil {
 		s.T().Fatalf("failed to create webhook publisher: %v", err)
 	}

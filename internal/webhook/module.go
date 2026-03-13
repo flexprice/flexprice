@@ -1,14 +1,8 @@
 package webhook
 
 import (
-	"github.com/flexprice/flexprice/internal/config"
-	"github.com/flexprice/flexprice/internal/logger"
-	"github.com/flexprice/flexprice/internal/pubsub"
-	"github.com/flexprice/flexprice/internal/pubsub/kafka"
-	"github.com/flexprice/flexprice/internal/pubsub/memory"
 	"github.com/flexprice/flexprice/internal/sentry"
 	"github.com/flexprice/flexprice/internal/service"
-	"github.com/flexprice/flexprice/internal/types"
 	"github.com/flexprice/flexprice/internal/webhook/handler"
 	"github.com/flexprice/flexprice/internal/webhook/payload"
 	"github.com/flexprice/flexprice/internal/webhook/publisher"
@@ -17,18 +11,11 @@ import (
 
 // Module provides all webhook-related dependencies
 var Module = fx.Options(
-	// Core dependencies
 	fx.Provide(
-		// PubSub for sending webhook events
-		providePubSub,
-	),
-
-	// Webhook components
-	fx.Provide(
-		// Publisher for sending webhook events
+		// Publisher for sending webhook events (uses shared Kafka producer)
 		publisher.NewPublisher,
 
-		// Handler for processing webhook events
+		// Handler for processing webhook events (creates its own Kafka consumer)
 		handler.NewHandler,
 
 		// Payload builder factory and services
@@ -67,23 +54,4 @@ func providePayloadBuilderFactory(
 		creditNoteService,
 	)
 	return payload.NewPayloadBuilderFactory(services)
-}
-
-func providePubSub(
-	cfg *config.Configuration,
-	logger *logger.Logger,
-) pubsub.PubSub {
-	switch cfg.Webhook.PubSub {
-	case types.MemoryPubSub:
-		return memory.NewPubSub(cfg, logger)
-	case types.KafkaPubSub:
-		pubsub, err := kafka.NewPubSubFromConfig(cfg, logger, cfg.Webhook.ConsumerGroup)
-		if err != nil {
-			logger.Fatalw("failed to create kafka pubsub for webhooks", "error", err)
-		}
-		return pubsub
-	default:
-		logger.Fatalw("unsupported webhook pubsub type", "type", cfg.Webhook.PubSub)
-	}
-	return nil
 }
