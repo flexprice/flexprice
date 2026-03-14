@@ -160,6 +160,11 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	return copyInvoice(inv), nil
 }
 
+// GetForUpdate satisfies invoice.Repository; in-memory has no row locking, so it delegates to Get.
+func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice) error {
 	if inv == nil {
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)

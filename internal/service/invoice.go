@@ -798,8 +798,30 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 
 	// 5. Non-zero usage: remove existing (empty) line items, add calculated ones,
 	//    assign invoice number, and update amounts — all in a transaction.
+	//    Re-fetch the invoice under row lock (GetForUpdate) inside the tx to avoid
+	//    concurrent workers both populating the same draft.
+	var alreadySkipped bool
 	err = s.DB.WithTx(ctx, func(tx context.Context) error {
-		// 5a. Remove any stub line items that existed on the zero-dollar placeholder
+		// 5a. Acquire row lock and re-fetch current state (idempotent on retry / duplicate execution)
+		inv, err := s.InvoiceRepo.GetForUpdate(tx, id)
+		if err != nil {
+			return err
+		}
+		// Idempotency: another worker may have skipped or populated between our initial Get and the lock
+		if inv.InvoiceStatus == types.InvoiceStatusSkipped {
+			alreadySkipped = true
+			return nil
+		}
+		if inv.InvoiceNumber != nil && *inv.InvoiceNumber != "" {
+			return nil // already populated
+		}
+		if inv.InvoiceStatus != types.InvoiceStatusDraft {
+			return ierr.NewError("invoice is not in draft status").
+				WithHint("invoice must be in draft status to be calculated").
+				Mark(ierr.ErrValidation)
+		}
+
+		// 5b. Remove any stub line items that existed on the zero-dollar placeholder
 		existingIDs := make([]string, 0, len(inv.LineItems))
 		for _, li := range inv.LineItems {
 			existingIDs = append(existingIDs, li.ID)
@@ -810,7 +832,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			}
 		}
 
-		// 5b. Build domain line items for the calculated charges
+		// 5c. Build domain line items for the calculated charges
 		newLineItems := make([]*invoice.InvoiceLineItem, 0, len(invoiceReq.LineItems))
 		for _, liReq := range invoiceReq.LineItems {
 			li := liReq.ToInvoiceLineItem(tx, inv)
@@ -821,7 +843,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			return err
 		}
 
-		// 5c. Assign invoice number (first time this invoice gets one)
+		// 5d. Assign invoice number (first time this invoice gets one)
 		settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 		invoiceConfig, err := GetSetting[types.InvoiceConfig](
 			settingsSvc,
@@ -839,7 +861,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			return err
 		}
 
-		// 5d. Set subtotal and attach line items, then apply credits/coupons and taxes (same order as CreateInvoice).
+		// 5e. Set subtotal and attach line items, then apply credits/coupons and taxes (same order as CreateInvoice).
 		// NOTE: BillingReason is intentionally NOT overwritten here. The correct value
 		// (SubscriptionCreate for billingSeq==1, SubscriptionCycle otherwise) was set
 		// during draft creation by CreateInvoice, which checks the billing sequence.
@@ -856,7 +878,7 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 			return err
 		}
 
-		// 5e. Update invoice header fields: invoice number, description, due date, payment status
+		// 5f. Update invoice header fields: invoice number, description, due date, payment status
 		inv.InvoiceNumber = &invoiceNumber
 		inv.Description = invoiceReq.Description
 
@@ -891,6 +913,9 @@ func (s *invoiceService) CalculateAndPopulateInvoice(ctx context.Context, id str
 	})
 	if err != nil {
 		return false, err
+	}
+	if alreadySkipped {
+		return true, nil
 	}
 
 	// The draft was created earlier (with suppressed webhook). Now that it's

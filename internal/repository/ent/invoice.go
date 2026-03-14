@@ -434,6 +434,61 @@ func (r *invoiceRepository) Get(ctx context.Context, id string) (*domainInvoice.
 	return invoiceData, nil
 }
 
+// GetForUpdate loads the invoice by id and acquires a row lock (SELECT ... FOR UPDATE).
+// Must be called within a transaction; use the tx context so the lock is held until commit/rollback.
+// Does not read from or write to cache.
+func (r *invoiceRepository) GetForUpdate(ctx context.Context, id string) (*domainInvoice.Invoice, error) {
+	span := StartRepositorySpan(ctx, "invoice", "get_for_update", map[string]interface{}{
+		"invoice_id": id,
+	})
+	defer FinishSpan(span)
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	// Acquire row lock with FOR UPDATE so concurrent transactions block until this one commits/rolls back
+	lockQuery := `SELECT 1 FROM invoices WHERE id = $1 AND tenant_id = $2 AND environment_id = $3 AND status = $4 FOR UPDATE`
+	rows, err := r.client.Writer(ctx).QueryContext(ctx, lockQuery, id, tenantID, environmentID, string(types.StatusPublished))
+	if err != nil {
+		return nil, ierr.WithError(err).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return nil, ierr.WithError(err).WithHint("invoice lock failed").Mark(ierr.ErrDatabase)
+		}
+		return nil, ierr.NewError("invoice not found").
+			WithHintf("invoice %s not found", id).
+			WithReportableDetails(map[string]any{"id": id}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	// Load full invoice with line items (lock already held; same tx context)
+	entInv, err := r.client.Writer(ctx).Invoice.Query().
+		Where(
+			invoice.ID(id),
+			invoice.TenantID(tenantID),
+			invoice.EnvironmentID(environmentID),
+		).
+		WithLineItems(func(q *ent.InvoiceLineItemQuery) {
+			q.Where(invoicelineitem.Status(string(types.StatusPublished)))
+		}).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, ierr.
+				WithError(err).
+				WithHintf("invoice %s not found", id).
+				WithReportableDetails(map[string]any{"id": id}).
+				Mark(ierr.ErrNotFound)
+		}
+		return nil, ierr.WithError(err).WithHint("getting invoice for update failed").Mark(ierr.ErrDatabase)
+	}
+
+	return domainInvoice.FromEnt(entInv), nil
+}
+
 func (r *invoiceRepository) Update(ctx context.Context, inv *domainInvoice.Invoice) error {
 	// Start a span for this repository operation
 	span := StartRepositorySpan(ctx, "invoice", "update", map[string]interface{}{
