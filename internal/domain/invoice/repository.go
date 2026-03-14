@@ -12,6 +12,9 @@ type Repository interface {
 	// Core invoice operations
 	Create(ctx context.Context, inv *Invoice) error
 	Get(ctx context.Context, id string) (*Invoice, error)
+	// GetForUpdate loads the invoice by id and acquires a row lock (SELECT ... FOR UPDATE).
+	// Must be called within a transaction; use the tx context so the lock is held until commit/rollback.
+	GetForUpdate(ctx context.Context, id string) (*Invoice, error)
 	Update(ctx context.Context, inv *Invoice) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *types.InvoiceFilter) ([]*Invoice, error)

@@ -196,7 +196,7 @@ func (p PaymentTerms) Validate() error {
 		return ierr.NewError("invalid payment_terms").
 			WithHint("Payment terms must be one of: 15 NET, 30 NET, 45 NET, 60 NET, 75 NET, 90 NET").
 			WithReportableDetails(map[string]any{
-				"payment_terms":   p,
+				"payment_terms":  p,
 				"allowed_values": AllPaymentTerms,
 			}).
 			Mark(ierr.ErrValidation)
@@ -620,7 +620,7 @@ const (
 // UsageSource is the type for usage query source.
 type UsageSource string
 
-// UseFinal returns true when the source requires FINAL in ClickHouse feature_usage queries.
+// UseFinal returns true only when the source is invoice_creation; all other sources do not use FINAL.
 func (s UsageSource) UseFinal() bool {
 	return s == UsageSourceInvoiceCreation
 }

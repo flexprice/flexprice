@@ -12,6 +12,7 @@ const (
 	// Workflow name - must match the function name
 	WorkflowProcessInvoice = "ProcessInvoiceWorkflow"
 	// Activity names - must match the registered method names
+	ActivityCalculateInvoice       = "CalculateInvoiceActivity"
 	ActivityFinalizeInvoice        = "FinalizeInvoiceActivity"
 	ActivitySyncInvoiceToVendor    = "SyncInvoiceToVendorActivity"
 	ActivityAttemptInvoicePayment  = "AttemptInvoicePaymentActivity"
@@ -46,15 +47,47 @@ func ProcessInvoiceWorkflow(
 			InitialInterval:    time.Second * 10,
 			BackoffCoefficient: 2.0,
 			MaximumInterval:    time.Minute * 5,
-			MaximumAttempts:    1,
+			MaximumAttempts:    3, // Safe to retry: activities are idempotent (CalculateAndPopulateInvoice checks invoice number/SKIPPED, FinalizeInvoice validates DRAFT status)
 		},
 	}
 	ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
 	// ================================================================================
-	// STEP 1: Finalize Invoice
+	// STEP 1: Calculate Invoice (compute usage, populate line items or skip)
 	// ================================================================================
-	logger.Info("Step 1: Finalizing invoice",
+	logger.Info("Step 1: Calculating invoice",
+		"invoice_id", input.InvoiceID)
+
+	var calculateOutput invoiceModels.CalculateInvoiceActivityOutput
+	calculateInput := invoiceModels.CalculateInvoiceActivityInput{
+		InvoiceID:     input.InvoiceID,
+		TenantID:      input.TenantID,
+		EnvironmentID: input.EnvironmentID,
+		UserID:        input.UserID,
+	}
+
+	err := workflow.ExecuteActivity(ctx, ActivityCalculateInvoice, calculateInput).Get(ctx, &calculateOutput)
+	if err != nil {
+		logger.Error("Failed to calculate invoice",
+			"error", err,
+			"invoice_id", input.InvoiceID)
+		return nil, err
+	}
+
+	// If the invoice was skipped (zero usage), return early — no finalize, sync, or payment.
+	if calculateOutput.Skipped {
+		logger.Info("Invoice skipped (zero usage), completing workflow",
+			"invoice_id", input.InvoiceID)
+		return &invoiceModels.ProcessInvoiceWorkflowResult{
+			Success:     true,
+			CompletedAt: workflow.Now(ctx),
+		}, nil
+	}
+
+	// ================================================================================
+	// STEP 2: Finalize Invoice
+	// ================================================================================
+	logger.Info("Step 2: Finalizing invoice",
 		"invoice_id", input.InvoiceID)
 
 	var finalizeOutput invoiceModels.FinalizeInvoiceActivityOutput
@@ -62,9 +95,10 @@ func ProcessInvoiceWorkflow(
 		InvoiceID:     input.InvoiceID,
 		TenantID:      input.TenantID,
 		EnvironmentID: input.EnvironmentID,
+		UserID:        input.UserID,
 	}
 
-	err := workflow.ExecuteActivity(ctx, ActivityFinalizeInvoice, finalizeInput).Get(ctx, &finalizeOutput)
+	err = workflow.ExecuteActivity(ctx, ActivityFinalizeInvoice, finalizeInput).Get(ctx, &finalizeOutput)
 	if err != nil {
 		logger.Error("Failed to finalize invoice",
 			"error", err,
@@ -73,9 +107,9 @@ func ProcessInvoiceWorkflow(
 	}
 
 	// ================================================================================
-	// STEP 2: Sync Invoice to External Vendor
+	// STEP 3: Sync Invoice to External Vendor
 	// ================================================================================
-	logger.Info("Step 2: Syncing invoice to external vendor",
+	logger.Info("Step 3: Syncing invoice to external vendor",
 		"invoice_id", input.InvoiceID)
 
 	var syncOutput invoiceModels.SyncInvoiceActivityOutput
@@ -83,6 +117,7 @@ func ProcessInvoiceWorkflow(
 		InvoiceID:     input.InvoiceID,
 		TenantID:      input.TenantID,
 		EnvironmentID: input.EnvironmentID,
+		UserID:        input.UserID,
 	}
 
 	err = workflow.ExecuteActivity(ctx, ActivitySyncInvoiceToVendor, syncInput).Get(ctx, &syncOutput)
@@ -94,9 +129,9 @@ func ProcessInvoiceWorkflow(
 	}
 
 	// ================================================================================
-	// STEP 3: Attempt Payment
+	// STEP 4: Attempt Payment
 	// ================================================================================
-	logger.Info("Step 3: Attempting payment for invoice",
+	logger.Info("Step 4: Attempting payment for invoice",
 		"invoice_id", input.InvoiceID)
 
 	var paymentOutput invoiceModels.PaymentActivityOutput
@@ -104,6 +139,7 @@ func ProcessInvoiceWorkflow(
 		InvoiceID:     input.InvoiceID,
 		TenantID:      input.TenantID,
 		EnvironmentID: input.EnvironmentID,
+		UserID:        input.UserID,
 	}
 
 	err = workflow.ExecuteActivity(ctx, ActivityAttemptInvoicePayment, paymentInput).Get(ctx, &paymentOutput)

@@ -160,6 +160,11 @@ func (s *InMemoryInvoiceStore) Get(ctx context.Context, id string) (*invoice.Inv
 	return copyInvoice(inv), nil
 }
 
+// GetForUpdate satisfies invoice.Repository; in-memory has no row locking, so it delegates to Get.
+func (s *InMemoryInvoiceStore) GetForUpdate(ctx context.Context, id string) (*invoice.Invoice, error) {
+	return s.Get(ctx, id)
+}
+
 func (s *InMemoryInvoiceStore) Update(ctx context.Context, inv *invoice.Invoice) error {
 	if inv == nil {
 		return ierr.NewError("invoice cannot be nil").WithHint("invoice cannot be nil").Mark(ierr.ErrValidation)
@@ -376,8 +381,18 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 			return false
 		}
 	}
+	if f.PeriodStartLTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.After(*f.PeriodStartLTE) {
+			return false
+		}
+	}
 
-	// Filter by period_end_lte (periodEnd <= value)
+	// Filter by period end range
+	if f.PeriodEndGTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.PeriodEndGTE) {
+			return false
+		}
+	}
 	if f.PeriodEndLTE != nil {
 		if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.PeriodEndLTE) {
 			return false
