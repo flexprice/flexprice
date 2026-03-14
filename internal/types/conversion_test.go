@@ -108,20 +108,20 @@ func TestToStruct_InvoicePDFConfig(t *testing.T) {
 	}
 }
 
-func TestToStruct_EnvConfig(t *testing.T) {
+func TestToStruct_TenantConfig(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    map[string]interface{}
-		expected EnvConfig
+		expected TenantConfig
 		wantErr  bool
 	}{
 		{
-			name: "valid env config",
+			name: "valid tenant config",
 			input: map[string]interface{}{
 				"production":  2,
 				"development": 5,
 			},
-			expected: EnvConfig{
+			expected: TenantConfig{
 				Production:  2,
 				Development: 5,
 			},
@@ -133,7 +133,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 				"production":  float64(1),
 				"development": float64(3),
 			},
-			expected: EnvConfig{
+			expected: TenantConfig{
 				Production:  1,
 				Development: 3,
 			},
@@ -143,7 +143,7 @@ func TestToStruct_EnvConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := utils.ToStruct[EnvConfig](tt.input)
+			result, err := utils.ToStruct[TenantConfig](tt.input)
 			if tt.wantErr {
 				assert.Error(t, err)
 			} else {
@@ -237,16 +237,16 @@ func TestToMap_InvoicePDFConfig(t *testing.T) {
 	}
 }
 
-func TestToMap_EnvConfig(t *testing.T) {
+func TestToMap_TenantConfig(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    EnvConfig
+		input    TenantConfig
 		expected map[string]interface{}
 		wantErr  bool
 	}{
 		{
-			name: "valid env config",
-			input: EnvConfig{
+			name: "valid tenant config",
+			input: TenantConfig{
 				Production:  1,
 				Development: 2,
 			},
@@ -311,8 +311,8 @@ func TestRoundTrip_InvoicePDFConfig(t *testing.T) {
 	assert.Equal(t, original.GroupBy, result.GroupBy)
 }
 
-func TestRoundTrip_EnvConfig(t *testing.T) {
-	original := EnvConfig{
+func TestRoundTrip_TenantConfig(t *testing.T) {
+	original := TenantConfig{
 		Production:  3,
 		Development: 10,
 	}
@@ -322,7 +322,7 @@ func TestRoundTrip_EnvConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	// Convert back to struct
-	result, err := utils.ToStruct[EnvConfig](asMap)
+	result, err := utils.ToStruct[TenantConfig](asMap)
 	require.NoError(t, err)
 
 	// Should be equal

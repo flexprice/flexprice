@@ -68,6 +68,7 @@ const (
 	TemporalScheduleSubscriptionBillingWorkflow TemporalWorkflowType = "ScheduleSubscriptionBillingWorkflow"
 	TemporalProcessSubscriptionBillingWorkflow  TemporalWorkflowType = "ProcessSubscriptionBillingWorkflow"
 	TemporalProcessInvoiceWorkflow              TemporalWorkflowType = "ProcessInvoiceWorkflow"
+	TemporalRecalculateInvoiceWorkflow          TemporalWorkflowType = "RecalculateInvoiceWorkflow"
 	TemporalReprocessEventsWorkflow             TemporalWorkflowType = "ReprocessEventsWorkflow"
 	TemporalReprocessRawEventsWorkflow          TemporalWorkflowType = "ReprocessRawEventsWorkflow"
 	TemporalReprocessEventsForPlanWorkflow      TemporalWorkflowType = "ReprocessEventsForPlanWorkflow"
@@ -112,6 +113,7 @@ func (w TemporalWorkflowType) Validate() error {
 		TemporalScheduleSubscriptionBillingWorkflow, // "ScheduleSubscriptionBillingWorkflow"
 		TemporalProcessSubscriptionBillingWorkflow,  // "ProcessSubscriptionBillingWorkflow"
 		TemporalProcessInvoiceWorkflow,              // "ProcessInvoiceWorkflow"
+		TemporalRecalculateInvoiceWorkflow,          // "RecalculateInvoiceWorkflow"
 		TemporalReprocessEventsWorkflow,             // "ReprocessEventsWorkflow"
 		TemporalReprocessRawEventsWorkflow,          // "ReprocessRawEventsWorkflow"
 		TemporalReprocessEventsForPlanWorkflow,      // "ReprocessEventsForPlanWorkflow"
@@ -137,6 +139,8 @@ func (w TemporalWorkflowType) TaskQueue() TemporalTaskQueue {
 	case TemporalScheduleSubscriptionBillingWorkflow:
 		return TemporalTaskQueueSubscription
 	case TemporalProcessSubscriptionBillingWorkflow:
+		return TemporalTaskQueueSubscription
+	case TemporalRecalculateInvoiceWorkflow:
 		return TemporalTaskQueueSubscription
 	case TemporalProcessInvoiceWorkflow:
 		return TemporalTaskQueueInvoice
@@ -184,6 +188,7 @@ func GetWorkflowsForTaskQueue(taskQueue TemporalTaskQueue) []TemporalWorkflowTyp
 		return []TemporalWorkflowType{
 			TemporalScheduleSubscriptionBillingWorkflow,
 			TemporalProcessSubscriptionBillingWorkflow,
+			TemporalRecalculateInvoiceWorkflow,
 		}
 	case TemporalTaskQueueInvoice:
 		return []TemporalWorkflowType{

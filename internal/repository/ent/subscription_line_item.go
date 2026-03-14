@@ -608,35 +608,12 @@ func (o SubscriptionLineItemQueryOptions) ApplyPaginationFilter(query Subscripti
 	return query.Limit(limit).Offset(offset)
 }
 
+// GetFieldName returns the ent field name for subscription_line_item; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o SubscriptionLineItemQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return subscriptionlineitem.FieldCreatedAt
-	case "updated_at":
-		return subscriptionlineitem.FieldUpdatedAt
-	case "start_date":
-		return subscriptionlineitem.FieldStartDate
-	case "end_date":
-		return subscriptionlineitem.FieldEndDate
-	case "status":
-		return subscriptionlineitem.FieldStatus
-	case "subscription_id":
-		return subscriptionlineitem.FieldSubscriptionID
-	case "price_id":
-		return subscriptionlineitem.FieldPriceID
-	case "entity_id":
-		return subscriptionlineitem.FieldEntityID
-	case "entity_type":
-		return subscriptionlineitem.FieldEntityType
-	case "meter_id":
-		return subscriptionlineitem.FieldMeterID
-	case "currency":
-		return subscriptionlineitem.FieldCurrency
-	case "billing_period":
-		return subscriptionlineitem.FieldBillingPeriod
-	default:
+	if subscriptionlineitem.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 // applyEntityQueryOptions applies subscription line item-specific filters to the query

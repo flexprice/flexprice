@@ -9,6 +9,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -202,14 +205,14 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 }
 
 // RecalculateInvoice godoc
-// @Summary Recalculate invoice (default: voided invoice)
+// @Summary Recalculate invoice (voided invoice)
 // @ID recalculateInvoice
-// @Description Creates a fresh replacement invoice for a voided SUBSCRIPTION invoice covering the same billing period. The original voided invoice is linked to the new invoice via recalculated_invoice_id. Can only be called once per voided invoice.
+// @Description Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.
 // @Tags Invoices
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Invoice ID"
-// @Success 200 {object} dto.InvoiceResponse
+// @Success 202 {object} models.TemporalWorkflowResult
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request or invoice already recalculated"
 // @Failure 404 {object} ierr.ErrorResponse "Invoice not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
@@ -221,14 +224,35 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.invoiceService.RecalculateInvoice(c.Request.Context(), id)
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		h.logger.Errorw("temporal service not available for recalculate invoice", "invoice_id", id)
+		c.Error(ierr.NewError("temporal service not available").
+			WithHint("Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+
+	ctx := c.Request.Context()
+	workflowInput := invoiceModels.RecalculateInvoiceWorkflowInput{
+		InvoiceID:     id,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+	}
+
+	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalRecalculateInvoiceWorkflow, workflowInput)
 	if err != nil {
-		h.logger.Errorw("failed to recalculate invoice", "error", err, "invoice_id", id)
+		h.logger.Errorw("failed to start recalculate invoice workflow", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusAccepted, models.TemporalWorkflowResult{
+		Message:    "recalculate invoice workflow started",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+	})
 }
 
 // UpdatePaymentStatus godoc

@@ -43,12 +43,12 @@ func (r *CreateSettingRequest) ToSetting(ctx context.Context) *settings.Setting 
 		Value:     r.Value,
 	}
 
-	// For env_config, don't set environment_id (will be NULL in DB)
+	// For tenant_config, don't set environment_id (will be NULL in DB)
 	// For other settings, use environment_id from context
-	if r.Key != types.SettingKeyEnvConfig {
+	if r.Key != types.SettingKeyTenantConfig {
 		setting.EnvironmentID = types.GetEnvironmentID(ctx)
 	}
-	// env_config: EnvironmentID remains empty (zero value), repository will set to NULL
+	// tenant_config: EnvironmentID remains empty (zero value), repository will set to NULL
 
 	return setting
 }

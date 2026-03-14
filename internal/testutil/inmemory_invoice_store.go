@@ -370,7 +370,7 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 		}
 	}
 
-	// Filter by period start range
+	// Filter by period_start_gte (periodStart >= value)
 	if f.PeriodStartGTE != nil {
 		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
 			return false

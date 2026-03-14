@@ -522,69 +522,12 @@ func (o SubscriptionQueryOptions) ApplyPaginationFilter(query SubscriptionQuery,
 	return query
 }
 
+// GetFieldName returns the ent field name for subscription; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o SubscriptionQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return subscription.FieldCreatedAt
-	case "updated_at":
-		return subscription.FieldUpdatedAt
-	case "start_date":
-		return subscription.FieldStartDate
-	case "end_date":
-		return subscription.FieldEndDate
-	case "current_period_start":
-		return subscription.FieldCurrentPeriodStart
-	case "current_period_end":
-		return subscription.FieldCurrentPeriodEnd
-	case "status":
-		return subscription.FieldStatus
-	case "subscription_status":
-		return subscription.FieldSubscriptionStatus
-	case "billing_cadence":
-		return subscription.FieldBillingCadence
-	case "billing_period":
-		return subscription.FieldBillingPeriod
-	case "billing_period_count":
-		return subscription.FieldBillingPeriodCount
-	case "version":
-		return subscription.FieldVersion
-	case "metadata":
-		return subscription.FieldMetadata
-	case "pause_status":
-		return subscription.FieldPauseStatus
-	case "active_pause_id":
-		return subscription.FieldActivePauseID
-	case "billing_cycle":
-		return subscription.FieldBillingCycle
-	case "commitment_amount":
-		return subscription.FieldCommitmentAmount
-	case "overage_factor":
-		return subscription.FieldOverageFactor
-	case "payment_behavior":
-		return subscription.FieldPaymentBehavior
-	case "collection_method":
-		return subscription.FieldCollectionMethod
-	case "gateway_payment_method_id":
-		return subscription.FieldGatewayPaymentMethodID
-	case "customer_timezone":
-		return subscription.FieldCustomerTimezone
-	case "proration_behavior":
-		return subscription.FieldProrationBehavior
-	case "lookup_key":
-		return subscription.FieldLookupKey
-	case "customer_id":
-		return subscription.FieldCustomerID
-	case "plan_id":
-		return subscription.FieldPlanID
-	case "invoicing_customer_id":
-		return subscription.FieldInvoicingCustomerID
-	case "parent_subscription_id":
-		return subscription.FieldParentSubscriptionID
-	case "payment_terms":
-		return subscription.FieldPaymentTerms
-	default:
+	if subscription.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o SubscriptionQueryOptions) GetFieldResolver(field string) (string, error) {

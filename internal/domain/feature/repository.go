@@ -16,4 +16,8 @@ type Repository interface {
 	Update(ctx context.Context, feature *Feature) error
 	Delete(ctx context.Context, id string) error
 	ListByIDs(ctx context.Context, featureIDs []string) ([]*Feature, error)
+
+	// Group-related operations
+	GetByGroupIDs(ctx context.Context, groupIDs []string) ([]*Feature, error)
+	ClearByGroupID(ctx context.Context, groupID string) error
 }

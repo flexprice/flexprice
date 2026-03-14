@@ -468,24 +468,12 @@ func (o CustomerQueryOptions) ApplyPaginationFilter(query CustomerQuery, limit i
 	return query
 }
 
+// GetFieldName returns the ent field name for customer; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o CustomerQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return customer.FieldCreatedAt
-	case "updated_at":
-		return customer.FieldUpdatedAt
-	case "name":
-		return customer.FieldName
-	case "email":
-		return customer.FieldEmail
-	case "external_id":
-		return customer.FieldExternalID
-	case "status":
-		return customer.FieldStatus
-	default:
-		//unknown field
-		return ""
+	if customer.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o CustomerQueryOptions) GetFieldResolver(field string) (string, error) {

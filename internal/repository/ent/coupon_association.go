@@ -59,30 +59,12 @@ func (o CouponAssociationQueryOptions) ApplyPaginationFilter(query CouponAssocia
 	return query
 }
 
+// GetFieldName returns the ent field name for coupon_association; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o CouponAssociationQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return couponassociation.FieldCreatedAt
-	case "updated_at":
-		return couponassociation.FieldUpdatedAt
-	case "start_date":
-		return couponassociation.FieldStartDate
-	case "end_date":
-		return couponassociation.FieldEndDate
-	case "subscription_id":
-		return couponassociation.FieldSubscriptionID
-	case "coupon_id":
-		return couponassociation.FieldCouponID
-	case "subscription_line_item_id":
-		return couponassociation.FieldSubscriptionLineItemID
-	case "subscription_phase_id":
-		return couponassociation.FieldSubscriptionPhaseID
-	case "status":
-		return couponassociation.FieldStatus
-	default:
-		// unknown field
-		return ""
+	if couponassociation.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 // GetFieldResolver returns the ent field name for a given field with error handling

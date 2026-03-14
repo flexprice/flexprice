@@ -422,28 +422,12 @@ func (o PriceUnitQueryOptions) ApplyPaginationFilter(query PriceUnitQuery, limit
 	return query
 }
 
+// GetFieldName returns the ent field name for price_unit; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o PriceUnitQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return priceunit.FieldCreatedAt
-	case "updated_at":
-		return priceunit.FieldUpdatedAt
-	case "name":
-		return priceunit.FieldName
-	case "code":
-		return priceunit.FieldCode
-	case "symbol":
-		return priceunit.FieldSymbol
-	case "base_currency":
-		return priceunit.FieldBaseCurrency
-	case "conversion_rate":
-		return priceunit.FieldConversionRate
-	case "status":
-		return priceunit.FieldStatus
-	default:
-		// unknown field
-		return ""
+	if priceunit.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o PriceUnitQueryOptions) GetFieldResolver(field string) (string, error) {

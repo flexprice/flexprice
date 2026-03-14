@@ -51,6 +51,8 @@ const (
 	FieldReportingUnitConversionRate = "reporting_unit_conversion_rate"
 	// FieldAlertSettings holds the string denoting the alert_settings field in the database.
 	FieldAlertSettings = "alert_settings"
+	// FieldGroupID holds the string denoting the group_id field in the database.
+	FieldGroupID = "group_id"
 	// Table holds the table name of the feature in the database.
 	Table = "features"
 )
@@ -77,6 +79,7 @@ var Columns = []string{
 	FieldReportingUnitPlural,
 	FieldReportingUnitConversionRate,
 	FieldAlertSettings,
+	FieldGroupID,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -199,4 +202,9 @@ func ByReportingUnitPlural(opts ...sql.OrderTermOption) OrderOption {
 // ByReportingUnitConversionRate orders the results by the reporting_unit_conversion_rate field.
 func ByReportingUnitConversionRate(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldReportingUnitConversionRate, opts...).ToFunc()
+}
+
+// ByGroupID orders the results by the group_id field.
+func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }

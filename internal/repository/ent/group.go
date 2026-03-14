@@ -7,8 +7,8 @@ import (
 	"github.com/flexprice/flexprice/ent/group"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
-	"github.com/flexprice/flexprice/internal/dsl"
 	domainGroup "github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -68,7 +68,6 @@ func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Grou
 			group.IDEQ(id),
 			group.TenantIDEQ(tenantID),
 			group.EnvironmentIDEQ(environmentID),
-			group.StatusEQ(string(types.StatusPublished)),
 		).
 		Only(ctx)
 
@@ -299,24 +298,12 @@ func (o GroupQueryOptions) ApplyPaginationFilter(query GroupQuery, limit int, of
 	return query
 }
 
+// GetFieldName returns the ent field name for group; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o GroupQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return group.FieldCreatedAt
-	case "updated_at":
-		return group.FieldUpdatedAt
-	case "name":
-		return group.FieldName
-	case "entity_type":
-		return group.FieldEntityType
-	case "lookup_key":
-		return group.FieldLookupKey
-	case "status":
-		return group.FieldStatus
-	default:
-		//unknown field
-		return ""
+	if group.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o GroupQueryOptions) GetFieldResolver(field string) (string, error) {

@@ -919,6 +919,9 @@ type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
 
 // GetPreviewInvoiceRequest represents the request payload for previewing an invoice
 type GetPreviewInvoiceRequest struct {
+	// hide_zero_charges_line_items indicates whether to hide line items with zero cost
+	HideZeroChargesLineItems bool `json:"hide_zero_charges_line_items,omitempty" default:"false"`
+
 	// subscription_id is the unique identifier of the subscription to preview invoice for
 	SubscriptionID string `json:"subscription_id" binding:"required"`
 

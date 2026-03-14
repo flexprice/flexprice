@@ -256,6 +256,26 @@ func (fu *FeatureUpdate) ClearAlertSettings() *FeatureUpdate {
 	return fu
 }
 
+// SetGroupID sets the "group_id" field.
+func (fu *FeatureUpdate) SetGroupID(s string) *FeatureUpdate {
+	fu.mutation.SetGroupID(s)
+	return fu
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (fu *FeatureUpdate) SetNillableGroupID(s *string) *FeatureUpdate {
+	if s != nil {
+		fu.SetGroupID(*s)
+	}
+	return fu
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (fu *FeatureUpdate) ClearGroupID() *FeatureUpdate {
+	fu.mutation.ClearGroupID()
+	return fu
+}
+
 // Mutation returns the FeatureMutation object of the builder.
 func (fu *FeatureUpdate) Mutation() *FeatureMutation {
 	return fu.mutation
@@ -398,6 +418,12 @@ func (fu *FeatureUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	}
 	if fu.mutation.AlertSettingsCleared() {
 		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
+	}
+	if value, ok := fu.mutation.GroupID(); ok {
+		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
+	}
+	if fu.mutation.GroupIDCleared() {
+		_spec.ClearField(feature.FieldGroupID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, fu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -645,6 +671,26 @@ func (fuo *FeatureUpdateOne) ClearAlertSettings() *FeatureUpdateOne {
 	return fuo
 }
 
+// SetGroupID sets the "group_id" field.
+func (fuo *FeatureUpdateOne) SetGroupID(s string) *FeatureUpdateOne {
+	fuo.mutation.SetGroupID(s)
+	return fuo
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (fuo *FeatureUpdateOne) SetNillableGroupID(s *string) *FeatureUpdateOne {
+	if s != nil {
+		fuo.SetGroupID(*s)
+	}
+	return fuo
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (fuo *FeatureUpdateOne) ClearGroupID() *FeatureUpdateOne {
+	fuo.mutation.ClearGroupID()
+	return fuo
+}
+
 // Mutation returns the FeatureMutation object of the builder.
 func (fuo *FeatureUpdateOne) Mutation() *FeatureMutation {
 	return fuo.mutation
@@ -817,6 +863,12 @@ func (fuo *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err e
 	}
 	if fuo.mutation.AlertSettingsCleared() {
 		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
+	}
+	if value, ok := fuo.mutation.GroupID(); ok {
+		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
+	}
+	if fuo.mutation.GroupIDCleared() {
+		_spec.ClearField(feature.FieldGroupID, field.TypeString)
 	}
 	_node = &Feature{config: fuo.config}
 	_spec.Assign = _node.assignValues

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -28,8 +29,11 @@ type PriceService interface {
 	DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 
-	// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
+	// CalculateBucketedCost calculates cost for bucketed values where each value is priced independently
 	CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal
+
+	// CalculateCostFromUsageResults calculates total cost by pricing each usage result independently (e.g. per-group tiered pricing).
+	CalculateCostFromUsageResults(ctx context.Context, price *price.Price, results []events.UsageResult) decimal.Decimal
 
 	// CalculateCostWithBreakup calculates the cost for a given price and quantity
 	// and returns detailed information about the calculation
@@ -1035,9 +1039,24 @@ func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, qu
 	return s.calculateSingletonCost(ctx, price, quantity)
 }
 
-// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
+// CalculateBucketedCost calculates cost for bucketed values (from []decimal.Decimal).
+// For tiered pricing, each bucket value is priced through tiers independently.
 func (s *priceService) CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal {
 	return s.calculateBucketedMaxCost(ctx, price, bucketedValues)
+}
+
+// CalculateCostFromUsageResults sums cost by pricing each usage result independently.
+// For tiered pricing this applies tiers per result (e.g. per group per bucket), not on aggregated usage.
+func (s *priceService) CalculateCostFromUsageResults(ctx context.Context, price *price.Price, results []events.UsageResult) decimal.Decimal {
+	totalCost := decimal.Zero
+	for _, r := range results {
+		if price.BillingModel == types.BILLING_MODEL_TIERED {
+			totalCost = totalCost.Add(s.calculateTieredCost(ctx, price, r.Value))
+		} else {
+			totalCost = totalCost.Add(s.calculateSingletonCost(ctx, price, r.Value))
+		}
+	}
+	return totalCost.Round(types.GetCurrencyPrecision(price.Currency))
 }
 
 // calculateTieredCost calculates cost for tiered pricing

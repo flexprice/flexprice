@@ -299,3 +299,113 @@ func (c *commitmentCalculator) applyWindowCommitmentToLineItem(
 
 	return totalCharge, info, nil
 }
+
+// CumulativeSubscriptionCommitmentResult holds the result of applying cumulative subscription commitment
+type CumulativeSubscriptionCommitmentResult struct {
+	TotalCharge            decimal.Decimal
+	CommitmentUtilized     decimal.Decimal
+	OverageAmount          decimal.Decimal
+	TrueUpAmount           decimal.Decimal
+	WithinCommitment       decimal.Decimal
+	OverageBase            decimal.Decimal
+	CommitmentRemaining    decimal.Decimal
+}
+
+// applyCumulativeSubscriptionCommitment applies cumulative commitment logic at subscription level.
+// Used when commitment duration (e.g. ANNUAL) differs from billing period (e.g. MONTHLY).
+// totalPriorBase = sum of base usage from prior invoices (commitment_start to period_start).
+func applyCumulativeSubscriptionCommitment(
+	commitmentAmount, overageFactor, totalCurrentBase, totalPriorBase decimal.Decimal,
+	enableTrueUp, isLastPeriodOfCommitment bool,
+	logger *logger.Logger,
+) CumulativeSubscriptionCommitmentResult {
+	commitmentRemaining := commitmentAmount.Sub(totalPriorBase)
+	if commitmentRemaining.LessThan(decimal.Zero) {
+		commitmentRemaining = decimal.Zero
+	}
+
+	withinCommitment := decimal.Min(totalCurrentBase, commitmentRemaining)
+	overageBase := totalCurrentBase.Sub(withinCommitment)
+
+	overageCharge := overageBase.Mul(overageFactor)
+	totalCharge := withinCommitment.Add(overageCharge)
+	commitmentUtilized := withinCommitment
+	trueUpAmount := decimal.Zero
+
+	// True-up: only on last invoice of commitment period, when total usage < commitment
+	if isLastPeriodOfCommitment && enableTrueUp {
+		totalCumulative := totalPriorBase.Add(totalCurrentBase)
+		if totalCumulative.LessThan(commitmentAmount) {
+			trueUpAmount = commitmentAmount.Sub(totalCumulative)
+			totalCharge = totalCharge.Add(trueUpAmount)
+		}
+	}
+
+	logger.Debugw("applied cumulative subscription commitment",
+		"commitment_amount", commitmentAmount,
+		"total_prior_base", totalPriorBase,
+		"total_current_base", totalCurrentBase,
+		"commitment_remaining", commitmentRemaining,
+		"within_commitment", withinCommitment,
+		"overage_base", overageBase,
+		"overage_charge", overageCharge,
+		"true_up", trueUpAmount,
+		"total_charge", totalCharge)
+
+	return CumulativeSubscriptionCommitmentResult{
+		TotalCharge:         totalCharge,
+		CommitmentUtilized:  commitmentUtilized,
+		OverageAmount:       overageCharge,
+		TrueUpAmount:        trueUpAmount,
+		WithinCommitment:    withinCommitment,
+		OverageBase:         overageBase,
+		CommitmentRemaining: commitmentRemaining,
+	}
+}
+
+// getSubscriptionCommitmentPeriodBounds returns (commitmentStart, commitmentEnd) for the subscription's commitment period.
+// Returns (time.Time{}, time.Time{}, false) if CommitmentDuration is nil or same as billing period.
+func getSubscriptionCommitmentPeriodBounds(
+	sub *subscription.Subscription,
+	periodStart time.Time,
+) (commitmentStart, commitmentEnd time.Time, ok bool) {
+	if sub.CommitmentDuration == nil {
+		return time.Time{}, time.Time{}, false
+	}
+	cd := types.BillingPeriod(*sub.CommitmentDuration)
+	bp := sub.BillingPeriod
+	if bp != "" && cd == bp {
+		return time.Time{}, time.Time{}, false
+	}
+
+	// Commitment starts at subscription start (first billing period)
+	commitmentStart = sub.StartDate
+	if commitmentStart.IsZero() {
+		commitmentStart = sub.CurrentPeriodStart
+	}
+
+	// Add duration to get commitment end
+	switch cd {
+	case types.BILLING_PERIOD_ANNUAL:
+		commitmentEnd = commitmentStart.AddDate(1, 0, 0)
+	case types.BILLING_PERIOD_QUARTER:
+		commitmentEnd = commitmentStart.AddDate(0, 3, 0)
+	case types.BILLING_PERIOD_HALF_YEAR:
+		commitmentEnd = commitmentStart.AddDate(0, 6, 0)
+	case types.BILLING_PERIOD_MONTHLY:
+		commitmentEnd = commitmentStart.AddDate(0, 1, 0)
+	case types.BILLING_PERIOD_WEEKLY:
+		commitmentEnd = commitmentStart.AddDate(0, 0, 7)
+	case types.BILLING_PERIOD_DAILY:
+		commitmentEnd = commitmentStart.AddDate(0, 0, 1)
+	default:
+		return time.Time{}, time.Time{}, false
+	}
+
+	return commitmentStart, commitmentEnd, true
+}
+
+// isLastPeriodOfCommitmentPeriod returns true when the current invoice period closes or extends past the commitment period end.
+func isLastPeriodOfCommitmentPeriod(periodEnd, commitmentEnd time.Time) bool {
+	return !periodEnd.Before(commitmentEnd)
+}

@@ -432,32 +432,12 @@ func (o AlertLogQueryOptions) ApplyPaginationFilter(query AlertLogQuery, limit i
 	return query.Offset(offset).Limit(limit)
 }
 
+// GetFieldName returns the ent field name for alert log; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o AlertLogQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return alertlogs.FieldCreatedAt
-	case "updated_at":
-		return alertlogs.FieldUpdatedAt
-	case "entity_type":
-		return alertlogs.FieldEntityType
-	case "entity_id":
-		return alertlogs.FieldEntityID
-	case "parent_entity_type":
-		return alertlogs.FieldParentEntityType
-	case "parent_entity_id":
-		return alertlogs.FieldParentEntityID
-	case "customer_id":
-		return alertlogs.FieldCustomerID
-	case "alert_type":
-		return alertlogs.FieldAlertType
-	case "alert_status":
-		return alertlogs.FieldAlertStatus
-	case "status":
-		return alertlogs.FieldStatus
-	default:
-		// unknown field
-		return ""
+	if alertlogs.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o AlertLogQueryOptions) GetFieldResolver(field string) (string, error) {

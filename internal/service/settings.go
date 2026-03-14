@@ -38,7 +38,7 @@ func NewSettingsService(params ServiceParams) SettingsService {
 // isTenantLevelSetting checks if a setting is tenant-level (no environment_id)
 // Tenant-level settings apply across all environments for a tenant
 func isTenantLevelSetting(key types.SettingKey) bool {
-	return key == types.SettingKeyEnvConfig
+	return key == types.SettingKeyTenantConfig
 }
 
 // fetchSetting fetches a setting from the repository
@@ -74,6 +74,23 @@ func getDefaultValue[T any](key types.SettingKey) (T, error) {
 	return utils.ToStruct[T](defaultSetting.DefaultValue)
 }
 
+// resolvedValueMap returns the effective setting value as a map: default (from typed config) with fetched overlaid.
+// Uses getDefaultValue[T] + ToMap so default is defined once; callers use the map as-is or ToStruct when they need a struct.
+func resolvedValueMap[T any](key types.SettingKey, fetched map[string]interface{}) (map[string]interface{}, error) {
+	config, err := getDefaultValue[T](key)
+	if err != nil {
+		return nil, err
+	}
+	resolvedSettingMap, err := utils.ToMap(config)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range fetched {
+		resolvedSettingMap[k] = v
+	}
+	return resolvedSettingMap, nil
+}
+
 // GetSetting retrieves a setting and returns it as a typed struct
 //
 // WHEN TO USE:
@@ -106,8 +123,11 @@ func GetSetting[T any](s *settingsService, ctx context.Context, key types.Settin
 		return zero, err
 	}
 
-	// Convert map to typed struct
-	typedValue, err := utils.ToStruct[T](setting.Value)
+	valueMap, err := resolvedValueMap[T](key, setting.Value)
+	if err != nil {
+		return zero, err
+	}
+	typedValue, err := utils.ToStruct[T](valueMap)
 	if err != nil {
 		return zero, ierr.WithError(err).
 			WithHintf("Failed to convert setting %s", key).
@@ -199,8 +219,8 @@ func (s *settingsService) GetSettingByKey(ctx context.Context, key types.Setting
 		return getSettingByKey[types.SubscriptionConfig](s, ctx, key)
 	case types.SettingKeyInvoicePDFConfig:
 		return getSettingByKey[types.InvoicePDFConfig](s, ctx, key)
-	case types.SettingKeyEnvConfig:
-		return getSettingByKey[types.EnvConfig](s, ctx, key)
+	case types.SettingKeyTenantConfig:
+		return getSettingByKey[types.TenantConfig](s, ctx, key)
 	case types.SettingKeyCustomerOnboarding:
 		return getSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key)
 	case types.SettingKeyPrepareProcessedEvents:
@@ -241,8 +261,8 @@ func (s *settingsService) UpdateSettingByKey(ctx context.Context, key types.Sett
 		return updateSettingByKey[types.SubscriptionConfig](s, ctx, key, req)
 	case types.SettingKeyInvoicePDFConfig:
 		return updateSettingByKey[types.InvoicePDFConfig](s, ctx, key, req)
-	case types.SettingKeyEnvConfig:
-		return updateSettingByKey[types.EnvConfig](s, ctx, key, req)
+	case types.SettingKeyTenantConfig:
+		return updateSettingByKey[types.TenantConfig](s, ctx, key, req)
 	case types.SettingKeyCustomerOnboarding:
 		return updateSettingByKey[*workflowModels.WorkflowConfig](s, ctx, key, req)
 	case types.SettingKeyPrepareProcessedEvents:
@@ -287,38 +307,36 @@ func (s *settingsService) DeleteSettingByKey(ctx context.Context, key types.Sett
 	return s.SettingsRepo.DeleteByKey(ctx, key)
 }
 
-// getSettingByKey fetches a setting and returns it as a DTO response
-// Internal helper used by GetSettingByKey to handle type-specific logic
+// getSettingByKey fetches a setting and returns it as a DTO response.
+// If setting does not exist: returns default value.
+// If setting exists: returns default merged with fetched (fetched keys overwrite default).
 func getSettingByKey[T any](s *settingsService, ctx context.Context, key types.SettingKey) (*dto.SettingResponse, error) {
 	setting, err := s.fetchSetting(ctx, key)
-
-	if ent.IsNotFound(err) {
-		// Setting doesn't exist, return default value
-		config, err := getDefaultValue[T](key)
-		if err != nil {
-			return nil, err
-		}
-
-		// Convert typed struct to map for response
-		valueMap, err := utils.ToMap(config)
-		if err != nil {
-			return nil, err
-		}
-
-		// Return default setting (no ID since it doesn't exist in DB)
-		return dto.NewSettingResponse(&settings.Setting{
-			ID:        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SETTING),
-			BaseModel: types.GetDefaultBaseModel(ctx),
-			Key:       key,
-			Value:     valueMap,
-		}), nil
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, err
 	}
+
+	var fetched map[string]interface{}
+	if setting != nil {
+		fetched = setting.Value
+	}
+	valueMap, err := resolvedValueMap[T](key, fetched)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use the actual Setting object fetched from DB (with all metadata: ID, timestamps, etc.)
-	return dto.NewSettingResponse(setting), nil
+	// Persisted setting: include ID, base model, key, value, and environment ID.
+	if setting != nil {
+		return dto.NewSettingResponse(&settings.Setting{
+			ID:            setting.ID,
+			BaseModel:     setting.BaseModel,
+			Key:           setting.Key,
+			Value:         valueMap,
+			EnvironmentID: setting.EnvironmentID,
+		}), nil
+	}
+	// Default setting: no ID, base model, key, value, and environment ID (no DB record yet).
+	return dto.NewSettingResponse(&settings.Setting{Key: key, Value: valueMap}), nil
 }
 
 // updateSettingByKey updates a setting with partial values from a request

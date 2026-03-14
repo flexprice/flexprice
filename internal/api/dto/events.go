@@ -10,6 +10,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -335,6 +336,7 @@ type UsageAnalyticItem struct {
 	AddOnID              string                             `json:"add_on_id,omitempty"`
 	PlanID               string                             `json:"plan_id,omitempty"`
 	WindowSize           types.WindowSize                   `json:"window_size,omitempty"` // Window size for bucketed meters (only set if meter is bucketed)
+	Group                *group.Group                       `json:"group,omitempty"`      // Group when the feature belongs to a group (object includes id)
 }
 
 // CustomAnalyticItem represents a custom analytics calculation result

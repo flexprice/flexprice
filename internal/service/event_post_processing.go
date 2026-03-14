@@ -16,6 +16,7 @@ import (
 	"github.com/flexprice/flexprice/internal/config"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -1108,6 +1109,25 @@ func (s *eventPostProcessingService) enrichAnalyticsWithFeatureAndMeterData(ctx 
 		}
 	}
 
+	// Attach group to features that belong to one (lazy-fetch per group id)
+	groupMap := make(map[string]*group.Group)
+	for _, f := range features {
+		if f.GroupID == "" {
+			continue
+		}
+		if grp, ok := groupMap[f.GroupID]; ok {
+			f.Group = grp
+			continue
+		}
+		grp, err := s.GroupRepo.Get(ctx, f.GroupID)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch group for analytics", "group_id", f.GroupID, "error", err)
+			continue
+		}
+		groupMap[f.GroupID] = grp
+		f.Group = grp
+	}
+
 	// Fetch all meters in one call
 	meterFilter := types.NewNoLimitMeterFilter()
 	meterFilter.MeterIDs = meterIDs
@@ -1331,6 +1351,11 @@ func (s *eventPostProcessingService) ToGetUsageAnalyticsResponseDTO(ctx context.
 				item.TotalUsageDisplay = reportingUsage.String()
 				item.ReportingUnit = f.ReportingUnit
 			}
+		}
+
+		// Populate group when the feature belongs to a group
+		if f, ok := featureMap[analytic.FeatureID]; ok && f.Group != nil {
+			item.Group = f.Group
 		}
 
 		// Map time-series points if available

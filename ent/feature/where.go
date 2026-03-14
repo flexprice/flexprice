@@ -150,6 +150,11 @@ func ReportingUnitConversionRate(v decimal.Decimal) predicate.Feature {
 	return predicate.Feature(sql.FieldEQ(FieldReportingUnitConversionRate, v))
 }
 
+// GroupID applies equality check predicate on the "group_id" field. It's identical to GroupIDEQ.
+func GroupID(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldGroupID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Feature {
 	return predicate.Feature(sql.FieldEQ(FieldTenantID, v))
@@ -1298,6 +1303,81 @@ func AlertSettingsIsNil() predicate.Feature {
 // AlertSettingsNotNil applies the NotNil predicate on the "alert_settings" field.
 func AlertSettingsNotNil() predicate.Feature {
 	return predicate.Feature(sql.FieldNotNull(FieldAlertSettings))
+}
+
+// GroupIDEQ applies the EQ predicate on the "group_id" field.
+func GroupIDEQ(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEQ(FieldGroupID, v))
+}
+
+// GroupIDNEQ applies the NEQ predicate on the "group_id" field.
+func GroupIDNEQ(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldNEQ(FieldGroupID, v))
+}
+
+// GroupIDIn applies the In predicate on the "group_id" field.
+func GroupIDIn(vs ...string) predicate.Feature {
+	return predicate.Feature(sql.FieldIn(FieldGroupID, vs...))
+}
+
+// GroupIDNotIn applies the NotIn predicate on the "group_id" field.
+func GroupIDNotIn(vs ...string) predicate.Feature {
+	return predicate.Feature(sql.FieldNotIn(FieldGroupID, vs...))
+}
+
+// GroupIDGT applies the GT predicate on the "group_id" field.
+func GroupIDGT(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldGT(FieldGroupID, v))
+}
+
+// GroupIDGTE applies the GTE predicate on the "group_id" field.
+func GroupIDGTE(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldGTE(FieldGroupID, v))
+}
+
+// GroupIDLT applies the LT predicate on the "group_id" field.
+func GroupIDLT(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldLT(FieldGroupID, v))
+}
+
+// GroupIDLTE applies the LTE predicate on the "group_id" field.
+func GroupIDLTE(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldLTE(FieldGroupID, v))
+}
+
+// GroupIDContains applies the Contains predicate on the "group_id" field.
+func GroupIDContains(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldContains(FieldGroupID, v))
+}
+
+// GroupIDHasPrefix applies the HasPrefix predicate on the "group_id" field.
+func GroupIDHasPrefix(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldHasPrefix(FieldGroupID, v))
+}
+
+// GroupIDHasSuffix applies the HasSuffix predicate on the "group_id" field.
+func GroupIDHasSuffix(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldHasSuffix(FieldGroupID, v))
+}
+
+// GroupIDIsNil applies the IsNil predicate on the "group_id" field.
+func GroupIDIsNil() predicate.Feature {
+	return predicate.Feature(sql.FieldIsNull(FieldGroupID))
+}
+
+// GroupIDNotNil applies the NotNil predicate on the "group_id" field.
+func GroupIDNotNil() predicate.Feature {
+	return predicate.Feature(sql.FieldNotNull(FieldGroupID))
+}
+
+// GroupIDEqualFold applies the EqualFold predicate on the "group_id" field.
+func GroupIDEqualFold(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldEqualFold(FieldGroupID, v))
+}
+
+// GroupIDContainsFold applies the ContainsFold predicate on the "group_id" field.
+func GroupIDContainsFold(v string) predicate.Feature {
+	return predicate.Feature(sql.FieldContainsFold(FieldGroupID, v))
 }
 
 // And groups predicates with the AND operator between them.

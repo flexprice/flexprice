@@ -84,6 +84,12 @@ func (f *GroupFilter) Validate() error {
 		}
 	}
 
+	if f.EntityType != "" {
+		if err := GroupEntityType(f.EntityType).Validate(); err != nil {
+			return err
+		}
+	}
+
 	if f.Filters != nil {
 		for _, filter := range f.Filters {
 			if err := filter.Validate(); err != nil {

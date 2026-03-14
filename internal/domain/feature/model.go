@@ -2,6 +2,7 @@ package feature
 
 import (
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/samber/lo"
@@ -20,6 +21,9 @@ type Feature struct {
 	UnitPlural    string               `json:"unit_plural"`
 	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	GroupID       string               `json:"group_id,omitempty"`
+	// Group is populated by the service layer when building responses; repository/FromEnt do not set it.
+	Group         *group.Group         `json:"group,omitempty"`
 	EnvironmentID string               `json:"environment_id"`
 	types.BaseModel
 }
@@ -60,6 +64,7 @@ func FromEnt(f *ent.Feature) *Feature {
 		UnitPlural:    lo.FromPtr(f.UnitPlural),
 		ReportingUnit: reportingUnit,
 		AlertSettings: alertSettings,
+		GroupID:       lo.FromPtr(f.GroupID),
 		EnvironmentID: f.EnvironmentID,
 		BaseModel: types.BaseModel{
 			TenantID:  f.TenantID,

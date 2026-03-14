@@ -22,7 +22,7 @@ const (
 	SettingKeyInvoiceConfig            SettingKey = "invoice_config"
 	SettingKeySubscriptionConfig       SettingKey = "subscription_config"
 	SettingKeyInvoicePDFConfig         SettingKey = "invoice_pdf_config"
-	SettingKeyEnvConfig                SettingKey = "env_config"
+	SettingKeyTenantConfig             SettingKey = "tenant_config"
 	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
 	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
 	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
@@ -36,7 +36,7 @@ func (s *SettingKey) Validate() error {
 		SettingKeyInvoiceConfig,
 		SettingKeySubscriptionConfig,
 		SettingKeyInvoicePDFConfig,
-		SettingKeyEnvConfig,
+		SettingKeyTenantConfig,
 		SettingKeyCustomerOnboarding,
 		SettingKeyWalletBalanceAlertConfig,
 		SettingKeyPrepareProcessedEvents,
@@ -88,15 +88,15 @@ func (c InvoicePDFConfig) Validate() error {
 	return c.TemplateName.Validate()
 }
 
-// EnvConfig represents environment creation limits and user limit configuration
-type EnvConfig struct {
+// TenantConfig represents environment creation limits and user limit configuration
+type TenantConfig struct {
 	Production  int `json:"production" validate:"omitempty,min=0"`
 	Development int `json:"development" validate:"omitempty,min=0"`
 	MaxUsers    int `json:"max_users" validate:"omitempty,min=1"`
 }
 
 // Validate implements SettingConfig interface
-func (c EnvConfig) Validate() error {
+func (c TenantConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
@@ -358,7 +358,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		GroupBy:      []string{},
 	}
 
-	defaultEnvConfig := EnvConfig{
+	defaultTenantConfig := TenantConfig{
 		Production:  1,
 		Development: 2,
 		MaxUsers:    10,
@@ -399,7 +399,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	envConfigMap, err := utils.ToMap(defaultEnvConfig)
+	tenantConfigMap, err := utils.ToMap(defaultTenantConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -494,10 +494,10 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: invoicePDFConfigMap,
 			Description:  "Default configuration for invoice PDF generation",
 		},
-		SettingKeyEnvConfig: {
-			Key:          SettingKeyEnvConfig,
-			DefaultValue: envConfigMap,
-			Description:  "Default configuration for environment creation limits (production and sandbox)",
+		SettingKeyTenantConfig: {
+			Key:          SettingKeyTenantConfig,
+			DefaultValue: tenantConfigMap,
+			Description:  "Default configuration for tenant (environment creation limits, production and sandbox)",
 		},
 		SettingKeyCustomerOnboarding: {
 			Key:          SettingKeyCustomerOnboarding,
@@ -575,8 +575,8 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
-	case SettingKeyEnvConfig:
-		config, err := utils.ToStruct[EnvConfig](value)
+	case SettingKeyTenantConfig:
+		config, err := utils.ToStruct[TenantConfig](value)
 		if err != nil {
 			return err
 		}

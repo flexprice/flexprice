@@ -20,6 +20,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -1717,6 +1718,7 @@ type AnalyticsData struct {
 	PriceResponses        map[string]*dto.PriceResponse // Map of price ID -> PriceResponse (used when groups need to be expanded)
 	Plans                 map[string]*plan.Plan         // Map of plan ID -> plan
 	Addons                map[string]*addon.Addon       // Map of addon ID -> addon
+	Groups                map[string]*group.Group       // Map of group ID -> group (for features that belong to a group)
 	Currency              string
 	Params                *events.UsageAnalyticsParams
 }
@@ -1877,6 +1879,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 		Prices:                make(map[string]*price.Price),
 		Plans:                 make(map[string]*plan.Plan),
 		Addons:                make(map[string]*addon.Addon),
+		Groups:                make(map[string]*group.Group),
 		PriceResponses:        make(map[string]*dto.PriceResponse),
 	}
 
@@ -2257,11 +2260,31 @@ func (s *featureUsageTrackingService) enrichWithMetadata(ctx context.Context, da
 	// Build feature map and extract meter IDs
 	meterIDs := make([]string, 0)
 	meterIDSet := make(map[string]bool)
+	groupIDSet := make(map[string]bool)
 	for _, f := range features {
 		data.Features[f.ID] = f
 		if f.MeterID != "" && !meterIDSet[f.MeterID] {
 			meterIDs = append(meterIDs, f.MeterID)
 			meterIDSet[f.MeterID] = true
+		}
+		if f.GroupID != "" && !groupIDSet[f.GroupID] {
+			groupIDSet[f.GroupID] = true
+		}
+	}
+
+	// Fetch groups for features that belong to a group
+	for groupID := range groupIDSet {
+		grp, err := s.GroupRepo.Get(ctx, groupID)
+		if err != nil {
+			s.Logger.Warnw("failed to fetch group for analytics", "group_id", groupID, "error", err)
+			continue
+		}
+		data.Groups[groupID] = grp
+	}
+	// Backfill Feature.Group so expand=feature returns group
+	for _, f := range data.Features {
+		if f.GroupID != "" {
+			f.Group = data.Groups[f.GroupID]
 		}
 	}
 
@@ -3346,6 +3369,11 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			}
 		}
 
+		// Populate group when the feature belongs to a group
+		if f, ok := data.Features[analytic.FeatureID]; ok && f.GroupID != "" {
+			item.Group = data.Groups[f.GroupID]
+		}
+
 		// Only include Sources array when 'sources' is in expand param
 		if expandMap["source"] {
 			item.Sources = analytic.Sources
@@ -3613,6 +3641,9 @@ func (s *featureUsageTrackingService) mergeAnalyticsData(aggregated *AnalyticsDa
 	if aggregated.Addons == nil {
 		aggregated.Addons = make(map[string]*addon.Addon)
 	}
+	if aggregated.Groups == nil {
+		aggregated.Groups = make(map[string]*group.Group)
+	}
 	if aggregated.PriceResponses == nil {
 		aggregated.PriceResponses = make(map[string]*dto.PriceResponse)
 	}
@@ -3666,6 +3697,13 @@ func (s *featureUsageTrackingService) mergeAnalyticsData(aggregated *AnalyticsDa
 	for id, addon := range additional.Addons {
 		if _, exists := aggregated.Addons[id]; !exists {
 			aggregated.Addons[id] = addon
+		}
+	}
+
+	// Merge groups
+	for id, grp := range additional.Groups {
+		if _, exists := aggregated.Groups[id]; !exists {
+			aggregated.Groups[id] = grp
 		}
 	}
 }

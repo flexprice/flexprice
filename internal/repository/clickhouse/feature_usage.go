@@ -2269,29 +2269,50 @@ func (r *FeatureUsageRepository) GetUsageForBucketedMeters(ctx context.Context, 
 	var result events.AggregationResult
 	result.Type = params.UsageParams.AggregationType
 
+	hasGroupBy := params.UsageParams.GroupByProperty != "" && validateGroupByProperty(params.UsageParams.GroupByProperty) == nil
+
 	// For windowed queries, we need to process all rows
 	for rows.Next() {
 		var windowSize time.Time
 		var value decimal.Decimal
 		var total decimal.Decimal
-		if err := rows.Scan(&total, &windowSize, &value); err != nil {
-			SetSpanError(span, err)
-			return nil, ierr.WithError(err).
-				WithHint("Failed to scan decimal result").
-				WithReportableDetails(map[string]interface{}{
-					"window_size": windowSize,
-					"value":       value,
-					"total":       total,
-				}).
-				Mark(ierr.ErrDatabase)
+		if hasGroupBy {
+			var groupKey string
+			if err := rows.Scan(&total, &windowSize, &value, &groupKey); err != nil {
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to scan decimal result (with group_key)").
+					WithReportableDetails(map[string]interface{}{
+						"window_size": windowSize,
+						"value":       value,
+						"total":       total,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+			result.Value = total
+			result.Results = append(result.Results, events.UsageResult{
+				WindowSize: windowSize,
+				Value:      value,
+				GroupKey:   groupKey,
+			})
+		} else {
+			if err := rows.Scan(&total, &windowSize, &value); err != nil {
+				SetSpanError(span, err)
+				return nil, ierr.WithError(err).
+					WithHint("Failed to scan decimal result").
+					WithReportableDetails(map[string]interface{}{
+						"window_size": windowSize,
+						"value":       value,
+						"total":       total,
+					}).
+					Mark(ierr.ErrDatabase)
+			}
+			result.Value = total
+			result.Results = append(result.Results, events.UsageResult{
+				WindowSize: windowSize,
+				Value:      value,
+			})
 		}
-		// Set the overall maximum as the result value
-		result.Value = total
-
-		result.Results = append(result.Results, events.UsageResult{
-			WindowSize: windowSize,
-			Value:      value,
-		})
 	}
 
 	SetSpanSuccess(span)
@@ -2372,21 +2393,14 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 					%s
 					%s
 				GROUP BY bucket_start, group_key
-			),
-			%s AS (
-				SELECT
-					bucket_start,
-					sum(group_value) as %s
-				FROM per_group
-				GROUP BY bucket_start
-				ORDER BY bucket_start
 			)
 			SELECT
-				(SELECT sum(%s) FROM %s) as total,
+				(SELECT sum(group_value) FROM per_group) as total,
 				bucket_start as timestamp,
-				%s as value
-			FROM %s
-			ORDER BY bucket_start
+				group_value as value,
+				group_key
+			FROM per_group
+			ORDER BY bucket_start, group_key
 		`,
 			bucketWindow,
 			groupByExpr,
@@ -2400,12 +2414,7 @@ func (r *FeatureUsageRepository) getWindowedQuery(ctx context.Context, params *e
 			meterFilter,
 			subLineItemFilter,
 			filterConditions,
-			timeConditions,
-			bucketTableName,
-			bucketColumnName,
-			bucketColumnName, bucketTableName,
-			bucketColumnName,
-			bucketTableName)
+			timeConditions)
 	}
 
 	// First aggregate values per bucket using the appropriate function,

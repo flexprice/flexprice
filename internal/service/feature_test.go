@@ -7,6 +7,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -21,6 +22,7 @@ type FeatureServiceSuite struct {
 	featureRepo     *testutil.InMemoryFeatureStore
 	meterRepo       *testutil.InMemoryMeterStore
 	entitlementRepo *testutil.InMemoryEntitlementStore
+	groupRepo       *testutil.InMemoryGroupStore
 	testData        struct {
 		meters struct {
 			apiCalls *meter.Meter
@@ -49,12 +51,16 @@ func (s *FeatureServiceSuite) TearDownTest() {
 	s.featureRepo.Clear()
 	s.meterRepo.Clear()
 	s.entitlementRepo.Clear()
+	if s.groupRepo != nil {
+		s.groupRepo.Clear()
+	}
 }
 
 func (s *FeatureServiceSuite) setupService() {
 	s.featureRepo = testutil.NewInMemoryFeatureStore()
 	s.meterRepo = testutil.NewInMemoryMeterStore()
 	s.entitlementRepo = testutil.NewInMemoryEntitlementStore()
+	s.groupRepo = testutil.NewInMemoryGroupStore()
 
 	s.service = NewFeatureService(ServiceParams{
 		Logger:           s.GetLogger(),
@@ -62,6 +68,7 @@ func (s *FeatureServiceSuite) setupService() {
 		FeatureRepo:      s.featureRepo,
 		MeterRepo:        s.meterRepo,
 		EntitlementRepo:  s.entitlementRepo,
+		GroupRepo:        s.groupRepo,
 		WebhookPublisher: s.GetWebhookPublisher(),
 	})
 }
@@ -263,6 +270,17 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 			wantErr:   true,
 			errString: "conversion_rate",
 		},
+		{
+			name: "error - non-existent group_id",
+			req: dto.CreateFeatureRequest{
+				Name:        "Feature With Bad Group",
+				LookupKey:   "bad_group_feature",
+				Type:        types.FeatureTypeBoolean,
+				GroupID:     "group_nonexistent",
+			},
+			wantErr:   true,
+			errString: "not found",
+		},
 	}
 
 	for _, tt := range tests {
@@ -296,6 +314,59 @@ func (s *FeatureServiceSuite) TestCreateFeature() {
 			}
 		})
 	}
+}
+
+func (s *FeatureServiceSuite) TestCreateFeature_InvalidGroupValidation() {
+	// Create a group with entity_type "price" (wrong for features)
+	priceGroup := &group.Group{
+		ID:            "group_price_type",
+		Name:          "Price Group",
+		EntityType:    types.GroupEntityTypePrice,
+		LookupKey:     "price_group_key",
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.groupRepo.Create(s.GetContext(), priceGroup))
+
+	req := dto.CreateFeatureRequest{
+		Name:        "Feature With Wrong Group Type",
+		LookupKey:   "wrong_group_type_feature",
+		Type:        types.FeatureTypeBoolean,
+		GroupID:     priceGroup.ID,
+	}
+	_, err := s.service.CreateFeature(s.GetContext(), req)
+	s.Error(err)
+	s.Contains(err.Error(), "invalid group type")
+}
+
+func (s *FeatureServiceSuite) TestCreateFeature_WithGroupID() {
+	// Create a group of entity_type feature first
+	grp := &group.Group{
+		ID:            "group_feature_test",
+		Name:          "Feature Group",
+		EntityType:    types.GroupEntityTypeFeature,
+		LookupKey:     "feature_group_key",
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.groupRepo.Create(s.GetContext(), grp))
+
+	req := dto.CreateFeatureRequest{
+		Name:        "Grouped Feature",
+		Description: "Feature in a group",
+		LookupKey:   "grouped_feature",
+		Type:        types.FeatureTypeBoolean,
+		GroupID:     grp.ID,
+	}
+	resp, err := s.service.CreateFeature(s.GetContext(), req)
+	s.NoError(err)
+	s.NotNil(resp)
+	s.Equal(req.Name, resp.Name)
+	s.Equal(grp.ID, resp.GroupID)
+	s.NotNil(resp.Group, "response should include group object when feature has group_id")
+	s.Equal(grp.ID, resp.Group.ID)
+	s.Equal(grp.Name, resp.Group.Name)
+	s.Equal(string(grp.EntityType), resp.Group.EntityType)
 }
 
 func (s *FeatureServiceSuite) TestGetFeature() {
@@ -358,6 +429,36 @@ func (s *FeatureServiceSuite) TestGetFeature() {
 			}
 		})
 	}
+}
+
+func (s *FeatureServiceSuite) TestGetFeature_WithGroup() {
+	grp := &group.Group{
+		ID:            "group_get_feature",
+		Name:          "Get Feature Group",
+		EntityType:    types.GroupEntityTypeFeature,
+		LookupKey:     "get_feature_group",
+		EnvironmentID: types.GetEnvironmentID(s.GetContext()),
+		BaseModel:     types.GetDefaultBaseModel(s.GetContext()),
+	}
+	s.NoError(s.groupRepo.Create(s.GetContext(), grp))
+
+	createReq := dto.CreateFeatureRequest{
+		Name:        "Feature With Group",
+		LookupKey:   "feature_with_group",
+		Type:        types.FeatureTypeBoolean,
+		GroupID:     grp.ID,
+	}
+	created, err := s.service.CreateFeature(s.GetContext(), createReq)
+	s.NoError(err)
+	s.Require().NotNil(created)
+
+	resp, err := s.service.GetFeature(s.GetContext(), created.ID)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+	s.Equal(grp.ID, resp.GroupID)
+	s.NotNil(resp.Group, "GetFeature should return group object when feature has group_id")
+	s.Equal(grp.ID, resp.Group.ID)
+	s.Equal(grp.Name, resp.Group.Name)
 }
 
 func (s *FeatureServiceSuite) TestGetFeatures() {

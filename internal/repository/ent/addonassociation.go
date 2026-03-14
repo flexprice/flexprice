@@ -411,28 +411,12 @@ func (o AddonAssociationQueryOptions) ApplyPaginationFilter(query AddonAssociati
 	return query
 }
 
+// GetFieldName returns the ent field name for addon_association; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o AddonAssociationQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return addonassociation.FieldCreatedAt
-	case "updated_at":
-		return addonassociation.FieldUpdatedAt
-	case "entity_id":
-		return addonassociation.FieldEntityID
-	case "entity_type":
-		return addonassociation.FieldEntityType
-	case "addon_id":
-		return addonassociation.FieldAddonID
-	case "addon_status":
-		return addonassociation.FieldAddonStatus
-	case "start_date":
-		return addonassociation.FieldStartDate
-	case "end_date":
-		return addonassociation.FieldEndDate
-	default:
-		// unknown field
-		return ""
+	if addonassociation.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o AddonAssociationQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.AddonAssociationFilter, query AddonAssociationQuery) (AddonAssociationQuery, error) {

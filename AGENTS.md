@@ -385,6 +385,8 @@ Environment variables override config.yaml. Example:
 - `FLEXPRICE_POSTGRES_HOST` overrides `postgres.host`
 - `FLEXPRICE_KAFKA_BROKERS` overrides `kafka.brokers`
 
+**ClickHouse per-query memory limit:** Every ClickHouse query is bounded by a hardcoded limit of 90 GB (`max_memory_usage`).
+
 ## Common Operations
 
 ### Running a Single Test

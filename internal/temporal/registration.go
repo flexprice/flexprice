@@ -237,6 +237,7 @@ func buildWorkerConfig(
 			workflowsList,
 			subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
 			subscriptionWorkflows.ProcessSubscriptionBillingWorkflow,
+			invoiceWorkflows.RecalculateInvoiceWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			// Schedule billing activities
@@ -249,6 +250,8 @@ func buildWorkerConfig(
 			billingActivities.CheckCancellationActivity,
 			billingActivities.ProcessPendingPlanChangesActivity,
 			billingActivities.TriggerInvoiceWorkflowActivity,
+			// Invoice recalculation (v2)
+			invoiceActs.RecalculateInvoiceActivity,
 		)
 
 	case types.TemporalTaskQueueInvoice:
