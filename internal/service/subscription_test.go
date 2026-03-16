@@ -5384,3 +5384,554 @@ func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsWithInvoicingCustomer
 	s.True(updatedSub.CurrentPeriodStart.After(periodStart), "Period start should be updated")
 	s.True(updatedSub.CurrentPeriodEnd.After(periodEnd), "Period end should be updated")
 }
+
+// TestCancelSubscriptionWithAddons tests that addon associations and line items are properly
+// cancelled when a subscription is cancelled
+func (s *SubscriptionServiceSuite) TestCancelSubscriptionWithAddons() {
+	ctx := s.GetContext()
+
+	// Helper to create an addon with a price
+	createAddonWithPrice := func(addonID, priceID string) {
+		subService := s.service.(*subscriptionService)
+		a := &addon.Addon{
+			ID:          addonID,
+			LookupKey:   addonID,
+			Name:        "Test Addon " + addonID,
+			Description: "Test Addon Description",
+			Type:        types.AddonTypeOnetime,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(subService.AddonRepo.Create(ctx, a))
+
+		p := &price.Price{
+			ID:                 priceID,
+			Amount:             decimal.NewFromFloat(10.00),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+			EntityID:           addonID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	}
+
+	s.Run("cancel_subscription_with_single_addon_immediate", func() {
+		// Setup: Create a fresh subscription
+		now := time.Now().UTC()
+		testSub := &subscription.Subscription{
+			ID:                 "sub_addon_cancel_single",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		// Create addon and add to subscription
+		addonID := "addon_cancel_single"
+		priceID := "price_addon_cancel_single"
+		createAddonWithPrice(addonID, priceID)
+
+		startDate := now
+		association, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+		s.NotNil(association)
+		s.Equal(types.AddonStatusActive, association.AddonStatus)
+
+		// Cancel subscription immediately
+		_, err = s.service.CancelSubscription(ctx, testSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_cancellation_with_addon",
+		})
+		s.NoError(err)
+
+		// Verify subscription is cancelled
+		cancelledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, testSub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, cancelledSub.SubscriptionStatus)
+
+		// Verify addon association status
+		updatedAssociation, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, association.ID)
+		s.NoError(err)
+		s.Equal(types.AddonStatusCancelled, updatedAssociation.AddonStatus, "Addon association should be cancelled")
+		s.NotNil(updatedAssociation.EndDate, "Addon association should have end_date set")
+		s.NotNil(updatedAssociation.CancelledAt, "Addon association should have cancelled_at set")
+		s.Contains(updatedAssociation.CancellationReason, "Subscription cancelled", "Cancellation reason should mention subscription cancellation")
+	})
+
+	s.Run("cancel_subscription_with_multiple_addons", func() {
+		// Setup: Create a fresh subscription
+		now := time.Now().UTC()
+		testSub := &subscription.Subscription{
+			ID:                 "sub_addon_cancel_multiple",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		// Create and add multiple addons
+		addon1ID := "addon_cancel_multi_1"
+		addon2ID := "addon_cancel_multi_2"
+		createAddonWithPrice(addon1ID, "price_addon_multi_1")
+		createAddonWithPrice(addon2ID, "price_addon_multi_2")
+
+		startDate := now
+		association1, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addon1ID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		association2, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addon2ID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Cancel subscription
+		_, err = s.service.CancelSubscription(ctx, testSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_multi_addon_cancellation",
+		})
+		s.NoError(err)
+
+		// Verify both addon associations are cancelled
+		updatedAssociation1, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, association1.ID)
+		s.NoError(err)
+		s.Equal(types.AddonStatusCancelled, updatedAssociation1.AddonStatus, "First addon association should be cancelled")
+
+		updatedAssociation2, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, association2.ID)
+		s.NoError(err)
+		s.Equal(types.AddonStatusCancelled, updatedAssociation2.AddonStatus, "Second addon association should be cancelled")
+	})
+
+	s.Run("cancel_subscription_at_period_end_with_addon", func() {
+		// Setup: Create a fresh subscription
+		now := time.Now().UTC()
+		periodEnd := now.Add(6 * 24 * time.Hour)
+		testSub := &subscription.Subscription{
+			ID:                 "sub_addon_cancel_period_end",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		// Create addon and add to subscription
+		addonID := "addon_cancel_period_end"
+		priceID := "price_addon_period_end"
+		createAddonWithPrice(addonID, priceID)
+
+		startDate := now
+		association, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Cancel at period end
+		_, err = s.service.CancelSubscription(ctx, testSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeEndOfPeriod,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_period_end_cancellation",
+		})
+		s.NoError(err)
+
+		// Verify subscription is still active but marked for cancellation
+		cancelledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, testSub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusActive, cancelledSub.SubscriptionStatus, "Should remain active until period end")
+		s.True(cancelledSub.CancelAtPeriodEnd, "Should be marked to cancel at period end")
+
+		// Verify addon association has end_date set to period end
+		updatedAssociation, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, association.ID)
+		s.NoError(err)
+		if updatedAssociation.EndDate != nil {
+			// For end_of_period cancellation, addon end date should match subscription period end
+			s.True(updatedAssociation.EndDate.Equal(periodEnd) || updatedAssociation.EndDate.After(periodEnd.Add(-time.Second)),
+				"Addon end_date should be at or near period end")
+		}
+	})
+
+	s.Run("cancel_subscription_without_addons", func() {
+		// Setup: Create a subscription without addons
+		now := time.Now().UTC()
+		testSub := &subscription.Subscription{
+			ID:                 "sub_cancel_no_addons",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		// Cancel subscription - should succeed without any addon handling issues
+		_, err := s.service.CancelSubscription(ctx, testSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_no_addon_cancellation",
+		})
+		s.NoError(err)
+
+		// Verify subscription is cancelled
+		cancelledSub, err := s.GetStores().SubscriptionRepo.Get(ctx, testSub.ID)
+		s.NoError(err)
+		s.Equal(types.SubscriptionStatusCancelled, cancelledSub.SubscriptionStatus)
+	})
+
+	s.Run("verify_addon_line_items_terminated_on_cancel", func() {
+		// Setup: Create subscription with addon line items
+		now := time.Now().UTC()
+		addonID := "addon_line_item_term"
+		priceID := "price_line_item_term"
+		lineItemID := "li_addon_term"
+
+		testSub := &subscription.Subscription{
+			ID:                 "sub_addon_line_item_term",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		// Create the addon line item directly in the line item store
+		addonLineItem := &subscription.SubscriptionLineItem{
+			ID:             lineItemID,
+			SubscriptionID: testSub.ID,
+			CustomerID:     s.testData.customer.ID,
+			EntityID:       addonID,
+			EntityType:     types.SubscriptionLineItemEntityTypeAddon,
+			PriceID:        priceID,
+			PriceType:      types.PRICE_TYPE_FIXED,
+			Currency:       "usd",
+			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence: types.InvoiceCadenceAdvance,
+			DisplayName:    "Test Addon",
+			Quantity:       decimal.NewFromInt(1),
+			StartDate:      now,
+			EnvironmentID:  types.GetEnvironmentID(ctx),
+			BaseModel:      types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, addonLineItem))
+
+		// Create addon association
+		createAddonWithPrice(addonID, priceID)
+
+		startDate := now
+		_, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Get the line item directly by ID to verify it exists
+		lineItemBefore, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, lineItemID)
+		s.NoError(err)
+		s.NotNil(lineItemBefore, "Should have addon line item before cancellation")
+		s.True(lineItemBefore.EndDate.IsZero(), "Line item should not have end_date before cancellation")
+
+		// Cancel subscription
+		_, err = s.service.CancelSubscription(ctx, testSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            "test_line_item_termination",
+		})
+		s.NoError(err)
+
+		// Get addon line item after cancellation
+		lineItemAfter, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, lineItemID)
+		s.NoError(err)
+		s.NotNil(lineItemAfter)
+
+		// Verify line item has end_date set
+		s.False(lineItemAfter.EndDate.IsZero(), "Addon line item should have end_date set after subscription cancellation")
+	})
+
+	s.Run("verify_cancellation_reason_propagated_to_addon", func() {
+		// Setup
+		now := time.Now().UTC()
+		testSub := &subscription.Subscription{
+			ID:                 "sub_addon_reason_prop",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		addonID := "addon_reason_prop"
+		createAddonWithPrice(addonID, "price_reason_prop")
+
+		startDate := now
+		association, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Cancel with specific reason
+		customReason := "Customer requested downgrade"
+		_, err = s.service.CancelSubscription(ctx, testSub.ID, &dto.CancelSubscriptionRequest{
+			CancellationType:  types.CancellationTypeImmediate,
+			ProrationBehavior: types.ProrationBehaviorNone,
+			Reason:            customReason,
+		})
+		s.NoError(err)
+
+		// Verify reason is propagated
+		updatedAssociation, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, association.ID)
+		s.NoError(err)
+		s.Contains(updatedAssociation.CancellationReason, customReason, "Addon cancellation reason should contain the subscription cancellation reason")
+	})
+}
+
+// TestRemoveAddonFromSubscription tests the addon removal functionality
+func (s *SubscriptionServiceSuite) TestRemoveAddonFromSubscription() {
+	ctx := s.GetContext()
+
+	// Helper to create an addon with a price
+	createAddonWithPrice := func(addonID, priceID string) {
+		subService := s.service.(*subscriptionService)
+		a := &addon.Addon{
+			ID:          addonID,
+			LookupKey:   addonID,
+			Name:        "Test Addon " + addonID,
+			Description: "Test Addon Description",
+			Type:        types.AddonTypeOnetime,
+			BaseModel:   types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(subService.AddonRepo.Create(ctx, a))
+
+		p := &price.Price{
+			ID:                 priceID,
+			Amount:             decimal.NewFromFloat(10.00),
+			Currency:           "usd",
+			EntityType:         types.PRICE_ENTITY_TYPE_ADDON,
+			EntityID:           addonID,
+			Type:               types.PRICE_TYPE_FIXED,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+			BillingCadence:     types.BILLING_CADENCE_RECURRING,
+			InvoiceCadence:     types.InvoiceCadenceAdvance,
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().PriceRepo.Create(ctx, p))
+	}
+
+	s.Run("remove_addon_schedules_termination_at_period_end", func() {
+		// Setup
+		now := time.Now().UTC()
+		periodEnd := now.Add(6 * 24 * time.Hour)
+		testSub := &subscription.Subscription{
+			ID:                 "sub_remove_addon_schedule",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		addonID := "addon_remove_schedule"
+		createAddonWithPrice(addonID, "price_remove_schedule")
+
+		startDate := now
+		association, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Remove addon
+		err = s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+			AddonAssociationID: association.ID,
+			Reason:             "User requested removal",
+		})
+		s.NoError(err)
+
+		// Verify addon association has end_date set
+		updatedAssociation, err := s.GetStores().AddonAssociationRepo.GetByID(ctx, association.ID)
+		s.NoError(err)
+		s.NotNil(updatedAssociation.EndDate, "Addon association should have end_date set")
+		s.Equal(periodEnd.Unix(), updatedAssociation.EndDate.Unix(), "Addon end_date should be set to subscription period end")
+		s.Equal("User requested removal", updatedAssociation.CancellationReason)
+	})
+
+	s.Run("remove_addon_terminates_line_items", func() {
+		// Setup
+		now := time.Now().UTC()
+		addonID := "addon_remove_li"
+		priceID := "price_remove_li"
+		lineItemID := "li_addon_remove_li"
+		periodEnd := now.Add(6 * 24 * time.Hour)
+
+		testSub := &subscription.Subscription{
+			ID:                 "sub_remove_addon_li",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   periodEnd,
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		// Create the addon line item directly in the line item store
+		addonLineItem := &subscription.SubscriptionLineItem{
+			ID:             lineItemID,
+			SubscriptionID: testSub.ID,
+			CustomerID:     s.testData.customer.ID,
+			EntityID:       addonID,
+			EntityType:     types.SubscriptionLineItemEntityTypeAddon,
+			PriceID:        priceID,
+			PriceType:      types.PRICE_TYPE_FIXED,
+			Currency:       "usd",
+			BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+			InvoiceCadence: types.InvoiceCadenceAdvance,
+			DisplayName:    "Test Addon",
+			Quantity:       decimal.NewFromInt(1),
+			StartDate:      now,
+			EnvironmentID:  types.GetEnvironmentID(ctx),
+			BaseModel:      types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionLineItemRepo.Create(ctx, addonLineItem))
+
+		createAddonWithPrice(addonID, priceID)
+
+		startDate := now
+		association, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Verify line item exists before removal
+		lineItemBefore, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, lineItemID)
+		s.NoError(err)
+		s.NotNil(lineItemBefore, "Should have addon line item before removal")
+		s.True(lineItemBefore.EndDate.IsZero(), "Line item should not have end_date before removal")
+
+		// Remove addon
+		err = s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+			AddonAssociationID: association.ID,
+		})
+		s.NoError(err)
+
+		// Get line item after removal
+		lineItemAfter, err := s.GetStores().SubscriptionLineItemRepo.Get(ctx, lineItemID)
+		s.NoError(err)
+		s.NotNil(lineItemAfter)
+
+		// Line item should have end_date set
+		s.False(lineItemAfter.EndDate.IsZero(), "Line item should have end_date set after addon removal")
+	})
+
+	s.Run("cannot_remove_already_scheduled_addon", func() {
+		// Setup
+		now := time.Now().UTC()
+		testSub := &subscription.Subscription{
+			ID:                 "sub_remove_addon_double",
+			CustomerID:         s.testData.customer.ID,
+			PlanID:             s.testData.plan.ID,
+			SubscriptionStatus: types.SubscriptionStatusActive,
+			StartDate:          now.Add(-30 * 24 * time.Hour),
+			CurrentPeriodStart: now.Add(-24 * time.Hour),
+			CurrentPeriodEnd:   now.Add(6 * 24 * time.Hour),
+			BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+			BillingPeriodCount: 1,
+			Currency:           "usd",
+			BaseModel:          types.GetDefaultBaseModel(ctx),
+		}
+		s.NoError(s.GetStores().SubscriptionRepo.CreateWithLineItems(ctx, testSub, []*subscription.SubscriptionLineItem{}))
+
+		addonID := "addon_remove_double"
+		createAddonWithPrice(addonID, "price_remove_double")
+
+		startDate := now
+		association, err := s.service.AddAddonToSubscription(ctx, testSub.ID, &dto.AddAddonToSubscriptionRequest{
+			AddonID:   addonID,
+			StartDate: &startDate,
+		})
+		s.NoError(err)
+
+		// Remove addon first time
+		err = s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+			AddonAssociationID: association.ID,
+		})
+		s.NoError(err)
+
+		// Try to remove again
+		err = s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+			AddonAssociationID: association.ID,
+		})
+		s.Error(err)
+		s.Contains(err.Error(), "already scheduled to be removed")
+	})
+
+	s.Run("remove_addon_invalid_association_id", func() {
+		err := s.service.RemoveAddonFromSubscription(ctx, &dto.RemoveAddonRequest{
+			AddonAssociationID: "non_existent_id",
+		})
+		s.Error(err)
+	})
+}
