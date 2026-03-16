@@ -9,6 +9,7 @@ import (
 
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/config"
+	"github.com/flexprice/flexprice/internal/domain/events/transform"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
@@ -627,6 +628,116 @@ func (h *EventsHandler) ReprocessEventsInternal(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, result)
+}
+
+// @Summary Bulk ingest raw events
+// @ID ingestRawEventsBulk
+// @Description Accepts an array of raw Bento/VAPI billing entry payloads, transforms them using the standard
+// @Description BentoToEvent transformer, and publishes each to the events topic. This is the API equivalent of
+// @Description publishing to the raw_events Kafka topic and having the raw_event_consumption consumer process them.
+// @Tags Events
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param event body dto.RawBulkIngestEventRequest true "Raw event data array"
+// @Success 202 {object} map[string]interface{} "Processing summary"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /events/raw/bulk [post]
+func (h *EventsHandler) RawBulkIngestEvent(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req dto.RawBulkIngestEventRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.log.Error("Failed to bind JSON", "error", err)
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request payload").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	if err := req.Validate(); err != nil {
+		c.Error(err)
+		return
+	}
+
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	successCount := 0
+	skipCount := 0
+	errorCount := 0
+	var firstError string
+
+	for i, rawPayload := range req.Data {
+		// Transform using the same logic as raw_event_consumption consumer
+		transformedEvent, err := transform.TransformBentoToEvent(
+			string(rawPayload),
+			tenantID,
+			environmentID,
+		)
+
+		if err != nil {
+			errorCount++
+			if firstError == "" {
+				firstError = err.Error()
+			}
+			h.log.Warnw("raw bulk ingest: transformation error",
+				"batch_position", i+1,
+				"error", err.Error(),
+			)
+			continue
+		}
+
+		if transformedEvent == nil {
+			skipCount++
+			continue
+		}
+
+		// Publish via the standard event service (same path as POST /events)
+		ingestReq := &dto.IngestEventRequest{
+			EventName:          transformedEvent.EventName,
+			EventID:            transformedEvent.ID,
+			ExternalCustomerID: transformedEvent.ExternalCustomerID,
+			Timestamp:          transformedEvent.Timestamp,
+			Source:             transformedEvent.Source,
+			Properties:         transformedEvent.Properties,
+		}
+
+		if err := h.eventService.CreateEvent(ctx, ingestReq); err != nil {
+			errorCount++
+			if firstError == "" {
+				firstError = err.Error()
+			}
+			h.log.Errorw("raw bulk ingest: failed to publish event",
+				"event_id", transformedEvent.ID,
+				"batch_position", i+1,
+				"error", err.Error(),
+			)
+			continue
+		}
+
+		successCount++
+	}
+
+	h.log.Infow("raw bulk ingest completed",
+		"total", len(req.Data),
+		"success", successCount,
+		"skipped", skipCount,
+		"errors", errorCount,
+	)
+
+	result := gin.H{
+		"message":       "Raw events processed",
+		"total":         len(req.Data),
+		"success_count": successCount,
+		"skip_count":    skipCount,
+		"error_count":   errorCount,
+	}
+	if firstError != "" {
+		result["first_error"] = firstError
+	}
+
+	c.JSON(http.StatusAccepted, result)
 }
 
 func (h *EventsHandler) ReprocessRawEvents(c *gin.Context) {

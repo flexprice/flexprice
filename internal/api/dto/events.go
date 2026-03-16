@@ -2,6 +2,7 @@ package dto
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -40,6 +41,17 @@ type BulkIngestEventRequest struct {
 }
 
 func (r *BulkIngestEventRequest) Validate() error {
+	return validator.ValidateRequest(r)
+}
+
+// RawBulkIngestEventRequest represents the request body for POST /events/raw/bulk
+// It accepts an array of raw Bento/VAPI billing entry payloads which will be
+// transformed using the same logic as the raw_event_consumption Kafka consumer.
+type RawBulkIngestEventRequest struct {
+	Data []json.RawMessage `json:"data" validate:"required,min=1,max=1000"`
+}
+
+func (r *RawBulkIngestEventRequest) Validate() error {
 	return validator.ValidateRequest(r)
 }
 

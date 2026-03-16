@@ -142,6 +142,7 @@ func NewRouter(handlers Handlers, cfg *config.Configuration, logger *logger.Logg
 		{
 			events.POST("", permissionMW.RequirePermission("event", "write"), handlers.Events.IngestEvent)
 			events.POST("/bulk", permissionMW.RequirePermission("event", "write"), handlers.Events.BulkIngestEvent)
+			events.POST("/raw/bulk", permissionMW.RequirePermission("event", "write"), handlers.Events.RawBulkIngestEvent)
 			events.GET("", handlers.Events.GetEvents)
 			events.GET("/:id", handlers.Events.GetEventByID)
 			events.POST("/query", handlers.Events.QueryEvents)
