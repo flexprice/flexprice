@@ -1728,6 +1728,12 @@ func (s *subscriptionService) CancelSubscription(
 			}
 		}
 
+		// Step 7b: Cancel all addon associations and their line items
+		if err := s.cancelAddonsOnSubscriptionCancellation(ctx, subscription.ID, effectiveDate, req.Reason); err != nil {
+			logger.Errorw("failed to cancel addon associations", "error", err)
+			return err
+		}
+
 		// Step 8: Void future credit grants
 		// Step 8: Set credit grant end dates to effective cancellation date, then archive grants
 		creditGrantService := NewCreditGrantService(s.ServiceParams)
@@ -4088,6 +4094,110 @@ func (s *subscriptionService) RemoveAddonFromSubscription(ctx context.Context, r
 
 		return nil
 	})
+}
+
+// cancelAddonsOnSubscriptionCancellation cancels all active addon associations and their line items
+// when a subscription is cancelled. This sets the addon_status to cancelled, sets the end_date,
+// and terminates the associated line items.
+func (s *subscriptionService) cancelAddonsOnSubscriptionCancellation(ctx context.Context, subscriptionID string, effectiveDate time.Time, reason string) error {
+	logger := s.Logger.With(
+		zap.String("subscription_id", subscriptionID),
+		zap.Time("effective_date", effectiveDate),
+	)
+
+	// Get all active addon associations for this subscription
+	addonService := NewAddonService(s.ServiceParams)
+	activeAddons, err := addonService.GetActiveAddonAssociation(ctx, dto.GetActiveAddonAssociationRequest{
+		EntityID:   subscriptionID,
+		EntityType: types.AddonAssociationEntityTypeSubscription,
+	})
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to get active addon associations").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if activeAddons == nil || len(activeAddons.Items) == 0 {
+		logger.Debug("no active addon associations to cancel")
+		return nil
+	}
+
+	logger.Infow("cancelling addon associations for subscription",
+		"addon_count", len(activeAddons.Items))
+
+	cancellationReason := "Subscription cancelled"
+	if reason != "" {
+		cancellationReason = fmt.Sprintf("Subscription cancelled: %s", reason)
+	}
+
+	// Cancel each addon association and its line items
+	for _, addonResp := range activeAddons.Items {
+		association, err := s.AddonAssociationRepo.GetByID(ctx, addonResp.ID)
+		if err != nil {
+			logger.Warnw("failed to get addon association, skipping",
+				"addon_association_id", addonResp.ID,
+				"error", err)
+			continue
+		}
+
+		// Skip if already has end date (already scheduled for removal)
+		if association.EndDate != nil && !association.EndDate.IsZero() {
+			logger.Debugw("addon association already has end date, skipping",
+				"addon_association_id", association.ID,
+				"end_date", association.EndDate)
+			continue
+		}
+
+		// Update addon association to cancelled status
+		association.AddonStatus = types.AddonStatusCancelled
+		association.CancellationReason = cancellationReason
+		association.CancelledAt = lo.ToPtr(effectiveDate)
+		association.EndDate = lo.ToPtr(effectiveDate)
+
+		if err := s.AddonAssociationRepo.Update(ctx, association); err != nil {
+			logger.Errorw("failed to update addon association",
+				"addon_association_id", association.ID,
+				"error", err)
+			return ierr.WithError(err).
+				WithHintf("Failed to cancel addon association %s", association.ID).
+				Mark(ierr.ErrDatabase)
+		}
+
+		// Terminate all line items for this addon
+		lineItemFilter := types.NewSubscriptionLineItemFilter()
+		lineItemFilter.SubscriptionIDs = []string{subscriptionID}
+		lineItemFilter.EntityIDs = []string{association.AddonID}
+		lineItemFilter.EntityType = lo.ToPtr(types.SubscriptionLineItemEntityTypeAddon)
+
+		lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+		if err != nil {
+			logger.Warnw("failed to get line items for addon, skipping line item termination",
+				"addon_id", association.AddonID,
+				"error", err)
+			continue
+		}
+
+		deleteReq := dto.DeleteSubscriptionLineItemRequest{EffectiveFrom: lo.ToPtr(effectiveDate)}
+		for _, lineItem := range lineItems {
+			// Skip already terminated line items
+			if !lineItem.EndDate.IsZero() {
+				continue
+			}
+			if _, err := s.DeleteSubscriptionLineItem(ctx, lineItem.ID, deleteReq); err != nil {
+				logger.Warnw("failed to terminate line item for addon",
+					"line_item_id", lineItem.ID,
+					"addon_id", association.AddonID,
+					"error", err)
+				// Continue with other line items
+			}
+		}
+
+		logger.Infow("cancelled addon association",
+			"addon_association_id", association.ID,
+			"addon_id", association.AddonID)
+	}
+
+	return nil
 }
 
 // createLineItemFromPrice creates a subscription line item from a price for addon additions
