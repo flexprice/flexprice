@@ -106,3 +106,26 @@ func (ps *InMemoryPubSub) ClearMessages() {
 
 	ps.messages = make(map[string][]*message.Message)
 }
+
+// AsPublisher returns a message.Publisher adapter for use with webhook publisher
+func (ps *InMemoryPubSub) AsPublisher() message.Publisher {
+	return &inMemoryPublisherAdapter{ps: ps}
+}
+
+// inMemoryPublisherAdapter adapts InMemoryPubSub to watermill's message.Publisher interface
+type inMemoryPublisherAdapter struct {
+	ps *InMemoryPubSub
+}
+
+func (a *inMemoryPublisherAdapter) Publish(topic string, messages ...*message.Message) error {
+	for _, msg := range messages {
+		if err := a.ps.Publish(context.Background(), topic, msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *inMemoryPublisherAdapter) Close() error {
+	return a.ps.Close()
+}

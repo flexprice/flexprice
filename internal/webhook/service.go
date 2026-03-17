@@ -1,7 +1,6 @@
 package webhook
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/flexprice/flexprice/internal/config"
@@ -42,22 +41,9 @@ func NewWebhookService(
 	}
 }
 
-// RegisterHandler registers the webhook handler with the router
-func (s *WebhookService) RegisterHandler(router *pubsubRouter.Router) {
-	s.handler.RegisterHandler(router)
-}
-
-// Start starts the webhook service
-func (s *WebhookService) Start(ctx context.Context) error {
-	if !s.config.Webhook.Enabled {
-		s.logger.Info("webhook service disabled")
-		return nil
-	}
-
-	s.logger.Debug("starting webhook service")
-
-	s.logger.Info("webhook service started successfully")
-	return nil
+// RegisterHandler registers the webhook handler with the router (consumer side)
+func (s *WebhookService) RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration) {
+	s.handler.RegisterHandler(router, cfg)
 }
 
 // Stop stops the webhook service
