@@ -80,7 +80,7 @@ func (s *InvoiceActivities) FinalizeInvoiceActivity(
 
 	invoiceService := service.NewInvoiceService(s.serviceParams)
 
-	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID); err != nil {
+	if err := invoiceService.FinalizeInvoice(ctx, input.InvoiceID, nil); err != nil {
 		s.logger.Errorw("failed to finalize invoice",
 			"invoice_id", input.InvoiceID,
 			"error", err)

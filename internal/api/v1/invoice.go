@@ -151,7 +151,7 @@ func (h *InvoiceHandler) FinalizeInvoice(c *gin.Context) {
 		return
 	}
 
-	if err := h.invoiceService.FinalizeInvoice(c.Request.Context(), id); err != nil {
+	if err := h.invoiceService.FinalizeInvoice(c.Request.Context(), id, nil); err != nil {
 		h.logger.Errorw("failed to finalize invoice", "error", err, "invoice_id", id)
 		c.Error(err)
 		return

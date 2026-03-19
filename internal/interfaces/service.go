@@ -40,6 +40,8 @@ type PaymentService interface {
 // InvoiceService defines the interface for invoice operations
 type InvoiceService interface {
 	CreateInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
+	CreateDraftInvoice(ctx context.Context, req dto.CreateInvoiceRequest) (*dto.InvoiceResponse, error)
+	FinalizeInvoice(ctx context.Context, id string, req *dto.CreateInvoiceRequest) error
 	GetInvoice(ctx context.Context, id string) (*dto.InvoiceResponse, error)
 	ListInvoices(ctx context.Context, filter *types.InvoiceFilter) (*dto.ListInvoicesResponse, error)
 	UpdateInvoice(ctx context.Context, id string, req dto.UpdateInvoiceRequest) (*dto.InvoiceResponse, error)

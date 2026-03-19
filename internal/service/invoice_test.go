@@ -590,7 +590,7 @@ func (s *InvoiceServiceSuite) TestFinalizeInvoice() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := s.service.FinalizeInvoice(s.GetContext(), tt.id)
+			err := s.service.FinalizeInvoice(s.GetContext(), tt.id, nil)
 			if tt.wantErr {
 				s.Error(err)
 				return
