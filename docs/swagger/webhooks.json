@@ -1,0 +1,1313 @@
+{
+  "webhooks": {
+    "invoice.create.drafted": {
+      "post": {
+        "summary": "Invoice Drafted",
+        "operationId": "webhookInvoiceCreateDrafted",
+        "description": "Fired when a new invoice is created in draft status.",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "invoice.update.finalized": {
+      "post": {
+        "summary": "Invoice Finalized",
+        "operationId": "webhookInvoiceUpdateFinalized",
+        "description": "Fired when an invoice is finalized and locked for payment.",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "invoice.update.voided": {
+      "post": {
+        "summary": "Invoice Voided",
+        "operationId": "webhookInvoiceUpdateVoided",
+        "description": "Fired when an invoice is voided (e.g. order cancelled or duplicate).",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "invoice.update.payment": {
+      "post": {
+        "summary": "Invoice Payment Updated",
+        "operationId": "webhookInvoiceUpdatePayment",
+        "description": "Fired when an invoice payment status changes.",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "invoice.update": {
+      "post": {
+        "summary": "Invoice Updated",
+        "operationId": "webhookInvoiceUpdate",
+        "description": "Fired when an invoice is updated.",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "invoice.payment.overdue": {
+      "post": {
+        "summary": "Invoice Payment Overdue",
+        "operationId": "webhookInvoicePaymentOverdue",
+        "description": "Fired when an invoice payment is overdue past the due date.",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InvoiceWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "invoice.communication.triggered": {
+      "post": {
+        "summary": "Invoice Communication Triggered",
+        "operationId": "webhookInvoiceCommunicationTriggered",
+        "description": "Fired when an invoice communication (e.g. email notification) is triggered.",
+        "tags": ["Webhook Events - Invoice"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunicationWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.created": {
+      "post": {
+        "summary": "Subscription Created",
+        "operationId": "webhookSubscriptionCreated",
+        "description": "Fired when a new subscription is created.",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.draft.created": {
+      "post": {
+        "summary": "Subscription Draft Created",
+        "operationId": "webhookSubscriptionDraftCreated",
+        "description": "Fired when a new draft subscription is created (not yet activated).",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.activated": {
+      "post": {
+        "summary": "Subscription Activated",
+        "operationId": "webhookSubscriptionActivated",
+        "description": "Fired when a draft subscription is activated.",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.updated": {
+      "post": {
+        "summary": "Subscription Updated",
+        "operationId": "webhookSubscriptionUpdated",
+        "description": "Fired when a subscription is updated (e.g. quantity, billing anchor, or metadata changes).",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.paused": {
+      "post": {
+        "summary": "Subscription Paused",
+        "operationId": "webhookSubscriptionPaused",
+        "description": "Fired when a subscription is paused.",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.cancelled": {
+      "post": {
+        "summary": "Subscription Cancelled",
+        "operationId": "webhookSubscriptionCancelled",
+        "description": "Fired when a subscription is cancelled (immediately or end-of-period).",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.resumed": {
+      "post": {
+        "summary": "Subscription Resumed",
+        "operationId": "webhookSubscriptionResumed",
+        "description": "Fired when a paused subscription is resumed.",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.renewal.due": {
+      "post": {
+        "summary": "Subscription Renewal Due",
+        "operationId": "webhookSubscriptionRenewalDue",
+        "description": "Fired when a subscription renewal is upcoming (cron-driven).",
+        "tags": ["Webhook Events - Subscription"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.phase.created": {
+      "post": {
+        "summary": "Subscription Phase Created",
+        "operationId": "webhookSubscriptionPhaseCreated",
+        "description": "Fired when a new subscription phase is created.",
+        "tags": ["Webhook Events - Subscription Phase"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionPhaseWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.phase.updated": {
+      "post": {
+        "summary": "Subscription Phase Updated",
+        "operationId": "webhookSubscriptionPhaseUpdated",
+        "description": "Fired when a subscription phase is updated.",
+        "tags": ["Webhook Events - Subscription Phase"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionPhaseWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "subscription.phase.deleted": {
+      "post": {
+        "summary": "Subscription Phase Deleted",
+        "operationId": "webhookSubscriptionPhaseDeleted",
+        "description": "Fired when a subscription phase is deleted.",
+        "tags": ["Webhook Events - Subscription Phase"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscriptionPhaseWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "customer.created": {
+      "post": {
+        "summary": "Customer Created",
+        "operationId": "webhookCustomerCreated",
+        "description": "Fired when a new customer is created.",
+        "tags": ["Webhook Events - Customer"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "customer.updated": {
+      "post": {
+        "summary": "Customer Updated",
+        "operationId": "webhookCustomerUpdated",
+        "description": "Fired when a customer is updated.",
+        "tags": ["Webhook Events - Customer"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "customer.deleted": {
+      "post": {
+        "summary": "Customer Deleted",
+        "operationId": "webhookCustomerDeleted",
+        "description": "Fired when a customer is deleted.",
+        "tags": ["Webhook Events - Customer"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "payment.created": {
+      "post": {
+        "summary": "Payment Created",
+        "operationId": "webhookPaymentCreated",
+        "description": "Fired when a new payment is created.",
+        "tags": ["Webhook Events - Payment"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "payment.updated": {
+      "post": {
+        "summary": "Payment Updated",
+        "operationId": "webhookPaymentUpdated",
+        "description": "Fired when a payment is updated.",
+        "tags": ["Webhook Events - Payment"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "payment.success": {
+      "post": {
+        "summary": "Payment Succeeded",
+        "operationId": "webhookPaymentSuccess",
+        "description": "Fired when a payment succeeds.",
+        "tags": ["Webhook Events - Payment"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "payment.failed": {
+      "post": {
+        "summary": "Payment Failed",
+        "operationId": "webhookPaymentFailed",
+        "description": "Fired when a payment fails.",
+        "tags": ["Webhook Events - Payment"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "payment.pending": {
+      "post": {
+        "summary": "Payment Pending",
+        "operationId": "webhookPaymentPending",
+        "description": "Fired when a payment is pending processing.",
+        "tags": ["Webhook Events - Payment"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "feature.created": {
+      "post": {
+        "summary": "Feature Created",
+        "operationId": "webhookFeatureCreated",
+        "description": "Fired when a new feature is created.",
+        "tags": ["Webhook Events - Feature"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "feature.updated": {
+      "post": {
+        "summary": "Feature Updated",
+        "operationId": "webhookFeatureUpdated",
+        "description": "Fired when a feature is updated.",
+        "tags": ["Webhook Events - Feature"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "feature.deleted": {
+      "post": {
+        "summary": "Feature Deleted",
+        "operationId": "webhookFeatureDeleted",
+        "description": "Fired when a feature is deleted.",
+        "tags": ["Webhook Events - Feature"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeatureWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "feature.wallet_balance.alert": {
+      "post": {
+        "summary": "Feature Wallet Balance Alert",
+        "operationId": "webhookFeatureWalletBalanceAlert",
+        "description": "Fired when a feature's associated wallet balance crosses an alert threshold.",
+        "tags": ["Webhook Events - Feature"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "entitlement.created": {
+      "post": {
+        "summary": "Entitlement Created",
+        "operationId": "webhookEntitlementCreated",
+        "description": "Fired when a new entitlement is created.",
+        "tags": ["Webhook Events - Entitlement"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntitlementWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "entitlement.updated": {
+      "post": {
+        "summary": "Entitlement Updated",
+        "operationId": "webhookEntitlementUpdated",
+        "description": "Fired when an entitlement is updated.",
+        "tags": ["Webhook Events - Entitlement"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntitlementWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "entitlement.deleted": {
+      "post": {
+        "summary": "Entitlement Deleted",
+        "operationId": "webhookEntitlementDeleted",
+        "description": "Fired when an entitlement is deleted.",
+        "tags": ["Webhook Events - Entitlement"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntitlementWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.created": {
+      "post": {
+        "summary": "Wallet Created",
+        "operationId": "webhookWalletCreated",
+        "description": "Fired when a new wallet is created.",
+        "tags": ["Webhook Events - Wallet"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.updated": {
+      "post": {
+        "summary": "Wallet Updated",
+        "operationId": "webhookWalletUpdated",
+        "description": "Fired when a wallet is updated.",
+        "tags": ["Webhook Events - Wallet"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.terminated": {
+      "post": {
+        "summary": "Wallet Terminated",
+        "operationId": "webhookWalletTerminated",
+        "description": "Fired when a wallet is terminated.",
+        "tags": ["Webhook Events - Wallet"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.transaction.created": {
+      "post": {
+        "summary": "Wallet Transaction Created",
+        "operationId": "webhookWalletTransactionCreated",
+        "description": "Fired when a new wallet transaction is created (top-up, deduction, etc.).",
+        "tags": ["Webhook Events - Wallet"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransactionWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.credit_balance.dropped": {
+      "post": {
+        "summary": "Wallet Credit Balance Dropped",
+        "operationId": "webhookWalletCreditBalanceDropped",
+        "description": "Fired when a wallet's credit balance drops below an alert threshold.",
+        "tags": ["Webhook Events - Wallet Alert"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.credit_balance.recovered": {
+      "post": {
+        "summary": "Wallet Credit Balance Recovered",
+        "operationId": "webhookWalletCreditBalanceRecovered",
+        "description": "Fired when a wallet's credit balance recovers above an alert threshold.",
+        "tags": ["Webhook Events - Wallet Alert"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.ongoing_balance.dropped": {
+      "post": {
+        "summary": "Wallet Ongoing Balance Dropped",
+        "operationId": "webhookWalletOngoingBalanceDropped",
+        "description": "Fired when a wallet's ongoing balance drops below an alert threshold.",
+        "tags": ["Webhook Events - Wallet Alert"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "wallet.ongoing_balance.recovered": {
+      "post": {
+        "summary": "Wallet Ongoing Balance Recovered",
+        "operationId": "webhookWalletOngoingBalanceRecovered",
+        "description": "Fired when a wallet's ongoing balance recovers above an alert threshold.",
+        "tags": ["Webhook Events - Wallet Alert"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WalletWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "credit_note.created": {
+      "post": {
+        "summary": "Credit Note Created",
+        "operationId": "webhookCreditNoteCreated",
+        "description": "Fired when a new credit note is created.",
+        "tags": ["Webhook Events - Credit Note"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditNoteWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    },
+    "credit_note.updated": {
+      "post": {
+        "summary": "Credit Note Updated",
+        "operationId": "webhookCreditNoteUpdated",
+        "description": "Fired when a credit note is updated.",
+        "tags": ["Webhook Events - Credit Note"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditNoteWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook received successfully"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "WebhookEnvelope": {
+        "type": "object",
+        "description": "The top-level wrapper sent to your webhook endpoint. The `payload` field contains the event-specific data.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique webhook event ID",
+            "example": "evt_01HX7B2Z3Q4R5S6T7U8V9W0XYZ"
+          },
+          "event_name": {
+            "type": "string",
+            "description": "The event type (e.g. invoice.create.drafted, subscription.created)",
+            "example": "invoice.create.drafted"
+          },
+          "tenant_id": {
+            "type": "string",
+            "description": "Tenant ID"
+          },
+          "environment_id": {
+            "type": "string",
+            "description": "Environment ID"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User who triggered the event (if applicable)"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the event occurred"
+          },
+          "payload": {
+            "type": "object",
+            "description": "Event-specific payload (see individual webhook event schemas)"
+          }
+        },
+        "required": ["id", "event_name", "tenant_id", "environment_id", "timestamp", "payload"]
+      },
+      "InvoiceWebhookPayload": {
+        "type": "object",
+        "description": "Payload for invoice webhook events (invoice.create.drafted, invoice.update.*, invoice.payment.overdue)",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "invoice.create.drafted",
+              "invoice.update.finalized",
+              "invoice.update.voided",
+              "invoice.update.payment",
+              "invoice.update",
+              "invoice.payment.overdue"
+            ]
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/dto.InvoiceResponse"
+          }
+        },
+        "required": ["event_type", "invoice"]
+      },
+      "CommunicationWebhookPayload": {
+        "type": "object",
+        "description": "Payload for communication webhook events (invoice.communication.triggered)",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": ["invoice.communication.triggered"]
+          },
+          "invoice": {
+            "$ref": "#/components/schemas/dto.InvoiceResponse"
+          }
+        },
+        "required": ["event_type", "invoice"]
+      },
+      "SubscriptionWebhookPayload": {
+        "type": "object",
+        "description": "Payload for subscription webhook events",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "subscription.created",
+              "subscription.draft.created",
+              "subscription.activated",
+              "subscription.updated",
+              "subscription.paused",
+              "subscription.cancelled",
+              "subscription.resumed",
+              "subscription.renewal.due"
+            ]
+          },
+          "subscription": {
+            "$ref": "#/components/schemas/dto.SubscriptionResponse"
+          }
+        },
+        "required": ["event_type", "subscription"]
+      },
+      "SubscriptionPhaseWebhookPayload": {
+        "type": "object",
+        "description": "Payload for subscription phase webhook events",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "subscription.phase.created",
+              "subscription.phase.updated",
+              "subscription.phase.deleted"
+            ]
+          },
+          "phase": {
+            "$ref": "#/components/schemas/dto.SubscriptionPhaseResponse"
+          }
+        },
+        "required": ["event_type", "phase"]
+      },
+      "CustomerWebhookPayload": {
+        "type": "object",
+        "description": "Payload for customer webhook events",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "customer.created",
+              "customer.updated",
+              "customer.deleted"
+            ]
+          },
+          "customer": {
+            "$ref": "#/components/schemas/dto.CustomerResponse"
+          }
+        },
+        "required": ["event_type", "customer"]
+      },
+      "PaymentWebhookPayload": {
+        "type": "object",
+        "description": "Payload for payment webhook events",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "payment.created",
+              "payment.updated",
+              "payment.success",
+              "payment.failed",
+              "payment.pending"
+            ]
+          },
+          "payment": {
+            "$ref": "#/components/schemas/dto.PaymentResponse"
+          }
+        },
+        "required": ["event_type", "payment"]
+      },
+      "FeatureWebhookPayload": {
+        "type": "object",
+        "description": "Payload for feature webhook events (feature.created, feature.updated, feature.deleted)",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "feature.created",
+              "feature.updated",
+              "feature.deleted"
+            ]
+          },
+          "feature": {
+            "$ref": "#/components/schemas/dto.FeatureResponse"
+          }
+        },
+        "required": ["event_type", "feature"]
+      },
+      "AlertWebhookPayload": {
+        "type": "object",
+        "description": "Payload for alert webhook events (feature.wallet_balance.alert). Includes the feature, wallet, and customer context along with alert details.",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": ["feature.wallet_balance.alert"]
+          },
+          "alert_type": {
+            "type": "string",
+            "description": "Type of alert triggered"
+          },
+          "alert_status": {
+            "type": "string",
+            "description": "Current status of the alert"
+          },
+          "feature": {
+            "$ref": "#/components/schemas/dto.FeatureResponse"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/dto.WalletResponse"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/dto.CustomerResponse"
+          }
+        },
+        "required": ["event_type", "alert_type", "alert_status"]
+      },
+      "EntitlementWebhookPayload": {
+        "type": "object",
+        "description": "Payload for entitlement webhook events",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "entitlement.created",
+              "entitlement.updated",
+              "entitlement.deleted"
+            ]
+          },
+          "entitlement": {
+            "$ref": "#/components/schemas/dto.EntitlementResponse"
+          }
+        },
+        "required": ["event_type", "entitlement"]
+      },
+      "WalletWebhookPayload": {
+        "type": "object",
+        "description": "Payload for wallet webhook events and wallet balance alert events. Alert fields are populated for wallet.credit_balance.* and wallet.ongoing_balance.* events.",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "wallet.created",
+              "wallet.updated",
+              "wallet.terminated",
+              "wallet.credit_balance.dropped",
+              "wallet.credit_balance.recovered",
+              "wallet.ongoing_balance.dropped",
+              "wallet.ongoing_balance.recovered"
+            ]
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/dto.WalletResponse"
+          },
+          "customer": {
+            "$ref": "#/components/schemas/dto.CustomerResponse"
+          },
+          "alert": {
+            "$ref": "#/components/schemas/WalletAlertInfo"
+          }
+        },
+        "required": ["event_type", "wallet"]
+      },
+      "TransactionWebhookPayload": {
+        "type": "object",
+        "description": "Payload for wallet transaction webhook events (wallet.transaction.created)",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": ["wallet.transaction.created"]
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/dto.WalletTransactionResponse"
+          },
+          "wallet": {
+            "$ref": "#/components/schemas/dto.WalletResponse"
+          }
+        },
+        "required": ["event_type", "transaction", "wallet"]
+      },
+      "WalletAlertInfo": {
+        "type": "object",
+        "description": "Details about a wallet balance alert",
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "Current alert state (e.g. triggered, recovered)"
+          },
+          "current_balance": {
+            "type": "string",
+            "description": "Current wallet balance at time of alert"
+          },
+          "credit_balance": {
+            "type": "string",
+            "description": "Current credit balance at time of alert"
+          },
+          "alert_type": {
+            "type": "string",
+            "description": "Type of alert"
+          },
+          "alert_settings": {
+            "$ref": "#/components/schemas/types.AlertSettings"
+          }
+        },
+        "required": ["state", "current_balance", "credit_balance"]
+      },
+      "CreditNoteWebhookPayload": {
+        "type": "object",
+        "description": "Payload for credit note webhook events",
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "description": "The event type",
+            "enum": [
+              "credit_note.created",
+              "credit_note.updated"
+            ]
+          },
+          "credit_note": {
+            "$ref": "#/components/schemas/dto.CreditNoteResponse"
+          }
+        },
+        "required": ["event_type", "credit_note"]
+      }
+    }
+  }
+}

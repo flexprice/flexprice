@@ -7,7 +7,7 @@ install-swag:
 	@which swag > /dev/null || (go install github.com/swaggo/swag/cmd/swag@latest)
 
 .PHONY: swagger
-swagger: swagger-2-0 swagger-3-0
+swagger: swagger-2-0 swagger-3-0 swagger-webhooks
 
 .PHONY: swagger-2-0
 swagger-2-0: install-swag
@@ -36,6 +36,11 @@ swagger-3-0: install-swag
 	@echo "Conversion complete. Output saved to docs/swagger/swagger-3-0.json"
 	@node scripts/fix_swagger_internal_types.mjs
 	@./scripts/update_swagger_servers.sh
+
+.PHONY: swagger-webhooks
+swagger-webhooks:
+	@echo "Merging webhook definitions into OpenAPI 3.0 spec..."
+	@python3 scripts/merge_webhooks_swagger.py
 
 .PHONY: swagger-fix-refs
 swagger-fix-refs:
