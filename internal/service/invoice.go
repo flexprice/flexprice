@@ -71,6 +71,11 @@ type InvoiceService interface {
 	// If usage > 0: adds line items, assigns an invoice number, returns skipped=false.
 	// If usage == 0: marks invoice as SKIPPED, returns skipped=true.
 	CalculateAndPopulateInvoice(ctx context.Context, id string) (skipped bool, err error)
+
+	// CreateDraftInvoiceForSubscription creates a zero-dollar placeholder draft invoice
+	// for the given billing period. Idempotent: returns existing invoice if one exists
+	// for the subscription and period (DRAFT, FINALIZED, or SKIPPED).
+	CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error)
 }
 
 type invoiceService struct {
@@ -1854,6 +1859,166 @@ func (s *invoiceService) ReconcilePaymentStatus(ctx context.Context, id string, 
 	return nil
 }
 
+// CreateDraftInvoiceForSubscription creates a zero-dollar placeholder draft invoice
+// for the given billing period. No usage calculation, line-item population, due date,
+// or invoice number assignment happens here; all of that is deferred to
+// CalculateAndPopulateInvoice (called by CalculateInvoiceActivity in ProcessInvoiceWorkflow).
+// Idempotent: if an invoice already exists for this subscription and period (e.g. on workflow retry),
+// returns that invoice instead of creating a duplicate.
+func (s *invoiceService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
+	exists, err := s.InvoiceRepo.ExistsForPeriod(ctx, subscriptionID, period.Start, period.End)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		filter := &types.InvoiceFilter{
+			QueryFilter:    &types.QueryFilter{Limit: lo.ToPtr(1)},
+			SubscriptionID: subscriptionID,
+			PeriodStartGTE: &period.Start,
+			PeriodStartLTE: &period.Start,
+			PeriodEndGTE:   &period.End,
+			PeriodEndLTE:   &period.End,
+			// Return DRAFT, FINALIZED, or SKIPPED; exclude VOIDED so the caller
+			// gets a valid invoice. SKIPPED is included to avoid creating duplicates.
+			InvoiceStatus: []types.InvoiceStatus{
+				types.InvoiceStatusDraft,
+				types.InvoiceStatusFinalized,
+				types.InvoiceStatusSkipped,
+			},
+		}
+		invs, err := s.InvoiceRepo.List(ctx, filter)
+		if err != nil {
+			return nil, err
+		}
+		if len(invs) > 0 {
+			return dto.NewInvoiceResponse(invs[0]), nil
+		}
+	}
+
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	inv, err := s.createDraftInvoiceOnly(ctx, subscriptionID, period, sub)
+	if err != nil {
+		// On idempotency race, another goroutine created the invoice; fetch and return it
+		if ierr.IsAlreadyExists(err) {
+			filter := &types.InvoiceFilter{
+				QueryFilter:    &types.QueryFilter{Limit: lo.ToPtr(1)},
+				SubscriptionID: subscriptionID,
+				PeriodStartGTE: &period.Start,
+				PeriodStartLTE: &period.Start,
+				PeriodEndGTE:   &period.End,
+				PeriodEndLTE:   &period.End,
+				InvoiceStatus: []types.InvoiceStatus{
+					types.InvoiceStatusDraft,
+					types.InvoiceStatusFinalized,
+					types.InvoiceStatusSkipped,
+				},
+			}
+			invs, listErr := s.InvoiceRepo.List(ctx, filter)
+			if listErr != nil || len(invs) == 0 {
+				return nil, err
+			}
+			return dto.NewInvoiceResponse(invs[0]), nil
+		}
+		return nil, err
+	}
+	return inv, nil
+}
+
+// createDraftInvoiceOnly creates a minimal zero-dollar draft invoice placeholder.
+// No credits, coupons, taxes, line items, or invoice number. CalculateAndPopulateInvoice
+// will populate everything later. Used only for subscription draft creation.
+func (s *invoiceService) createDraftInvoiceOnly(ctx context.Context, subscriptionID string, period dto.Period, sub *subscription.Subscription) (*dto.InvoiceResponse, error) {
+	var resp *dto.InvoiceResponse
+
+	err := s.DB.WithTx(ctx, func(tx context.Context) error {
+		// Idempotency key (same as CreateInvoice for subscription invoices)
+		params := map[string]interface{}{
+			"tenant_id":       types.GetTenantID(tx),
+			"environment_id": types.GetEnvironmentID(tx),
+			"customer_id":    sub.GetInvoicingCustomerID(),
+			"subscription_id": subscriptionID,
+			"period_start":   period.Start,
+			"period_end":     period.End,
+		}
+		idempKey := s.idempGen.GenerateKey(idempotency.ScopeSubscriptionInvoice, params)
+
+		existing, err := s.InvoiceRepo.GetByIdempotencyKey(tx, idempKey)
+		if err != nil && !ierr.IsNotFound(err) {
+			return ierr.WithError(err).WithHint("failed to check idempotency").Mark(ierr.ErrDatabase)
+		}
+		if existing != nil {
+			return ierr.NewError("invoice already exists").WithHint("invoice already exists").Mark(ierr.ErrAlreadyExists)
+		}
+
+		// Billing sequence for BillingReason (SubscriptionCreate vs SubscriptionCycle)
+		seq, err := s.InvoiceRepo.GetNextBillingSequence(ctx, subscriptionID)
+		if err != nil {
+			return err
+		}
+		billingSeq := seq
+
+		billingReason := string(types.InvoiceBillingReasonSubscriptionCycle)
+		if billingSeq == 1 {
+			billingReason = string(types.InvoiceBillingReasonSubscriptionCreate)
+		}
+
+		emptyStr := ""
+		inv := &invoice.Invoice{
+			ID:                        types.GenerateUUIDWithPrefix(types.UUID_PREFIX_INVOICE),
+			CustomerID:                sub.GetInvoicingCustomerID(),
+			SubscriptionID:            lo.ToPtr(sub.ID),
+			InvoiceType:               types.InvoiceTypeSubscription,
+			InvoiceStatus:             types.InvoiceStatusDraft,
+			PaymentStatus:             types.PaymentStatusPending,
+			Currency:                  sub.Currency,
+			AmountDue:                 decimal.Zero,
+			AmountPaid:                decimal.Zero,
+			AmountRemaining:           decimal.Zero,
+			Subtotal:                  decimal.Zero,
+			Total:                     decimal.Zero,
+			TotalTax:                  decimal.Zero,
+			TotalDiscount:             decimal.Zero,
+			TotalPrepaidCreditsApplied: decimal.Zero,
+			AdjustmentAmount:          decimal.Zero,
+			RefundedAmount:            decimal.Zero,
+			InvoiceNumber:             &emptyStr,
+			IdempotencyKey:            &idempKey,
+			BillingSequence:           &billingSeq,
+			BillingReason:             billingReason,
+			BillingPeriod:             lo.ToPtr(string(sub.BillingPeriod)),
+			PeriodStart:               &period.Start,
+			PeriodEnd:                 &period.End,
+			Description:               "",
+			LineItems:                 []*invoice.InvoiceLineItem{},
+			BaseModel:                 types.GetDefaultBaseModel(tx),
+		}
+
+		if inv.EnvironmentID == "" {
+			inv.EnvironmentID = types.GetEnvironmentID(tx)
+		}
+
+		if err := inv.Validate(); err != nil {
+			return err
+		}
+
+		if err := s.InvoiceRepo.CreateWithLineItems(tx, inv); err != nil {
+			return err
+		}
+
+		resp = dto.NewInvoiceResponse(inv)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto.CreateSubscriptionInvoiceRequest, paymentParams *dto.PaymentParameters, flowType types.InvoiceFlowType, isDraftSubscription bool) (*dto.InvoiceResponse, *subscription.Subscription, error) {
 	s.Logger.Infow("creating subscription invoice",
 		"subscription_id", req.SubscriptionID,
@@ -1864,8 +2029,6 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 	if err := req.Validate(); err != nil {
 		return nil, nil, err
 	}
-
-	billingService := NewBillingService(s.ServiceParams)
 
 	// Get subscription with line items
 	subscription, _, err := s.SubRepo.GetWithLineItems(ctx, req.SubscriptionID)
@@ -1884,37 +2047,32 @@ func (s *invoiceService) CreateSubscriptionInvoice(ctx context.Context, req *dto
 			Mark(ierr.ErrValidation)
 	}
 
-	// Prepare invoice request using billing service
-	invoiceReq, err := billingService.PrepareSubscriptionInvoiceRequest(ctx,
-		subscription,
-		req.PeriodStart,
-		req.PeriodEnd,
-		req.ReferencePoint,
-	)
+	// Create draft first (idempotent; returns existing if same period)
+	draft, err := s.CreateDraftInvoiceForSubscription(ctx, req.SubscriptionID, dto.Period{Start: req.PeriodStart, End: req.PeriodEnd})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Check if the invoice is zeroAmountInvoice
-	if invoiceReq.Subtotal.IsZero() {
+	// Populate draft (handles zero usage by SkipInvoice)
+	skipped, err := s.CalculateAndPopulateInvoice(ctx, draft.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if skipped {
 		return nil, subscription, nil
 	}
 
-	s.Logger.Infow("prepared invoice request for subscription",
-		"invoice_request", invoiceReq)
+	// Process the invoice with payment behavior, passing subscription to avoid extra DB call
+	if err := s.ProcessDraftInvoice(ctx, draft.ID, paymentParams, subscription, flowType); err != nil {
+		return nil, nil, err
+	}
 
-	// Create the invoice
-	inv, err := s.CreateInvoice(ctx, *invoiceReq)
+	// Fetch and return the finalized invoice
+	inv, err := s.InvoiceRepo.Get(ctx, draft.ID)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// Process the invoice with payment behavior, passing subscription to avoid extra DB call
-	if err := s.ProcessDraftInvoice(ctx, inv.ID, paymentParams, subscription, flowType); err != nil {
-		return nil, nil, err
-	}
-
-	return inv, subscription, nil
+	return dto.NewInvoiceResponse(inv), subscription, nil
 }
 
 func (s *invoiceService) GetPreviewInvoice(ctx context.Context, req dto.GetPreviewInvoiceRequest) (*dto.InvoiceResponse, error) {

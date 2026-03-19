@@ -5757,72 +5757,11 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 }
 
 // CreateDraftInvoiceForSubscription creates a zero-dollar placeholder draft invoice
-// for the given billing period. No usage calculation, line-item population, due date,
-// or invoice number assignment happens here; all of that is deferred to
-// CalculateAndPopulateInvoice (called by CalculateInvoiceActivity in ProcessInvoiceWorkflow).
-// Idempotent: if an invoice already exists for this subscription and period (e.g. on workflow retry),
-// returns that invoice instead of creating a duplicate.
+// for the given billing period. Delegates to the invoice service which owns
+// invoice creation logic.
 func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
-	exists, err := s.InvoiceRepo.ExistsForPeriod(ctx, subscriptionID, period.Start, period.End)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		filter := &types.InvoiceFilter{
-			QueryFilter:    &types.QueryFilter{Limit: lo.ToPtr(1)},
-			SubscriptionID: subscriptionID,
-			PeriodStartGTE: &period.Start,
-			PeriodStartLTE: &period.Start,
-			PeriodEndGTE:   &period.End,
-			PeriodEndLTE:   &period.End,
-			// Only return actionable invoices (DRAFT or FINALIZED); exclude
-			// VOIDED and SKIPPED so the caller doesn't get a stale invoice
-			// that can't be processed further.
-			InvoiceStatus: []types.InvoiceStatus{
-				types.InvoiceStatusDraft,
-				types.InvoiceStatusFinalized,
-			},
-		}
-		invs, err := s.InvoiceRepo.List(ctx, filter)
-		if err != nil {
-			return nil, err
-		}
-		if len(invs) > 0 {
-			return dto.NewInvoiceResponse(invs[0]), nil
-		}
-	}
-
-	sub, err := s.SubRepo.Get(ctx, subscriptionID)
-	if err != nil {
-		return nil, err
-	}
-
 	invoiceService := NewInvoiceService(s.ServiceParams)
-
-	invoiceReq := dto.CreateInvoiceRequest{
-		CustomerID:        sub.GetInvoicingCustomerID(),
-		SubscriptionID:    lo.ToPtr(sub.ID),
-		InvoiceType:       types.InvoiceTypeSubscription,
-		InvoiceStatus:     lo.ToPtr(types.InvoiceStatusDraft),
-		PaymentStatus:     lo.ToPtr(types.PaymentStatusPending),
-		Currency:          sub.Currency,
-		AmountDue:         decimal.Zero,
-		Total:             decimal.Zero,
-		Subtotal:          decimal.Zero,
-		BillingPeriod:     lo.ToPtr(string(sub.BillingPeriod)),
-		PeriodStart:       &period.Start,
-		PeriodEnd:         &period.End,
-		BillingReason:     types.InvoiceBillingReasonSubscriptionCycle,
-		SkipInvoiceNumber: true,
-		SuppressWebhook:   true, // Webhook is sent when draft is populated by CalculateAndPopulateInvoice
-	}
-
-	inv, err := invoiceService.CreateInvoice(ctx, invoiceReq)
-	if err != nil {
-		return nil, err
-	}
-
-	return inv, nil
+	return invoiceService.CreateDraftInvoiceForSubscription(ctx, subscriptionID, period)
 }
 
 // subscriptionOriginalState holds the original subscription state before cancellation
