@@ -6,4 +6,402 @@ overlay: 1.0.0
 info:
   title: Flexprice SDK and MCP customizations
   version: 2.0.0
-actions: []
+actions:
+  # =============================================================================
+  # MCP Scope Classifications
+  # Read-only operations are marked with scope "read"
+  # Write operations (create, update, delete, actions) are marked with scope "write"
+  # =============================================================================
+
+  # -----------------------------------------------------------------------------
+  # Customers - Read Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/customers/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/customers/external/{external_id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/customers/search"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/customers/usage"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/customers/{id}/entitlements"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/customers/{id}/grants/upcoming"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/customers/{id}/invoices/summary"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+
+  # -----------------------------------------------------------------------------
+  # Customers - Write Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/customers"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/customers"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/customers/{id}"].delete
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+
+  # -----------------------------------------------------------------------------
+  # Events - Read Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/events/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/events/query"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/events/analytics"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/events/usage"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/events/usage/meter"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/events/huggingface-inference"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+
+  # -----------------------------------------------------------------------------
+  # Events - Write Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/events"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/events/bulk"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+
+  # -----------------------------------------------------------------------------
+  # Invoices - Read Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/invoices/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/invoices/search"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/invoices/preview"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/invoices/{id}/pdf"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+
+  # -----------------------------------------------------------------------------
+  # Invoices - Write Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/invoices"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}/finalize"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}/void"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}/recalculate"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}/payment"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}/payment/attempt"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/invoices/{id}/comms/trigger"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+
+  # -----------------------------------------------------------------------------
+  # Plans - Read Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/plans/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/plans/search"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+
+  # -----------------------------------------------------------------------------
+  # Plans - Write Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/plans"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/plans/{id}"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/plans/{id}"].delete
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/plans/{id}/clone"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/plans/{id}/sync/subscriptions"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+
+  # -----------------------------------------------------------------------------
+  # Prices - Read Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/prices/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/prices/search"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/prices/lookup/{lookup_key}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+
+  # -----------------------------------------------------------------------------
+  # Prices - Write Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/prices"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/prices/bulk"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/prices/{id}"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/prices/{id}"].delete
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+
+  # -----------------------------------------------------------------------------
+  # Subscriptions - Read Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/subscriptions/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/{id}/v2"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/search"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/usage"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/{id}/entitlements"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/{id}/grants/upcoming"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/{id}/addons/associations"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/{id}/pauses"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/subscriptions/{id}/change/preview"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/v1/subscription-schedules"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/v1/subscription-schedules/{id}"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+  - target: $.paths["/v1/subscriptions/{subscription_id}/schedules"].get
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - read
+
+  # -----------------------------------------------------------------------------
+  # Subscriptions - Write Operations
+  # -----------------------------------------------------------------------------
+  - target: $.paths["/subscriptions"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}/activate"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}/cancel"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}/pause"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}/resume"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}/change/execute"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/addon"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/addon"].delete
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/{id}/lineitems"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/lineitems/{id}"].put
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/subscriptions/lineitems/{id}"].delete
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
+  - target: $.paths["/v1/subscriptions/schedules/{schedule_id}/cancel"].post
+    update:
+      x-speakeasy-mcp:
+        scopes:
+          - write
