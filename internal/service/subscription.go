@@ -228,7 +228,8 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			item.PlanDisplayName = plan.Name
 			item.CustomerID = sub.CustomerID
 			item.Currency = sub.Currency
-			item.BillingPeriod = sub.BillingPeriod
+			item.BillingPeriod = price.BillingPeriod
+			item.BillingPeriodCount = price.BillingPeriodCount
 			item.InvoiceCadence = price.InvoiceCadence
 			item.TrialPeriod = price.TrialPeriod
 			// Set phase ID if phases exist
@@ -275,6 +276,11 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 	}
 
 	sub.LineItems = lineItems
+
+	// Multi-cadence validations: interval alignment and proration mutual exclusion
+	if err := s.validateMultiCadence(sub); err != nil {
+		return nil, err
+	}
 
 	// Ensure subscription-level and line-item-level commitments don't conflict
 	if err := s.validateSubscriptionLevelCommitment(sub); err != nil {
@@ -1641,6 +1647,17 @@ func (s *subscriptionService) CancelSubscription(
 			WithHint("The subscription is already cancelled").
 			WithReportableDetails(map[string]interface{}{
 				"subscription_id": subscriptionID,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	// Reject proration for subscriptions with mixed billing periods
+	if req.ProrationBehavior == types.ProrationBehaviorCreateProrations && subscription.HasMixedBillingPeriods() {
+		return nil, ierr.NewError("proration is not supported for subscriptions with mixed billing periods").
+			WithHint("Set proration_behavior to 'none' when cancelling a subscription with different billing periods").
+			WithReportableDetails(map[string]interface{}{
+				"subscription_id":    subscriptionID,
+				"proration_behavior": req.ProrationBehavior,
 			}).
 			Mark(ierr.ErrValidation)
 	}
@@ -3018,14 +3035,18 @@ func createChargeResponse(priceObj *price.Price, quantity decimal.Decimal, cost 
 	}
 }
 
-// filterValidPricesForSubscription filters prices that are valid for a subscription
-// This utility function can be used for both plans and addons
+// filterValidPricesForSubscription filters prices that are valid for a subscription.
+// A price is valid when its currency matches and its billing period is equal to or a
+// valid multiple of the subscription billing period (enabling multi-cadence subscriptions).
 func filterValidPricesForSubscription(prices []*dto.PriceResponse, subscription *subscription.Subscription) []*dto.PriceResponse {
 	var validPrices []*dto.PriceResponse
 	for _, p := range prices {
-		if types.IsMatchingCurrency(p.Price.Currency, subscription.Currency) &&
-			p.Price.BillingPeriod == subscription.BillingPeriod &&
-			p.Price.BillingPeriodCount == subscription.BillingPeriodCount {
+		if !types.IsMatchingCurrency(p.Price.Currency, subscription.Currency) {
+			continue
+		}
+		periodOK := p.Price.BillingPeriod == subscription.BillingPeriod ||
+			types.IsBillingPeriodMultiple(p.Price.BillingPeriod, subscription.BillingPeriod)
+		if periodOK {
 			validPrices = append(validPrices, p)
 		}
 	}

@@ -1,12 +1,15 @@
 package service
 
 import (
+	"strings"
 	"time"
 
+	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/api/dto"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
+	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/testutil"
 	"github.com/flexprice/flexprice/internal/types"
@@ -519,6 +522,61 @@ func (s *SubscriptionChangeServiceTestSuite) TestExecuteSubscriptionChangeValida
 
 	_, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, "invalid-sub-id", req)
 	assert.Error(s.T(), err)
+}
+
+// TestMultiCadence_ProrationMutualExclusion_PlanChange implements PRD E.3.3: M only -> M+Q with create_prorations must fail.
+func (s *SubscriptionChangeServiceTestSuite) TestMultiCadence_ProrationMutualExclusion_PlanChange() {
+	ctx := s.GetContext()
+
+	// Plan M only (single monthly price)
+	planM := s.createTestPlan("Plan M", decimal.NewFromFloat(10.00))
+	cust := s.createTestCustomer()
+	testSub := s.createTestSubscription(planM.ID, cust.ID)
+
+	// Plan M+Q (monthly + quarterly) - create via repo so we have two prices
+	planMQ := &plan.Plan{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:        "Plan M+Q",
+		Description: "Multi-cadence",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(s.T(), s.GetStores().PlanRepo.Create(ctx, planMQ))
+	priceM := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(s.T(), s.GetStores().PriceRepo.Create(ctx, priceM))
+	priceQ := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	require.NoError(s.T(), s.GetStores().PriceRepo.Create(ctx, priceQ))
+
+	req := s.createSubscriptionChangeRequest(planMQ.ID, types.ProrationBehaviorCreateProrations)
+	_, err := s.subscriptionChangeService.ExecuteSubscriptionChange(ctx, testSub.ID, req)
+	require.Error(s.T(), err, "E.3.3: change to mixed-cadence plan with create_prorations must fail")
+	assert.True(s.T(), ierr.IsValidation(err), "error should be validation")
+	assert.True(s.T(), strings.Contains(err.Error(), "mixed billing periods"), "error message should mention mixed billing periods")
 }
 
 func (s *SubscriptionChangeServiceTestSuite) TestCalculatePeriodEndHelper() {
@@ -1228,6 +1286,8 @@ func (s *SubscriptionChangeServiceTestSuite) TestFixedToUsagePlanTransition() {
 // 	}
 // }
 
+// TestSubscriptionChangeServiceTestSuite runs the subscription change suite.
+// Uncomment to run; requires integration deps (e.g. IntegrationFactory) for full subscription creation.
 // func TestSubscriptionChangeServiceTestSuite(t *testing.T) {
 // 	suite.Run(t, new(SubscriptionChangeServiceTestSuite))
 // }

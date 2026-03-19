@@ -5384,3 +5384,155 @@ func (s *SubscriptionServiceSuite) TestUpdateBillingPeriodsWithInvoicingCustomer
 	s.True(updatedSub.CurrentPeriodStart.After(periodStart), "Period start should be updated")
 	s.True(updatedSub.CurrentPeriodEnd.After(periodEnd), "Period end should be updated")
 }
+
+// TestMultiCadence_ProrationMutualExclusion_Creation implements PRD E.3.1: subscription creation with mixed billing periods.
+// Mixed periods + none -> success; mixed periods + create_prorations -> error.
+func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Creation() {
+	ctx := s.GetContext()
+	s.ClearStores()
+	s.setupTestData()
+
+	// Plan with monthly + quarterly fixed prices (multi-cadence)
+	planMQ := &plan.Plan{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:        "Plan M+Q",
+		Description: "Monthly and Quarterly",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, planMQ))
+
+	priceM := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceM))
+	priceQ := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceQ))
+
+	start := time.Now().UTC().Truncate(time.Millisecond)
+	reqNone := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             planMQ.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+	}
+	resp, err := s.service.CreateSubscription(ctx, reqNone)
+	s.NoError(err, "E.3.1: mixed periods + none should succeed")
+	s.NotNil(resp)
+	s.NotEmpty(resp.ID)
+
+	// Same plan, create_prorations -> must fail
+	reqProration := reqNone
+	reqProration.ProrationBehavior = types.ProrationBehaviorCreateProrations
+	_, err2 := s.service.CreateSubscription(ctx, reqProration)
+	s.Require().Error(err2, "E.3.1: mixed periods + create_prorations must fail")
+	s.True(ierr.IsValidation(err2), "error should be validation")
+	s.Contains(err2.Error(), "mixed billing periods", "error message should mention mixed billing periods")
+}
+
+// TestMultiCadence_ProrationMutualExclusion_Cancellation implements PRD E.3.2: cancel with mixed periods + create_prorations -> error.
+func (s *SubscriptionServiceSuite) TestMultiCadence_ProrationMutualExclusion_Cancellation() {
+	ctx := s.GetContext()
+	s.ClearStores()
+	s.setupTestData()
+
+	planMQ := &plan.Plan{
+		ID:          types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:        "Plan M+Q Cancel",
+		BaseModel:   types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PlanRepo.Create(ctx, planMQ))
+	priceM := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(10),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceM))
+	priceQ := &price.Price{
+		ID:                 types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE),
+		Amount:             decimal.NewFromInt(100),
+		Currency:           "usd",
+		EntityType:         types.PRICE_ENTITY_TYPE_PLAN,
+		EntityID:           planMQ.ID,
+		Type:               types.PRICE_TYPE_FIXED,
+		BillingPeriod:      types.BILLING_PERIOD_QUARTER,
+		BillingPeriodCount: 1,
+		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		InvoiceCadence:     types.InvoiceCadenceArrear,
+		BaseModel:          types.GetDefaultBaseModel(ctx),
+	}
+	s.NoError(s.GetStores().PriceRepo.Create(ctx, priceQ))
+
+	start := time.Now().UTC().Truncate(time.Millisecond)
+	createReq := dto.CreateSubscriptionRequest{
+		CustomerID:         s.testData.customer.ID,
+		PlanID:             planMQ.ID,
+		StartDate:          &start,
+		Currency:           "usd",
+		BillingCadence:     types.BILLING_CADENCE_RECURRING,
+		BillingPeriod:      types.BILLING_PERIOD_MONTHLY,
+		BillingPeriodCount: 1,
+		BillingCycle:       types.BillingCycleAnniversary,
+		ProrationBehavior:  types.ProrationBehaviorNone,
+	}
+	resp, err := s.service.CreateSubscription(ctx, createReq)
+	s.NoError(err)
+	s.Require().NotNil(resp)
+
+	cancelReq := &dto.CancelSubscriptionRequest{
+		CancellationType:   types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorCreateProrations,
+	}
+	cancelReq.Validate()
+	_, errCancel := s.service.CancelSubscription(ctx, resp.ID, cancelReq)
+	s.Require().Error(errCancel, "E.3.2: cancel with mixed + create_prorations must fail")
+	s.True(ierr.IsValidation(errCancel))
+	s.Contains(errCancel.Error(), "mixed billing periods")
+
+	// Same sub, cancel with none -> success (need a new sub since we didn't cancel the first with none first - actually first cancel failed so sub is still active)
+	cancelReqNone := &dto.CancelSubscriptionRequest{
+		CancellationType:   types.CancellationTypeImmediate,
+		ProrationBehavior: types.ProrationBehaviorNone,
+	}
+	cancelReqNone.Validate()
+	_, errCancelNone := s.service.CancelSubscription(ctx, resp.ID, cancelReqNone)
+	s.NoError(errCancelNone, "E.3.2: cancel with mixed + none should succeed")
+}
