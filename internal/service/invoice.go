@@ -821,6 +821,8 @@ func (s *invoiceService) VoidInvoice(ctx context.Context, id string, req dto.Inv
 	return nil
 }
 
+// this brother assumes that invoice has been populated
+
 func (s *invoiceService) ProcessDraftInvoice(ctx context.Context, id string, paymentParams *dto.PaymentParameters, sub *subscription.Subscription, flowType types.InvoiceFlowType) error {
 	inv, err := s.InvoiceRepo.Get(ctx, id)
 	if err != nil {

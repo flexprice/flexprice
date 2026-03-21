@@ -63,7 +63,7 @@ func ProcessSubscriptionBillingWorkflow(
 		RetryPolicy: &temporal.RetryPolicy{
 			InitialInterval:    time.Second * 10,
 			BackoffCoefficient: 2.0,
-			MaximumInterval:    time.Minute * 5,
+			MaximumInterval:    time.Minute * 10,
 			MaximumAttempts:    1,
 		},
 	}

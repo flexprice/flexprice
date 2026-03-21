@@ -414,6 +414,8 @@ func (s *billingService) CalculateUsageCharges(
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
 	// filter out line items that are not active
+	// ye wo bahar se jo filter karke bheje the classify etc invoiced already check laga
+	// ye wo wale line items hain
 	for _, item := range sub.LineItems {
 		if item.PriceType != types.PRICE_TYPE_USAGE {
 			continue
@@ -1823,6 +1825,9 @@ func (s *billingService) calculateAllFeatureUsageCharges(
 	}, nil
 }
 
+//  isko jo bhi bahar se line items aaye -> isne unko classify kia
+// and kuch bhi skip hoga nhi from usage arrear items -> we are not checking line item level start ends
+// we are mostly concerned with invoiced already cases here
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -2070,6 +2075,7 @@ func (s *billingService) validatePeriodAgainstSubscriptionEndDate(
 
 	return nil
 }
+
 func (s *billingService) checkIfChargeInvoiced(
 	invoice *invoice.Invoice,
 	charge *subscription.SubscriptionLineItem,
@@ -2303,6 +2309,7 @@ func (s *billingService) calculateFeatureUsageCharges(
 }
 
 // CalculateCharges calculates charges for the given line items and period
+// isko bhi bahar se line items aaye -> classified and filtered	
 func (s *billingService) CalculateCharges(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -2321,6 +2328,8 @@ func (s *billingService) CalculateCharges(
 
 	if includeUsage {
 		subscriptionService := NewSubscriptionService(s.ServiceParams)
+		// iske andar jaa ke humne wapas ye ensure kia ki line items filtered by periodStart and periodEnd
+		// aaj nahi hota hitesh ki PR me hoga ye
 		usage, err = subscriptionService.GetUsageBySubscription(ctx, &dto.GetUsageBySubscriptionRequest{
 			SubscriptionID: sub.ID,
 			StartTime:      periodStart,

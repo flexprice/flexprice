@@ -5960,10 +5960,20 @@ func (s *subscriptionService) CalculateBillingPeriods(ctx context.Context, subsc
 
 // Create Draft Invoice for Subscription
 func (s *subscriptionService) CreateDraftInvoiceForSubscription(ctx context.Context, subscriptionID string, period dto.Period) (*dto.InvoiceResponse, error) {
-	sub, _, err := s.SubRepo.GetWithLineItems(ctx, subscriptionID)
+	sub, err := s.SubRepo.Get(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
 	}
+
+	lineItemFilter := types.NewNoLimitSubscriptionLineItemFilter()
+	lineItemFilter.SubscriptionIDs = []string{sub.ID}
+	lineItemFilter.ActiveFilter = true
+	lineItemFilter.CurrentPeriodStart = &period.Start
+	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
+	if err != nil {
+		return nil, err
+	}
+	sub.LineItems = lineItems
 
 	billingService := NewBillingService(s.ServiceParams)
 	invoiceService := NewInvoiceService(s.ServiceParams)
