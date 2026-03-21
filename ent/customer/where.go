@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/flexprice/flexprice/ent/predicate"
 )
 
@@ -1322,6 +1323,52 @@ func ParentCustomerIDEqualFold(v string) predicate.Customer {
 // ParentCustomerIDContainsFold applies the ContainsFold predicate on the "parent_customer_id" field.
 func ParentCustomerIDContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldParentCustomerID, v))
+}
+
+// HasSubscriptionsWithUsage applies the HasEdge predicate on the "subscriptions_with_usage" edge.
+func HasSubscriptionsWithUsage() predicate.Customer {
+	return predicate.Customer(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, SubscriptionsWithUsageTable, SubscriptionsWithUsagePrimaryKey...),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSubscriptionsWithUsageWith applies the HasEdge predicate on the "subscriptions_with_usage" edge with a given conditions (other predicates).
+func HasSubscriptionsWithUsageWith(preds ...predicate.Subscription) predicate.Customer {
+	return predicate.Customer(func(s *sql.Selector) {
+		step := newSubscriptionsWithUsageStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasLineItemsWithUsage applies the HasEdge predicate on the "line_items_with_usage" edge.
+func HasLineItemsWithUsage() predicate.Customer {
+	return predicate.Customer(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, LineItemsWithUsageTable, LineItemsWithUsagePrimaryKey...),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasLineItemsWithUsageWith applies the HasEdge predicate on the "line_items_with_usage" edge with a given conditions (other predicates).
+func HasLineItemsWithUsageWith(preds ...predicate.SubscriptionLineItem) predicate.Customer {
+	return predicate.Customer(func(s *sql.Selector) {
+		step := newLineItemsWithUsageStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

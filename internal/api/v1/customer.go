@@ -85,6 +85,30 @@ func (h *CustomerHandler) GetCustomer(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Get customer children
+// @ID getCustomerChildren
+// @Description Retrieve all child customers for a given parent customer
+// @Tags Customers
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Parent Customer ID"
+// @Success 200 {object} dto.ListCustomersResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Customer not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /customers/{id}/children [get]
+func (h *CustomerHandler) GetCustomerChildren(c *gin.Context) {
+	id := c.Param("id")
+
+	resp, err := h.service.GetCustomerChildren(c.Request.Context(), id)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *CustomerHandler) ListCustomers(c *gin.Context) {
 	var filter types.CustomerFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {

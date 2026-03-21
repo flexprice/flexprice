@@ -826,6 +826,7 @@ func (s *billingService) CalculateUsageCharges(
 				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
 				Metadata:         metadata,
 				CommitmentInfo:   commitmentInfo,
+				UsageCustomerIDs: item.EffectiveUsageCustomerIDs(sub),
 			})
 		}
 	}
@@ -1608,6 +1609,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				PeriodEnd:        lo.ToPtr(item.GetPeriodEnd(periodEnd)),
 				Metadata:         metadata,
 				CommitmentInfo:   commitmentInfo,
+				UsageCustomerIDs: item.EffectiveUsageCustomerIDs(sub),
 			})
 		}
 	}
@@ -1653,6 +1655,7 @@ func (s *billingService) CalculateFeatureUsageCharges(
 				PeriodStart:      lo.ToPtr(bc.item.GetPeriodStart(periodStart)),
 				PeriodEnd:        lo.ToPtr(bc.item.GetPeriodEnd(periodEnd)),
 				Metadata:         bc.metadata,
+				UsageCustomerIDs: bc.item.EffectiveUsageCustomerIDs(sub),
 			})
 			totalUsageCost = totalUsageCost.Add(roundedAmount)
 		}
@@ -2773,22 +2776,52 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		Features:   []*dto.AggregatedFeature{},
 	}
 
-	// 1. Get active subscriptions for the customer
-	subscriptionService := NewSubscriptionService(s.ServiceParams)
-	subscriptions, err := subscriptionService.ListByCustomerID(ctx, customerID)
-	if err != nil {
-		return nil, err
+	// 1. Resolve hierarchy if enabled
+	var targetCustomers []*customer.Customer
+	var err error
+
+	if req.IncludeChildren || len(req.ChildCustomerIDs) > 0 {
+		targetCustomers, _, err = s.resolveHierarchyCustomers(
+			ctx,
+			customerID,
+			req.IncludeChildren,
+			req.ChildCustomerIDs,
+		)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Single customer mode (existing behavior)
+		cust, err := s.CustomerRepo.Get(ctx, customerID)
+		if err != nil {
+			return nil, err
+		}
+		targetCustomers = []*customer.Customer{cust}
 	}
 
-	// Filter subscriptions if IDs are specified
+	// 2. Build list of customer IDs
+	customerIDs := make([]string, len(targetCustomers))
+	for i, c := range targetCustomers {
+		customerIDs[i] = c.ID
+	}
+
+	// 3. Fetch subscriptions where these customers are usage customers
+	subscriptionService := NewSubscriptionService(s.ServiceParams)
+	filter := types.NewSubscriptionFilter()
+	filter.UsageCustomerIDs = customerIDs
+	filter.SubscriptionStatus = []types.SubscriptionStatus{
+		types.SubscriptionStatusActive,
+		types.SubscriptionStatusTrialing,
+	}
+	filter.WithUsageCustomers = true
+
 	if len(req.SubscriptionIDs) > 0 {
-		filteredSubscriptions := make([]*subscription.Subscription, 0)
-		for _, sub := range subscriptions {
-			if lo.Contains(req.SubscriptionIDs, sub.ID) {
-				filteredSubscriptions = append(filteredSubscriptions, sub)
-			}
-		}
-		subscriptions = filteredSubscriptions
+		filter.SubscriptionIDs = req.SubscriptionIDs
+	}
+
+	subscriptions, err := s.SubRepo.List(ctx, filter)
+	if err != nil {
+		return nil, err
 	}
 
 	// Return empty response if no subscriptions found
@@ -2796,7 +2829,7 @@ func (s *billingService) GetCustomerEntitlements(ctx context.Context, customerID
 		return resp, nil
 	}
 
-	// Collect all entitlements from all subscriptions
+	// 4. Collect all entitlements from all subscriptions
 	allEntitlements := make([]*dto.EntitlementResponse, 0)
 
 	// Process each subscription to get its entitlements (including both plan and addon entitlements)
@@ -2838,10 +2871,35 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	subscriptionService := NewSubscriptionService(s.ServiceParams)
 	eventService := NewEventService(s.EventRepo, s.MeterRepo, s.EventPublisher, s.Logger, s.Config)
 
-	// get customer
-	customer, err := s.CustomerRepo.Get(ctx, customerID)
-	if err != nil {
-		return nil, err
+	// 0. Resolve hierarchy if enabled
+	var targetCustomers []*customer.Customer
+	var err error
+
+	if req.IncludeChildren || len(req.ChildCustomerIDs) > 0 {
+		targetCustomers, _, err = s.resolveHierarchyCustomers(
+			ctx,
+			customerID,
+			req.IncludeChildren,
+			req.ChildCustomerIDs,
+		)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Single customer mode (existing behavior)
+		c, err := s.CustomerRepo.Get(ctx, customerID)
+		if err != nil {
+			return nil, err
+		}
+		targetCustomers = []*customer.Customer{c}
+	}
+
+	// Build lists of customer IDs and external IDs
+	customerIDs := make([]string, len(targetCustomers))
+	externalCustomerIDs := make([]string, len(targetCustomers))
+	for i, c := range targetCustomers {
+		customerIDs[i] = c.ID
+		externalCustomerIDs[i] = c.ExternalID
 	}
 
 	// Convert feature lookup keys to IDs if provided
@@ -2859,10 +2917,12 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		}
 	}
 
-	// 1. Get customer entitlements first
+	// 1. Get customer entitlements first (now with hierarchy support)
 	entitlementsReq := &dto.GetCustomerEntitlementsRequest{
-		SubscriptionIDs: req.SubscriptionIDs,
-		FeatureIDs:      featureIDs,
+		SubscriptionIDs:  req.SubscriptionIDs,
+		FeatureIDs:       featureIDs,
+		IncludeChildren:  req.IncludeChildren,
+		ChildCustomerIDs: req.ChildCustomerIDs,
 	}
 
 	entitlements, err := s.GetCustomerEntitlements(ctx, customerID, entitlementsReq)
@@ -2885,6 +2945,12 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 	meterFeatureMap := make(map[string]string)
 	featureMeterMap := make(map[string]string) // feature ID -> meter ID
 	featureUsageResetPeriodMap := make(map[string]types.EntitlementUsageResetPeriod)
+
+	// Per-customer usage tracking for breakdown
+	var perCustomerUsage map[string]map[string]decimal.Decimal // feature_id -> customer_id -> usage
+	if req.IncludeBreakdown {
+		perCustomerUsage = make(map[string]map[string]decimal.Decimal)
+	}
 
 	// Collect unique subscription IDs and build feature maps
 	subscriptionIDs := make([]string, 0)
@@ -2950,12 +3016,13 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// Handle daily reset features: get today's usage from daily windows
 					meterID := featureMeterMap[featureID]
 					// Create usage request with daily window size for current billing period
+					// Use all customer IDs for aggregated usage
 					usageRequest := &dto.GetUsageByMeterRequest{
-						MeterID:            meterID,
-						ExternalCustomerID: customer.ExternalID,
-						StartTime:          sub.CurrentPeriodStart,
-						EndTime:            sub.CurrentPeriodEnd,
-						WindowSize:         types.WindowSizeDay,
+						MeterID:             meterID,
+						ExternalCustomerIDs: externalCustomerIDs,
+						StartTime:           sub.CurrentPeriodStart,
+						EndTime:             sub.CurrentPeriodEnd,
+						WindowSize:          types.WindowSizeDay,
 					}
 
 					// Get usage data with daily windows
@@ -2984,7 +3051,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 						s.Logger.DebugwCtx(ctx, "using daily usage for feature summary",
 							"customer_id", customerID,
-							"external_customer_id", customer.ExternalID,
+							"external_customer_ids", externalCustomerIDs,
 							"feature_id", featureID,
 							"meter_id", meterID,
 							"subscription_id", subscriptionID,
@@ -2996,18 +3063,50 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 							"total_daily_windows", len(usageResult.Results))
 					}
 					usageByFeature[featureID] = dailyUsage
+
+					// If breakdown requested, query per customer
+					if req.IncludeBreakdown {
+						if perCustomerUsage[featureID] == nil {
+							perCustomerUsage[featureID] = make(map[string]decimal.Decimal)
+						}
+						for _, cust := range targetCustomers {
+							perCustomerReq := &dto.GetUsageByMeterRequest{
+								MeterID:            meterID,
+								ExternalCustomerID: cust.ExternalID,
+								StartTime:          sub.CurrentPeriodStart,
+								EndTime:            sub.CurrentPeriodEnd,
+								WindowSize:         types.WindowSizeDay,
+							}
+							perCustomerResult, err := eventService.GetUsageByMeter(ctx, perCustomerReq)
+							if err != nil {
+								s.Logger.WarnwCtx(ctx, "failed to get per-customer daily usage",
+									"customer_id", cust.ID,
+									"feature_id", featureID,
+									"error", err)
+								continue
+							}
+							customerDailyUsage := decimal.Zero
+							if len(perCustomerResult.Results) > 0 {
+								lastBucket := perCustomerResult.Results[len(perCustomerResult.Results)-1]
+								if (lastBucket.WindowSize.After(todayStart) || lastBucket.WindowSize.Equal(todayStart)) && lastBucket.WindowSize.Before(todayEnd) {
+									customerDailyUsage = lastBucket.Value
+								}
+							}
+							perCustomerUsage[featureID][cust.ID] = customerDailyUsage
+						}
+					}
 				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_MONTHLY {
 					// Handle monthly reset features: get current month's usage from monthly windows
 					meterID := featureMeterMap[featureID]
 
 					// Create usage request for current month with monthly window size
 					usageRequest := &dto.GetUsageByMeterRequest{
-						MeterID:            meterID,
-						ExternalCustomerID: customer.ExternalID,
-						StartTime:          sub.CurrentPeriodStart,
-						EndTime:            sub.CurrentPeriodEnd,
-						WindowSize:         types.WindowSizeMonth,
-						BillingAnchor:      &sub.BillingAnchor,
+						MeterID:             meterID,
+						ExternalCustomerIDs: externalCustomerIDs,
+						StartTime:           sub.CurrentPeriodStart,
+						EndTime:             sub.CurrentPeriodEnd,
+						WindowSize:          types.WindowSizeMonth,
+						BillingAnchor:       &sub.BillingAnchor,
 					}
 
 					// Get usage data for current month
@@ -3045,7 +3144,7 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					s.Logger.DebugwCtx(ctx, "using monthly usage for feature summary",
 						"customer_id", customerID,
-						"external_customer_id", customer.ExternalID,
+						"external_customer_ids", externalCustomerIDs,
 						"feature_id", featureID,
 						"meter_id", meterID,
 						"subscription_id", subscriptionID,
@@ -3053,6 +3152,43 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 						"monthly_usage", monthlyUsage)
 
 					usageByFeature[featureID] = monthlyUsage
+
+					// If breakdown requested, query per customer
+					if req.IncludeBreakdown {
+						if perCustomerUsage[featureID] == nil {
+							perCustomerUsage[featureID] = make(map[string]decimal.Decimal)
+						}
+						for _, cust := range targetCustomers {
+							perCustomerReq := &dto.GetUsageByMeterRequest{
+								MeterID:            meterID,
+								ExternalCustomerID: cust.ExternalID,
+								StartTime:          sub.CurrentPeriodStart,
+								EndTime:            sub.CurrentPeriodEnd,
+								WindowSize:         types.WindowSizeMonth,
+								BillingAnchor:      &sub.BillingAnchor,
+							}
+							perCustomerResult, err := eventService.GetUsageByMeter(ctx, perCustomerReq)
+							if err != nil {
+								s.Logger.WarnwCtx(ctx, "failed to get per-customer monthly usage",
+									"customer_id", cust.ID,
+									"feature_id", featureID,
+									"error", err)
+								continue
+							}
+							customerMonthlyUsage := decimal.Zero
+							if len(perCustomerResult.Results) > 0 {
+								for _, result := range perCustomerResult.Results {
+									windowStart := result.WindowSize
+									windowEnd := windowStart.AddDate(0, 1, 0)
+									if (currentTime.Equal(windowStart) || currentTime.After(windowStart)) && currentTime.Before(windowEnd) {
+										customerMonthlyUsage = result.Value
+										break
+									}
+								}
+							}
+							perCustomerUsage[featureID][cust.ID] = customerMonthlyUsage
+						}
+					}
 				} else if resetPeriod == types.ENTITLEMENT_USAGE_RESET_PERIOD_NEVER {
 					// Handle never reset features: get cumulative usage from subscription start
 					meterID := featureMeterMap[featureID]
@@ -3060,10 +3196,10 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 					// For never reset features, calculate cumulative usage from subscription start to current period end
 					// This maintains consistency with the billing logic
 					totalUsageRequest := &dto.GetUsageByMeterRequest{
-						MeterID:            meterID,
-						ExternalCustomerID: customer.ExternalID,
-						StartTime:          sub.StartDate,
-						EndTime:            sub.CurrentPeriodEnd,
+						MeterID:             meterID,
+						ExternalCustomerIDs: externalCustomerIDs,
+						StartTime:           sub.StartDate,
+						EndTime:             sub.CurrentPeriodEnd,
 					}
 
 					totalUsageResult, err := eventService.GetUsageByMeter(ctx, totalUsageRequest)
@@ -3081,13 +3217,37 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 
 					s.Logger.DebugwCtx(ctx, "using cumulative usage for never reset feature summary",
 						"customer_id", customerID,
-						"external_customer_id", customer.ExternalID,
+						"external_customer_ids", externalCustomerIDs,
 						"feature_id", featureID,
 						"meter_id", meterID,
 						"subscription_id", subscriptionID,
 						"subscription_start", sub.StartDate,
 						"current_period_end", sub.CurrentPeriodEnd,
 						"total_cumulative_usage", totalUsageResult.Value)
+
+					// If breakdown requested, query per customer
+					if req.IncludeBreakdown {
+						if perCustomerUsage[featureID] == nil {
+							perCustomerUsage[featureID] = make(map[string]decimal.Decimal)
+						}
+						for _, cust := range targetCustomers {
+							perCustomerReq := &dto.GetUsageByMeterRequest{
+								MeterID:            meterID,
+								ExternalCustomerID: cust.ExternalID,
+								StartTime:          sub.StartDate,
+								EndTime:            sub.CurrentPeriodEnd,
+							}
+							perCustomerResult, err := eventService.GetUsageByMeter(ctx, perCustomerReq)
+							if err != nil {
+								s.Logger.WarnwCtx(ctx, "failed to get per-customer never reset usage",
+									"customer_id", cust.ID,
+									"feature_id", featureID,
+									"error", err)
+								continue
+							}
+							perCustomerUsage[featureID][cust.ID] = perCustomerResult.Value
+						}
+					}
 				}
 			}
 		}
@@ -3162,6 +3322,21 @@ func (s *billingService) GetCustomerUsageSummary(ctx context.Context, customerID
 		}
 
 		resp.Features = append(resp.Features, featureSummary)
+	}
+
+	// 7. Add per-customer breakdown if requested
+	if req.IncludeBreakdown && len(targetCustomers) > 1 {
+		resp.CustomerBreakdown = make([]*dto.CustomerUsageBreakdown, 0, len(targetCustomers))
+		for _, cust := range targetCustomers {
+			breakdown := &dto.CustomerUsageBreakdown{
+				CustomerID:         cust.ID,
+				ExternalCustomerID: cust.ExternalID,
+				CustomerName:       cust.Name,
+				IsParent:           cust.ID == customerID,
+				Features:           s.buildFeatureSummaryForCustomer(cust.ID, perCustomerUsage, entitlements.Features, featureSubscriptionMap, featureNextUsageResetAtMap),
+			}
+			resp.CustomerBreakdown = append(resp.CustomerBreakdown, breakdown)
+		}
 	}
 
 	return resp, nil
@@ -3266,4 +3441,143 @@ func (s *billingService) calculateNeverResetUsage(
 		"billable_quantity", billableQuantity)
 
 	return billableQuantity, nil
+}
+
+// buildFeatureSummaryForCustomer builds a feature usage summary for a single customer
+// from per-customer usage data
+func (s *billingService) buildFeatureSummaryForCustomer(
+	customerID string,
+	perCustomerUsage map[string]map[string]decimal.Decimal, // feature_id -> customer_id -> usage
+	entitlements []*dto.AggregatedFeature,
+	featureSubscriptionMap map[string]*subscription.Subscription,
+	featureNextUsageResetAtMap map[string]*time.Time,
+) []*dto.FeatureUsageSummary {
+	features := make([]*dto.FeatureUsageSummary, 0, len(entitlements))
+
+	for _, feature := range entitlements {
+		featureID := feature.Feature.ID
+
+		// Get this customer's usage for this feature
+		usage := decimal.Zero
+		if customerUsage, exists := perCustomerUsage[featureID]; exists {
+			if custUsage, ok := customerUsage[customerID]; ok {
+				usage = custUsage
+			}
+		}
+
+		nextUsageResetAt := featureNextUsageResetAtMap[featureID]
+
+		featureSummary := &dto.FeatureUsageSummary{
+			Feature:          feature.Feature,
+			TotalLimit:       feature.Entitlement.UsageLimit,
+			IsUnlimited:      feature.Entitlement.UsageLimit == nil,
+			CurrentUsage:     usage,
+			UsagePercent:     s.getUsagePercent(usage, feature.Entitlement.UsageLimit),
+			IsEnabled:        feature.Entitlement.IsEnabled,
+			IsSoftLimit:      feature.Entitlement.IsSoftLimit,
+			Sources:          feature.Sources,
+			NextUsageResetAt: nextUsageResetAt,
+		}
+
+		features = append(features, featureSummary)
+	}
+
+	return features
+}
+
+// resolveHierarchyCustomers resolves customer IDs for hierarchy analytics
+// Returns a list of customers (parent + children) and a map of customer details
+func (s *billingService) resolveHierarchyCustomers(
+	ctx context.Context,
+	primaryCustomerID string,
+	includeChildren bool,
+	childCustomerIDs []string,
+) ([]*customer.Customer, map[string]*customer.Customer, error) {
+	// Get the primary customer
+	primaryCustomer, err := s.CustomerRepo.Get(ctx, primaryCustomerID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// If no hierarchy params, return just the primary customer
+	if !includeChildren && len(childCustomerIDs) == 0 {
+		customerMap := map[string]*customer.Customer{
+			primaryCustomerID: primaryCustomer,
+		}
+		return []*customer.Customer{primaryCustomer}, customerMap, nil
+	}
+
+	// Determine which children to include
+	var targetChildIDs []string
+	if includeChildren {
+		// Fetch all children
+		childFilter := types.NewCustomerFilter()
+		childFilter.ParentCustomerIDs = []string{primaryCustomerID}
+		childFilter.Limit = lo.ToPtr(1000)
+
+		children, err := s.CustomerRepo.List(ctx, childFilter)
+		if err != nil {
+			return nil, nil, ierr.WithError(err).
+				WithHint("Failed to fetch child customers").
+				Mark(ierr.ErrDatabase)
+		}
+
+		for _, child := range children {
+			targetChildIDs = append(targetChildIDs, child.ID)
+		}
+	} else if len(childCustomerIDs) > 0 {
+		// Use provided child IDs
+		targetChildIDs = childCustomerIDs
+	}
+
+	// Validate that all specified children are actually children of the primary customer
+	if len(targetChildIDs) > 0 {
+		childFilter := types.NewCustomerFilter()
+		childFilter.CustomerIDs = targetChildIDs
+		childFilter.Limit = lo.ToPtr(len(targetChildIDs))
+
+		children, err := s.CustomerRepo.List(ctx, childFilter)
+		if err != nil {
+			return nil, nil, ierr.WithError(err).
+				WithHint("Failed to fetch specified child customers").
+				Mark(ierr.ErrDatabase)
+		}
+
+		if len(children) != len(targetChildIDs) {
+			return nil, nil, ierr.NewError("one or more specified child customers not found").
+				WithHint("All child_customer_ids must reference valid customers").
+				Mark(ierr.ErrValidation)
+		}
+
+		// Validate hierarchy relationship
+		for _, child := range children {
+			if child.ParentCustomerID == nil || *child.ParentCustomerID != primaryCustomerID {
+				return nil, nil, ierr.NewError("specified customer is not a child of the primary customer").
+					WithHint("All child_customer_ids must be children of the specified customer").
+					WithReportableDetails(map[string]interface{}{
+						"primary_customer_id": primaryCustomerID,
+						"invalid_child_id":    child.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+
+		// Build result
+		allCustomers := []*customer.Customer{primaryCustomer}
+		allCustomers = append(allCustomers, children...)
+
+		customerMap := make(map[string]*customer.Customer, len(allCustomers))
+		customerMap[primaryCustomerID] = primaryCustomer
+		for _, child := range children {
+			customerMap[child.ID] = child
+		}
+
+		return allCustomers, customerMap, nil
+	}
+
+	// No children found or specified
+	customerMap := map[string]*customer.Customer{
+		primaryCustomerID: primaryCustomer,
+	}
+	return []*customer.Customer{primaryCustomer}, customerMap, nil
 }

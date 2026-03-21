@@ -272,6 +272,11 @@ type CreateSubscriptionRequest struct {
 	// "invoice_to_self" - Invoices are sent to the subscription's customer
 	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
 
+	// usage_customer_ids is a list of customer IDs whose usage should be aggregated for this subscription
+	// All customers must be in the same hierarchy (either children of the subscription's customer, or siblings if subscription is for a child)
+	// This enables consolidated billing where a parent customer's subscription can aggregate usage from child customers
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty"`
+
 	PlanID             string               `json:"plan_id" validate:"required"`
 	Currency           string               `json:"currency" validate:"required,len=3"`
 	LookupKey          string               `json:"lookup_key"`
@@ -896,6 +901,17 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		}
 	}
 
+	// Validate usage customer IDs if provided
+	if len(r.UsageCustomerIDs) > 0 {
+		for _, customerID := range r.UsageCustomerIDs {
+			if customerID == "" {
+				return ierr.NewError("usage_customer_id cannot be empty").
+					WithHint("Usage customer ID must be a non-empty string").
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -1062,6 +1078,7 @@ func (r *CreateSubscriptionRequest) ToSubscription(ctx context.Context) *subscri
 		BillingCycle:       r.BillingCycle,
 		CustomerTimezone:   r.CustomerTimezone,
 		ProrationBehavior:  r.ProrationBehavior,
+		UsageCustomerIDs:   r.UsageCustomerIDs, // Store usage customer IDs
 
 		// New payment behavior fields
 		PaymentBehavior:        string(paymentBehavior),
@@ -1535,6 +1552,12 @@ type GetUsageBySubscriptionRequest struct {
 	// Source indicates the caller context. When "invoice_creation", ClickHouse queries use FINAL.
 	// Optional; omit for default (no FINAL).
 	Source string `json:"-"`
+
+	// Hierarchy support - for subscriptions with usage_customer_ids
+	// Include all child customers from subscription's usage_customer_ids (convenience flag)
+	IncludeChildren bool `json:"include_children,omitempty"`
+	// Note: child_customer_ids are derived from subscription's usage_customer_ids field
+	// This flag controls whether to aggregate across them in the response breakdown
 }
 
 type GetUsageBySubscriptionResponse struct {
@@ -1549,6 +1572,19 @@ type GetUsageBySubscriptionResponse struct {
 	CommitmentUtilized float64                              `json:"commitment_utilized,omitempty"` // Amount of commitment used
 	OverageAmount      float64                              `json:"overage_amount,omitempty"`      // Amount charged at overage rate
 	HasOverage         bool                                 `json:"has_overage"`                   // Whether any usage exceeded commitment
+
+	// Hierarchy breakdown - per-customer usage when include_children is enabled
+	CustomerBreakdown []*SubscriptionCustomerUsageBreakdown `json:"customer_breakdown,omitempty"`
+}
+
+// SubscriptionCustomerUsageBreakdown represents usage breakdown for a single customer in subscription hierarchy
+type SubscriptionCustomerUsageBreakdown struct {
+	CustomerID         string                               `json:"customer_id"`
+	ExternalCustomerID string                               `json:"external_customer_id"`
+	CustomerName       string                               `json:"customer_name,omitempty"`
+	IsOwner            bool                                 `json:"is_owner"` // True if this is the subscription owner
+	Amount             float64                              `json:"amount"`
+	Charges            []*SubscriptionUsageByMetersResponse `json:"charges"`
 }
 
 type SubscriptionUsageByMetersResponse struct {

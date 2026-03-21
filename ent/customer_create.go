@@ -11,6 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/customer"
+	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 )
 
 // CustomerCreate is the builder for creating a Customer entity.
@@ -246,6 +248,36 @@ func (cc *CustomerCreate) SetID(s string) *CustomerCreate {
 	return cc
 }
 
+// AddSubscriptionsWithUsageIDs adds the "subscriptions_with_usage" edge to the Subscription entity by IDs.
+func (cc *CustomerCreate) AddSubscriptionsWithUsageIDs(ids ...string) *CustomerCreate {
+	cc.mutation.AddSubscriptionsWithUsageIDs(ids...)
+	return cc
+}
+
+// AddSubscriptionsWithUsage adds the "subscriptions_with_usage" edges to the Subscription entity.
+func (cc *CustomerCreate) AddSubscriptionsWithUsage(s ...*Subscription) *CustomerCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return cc.AddSubscriptionsWithUsageIDs(ids...)
+}
+
+// AddLineItemsWithUsageIDs adds the "line_items_with_usage" edge to the SubscriptionLineItem entity by IDs.
+func (cc *CustomerCreate) AddLineItemsWithUsageIDs(ids ...string) *CustomerCreate {
+	cc.mutation.AddLineItemsWithUsageIDs(ids...)
+	return cc
+}
+
+// AddLineItemsWithUsage adds the "line_items_with_usage" edges to the SubscriptionLineItem entity.
+func (cc *CustomerCreate) AddLineItemsWithUsage(s ...*SubscriptionLineItem) *CustomerCreate {
+	ids := make([]string, len(s))
+	for i := range s {
+		ids[i] = s[i].ID
+	}
+	return cc.AddLineItemsWithUsageIDs(ids...)
+}
+
 // Mutation returns the CustomerMutation object of the builder.
 func (cc *CustomerCreate) Mutation() *CustomerMutation {
 	return cc.mutation
@@ -440,6 +472,38 @@ func (cc *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := cc.mutation.ParentCustomerID(); ok {
 		_spec.SetField(customer.FieldParentCustomerID, field.TypeString, value)
 		_node.ParentCustomerID = &value
+	}
+	if nodes := cc.mutation.SubscriptionsWithUsageIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   customer.SubscriptionsWithUsageTable,
+			Columns: customer.SubscriptionsWithUsagePrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscription.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := cc.mutation.LineItemsWithUsageIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: true,
+			Table:   customer.LineItemsWithUsageTable,
+			Columns: customer.LineItemsWithUsagePrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(subscriptionlineitem.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

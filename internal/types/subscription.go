@@ -302,6 +302,14 @@ type SubscriptionFilter struct {
 	// ActiveAt filters subscriptions that are active at the given time
 	ActiveAt *time.Time `json:"active_at,omitempty" form:"active_at"`
 
+	// UsageCustomerIDs filters subscriptions that have at least one of these customer IDs
+	// in their usage_customers edge (i.e. subscriptions that aggregate usage for these customers)
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty" form:"usage_customer_ids"`
+
+	// WithUsageCustomers loads the usage_customers edge when true (opt-in to avoid unnecessary joins)
+	// Only use when you need to inspect which customers' usage is aggregated (e.g., feature usage tracking)
+	WithUsageCustomers bool `json:"with_usage_customers,omitempty" form:"with_usage_customers"`
+
 	// WithLineItems includes line items in the response
 	WithLineItems bool `json:"with_line_items,omitempty" form:"with_line_items"`
 }

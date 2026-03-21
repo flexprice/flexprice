@@ -39,6 +39,7 @@ type SubscriptionQuery struct {
 	withCouponAssociations *CouponAssociationQuery
 	withCouponApplications *CouponApplicationQuery
 	withInvoicingCustomer  *CustomerQuery
+	withUsageCustomers     *CustomerQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -251,6 +252,28 @@ func (sq *SubscriptionQuery) QueryInvoicingCustomer() *CustomerQuery {
 	return query
 }
 
+// QueryUsageCustomers chains the current query on the "usage_customers" edge.
+func (sq *SubscriptionQuery) QueryUsageCustomers() *CustomerQuery {
+	query := (&CustomerClient{config: sq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, selector),
+			sqlgraph.To(customer.Table, customer.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, subscription.UsageCustomersTable, subscription.UsageCustomersPrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(sq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
 // First returns the first Subscription entity from the query.
 // Returns a *NotFoundError when no Subscription was found.
 func (sq *SubscriptionQuery) First(ctx context.Context) (*Subscription, error) {
@@ -451,6 +474,7 @@ func (sq *SubscriptionQuery) Clone() *SubscriptionQuery {
 		withCouponAssociations: sq.withCouponAssociations.Clone(),
 		withCouponApplications: sq.withCouponApplications.Clone(),
 		withInvoicingCustomer:  sq.withInvoicingCustomer.Clone(),
+		withUsageCustomers:     sq.withUsageCustomers.Clone(),
 		// clone intermediate query.
 		sql:  sq.sql.Clone(),
 		path: sq.path,
@@ -545,6 +569,17 @@ func (sq *SubscriptionQuery) WithInvoicingCustomer(opts ...func(*CustomerQuery))
 	return sq
 }
 
+// WithUsageCustomers tells the query-builder to eager-load the nodes that are connected to
+// the "usage_customers" edge. The optional arguments are used to configure the query builder of the edge.
+func (sq *SubscriptionQuery) WithUsageCustomers(opts ...func(*CustomerQuery)) *SubscriptionQuery {
+	query := (&CustomerClient{config: sq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sq.withUsageCustomers = query
+	return sq
+}
+
 // GroupBy is used to group vertices by one or more fields/columns.
 // It is often used with aggregate functions, like: count, max, mean, min, sum.
 //
@@ -623,7 +658,7 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	var (
 		nodes       = []*Subscription{}
 		_spec       = sq.querySpec()
-		loadedTypes = [8]bool{
+		loadedTypes = [9]bool{
 			sq.withLineItems != nil,
 			sq.withPauses != nil,
 			sq.withPhases != nil,
@@ -632,6 +667,7 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 			sq.withCouponAssociations != nil,
 			sq.withCouponApplications != nil,
 			sq.withInvoicingCustomer != nil,
+			sq.withUsageCustomers != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -708,6 +744,13 @@ func (sq *SubscriptionQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]
 	if query := sq.withInvoicingCustomer; query != nil {
 		if err := sq.loadInvoicingCustomer(ctx, query, nodes, nil,
 			func(n *Subscription, e *Customer) { n.Edges.InvoicingCustomer = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := sq.withUsageCustomers; query != nil {
+		if err := sq.loadUsageCustomers(ctx, query, nodes,
+			func(n *Subscription) { n.Edges.UsageCustomers = []*Customer{} },
+			func(n *Subscription, e *Customer) { n.Edges.UsageCustomers = append(n.Edges.UsageCustomers, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -958,6 +1001,67 @@ func (sq *SubscriptionQuery) loadInvoicingCustomer(ctx context.Context, query *C
 		}
 		for i := range nodes {
 			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (sq *SubscriptionQuery) loadUsageCustomers(ctx context.Context, query *CustomerQuery, nodes []*Subscription, init func(*Subscription), assign func(*Subscription, *Customer)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[string]*Subscription)
+	nids := make(map[string]map[*Subscription]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(subscription.UsageCustomersTable)
+		s.Join(joinT).On(s.C(customer.FieldID), joinT.C(subscription.UsageCustomersPrimaryKey[1]))
+		s.Where(sql.InValues(joinT.C(subscription.UsageCustomersPrimaryKey[0]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(subscription.UsageCustomersPrimaryKey[0]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(sql.NullString)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := values[0].(*sql.NullString).String
+				inValue := values[1].(*sql.NullString).String
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Subscription]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*Customer](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "usage_customers" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
 		}
 	}
 	return nil

@@ -116,6 +116,8 @@ const (
 	EdgeCouponApplications = "coupon_applications"
 	// EdgeInvoicingCustomer holds the string denoting the invoicing_customer edge name in mutations.
 	EdgeInvoicingCustomer = "invoicing_customer"
+	// EdgeUsageCustomers holds the string denoting the usage_customers edge name in mutations.
+	EdgeUsageCustomers = "usage_customers"
 	// Table holds the table name of the subscription in the database.
 	Table = "subscriptions"
 	// LineItemsTable is the table that holds the line_items relation/edge.
@@ -174,6 +176,11 @@ const (
 	InvoicingCustomerInverseTable = "customers"
 	// InvoicingCustomerColumn is the table column denoting the invoicing_customer relation/edge.
 	InvoicingCustomerColumn = "invoicing_customer_id"
+	// UsageCustomersTable is the table that holds the usage_customers relation/edge. The primary key declared below.
+	UsageCustomersTable = "subscription_usage_customers"
+	// UsageCustomersInverseTable is the table name for the Customer entity.
+	// It exists in this package in order to avoid circular dependency with the "customer" package.
+	UsageCustomersInverseTable = "customers"
 )
 
 // Columns holds all SQL columns for subscription fields.
@@ -222,6 +229,12 @@ var Columns = []string{
 	FieldParentSubscriptionID,
 	FieldPaymentTerms,
 }
+
+var (
+	// UsageCustomersPrimaryKey and UsageCustomersColumn2 are the table columns denoting the
+	// primary key for the usage_customers relation (M2M).
+	UsageCustomersPrimaryKey = []string{"subscription_id", "customer_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -611,6 +624,20 @@ func ByInvoicingCustomerField(field string, opts ...sql.OrderTermOption) OrderOp
 		sqlgraph.OrderByNeighborTerms(s, newInvoicingCustomerStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByUsageCustomersCount orders the results by usage_customers count.
+func ByUsageCustomersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUsageCustomersStep(), opts...)
+	}
+}
+
+// ByUsageCustomers orders the results by usage_customers terms.
+func ByUsageCustomers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUsageCustomersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newLineItemsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -665,5 +692,12 @@ func newInvoicingCustomerStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(InvoicingCustomerInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, InvoicingCustomerTable, InvoicingCustomerColumn),
+	)
+}
+func newUsageCustomersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UsageCustomersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, false, UsageCustomersTable, UsageCustomersPrimaryKey...),
 	)
 }

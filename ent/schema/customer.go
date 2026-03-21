@@ -3,6 +3,7 @@ package schema
 import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
@@ -90,7 +91,14 @@ func (Customer) Fields() []ent.Field {
 
 // Edges of the Customer.
 func (Customer) Edges() []ent.Edge {
-	return nil
+	return []ent.Edge{
+		edge.From("subscriptions_with_usage", Subscription.Type).
+			Ref("usage_customers").
+			Comment("Subscriptions that aggregate this customer's usage"),
+		edge.From("line_items_with_usage", SubscriptionLineItem.Type).
+			Ref("usage_customers").
+			Comment("Subscription line items that aggregate this customer's usage"),
+	}
 }
 
 // Indexes of the Customer.

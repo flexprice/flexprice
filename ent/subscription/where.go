@@ -3016,6 +3016,29 @@ func HasInvoicingCustomerWith(preds ...predicate.Customer) predicate.Subscriptio
 	})
 }
 
+// HasUsageCustomers applies the HasEdge predicate on the "usage_customers" edge.
+func HasUsageCustomers() predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, UsageCustomersTable, UsageCustomersPrimaryKey...),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasUsageCustomersWith applies the HasEdge predicate on the "usage_customers" edge with a given conditions (other predicates).
+func HasUsageCustomersWith(preds ...predicate.Customer) predicate.Subscription {
+	return predicate.Subscription(func(s *sql.Selector) {
+		step := newUsageCustomersStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
 // And groups predicates with the AND operator between them.
 func And(predicates ...predicate.Subscription) predicate.Subscription {
 	return predicate.Subscription(sql.AndPredicates(predicates...))

@@ -46,6 +46,10 @@ type SubscriptionLineItem struct {
 	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
 	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
 
+	// UsageCustomerIDs is populated when loading the line item with its usage_customers edge
+	// This contains the customer IDs whose usage is aggregated for this line item
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty"`
+
 	Price *price.Price `json:"price,omitempty"`
 
 	types.BaseModel
@@ -86,6 +90,21 @@ func (li *SubscriptionLineItem) HasCommitment() bool {
 // GetCommitmentType returns the commitment type for the line item
 func (li *SubscriptionLineItem) GetCommitmentType() types.CommitmentType {
 	return li.CommitmentType
+}
+
+// EffectiveUsageCustomerIDs returns the customer IDs whose usage should be aggregated for this line item.
+// Resolution order: line item's UsageCustomerIDs (if set) → else subscription's EffectiveUsageCustomerIDs().
+// This centralizes the resolution logic so all call sites use a consistent approach.
+// The sub parameter is required to fall back to subscription-level usage customers.
+func (li *SubscriptionLineItem) EffectiveUsageCustomerIDs(sub *Subscription) []string {
+	if len(li.UsageCustomerIDs) > 0 {
+		return li.UsageCustomerIDs
+	}
+	if sub != nil {
+		return sub.EffectiveUsageCustomerIDs()
+	}
+	// Fallback if no subscription provided (shouldn't normally happen)
+	return []string{li.CustomerID}
 }
 
 // FromEntList converts a list of Ent SubscriptionLineItems to domain SubscriptionLineItems
@@ -147,6 +166,16 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 	if billingPeriodCount <= 0 {
 		billingPeriodCount = 1
 	}
+
+	// Extract usage customer IDs from the usage_customers edge
+	var usageCustomerIDs []string
+	if e.Edges.UsageCustomers != nil {
+		usageCustomerIDs = make([]string, len(e.Edges.UsageCustomers))
+		for i, customer := range e.Edges.UsageCustomers {
+			usageCustomerIDs[i] = customer.ID
+		}
+	}
+
 	return &SubscriptionLineItem{
 		ID:                      e.ID,
 		SubscriptionID:          e.SubscriptionID,
@@ -179,6 +208,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		CommitmentTrueUpEnabled: e.CommitmentTrueUpEnabled,
 		CommitmentWindowed:      e.CommitmentWindowed,
 		CommitmentDuration:      commitmentDuration,
+		UsageCustomerIDs:        usageCustomerIDs,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

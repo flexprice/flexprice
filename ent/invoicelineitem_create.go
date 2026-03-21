@@ -410,6 +410,12 @@ func (ilic *InvoiceLineItemCreate) SetNillableInvoiceLevelDiscount(d *decimal.De
 	return ilic
 }
 
+// SetUsageCustomerIds sets the "usage_customer_ids" field.
+func (ilic *InvoiceLineItemCreate) SetUsageCustomerIds(s []string) *InvoiceLineItemCreate {
+	ilic.mutation.SetUsageCustomerIds(s)
+	return ilic
+}
+
 // SetID sets the "id" field.
 func (ilic *InvoiceLineItemCreate) SetID(s string) *InvoiceLineItemCreate {
 	ilic.mutation.SetID(s)
@@ -720,6 +726,10 @@ func (ilic *InvoiceLineItemCreate) createSpec() (*InvoiceLineItem, *sqlgraph.Cre
 	if value, ok := ilic.mutation.InvoiceLevelDiscount(); ok {
 		_spec.SetField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther, value)
 		_node.InvoiceLevelDiscount = &value
+	}
+	if value, ok := ilic.mutation.UsageCustomerIds(); ok {
+		_spec.SetField(invoicelineitem.FieldUsageCustomerIds, field.TypeJSON, value)
+		_node.UsageCustomerIds = value
 	}
 	if nodes := ilic.mutation.InvoiceIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

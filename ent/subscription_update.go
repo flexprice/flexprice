@@ -655,6 +655,21 @@ func (su *SubscriptionUpdate) SetInvoicingCustomer(c *Customer) *SubscriptionUpd
 	return su.SetInvoicingCustomerID(c.ID)
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by IDs.
+func (su *SubscriptionUpdate) AddUsageCustomerIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.AddUsageCustomerIDs(ids...)
+	return su
+}
+
+// AddUsageCustomers adds the "usage_customers" edges to the Customer entity.
+func (su *SubscriptionUpdate) AddUsageCustomers(c ...*Customer) *SubscriptionUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return su.AddUsageCustomerIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (su *SubscriptionUpdate) Mutation() *SubscriptionMutation {
 	return su.mutation
@@ -811,6 +826,27 @@ func (su *SubscriptionUpdate) RemoveCouponApplications(c ...*CouponApplication) 
 func (su *SubscriptionUpdate) ClearInvoicingCustomer() *SubscriptionUpdate {
 	su.mutation.ClearInvoicingCustomer()
 	return su
+}
+
+// ClearUsageCustomers clears all "usage_customers" edges to the Customer entity.
+func (su *SubscriptionUpdate) ClearUsageCustomers() *SubscriptionUpdate {
+	su.mutation.ClearUsageCustomers()
+	return su
+}
+
+// RemoveUsageCustomerIDs removes the "usage_customers" edge to Customer entities by IDs.
+func (su *SubscriptionUpdate) RemoveUsageCustomerIDs(ids ...string) *SubscriptionUpdate {
+	su.mutation.RemoveUsageCustomerIDs(ids...)
+	return su
+}
+
+// RemoveUsageCustomers removes "usage_customers" edges to Customer entities.
+func (su *SubscriptionUpdate) RemoveUsageCustomers(c ...*Customer) *SubscriptionUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return su.RemoveUsageCustomerIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1333,6 +1369,51 @@ func (su *SubscriptionUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Inverse: false,
 			Table:   subscription.InvoicingCustomerTable,
 			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if su.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.RemovedUsageCustomersIDs(); len(nodes) > 0 && !su.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := su.mutation.UsageCustomersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
@@ -1980,6 +2061,21 @@ func (suo *SubscriptionUpdateOne) SetInvoicingCustomer(c *Customer) *Subscriptio
 	return suo.SetInvoicingCustomerID(c.ID)
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by IDs.
+func (suo *SubscriptionUpdateOne) AddUsageCustomerIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.AddUsageCustomerIDs(ids...)
+	return suo
+}
+
+// AddUsageCustomers adds the "usage_customers" edges to the Customer entity.
+func (suo *SubscriptionUpdateOne) AddUsageCustomers(c ...*Customer) *SubscriptionUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return suo.AddUsageCustomerIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (suo *SubscriptionUpdateOne) Mutation() *SubscriptionMutation {
 	return suo.mutation
@@ -2136,6 +2232,27 @@ func (suo *SubscriptionUpdateOne) RemoveCouponApplications(c ...*CouponApplicati
 func (suo *SubscriptionUpdateOne) ClearInvoicingCustomer() *SubscriptionUpdateOne {
 	suo.mutation.ClearInvoicingCustomer()
 	return suo
+}
+
+// ClearUsageCustomers clears all "usage_customers" edges to the Customer entity.
+func (suo *SubscriptionUpdateOne) ClearUsageCustomers() *SubscriptionUpdateOne {
+	suo.mutation.ClearUsageCustomers()
+	return suo
+}
+
+// RemoveUsageCustomerIDs removes the "usage_customers" edge to Customer entities by IDs.
+func (suo *SubscriptionUpdateOne) RemoveUsageCustomerIDs(ids ...string) *SubscriptionUpdateOne {
+	suo.mutation.RemoveUsageCustomerIDs(ids...)
+	return suo
+}
+
+// RemoveUsageCustomers removes "usage_customers" edges to Customer entities.
+func (suo *SubscriptionUpdateOne) RemoveUsageCustomers(c ...*Customer) *SubscriptionUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return suo.RemoveUsageCustomerIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionUpdate builder.
@@ -2688,6 +2805,51 @@ func (suo *SubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *Subscript
 			Inverse: false,
 			Table:   subscription.InvoicingCustomerTable,
 			Columns: []string{subscription.InvoicingCustomerColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if suo.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.RemovedUsageCustomersIDs(); len(nodes) > 0 && !suo.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := suo.mutation.UsageCustomersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),

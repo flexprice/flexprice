@@ -2811,6 +2811,38 @@ func (c *CustomerClient) GetX(ctx context.Context, id string) *Customer {
 	return obj
 }
 
+// QuerySubscriptionsWithUsage queries the subscriptions_with_usage edge of a Customer.
+func (c *CustomerClient) QuerySubscriptionsWithUsage(cu *Customer) *SubscriptionQuery {
+	query := (&SubscriptionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cu.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(customer.Table, customer.FieldID, id),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, customer.SubscriptionsWithUsageTable, customer.SubscriptionsWithUsagePrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(cu.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryLineItemsWithUsage queries the line_items_with_usage edge of a Customer.
+func (c *CustomerClient) QueryLineItemsWithUsage(cu *Customer) *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := cu.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(customer.Table, customer.FieldID, id),
+			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, customer.LineItemsWithUsageTable, customer.LineItemsWithUsagePrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(cu.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *CustomerClient) Hooks() []Hook {
 	return c.hooks.Customer
@@ -5493,6 +5525,22 @@ func (c *SubscriptionClient) QueryInvoicingCustomer(s *Subscription) *CustomerQu
 	return query
 }
 
+// QueryUsageCustomers queries the usage_customers edge of a Subscription.
+func (c *SubscriptionClient) QueryUsageCustomers(s *Subscription) *CustomerQuery {
+	query := (&CustomerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := s.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscription.Table, subscription.FieldID, id),
+			sqlgraph.To(customer.Table, customer.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, subscription.UsageCustomersTable, subscription.UsageCustomersPrimaryKey...),
+		)
+		fromV = sqlgraph.Neighbors(s.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *SubscriptionClient) Hooks() []Hook {
 	return c.hooks.Subscription
@@ -5651,6 +5699,22 @@ func (c *SubscriptionLineItemClient) QueryCouponAssociations(sli *SubscriptionLi
 			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, id),
 			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionlineitem.CouponAssociationsTable, subscriptionlineitem.CouponAssociationsColumn),
+		)
+		fromV = sqlgraph.Neighbors(sli.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryUsageCustomers queries the usage_customers edge of a SubscriptionLineItem.
+func (c *SubscriptionLineItemClient) QueryUsageCustomers(sli *SubscriptionLineItem) *CustomerQuery {
+	query := (&CustomerClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := sli.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, id),
+			sqlgraph.To(customer.Table, customer.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, subscriptionlineitem.UsageCustomersTable, subscriptionlineitem.UsageCustomersPrimaryKey...),
 		)
 		fromV = sqlgraph.Neighbors(sli.driver.Dialect(), step)
 		return fromV, nil

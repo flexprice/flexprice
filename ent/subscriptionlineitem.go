@@ -105,9 +105,11 @@ type SubscriptionLineItemEdges struct {
 	Subscription *Subscription `json:"subscription,omitempty"`
 	// Subscription line item can have multiple coupon associations
 	CouponAssociations []*CouponAssociation `json:"coupon_associations,omitempty"`
+	// Customers whose usage is aggregated for this line item (M2M)
+	UsageCustomers []*Customer `json:"usage_customers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [2]bool
+	loadedTypes [3]bool
 }
 
 // SubscriptionOrErr returns the Subscription value or an error if the edge
@@ -128,6 +130,15 @@ func (e SubscriptionLineItemEdges) CouponAssociationsOrErr() ([]*CouponAssociati
 		return e.CouponAssociations, nil
 	}
 	return nil, &NotLoadedError{edge: "coupon_associations"}
+}
+
+// UsageCustomersOrErr returns the UsageCustomers value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionLineItemEdges) UsageCustomersOrErr() ([]*Customer, error) {
+	if e.loadedTypes[2] {
+		return e.UsageCustomers, nil
+	}
+	return nil, &NotLoadedError{edge: "usage_customers"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -425,6 +436,11 @@ func (sli *SubscriptionLineItem) QuerySubscription() *SubscriptionQuery {
 // QueryCouponAssociations queries the "coupon_associations" edge of the SubscriptionLineItem entity.
 func (sli *SubscriptionLineItem) QueryCouponAssociations() *CouponAssociationQuery {
 	return NewSubscriptionLineItemClient(sli.config).QueryCouponAssociations(sli)
+}
+
+// QueryUsageCustomers queries the "usage_customers" edge of the SubscriptionLineItem entity.
+func (sli *SubscriptionLineItem) QueryUsageCustomers() *CustomerQuery {
+	return NewSubscriptionLineItemClient(sli.config).QueryUsageCustomers(sli)
 }
 
 // Update returns a builder for updating this SubscriptionLineItem.

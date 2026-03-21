@@ -2107,6 +2107,16 @@ func InvoiceLevelDiscountNotNil() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldInvoiceLevelDiscount))
 }
 
+// UsageCustomerIdsIsNil applies the IsNil predicate on the "usage_customer_ids" field.
+func UsageCustomerIdsIsNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldIsNull(FieldUsageCustomerIds))
+}
+
+// UsageCustomerIdsNotNil applies the NotNil predicate on the "usage_customer_ids" field.
+func UsageCustomerIdsNotNil() predicate.InvoiceLineItem {
+	return predicate.InvoiceLineItem(sql.FieldNotNull(FieldUsageCustomerIds))
+}
+
 // HasInvoice applies the HasEdge predicate on the "invoice" edge.
 func HasInvoice() predicate.InvoiceLineItem {
 	return predicate.InvoiceLineItem(func(s *sql.Selector) {

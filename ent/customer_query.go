@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -13,15 +14,19 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
+	"github.com/flexprice/flexprice/ent/subscription"
+	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 )
 
 // CustomerQuery is the builder for querying Customer entities.
 type CustomerQuery struct {
 	config
-	ctx        *QueryContext
-	order      []customer.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Customer
+	ctx                        *QueryContext
+	order                      []customer.OrderOption
+	inters                     []Interceptor
+	predicates                 []predicate.Customer
+	withSubscriptionsWithUsage *SubscriptionQuery
+	withLineItemsWithUsage     *SubscriptionLineItemQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +61,50 @@ func (cq *CustomerQuery) Unique(unique bool) *CustomerQuery {
 func (cq *CustomerQuery) Order(o ...customer.OrderOption) *CustomerQuery {
 	cq.order = append(cq.order, o...)
 	return cq
+}
+
+// QuerySubscriptionsWithUsage chains the current query on the "subscriptions_with_usage" edge.
+func (cq *CustomerQuery) QuerySubscriptionsWithUsage() *SubscriptionQuery {
+	query := (&SubscriptionClient{config: cq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := cq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := cq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(customer.Table, customer.FieldID, selector),
+			sqlgraph.To(subscription.Table, subscription.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, customer.SubscriptionsWithUsageTable, customer.SubscriptionsWithUsagePrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(cq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryLineItemsWithUsage chains the current query on the "line_items_with_usage" edge.
+func (cq *CustomerQuery) QueryLineItemsWithUsage() *SubscriptionLineItemQuery {
+	query := (&SubscriptionLineItemClient{config: cq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := cq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := cq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(customer.Table, customer.FieldID, selector),
+			sqlgraph.To(subscriptionlineitem.Table, subscriptionlineitem.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, true, customer.LineItemsWithUsageTable, customer.LineItemsWithUsagePrimaryKey...),
+		)
+		fromU = sqlgraph.SetNeighbors(cq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Customer entity from the query.
@@ -245,15 +294,39 @@ func (cq *CustomerQuery) Clone() *CustomerQuery {
 		return nil
 	}
 	return &CustomerQuery{
-		config:     cq.config,
-		ctx:        cq.ctx.Clone(),
-		order:      append([]customer.OrderOption{}, cq.order...),
-		inters:     append([]Interceptor{}, cq.inters...),
-		predicates: append([]predicate.Customer{}, cq.predicates...),
+		config:                     cq.config,
+		ctx:                        cq.ctx.Clone(),
+		order:                      append([]customer.OrderOption{}, cq.order...),
+		inters:                     append([]Interceptor{}, cq.inters...),
+		predicates:                 append([]predicate.Customer{}, cq.predicates...),
+		withSubscriptionsWithUsage: cq.withSubscriptionsWithUsage.Clone(),
+		withLineItemsWithUsage:     cq.withLineItemsWithUsage.Clone(),
 		// clone intermediate query.
 		sql:  cq.sql.Clone(),
 		path: cq.path,
 	}
+}
+
+// WithSubscriptionsWithUsage tells the query-builder to eager-load the nodes that are connected to
+// the "subscriptions_with_usage" edge. The optional arguments are used to configure the query builder of the edge.
+func (cq *CustomerQuery) WithSubscriptionsWithUsage(opts ...func(*SubscriptionQuery)) *CustomerQuery {
+	query := (&SubscriptionClient{config: cq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	cq.withSubscriptionsWithUsage = query
+	return cq
+}
+
+// WithLineItemsWithUsage tells the query-builder to eager-load the nodes that are connected to
+// the "line_items_with_usage" edge. The optional arguments are used to configure the query builder of the edge.
+func (cq *CustomerQuery) WithLineItemsWithUsage(opts ...func(*SubscriptionLineItemQuery)) *CustomerQuery {
+	query := (&SubscriptionLineItemClient{config: cq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	cq.withLineItemsWithUsage = query
+	return cq
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +405,12 @@ func (cq *CustomerQuery) prepareQuery(ctx context.Context) error {
 
 func (cq *CustomerQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Customer, error) {
 	var (
-		nodes = []*Customer{}
-		_spec = cq.querySpec()
+		nodes       = []*Customer{}
+		_spec       = cq.querySpec()
+		loadedTypes = [2]bool{
+			cq.withSubscriptionsWithUsage != nil,
+			cq.withLineItemsWithUsage != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Customer).scanValues(nil, columns)
@@ -341,6 +418,7 @@ func (cq *CustomerQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Cus
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Customer{config: cq.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +430,148 @@ func (cq *CustomerQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Cus
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := cq.withSubscriptionsWithUsage; query != nil {
+		if err := cq.loadSubscriptionsWithUsage(ctx, query, nodes,
+			func(n *Customer) { n.Edges.SubscriptionsWithUsage = []*Subscription{} },
+			func(n *Customer, e *Subscription) {
+				n.Edges.SubscriptionsWithUsage = append(n.Edges.SubscriptionsWithUsage, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := cq.withLineItemsWithUsage; query != nil {
+		if err := cq.loadLineItemsWithUsage(ctx, query, nodes,
+			func(n *Customer) { n.Edges.LineItemsWithUsage = []*SubscriptionLineItem{} },
+			func(n *Customer, e *SubscriptionLineItem) {
+				n.Edges.LineItemsWithUsage = append(n.Edges.LineItemsWithUsage, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (cq *CustomerQuery) loadSubscriptionsWithUsage(ctx context.Context, query *SubscriptionQuery, nodes []*Customer, init func(*Customer), assign func(*Customer, *Subscription)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[string]*Customer)
+	nids := make(map[string]map[*Customer]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(customer.SubscriptionsWithUsageTable)
+		s.Join(joinT).On(s.C(subscription.FieldID), joinT.C(customer.SubscriptionsWithUsagePrimaryKey[0]))
+		s.Where(sql.InValues(joinT.C(customer.SubscriptionsWithUsagePrimaryKey[1]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(customer.SubscriptionsWithUsagePrimaryKey[1]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(sql.NullString)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := values[0].(*sql.NullString).String
+				inValue := values[1].(*sql.NullString).String
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Customer]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*Subscription](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "subscriptions_with_usage" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
+		}
+	}
+	return nil
+}
+func (cq *CustomerQuery) loadLineItemsWithUsage(ctx context.Context, query *SubscriptionLineItemQuery, nodes []*Customer, init func(*Customer), assign func(*Customer, *SubscriptionLineItem)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[string]*Customer)
+	nids := make(map[string]map[*Customer]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(customer.LineItemsWithUsageTable)
+		s.Join(joinT).On(s.C(subscriptionlineitem.FieldID), joinT.C(customer.LineItemsWithUsagePrimaryKey[0]))
+		s.Where(sql.InValues(joinT.C(customer.LineItemsWithUsagePrimaryKey[1]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(customer.LineItemsWithUsagePrimaryKey[1]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(sql.NullString)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := values[0].(*sql.NullString).String
+				inValue := values[1].(*sql.NullString).String
+				if nids[inValue] == nil {
+					nids[inValue] = map[*Customer]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*SubscriptionLineItem](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "line_items_with_usage" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
+		}
+	}
+	return nil
 }
 
 func (cq *CustomerQuery) sqlCount(ctx context.Context) (int, error) {

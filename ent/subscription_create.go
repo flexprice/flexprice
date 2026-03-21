@@ -678,6 +678,21 @@ func (sc *SubscriptionCreate) SetInvoicingCustomer(c *Customer) *SubscriptionCre
 	return sc.SetInvoicingCustomerID(c.ID)
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by IDs.
+func (sc *SubscriptionCreate) AddUsageCustomerIDs(ids ...string) *SubscriptionCreate {
+	sc.mutation.AddUsageCustomerIDs(ids...)
+	return sc
+}
+
+// AddUsageCustomers adds the "usage_customers" edges to the Customer entity.
+func (sc *SubscriptionCreate) AddUsageCustomers(c ...*Customer) *SubscriptionCreate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sc.AddUsageCustomerIDs(ids...)
+}
+
 // Mutation returns the SubscriptionMutation object of the builder.
 func (sc *SubscriptionCreate) Mutation() *SubscriptionMutation {
 	return sc.mutation
@@ -1265,6 +1280,22 @@ func (sc *SubscriptionCreate) createSpec() (*Subscription, *sqlgraph.CreateSpec)
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.InvoicingCustomerID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := sc.mutation.UsageCustomersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscription.UsageCustomersTable,
+			Columns: subscription.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

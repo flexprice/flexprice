@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/couponassociation"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/internal/types"
@@ -524,6 +525,21 @@ func (sliu *SubscriptionLineItemUpdate) AddCouponAssociations(c ...*CouponAssoci
 	return sliu.AddCouponAssociationIDs(ids...)
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by IDs.
+func (sliu *SubscriptionLineItemUpdate) AddUsageCustomerIDs(ids ...string) *SubscriptionLineItemUpdate {
+	sliu.mutation.AddUsageCustomerIDs(ids...)
+	return sliu
+}
+
+// AddUsageCustomers adds the "usage_customers" edges to the Customer entity.
+func (sliu *SubscriptionLineItemUpdate) AddUsageCustomers(c ...*Customer) *SubscriptionLineItemUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliu.AddUsageCustomerIDs(ids...)
+}
+
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
 func (sliu *SubscriptionLineItemUpdate) Mutation() *SubscriptionLineItemMutation {
 	return sliu.mutation
@@ -548,6 +564,27 @@ func (sliu *SubscriptionLineItemUpdate) RemoveCouponAssociations(c ...*CouponAss
 		ids[i] = c[i].ID
 	}
 	return sliu.RemoveCouponAssociationIDs(ids...)
+}
+
+// ClearUsageCustomers clears all "usage_customers" edges to the Customer entity.
+func (sliu *SubscriptionLineItemUpdate) ClearUsageCustomers() *SubscriptionLineItemUpdate {
+	sliu.mutation.ClearUsageCustomers()
+	return sliu
+}
+
+// RemoveUsageCustomerIDs removes the "usage_customers" edge to Customer entities by IDs.
+func (sliu *SubscriptionLineItemUpdate) RemoveUsageCustomerIDs(ids ...string) *SubscriptionLineItemUpdate {
+	sliu.mutation.RemoveUsageCustomerIDs(ids...)
+	return sliu
+}
+
+// RemoveUsageCustomers removes "usage_customers" edges to Customer entities.
+func (sliu *SubscriptionLineItemUpdate) RemoveUsageCustomers(c ...*Customer) *SubscriptionLineItemUpdate {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliu.RemoveUsageCustomerIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -819,6 +856,51 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if sliu.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.UsageCustomersTable,
+			Columns: subscriptionlineitem.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliu.mutation.RemovedUsageCustomersIDs(); len(nodes) > 0 && !sliu.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.UsageCustomersTable,
+			Columns: subscriptionlineitem.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliu.mutation.UsageCustomersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.UsageCustomersTable,
+			Columns: subscriptionlineitem.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -1339,6 +1421,21 @@ func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociations(c ...*CouponAs
 	return sliuo.AddCouponAssociationIDs(ids...)
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by IDs.
+func (sliuo *SubscriptionLineItemUpdateOne) AddUsageCustomerIDs(ids ...string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.AddUsageCustomerIDs(ids...)
+	return sliuo
+}
+
+// AddUsageCustomers adds the "usage_customers" edges to the Customer entity.
+func (sliuo *SubscriptionLineItemUpdateOne) AddUsageCustomers(c ...*Customer) *SubscriptionLineItemUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliuo.AddUsageCustomerIDs(ids...)
+}
+
 // Mutation returns the SubscriptionLineItemMutation object of the builder.
 func (sliuo *SubscriptionLineItemUpdateOne) Mutation() *SubscriptionLineItemMutation {
 	return sliuo.mutation
@@ -1363,6 +1460,27 @@ func (sliuo *SubscriptionLineItemUpdateOne) RemoveCouponAssociations(c ...*Coupo
 		ids[i] = c[i].ID
 	}
 	return sliuo.RemoveCouponAssociationIDs(ids...)
+}
+
+// ClearUsageCustomers clears all "usage_customers" edges to the Customer entity.
+func (sliuo *SubscriptionLineItemUpdateOne) ClearUsageCustomers() *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.ClearUsageCustomers()
+	return sliuo
+}
+
+// RemoveUsageCustomerIDs removes the "usage_customers" edge to Customer entities by IDs.
+func (sliuo *SubscriptionLineItemUpdateOne) RemoveUsageCustomerIDs(ids ...string) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.RemoveUsageCustomerIDs(ids...)
+	return sliuo
+}
+
+// RemoveUsageCustomers removes "usage_customers" edges to Customer entities.
+func (sliuo *SubscriptionLineItemUpdateOne) RemoveUsageCustomers(c ...*Customer) *SubscriptionLineItemUpdateOne {
+	ids := make([]string, len(c))
+	for i := range c {
+		ids[i] = c[i].ID
+	}
+	return sliuo.RemoveUsageCustomerIDs(ids...)
 }
 
 // Where appends a list predicates to the SubscriptionLineItemUpdate builder.
@@ -1664,6 +1782,51 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(couponassociation.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if sliuo.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.UsageCustomersTable,
+			Columns: subscriptionlineitem.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliuo.mutation.RemovedUsageCustomersIDs(); len(nodes) > 0 && !sliuo.mutation.UsageCustomersCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.UsageCustomersTable,
+			Columns: subscriptionlineitem.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := sliuo.mutation.UsageCustomersIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2M,
+			Inverse: false,
+			Table:   subscriptionlineitem.UsageCustomersTable,
+			Columns: subscriptionlineitem.UsageCustomersPrimaryKey,
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(customer.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

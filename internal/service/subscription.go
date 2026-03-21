@@ -15,6 +15,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/invoice"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/interfaces"
+	"github.com/samber/lo"
 
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/proration"
@@ -26,7 +27,6 @@ import (
 
 	"github.com/flexprice/flexprice/internal/types"
 	webhookDto "github.com/flexprice/flexprice/internal/webhook/dto"
-	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
@@ -40,6 +40,39 @@ func NewSubscriptionService(params ServiceParams) SubscriptionService {
 	return &subscriptionService{
 		ServiceParams: params,
 	}
+}
+
+// resolveCustomerIDsToExternalIDs resolves a list of customer IDs to their external IDs.
+// This is used for multi-customer usage aggregation in customer hierarchy.
+// Returns a list of external IDs in the same order as the input customer IDs.
+func (s *subscriptionService) resolveCustomerIDsToExternalIDs(ctx context.Context, customerIDs []string) ([]string, error) {
+	if len(customerIDs) == 0 {
+		return nil, nil
+	}
+
+	// Batch fetch all customers
+	customerFilter := types.NewNoLimitCustomerFilter()
+	customerFilter.CustomerIDs = customerIDs
+	customers, err := s.CustomerRepo.List(ctx, customerFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build map for quick lookup
+	customerMap := make(map[string]string, len(customers))
+	for _, cust := range customers {
+		customerMap[cust.ID] = cust.ExternalID
+	}
+
+	// Resolve in order
+	externalIDs := make([]string, 0, len(customerIDs))
+	for _, custID := range customerIDs {
+		if externalID, ok := customerMap[custID]; ok {
+			externalIDs = append(externalIDs, externalID)
+		}
+	}
+
+	return externalIDs, nil
 }
 
 func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.CreateSubscriptionRequest) (*dto.SubscriptionResponse, error) {
@@ -69,6 +102,13 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			WithHint("The customer must be active to create a subscription").
 			WithReportableDetails(map[string]interface{}{"customer_id": req.CustomerID, "status": customer.Status}).
 			Mark(ierr.ErrValidation)
+	}
+
+	// Validate usage_customer_ids if provided
+	if len(req.UsageCustomerIDs) > 0 {
+		if err := s.validateUsageCustomerIDs(ctx, customer, req.UsageCustomerIDs); err != nil {
+			return nil, err
+		}
 	}
 
 	// Handle InvoiceBilling to set InvoicingCustomerID internally
@@ -220,7 +260,6 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			if item.ID == "" {
 				item.ID = types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM)
 			}
-
 			item.SubscriptionID = sub.ID
 			item.PriceType = price.Type
 			item.EntityID = plan.ID
@@ -228,8 +267,9 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 			item.PlanDisplayName = plan.Name
 			item.CustomerID = sub.CustomerID
 			item.Currency = sub.Currency
-			item.BillingPeriod = price.BillingPeriod
-			item.BillingPeriodCount = price.BillingPeriodCount
+			item.BillingPeriod = sub.BillingPeriod
+			// Copy subscription's usage_customer_ids to line item
+			item.UsageCustomerIDs = sub.UsageCustomerIDs
 			item.InvoiceCadence = price.InvoiceCadence
 			item.TrialPeriod = price.TrialPeriod
 			// Set phase ID if phases exist
@@ -2155,14 +2195,29 @@ func (s *subscriptionService) GetUsageBySubscription(ctx context.Context, req *d
 		}
 
 		meterID := lineItem.MeterID
+
+		// Get effective usage customer IDs for this line item (handles hierarchy)
+		usageCustomerIDs := lineItem.EffectiveUsageCustomerIDs(subscription)
+
+		// Resolve customer IDs to external IDs for ClickHouse queries
+		externalCustomerIDs, err := s.resolveCustomerIDsToExternalIDs(ctx, usageCustomerIDs)
+		if err != nil {
+			s.Logger.Warnw("failed to resolve usage customer IDs to external IDs",
+				"error", err,
+				"usage_customer_ids", usageCustomerIDs,
+				"subscription_id", req.SubscriptionID)
+			return nil, err
+		}
+
 		usageRequest := &dto.GetUsageByMeterRequest{
-			MeterID:            meterID,
-			PriceID:            lineItem.PriceID,
-			Meter:              meter.ToMeter(),
-			ExternalCustomerID: customer.ExternalID,
-			StartTime:          lineItem.GetPeriodStart(usageStartTime),
-			EndTime:            lineItem.GetPeriodEnd(usageEndTime),
-			Filters:            make(map[string][]string),
+			MeterID:             meterID,
+			PriceID:             lineItem.PriceID,
+			Meter:               meter.ToMeter(),
+			ExternalCustomerID:  customer.ExternalID, // Keep for backward compatibility
+			ExternalCustomerIDs: externalCustomerIDs, // Multi-customer aggregation
+			StartTime:           lineItem.GetPeriodStart(usageStartTime),
+			EndTime:             lineItem.GetPeriodEnd(usageEndTime),
+			Filters:             make(map[string][]string),
 		}
 
 		for _, filter := range meter.Filters {
@@ -6111,4 +6166,75 @@ func (s *subscriptionService) TriggerSubscriptionWorkflow(ctx context.Context, s
 	}
 
 	return response, nil
+}
+
+// validateUsageCustomerIDs validates that all provided usage customer IDs are valid and in the same hierarchy
+func (s *subscriptionService) validateUsageCustomerIDs(ctx context.Context, subscriptionCustomer *customer.Customer, usageCustomerIDs []string) error {
+	if len(usageCustomerIDs) == 0 {
+		return nil
+	}
+
+	// Ignore the subscription customer's own ID (parent/self in usage_customer_ids is allowed and treated as no-op)
+	filtered := lo.Filter(usageCustomerIDs, func(id string, _ int) bool {
+		return id != subscriptionCustomer.ID
+	})
+	if len(filtered) == 0 {
+		return nil
+	}
+
+	// Deduplicate IDs
+	uniqueIDs := lo.Uniq(filtered)
+
+	// Fetch all usage customers in a single query
+	customerFilter := types.NewCustomerFilter()
+	customerFilter.CustomerIDs = uniqueIDs
+	customerFilter.Limit = lo.ToPtr(len(uniqueIDs))
+
+	usageCustomers, err := s.CustomerRepo.List(ctx, customerFilter)
+	if err != nil {
+		return ierr.WithError(err).
+			WithHint("Failed to fetch usage customers").
+			Mark(ierr.ErrDatabase)
+	}
+
+	if len(usageCustomers) != len(uniqueIDs) {
+		return ierr.NewError("one or more usage customers not found").
+			WithHint("All usage_customer_ids must reference valid customers").
+			Mark(ierr.ErrValidation)
+	}
+
+	// Validate hierarchy constraints
+	// Rule 1: If subscription customer is a parent (no parent_customer_id), all usage customers must be children
+	// Rule 2: If subscription customer is a child, all usage customers must be siblings (same parent)
+	if subscriptionCustomer.ParentCustomerID == nil {
+		// Subscription customer is a parent
+		for _, usageCust := range usageCustomers {
+			if usageCust.ParentCustomerID == nil || *usageCust.ParentCustomerID != subscriptionCustomer.ID {
+				return ierr.NewError("usage customers must be children of the subscription customer").
+					WithHint("When creating a subscription for a parent customer, usage_customer_ids must be its children").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_customer_id": subscriptionCustomer.ID,
+						"invalid_usage_customer":   usageCust.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	} else {
+		// Subscription customer is a child
+		for _, usageCust := range usageCustomers {
+			if usageCust.ParentCustomerID == nil ||
+				*usageCust.ParentCustomerID != *subscriptionCustomer.ParentCustomerID {
+				return ierr.NewError("usage customers must be siblings (share the same parent)").
+					WithHint("When creating a subscription for a child customer, usage_customer_ids must be siblings").
+					WithReportableDetails(map[string]interface{}{
+						"subscription_customer_id":        subscriptionCustomer.ID,
+						"subscription_customer_parent_id": *subscriptionCustomer.ParentCustomerID,
+						"invalid_usage_customer":          usageCust.ID,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+	}
+
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -49,8 +50,22 @@ const (
 	FieldAddressCountry = "address_country"
 	// FieldParentCustomerID holds the string denoting the parent_customer_id field in the database.
 	FieldParentCustomerID = "parent_customer_id"
+	// EdgeSubscriptionsWithUsage holds the string denoting the subscriptions_with_usage edge name in mutations.
+	EdgeSubscriptionsWithUsage = "subscriptions_with_usage"
+	// EdgeLineItemsWithUsage holds the string denoting the line_items_with_usage edge name in mutations.
+	EdgeLineItemsWithUsage = "line_items_with_usage"
 	// Table holds the table name of the customer in the database.
 	Table = "customers"
+	// SubscriptionsWithUsageTable is the table that holds the subscriptions_with_usage relation/edge. The primary key declared below.
+	SubscriptionsWithUsageTable = "subscription_usage_customers"
+	// SubscriptionsWithUsageInverseTable is the table name for the Subscription entity.
+	// It exists in this package in order to avoid circular dependency with the "subscription" package.
+	SubscriptionsWithUsageInverseTable = "subscriptions"
+	// LineItemsWithUsageTable is the table that holds the line_items_with_usage relation/edge. The primary key declared below.
+	LineItemsWithUsageTable = "subscription_line_item_usage_customers"
+	// LineItemsWithUsageInverseTable is the table name for the SubscriptionLineItem entity.
+	// It exists in this package in order to avoid circular dependency with the "subscriptionlineitem" package.
+	LineItemsWithUsageInverseTable = "subscription_line_items"
 )
 
 // Columns holds all SQL columns for customer fields.
@@ -75,6 +90,15 @@ var Columns = []string{
 	FieldAddressCountry,
 	FieldParentCustomerID,
 }
+
+var (
+	// SubscriptionsWithUsagePrimaryKey and SubscriptionsWithUsageColumn2 are the table columns denoting the
+	// primary key for the subscriptions_with_usage relation (M2M).
+	SubscriptionsWithUsagePrimaryKey = []string{"subscription_id", "customer_id"}
+	// LineItemsWithUsagePrimaryKey and LineItemsWithUsageColumn2 are the table columns denoting the
+	// primary key for the line_items_with_usage relation (M2M).
+	LineItemsWithUsagePrimaryKey = []string{"subscription_line_item_id", "customer_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -196,4 +220,46 @@ func ByAddressCountry(opts ...sql.OrderTermOption) OrderOption {
 // ByParentCustomerID orders the results by the parent_customer_id field.
 func ByParentCustomerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentCustomerID, opts...).ToFunc()
+}
+
+// BySubscriptionsWithUsageCount orders the results by subscriptions_with_usage count.
+func BySubscriptionsWithUsageCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newSubscriptionsWithUsageStep(), opts...)
+	}
+}
+
+// BySubscriptionsWithUsage orders the results by subscriptions_with_usage terms.
+func BySubscriptionsWithUsage(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSubscriptionsWithUsageStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByLineItemsWithUsageCount orders the results by line_items_with_usage count.
+func ByLineItemsWithUsageCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newLineItemsWithUsageStep(), opts...)
+	}
+}
+
+// ByLineItemsWithUsage orders the results by line_items_with_usage terms.
+func ByLineItemsWithUsage(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newLineItemsWithUsageStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newSubscriptionsWithUsageStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SubscriptionsWithUsageInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, true, SubscriptionsWithUsageTable, SubscriptionsWithUsagePrimaryKey...),
+	)
+}
+func newLineItemsWithUsageStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(LineItemsWithUsageInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, true, LineItemsWithUsageTable, LineItemsWithUsagePrimaryKey...),
+	)
 }

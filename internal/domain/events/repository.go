@@ -83,16 +83,20 @@ type UsageAnalytic struct {
 
 type UsageParams struct {
 	ExternalCustomerID string                `json:"external_customer_id"`
-	CustomerID         string                `json:"customer_id"`
-	EventName          string                `json:"event_name" validate:"required"`
-	PropertyName       string                `json:"property_name" validate:"required"`
-	AggregationType    types.AggregationType `json:"aggregation_type" validate:"required"`
-	WindowSize         types.WindowSize      `json:"window_size"`
-	BucketSize         types.WindowSize      `json:"bucket_size,omitempty"` // For windowed MAX aggregation
-	StartTime          time.Time             `json:"start_time" validate:"required"`
-	EndTime            time.Time             `json:"end_time" validate:"required"`
-	Filters            map[string][]string   `json:"filters"`
-	Multiplier         *decimal.Decimal      `json:"multiplier,omitempty" validate:"omitempty,gt=0"`
+	// ExternalCustomerIDs is used for multi-customer usage aggregation (e.g., customer hierarchy).
+	// When set, aggregates usage across all specified customer IDs using IN clause.
+	// If both ExternalCustomerID and ExternalCustomerIDs are set, ExternalCustomerIDs takes precedence.
+	ExternalCustomerIDs []string              `json:"external_customer_ids,omitempty"`
+	CustomerID          string                `json:"customer_id"`
+	EventName           string                `json:"event_name" validate:"required"`
+	PropertyName        string                `json:"property_name" validate:"required"`
+	AggregationType     types.AggregationType `json:"aggregation_type" validate:"required"`
+	WindowSize          types.WindowSize      `json:"window_size"`
+	BucketSize          types.WindowSize      `json:"bucket_size,omitempty"` // For windowed MAX aggregation
+	StartTime           time.Time             `json:"start_time" validate:"required"`
+	EndTime             time.Time             `json:"end_time" validate:"required"`
+	Filters             map[string][]string   `json:"filters"`
+	Multiplier          *decimal.Decimal      `json:"multiplier,omitempty" validate:"omitempty,gt=0"`
 	// BillingAnchor enables custom monthly billing periods for usage aggregation.
 	//
 	// Behavior by WindowSize:

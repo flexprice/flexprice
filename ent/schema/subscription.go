@@ -215,6 +215,8 @@ func (Subscription) Edges() []ent.Edge {
 			Unique().
 			Field("invoicing_customer_id").
 			Comment("Customer to use for invoicing (can differ from the subscription customer)"),
+		edge.To("usage_customers", Customer.Type).
+			Comment("Customers whose usage is aggregated for this subscription (M2M)"),
 	}
 }
 

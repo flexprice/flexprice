@@ -77,6 +77,8 @@ const (
 	FieldLineItemDiscount = "line_item_discount"
 	// FieldInvoiceLevelDiscount holds the string denoting the invoice_level_discount field in the database.
 	FieldInvoiceLevelDiscount = "invoice_level_discount"
+	// FieldUsageCustomerIds holds the string denoting the usage_customer_ids field in the database.
+	FieldUsageCustomerIds = "usage_customer_ids"
 	// EdgeInvoice holds the string denoting the invoice edge name in mutations.
 	EdgeInvoice = "invoice"
 	// EdgeCouponApplications holds the string denoting the coupon_applications edge name in mutations.
@@ -133,6 +135,7 @@ var Columns = []string{
 	FieldPrepaidCreditsApplied,
 	FieldLineItemDiscount,
 	FieldInvoiceLevelDiscount,
+	FieldUsageCustomerIds,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).

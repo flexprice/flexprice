@@ -173,6 +173,28 @@ func buildFilterConditions(filters map[string][]string) string {
 	return "AND " + strings.Join(conditions, " AND ")
 }
 
+// buildExternalCustomerFilter builds the external_customer_id filter clause.
+// If ExternalCustomerIDs is set, uses IN clause for multi-customer aggregation.
+// Otherwise, uses single customer ID equality check.
+// Returns empty string if no customer filter is specified.
+func buildExternalCustomerFilter(params *events.UsageParams) string {
+	if len(params.ExternalCustomerIDs) > 0 {
+		// Multi-customer filter using IN clause
+		quotedIDs := make([]string, len(params.ExternalCustomerIDs))
+		for i, id := range params.ExternalCustomerIDs {
+			quotedIDs[i] = fmt.Sprintf("'%s'", id)
+		}
+		return fmt.Sprintf("AND external_customer_id IN (%s)", strings.Join(quotedIDs, ","))
+	}
+	
+	if params.ExternalCustomerID != "" {
+		// Single customer filter
+		return fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
+	}
+	
+	return ""
+}
+
 func buildTimeConditions(params *events.UsageParams) string {
 	conditions := parseTimeConditions(params)
 
@@ -227,10 +249,7 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -276,10 +295,7 @@ func (a *SumAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 func (a *SumAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
 	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor)
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -341,10 +357,7 @@ func (a *CountAggregator) GetQuery(ctx context.Context, params *events.UsagePara
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -400,10 +413,7 @@ func (a *CountUniqueAggregator) GetQuery(ctx context.Context, params *events.Usa
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -467,10 +477,7 @@ func (a *AvgAggregator) GetQuery(ctx context.Context, params *events.UsageParams
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -530,10 +537,7 @@ func (a *LatestAggregator) GetQuery(ctx context.Context, params *events.UsagePar
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -590,10 +594,7 @@ func (a *SumWithMultiAggregator) GetQuery(ctx context.Context, params *events.Us
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -672,10 +673,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 		windowGroupBy = ", window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -721,10 +719,7 @@ func (a *MaxAggregator) getNonWindowedQuery(ctx context.Context, params *events.
 func (a *MaxAggregator) getWindowedQuery(ctx context.Context, params *events.UsageParams) string {
 	bucketWindow := formatWindowSizeWithBillingAnchor(params.BucketSize, params.BillingAnchor)
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {
@@ -830,10 +825,7 @@ func (a *WeightedSumAggregator) GetQuery(ctx context.Context, params *events.Usa
 		groupByClause = "GROUP BY window_size ORDER BY window_size"
 	}
 
-	externalCustomerFilter := ""
-	if params.ExternalCustomerID != "" {
-		externalCustomerFilter = fmt.Sprintf("AND external_customer_id = '%s'", params.ExternalCustomerID)
-	}
+	externalCustomerFilter := buildExternalCustomerFilter(params)
 
 	customerFilter := ""
 	if params.CustomerID != "" {

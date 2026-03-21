@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"entgo.io/ent/dialect/sql/sqljson"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/couponapplication"
 	"github.com/flexprice/flexprice/ent/invoicelineitem"
@@ -192,6 +193,24 @@ func (iliu *InvoiceLineItemUpdate) SetNillableInvoiceLevelDiscount(d *decimal.De
 // ClearInvoiceLevelDiscount clears the value of the "invoice_level_discount" field.
 func (iliu *InvoiceLineItemUpdate) ClearInvoiceLevelDiscount() *InvoiceLineItemUpdate {
 	iliu.mutation.ClearInvoiceLevelDiscount()
+	return iliu
+}
+
+// SetUsageCustomerIds sets the "usage_customer_ids" field.
+func (iliu *InvoiceLineItemUpdate) SetUsageCustomerIds(s []string) *InvoiceLineItemUpdate {
+	iliu.mutation.SetUsageCustomerIds(s)
+	return iliu
+}
+
+// AppendUsageCustomerIds appends s to the "usage_customer_ids" field.
+func (iliu *InvoiceLineItemUpdate) AppendUsageCustomerIds(s []string) *InvoiceLineItemUpdate {
+	iliu.mutation.AppendUsageCustomerIds(s)
+	return iliu
+}
+
+// ClearUsageCustomerIds clears the value of the "usage_customer_ids" field.
+func (iliu *InvoiceLineItemUpdate) ClearUsageCustomerIds() *InvoiceLineItemUpdate {
+	iliu.mutation.ClearUsageCustomerIds()
 	return iliu
 }
 
@@ -387,6 +406,17 @@ func (iliu *InvoiceLineItemUpdate) sqlSave(ctx context.Context) (n int, err erro
 	}
 	if iliu.mutation.InvoiceLevelDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
+	}
+	if value, ok := iliu.mutation.UsageCustomerIds(); ok {
+		_spec.SetField(invoicelineitem.FieldUsageCustomerIds, field.TypeJSON, value)
+	}
+	if value, ok := iliu.mutation.AppendedUsageCustomerIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, invoicelineitem.FieldUsageCustomerIds, value)
+		})
+	}
+	if iliu.mutation.UsageCustomerIdsCleared() {
+		_spec.ClearField(invoicelineitem.FieldUsageCustomerIds, field.TypeJSON)
 	}
 	if iliu.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -617,6 +647,24 @@ func (iliuo *InvoiceLineItemUpdateOne) ClearInvoiceLevelDiscount() *InvoiceLineI
 	return iliuo
 }
 
+// SetUsageCustomerIds sets the "usage_customer_ids" field.
+func (iliuo *InvoiceLineItemUpdateOne) SetUsageCustomerIds(s []string) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.SetUsageCustomerIds(s)
+	return iliuo
+}
+
+// AppendUsageCustomerIds appends s to the "usage_customer_ids" field.
+func (iliuo *InvoiceLineItemUpdateOne) AppendUsageCustomerIds(s []string) *InvoiceLineItemUpdateOne {
+	iliuo.mutation.AppendUsageCustomerIds(s)
+	return iliuo
+}
+
+// ClearUsageCustomerIds clears the value of the "usage_customer_ids" field.
+func (iliuo *InvoiceLineItemUpdateOne) ClearUsageCustomerIds() *InvoiceLineItemUpdateOne {
+	iliuo.mutation.ClearUsageCustomerIds()
+	return iliuo
+}
+
 // AddCouponApplicationIDs adds the "coupon_applications" edge to the CouponApplication entity by IDs.
 func (iliuo *InvoiceLineItemUpdateOne) AddCouponApplicationIDs(ids ...string) *InvoiceLineItemUpdateOne {
 	iliuo.mutation.AddCouponApplicationIDs(ids...)
@@ -839,6 +887,17 @@ func (iliuo *InvoiceLineItemUpdateOne) sqlSave(ctx context.Context) (_node *Invo
 	}
 	if iliuo.mutation.InvoiceLevelDiscountCleared() {
 		_spec.ClearField(invoicelineitem.FieldInvoiceLevelDiscount, field.TypeOther)
+	}
+	if value, ok := iliuo.mutation.UsageCustomerIds(); ok {
+		_spec.SetField(invoicelineitem.FieldUsageCustomerIds, field.TypeJSON, value)
+	}
+	if value, ok := iliuo.mutation.AppendedUsageCustomerIds(); ok {
+		_spec.AddModifier(func(u *sql.UpdateBuilder) {
+			sqljson.Append(u, invoicelineitem.FieldUsageCustomerIds, value)
+		})
+	}
+	if iliuo.mutation.UsageCustomerIdsCleared() {
+		_spec.ClearField(invoicelineitem.FieldUsageCustomerIds, field.TypeJSON)
 	}
 	if iliuo.mutation.CouponApplicationsCleared() {
 		edge := &sqlgraph.EdgeSpec{

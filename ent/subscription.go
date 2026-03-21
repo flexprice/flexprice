@@ -129,9 +129,11 @@ type SubscriptionEdges struct {
 	CouponApplications []*CouponApplication `json:"coupon_applications,omitempty"`
 	// Customer to use for invoicing (can differ from the subscription customer)
 	InvoicingCustomer *Customer `json:"invoicing_customer,omitempty"`
+	// Customers whose usage is aggregated for this subscription (M2M)
+	UsageCustomers []*Customer `json:"usage_customers,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [8]bool
+	loadedTypes [9]bool
 }
 
 // LineItemsOrErr returns the LineItems value or an error if the edge
@@ -206,6 +208,15 @@ func (e SubscriptionEdges) InvoicingCustomerOrErr() (*Customer, error) {
 		return nil, &NotFoundError{label: customer.Label}
 	}
 	return nil, &NotLoadedError{edge: "invoicing_customer"}
+}
+
+// UsageCustomersOrErr returns the UsageCustomers value or an error if the edge
+// was not loaded in eager-loading.
+func (e SubscriptionEdges) UsageCustomersOrErr() ([]*Customer, error) {
+	if e.loadedTypes[8] {
+		return e.UsageCustomers, nil
+	}
+	return nil, &NotLoadedError{edge: "usage_customers"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -563,6 +574,11 @@ func (s *Subscription) QueryCouponApplications() *CouponApplicationQuery {
 // QueryInvoicingCustomer queries the "invoicing_customer" edge of the Subscription entity.
 func (s *Subscription) QueryInvoicingCustomer() *CustomerQuery {
 	return NewSubscriptionClient(s.config).QueryInvoicingCustomer(s)
+}
+
+// QueryUsageCustomers queries the "usage_customers" edge of the Subscription entity.
+func (s *Subscription) QueryUsageCustomers() *CustomerQuery {
+	return NewSubscriptionClient(s.config).QueryUsageCustomers(s)
 }
 
 // Update returns a builder for updating this Subscription.

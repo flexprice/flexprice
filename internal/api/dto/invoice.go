@@ -559,6 +559,9 @@ type CreateInvoiceLineItemRequest struct {
 
 	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
 	InvoiceLevelDiscount *decimal.Decimal `json:"invoice_level_discount,omitempty" swaggertype:"string"`
+
+	// usage_customer_ids contains the customer IDs whose usage was aggregated for this line item (for customer hierarchy)
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty"`
 }
 
 func (r *CreateInvoiceLineItemRequest) Validate(invoiceType types.InvoiceType) error {
@@ -660,6 +663,7 @@ func (r *CreateInvoiceLineItemRequest) ToInvoiceLineItem(ctx context.Context, in
 		PrepaidCreditsApplied: lo.FromPtrOr(r.PrepaidCreditsApplied, decimal.Zero),
 		LineItemDiscount:      lo.FromPtrOr(r.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:  lo.FromPtrOr(r.InvoiceLevelDiscount, decimal.Zero),
+		UsageCustomerIDs:      r.UsageCustomerIDs,
 	}
 }
 

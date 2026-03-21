@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/couponassociation"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -27,6 +28,7 @@ type SubscriptionLineItemQuery struct {
 	predicates             []predicate.SubscriptionLineItem
 	withSubscription       *SubscriptionQuery
 	withCouponAssociations *CouponAssociationQuery
+	withUsageCustomers     *CustomerQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -100,6 +102,28 @@ func (sliq *SubscriptionLineItemQuery) QueryCouponAssociations() *CouponAssociat
 			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, selector),
 			sqlgraph.To(couponassociation.Table, couponassociation.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, subscriptionlineitem.CouponAssociationsTable, subscriptionlineitem.CouponAssociationsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(sliq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryUsageCustomers chains the current query on the "usage_customers" edge.
+func (sliq *SubscriptionLineItemQuery) QueryUsageCustomers() *CustomerQuery {
+	query := (&CustomerClient{config: sliq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := sliq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := sliq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(subscriptionlineitem.Table, subscriptionlineitem.FieldID, selector),
+			sqlgraph.To(customer.Table, customer.FieldID),
+			sqlgraph.Edge(sqlgraph.M2M, false, subscriptionlineitem.UsageCustomersTable, subscriptionlineitem.UsageCustomersPrimaryKey...),
 		)
 		fromU = sqlgraph.SetNeighbors(sliq.driver.Dialect(), step)
 		return fromU, nil
@@ -301,6 +325,7 @@ func (sliq *SubscriptionLineItemQuery) Clone() *SubscriptionLineItemQuery {
 		predicates:             append([]predicate.SubscriptionLineItem{}, sliq.predicates...),
 		withSubscription:       sliq.withSubscription.Clone(),
 		withCouponAssociations: sliq.withCouponAssociations.Clone(),
+		withUsageCustomers:     sliq.withUsageCustomers.Clone(),
 		// clone intermediate query.
 		sql:  sliq.sql.Clone(),
 		path: sliq.path,
@@ -326,6 +351,17 @@ func (sliq *SubscriptionLineItemQuery) WithCouponAssociations(opts ...func(*Coup
 		opt(query)
 	}
 	sliq.withCouponAssociations = query
+	return sliq
+}
+
+// WithUsageCustomers tells the query-builder to eager-load the nodes that are connected to
+// the "usage_customers" edge. The optional arguments are used to configure the query builder of the edge.
+func (sliq *SubscriptionLineItemQuery) WithUsageCustomers(opts ...func(*CustomerQuery)) *SubscriptionLineItemQuery {
+	query := (&CustomerClient{config: sliq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	sliq.withUsageCustomers = query
 	return sliq
 }
 
@@ -407,9 +443,10 @@ func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...quer
 	var (
 		nodes       = []*SubscriptionLineItem{}
 		_spec       = sliq.querySpec()
-		loadedTypes = [2]bool{
+		loadedTypes = [3]bool{
 			sliq.withSubscription != nil,
 			sliq.withCouponAssociations != nil,
+			sliq.withUsageCustomers != nil,
 		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
@@ -442,6 +479,13 @@ func (sliq *SubscriptionLineItemQuery) sqlAll(ctx context.Context, hooks ...quer
 			func(n *SubscriptionLineItem, e *CouponAssociation) {
 				n.Edges.CouponAssociations = append(n.Edges.CouponAssociations, e)
 			}); err != nil {
+			return nil, err
+		}
+	}
+	if query := sliq.withUsageCustomers; query != nil {
+		if err := sliq.loadUsageCustomers(ctx, query, nodes,
+			func(n *SubscriptionLineItem) { n.Edges.UsageCustomers = []*Customer{} },
+			func(n *SubscriptionLineItem, e *Customer) { n.Edges.UsageCustomers = append(n.Edges.UsageCustomers, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -507,6 +551,67 @@ func (sliq *SubscriptionLineItemQuery) loadCouponAssociations(ctx context.Contex
 			return fmt.Errorf(`unexpected referenced foreign-key "subscription_line_item_id" returned %v for node %v`, *fk, n.ID)
 		}
 		assign(node, n)
+	}
+	return nil
+}
+func (sliq *SubscriptionLineItemQuery) loadUsageCustomers(ctx context.Context, query *CustomerQuery, nodes []*SubscriptionLineItem, init func(*SubscriptionLineItem), assign func(*SubscriptionLineItem, *Customer)) error {
+	edgeIDs := make([]driver.Value, len(nodes))
+	byID := make(map[string]*SubscriptionLineItem)
+	nids := make(map[string]map[*SubscriptionLineItem]struct{})
+	for i, node := range nodes {
+		edgeIDs[i] = node.ID
+		byID[node.ID] = node
+		if init != nil {
+			init(node)
+		}
+	}
+	query.Where(func(s *sql.Selector) {
+		joinT := sql.Table(subscriptionlineitem.UsageCustomersTable)
+		s.Join(joinT).On(s.C(customer.FieldID), joinT.C(subscriptionlineitem.UsageCustomersPrimaryKey[1]))
+		s.Where(sql.InValues(joinT.C(subscriptionlineitem.UsageCustomersPrimaryKey[0]), edgeIDs...))
+		columns := s.SelectedColumns()
+		s.Select(joinT.C(subscriptionlineitem.UsageCustomersPrimaryKey[0]))
+		s.AppendSelect(columns...)
+		s.SetDistinct(false)
+	})
+	if err := query.prepareQuery(ctx); err != nil {
+		return err
+	}
+	qr := QuerierFunc(func(ctx context.Context, q Query) (Value, error) {
+		return query.sqlAll(ctx, func(_ context.Context, spec *sqlgraph.QuerySpec) {
+			assign := spec.Assign
+			values := spec.ScanValues
+			spec.ScanValues = func(columns []string) ([]any, error) {
+				values, err := values(columns[1:])
+				if err != nil {
+					return nil, err
+				}
+				return append([]any{new(sql.NullString)}, values...), nil
+			}
+			spec.Assign = func(columns []string, values []any) error {
+				outValue := values[0].(*sql.NullString).String
+				inValue := values[1].(*sql.NullString).String
+				if nids[inValue] == nil {
+					nids[inValue] = map[*SubscriptionLineItem]struct{}{byID[outValue]: {}}
+					return assign(columns[1:], values[1:])
+				}
+				nids[inValue][byID[outValue]] = struct{}{}
+				return nil
+			}
+		})
+	})
+	neighbors, err := withInterceptors[[]*Customer](ctx, query, qr, query.inters)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected "usage_customers" node returned %v`, n.ID)
+		}
+		for kn := range nodes {
+			assign(kn, n)
+		}
 	}
 	return nil
 }

@@ -184,6 +184,13 @@ func (InvoiceLineItem) Fields() []ent.Field {
 			Nillable().
 			Default(decimal.Zero).
 			Comment("Discount amount in invoice currency applied to all line items on the invoice"),
+
+		field.JSON("usage_customer_ids", []string{}).
+			Optional().
+			SchemaType(map[string]string{
+				"postgres": "jsonb",
+			}).
+			Comment("Customer IDs whose usage was aggregated for this line item"),
 	}
 }
 

@@ -18,6 +18,15 @@ type SubscriptionLineItemFilter struct {
 	EntityType         *SubscriptionLineItemEntityType `json:"entity_type,omitempty" form:"entity_type"`
 	ActiveFilter       bool                            `json:"active_filter,omitempty" form:"active_filter" default:"true"`
 	CurrentPeriodStart *time.Time                      `json:"current_period_start,omitempty" form:"current_period_start"`
+	
+	// UsageCustomerIDs filters line items that have at least one of these customer IDs
+	// in their usage_customers edge (i.e. line items that aggregate usage for these customers)
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty" form:"usage_customer_ids"`
+	
+	// WithUsageCustomers loads the usage_customers edge when true (opt-in to avoid unnecessary joins)
+	// Only use when you need to inspect which customers' usage is aggregated (e.g., feature usage tracking, billing)
+	// For most queries, the default behavior (not loading the edge) is sufficient
+	WithUsageCustomers bool `json:"with_usage_customers,omitempty" form:"with_usage_customers"`
 }
 
 // NewSubscriptionLineItemFilter creates a new subscription line item filter with default options

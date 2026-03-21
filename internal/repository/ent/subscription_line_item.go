@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
 	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
@@ -439,7 +440,8 @@ func (r *subscriptionLineItemRepository) ListBySubscription(ctx context.Context,
 			subscriptionlineitem.SubscriptionID(sub.ID),
 			subscriptionlineitem.TenantID(types.GetTenantID(ctx)),
 			subscriptionlineitem.EnvironmentID(types.GetEnvironmentID(ctx)),
-		)
+		).
+		WithUsageCustomers() // Load usage_customers edge for billing/usage calculations
 
 	query = r.queryOpts.applyActiveLineItemFilter(query, &sub.CurrentPeriodStart)
 
@@ -490,6 +492,11 @@ func (r *subscriptionLineItemRepository) List(ctx context.Context, filter *types
 	defer FinishSpan(span)
 
 	query := client.SubscriptionLineItem.Query()
+
+	// Optionally load usage_customers edge if requested to avoid unnecessary joins
+	if filter.WithUsageCustomers {
+		query = query.WithUsageCustomers()
+	}
 
 	// Apply entity-specific filters
 	query, err := r.queryOpts.applyEntityQueryOptions(ctx, filter, query)
@@ -656,6 +663,11 @@ func (o *SubscriptionLineItemQueryOptions) applyEntityQueryOptions(_ context.Con
 
 	if f.ActiveFilter {
 		query = o.applyActiveLineItemFilter(query, f.CurrentPeriodStart)
+	}
+
+	// Apply usage customer IDs filter - line items that have at least one of these customers in usage_customers
+	if len(f.UsageCustomerIDs) > 0 {
+		query = query.Where(subscriptionlineitem.HasUsageCustomersWith(customer.IDIn(f.UsageCustomerIDs...)))
 	}
 
 	return query, nil

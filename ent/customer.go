@@ -54,7 +54,39 @@ type Customer struct {
 	AddressCountry string `json:"address_country,omitempty"`
 	// ParentCustomerID holds the value of the "parent_customer_id" field.
 	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
-	selectValues     sql.SelectValues
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the CustomerQuery when eager-loading is set.
+	Edges        CustomerEdges `json:"edges"`
+	selectValues sql.SelectValues
+}
+
+// CustomerEdges holds the relations/edges for other nodes in the graph.
+type CustomerEdges struct {
+	// Subscriptions that aggregate this customer's usage
+	SubscriptionsWithUsage []*Subscription `json:"subscriptions_with_usage,omitempty"`
+	// Subscription line items that aggregate this customer's usage
+	LineItemsWithUsage []*SubscriptionLineItem `json:"line_items_with_usage,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [2]bool
+}
+
+// SubscriptionsWithUsageOrErr returns the SubscriptionsWithUsage value or an error if the edge
+// was not loaded in eager-loading.
+func (e CustomerEdges) SubscriptionsWithUsageOrErr() ([]*Subscription, error) {
+	if e.loadedTypes[0] {
+		return e.SubscriptionsWithUsage, nil
+	}
+	return nil, &NotLoadedError{edge: "subscriptions_with_usage"}
+}
+
+// LineItemsWithUsageOrErr returns the LineItemsWithUsage value or an error if the edge
+// was not loaded in eager-loading.
+func (e CustomerEdges) LineItemsWithUsageOrErr() ([]*SubscriptionLineItem, error) {
+	if e.loadedTypes[1] {
+		return e.LineItemsWithUsage, nil
+	}
+	return nil, &NotLoadedError{edge: "line_items_with_usage"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -211,6 +243,16 @@ func (c *Customer) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (c *Customer) Value(name string) (ent.Value, error) {
 	return c.selectValues.Get(name)
+}
+
+// QuerySubscriptionsWithUsage queries the "subscriptions_with_usage" edge of the Customer entity.
+func (c *Customer) QuerySubscriptionsWithUsage() *SubscriptionQuery {
+	return NewCustomerClient(c.config).QuerySubscriptionsWithUsage(c)
+}
+
+// QueryLineItemsWithUsage queries the "line_items_with_usage" edge of the Customer entity.
+func (c *Customer) QueryLineItemsWithUsage() *SubscriptionLineItemQuery {
+	return NewCustomerClient(c.config).QueryLineItemsWithUsage(c)
 }
 
 // Update returns a builder for updating this Customer.

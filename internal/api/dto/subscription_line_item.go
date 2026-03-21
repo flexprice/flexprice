@@ -102,6 +102,10 @@ type CreateSubscriptionLineItemRequest struct {
 	CommitmentTrueUpEnabled bool                 `json:"commitment_true_up_enabled,omitempty"`
 	CommitmentWindowed      bool                 `json:"commitment_windowed,omitempty"`
 	CommitmentDuration      *types.BillingPeriod `json:"commitment_duration,omitempty"`
+
+	// UsageCustomerIDs specifies which customers' usage should be aggregated for this line item
+	// If not provided, defaults to the subscription's usage_customer_ids
+	UsageCustomerIDs []string `json:"-"`
 }
 
 // DeleteSubscriptionLineItemRequest represents the request to delete a subscription line item
@@ -445,6 +449,13 @@ func (r *CreateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.C
 		BaseModel:           types.GetDefaultBaseModel(ctx),
 	}
 
+	// Set usage_customer_ids: use provided value if given, else fallback to subscription's usage_customer_ids
+	if r.UsageCustomerIDs != nil {
+		lineItem.UsageCustomerIDs = r.UsageCustomerIDs
+	} else {
+		lineItem.UsageCustomerIDs = params.Subscription.UsageCustomerIDs
+	}
+
 	// Always use price display name (priority: request > price display name)
 	if r.DisplayName != "" {
 		lineItem.DisplayName = r.DisplayName
@@ -591,24 +602,25 @@ func (r *UpdateSubscriptionLineItemRequest) ShouldCreateNewLineItem() bool {
 func (r *UpdateSubscriptionLineItemRequest) ToSubscriptionLineItem(ctx context.Context, existingLineItem *subscription.SubscriptionLineItem, newPriceID string) *subscription.SubscriptionLineItem {
 	// Start with the existing line item as base
 	newLineItem := &subscription.SubscriptionLineItem{
-		ID:               types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
-		SubscriptionID:   existingLineItem.SubscriptionID,
-		CustomerID:       existingLineItem.CustomerID,
-		PriceID:          newPriceID,
-		PriceType:        existingLineItem.PriceType,
-		Currency:         existingLineItem.Currency,
-		BillingPeriod:    existingLineItem.BillingPeriod,
-		InvoiceCadence:   existingLineItem.InvoiceCadence,
-		TrialPeriod:      existingLineItem.TrialPeriod,
-		EntityType:       existingLineItem.EntityType,
-		EntityID:         existingLineItem.EntityID,
-		PlanDisplayName:  existingLineItem.PlanDisplayName,
-		MeterID:          existingLineItem.MeterID,
-		MeterDisplayName: existingLineItem.MeterDisplayName,
-		DisplayName:      existingLineItem.DisplayName,
-		Quantity:         existingLineItem.Quantity,
-		EnvironmentID:    types.GetEnvironmentID(ctx),
-		BaseModel:        types.GetDefaultBaseModel(ctx),
+		ID:                types.GenerateUUIDWithPrefix(types.UUID_PREFIX_SUBSCRIPTION_LINE_ITEM),
+		SubscriptionID:    existingLineItem.SubscriptionID,
+		CustomerID:        existingLineItem.CustomerID,
+		PriceID:           newPriceID,
+		PriceType:         existingLineItem.PriceType,
+		Currency:          existingLineItem.Currency,
+		BillingPeriod:     existingLineItem.BillingPeriod,
+		InvoiceCadence:    existingLineItem.InvoiceCadence,
+		TrialPeriod:       existingLineItem.TrialPeriod,
+		EntityType:        existingLineItem.EntityType,
+		EntityID:          existingLineItem.EntityID,
+		PlanDisplayName:   existingLineItem.PlanDisplayName,
+		MeterID:           existingLineItem.MeterID,
+		MeterDisplayName:  existingLineItem.MeterDisplayName,
+		DisplayName:       existingLineItem.DisplayName,
+		Quantity:          existingLineItem.Quantity,
+		UsageCustomerIDs:  existingLineItem.UsageCustomerIDs, // Preserve usage_customer_ids
+		EnvironmentID:     types.GetEnvironmentID(ctx),
+		BaseModel:         types.GetDefaultBaseModel(ctx),
 	}
 
 	// Set metadata - use provided metadata or keep existing

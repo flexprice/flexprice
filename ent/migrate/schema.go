@@ -1094,6 +1094,7 @@ var (
 		{Name: "prepaid_credits_applied", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "line_item_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
 		{Name: "invoice_level_discount", Type: field.TypeOther, Nullable: true, SchemaType: map[string]string{"postgres": "numeric(20,8)"}},
+		{Name: "usage_customer_ids", Type: field.TypeJSON, Nullable: true, SchemaType: map[string]string{"postgres": "jsonb"}},
 		{Name: "invoice_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
 	}
 	// InvoiceLineItemsTable holds the schema information for the "invoice_line_items" table.
@@ -1104,7 +1105,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "invoice_line_items_invoices_line_items",
-				Columns:    []*schema.Column{InvoiceLineItemsColumns[31]},
+				Columns:    []*schema.Column{InvoiceLineItemsColumns[32]},
 				RefColumns: []*schema.Column{InvoicesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1113,7 +1114,7 @@ var (
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_invoice_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[31], InvoiceLineItemsColumns[2]},
+				Columns: []*schema.Column{InvoiceLineItemsColumns[1], InvoiceLineItemsColumns[7], InvoiceLineItemsColumns[32], InvoiceLineItemsColumns[2]},
 			},
 			{
 				Name:    "invoicelineitem_tenant_id_environment_id_customer_id_status",
@@ -2347,6 +2348,56 @@ var (
 			},
 		},
 	}
+	// SubscriptionUsageCustomersColumns holds the columns for the "subscription_usage_customers" table.
+	SubscriptionUsageCustomersColumns = []*schema.Column{
+		{Name: "subscription_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// SubscriptionUsageCustomersTable holds the schema information for the "subscription_usage_customers" table.
+	SubscriptionUsageCustomersTable = &schema.Table{
+		Name:       "subscription_usage_customers",
+		Columns:    SubscriptionUsageCustomersColumns,
+		PrimaryKey: []*schema.Column{SubscriptionUsageCustomersColumns[0], SubscriptionUsageCustomersColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_usage_customers_subscription_id",
+				Columns:    []*schema.Column{SubscriptionUsageCustomersColumns[0]},
+				RefColumns: []*schema.Column{SubscriptionsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "subscription_usage_customers_customer_id",
+				Columns:    []*schema.Column{SubscriptionUsageCustomersColumns[1]},
+				RefColumns: []*schema.Column{CustomersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
+	// SubscriptionLineItemUsageCustomersColumns holds the columns for the "subscription_line_item_usage_customers" table.
+	SubscriptionLineItemUsageCustomersColumns = []*schema.Column{
+		{Name: "subscription_line_item_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+		{Name: "customer_id", Type: field.TypeString, SchemaType: map[string]string{"postgres": "varchar(50)"}},
+	}
+	// SubscriptionLineItemUsageCustomersTable holds the schema information for the "subscription_line_item_usage_customers" table.
+	SubscriptionLineItemUsageCustomersTable = &schema.Table{
+		Name:       "subscription_line_item_usage_customers",
+		Columns:    SubscriptionLineItemUsageCustomersColumns,
+		PrimaryKey: []*schema.Column{SubscriptionLineItemUsageCustomersColumns[0], SubscriptionLineItemUsageCustomersColumns[1]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "subscription_line_item_usage_customers_subscription_line_item_id",
+				Columns:    []*schema.Column{SubscriptionLineItemUsageCustomersColumns[0]},
+				RefColumns: []*schema.Column{SubscriptionLineItemsColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+			{
+				Symbol:     "subscription_line_item_usage_customers_customer_id",
+				Columns:    []*schema.Column{SubscriptionLineItemUsageCustomersColumns[1]},
+				RefColumns: []*schema.Column{CustomersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
 		AddonsTable,
@@ -2396,6 +2447,8 @@ var (
 		WalletTransactionsTable,
 		WorkflowExecutionsTable,
 		CouponAssociationCouponApplicationsTable,
+		SubscriptionUsageCustomersTable,
+		SubscriptionLineItemUsageCustomersTable,
 	}
 )
 
@@ -2422,4 +2475,8 @@ func init() {
 	SubscriptionSchedulesTable.ForeignKeys[0].RefTable = SubscriptionsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[0].RefTable = CouponAssociationsTable
 	CouponAssociationCouponApplicationsTable.ForeignKeys[1].RefTable = CouponApplicationsTable
+	SubscriptionUsageCustomersTable.ForeignKeys[0].RefTable = SubscriptionsTable
+	SubscriptionUsageCustomersTable.ForeignKeys[1].RefTable = CustomersTable
+	SubscriptionLineItemUsageCustomersTable.ForeignKeys[0].RefTable = SubscriptionLineItemsTable
+	SubscriptionLineItemUsageCustomersTable.ForeignKeys[1].RefTable = CustomersTable
 }

@@ -92,6 +92,8 @@ const (
 	EdgeSubscription = "subscription"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
 	EdgeCouponAssociations = "coupon_associations"
+	// EdgeUsageCustomers holds the string denoting the usage_customers edge name in mutations.
+	EdgeUsageCustomers = "usage_customers"
 	// Table holds the table name of the subscriptionlineitem in the database.
 	Table = "subscription_line_items"
 	// SubscriptionTable is the table that holds the subscription relation/edge.
@@ -108,6 +110,11 @@ const (
 	CouponAssociationsInverseTable = "coupon_associations"
 	// CouponAssociationsColumn is the table column denoting the coupon_associations relation/edge.
 	CouponAssociationsColumn = "subscription_line_item_id"
+	// UsageCustomersTable is the table that holds the usage_customers relation/edge. The primary key declared below.
+	UsageCustomersTable = "subscription_line_item_usage_customers"
+	// UsageCustomersInverseTable is the table name for the Customer entity.
+	// It exists in this package in order to avoid circular dependency with the "customer" package.
+	UsageCustomersInverseTable = "customers"
 )
 
 // Columns holds all SQL columns for subscriptionlineitem fields.
@@ -150,6 +157,12 @@ var Columns = []string{
 	FieldCommitmentWindowed,
 	FieldCommitmentDuration,
 }
+
+var (
+	// UsageCustomersPrimaryKey and UsageCustomersColumn2 are the table columns denoting the
+	// primary key for the usage_customers relation (M2M).
+	UsageCustomersPrimaryKey = []string{"subscription_line_item_id", "customer_id"}
+)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -401,6 +414,20 @@ func ByCouponAssociations(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOptio
 		sqlgraph.OrderByNeighborTerms(s, newCouponAssociationsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
 }
+
+// ByUsageCustomersCount orders the results by usage_customers count.
+func ByUsageCustomersCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newUsageCustomersStep(), opts...)
+	}
+}
+
+// ByUsageCustomers orders the results by usage_customers terms.
+func ByUsageCustomers(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newUsageCustomersStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newSubscriptionStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -413,5 +440,12 @@ func newCouponAssociationsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CouponAssociationsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, CouponAssociationsTable, CouponAssociationsColumn),
+	)
+}
+func newUsageCustomersStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(UsageCustomersInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2M, false, UsageCustomersTable, UsageCustomersPrimaryKey...),
 	)
 }

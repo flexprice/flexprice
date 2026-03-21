@@ -45,6 +45,9 @@ type InvoiceLineItem struct {
 	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
 	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount" swaggertype:"string"`
 
+	// usage_customer_ids contains the customer IDs whose usage was aggregated for this line item (for customer hierarchy).
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty"`
+
 	types.BaseModel
 }
 
@@ -81,6 +84,7 @@ func (i *InvoiceLineItem) FromEnt(e *ent.InvoiceLineItem) *InvoiceLineItem {
 		PrepaidCreditsApplied: lo.FromPtrOr(e.PrepaidCreditsApplied, decimal.Zero),
 		LineItemDiscount:      lo.FromPtrOr(e.LineItemDiscount, decimal.Zero),
 		InvoiceLevelDiscount:  lo.FromPtrOr(e.InvoiceLevelDiscount, decimal.Zero),
+		UsageCustomerIDs:      cloneUsageCustomerIDs(e.UsageCustomerIds),
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),
@@ -137,4 +141,13 @@ func (i *InvoiceLineItem) Validate() error {
 	}
 
 	return nil
+}
+
+// cloneUsageCustomerIDs returns a copy of ids for nil/empty safety and omitempty semantics.
+// Returns nil for nil or empty input so JSON omitempty omits the field.
+func cloneUsageCustomerIDs(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	return append([]string(nil), ids...)
 }

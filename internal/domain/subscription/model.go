@@ -133,6 +133,10 @@ type Subscription struct {
 	// PaymentTerms (e.g. 15 NET, 30 NET) used to compute invoice due date from period end
 	PaymentTerms *types.PaymentTerms `db:"payment_terms" json:"payment_terms,omitempty"`
 
+	// UsageCustomerIDs is populated when loading the subscription with its usage_customers edge
+	// This contains the customer IDs whose usage is aggregated for this subscription
+	UsageCustomerIDs []string `json:"usage_customer_ids,omitempty"`
+
 	types.BaseModel
 }
 
@@ -174,6 +178,16 @@ func (s *Subscription) HasCommitment() bool {
 		s.OverageFactor.GreaterThan(decimal.NewFromInt(1))
 }
 
+// EffectiveUsageCustomerIDs returns the customer IDs whose usage should be aggregated for this subscription.
+// Returns UsageCustomerIDs if non-empty, else returns [Subscription.CustomerID] as the default.
+// This centralizes the resolution logic so all call sites use a consistent approach.
+func (s *Subscription) EffectiveUsageCustomerIDs() []string {
+	if len(s.UsageCustomerIDs) > 0 {
+		return s.UsageCustomerIDs
+	}
+	return []string{s.CustomerID}
+}
+
 func FromEntList(subs []*ent.Subscription) []*Subscription {
 	return lo.Map(subs, func(sub *ent.Subscription, _ int) *Subscription {
 		return GetSubscriptionFromEnt(sub)
@@ -202,6 +216,15 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 	var couponAssociations []*coupon_association.CouponAssociation
 	if sub.Edges.CouponAssociations != nil {
 		couponAssociations = coupon_association.FromEntList(sub.Edges.CouponAssociations)
+	}
+
+	// Extract usage customer IDs from the usage_customers edge
+	var usageCustomerIDs []string
+	if sub.Edges.UsageCustomers != nil {
+		usageCustomerIDs = make([]string, len(sub.Edges.UsageCustomers))
+		for i, customer := range sub.Edges.UsageCustomers {
+			usageCustomerIDs[i] = customer.ID
+		}
 	}
 
 	return &Subscription{
@@ -247,6 +270,7 @@ func GetSubscriptionFromEnt(sub *ent.Subscription) *Subscription {
 		InvoicingCustomerID:  sub.InvoicingCustomerID,
 		ParentSubscriptionID: sub.ParentSubscriptionID,
 		PaymentTerms:         sub.PaymentTerms,
+		UsageCustomerIDs:     usageCustomerIDs,
 		BaseModel: types.BaseModel{
 			TenantID:  sub.TenantID,
 			Status:    types.Status(sub.Status),

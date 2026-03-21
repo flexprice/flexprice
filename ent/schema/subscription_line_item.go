@@ -192,6 +192,8 @@ func (SubscriptionLineItem) Edges() []ent.Edge {
 			Immutable(),
 		edge.To("coupon_associations", CouponAssociation.Type).
 			Comment("Subscription line item can have multiple coupon associations"),
+		edge.To("usage_customers", Customer.Type).
+			Comment("Customers whose usage is aggregated for this line item (M2M)"),
 	}
 }
 

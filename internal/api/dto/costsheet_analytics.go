@@ -19,6 +19,12 @@ type GetCostAnalyticsRequest struct {
 
 	ExternalCustomerID string `json:"external_customer_id,omitempty"` // Optional - for specific customer
 
+	// Hierarchy support - aggregate analytics across parent and children
+	// Include all child customers in analytics (convenience flag)
+	IncludeChildren bool `json:"include_children,omitempty"`
+	// Specific child customer IDs to include (granular control)
+	ChildCustomerIDs []string `json:"child_customer_ids,omitempty"`
+
 	// Additional filters
 	FeatureIDs []string `json:"feature_ids,omitempty"`
 
@@ -138,4 +144,22 @@ type GetDetailedCostAnalyticsResponse struct {
 	Currency  string    `json:"currency"`
 	StartTime time.Time `json:"start_time"`
 	EndTime   time.Time `json:"end_time"`
+
+	// Hierarchy breakdown - per-customer analytics when hierarchy is enabled
+	CustomerBreakdown []*CustomerAnalyticsBreakdown `json:"customer_breakdown,omitempty"`
+}
+
+// CustomerAnalyticsBreakdown represents analytics breakdown for a single customer in hierarchy
+type CustomerAnalyticsBreakdown struct {
+	CustomerID         string              `json:"customer_id"`
+	ExternalCustomerID string              `json:"external_customer_id"`
+	CustomerName       string              `json:"customer_name,omitempty"`
+	IsParent           bool                `json:"is_parent"` // True if this is the parent customer
+	CostAnalytics      []CostAnalyticItem  `json:"cost_analytics"`
+	TotalRevenue       decimal.Decimal     `json:"total_revenue" swaggertype:"string"`
+	TotalCost          decimal.Decimal     `json:"total_cost" swaggertype:"string"`
+	Margin             decimal.Decimal     `json:"margin" swaggertype:"string"`
+	MarginPercent      decimal.Decimal     `json:"margin_percent" swaggertype:"string"`
+	ROI                decimal.Decimal     `json:"roi" swaggertype:"string"`
+	ROIPercent         decimal.Decimal     `json:"roi_percent" swaggertype:"string"`
 }

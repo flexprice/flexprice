@@ -18670,31 +18670,37 @@ func (m *CreditNoteLineItemMutation) ResetEdge(name string) error {
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.
 type CustomerMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *string
-	tenant_id           *string
-	status              *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	created_by          *string
-	updated_by          *string
-	environment_id      *string
-	metadata            *map[string]string
-	external_id         *string
-	name                *string
-	email               *string
-	address_line1       *string
-	address_line2       *string
-	address_city        *string
-	address_state       *string
-	address_postal_code *string
-	address_country     *string
-	parent_customer_id  *string
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*Customer, error)
-	predicates          []predicate.Customer
+	op                              Op
+	typ                             string
+	id                              *string
+	tenant_id                       *string
+	status                          *string
+	created_at                      *time.Time
+	updated_at                      *time.Time
+	created_by                      *string
+	updated_by                      *string
+	environment_id                  *string
+	metadata                        *map[string]string
+	external_id                     *string
+	name                            *string
+	email                           *string
+	address_line1                   *string
+	address_line2                   *string
+	address_city                    *string
+	address_state                   *string
+	address_postal_code             *string
+	address_country                 *string
+	parent_customer_id              *string
+	clearedFields                   map[string]struct{}
+	subscriptions_with_usage        map[string]struct{}
+	removedsubscriptions_with_usage map[string]struct{}
+	clearedsubscriptions_with_usage bool
+	line_items_with_usage           map[string]struct{}
+	removedline_items_with_usage    map[string]struct{}
+	clearedline_items_with_usage    bool
+	done                            bool
+	oldValue                        func(context.Context) (*Customer, error)
+	predicates                      []predicate.Customer
 }
 
 var _ ent.Mutation = (*CustomerMutation)(nil)
@@ -19605,6 +19611,114 @@ func (m *CustomerMutation) ResetParentCustomerID() {
 	delete(m.clearedFields, customer.FieldParentCustomerID)
 }
 
+// AddSubscriptionsWithUsageIDs adds the "subscriptions_with_usage" edge to the Subscription entity by ids.
+func (m *CustomerMutation) AddSubscriptionsWithUsageIDs(ids ...string) {
+	if m.subscriptions_with_usage == nil {
+		m.subscriptions_with_usage = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.subscriptions_with_usage[ids[i]] = struct{}{}
+	}
+}
+
+// ClearSubscriptionsWithUsage clears the "subscriptions_with_usage" edge to the Subscription entity.
+func (m *CustomerMutation) ClearSubscriptionsWithUsage() {
+	m.clearedsubscriptions_with_usage = true
+}
+
+// SubscriptionsWithUsageCleared reports if the "subscriptions_with_usage" edge to the Subscription entity was cleared.
+func (m *CustomerMutation) SubscriptionsWithUsageCleared() bool {
+	return m.clearedsubscriptions_with_usage
+}
+
+// RemoveSubscriptionsWithUsageIDs removes the "subscriptions_with_usage" edge to the Subscription entity by IDs.
+func (m *CustomerMutation) RemoveSubscriptionsWithUsageIDs(ids ...string) {
+	if m.removedsubscriptions_with_usage == nil {
+		m.removedsubscriptions_with_usage = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.subscriptions_with_usage, ids[i])
+		m.removedsubscriptions_with_usage[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedSubscriptionsWithUsage returns the removed IDs of the "subscriptions_with_usage" edge to the Subscription entity.
+func (m *CustomerMutation) RemovedSubscriptionsWithUsageIDs() (ids []string) {
+	for id := range m.removedsubscriptions_with_usage {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// SubscriptionsWithUsageIDs returns the "subscriptions_with_usage" edge IDs in the mutation.
+func (m *CustomerMutation) SubscriptionsWithUsageIDs() (ids []string) {
+	for id := range m.subscriptions_with_usage {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetSubscriptionsWithUsage resets all changes to the "subscriptions_with_usage" edge.
+func (m *CustomerMutation) ResetSubscriptionsWithUsage() {
+	m.subscriptions_with_usage = nil
+	m.clearedsubscriptions_with_usage = false
+	m.removedsubscriptions_with_usage = nil
+}
+
+// AddLineItemsWithUsageIDs adds the "line_items_with_usage" edge to the SubscriptionLineItem entity by ids.
+func (m *CustomerMutation) AddLineItemsWithUsageIDs(ids ...string) {
+	if m.line_items_with_usage == nil {
+		m.line_items_with_usage = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.line_items_with_usage[ids[i]] = struct{}{}
+	}
+}
+
+// ClearLineItemsWithUsage clears the "line_items_with_usage" edge to the SubscriptionLineItem entity.
+func (m *CustomerMutation) ClearLineItemsWithUsage() {
+	m.clearedline_items_with_usage = true
+}
+
+// LineItemsWithUsageCleared reports if the "line_items_with_usage" edge to the SubscriptionLineItem entity was cleared.
+func (m *CustomerMutation) LineItemsWithUsageCleared() bool {
+	return m.clearedline_items_with_usage
+}
+
+// RemoveLineItemsWithUsageIDs removes the "line_items_with_usage" edge to the SubscriptionLineItem entity by IDs.
+func (m *CustomerMutation) RemoveLineItemsWithUsageIDs(ids ...string) {
+	if m.removedline_items_with_usage == nil {
+		m.removedline_items_with_usage = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.line_items_with_usage, ids[i])
+		m.removedline_items_with_usage[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedLineItemsWithUsage returns the removed IDs of the "line_items_with_usage" edge to the SubscriptionLineItem entity.
+func (m *CustomerMutation) RemovedLineItemsWithUsageIDs() (ids []string) {
+	for id := range m.removedline_items_with_usage {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// LineItemsWithUsageIDs returns the "line_items_with_usage" edge IDs in the mutation.
+func (m *CustomerMutation) LineItemsWithUsageIDs() (ids []string) {
+	for id := range m.line_items_with_usage {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetLineItemsWithUsage resets all changes to the "line_items_with_usage" edge.
+func (m *CustomerMutation) ResetLineItemsWithUsage() {
+	m.line_items_with_usage = nil
+	m.clearedline_items_with_usage = false
+	m.removedline_items_with_usage = nil
+}
+
 // Where appends a list predicates to the CustomerMutation builder.
 func (m *CustomerMutation) Where(ps ...predicate.Customer) {
 	m.predicates = append(m.predicates, ps...)
@@ -20102,49 +20216,111 @@ func (m *CustomerMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *CustomerMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.subscriptions_with_usage != nil {
+		edges = append(edges, customer.EdgeSubscriptionsWithUsage)
+	}
+	if m.line_items_with_usage != nil {
+		edges = append(edges, customer.EdgeLineItemsWithUsage)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *CustomerMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case customer.EdgeSubscriptionsWithUsage:
+		ids := make([]ent.Value, 0, len(m.subscriptions_with_usage))
+		for id := range m.subscriptions_with_usage {
+			ids = append(ids, id)
+		}
+		return ids
+	case customer.EdgeLineItemsWithUsage:
+		ids := make([]ent.Value, 0, len(m.line_items_with_usage))
+		for id := range m.line_items_with_usage {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *CustomerMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.removedsubscriptions_with_usage != nil {
+		edges = append(edges, customer.EdgeSubscriptionsWithUsage)
+	}
+	if m.removedline_items_with_usage != nil {
+		edges = append(edges, customer.EdgeLineItemsWithUsage)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *CustomerMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case customer.EdgeSubscriptionsWithUsage:
+		ids := make([]ent.Value, 0, len(m.removedsubscriptions_with_usage))
+		for id := range m.removedsubscriptions_with_usage {
+			ids = append(ids, id)
+		}
+		return ids
+	case customer.EdgeLineItemsWithUsage:
+		ids := make([]ent.Value, 0, len(m.removedline_items_with_usage))
+		for id := range m.removedline_items_with_usage {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *CustomerMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 2)
+	if m.clearedsubscriptions_with_usage {
+		edges = append(edges, customer.EdgeSubscriptionsWithUsage)
+	}
+	if m.clearedline_items_with_usage {
+		edges = append(edges, customer.EdgeLineItemsWithUsage)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *CustomerMutation) EdgeCleared(name string) bool {
+	switch name {
+	case customer.EdgeSubscriptionsWithUsage:
+		return m.clearedsubscriptions_with_usage
+	case customer.EdgeLineItemsWithUsage:
+		return m.clearedline_items_with_usage
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *CustomerMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown Customer unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *CustomerMutation) ResetEdge(name string) error {
+	switch name {
+	case customer.EdgeSubscriptionsWithUsage:
+		m.ResetSubscriptionsWithUsage()
+		return nil
+	case customer.EdgeLineItemsWithUsage:
+		m.ResetLineItemsWithUsage()
+		return nil
+	}
 	return fmt.Errorf("unknown Customer edge %s", name)
 }
 
@@ -29285,6 +29461,8 @@ type InvoiceLineItemMutation struct {
 	prepaid_credits_applied    *decimal.Decimal
 	line_item_discount         *decimal.Decimal
 	invoice_level_discount     *decimal.Decimal
+	usage_customer_ids         *[]string
+	appendusage_customer_ids   []string
 	clearedFields              map[string]struct{}
 	invoice                    *string
 	clearedinvoice             bool
@@ -30802,6 +30980,71 @@ func (m *InvoiceLineItemMutation) ResetInvoiceLevelDiscount() {
 	delete(m.clearedFields, invoicelineitem.FieldInvoiceLevelDiscount)
 }
 
+// SetUsageCustomerIds sets the "usage_customer_ids" field.
+func (m *InvoiceLineItemMutation) SetUsageCustomerIds(s []string) {
+	m.usage_customer_ids = &s
+	m.appendusage_customer_ids = nil
+}
+
+// UsageCustomerIds returns the value of the "usage_customer_ids" field in the mutation.
+func (m *InvoiceLineItemMutation) UsageCustomerIds() (r []string, exists bool) {
+	v := m.usage_customer_ids
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUsageCustomerIds returns the old "usage_customer_ids" field's value of the InvoiceLineItem entity.
+// If the InvoiceLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceLineItemMutation) OldUsageCustomerIds(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUsageCustomerIds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUsageCustomerIds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUsageCustomerIds: %w", err)
+	}
+	return oldValue.UsageCustomerIds, nil
+}
+
+// AppendUsageCustomerIds adds s to the "usage_customer_ids" field.
+func (m *InvoiceLineItemMutation) AppendUsageCustomerIds(s []string) {
+	m.appendusage_customer_ids = append(m.appendusage_customer_ids, s...)
+}
+
+// AppendedUsageCustomerIds returns the list of values that were appended to the "usage_customer_ids" field in this mutation.
+func (m *InvoiceLineItemMutation) AppendedUsageCustomerIds() ([]string, bool) {
+	if len(m.appendusage_customer_ids) == 0 {
+		return nil, false
+	}
+	return m.appendusage_customer_ids, true
+}
+
+// ClearUsageCustomerIds clears the value of the "usage_customer_ids" field.
+func (m *InvoiceLineItemMutation) ClearUsageCustomerIds() {
+	m.usage_customer_ids = nil
+	m.appendusage_customer_ids = nil
+	m.clearedFields[invoicelineitem.FieldUsageCustomerIds] = struct{}{}
+}
+
+// UsageCustomerIdsCleared returns if the "usage_customer_ids" field was cleared in this mutation.
+func (m *InvoiceLineItemMutation) UsageCustomerIdsCleared() bool {
+	_, ok := m.clearedFields[invoicelineitem.FieldUsageCustomerIds]
+	return ok
+}
+
+// ResetUsageCustomerIds resets all changes to the "usage_customer_ids" field.
+func (m *InvoiceLineItemMutation) ResetUsageCustomerIds() {
+	m.usage_customer_ids = nil
+	m.appendusage_customer_ids = nil
+	delete(m.clearedFields, invoicelineitem.FieldUsageCustomerIds)
+}
+
 // ClearInvoice clears the "invoice" edge to the Invoice entity.
 func (m *InvoiceLineItemMutation) ClearInvoice() {
 	m.clearedinvoice = true
@@ -30917,7 +31160,7 @@ func (m *InvoiceLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 32)
 	if m.tenant_id != nil {
 		fields = append(fields, invoicelineitem.FieldTenantID)
 	}
@@ -31011,6 +31254,9 @@ func (m *InvoiceLineItemMutation) Fields() []string {
 	if m.invoice_level_discount != nil {
 		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
 	}
+	if m.usage_customer_ids != nil {
+		fields = append(fields, invoicelineitem.FieldUsageCustomerIds)
+	}
 	return fields
 }
 
@@ -31081,6 +31327,8 @@ func (m *InvoiceLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.LineItemDiscount()
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		return m.InvoiceLevelDiscount()
+	case invoicelineitem.FieldUsageCustomerIds:
+		return m.UsageCustomerIds()
 	}
 	return nil, false
 }
@@ -31152,6 +31400,8 @@ func (m *InvoiceLineItemMutation) OldField(ctx context.Context, name string) (en
 		return m.OldLineItemDiscount(ctx)
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		return m.OldInvoiceLevelDiscount(ctx)
+	case invoicelineitem.FieldUsageCustomerIds:
+		return m.OldUsageCustomerIds(ctx)
 	}
 	return nil, fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -31378,6 +31628,13 @@ func (m *InvoiceLineItemMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInvoiceLevelDiscount(v)
 		return nil
+	case invoicelineitem.FieldUsageCustomerIds:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUsageCustomerIds(v)
+		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
 }
@@ -31474,6 +31731,9 @@ func (m *InvoiceLineItemMutation) ClearedFields() []string {
 	if m.FieldCleared(invoicelineitem.FieldInvoiceLevelDiscount) {
 		fields = append(fields, invoicelineitem.FieldInvoiceLevelDiscount)
 	}
+	if m.FieldCleared(invoicelineitem.FieldUsageCustomerIds) {
+		fields = append(fields, invoicelineitem.FieldUsageCustomerIds)
+	}
 	return fields
 }
 
@@ -31553,6 +31813,9 @@ func (m *InvoiceLineItemMutation) ClearField(name string) error {
 		return nil
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		m.ClearInvoiceLevelDiscount()
+		return nil
+	case invoicelineitem.FieldUsageCustomerIds:
+		m.ClearUsageCustomerIds()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem nullable field %s", name)
@@ -31654,6 +31917,9 @@ func (m *InvoiceLineItemMutation) ResetField(name string) error {
 		return nil
 	case invoicelineitem.FieldInvoiceLevelDiscount:
 		m.ResetInvoiceLevelDiscount()
+		return nil
+	case invoicelineitem.FieldUsageCustomerIds:
+		m.ResetUsageCustomerIds()
 		return nil
 	}
 	return fmt.Errorf("unknown InvoiceLineItem field %s", name)
@@ -45543,6 +45809,9 @@ type SubscriptionMutation struct {
 	clearedcoupon_applications bool
 	invoicing_customer         *string
 	clearedinvoicing_customer  bool
+	usage_customers            map[string]struct{}
+	removedusage_customers     map[string]struct{}
+	clearedusage_customers     bool
 	done                       bool
 	oldValue                   func(context.Context) (*Subscription, error)
 	predicates                 []predicate.Subscription
@@ -47843,6 +48112,60 @@ func (m *SubscriptionMutation) ResetInvoicingCustomer() {
 	m.clearedinvoicing_customer = false
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by ids.
+func (m *SubscriptionMutation) AddUsageCustomerIDs(ids ...string) {
+	if m.usage_customers == nil {
+		m.usage_customers = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.usage_customers[ids[i]] = struct{}{}
+	}
+}
+
+// ClearUsageCustomers clears the "usage_customers" edge to the Customer entity.
+func (m *SubscriptionMutation) ClearUsageCustomers() {
+	m.clearedusage_customers = true
+}
+
+// UsageCustomersCleared reports if the "usage_customers" edge to the Customer entity was cleared.
+func (m *SubscriptionMutation) UsageCustomersCleared() bool {
+	return m.clearedusage_customers
+}
+
+// RemoveUsageCustomerIDs removes the "usage_customers" edge to the Customer entity by IDs.
+func (m *SubscriptionMutation) RemoveUsageCustomerIDs(ids ...string) {
+	if m.removedusage_customers == nil {
+		m.removedusage_customers = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.usage_customers, ids[i])
+		m.removedusage_customers[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedUsageCustomers returns the removed IDs of the "usage_customers" edge to the Customer entity.
+func (m *SubscriptionMutation) RemovedUsageCustomersIDs() (ids []string) {
+	for id := range m.removedusage_customers {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// UsageCustomersIDs returns the "usage_customers" edge IDs in the mutation.
+func (m *SubscriptionMutation) UsageCustomersIDs() (ids []string) {
+	for id := range m.usage_customers {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetUsageCustomers resets all changes to the "usage_customers" edge.
+func (m *SubscriptionMutation) ResetUsageCustomers() {
+	m.usage_customers = nil
+	m.clearedusage_customers = false
+	m.removedusage_customers = nil
+}
+
 // Where appends a list predicates to the SubscriptionMutation builder.
 func (m *SubscriptionMutation) Where(ps ...predicate.Subscription) {
 	m.predicates = append(m.predicates, ps...)
@@ -48811,7 +49134,7 @@ func (m *SubscriptionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 8)
+	edges := make([]string, 0, 9)
 	if m.line_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -48835,6 +49158,9 @@ func (m *SubscriptionMutation) AddedEdges() []string {
 	}
 	if m.invoicing_customer != nil {
 		edges = append(edges, subscription.EdgeInvoicingCustomer)
+	}
+	if m.usage_customers != nil {
+		edges = append(edges, subscription.EdgeUsageCustomers)
 	}
 	return edges
 }
@@ -48889,13 +49215,19 @@ func (m *SubscriptionMutation) AddedIDs(name string) []ent.Value {
 		if id := m.invoicing_customer; id != nil {
 			return []ent.Value{*id}
 		}
+	case subscription.EdgeUsageCustomers:
+		ids := make([]ent.Value, 0, len(m.usage_customers))
+		for id := range m.usage_customers {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 8)
+	edges := make([]string, 0, 9)
 	if m.removedline_items != nil {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -48916,6 +49248,9 @@ func (m *SubscriptionMutation) RemovedEdges() []string {
 	}
 	if m.removedcoupon_applications != nil {
 		edges = append(edges, subscription.EdgeCouponApplications)
+	}
+	if m.removedusage_customers != nil {
+		edges = append(edges, subscription.EdgeUsageCustomers)
 	}
 	return edges
 }
@@ -48966,13 +49301,19 @@ func (m *SubscriptionMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscription.EdgeUsageCustomers:
+		ids := make([]ent.Value, 0, len(m.removedusage_customers))
+		for id := range m.removedusage_customers {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 8)
+	edges := make([]string, 0, 9)
 	if m.clearedline_items {
 		edges = append(edges, subscription.EdgeLineItems)
 	}
@@ -48997,6 +49338,9 @@ func (m *SubscriptionMutation) ClearedEdges() []string {
 	if m.clearedinvoicing_customer {
 		edges = append(edges, subscription.EdgeInvoicingCustomer)
 	}
+	if m.clearedusage_customers {
+		edges = append(edges, subscription.EdgeUsageCustomers)
+	}
 	return edges
 }
 
@@ -49020,6 +49364,8 @@ func (m *SubscriptionMutation) EdgeCleared(name string) bool {
 		return m.clearedcoupon_applications
 	case subscription.EdgeInvoicingCustomer:
 		return m.clearedinvoicing_customer
+	case subscription.EdgeUsageCustomers:
+		return m.clearedusage_customers
 	}
 	return false
 }
@@ -49062,6 +49408,9 @@ func (m *SubscriptionMutation) ResetEdge(name string) error {
 		return nil
 	case subscription.EdgeInvoicingCustomer:
 		m.ResetInvoicingCustomer()
+		return nil
+	case subscription.EdgeUsageCustomers:
+		m.ResetUsageCustomers()
 		return nil
 	}
 	return fmt.Errorf("unknown Subscription edge %s", name)
@@ -49116,6 +49465,9 @@ type SubscriptionLineItemMutation struct {
 	coupon_associations        map[string]struct{}
 	removedcoupon_associations map[string]struct{}
 	clearedcoupon_associations bool
+	usage_customers            map[string]struct{}
+	removedusage_customers     map[string]struct{}
+	clearedusage_customers     bool
 	done                       bool
 	oldValue                   func(context.Context) (*SubscriptionLineItem, error)
 	predicates                 []predicate.SubscriptionLineItem
@@ -50915,6 +51267,60 @@ func (m *SubscriptionLineItemMutation) ResetCouponAssociations() {
 	m.removedcoupon_associations = nil
 }
 
+// AddUsageCustomerIDs adds the "usage_customers" edge to the Customer entity by ids.
+func (m *SubscriptionLineItemMutation) AddUsageCustomerIDs(ids ...string) {
+	if m.usage_customers == nil {
+		m.usage_customers = make(map[string]struct{})
+	}
+	for i := range ids {
+		m.usage_customers[ids[i]] = struct{}{}
+	}
+}
+
+// ClearUsageCustomers clears the "usage_customers" edge to the Customer entity.
+func (m *SubscriptionLineItemMutation) ClearUsageCustomers() {
+	m.clearedusage_customers = true
+}
+
+// UsageCustomersCleared reports if the "usage_customers" edge to the Customer entity was cleared.
+func (m *SubscriptionLineItemMutation) UsageCustomersCleared() bool {
+	return m.clearedusage_customers
+}
+
+// RemoveUsageCustomerIDs removes the "usage_customers" edge to the Customer entity by IDs.
+func (m *SubscriptionLineItemMutation) RemoveUsageCustomerIDs(ids ...string) {
+	if m.removedusage_customers == nil {
+		m.removedusage_customers = make(map[string]struct{})
+	}
+	for i := range ids {
+		delete(m.usage_customers, ids[i])
+		m.removedusage_customers[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedUsageCustomers returns the removed IDs of the "usage_customers" edge to the Customer entity.
+func (m *SubscriptionLineItemMutation) RemovedUsageCustomersIDs() (ids []string) {
+	for id := range m.removedusage_customers {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// UsageCustomersIDs returns the "usage_customers" edge IDs in the mutation.
+func (m *SubscriptionLineItemMutation) UsageCustomersIDs() (ids []string) {
+	for id := range m.usage_customers {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetUsageCustomers resets all changes to the "usage_customers" edge.
+func (m *SubscriptionLineItemMutation) ResetUsageCustomers() {
+	m.usage_customers = nil
+	m.clearedusage_customers = false
+	m.removedusage_customers = nil
+}
+
 // Where appends a list predicates to the SubscriptionLineItemMutation builder.
 func (m *SubscriptionLineItemMutation) Where(ps ...predicate.SubscriptionLineItem) {
 	m.predicates = append(m.predicates, ps...)
@@ -51799,12 +52205,15 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *SubscriptionLineItemMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.subscription != nil {
 		edges = append(edges, subscriptionlineitem.EdgeSubscription)
 	}
 	if m.coupon_associations != nil {
 		edges = append(edges, subscriptionlineitem.EdgeCouponAssociations)
+	}
+	if m.usage_customers != nil {
+		edges = append(edges, subscriptionlineitem.EdgeUsageCustomers)
 	}
 	return edges
 }
@@ -51823,15 +52232,24 @@ func (m *SubscriptionLineItemMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscriptionlineitem.EdgeUsageCustomers:
+		ids := make([]ent.Value, 0, len(m.usage_customers))
+		for id := range m.usage_customers {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *SubscriptionLineItemMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedcoupon_associations != nil {
 		edges = append(edges, subscriptionlineitem.EdgeCouponAssociations)
+	}
+	if m.removedusage_customers != nil {
+		edges = append(edges, subscriptionlineitem.EdgeUsageCustomers)
 	}
 	return edges
 }
@@ -51846,18 +52264,27 @@ func (m *SubscriptionLineItemMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case subscriptionlineitem.EdgeUsageCustomers:
+		ids := make([]ent.Value, 0, len(m.removedusage_customers))
+		for id := range m.removedusage_customers {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *SubscriptionLineItemMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.clearedsubscription {
 		edges = append(edges, subscriptionlineitem.EdgeSubscription)
 	}
 	if m.clearedcoupon_associations {
 		edges = append(edges, subscriptionlineitem.EdgeCouponAssociations)
+	}
+	if m.clearedusage_customers {
+		edges = append(edges, subscriptionlineitem.EdgeUsageCustomers)
 	}
 	return edges
 }
@@ -51870,6 +52297,8 @@ func (m *SubscriptionLineItemMutation) EdgeCleared(name string) bool {
 		return m.clearedsubscription
 	case subscriptionlineitem.EdgeCouponAssociations:
 		return m.clearedcoupon_associations
+	case subscriptionlineitem.EdgeUsageCustomers:
+		return m.clearedusage_customers
 	}
 	return false
 }
@@ -51894,6 +52323,9 @@ func (m *SubscriptionLineItemMutation) ResetEdge(name string) error {
 		return nil
 	case subscriptionlineitem.EdgeCouponAssociations:
 		m.ResetCouponAssociations()
+		return nil
+	case subscriptionlineitem.EdgeUsageCustomers:
+		m.ResetUsageCustomers()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem edge %s", name)

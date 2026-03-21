@@ -8,6 +8,7 @@ import (
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/coupon"
 	"github.com/flexprice/flexprice/ent/couponassociation"
+	"github.com/flexprice/flexprice/ent/customer"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/ent/subscription"
 	"github.com/flexprice/flexprice/ent/subscriptionlineitem"
@@ -92,6 +93,7 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *domainSub.Subs
 		SetNillableInvoicingCustomerID(sub.InvoicingCustomerID).
 		SetNillableParentSubscriptionID(sub.ParentSubscriptionID).
 		SetNillablePaymentTerms(sub.PaymentTerms).
+		AddUsageCustomerIDs(sub.UsageCustomerIDs...). // Add usage customers M2M relationship
 		Save(ctx)
 
 	if err != nil {
@@ -233,6 +235,34 @@ func (r *subscriptionRepository) Update(ctx context.Context, sub *domainSub.Subs
 			Mark(ierr.ErrDatabase)
 	}
 
+	// Update usage_customers M2M relationship separately (clear old and add new)
+	// This is done after the main update to ensure atomicity
+	if len(sub.UsageCustomerIDs) > 0 {
+		_, err = client.Subscription.UpdateOneID(sub.ID).
+			ClearUsageCustomers().
+			AddUsageCustomerIDs(sub.UsageCustomerIDs...).
+			Save(ctx)
+		if err != nil {
+			SetSpanError(span, err)
+			r.logger.Errorw("failed to update subscription usage_customers", "error", err, "subscription_id", sub.ID)
+			return ierr.WithError(err).
+				WithHint("Failed to update subscription usage customers").
+				Mark(ierr.ErrDatabase)
+		}
+	} else {
+		// Clear all usage customers if the list is empty
+		_, err = client.Subscription.UpdateOneID(sub.ID).
+			ClearUsageCustomers().
+			Save(ctx)
+		if err != nil {
+			SetSpanError(span, err)
+			r.logger.Errorw("failed to clear subscription usage_customers", "error", err, "subscription_id", sub.ID)
+			return ierr.WithError(err).
+				WithHint("Failed to clear subscription usage customers").
+				Mark(ierr.ErrDatabase)
+		}
+	}
+
 	SetSpanSuccess(span)
 	r.DeleteCache(ctx, sub.ID)
 	return nil
@@ -303,12 +333,21 @@ func (r *subscriptionRepository) List(ctx context.Context, filter *types.Subscri
 	if filter.WithLineItems {
 		query = query.WithLineItems(func(q *ent.SubscriptionLineItemQuery) {
 			q.Where(subscriptionlineitem.Status(string(types.StatusPublished)))
+			// Optionally load usage_customers edge on line items if requested
+			if filter.WithUsageCustomers {
+				q.WithUsageCustomers()
+			}
 		}).WithCouponAssociations(func(q *ent.CouponAssociationQuery) {
 			q.Where(couponassociation.Status(string(types.StatusPublished))).
 				WithCoupon(func(cq *ent.CouponQuery) {
 					cq.Where(coupon.Status(string(types.StatusPublished)))
 				})
 		})
+	}
+
+	// Optionally load usage_customers edge on subscription if requested
+	if filter.WithUsageCustomers {
+		query = query.WithUsageCustomers()
 	}
 
 	// Apply entity-specific filters
@@ -623,6 +662,11 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		)
 	}
 
+	// Apply usage customer IDs filter - subscriptions that have at least one of these customers in usage_customers
+	if len(f.UsageCustomerIDs) > 0 {
+		query = query.Where(subscription.HasUsageCustomersWith(customer.IDIn(f.UsageCustomerIDs...)))
+	}
+
 	// Apply time range filters
 	if f.TimeRangeFilter != nil {
 		if f.TimeRangeFilter.StartTime != nil {
@@ -685,56 +729,57 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				item.EnvironmentID = types.GetEnvironmentID(ctx)
 			}
 
-			bulk[i] = client.SubscriptionLineItem.Create().
-				SetID(item.ID).
-				SetSubscriptionID(item.SubscriptionID).
-				SetCustomerID(item.CustomerID).
-				SetNillableEntityID(types.ToNillableString(item.EntityID)).
-				SetNillableEntityType(func() *types.InvoiceLineItemEntityType {
-					if item.EntityType == "" {
-						return nil
-					}
-					t := types.InvoiceLineItemEntityType(item.EntityType)
-					return &t
-				}()).
-				SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
-				SetPriceID(item.PriceID).
-				SetNillablePriceType(func() *types.PriceType {
-					if item.PriceType == "" {
-						return nil
-					}
-					t := item.PriceType
-					return &t
-				}()).
-				SetNillableMeterID(types.ToNillableString(item.MeterID)).
-				SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
-				SetNillablePriceUnitID(item.PriceUnitID).
-				SetNillablePriceUnit(item.PriceUnit).
-				SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
-				SetQuantity(item.Quantity).
-				SetCurrency(item.Currency).
-				SetBillingPeriod(item.BillingPeriod).
-				SetNillableStartDate(types.ToNillableTime(item.StartDate)).
-				SetNillableEndDate(types.ToNillableTime(item.EndDate)).
-				SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
-				SetInvoiceCadence(item.InvoiceCadence).
-				SetTrialPeriod(item.TrialPeriod).
-				SetNillableCommitmentAmount(item.CommitmentAmount).
-				SetNillableCommitmentQuantity(item.CommitmentQuantity).
-				SetNillableCommitmentType(types.ToNillableString(string(item.CommitmentType))).
-				SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
-				SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
-				SetCommitmentWindowed(item.CommitmentWindowed).
-				SetNillableCommitmentDuration(item.CommitmentDuration).
-				SetMetadata(item.Metadata).
-				SetTenantID(item.TenantID).
-				SetEnvironmentID(item.EnvironmentID).
-				SetStatus(string(item.Status)).
-				SetCreatedBy(item.CreatedBy).
-				SetUpdatedBy(item.UpdatedBy).
-				SetCreatedAt(time.Now()).
-				SetUpdatedAt(time.Now())
-		}
+		bulk[i] = client.SubscriptionLineItem.Create().
+			SetID(item.ID).
+			SetSubscriptionID(item.SubscriptionID).
+			SetCustomerID(item.CustomerID).
+			SetNillableEntityID(types.ToNillableString(item.EntityID)).
+			SetNillableEntityType(func() *types.InvoiceLineItemEntityType {
+				if item.EntityType == "" {
+					return nil
+				}
+				t := types.InvoiceLineItemEntityType(item.EntityType)
+				return &t
+			}()).
+			SetNillablePlanDisplayName(types.ToNillableString(item.PlanDisplayName)).
+			SetPriceID(item.PriceID).
+			SetNillablePriceType(func() *types.PriceType {
+				if item.PriceType == "" {
+					return nil
+				}
+				t := item.PriceType
+				return &t
+			}()).
+			SetNillableMeterID(types.ToNillableString(item.MeterID)).
+			SetNillableMeterDisplayName(types.ToNillableString(item.MeterDisplayName)).
+			SetNillablePriceUnitID(item.PriceUnitID).
+			SetNillablePriceUnit(item.PriceUnit).
+			SetNillableDisplayName(types.ToNillableString(item.DisplayName)).
+			SetQuantity(item.Quantity).
+			SetCurrency(item.Currency).
+			SetBillingPeriod(item.BillingPeriod).
+			SetNillableStartDate(types.ToNillableTime(item.StartDate)).
+			SetNillableEndDate(types.ToNillableTime(item.EndDate)).
+			SetNillableSubscriptionPhaseID(item.SubscriptionPhaseID).
+			SetInvoiceCadence(item.InvoiceCadence).
+			SetTrialPeriod(item.TrialPeriod).
+			SetNillableCommitmentAmount(item.CommitmentAmount).
+			SetNillableCommitmentQuantity(item.CommitmentQuantity).
+			SetNillableCommitmentType(types.ToNillableString(string(item.CommitmentType))).
+			SetNillableCommitmentOverageFactor(item.CommitmentOverageFactor).
+			SetCommitmentTrueUpEnabled(item.CommitmentTrueUpEnabled).
+			SetCommitmentWindowed(item.CommitmentWindowed).
+			SetNillableCommitmentDuration(item.CommitmentDuration).
+			SetMetadata(item.Metadata).
+			SetTenantID(item.TenantID).
+			SetEnvironmentID(item.EnvironmentID).
+			SetStatus(string(item.Status)).
+			SetCreatedBy(item.CreatedBy).
+			SetUpdatedBy(item.UpdatedBy).
+			SetCreatedAt(time.Now()).
+			SetUpdatedAt(time.Now()).
+			AddUsageCustomerIDs(item.UsageCustomerIDs...) // Add usage customers M2M relationship
+	}
 
 		// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
 		for i := 0; i < len(bulk); i += subscriptionLineItemBatchSize {
@@ -774,6 +819,7 @@ func (r *subscriptionRepository) GetWithLineItems(ctx context.Context, id string
 			subscription.TenantID(types.GetTenantID(ctx)),
 			subscription.Status(string(types.StatusPublished)),
 		).
+		WithUsageCustomers(). // Load usage_customers edge for billing/usage calculations
 		Only(ctx)
 
 	if err != nil {
