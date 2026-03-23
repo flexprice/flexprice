@@ -807,9 +807,28 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		return nil, err
 	}
 
-	// GetByLookupKey only matches published plans, so a successful lookup means the
-	// key is already taken — covers both "same as source" and "taken by another plan".
-	existing, err := s.PlanRepo.GetByLookupKey(ctx, req.LookupKey)
+	// Determine save context and target environment ID
+	saveCtx := ctx
+	targetEnvID := types.GetEnvironmentID(ctx)
+
+	if req.TargetEnvironmentID != nil && *req.TargetEnvironmentID != "" {
+		if _, err := s.EnvironmentRepo.Get(ctx, *req.TargetEnvironmentID); err != nil {
+			if ierr.IsNotFound(err) {
+				return nil, ierr.NewError("target environment not found").
+					WithHint("Ensure target_environment_id belongs to your tenant").
+					WithReportableDetails(map[string]interface{}{
+						"target_environment_id": *req.TargetEnvironmentID,
+					}).
+					Mark(ierr.ErrNotFound)
+			}
+			return nil, err
+		}
+		targetEnvID = *req.TargetEnvironmentID
+		saveCtx = types.SetEnvironmentID(ctx, targetEnvID)
+	}
+
+	// lookup_key uniqueness check must use saveCtx (target environment)
+	existing, err := s.PlanRepo.GetByLookupKey(saveCtx, req.LookupKey)
 	if err != nil && !ierr.IsNotFound(err) {
 		return nil, err
 	}
@@ -822,7 +841,7 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 			Mark(ierr.ErrAlreadyExists)
 	}
 
-	// Active prices: published + not expired
+	// Active prices: published + not expired — read from source env context
 	sourcePrices, err := s.PriceRepo.List(ctx, types.NewNoLimitPriceFilter().
 		WithEntityIDs([]string{id}).
 		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
@@ -832,7 +851,7 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		return nil, err
 	}
 
-	// Published entitlements — WithPlanIDs sets EntityType=PLAN + EntityIDs in one call
+	// Published entitlements
 	sourceEntitlements, err := s.EntitlementRepo.List(ctx, types.NewNoLimitEntitlementFilter().
 		WithPlanIDs([]string{id}).
 		WithStatus(types.StatusPublished))
@@ -841,7 +860,7 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		return nil, err
 	}
 
-	// Published credit grants — filter at query level, no post-loop status check needed
+	// Published credit grants
 	sourceGrants, err := s.CreditGrantRepo.List(ctx, types.NewNoLimitCreditGrantFilter().
 		WithPlanIDs([]string{id}).
 		WithStatus(types.StatusPublished).
@@ -850,6 +869,25 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		s.Logger.ErrorwCtx(ctx, "failed to fetch credit grants for plan clone", "plan_id", id, "error", err)
 		return nil, err
 	}
+
+	return s.clonePlanCore(ctx, saveCtx, sourcePlan, sourcePrices, sourceEntitlements, sourceGrants, req, targetEnvID)
+}
+
+// clonePlanCore builds and saves the cloned plan and sub-entities.
+// saveCtx carries the target environment ID — all writes and BaseModel generation use it.
+// sourcePlan, sourcePrices, sourceEntitlements, sourceGrants are pre-fetched from the source env.
+// targetEnvID is explicitly stamped on all new entities (CopyWith doesn't copy EnvironmentID).
+func (s *planService) clonePlanCore(
+	ctx context.Context,
+	saveCtx context.Context,
+	sourcePlan *plan.Plan,
+	sourcePrices []*domainPrice.Price,
+	sourceEntitlements []*domainEntitlement.Entitlement,
+	sourceGrants []*domainCreditGrant.CreditGrant,
+	req dto.ClonePlanRequest,
+	targetEnvID string,
+) (*dto.PlanResponse, error) {
+	id := sourcePlan.ID
 
 	// Resolve fields: request overrides take precedence over source values
 	description := sourcePlan.Description
@@ -877,10 +915,10 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 		Name:          req.Name,
 		LookupKey:     req.LookupKey,
 		Description:   description,
-		EnvironmentID: sourcePlan.EnvironmentID,
+		EnvironmentID: targetEnvID,
 		Metadata:      metadata,
 		DisplayOrder:  displayOrder,
-		BaseModel:     types.GetDefaultBaseModel(ctx),
+		BaseModel:     types.GetDefaultBaseModel(saveCtx),
 	}
 
 	emptyLookupKey := ""
@@ -890,31 +928,37 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 
 	newPrices := make([]*domainPrice.Price, 0, len(sourcePrices))
 	for _, p := range sourcePrices {
-		newPrices = append(newPrices, p.CopyWith(ctx, &domainPrice.PriceCloneOverrides{
+		cloned := p.CopyWith(saveCtx, &domainPrice.PriceCloneOverrides{
 			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
 			EntityType: &entityTypePlan,
 			EntityID:   &newPlan.ID,
 			LookupKey:  lo.ToPtr(emptyLookupKey),
-		}))
+		})
+		cloned.EnvironmentID = targetEnvID
+		newPrices = append(newPrices, cloned)
 	}
 
 	newEntitlements := make([]*domainEntitlement.Entitlement, 0, len(sourceEntitlements))
 	for _, e := range sourceEntitlements {
-		newEntitlements = append(newEntitlements, e.CopyWith(ctx, &domainEntitlement.EntitlementCloneOverrides{
+		cloned := e.CopyWith(saveCtx, &domainEntitlement.EntitlementCloneOverrides{
 			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)),
 			EntityType: &entEntityTypePlan,
 			EntityID:   &newPlan.ID,
-		}))
+		})
+		cloned.EnvironmentID = targetEnvID
+		newEntitlements = append(newEntitlements, cloned)
 	}
 
 	newGrants := make([]*domainCreditGrant.CreditGrant, 0, len(sourceGrants))
 	newPlanID := newPlan.ID
 	for _, cg := range sourceGrants {
-		newGrants = append(newGrants, cg.CopyWith(ctx, &domainCreditGrant.CreditGrantCloneOverrides{
+		cloned := cg.CopyWith(saveCtx, &domainCreditGrant.CreditGrantCloneOverrides{
 			ID:     lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)),
 			Scope:  &scopePlan,
 			PlanID: &newPlanID,
-		}))
+		})
+		cloned.EnvironmentID = targetEnvID
+		newGrants = append(newGrants, cloned)
 	}
 
 	// Batch size for bulk creates (prices, entitlements, credit grants)
@@ -923,7 +967,7 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	// Inside tx: plan create then batched bulk creates
 	var entitlementsCreated []*domainEntitlement.Entitlement
 	var grantsCreated []*domainCreditGrant.CreditGrant
-	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+	err := s.DB.WithTx(saveCtx, func(txCtx context.Context) error {
 		if err := s.PlanRepo.Create(txCtx, newPlan); err != nil {
 			return err
 		}
