@@ -1741,6 +1741,10 @@ func init() {
 	subscriptionlineitemDescCommitmentWindowed := subscriptionlineitemFields[28].Descriptor()
 	// subscriptionlineitem.DefaultCommitmentWindowed holds the default value on creation for the commitment_windowed field.
 	subscriptionlineitem.DefaultCommitmentWindowed = subscriptionlineitemDescCommitmentWindowed.Default.(bool)
+	// subscriptionlineitemDescBillingCadence is the schema descriptor for billing_cadence field.
+	subscriptionlineitemDescBillingCadence := subscriptionlineitemFields[30].Descriptor()
+	// subscriptionlineitem.DefaultBillingCadence holds the default value on creation for the billing_cadence field.
+	subscriptionlineitem.DefaultBillingCadence = types.BillingCadence(subscriptionlineitemDescBillingCadence.Default.(string))
 	subscriptionpauseMixin := schema.SubscriptionPause{}.Mixin()
 	subscriptionpauseMixinFields0 := subscriptionpauseMixin[0].Fields()
 	_ = subscriptionpauseMixinFields0

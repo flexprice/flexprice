@@ -472,6 +472,20 @@ func (slic *SubscriptionLineItemCreate) SetNillableCommitmentDuration(tp *types.
 	return slic
 }
 
+// SetBillingCadence sets the "billing_cadence" field.
+func (slic *SubscriptionLineItemCreate) SetBillingCadence(tc types.BillingCadence) *SubscriptionLineItemCreate {
+	slic.mutation.SetBillingCadence(tc)
+	return slic
+}
+
+// SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableBillingCadence(tc *types.BillingCadence) *SubscriptionLineItemCreate {
+	if tc != nil {
+		slic.SetBillingCadence(*tc)
+	}
+	return slic
+}
+
 // SetID sets the "id" field.
 func (slic *SubscriptionLineItemCreate) SetID(s string) *SubscriptionLineItemCreate {
 	slic.mutation.SetID(s)
@@ -573,6 +587,10 @@ func (slic *SubscriptionLineItemCreate) defaults() {
 		v := subscriptionlineitem.DefaultCommitmentWindowed
 		slic.mutation.SetCommitmentWindowed(v)
 	}
+	if _, ok := slic.mutation.BillingCadence(); !ok {
+		v := subscriptionlineitem.DefaultBillingCadence
+		slic.mutation.SetBillingCadence(v)
+	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -665,6 +683,14 @@ func (slic *SubscriptionLineItemCreate) check() error {
 	if v, ok := slic.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
+		}
+	}
+	if _, ok := slic.mutation.BillingCadence(); !ok {
+		return &ValidationError{Name: "billing_cadence", err: errors.New(`ent: missing required field "SubscriptionLineItem.billing_cadence"`)}
+	}
+	if v, ok := slic.mutation.BillingCadence(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_cadence": %w`, err)}
 		}
 	}
 	if len(slic.mutation.SubscriptionIDs()) == 0 {
@@ -844,6 +870,10 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.CommitmentDuration(); ok {
 		_spec.SetField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString, value)
 		_node.CommitmentDuration = &value
+	}
+	if value, ok := slic.mutation.BillingCadence(); ok {
+		_spec.SetField(subscriptionlineitem.FieldBillingCadence, field.TypeString, value)
+		_node.BillingCadence = value
 	}
 	if nodes := slic.mutation.SubscriptionIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

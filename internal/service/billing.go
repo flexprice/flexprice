@@ -183,10 +183,17 @@ func (s *billingService) CalculateFixedCharges(
 		var amount decimal.Decimal
 		var linePeriodStart, linePeriodEnd time.Time
 
-		// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
-		// Advance: include when line-item period start falls in [periodStart, periodEnd).
-		// Arrear: include when line-item period end falls in [periodStart, periodEnd).
-		if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+		// ONETIME charge: full amount, no proration; service period = charge date.
+		if item.IsOneTime() {
+			amount = priceService.CalculateCost(ctx, price.Price, item.Quantity)
+			chargeDate := item.GetChargeDate()
+			linePeriodStart = chargeDate
+			linePeriodEnd = chargeDate
+			// fall through to shared rounding + line item build below
+		} else if types.BillingPeriodGreaterThan(item.BillingPeriod, sub.BillingPeriod) {
+			// Line item has longer cadence than subscription (e.g. quarterly line on monthly sub):
+			// Advance: include when line-item period start falls in [periodStart, periodEnd).
+			// Arrear: include when line-item period end falls in [periodStart, periodEnd).
 			res, err := FindMatchingLineItemPeriodForInvoice(FindMatchingLineItemPeriodInput{
 				Item:           item,
 				PeriodStart:    periodStart,
@@ -2133,6 +2140,29 @@ func (s *billingService) ClassifyLineItems(
 		}
 
 		if item.PriceType != types.PRICE_TYPE_FIXED {
+			continue
+		}
+
+		// ONETIME charges: classified by whether the charge date (StartDate) falls in the period.
+		// They are never auto-added to both current and next (unlike RECURRING ADVANCE).
+		// FilterLineItemsToBeInvoiced prevents double-billing if the charge was already invoiced.
+		if item.IsOneTime() {
+			chargeDate := item.GetChargeDate()
+			if item.InvoiceCadence == types.InvoiceCadenceAdvance {
+				// Advance: charge date in [currentPeriodStart, currentPeriodEnd)
+				if !chargeDate.Before(currentPeriodStart) && chargeDate.Before(currentPeriodEnd) {
+					result.CurrentPeriodAdvance = append(result.CurrentPeriodAdvance, item)
+				}
+				// Also check if charge date falls in the next period window
+				if !chargeDate.Before(nextPeriodStart) && chargeDate.Before(nextPeriodEnd) {
+					result.NextPeriodAdvance = append(result.NextPeriodAdvance, item)
+				}
+			} else {
+				// Arrear: charge date in (currentPeriodStart, currentPeriodEnd]
+				if chargeDate.After(currentPeriodStart) && !chargeDate.After(currentPeriodEnd) {
+					result.CurrentPeriodArrear = append(result.CurrentPeriodArrear, item)
+				}
+			}
 			continue
 		}
 

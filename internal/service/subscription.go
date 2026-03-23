@@ -901,8 +901,14 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			return err
 		}
 
-		// Skip creating line items for the first phase since they're already created with the subscription
+		// Skip creating plan price line items for the first phase since they're already created with the subscription.
+		// But still process extra line items (e.g. one-time charges) defined on phase 0.
 		if i == 0 {
+			if len(phaseRequests[0].LineItems) > 0 {
+				if err := s.createPhaseExtraLineItems(ctx, sub, phase, phaseRequests[0]); err != nil {
+					return err
+				}
+			}
 			continue
 		}
 
@@ -976,6 +982,14 @@ func (s *subscriptionService) handleSubscriptionPhases(
 			}
 		}
 
+		// Handle extra line items defined on the phase (e.g. one-time charges).
+		// These are processed for all phases (including phase 0).
+		if len(phaseReq.LineItems) > 0 {
+			if err := s.createPhaseExtraLineItems(ctx, sub, phase, phaseReq); err != nil {
+				return err
+			}
+		}
+
 		// Handle phase coupons - transform simple coupons to SubscriptionCouponRequest format
 		couponAssociationService := NewCouponAssociationService(s.ServiceParams)
 		phaseCoupons := s.normalizePhaseCoupons(phaseReq, phase.ID, phasePriceToLineItemMap)
@@ -1036,6 +1050,29 @@ func (s *subscriptionService) normalizePhaseCoupons(
 	}
 
 	return subscriptionCoupons
+}
+
+// createPhaseExtraLineItems creates extra line items defined in a phase request (e.g. one-time charges).
+// charge_date (or start_date) defaults to phase.StartDate when not provided.
+func (s *subscriptionService) createPhaseExtraLineItems(
+	ctx context.Context,
+	sub *subscription.Subscription,
+	phase *subscription.SubscriptionPhase,
+	phaseReq dto.SubscriptionPhaseCreateRequest,
+) error {
+	for _, liReq := range phaseReq.LineItems {
+		// Default charge_date and start_date to phase start when not set
+		if liReq.ChargeDate == nil && liReq.StartDate == nil {
+			liReq.ChargeDate = &phaseReq.StartDate
+		}
+		liReq.SubscriptionPhaseID = lo.ToPtr(phase.ID)
+		liReq.SkipEntitlementCheck = true
+
+		if _, err := s.AddSubscriptionLineItem(ctx, sub.ID, liReq); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // processSubscriptionPriceOverrides handles creating subscription-scoped prices for overrides

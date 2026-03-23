@@ -509,6 +509,20 @@ func (sliu *SubscriptionLineItemUpdate) ClearCommitmentDuration() *SubscriptionL
 	return sliu
 }
 
+// SetBillingCadence sets the "billing_cadence" field.
+func (sliu *SubscriptionLineItemUpdate) SetBillingCadence(tc types.BillingCadence) *SubscriptionLineItemUpdate {
+	sliu.mutation.SetBillingCadence(tc)
+	return sliu
+}
+
+// SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
+func (sliu *SubscriptionLineItemUpdate) SetNillableBillingCadence(tc *types.BillingCadence) *SubscriptionLineItemUpdate {
+	if tc != nil {
+		sliu.SetBillingCadence(*tc)
+	}
+	return sliu
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliu *SubscriptionLineItemUpdate) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdate {
 	sliu.mutation.AddCouponAssociationIDs(ids...)
@@ -611,6 +625,11 @@ func (sliu *SubscriptionLineItemUpdate) check() error {
 	if v, ok := sliu.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
+		}
+	}
+	if v, ok := sliu.mutation.BillingCadence(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_cadence": %w`, err)}
 		}
 	}
 	if sliu.mutation.SubscriptionCleared() && len(sliu.mutation.SubscriptionIDs()) > 0 {
@@ -780,6 +799,9 @@ func (sliu *SubscriptionLineItemUpdate) sqlSave(ctx context.Context) (n int, err
 	}
 	if sliu.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
+	}
+	if value, ok := sliu.mutation.BillingCadence(); ok {
+		_spec.SetField(subscriptionlineitem.FieldBillingCadence, field.TypeString, value)
 	}
 	if sliu.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1324,6 +1346,20 @@ func (sliuo *SubscriptionLineItemUpdateOne) ClearCommitmentDuration() *Subscript
 	return sliuo
 }
 
+// SetBillingCadence sets the "billing_cadence" field.
+func (sliuo *SubscriptionLineItemUpdateOne) SetBillingCadence(tc types.BillingCadence) *SubscriptionLineItemUpdateOne {
+	sliuo.mutation.SetBillingCadence(tc)
+	return sliuo
+}
+
+// SetNillableBillingCadence sets the "billing_cadence" field if the given value is not nil.
+func (sliuo *SubscriptionLineItemUpdateOne) SetNillableBillingCadence(tc *types.BillingCadence) *SubscriptionLineItemUpdateOne {
+	if tc != nil {
+		sliuo.SetBillingCadence(*tc)
+	}
+	return sliuo
+}
+
 // AddCouponAssociationIDs adds the "coupon_associations" edge to the CouponAssociation entity by IDs.
 func (sliuo *SubscriptionLineItemUpdateOne) AddCouponAssociationIDs(ids ...string) *SubscriptionLineItemUpdateOne {
 	sliuo.mutation.AddCouponAssociationIDs(ids...)
@@ -1439,6 +1475,11 @@ func (sliuo *SubscriptionLineItemUpdateOne) check() error {
 	if v, ok := sliuo.mutation.CommitmentDuration(); ok {
 		if err := v.Validate(); err != nil {
 			return &ValidationError{Name: "commitment_duration", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.commitment_duration": %w`, err)}
+		}
+	}
+	if v, ok := sliuo.mutation.BillingCadence(); ok {
+		if err := v.Validate(); err != nil {
+			return &ValidationError{Name: "billing_cadence", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_cadence": %w`, err)}
 		}
 	}
 	if sliuo.mutation.SubscriptionCleared() && len(sliuo.mutation.SubscriptionIDs()) > 0 {
@@ -1625,6 +1666,9 @@ func (sliuo *SubscriptionLineItemUpdateOne) sqlSave(ctx context.Context) (_node 
 	}
 	if sliuo.mutation.CommitmentDurationCleared() {
 		_spec.ClearField(subscriptionlineitem.FieldCommitmentDuration, field.TypeString)
+	}
+	if value, ok := sliuo.mutation.BillingCadence(); ok {
+		_spec.SetField(subscriptionlineitem.FieldBillingCadence, field.TypeString, value)
 	}
 	if sliuo.mutation.CouponAssociationsCleared() {
 		edge := &sqlgraph.EdgeSpec{
