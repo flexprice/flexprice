@@ -211,6 +211,28 @@ func (r *CreateSubscriptionLineItemRequest) Validate(price *price.Price, sub *su
 					Mark(ierr.ErrValidation)
 			}
 		}
+		// Validate charge_date for ONETIME prices: must fall within subscription bounds.
+		if price != nil && price.BillingCadence == types.BILLING_CADENCE_ONETIME && r.ChargeDate != nil {
+			chargeDateUTC := r.ChargeDate.UTC()
+			if chargeDateUTC.Before(subStartUTC) {
+				return ierr.NewError("charge_date cannot be before subscription start date").
+					WithHint("charge_date must be on or after the subscription's start date.").
+					WithReportableDetails(map[string]interface{}{
+						"charge_date":        r.ChargeDate,
+						"subscription_start": sub.StartDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+			if sub.EndDate != nil && chargeDateUTC.After(lo.FromPtr(sub.EndDate).UTC()) {
+				return ierr.NewError("charge_date cannot be after subscription end date").
+					WithHint("charge_date must be on or before the subscription's end date when the subscription has an end date.").
+					WithReportableDetails(map[string]interface{}{
+						"charge_date":      r.ChargeDate,
+						"subscription_end": sub.EndDate,
+					}).
+					Mark(ierr.ErrValidation)
+			}
+		}
 		if sub.EndDate != nil && r.EndDate != nil {
 			subEndUTC := lo.FromPtr(sub.EndDate).UTC()
 			endUTC := lo.FromPtr(r.EndDate).UTC()
