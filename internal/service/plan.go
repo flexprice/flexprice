@@ -811,25 +811,17 @@ func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePla
 	saveCtx := ctx
 	targetEnvID := types.GetEnvironmentID(ctx)
 
-	if req.TargetEnvironmentID != nil && *req.TargetEnvironmentID != "" {
-		if _, err := s.EnvironmentRepo.Get(ctx, *req.TargetEnvironmentID); err != nil {
-			if ierr.IsNotFound(err) {
-				return nil, ierr.NewError("target environment not found").
-					WithHint("Ensure target_environment_id belongs to your tenant").
-					WithReportableDetails(map[string]interface{}{
-						"target_environment_id": *req.TargetEnvironmentID,
-					}).
-					Mark(ierr.ErrNotFound)
-			}
+	if req.TargetEnvironmentID != nil && lo.FromPtr(req.TargetEnvironmentID) != "" {
+		if _, err := s.EnvironmentRepo.Get(ctx, lo.FromPtr(req.TargetEnvironmentID)); err != nil {
 			return nil, err
 		}
-		targetEnvID = *req.TargetEnvironmentID
+		targetEnvID = lo.FromPtr(req.TargetEnvironmentID)
 		saveCtx = types.SetEnvironmentID(ctx, targetEnvID)
 	}
 
 	// lookup_key uniqueness check must use saveCtx (target environment)
 	existing, err := s.PlanRepo.GetByLookupKey(saveCtx, req.LookupKey)
-	if err != nil && !ierr.IsNotFound(err) {
+	if err != nil {
 		return nil, err
 	}
 	if existing != nil {
