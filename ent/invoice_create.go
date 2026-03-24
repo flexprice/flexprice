@@ -516,6 +516,20 @@ func (ic *InvoiceCreate) SetNillableIdempotencyKey(s *string) *InvoiceCreate {
 	return ic
 }
 
+// SetRecalculatedInvoiceID sets the "recalculated_invoice_id" field.
+func (ic *InvoiceCreate) SetRecalculatedInvoiceID(s string) *InvoiceCreate {
+	ic.mutation.SetRecalculatedInvoiceID(s)
+	return ic
+}
+
+// SetNillableRecalculatedInvoiceID sets the "recalculated_invoice_id" field if the given value is not nil.
+func (ic *InvoiceCreate) SetNillableRecalculatedInvoiceID(s *string) *InvoiceCreate {
+	if s != nil {
+		ic.SetRecalculatedInvoiceID(*s)
+	}
+	return ic
+}
+
 // SetID sets the "id" field.
 func (ic *InvoiceCreate) SetID(s string) *InvoiceCreate {
 	ic.mutation.SetID(s)
@@ -919,6 +933,10 @@ func (ic *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := ic.mutation.IdempotencyKey(); ok {
 		_spec.SetField(invoice.FieldIdempotencyKey, field.TypeString, value)
 		_node.IdempotencyKey = &value
+	}
+	if value, ok := ic.mutation.RecalculatedInvoiceID(); ok {
+		_spec.SetField(invoice.FieldRecalculatedInvoiceID, field.TypeString, value)
+		_node.RecalculatedInvoiceID = &value
 	}
 	if nodes := ic.mutation.LineItemsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{

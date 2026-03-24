@@ -443,45 +443,20 @@ func (o WorkflowExecutionQueryOptions) applyEntityQueryOptions(ctx context.Conte
 	return query, nil
 }
 
+// workflowExecutionFieldName resolves optional aliases then delegates to ent's ValidColumn so new schema fields are supported automatically.
 func workflowExecutionFieldName(field string) string {
-	switch strings.ToLower(strings.TrimSpace(field)) {
-	case "id":
-		return workflowexecution.FieldID
-	case "tenant_id":
-		return workflowexecution.FieldTenantID
-	case "environment_id":
-		return workflowexecution.FieldEnvironmentID
-	case "workflow_id":
-		return workflowexecution.FieldWorkflowID
-	case "run_id":
-		return workflowexecution.FieldRunID
-	case "workflow_type":
-		return workflowexecution.FieldWorkflowType
-	case "task_queue":
-		return workflowexecution.FieldTaskQueue
-	case "start_time":
-		return workflowexecution.FieldStartTime
-	case "end_time", "close_time":
-		return workflowexecution.FieldEndTime
-	case "duration_ms":
-		return workflowexecution.FieldDurationMs
-	case "workflow_status", "status":
-		return workflowexecution.FieldWorkflowStatus
-	case "entity":
-		return workflowexecution.FieldEntity
-	case "entity_id":
-		return workflowexecution.FieldEntityID
-	case "created_at":
-		return workflowexecution.FieldCreatedAt
-	case "updated_at":
-		return workflowexecution.FieldUpdatedAt
-	case "created_by":
-		return workflowexecution.FieldCreatedBy
-	case "updated_by":
-		return workflowexecution.FieldUpdatedBy
-	default:
-		return ""
+	f := strings.ToLower(strings.TrimSpace(field))
+	// Optional aliases for API compatibility (ent column name -> used in ValidColumn)
+	if f == "close_time" {
+		f = "end_time"
 	}
+	if f == "status" {
+		f = "workflow_status"
+	}
+	if workflowexecution.ValidColumn(f) {
+		return f
+	}
+	return ""
 }
 
 func (r *workflowExecutionRepository) GetCache(ctx context.Context, workflowID, runID string) *domainWorkflowExecution.WorkflowExecution {

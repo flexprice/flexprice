@@ -5,107 +5,111 @@ import (
 	"time"
 )
 
+// WebhookEventName represents a webhook event name string.
+// @name WebhookEventName
+type WebhookEventName = string
+
 // WebhookEvent represents a webhook event to be delivered
 type WebhookEvent struct {
-	ID            string          `json:"id"`
-	EventName     string          `json:"event_name"`
-	TenantID      string          `json:"tenant_id"`
-	EnvironmentID string          `json:"environment_id"`
-	UserID        string          `json:"user_id"`
-	Timestamp     time.Time       `json:"timestamp"`
-	Payload       json.RawMessage `json:"payload"`
+	ID            string           `json:"id"`
+	EventName     WebhookEventName `json:"event_name"`
+	TenantID      string           `json:"tenant_id"`
+	EnvironmentID string           `json:"environment_id"`
+	UserID        string           `json:"user_id"`
+	Timestamp     time.Time        `json:"timestamp"`
+	Payload       json.RawMessage  `json:"payload"`
 }
 
 // invoice event names
 const (
-	WebhookEventInvoiceCreateDraft = "invoice.create.drafted"
+	WebhookEventInvoiceCreateDraft WebhookEventName = "invoice.create.drafted"
 )
 
 // subscription event names
 const (
-	WebhookEventSubscriptionCreated      = "subscription.created"
-	WebhookEventSubscriptionDraftCreated = "subscription.draft.created"
-	WebhookEventSubscriptionActivated    = "subscription.activated"
-	WebhookEventSubscriptionUpdated      = "subscription.updated"
-	WebhookEventSubscriptionPaused       = "subscription.paused"
-	WebhookEventSubscriptionCancelled    = "subscription.cancelled"
-	WebhookEventSubscriptionResumed      = "subscription.resumed"
+	WebhookEventSubscriptionCreated      WebhookEventName = "subscription.created"
+	WebhookEventSubscriptionDraftCreated WebhookEventName = "subscription.draft.created"
+	WebhookEventSubscriptionActivated    WebhookEventName = "subscription.activated"
+	WebhookEventSubscriptionUpdated      WebhookEventName = "subscription.updated"
+	WebhookEventSubscriptionPaused       WebhookEventName = "subscription.paused"
+	WebhookEventSubscriptionCancelled    WebhookEventName = "subscription.cancelled"
+	WebhookEventSubscriptionResumed      WebhookEventName = "subscription.resumed"
 )
 
 // subscription phase event names
 const (
-	WebhookEventSubscriptionPhaseCreated = "subscription.phase.created"
-	WebhookEventSubscriptionPhaseUpdated = "subscription.phase.updated"
-	WebhookEventSubscriptionPhaseDeleted = "subscription.phase.deleted"
+	WebhookEventSubscriptionPhaseCreated WebhookEventName = "subscription.phase.created"
+	WebhookEventSubscriptionPhaseUpdated WebhookEventName = "subscription.phase.updated"
+	WebhookEventSubscriptionPhaseDeleted WebhookEventName = "subscription.phase.deleted"
 )
 
 // feature event names
 const (
-	WebhookEventFeatureCreated            = "feature.created"
-	WebhookEventFeatureUpdated            = "feature.updated"
-	WebhookEventFeatureDeleted            = "feature.deleted"
-	WebhookEventFeatureWalletBalanceAlert = "feature.wallet_balance.alert"
+	WebhookEventFeatureCreated            WebhookEventName = "feature.created"
+	WebhookEventFeatureUpdated            WebhookEventName = "feature.updated"
+	WebhookEventFeatureDeleted            WebhookEventName = "feature.deleted"
+	WebhookEventFeatureWalletBalanceAlert WebhookEventName = "feature.wallet_balance.alert"
 )
 
 // entitlement event names
 const (
-	WebhookEventEntitlementCreated = "entitlement.created"
-	WebhookEventEntitlementUpdated = "entitlement.updated"
-	WebhookEventEntitlementDeleted = "entitlement.deleted"
+	WebhookEventEntitlementCreated WebhookEventName = "entitlement.created"
+	WebhookEventEntitlementUpdated WebhookEventName = "entitlement.updated"
+	WebhookEventEntitlementDeleted WebhookEventName = "entitlement.deleted"
 )
 
 // wallet event names
 const (
-	WebhookEventWalletCreated            = "wallet.created"
-	WebhookEventWalletUpdated            = "wallet.updated"
-	WebhookEventWalletTerminated         = "wallet.terminated"
-	WebhookEventWalletTransactionCreated = "wallet.transaction.created"
+	WebhookEventWalletCreated            WebhookEventName = "wallet.created"
+	WebhookEventWalletUpdated            WebhookEventName = "wallet.updated"
+	WebhookEventWalletTerminated         WebhookEventName = "wallet.terminated"
+	WebhookEventWalletTransactionCreated WebhookEventName = "wallet.transaction.created"
 )
 
 // payment event names
 const (
-	WebhookEventPaymentCreated = "payment.created"
-	WebhookEventPaymentUpdated = "payment.updated"
-	WebhookEventPaymentFailed  = "payment.failed"
-	WebhookEventPaymentSuccess = "payment.success"
-	WebhookEventPaymentPending = "payment.pending"
+	WebhookEventPaymentCreated WebhookEventName = "payment.created"
+	WebhookEventPaymentUpdated WebhookEventName = "payment.updated"
+	WebhookEventPaymentFailed  WebhookEventName = "payment.failed"
+	WebhookEventPaymentSuccess WebhookEventName = "payment.success"
+	WebhookEventPaymentPending WebhookEventName = "payment.pending"
 )
 
 // customer event names
 const (
-	WebhookEventCustomerCreated = "customer.created"
-	WebhookEventCustomerUpdated = "customer.updated"
-	WebhookEventCustomerDeleted = "customer.deleted"
+	WebhookEventCustomerCreated WebhookEventName = "customer.created"
+	WebhookEventCustomerUpdated WebhookEventName = "customer.updated"
+	WebhookEventCustomerDeleted WebhookEventName = "customer.deleted"
 )
 
 // TODO: Below events should be cron triggered webhook event names
 const (
-	WebhookEventInvoiceUpdateFinalized = "invoice.update.finalized"
-	WebhookEventInvoiceUpdatePayment   = "invoice.update.payment"
-	WebhookEventInvoiceUpdateVoided    = "invoice.update.voided"
-	WebhookEventInvoiceUpdate          = "invoice.update"
-	WebhookEventInvoicePaymentOverdue  = "invoice.payment.overdue"
+	WebhookEventInvoiceUpdateFinalized WebhookEventName = "invoice.update.finalized"
+	WebhookEventInvoiceUpdatePayment   WebhookEventName = "invoice.update.payment"
+	WebhookEventInvoiceUpdateVoided    WebhookEventName = "invoice.update.voided"
+	WebhookEventInvoiceUpdate          WebhookEventName = "invoice.update"
+	WebhookEventInvoicePaymentOverdue  WebhookEventName = "invoice.payment.overdue"
 )
 
 // alert event names
 const (
-	WebhookEventWalletCreditBalanceDropped   = "wallet.credit_balance.dropped"
-	WebhookEventWalletCreditBalanceRecovered = "wallet.credit_balance.recovered"
+	WebhookEventWalletCreditBalanceDropped   WebhookEventName = "wallet.credit_balance.dropped"
+	WebhookEventWalletCreditBalanceRecovered WebhookEventName = "wallet.credit_balance.recovered"
 
-	WebhookEventWalletOngoingBalanceDropped   = "wallet.ongoing_balance.dropped"
-	WebhookEventWalletOngoingBalanceRecovered = "wallet.ongoing_balance.recovered"
+	WebhookEventWalletOngoingBalanceDropped   WebhookEventName = "wallet.ongoing_balance.dropped"
+	WebhookEventWalletOngoingBalanceRecovered WebhookEventName = "wallet.ongoing_balance.recovered"
 
 	// cron driven webhook event names
-	WebhookEventSubscriptionRenewalDue = "subscription.renewal.due"
+	WebhookEventSubscriptionRenewalDue WebhookEventName = "subscription.renewal.due"
 )
 
 // communication event names
 const (
-	WebhookEventInvoiceCommunicationTriggered = "invoice.communication.triggered"
+	WebhookEventInvoiceCommunicationTriggered WebhookEventName = "invoice.communication.triggered"
 )
 
 // credit note event names
 const (
-	WebhookEventCreditNoteCreated = "credit_note.created"
-	WebhookEventCreditNoteUpdated = "credit_note.updated"
+	WebhookEventCreditNoteCreated WebhookEventName = "credit_note.created"
+	WebhookEventCreditNoteUpdated WebhookEventName = "credit_note.updated"
 )

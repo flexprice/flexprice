@@ -1180,21 +1180,14 @@ definitions:
     - provider_entity_id
     - provider_type
     type: object
-  dto.CreateEnvironmentRequest:
-    properties:
-      name:
-        type: string
-      type:
-        type: string
-    required:
-    - name
-    - type
-    type: object
   dto.CreateFeatureRequest:
     properties:
       alert_settings:
         $ref: '#/definitions/types.AlertSettings'
       description:
+        type: string
+      group_id:
+        description: GroupID is the id of the group to add the feature to
         type: string
       lookup_key:
         type: string
@@ -1206,6 +1199,8 @@ definitions:
         type: string
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       type:
         $ref: '#/definitions/types.FeatureType'
       unit_plural:
@@ -2022,19 +2017,38 @@ definitions:
     type: object
   dto.CreateUserRequest:
     properties:
+      email:
+        description: Required when type is "user"
+        type: string
       roles:
-        description: Roles are required
+        description: Required when type is "service_account"
         items:
           type: string
-        minItems: 1
         type: array
       type:
         allOf:
         - $ref: '#/definitions/types.UserType'
-        description: Must be "service_account"
+        description: '"user" or "service_account"'
     required:
-    - roles
     - type
+    type: object
+  dto.CreateUserResponse:
+    properties:
+      email:
+        description: Empty for service accounts
+        type: string
+      id:
+        type: string
+      password:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      tenant:
+        $ref: '#/definitions/dto.TenantResponse'
+      type:
+        $ref: '#/definitions/types.UserType'
     type: object
   dto.CreateWalletRequest:
     properties:
@@ -2631,19 +2645,6 @@ definitions:
       updated_by:
         type: string
     type: object
-  dto.EnvironmentResponse:
-    properties:
-      created_at:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      type:
-        type: string
-      updated_at:
-        type: string
-    type: object
   dto.Event:
     properties:
       customer_id:
@@ -2683,6 +2684,13 @@ definitions:
         type: string
       environment_id:
         type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/dto.GroupResponse'
+        description: Group is the full group object when the feature belongs to a
+          group (populated in response)
+      group_id:
+        type: string
       id:
         type: string
       lookup_key:
@@ -2695,6 +2703,8 @@ definitions:
         type: string
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -2923,6 +2933,11 @@ definitions:
     type: object
   dto.GetPreviewInvoiceRequest:
     properties:
+      hide_zero_charges_line_items:
+        default: false
+        description: hide_zero_charges_line_items indicates whether to hide line items
+          with zero cost
+        type: boolean
       period_end:
         description: period_end is the optional end date of the period to preview
         type: string
@@ -3521,6 +3536,11 @@ definitions:
       period_start:
         description: period_start is the start date of the billing period covered
           by this invoice
+        type: string
+      recalculated_invoice_id:
+        description: |-
+          recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.
+          When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
         type: string
       refunded_amount:
         description: |-
@@ -5908,13 +5928,6 @@ definitions:
       usage_reset_period:
         $ref: '#/definitions/types.EntitlementUsageResetPeriod'
     type: object
-  dto.UpdateEnvironmentRequest:
-    properties:
-      name:
-        type: string
-      type:
-        type: string
-    type: object
   dto.UpdateFeatureRequest:
     properties:
       alert_settings:
@@ -5925,10 +5938,16 @@ definitions:
         items:
           $ref: '#/definitions/meter.Filter'
         type: array
+      group_id:
+        description: GroupID is the id of the group to assign the feature to. Pass
+          empty string to clear.
+        type: string
       metadata:
         $ref: '#/definitions/types.Metadata'
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       unit_plural:
         type: string
       unit_singular:
@@ -6007,7 +6026,11 @@ definitions:
       effective_from:
         type: string
       group_id:
-        description: GroupID is the id of the group to update the price in
+        description: |-
+          GroupID is the id of the group to update the price in.
+          If not provided (nil), the group will not be changed
+          If provided as empty string (""), the group will be removed (price will be ungrouped)
+          If provided as a group ID, the price will be assigned to that group (must exist and be published)
         type: string
       lookup_key:
         description: |-
@@ -6196,6 +6219,10 @@ definitions:
         description: Full feature object (only if expand includes "feature")
       feature_id:
         type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/group.Group'
+        description: Group when the feature belongs to a group (object includes id)
       meter:
         allOf:
         - $ref: '#/definitions/meter.Meter'
@@ -6228,6 +6255,11 @@ definitions:
         description: Stores property values for flexible grouping (e.g., org_id ->
           "org123")
         type: object
+      reporting_unit:
+        allOf:
+        - $ref: '#/definitions/types.ReportingUnit'
+        description: Present when total_usage_display is set (unit_singular, unit_plural,
+          conversion_rate)
       source:
         type: string
       sources:
@@ -6248,6 +6280,10 @@ definitions:
       total_cost:
         type: string
       total_usage:
+        type: string
+      total_usage_display:
+        description: Empty string when feature has no reporting unit; otherwise the
+          value in reporting units
         type: string
       unit:
         type: string
@@ -6714,6 +6750,13 @@ definitions:
         type: string
       environment_id:
         type: string
+      group:
+        allOf:
+        - $ref: '#/definitions/group.Group'
+        description: Group is populated by the service layer when building responses;
+          repository/FromEnt do not set it.
+      group_id:
+        type: string
       id:
         type: string
       lookup_key:
@@ -6724,6 +6767,8 @@ definitions:
         type: string
       name:
         type: string
+      reporting_unit:
+        $ref: '#/definitions/types.ReportingUnit'
       status:
         $ref: '#/definitions/types.Status'
       tenant_id:
@@ -8458,6 +8503,7 @@ definitions:
     - WALLET_TERMINATION
     - MANUAL_BALANCE_DEBIT
     - CREDIT_ADJUSTMENT
+    - INVOICE_VOID_REFUND
     type: string
     x-enum-varnames:
     - TransactionReasonInvoicePayment
@@ -8470,6 +8516,7 @@ definitions:
     - TransactionReasonWalletTermination
     - TransactionReasonManualBalanceDebit
     - TransactionReasonCreditAdjustment
+    - TransactionReasonInvoiceVoidRefund
   types.TransactionStatus:
     enum:
     - pending
@@ -8691,6 +8738,7 @@ definitions:
     - WalletTypePostPaid
   types.WindowSize:
     enum:
+    - MONTH
     - MINUTE
     - 15MIN
     - 30MIN
@@ -8701,9 +8749,9 @@ definitions:
     - DAY
     - WEEK
     - MONTH
-    - MONTH
     type: string
     x-enum-varnames:
+    - DefaultWindowSize
     - WindowSizeMinute
     - WindowSize15Min
     - WindowSize30Min
@@ -8714,7 +8762,6 @@ definitions:
     - WindowSizeDay
     - WindowSizeWeek
     - WindowSizeMonth
-    - DefaultWindowSize
   types.WorkflowExecutionFilter:
     properties:
       end_time:
@@ -8762,6 +8809,35 @@ definitions:
         description: e.g. Running, Completed, Failed
         type: string
       workflow_type:
+        type: string
+    type: object
+  group.Group:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      entity_type:
+        $ref: '#/definitions/types.GroupEntityType'
+      environment_id:
+        type: string
+      id:
+        type: string
+      lookup_key:
+        type: string
+      metadata:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      status:
+        $ref: '#/definitions/types.Status'
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
         type: string
     type: object
   invoice.InvoiceLineItem:
@@ -9291,6 +9367,14 @@ definitions:
       updated_by:
         type: string
     type: object
+  types.GroupEntityType:
+    enum:
+    - price
+    - feature
+    type: string
+    x-enum-varnames:
+    - GroupEntityTypePrice
+    - GroupEntityTypeFeature
   types.ListResponse-dto_WalletResponse:
     properties:
       items:
@@ -9303,6 +9387,19 @@ definitions:
   types.Metadata:
     additionalProperties:
       type: string
+    type: object
+  types.ReportingUnit:
+    properties:
+      conversion_rate:
+        description: 'Multiplier: reporting_unit_value = unit_value * conversion_rate;
+          must be > 0'
+        type: number
+      unit_plural:
+        description: Display unit label, plural (e.g. "seconds")
+        type: string
+      unit_singular:
+        description: Display unit label, singular (e.g. "second")
+        type: string
     type: object
 info:
   contact:
@@ -10433,6 +10530,7 @@ paths:
       summary: Create customer
       tags:
       - Customers
+      x-scope: write
     put:
       consumes:
       - application/json
@@ -10535,6 +10633,7 @@ paths:
       summary: Get customer
       tags:
       - Customers
+      x-scope: read
   /customers/{id}/entitlements:
     get:
       description: Use when checking what a customer can access (e.g. feature gating
@@ -10738,6 +10837,7 @@ paths:
       summary: Query customers
       tags:
       - Customers
+      x-scope: read
   /customers/usage:
     get:
       consumes:
@@ -11129,83 +11229,6 @@ paths:
       summary: Delete entity integration mapping
       tags:
       - Entity Integration Mappings
-  /environments:
-    post:
-      consumes:
-      - application/json
-      description: Use when setting up a new environment (e.g. production, staging)
-        for the tenant. Ideal for separating billing or config per environment.
-      operationId: createEnvironment
-      parameters:
-      - description: Environment
-        in: body
-        name: environment
-        required: true
-        schema:
-          $ref: '#/definitions/dto.CreateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/dto.EnvironmentResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create environment
-      tags:
-      - Environments
-  /environments/{id}:
-    put:
-      consumes:
-      - application/json
-      description: Use when changing environment name or settings (e.g. renaming or
-        updating metadata).
-      operationId: updateEnvironment
-      parameters:
-      - description: Environment ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Environment
-        in: body
-        name: environment
-        required: true
-        schema:
-          $ref: '#/definitions/dto.UpdateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/dto.EnvironmentResponse'
-        "400":
-          description: Invalid request
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "404":
-          description: Resource not found
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-        "500":
-          description: Server error
-          schema:
-            $ref: '#/definitions/errors.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Update environment
-      tags:
-      - Environments
   /events:
     post:
       consumes:
@@ -11949,6 +11972,7 @@ paths:
       summary: Finalize invoice
       tags:
       - Invoices
+      x-scope: delete
   /invoices/{id}/payment:
     put:
       consumes:
@@ -12068,11 +12092,49 @@ paths:
       - Invoices
   /invoices/{id}/recalculate:
     post:
+      description: Starts an async workflow that creates a fresh replacement invoice
+        for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id
+        and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id
+        after completion.
+      operationId: recalculateInvoice
+      parameters:
+      - description: Invoice ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            $ref: '#/definitions/models.TemporalWorkflowResult'
+        "400":
+          description: Invalid request or invoice already recalculated
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "404":
+          description: Invoice not found
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/errors.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Recalculate invoice (voided invoice)
+      tags:
+      - Invoices
+  /invoices/{id}/recalculate-v2:
+    post:
       consumes:
       - application/json
-      description: Use when subscription or usage data changed and you need to refresh
-        a draft invoice before finalizing. Optional finalize=true to lock after recalc.
-      operationId: recalculateInvoice
+      description: Recalculates a draft SUBSCRIPTION invoice in-place (replaces line
+        items, reapplies credits/coupons/taxes). Use when subscription or usage data
+        changed before finalizing.
+      operationId: recalculateInvoiceV2
       parameters:
       - description: Invoice ID
         in: path
@@ -12105,7 +12167,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Recalculate invoice
+      summary: Recalculate draft invoice (v2)
       tags:
       - Invoices
   /invoices/{id}/void:
@@ -15496,12 +15558,13 @@ paths:
     post:
       consumes:
       - application/json
-      description: Use when provisioning API access for automation, CI/CD pipelines,
-        or headless integrations that need scoped API keys.
+      description: Create a user account (type=user, email required; returns user
+        + password for login) or a service account (type=service_account, roles required)
+        for API/automation access.
       operationId: createUser
       parameters:
-      - description: Create service account request (type must be 'service_account',
-          roles are required)
+      - description: Create user (email, type=user) or service account (type=service_account,
+          roles)
         in: body
         name: request
         required: true
@@ -15513,7 +15576,7 @@ paths:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/dto.UserResponse'
+            $ref: '#/definitions/dto.CreateUserResponse'
         "400":
           description: Invalid request
           schema:
@@ -15524,7 +15587,7 @@ paths:
             $ref: '#/definitions/errors.ErrorResponse'
       security:
       - ApiKeyAuth: []
-      summary: Create service account
+      summary: Create user or service account
       tags:
       - Users
   /users/me:
@@ -16011,6 +16074,7 @@ paths:
         - WALLET_TERMINATION
         - MANUAL_BALANCE_DEBIT
         - CREDIT_ADJUSTMENT
+        - INVOICE_VOID_REFUND
         in: query
         name: transaction_reason
         type: string
@@ -16025,6 +16089,7 @@ paths:
         - TransactionReasonWalletTermination
         - TransactionReasonManualBalanceDebit
         - TransactionReasonCreditAdjustment
+        - TransactionReasonInvoiceVoidRefund
       - enum:
         - pending
         - completed

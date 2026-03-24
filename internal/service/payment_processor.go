@@ -151,7 +151,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		}
 		attempt.UpdatedAt = time.Now().UTC()
 		if err := p.PaymentRepo.UpdateAttempt(ctx, attempt); err != nil {
-			p.Logger.Errorw("failed to update payment attempt", "error", err)
+			p.Logger.ErrorwCtx(ctx, "failed to update payment attempt", "error", err)
 		}
 	}
 
@@ -161,7 +161,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		// keep the status as INITIATED instead of marking as FAILED
 		if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
 			// Keep status as INITIATED when Stripe SDK fails for payment links
-			p.Logger.Infow("keeping payment link as initiated due to Stripe SDK failure",
+			p.Logger.InfowCtx(ctx, "keeping payment link as initiated due to Stripe SDK failure",
 				"payment_id", paymentObj.ID,
 				"status", paymentObj.PaymentStatus,
 				"error", processErr.Error())
@@ -184,13 +184,13 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 		if paymentObj.PaymentMethodType == types.PaymentMethodTypePaymentLink {
 			paymentObj.PaymentStatus = types.PaymentStatusPending
 			paymentObj.SucceededAt = nil // Keep succeeded_at as nil
-			p.Logger.Infow("keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
+			p.Logger.InfowCtx(ctx, "keeping payment link as pending", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
 			p.publishWebhookEvent(ctx, types.WebhookEventPaymentPending, paymentObj.ID)
 		} else {
 			paymentObj.PaymentStatus = types.PaymentStatusSucceeded
 			succeededAt := time.Now().UTC()
 			paymentObj.SucceededAt = &succeededAt
-			p.Logger.Infow("marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
+			p.Logger.InfowCtx(ctx, "marking payment as succeeded", "payment_id", paymentObj.ID, "status", paymentObj.PaymentStatus)
 			p.publishWebhookEvent(ctx, types.WebhookEventPaymentSuccess, paymentObj.ID)
 		}
 	}
@@ -203,7 +203,7 @@ func (p *paymentProcessor) ProcessPayment(ctx context.Context, id string) (*paym
 	// If payment succeeded, handle post-processing
 	if paymentObj.PaymentStatus == types.PaymentStatusSucceeded {
 		if err := p.handlePostProcessing(ctx, paymentObj); err != nil {
-			p.Logger.Errorw("failed to handle post-processing", "error", err, "payment_id", paymentObj.ID)
+			p.Logger.ErrorwCtx(ctx, "failed to handle post-processing", "error", err, "payment_id", paymentObj.ID)
 			// Note: We don't return this error as the payment itself was successful
 		}
 	}
@@ -234,7 +234,7 @@ func (p *paymentProcessor) handlePaymentLinkCreation(ctx context.Context, paymen
 		gatewayType = types.PaymentGatewayType(*paymentObj.PaymentGateway)
 	}
 
-	p.Logger.Infow("creating payment link",
+	p.Logger.InfowCtx(ctx, "creating payment link",
 		"payment_id", paymentObj.ID,
 		"gateway_type", gatewayType)
 
@@ -319,7 +319,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 	paymentLinkResp, err := stripeIntegration.PaymentSvc.CreatePaymentLink(ctx, paymentLinkReq, customerService, invoiceService)
 	if err != nil {
 		// If Stripe SDK fails, keep payment status as INITIATED and return error
-		p.Logger.Errorw("failed to create payment link via Stripe SDK",
+		p.Logger.ErrorwCtx(ctx, "failed to create payment link via Stripe SDK",
 			"error", err,
 			"payment_id", paymentObj.ID,
 			"invoice_id", paymentObj.DestinationID)
@@ -350,7 +350,7 @@ func (p *paymentProcessor) handleStripePaymentLinkCreation(ctx context.Context, 
 			Mark(ierr.ErrDatabase)
 	}
 
-	p.Logger.Infow("successfully created stripe payment link and updated status to pending",
+	p.Logger.InfowCtx(ctx, "successfully created stripe payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
 		"session_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
@@ -413,7 +413,7 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 	paymentLinkResp, err := razorpayIntegration.PaymentSvc.CreatePaymentLink(ctx, paymentLinkReq, customerService, invoiceService)
 	if err != nil {
 		// If Razorpay SDK fails, keep payment status as INITIATED and return error
-		p.Logger.Errorw("failed to create payment link via Razorpay SDK",
+		p.Logger.ErrorwCtx(ctx, "failed to create payment link via Razorpay SDK",
 			"error", err,
 			"payment_id", paymentObj.ID,
 			"invoice_id", paymentObj.DestinationID)
@@ -443,7 +443,7 @@ func (p *paymentProcessor) handleRazorpayPaymentLinkCreation(ctx context.Context
 			Mark(ierr.ErrDatabase)
 	}
 
-	p.Logger.Infow("successfully created razorpay payment link and updated status to pending",
+	p.Logger.InfowCtx(ctx, "successfully created razorpay payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
 		"payment_link_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
@@ -506,7 +506,7 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 	paymentLinkResp, err := nomodIntegration.PaymentSvc.CreatePaymentLink(ctx, paymentLinkReq, customerService, invoiceService)
 	if err != nil {
 		// If Nomod API fails, keep payment status as INITIATED and return error
-		p.Logger.Errorw("failed to create payment link via Nomod",
+		p.Logger.ErrorwCtx(ctx, "failed to create payment link via Nomod",
 			"error", err,
 			"payment_id", paymentObj.ID,
 			"invoice_id", paymentObj.DestinationID)
@@ -537,7 +537,7 @@ func (p *paymentProcessor) handleNomodPaymentLinkCreation(ctx context.Context, p
 			Mark(ierr.ErrDatabase)
 	}
 
-	p.Logger.Infow("successfully created nomod payment link and updated status to pending",
+	p.Logger.InfowCtx(ctx, "successfully created nomod payment link and updated status to pending",
 		"payment_id", paymentObj.ID,
 		"nomod_invoice_id", paymentLinkResp.ID,
 		"payment_url", paymentLinkResp.PaymentURL)
@@ -714,7 +714,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 			if invoice.PaymentStatus == types.PaymentStatusSucceeded {
 				walletService := NewWalletService(p.ServiceParams)
 				if err := walletService.CompletePurchasedCreditTransactionWithRetry(ctx, walletTransactionID); err != nil {
-					p.Logger.Errorw("failed to complete purchased credit transaction",
+					p.Logger.ErrorwCtx(ctx, "failed to complete purchased credit transaction",
 						"error", err,
 						"invoice_id", invoice.ID,
 						"wallet_transaction_id", walletTransactionID,
@@ -722,7 +722,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 					// Don't fail the payment, but log the error
 					// The transaction can be manually completed later
 				} else {
-					p.Logger.Infow("successfully completed purchased credit transaction",
+					p.Logger.InfowCtx(ctx, "successfully completed purchased credit transaction",
 						"invoice_id", invoice.ID,
 						"wallet_transaction_id", walletTransactionID,
 					)
@@ -733,7 +733,7 @@ func (p *paymentProcessor) handleInvoicePostProcessing(ctx context.Context, paym
 
 	// Check if this is the first invoice payment for an incomplete subscription
 	if err := p.handleIncompleteSubscriptionPayment(ctx, invoice); err != nil {
-		p.Logger.Errorw("failed to handle incomplete subscription payment",
+		p.Logger.ErrorwCtx(ctx, "failed to handle incomplete subscription payment",
 			"invoice_id", invoice.ID,
 			"error", err)
 	}
@@ -770,14 +770,14 @@ func (p *paymentProcessor) createNewAttempt(ctx context.Context, paymentObj *pay
 	return attempt, nil
 }
 
-func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName string, paymentID string) {
+func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
 		PaymentID: paymentID,
 		TenantID:  types.GetTenantID(ctx),
 	})
 
 	if err != nil {
-		p.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		p.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -791,13 +791,13 @@ func (p *paymentProcessor) publishWebhookEvent(ctx context.Context, eventName st
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := p.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		p.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		p.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
 // handleCardPayment processes card payments using saved payment methods
 func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *payment.Payment) error {
-	p.Logger.Infow("processing card payment",
+	p.Logger.InfowCtx(ctx, "processing card payment",
 		"payment_id", paymentObj.ID,
 		"customer_id", paymentObj.Metadata["customer_id"],
 		"payment_method_id", paymentObj.PaymentMethodID,
@@ -831,7 +831,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		}
 	}
 
-	p.Logger.Infow("processing card payment for customer",
+	p.Logger.InfowCtx(ctx, "processing card payment for customer",
 		"customer_id", customerID,
 		"payment_id", paymentObj.ID,
 	)
@@ -850,7 +850,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 		customerService := NewCustomerService(p.ServiceParams)
 		defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, customerID, customerService)
 		if err != nil || defaultPaymentMethod == nil {
-			p.Logger.Warnw("customer has no default payment method for card payment",
+			p.Logger.WarnwCtx(ctx, "customer has no default payment method for card payment",
 				"customer_id", customerID,
 				"payment_id", paymentObj.ID,
 				"error", err,
@@ -866,7 +866,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 
 		// Use the default payment method
 		paymentObj.PaymentMethodID = defaultPaymentMethod.ID
-		p.Logger.Infow("using default payment method for card payment",
+		p.Logger.InfowCtx(ctx, "using default payment method for card payment",
 			"customer_id", customerID,
 			"payment_id", paymentObj.ID,
 			"payment_method_id", paymentObj.PaymentMethodID,
@@ -904,7 +904,7 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 
 		paymentService := NewPaymentService(p.ServiceParams)
 		if _, updateErr := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq); updateErr != nil {
-			p.Logger.Errorw("failed to update payment status to failed",
+			p.Logger.ErrorwCtx(ctx, "failed to update payment status to failed",
 				"error", updateErr,
 				"payment_id", paymentObj.ID,
 			)
@@ -924,14 +924,14 @@ func (p *paymentProcessor) handleCardPayment(ctx context.Context, paymentObj *pa
 
 	paymentService := NewPaymentService(p.ServiceParams)
 	if _, err := paymentService.UpdatePayment(ctx, paymentObj.ID, *updateReq); err != nil {
-		p.Logger.Errorw("failed to update payment status to succeeded",
+		p.Logger.ErrorwCtx(ctx, "failed to update payment status to succeeded",
 			"error", err,
 			"payment_id", paymentObj.ID,
 		)
 		return err
 	}
 
-	p.Logger.Infow("successfully processed card payment",
+	p.Logger.InfowCtx(ctx, "successfully processed card payment",
 		"payment_id", paymentObj.ID,
 		"customer_id", customerID,
 		"payment_method_id", paymentObj.PaymentMethodID,
@@ -955,7 +955,7 @@ func (p *paymentProcessor) handleIncompleteSubscriptionPayment(ctx context.Conte
 		return nil
 	}
 
-	p.Logger.Infow("processing first invoice payment for subscription activation",
+	p.Logger.InfowCtx(ctx, "processing first invoice payment for subscription activation",
 		"invoice_id", invoice.ID,
 		"subscription_id", *invoice.SubscriptionID,
 		"billing_reason", invoice.BillingReason)
@@ -975,7 +975,7 @@ func (p *paymentProcessor) handleIncompleteSubscriptionPayment(ctx context.Conte
 			Mark(ierr.ErrInvalidOperation)
 	}
 
-	p.Logger.Infow("successfully activated subscription after first invoice payment",
+	p.Logger.InfowCtx(ctx, "successfully activated subscription after first invoice payment",
 		"invoice_id", invoice.ID,
 		"subscription_id", *invoice.SubscriptionID)
 

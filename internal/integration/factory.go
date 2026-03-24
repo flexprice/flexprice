@@ -22,6 +22,8 @@ import (
 	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	"github.com/flexprice/flexprice/internal/integration/nomod"
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
+	"github.com/flexprice/flexprice/internal/integration/paddle"
+	paddlewebhook "github.com/flexprice/flexprice/internal/integration/paddle/webhook"
 	"github.com/flexprice/flexprice/internal/integration/quickbooks"
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	"github.com/flexprice/flexprice/internal/integration/razorpay"
@@ -410,6 +412,60 @@ func (f *Factory) GetQuickBooksIntegration(ctx context.Context) (*QuickBooksInte
 	}, nil
 }
 
+// GetPaddleIntegration returns a complete Paddle integration setup
+func (f *Factory) GetPaddleIntegration(ctx context.Context) (*PaddleIntegration, error) {
+	// Verify a Paddle connection exists for this environment before building the integration.
+	// This allows callers (e.g. Temporal activities) to detect ErrNotFound early and stop
+	// retrying a permanent configuration problem.
+	conn, err := f.connectionRepo.GetByProvider(ctx, types.SecretProviderPaddle)
+	if err != nil {
+		return nil, err
+	}
+	if conn == nil || conn.Status != types.StatusPublished {
+		return nil, ierr.NewError("Connection with provider paddle is not configured in this environment").
+			WithHint("Paddle connection must be configured and published before use").
+			Mark(ierr.ErrNotFound)
+	}
+
+	paddleClient := paddle.NewClient(
+		f.connectionRepo,
+		f.encryptionService,
+		f.logger,
+	)
+
+	customerSvc := paddle.NewCustomerService(
+		paddleClient,
+		f.customerRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	invoiceSyncSvc := paddle.NewInvoiceSyncService(
+		paddleClient,
+		customerSvc,
+		f.invoiceRepo,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+		f.config.Auth.Secret,
+	)
+
+	paymentSvc := paddle.NewPaymentService(f.logger)
+
+	webhookHandler := paddlewebhook.NewHandler(
+		paymentSvc,
+		customerSvc,
+		f.entityIntegrationMappingRepo,
+		f.logger,
+	)
+
+	return &PaddleIntegration{
+		Client:         paddleClient,
+		CustomerSvc:    customerSvc,
+		InvoiceSyncSvc: invoiceSyncSvc,
+		WebhookHandler: webhookHandler,
+	}, nil
+}
+
 // GetNomodIntegration returns a complete Nomod integration setup
 func (f *Factory) GetNomodIntegration(ctx context.Context) (*NomodIntegration, error) {
 	// Create Nomod client
@@ -526,6 +582,8 @@ func (f *Factory) GetIntegrationByProvider(ctx context.Context, providerType typ
 		return f.GetQuickBooksIntegration(ctx)
 	case types.SecretProviderNomod:
 		return f.GetNomodIntegration(ctx)
+	case types.SecretProviderPaddle:
+		return f.GetPaddleIntegration(ctx)
 	case types.SecretProviderMoyasar:
 		return f.GetMoyasarIntegration(ctx)
 	default:
@@ -547,6 +605,7 @@ func (f *Factory) GetSupportedProviders() []types.SecretProvider {
 		types.SecretProviderChargebee,
 		types.SecretProviderQuickBooks,
 		types.SecretProviderNomod,
+		types.SecretProviderPaddle,
 		types.SecretProviderMoyasar,
 	}
 }
@@ -610,6 +669,14 @@ type QuickBooksIntegration struct {
 	InvoiceSvc     quickbooks.QuickBooksInvoiceService
 	PaymentSvc     quickbooks.QuickBooksPaymentService
 	WebhookHandler *quickbookswebhook.Handler
+}
+
+// PaddleIntegration contains all Paddle integration services
+type PaddleIntegration struct {
+	Client         paddle.PaddleClient
+	CustomerSvc    paddle.PaddleCustomerService
+	InvoiceSyncSvc *paddle.InvoiceSyncService
+	WebhookHandler *paddlewebhook.Handler
 }
 
 // NomodIntegration contains all Nomod integration services
@@ -711,6 +778,21 @@ func (p *NomodProvider) IsAvailable(ctx context.Context) bool {
 	return p.integration.Client.HasNomodConnection(ctx)
 }
 
+// PaddleProvider implements IntegrationProvider for Paddle
+type PaddleProvider struct {
+	integration *PaddleIntegration
+}
+
+// GetProviderType returns the provider type
+func (p *PaddleProvider) GetProviderType() types.SecretProvider {
+	return types.SecretProviderPaddle
+}
+
+// IsAvailable checks if Paddle integration is available
+func (p *PaddleProvider) IsAvailable(ctx context.Context) bool {
+	return p.integration.Client.HasPaddleConnection(ctx)
+}
+
 // GetAvailableProviders returns all available providers for the current environment
 func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvider, error) {
 	var providers []IntegrationProvider
@@ -757,6 +839,15 @@ func (f *Factory) GetAvailableProviders(ctx context.Context) ([]IntegrationProvi
 		nomodProvider := &NomodProvider{integration: nomodIntegration}
 		if nomodProvider.IsAvailable(ctx) {
 			providers = append(providers, nomodProvider)
+		}
+	}
+
+	// Check Paddle
+	paddleIntegration, err := f.GetPaddleIntegration(ctx)
+	if err == nil {
+		paddleProvider := &PaddleProvider{integration: paddleIntegration}
+		if paddleProvider.IsAvailable(ctx) {
+			providers = append(providers, paddleProvider)
 		}
 	}
 

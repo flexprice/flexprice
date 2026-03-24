@@ -397,6 +397,11 @@ func (s *temporalService) extractWorkflowContextID(workflowType types.TemporalWo
 		if input, ok := params.(invoiceModels.ProcessInvoiceWorkflowInput); ok {
 			return input.InvoiceID
 		}
+	case types.TemporalRecalculateInvoiceWorkflow:
+		// Extract invoice ID from RecalculateInvoiceWorkflowInput
+		if input, ok := params.(invoiceModels.RecalculateInvoiceWorkflowInput); ok {
+			return input.InvoiceID
+		}
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		// Extract event ID from PrepareProcessedEventsWorkflowInput
 		if input, ok := params.(*models.PrepareProcessedEventsWorkflowInput); ok {
@@ -492,12 +497,16 @@ func (s *temporalService) buildWorkflowInput(ctx context.Context, workflowType t
 		return s.buildNomodInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalMoyasarInvoiceSyncWorkflow:
 		return s.buildMoyasarInvoiceSyncInput(ctx, tenantID, environmentID, params)
+	case types.TemporalPaddleInvoiceSyncWorkflow:
+		return s.buildPaddleInvoiceSyncInput(ctx, tenantID, environmentID, params)
 	case types.TemporalCustomerOnboardingWorkflow:
 		return s.buildCustomerOnboardingInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalPrepareProcessedEventsWorkflow:
 		return s.buildPrepareProcessedEventsInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalProcessInvoiceWorkflow:
 		return s.buildProcessInvoiceInput(ctx, tenantID, environmentID, params)
+	case types.TemporalRecalculateInvoiceWorkflow:
+		return s.buildRecalculateInvoiceInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessEventsWorkflow:
 		return s.buildReprocessEventsInput(ctx, tenantID, environmentID, userID, params)
 	case types.TemporalReprocessRawEventsWorkflow:
@@ -724,6 +733,26 @@ func (s *temporalService) buildMoyasarInvoiceSyncInput(_ context.Context, tenant
 		Mark(errors.ErrValidation)
 }
 
+func (s *temporalService) buildPaddleInvoiceSyncInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
+	// If already correct type, just ensure context is set
+	if input, ok := params.(*models.PaddleInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return *input, nil
+	}
+
+	// Handle value type as well
+	if input, ok := params.(models.PaddleInvoiceSyncWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		return input, nil
+	}
+
+	return nil, errors.NewError("invalid input for Paddle invoice sync workflow").
+		WithHint("Provide PaddleInvoiceSyncWorkflowInput with invoice_id and customer_id").
+		Mark(errors.ErrValidation)
+}
+
 // buildProcessInvoiceInput builds input for process invoice workflow
 func (s *temporalService) buildProcessInvoiceInput(_ context.Context, tenantID, environmentID string, params interface{}) (interface{}, error) {
 	// If already correct type, just ensure context is set
@@ -752,6 +781,49 @@ func (s *temporalService) buildProcessInvoiceInput(_ context.Context, tenantID, 
 
 	return nil, errors.NewError("invalid input for process invoice workflow").
 		WithHint("Provide ProcessInvoiceWorkflowInput with invoice_id, tenant_id, and environment_id").
+		Mark(errors.ErrValidation)
+}
+
+// buildRecalculateInvoiceInput builds input for recalculate invoice (voided) workflow
+func (s *temporalService) buildRecalculateInvoiceInput(_ context.Context, tenantID, environmentID, userID string, params interface{}) (interface{}, error) {
+	if input, ok := params.(invoiceModels.RecalculateInvoiceWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		return input, nil
+	}
+	if input, ok := params.(*invoiceModels.RecalculateInvoiceWorkflowInput); ok {
+		input.TenantID = tenantID
+		input.EnvironmentID = environmentID
+		input.UserID = userID
+		return *input, nil
+	}
+	// Handle string input (invoice ID)
+	if invoiceID, ok := params.(string); ok && invoiceID != "" {
+		return invoiceModels.RecalculateInvoiceWorkflowInput{
+			InvoiceID:     invoiceID,
+			TenantID:      tenantID,
+			EnvironmentID: environmentID,
+			UserID:        userID,
+		}, nil
+	}
+	// Handle map input (e.g. from API with invoice_id)
+	if paramsMap, ok := params.(map[string]interface{}); ok {
+		invoiceID, _ := paramsMap["invoice_id"].(string)
+		if invoiceID == "" {
+			return nil, errors.NewError("invoice_id is required").
+				WithHint("Provide invoice_id in params").
+				Mark(errors.ErrValidation)
+		}
+		return invoiceModels.RecalculateInvoiceWorkflowInput{
+			InvoiceID:     invoiceID,
+			TenantID:      tenantID,
+			EnvironmentID: environmentID,
+			UserID:        userID,
+		}, nil
+	}
+	return nil, errors.NewError("invalid input for recalculate invoice workflow").
+		WithHint("Provide RecalculateInvoiceWorkflowInput with invoice_id, or invoice_id string, or map with invoice_id").
 		Mark(errors.ErrValidation)
 }
 

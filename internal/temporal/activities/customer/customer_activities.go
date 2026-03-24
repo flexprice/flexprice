@@ -26,7 +26,8 @@ func NewCustomerActivities(serviceParams service.ServiceParams, logger *logger.L
 	}
 }
 
-// CreateCustomerActivity creates a customer based on external ID from the event
+// CreateCustomerActivity creates a customer based on external ID from the event.
+// Idempotent: if a customer with this external_id already exists, returns the existing customer.
 func (a *CustomerActivities) CreateCustomerActivity(ctx context.Context, input models.CreateCustomerActivityInput) (*models.CreateCustomerActivityResult, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("Starting CreateCustomerActivity", "external_customer_id", input.ExternalID)
@@ -36,13 +37,22 @@ func (a *CustomerActivities) CreateCustomerActivity(ctx context.Context, input m
 		return nil, err
 	}
 
-	// Set tenant_id, environment_id, and user_id in context for proper BaseModel creation
+	// Set tenant_id, environment_id, and user_id in context
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
 
-	// Create customer service
 	customerService := service.NewCustomerService(a.serviceParams)
+
+	// Idempotent: check if customer already exists (e.g. created via API before workflow ran)
+	existing, err := customerService.GetCustomerByLookupKey(ctx, input.ExternalID)
+	if err == nil && existing != nil && existing.ID != "" {
+		return &models.CreateCustomerActivityResult{
+			CustomerID: existing.ID,
+			ExternalID: existing.ExternalID,
+			Name:       existing.Name,
+		}, nil
+	}
 
 	// Create customer request with metadata and skip workflow flag to prevent infinite loop
 	createCustomerReq := dto.CreateCustomerRequest{
@@ -58,15 +68,7 @@ func (a *CustomerActivities) CreateCustomerActivity(ctx context.Context, input m
 		"external_id", input.ExternalID,
 		"skip_onboarding_workflow", createCustomerReq.SkipOnboardingWorkflow)
 
-	// Create the customer
 	customerResp, err := customerService.CreateCustomer(ctx, createCustomerReq)
-
-	if err == nil {
-		logger.Info("Customer created successfully via workflow",
-			"customer_id", customerResp.ID,
-			"external_id", customerResp.ExternalID)
-	}
-
 	if err != nil {
 		return nil, ierr.WithError(err).
 			WithHint("Failed to create customer").

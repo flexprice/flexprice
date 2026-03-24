@@ -1,7 +1,9 @@
 package dto
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"slices"
 	"strings"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -41,6 +44,36 @@ type BulkIngestEventRequest struct {
 
 func (r *BulkIngestEventRequest) Validate() error {
 	return validator.ValidateRequest(r)
+}
+
+// BulkIngestRawEventRequest is the request body for POST /v1/events/raw/bulk.
+// Each element in Events is a raw Bento-format event JSON object — the same
+// format that the Bento collector writes to the raw_events Kafka topic.
+type BulkIngestRawEventRequest struct {
+	Events []json.RawMessage `json:"events" validate:"required,min=1,max=1000"`
+}
+
+func (r *BulkIngestRawEventRequest) Validate() error {
+	if len(r.Events) == 0 {
+		return ierr.NewError("events is required").
+			WithHint("Provide at least one raw event").
+			Mark(ierr.ErrValidation)
+	}
+	if len(r.Events) > 1000 {
+		return ierr.NewError("too many events").
+			WithHint("Maximum 1000 events per batch").
+			Mark(ierr.ErrValidation)
+	}
+	// Ensure every element is a JSON object — reject nulls, arrays, strings, etc.
+	for i, raw := range r.Events {
+		trimmed := bytes.TrimSpace(raw)
+		if len(trimmed) == 0 || trimmed[0] != '{' {
+			return ierr.NewErrorf("events[%d] is not a JSON object", i).
+				WithHint("Each event must be a JSON object {}").
+				Mark(ierr.ErrValidation)
+		}
+	}
+	return nil
 }
 
 func (r *IngestEventRequest) ToEvent(ctx context.Context) *events.Event {
@@ -324,6 +357,8 @@ type UsageAnalyticItem struct {
 	UnitPlural           string                             `json:"unit_plural,omitempty"`
 	AggregationType      types.AggregationType              `json:"aggregation_type,omitempty"`
 	TotalUsage           decimal.Decimal                    `json:"total_usage" swaggertype:"string"`
+	TotalUsageDisplay    string                             `json:"total_usage_display"` // Empty string when feature has no reporting unit; otherwise the value in reporting units
+	ReportingUnit        *types.ReportingUnit               `json:"reporting_unit,omitempty"` // Present when total_usage_display is set (unit_singular, unit_plural, conversion_rate)
 	TotalCost            decimal.Decimal                    `json:"total_cost" swaggertype:"string"`
 	Currency             string                             `json:"currency,omitempty"`
 	EventCount           uint64                             `json:"event_count"`          // Number of events that contributed to this aggregation
@@ -333,6 +368,7 @@ type UsageAnalyticItem struct {
 	AddOnID              string                             `json:"add_on_id,omitempty"`
 	PlanID               string                             `json:"plan_id,omitempty"`
 	WindowSize           types.WindowSize                   `json:"window_size,omitempty"` // Window size for bucketed meters (only set if meter is bucketed)
+	Group                *group.Group                       `json:"group,omitempty"`      // Group when the feature belongs to a group (object includes id)
 }
 
 // CustomAnalyticItem represents a custom analytics calculation result

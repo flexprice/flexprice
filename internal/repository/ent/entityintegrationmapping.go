@@ -436,23 +436,12 @@ func (o EntityIntegrationMappingQueryOptions) ApplyPaginationFilter(query Entity
 	return query
 }
 
+// GetFieldName returns the ent field name for entity_integration_mapping; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o EntityIntegrationMappingQueryOptions) GetFieldName(field string) string {
-	fieldMap := map[string]string{
-		"id":                 "id",
-		"entity_id":          "entity_id",
-		"entity_type":        "entity_type",
-		"provider_type":      "provider_type",
-		"provider_entity_id": "provider_entity_id",
-		"status":             "status",
-		"created_at":         "created_at",
-		"updated_at":         "updated_at",
+	if entityintegrationmapping.ValidColumn(field) {
+		return field
 	}
-
-	if mappedField, exists := fieldMap[field]; exists {
-		return mappedField
-	}
-
-	return field
+	return ""
 }
 
 func (o EntityIntegrationMappingQueryOptions) GetFieldResolver(field string) (string, error) {

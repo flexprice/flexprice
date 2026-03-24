@@ -22,11 +22,13 @@ const (
 	SettingKeyInvoiceConfig            SettingKey = "invoice_config"
 	SettingKeySubscriptionConfig       SettingKey = "subscription_config"
 	SettingKeyInvoicePDFConfig         SettingKey = "invoice_pdf_config"
-	SettingKeyEnvConfig                SettingKey = "env_config"
+	SettingKeyTenantConfig             SettingKey = "tenant_config"
 	SettingKeyCustomerOnboarding       SettingKey = "customer_onboarding"
 	SettingKeyWalletBalanceAlertConfig SettingKey = "wallet_balance_alert_config"
 	SettingKeyPrepareProcessedEvents   SettingKey = "prepare_processed_events_config"
 	SettingKeyCustomAnalytics          SettingKey = "custom_analytics_config"
+	SettingKeyCustomerPortalConfig     SettingKey = "customer_portal_config"
+	SettingKeyEventIngestionFilter     SettingKey = "event_ingestion_filter"
 )
 
 func (s *SettingKey) Validate() error {
@@ -35,11 +37,13 @@ func (s *SettingKey) Validate() error {
 		SettingKeyInvoiceConfig,
 		SettingKeySubscriptionConfig,
 		SettingKeyInvoicePDFConfig,
-		SettingKeyEnvConfig,
+		SettingKeyTenantConfig,
 		SettingKeyCustomerOnboarding,
 		SettingKeyWalletBalanceAlertConfig,
 		SettingKeyPrepareProcessedEvents,
 		SettingKeyCustomAnalytics,
+		SettingKeyCustomerPortalConfig,
+		SettingKeyEventIngestionFilter,
 	}
 
 	if !lo.Contains(allowedKeys, *s) {
@@ -86,14 +90,15 @@ func (c InvoicePDFConfig) Validate() error {
 	return c.TemplateName.Validate()
 }
 
-// EnvConfig represents environment creation limits configuration
-type EnvConfig struct {
-	Production  int `json:"production" validate:"required,min=0"`
-	Development int `json:"development" validate:"required,min=0"`
+// TenantConfig represents environment creation limits and user limit configuration
+type TenantConfig struct {
+	Production  int `json:"production" validate:"omitempty,min=0"`
+	Development int `json:"development" validate:"omitempty,min=0"`
+	MaxUsers    int `json:"max_users" validate:"omitempty,min=1"`
 }
 
 // Validate implements SettingConfig interface
-func (c EnvConfig) Validate() error {
+func (c TenantConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
@@ -271,6 +276,88 @@ func (c CustomAnalyticsConfig) Validate() error {
 	return validator.ValidateRequest(c)
 }
 
+// CustomerPortalConfig is the top-level configuration for the customer self-service portal.
+// It controls branding, section layout, and per-tab behaviour.
+type CustomerPortalConfig struct {
+	// Version is a user-managed schema version string (e.g. "1.0")
+	Version string `json:"version,omitempty"`
+
+	// Theme holds the visual branding colours for the portal
+	Theme CustomerPortalTheme `json:"theme,omitempty"`
+
+	// Sections defines the ordered list of navigation sections shown in the portal
+	Sections []CustomerPortalSection `json:"sections,omitempty" validate:"omitempty,dive"`
+}
+
+// Validate implements SettingConfig interface
+func (c CustomerPortalConfig) Validate() error {
+	return validator.ValidateRequest(c)
+}
+
+// CustomerPortalTheme holds brand colour tokens used by the portal UI
+type CustomerPortalTheme struct {
+	PrimaryColor   string `json:"primary_color,omitempty"`
+	SecondaryColor string `json:"secondary_color,omitempty"`
+	TertiaryColor  string `json:"tertiary_color,omitempty"`
+}
+
+// CustomerPortalSection represents a top-level navigation section in the portal
+type CustomerPortalSection struct {
+	ID      string              `json:"id" validate:"required"`
+	Label   string              `json:"label,omitempty"`
+	Enabled bool                `json:"enabled"`
+	Order   int                 `json:"order,omitempty"`
+	Tabs    []CustomerPortalTab `json:"tabs,omitempty" validate:"omitempty,dive"`
+}
+
+// CustomerPortalTab represents a single tab within a portal section
+type CustomerPortalTab struct {
+	ID          string                     `json:"id" validate:"required"`
+	Type        string                     `json:"type" validate:"required"`
+	Enabled     bool                       `json:"enabled"`
+	Order       int                        `json:"order,omitempty"`
+	UsageGraph  *CustomerPortalUsageGraph  `json:"usage_graph,omitempty"`
+	MetricCards *CustomerPortalMetricCards `json:"metric_cards,omitempty"`
+}
+
+// CustomerPortalUsageGraph holds configuration for usage_graph tab types
+type CustomerPortalUsageGraph struct {
+	DatePresets          []string `json:"date_presets,omitempty"`
+	DefaultPreset        string   `json:"default_preset,omitempty"`
+	AllowCustomDateRange bool     `json:"allow_custom_date_range"`
+	FeatureFilterMode    string   `json:"feature_filter_mode,omitempty"`
+}
+
+// CustomerPortalMetricCards holds configuration for metric_cards tab types
+type CustomerPortalMetricCards struct {
+	ShowCostMetrics   bool `json:"show_cost_metrics"`
+	ShowCustomMetrics bool `json:"show_custom_metrics"`
+	ShowRevenueMetric bool `json:"show_revenue_metric"`
+}
+
+// EventIngestionFilterConfig controls which external customer IDs are allowed through
+// the raw-event → events transformation pipeline. When Enabled is true, only events
+// whose ExternalCustomerID appears in AllowedExternalCustomerIDs are forwarded; all
+// others are stored in raw_events but silently dropped at the enqueue step.
+// This is useful for large-volume pilots where only a subset of customers need live
+// billing (e.g. 400 out of 60 000 VAPI orgs).
+type EventIngestionFilterConfig struct {
+	Enabled                    bool     `json:"enabled"`
+	AllowedExternalCustomerIDs []string `json:"allowed_external_customer_ids"`
+}
+
+// Validate implements SettingConfig interface.
+// It rejects the combination of Enabled=true with an empty allowlist because
+// that would silently drop every event — an almost certainly unintentional
+// configuration. Use Enabled=false to disable filtering entirely.
+func (c EventIngestionFilterConfig) Validate() error {
+	if c.Enabled && len(c.AllowedExternalCustomerIDs) == 0 {
+		return ierr.NewError("event_ingestion_filter: enabled is true but allowed_external_customer_ids is empty — this would block all events; set enabled=false to disable filtering").
+			Mark(ierr.ErrValidation)
+	}
+	return validator.ValidateRequest(c)
+}
+
 // GetDefaultSettings returns the default settings configuration for all setting keys
 // Uses typed structs and converts them to maps using ToMap utility from conversion.go
 func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
@@ -296,9 +383,10 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 		GroupBy:      []string{},
 	}
 
-	defaultEnvConfig := EnvConfig{
+	defaultTenantConfig := TenantConfig{
 		Production:  1,
 		Development: 2,
+		MaxUsers:    10,
 	}
 
 	// Note: WorkflowConfig is now defined in service package to avoid import cycles
@@ -336,7 +424,7 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	envConfigMap, err := utils.ToMap(defaultEnvConfig)
+	tenantConfigMap, err := utils.ToMap(defaultTenantConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -350,6 +438,79 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 
 	// Already a map, no conversion needed
 	defaultPrepareProcessedEventsConfigMap := defaultPrepareProcessedEventsConfig
+
+	defaultCustomerPortalConfig := CustomerPortalConfig{
+		Version: "1.0",
+		Theme:   CustomerPortalTheme{},
+		Sections: []CustomerPortalSection{
+			{
+				ID: "usage", Label: "Usage", Enabled: true, Order: 1,
+				Tabs: []CustomerPortalTab{
+					{
+						ID: "1", Type: "metric_cards", Order: 1, Enabled: true,
+						MetricCards: &CustomerPortalMetricCards{
+							ShowCostMetrics:   false,
+							ShowCustomMetrics: true,
+							ShowRevenueMetric: true,
+						},
+					},
+					{
+						ID: "2", Type: "usage_graph", Order: 2, Enabled: true,
+						UsageGraph: &CustomerPortalUsageGraph{
+							DatePresets:          []string{"today", "last_7_days", "last_30_days", "current_month", "last_month"},
+							DefaultPreset:        "last_7_days",
+							FeatureFilterMode:    "inc",
+							AllowCustomDateRange: true,
+						},
+					},
+					{ID: "4", Type: "current_usage", Order: 3, Enabled: true},
+					{ID: "3", Type: "usage_breakdown", Order: 4, Enabled: true},
+				},
+			},
+			{
+				ID: "credits", Label: "Credits", Enabled: true, Order: 2,
+				Tabs: []CustomerPortalTab{
+					{ID: "6", Type: "wallet_balance", Order: 1, Enabled: true},
+					{ID: "7", Type: "wallet_transactions", Order: 2, Enabled: true},
+				},
+			},
+			{
+				ID: "invoices", Label: "Invoices", Enabled: true, Order: 3,
+				Tabs: []CustomerPortalTab{
+					{ID: "8", Type: "invoices", Order: 1, Enabled: true},
+				},
+			},
+			{
+				ID: "overview", Label: "Overview", Enabled: true, Order: 4,
+				Tabs: []CustomerPortalTab{
+					{ID: "9", Type: "wallet_balance", Order: 1, Enabled: true},
+					{ID: "10", Type: "subscriptions", Order: 2, Enabled: true},
+					{
+						ID: "11", Type: "usage_graph", Order: 3, Enabled: true,
+						UsageGraph: &CustomerPortalUsageGraph{
+							DatePresets:          []string{"last_7_days", "last_30_days"},
+							DefaultPreset:        "last_7_days",
+							FeatureFilterMode:    "all",
+							AllowCustomDateRange: true,
+						},
+					},
+				},
+			},
+		},
+	}
+	defaultCustomerPortalConfigMap, err := utils.ToMap(defaultCustomerPortalConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultEventIngestionFilterConfig := EventIngestionFilterConfig{
+		Enabled:                    false,
+		AllowedExternalCustomerIDs: []string{},
+	}
+	defaultEventIngestionFilterConfigMap, err := utils.ToMap(defaultEventIngestionFilterConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	return map[SettingKey]DefaultSettingValue{
 		SettingKeyInvoiceConfig: {
@@ -367,10 +528,10 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 			DefaultValue: invoicePDFConfigMap,
 			Description:  "Default configuration for invoice PDF generation",
 		},
-		SettingKeyEnvConfig: {
-			Key:          SettingKeyEnvConfig,
-			DefaultValue: envConfigMap,
-			Description:  "Default configuration for environment creation limits (production and sandbox)",
+		SettingKeyTenantConfig: {
+			Key:          SettingKeyTenantConfig,
+			DefaultValue: tenantConfigMap,
+			Description:  "Default configuration for tenant (environment creation limits, production and sandbox)",
 		},
 		SettingKeyCustomerOnboarding: {
 			Key:          SettingKeyCustomerOnboarding,
@@ -393,6 +554,16 @@ func GetDefaultSettings() (map[SettingKey]DefaultSettingValue, error) {
 				"rules": []interface{}{},
 			},
 			Description: "Configuration for custom analytics calculations (e.g., revenue per minute)",
+		},
+		SettingKeyCustomerPortalConfig: {
+			Key:          SettingKeyCustomerPortalConfig,
+			DefaultValue: defaultCustomerPortalConfigMap,
+			Description:  "Configuration for the customer self-service portal (branding, allowed sections, permissions)",
+		},
+		SettingKeyEventIngestionFilter: {
+			Key:          SettingKeyEventIngestionFilter,
+			DefaultValue: defaultEventIngestionFilterConfigMap,
+			Description:  "Controls which external customer IDs are forwarded from raw events to the events pipeline (pilot allowlist)",
 		},
 	}, nil
 }
@@ -443,8 +614,8 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 		}
 		return config.Validate()
 
-	case SettingKeyEnvConfig:
-		config, err := utils.ToStruct[EnvConfig](value)
+	case SettingKeyTenantConfig:
+		config, err := utils.ToStruct[TenantConfig](value)
 		if err != nil {
 			return err
 		}
@@ -481,6 +652,20 @@ func ValidateSettingValue(key SettingKey, value map[string]interface{}) error {
 
 	case SettingKeyCustomAnalytics:
 		config, err := utils.ToStruct[CustomAnalyticsConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyCustomerPortalConfig:
+		config, err := utils.ToStruct[CustomerPortalConfig](value)
+		if err != nil {
+			return err
+		}
+		return config.Validate()
+
+	case SettingKeyEventIngestionFilter:
+		config, err := utils.ToStruct[EventIngestionFilterConfig](value)
 		if err != nil {
 			return err
 		}

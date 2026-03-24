@@ -9,6 +9,9 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal/models"
+	invoiceModels "github.com/flexprice/flexprice/internal/temporal/models/invoice"
+	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
 	"github.com/samber/lo"
@@ -171,6 +174,7 @@ func (h *InvoiceHandler) ListInvoices(c *gin.Context) {
 // @ID finalizeInvoice
 // @Description Use when locking an invoice for payment (e.g. after review). Once finalized, line items are locked; invoice can be paid or voided.
 // @Tags Invoices
+// @x-scope "delete"
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
@@ -237,6 +241,57 @@ func (h *InvoiceHandler) VoidInvoice(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "invoice voided successfully"})
+}
+
+// RecalculateInvoice godoc
+// @Summary Recalculate invoice (voided invoice)
+// @ID recalculateInvoice
+// @Description Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.
+// @Tags Invoices
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Invoice ID"
+// @Success 202 {object} models.TemporalWorkflowResult
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request or invoice already recalculated"
+// @Failure 404 {object} ierr.ErrorResponse "Invoice not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
+// @Router /invoices/{id}/recalculate [post]
+func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
+		return
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		h.logger.Errorw("temporal service not available for recalculate invoice", "invoice_id", id)
+		c.Error(ierr.NewError("temporal service not available").
+			WithHint("Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+
+	ctx := c.Request.Context()
+	workflowInput := invoiceModels.RecalculateInvoiceWorkflowInput{
+		InvoiceID:     id,
+		TenantID:      types.GetTenantID(ctx),
+		EnvironmentID: types.GetEnvironmentID(ctx),
+		UserID:        types.GetUserID(ctx),
+	}
+
+	workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalRecalculateInvoiceWorkflow, workflowInput)
+	if err != nil {
+		h.logger.Errorw("failed to start recalculate invoice workflow", "error", err, "invoice_id", id)
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, models.TemporalWorkflowResult{
+		Message:    "recalculate invoice workflow started",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
+	})
 }
 
 // UpdatePaymentStatus godoc
@@ -426,10 +481,10 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 	c.Data(http.StatusOK, "application/pdf", pdf)
 }
 
-// RecalculateInvoice godoc
-// @Summary Recalculate invoice
-// @ID recalculateInvoice
-// @Description Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.
+// RecalculateInvoiceV2 godoc
+// @Summary Recalculate draft invoice (v2)
+// @ID recalculateInvoiceV2
+// @Description Recalculates a draft SUBSCRIPTION invoice in-place (replaces line items, reapplies credits/coupons/taxes). Use when subscription or usage data changed before finalizing.
 // @Tags Invoices
 // @Accept json
 // @Produce json
@@ -440,8 +495,8 @@ func (h *InvoiceHandler) GetInvoicePDF(c *gin.Context) {
 // @Failure 400 {object} ierr.ErrorResponse "Invalid request"
 // @Failure 404 {object} ierr.ErrorResponse "Resource not found"
 // @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /invoices/{id}/recalculate [post]
-func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
+// @Router /invoices/{id}/recalculate-v2 [post]
+func (h *InvoiceHandler) RecalculateInvoiceV2(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
 		c.Error(ierr.NewError("invalid invoice id").Mark(ierr.ErrValidation))
@@ -452,9 +507,9 @@ func (h *InvoiceHandler) RecalculateInvoice(c *gin.Context) {
 	finalizeParam := c.DefaultQuery("finalize", "true")
 	finalize := finalizeParam == "true"
 
-	invoice, err := h.invoiceService.RecalculateInvoice(c.Request.Context(), id, finalize)
+	invoice, err := h.invoiceService.RecalculateInvoiceV2(c.Request.Context(), id, finalize)
 	if err != nil {
-		h.logger.Errorw("failed to recalculate invoice", "error", err, "invoice_id", id)
+		h.logger.Errorw("failed to recalculate invoice v2", "error", err, "invoice_id", id)
 		c.Error(err)
 		return
 	}
@@ -582,7 +637,7 @@ func (h *InvoiceHandler) TriggerWebhook(c *gin.Context) {
 		return
 	}
 
-	if err := h.invoiceService.TriggerWebhook(c.Request.Context(), id, eventName); err != nil {
+	if err := h.invoiceService.TriggerWebhook(c.Request.Context(), id, types.WebhookEventName(eventName)); err != nil {
 		h.logger.Errorw("failed to trigger webhook", "error", err, "invoice_id", id, "event_name", eventName)
 		c.Error(err)
 		return

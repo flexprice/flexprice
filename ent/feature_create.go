@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // FeatureCreate is the builder for creating a Feature entity.
@@ -191,6 +192,48 @@ func (fc *FeatureCreate) SetNillableUnitPlural(s *string) *FeatureCreate {
 	return fc
 }
 
+// SetReportingUnitSingular sets the "reporting_unit_singular" field.
+func (fc *FeatureCreate) SetReportingUnitSingular(s string) *FeatureCreate {
+	fc.mutation.SetReportingUnitSingular(s)
+	return fc
+}
+
+// SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableReportingUnitSingular(s *string) *FeatureCreate {
+	if s != nil {
+		fc.SetReportingUnitSingular(*s)
+	}
+	return fc
+}
+
+// SetReportingUnitPlural sets the "reporting_unit_plural" field.
+func (fc *FeatureCreate) SetReportingUnitPlural(s string) *FeatureCreate {
+	fc.mutation.SetReportingUnitPlural(s)
+	return fc
+}
+
+// SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableReportingUnitPlural(s *string) *FeatureCreate {
+	if s != nil {
+		fc.SetReportingUnitPlural(*s)
+	}
+	return fc
+}
+
+// SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
+func (fc *FeatureCreate) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureCreate {
+	fc.mutation.SetReportingUnitConversionRate(d)
+	return fc
+}
+
+// SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureCreate {
+	if d != nil {
+		fc.SetReportingUnitConversionRate(*d)
+	}
+	return fc
+}
+
 // SetAlertSettings sets the "alert_settings" field.
 func (fc *FeatureCreate) SetAlertSettings(ts types.AlertSettings) *FeatureCreate {
 	fc.mutation.SetAlertSettings(ts)
@@ -201,6 +244,20 @@ func (fc *FeatureCreate) SetAlertSettings(ts types.AlertSettings) *FeatureCreate
 func (fc *FeatureCreate) SetNillableAlertSettings(ts *types.AlertSettings) *FeatureCreate {
 	if ts != nil {
 		fc.SetAlertSettings(*ts)
+	}
+	return fc
+}
+
+// SetGroupID sets the "group_id" field.
+func (fc *FeatureCreate) SetGroupID(s string) *FeatureCreate {
+	fc.mutation.SetGroupID(s)
+	return fc
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (fc *FeatureCreate) SetNillableGroupID(s *string) *FeatureCreate {
+	if s != nil {
+		fc.SetGroupID(*s)
 	}
 	return fc
 }
@@ -402,9 +459,25 @@ func (fc *FeatureCreate) createSpec() (*Feature, *sqlgraph.CreateSpec) {
 		_spec.SetField(feature.FieldUnitPlural, field.TypeString, value)
 		_node.UnitPlural = &value
 	}
+	if value, ok := fc.mutation.ReportingUnitSingular(); ok {
+		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
+		_node.ReportingUnitSingular = &value
+	}
+	if value, ok := fc.mutation.ReportingUnitPlural(); ok {
+		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
+		_node.ReportingUnitPlural = &value
+	}
+	if value, ok := fc.mutation.ReportingUnitConversionRate(); ok {
+		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
+		_node.ReportingUnitConversionRate = &value
+	}
 	if value, ok := fc.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 		_node.AlertSettings = value
+	}
+	if value, ok := fc.mutation.GroupID(); ok {
+		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
+		_node.GroupID = &value
 	}
 	return _node, _spec
 }

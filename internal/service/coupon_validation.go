@@ -48,7 +48,7 @@ func (s *couponValidationService) ValidateCoupon(ctx context.Context, coupon cou
 		subscriptionID = &subscription.ID
 	}
 
-	s.Logger.Infow("validating coupon for subscription association",
+	s.Logger.InfowCtx(ctx, "validating coupon for subscription association",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscriptionID)
 
@@ -74,7 +74,7 @@ func (s *couponValidationService) ValidateCoupon(ctx context.Context, coupon cou
 		}
 	}
 
-	s.Logger.Infow("coupon validation for subscription successful",
+	s.Logger.InfowCtx(ctx, "coupon validation for subscription successful",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscriptionID)
 
@@ -195,7 +195,7 @@ func (s *couponValidationService) validateCouponRedemption(coupon coupon.Coupon)
 
 // validateCouponForInvoiceSpecific implements cadence-specific validation for invoice application
 func (s *couponValidationService) validateCouponCadence(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
-	s.Logger.Debugw("validating coupon cadence for invoice",
+	s.Logger.DebugwCtx(ctx, "validating coupon cadence for invoice",
 		"coupon_id", coupon.ID,
 		"cadence", coupon.Cadence)
 
@@ -221,7 +221,7 @@ func (s *couponValidationService) validateCouponCadence(ctx context.Context, cou
 
 // validateOnceCadenceForInvoice validates "once" cadence - coupon should only be applied to first invoice
 func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
-	s.Logger.Debugw("validating once cadence for invoice",
+	s.Logger.DebugwCtx(ctx, "validating once cadence for invoice",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID)
 
@@ -243,7 +243,7 @@ func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupo
 		}
 	}
 
-	s.Logger.Debugw("existing applications count for once cadence validation",
+	s.Logger.DebugwCtx(ctx, "existing applications count for once cadence validation",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID,
 		"existing_applications", existingApplicationCount)
@@ -261,7 +261,7 @@ func (s *couponValidationService) validateOnceCadence(ctx context.Context, coupo
 		}
 	}
 
-	s.Logger.Debugw("once cadence validation passed - no previous applications found",
+	s.Logger.DebugwCtx(ctx, "once cadence validation passed - no previous applications found",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID)
 
@@ -283,7 +283,7 @@ func (s *couponValidationService) validateForeverCadence(coupon coupon.Coupon, s
 
 // validateRepeatedCadenceForInvoice validates "repeated" cadence - coupon applied for duration_in_periods times
 func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, coupon coupon.Coupon, subscription *subscription.Subscription) error {
-	s.Logger.Debugw("validating repeated cadence for invoice",
+	s.Logger.DebugwCtx(ctx, "validating repeated cadence for invoice",
 		"coupon_id", coupon.ID,
 		"duration_in_periods", coupon.DurationInPeriods)
 
@@ -306,7 +306,7 @@ func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, c
 	filter.CouponIDs = []string{coupon.ID}
 	existingApplicationCount, err := s.CouponApplicationRepo.Count(ctx, filter)
 	if err != nil {
-		s.Logger.Warnw("failed to count existing applications for repeated cadence validation",
+		s.Logger.WarnwCtx(ctx, "failed to count existing applications for repeated cadence validation",
 			"coupon_id", coupon.ID,
 			"subscription_id", subscription.ID,
 			"error", err)
@@ -314,7 +314,7 @@ func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, c
 		return nil
 	}
 
-	s.Logger.Debugw("existing applications count for repeated cadence validation",
+	s.Logger.DebugwCtx(ctx, "existing applications count for repeated cadence validation",
 		"coupon_id", coupon.ID,
 		"subscription_id", subscription.ID,
 		"existing_applications", existingApplicationCount)
@@ -333,7 +333,7 @@ func (s *couponValidationService) validateRepeatedCadence(ctx context.Context, c
 		}
 	}
 
-	s.Logger.Debugw("repeated cadence validation passed",
+	s.Logger.DebugwCtx(ctx, "repeated cadence validation passed",
 		"coupon_id", coupon.ID,
 		"existing_applications", existingApplicationCount,
 		"duration_in_periods", *coupon.DurationInPeriods)

@@ -153,13 +153,19 @@ func (s *EventServiceSuite) TestCreateEvent() {
 }
 
 func (s *EventServiceSuite) TestGetUsage() {
+	// Use a fixed base time anchored at minute :30 to ensure events at -1h fall in a
+	// different UTC hourly bucket than events at -30m and -15m. This prevents flaky
+	// behavior in the windowed_max_storage test case.
+	now := time.Now().UTC()
+	baseTime := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 30, 0, 0, time.UTC)
+
 	// Setup test data with properties for filtering
 	testingEvents := []*dto.IngestEventRequest{
 		{
 			EventID:            "evt-1",
 			ExternalCustomerID: "cust-1",
 			EventName:          "api_request",
-			Timestamp:          time.Now().Add(-1 * time.Hour),
+			Timestamp:          baseTime.Add(-1 * time.Hour), // Previous hour bucket (e.g., hour H-1, minute :30)
 			Properties: map[string]interface{}{
 				"duration_ms": float64(100),
 				"status":      "success",
@@ -171,7 +177,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 			EventID:            "evt-2",
 			ExternalCustomerID: "cust-1",
 			EventName:          "api_request",
-			Timestamp:          time.Now().Add(-30 * time.Minute),
+			Timestamp:          baseTime.Add(-30 * time.Minute), // Current hour bucket (e.g., hour H, minute :00)
 			Properties: map[string]interface{}{
 				"duration_ms": float64(150),
 				"status":      "error",
@@ -183,7 +189,7 @@ func (s *EventServiceSuite) TestGetUsage() {
 			EventID:            "evt-3",
 			ExternalCustomerID: "cust-1",
 			EventName:          "api_request",
-			Timestamp:          time.Now().Add(-15 * time.Minute),
+			Timestamp:          baseTime.Add(-15 * time.Minute), // Current hour bucket (e.g., hour H, minute :15)
 			Properties: map[string]interface{}{
 				"duration_ms": float64(200),
 				"status":      "success",
@@ -222,8 +228,8 @@ func (s *EventServiceSuite) TestGetUsage() {
 				ExternalCustomerID: "cust-1",
 				EventName:          "api_request",
 				AggregationType:    types.AggregationCount,
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
+				StartTime:          baseTime.Add(-2 * time.Hour),
+				EndTime:            baseTime,
 			},
 			expectedValue: decimal.NewFromFloat(3),
 			expectedError: false,
@@ -235,8 +241,8 @@ func (s *EventServiceSuite) TestGetUsage() {
 				EventName:          "api_request",
 				PropertyName:       "duration_ms",
 				AggregationType:    types.AggregationSum,
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
+				StartTime:          baseTime.Add(-2 * time.Hour),
+				EndTime:            baseTime,
 				Filters: map[string][]string{
 					"status": {"success"},
 				},
@@ -251,8 +257,8 @@ func (s *EventServiceSuite) TestGetUsage() {
 				EventName:          "api_request",
 				PropertyName:       "duration_ms",
 				AggregationType:    types.AggregationSum,
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
+				StartTime:          baseTime.Add(-2 * time.Hour),
+				EndTime:            baseTime,
 				Filters: map[string][]string{
 					"status": {"success", "error"},
 					"region": {"us-east-1"},
@@ -267,8 +273,8 @@ func (s *EventServiceSuite) TestGetUsage() {
 				ExternalCustomerID: "cust-1",
 				EventName:          "api_request",
 				AggregationType:    types.AggregationCount,
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
+				StartTime:          baseTime.Add(-2 * time.Hour),
+				EndTime:            baseTime,
 				Filters: map[string][]string{
 					"region": {"us-west-2"},
 				},
@@ -283,8 +289,8 @@ func (s *EventServiceSuite) TestGetUsage() {
 				EventName:          "api_request",
 				PropertyName:       "storage_gb",
 				AggregationType:    types.AggregationMax,
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
+				StartTime:          baseTime.Add(-2 * time.Hour),
+				EndTime:            baseTime,
 			},
 			expectedValue: decimal.NewFromFloat(15), // Maximum storage value across all events
 			expectedError: false,
@@ -296,11 +302,11 @@ func (s *EventServiceSuite) TestGetUsage() {
 				EventName:          "api_request",
 				PropertyName:       "storage_gb",
 				AggregationType:    types.AggregationMax,
-				StartTime:          time.Now().Add(-2 * time.Hour),
-				EndTime:            time.Now(),
+				StartTime:          baseTime.Add(-2 * time.Hour),
+				EndTime:            baseTime,
 				BucketSize:         types.WindowSizeHour,
 			},
-			expectedValue: decimal.NewFromFloat(15), // Should still return the overall maximum
+			expectedValue: decimal.NewFromFloat(25), // Sum of per-bucket maxes (bucket A: max=10, bucket B: max=15)
 			expectedError: false,
 		},
 	}

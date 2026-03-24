@@ -80,6 +80,7 @@ func (s *InvoiceServiceSuite) setupService() {
 		Config:                       s.GetConfig(),
 		DB:                           s.GetDB(),
 		SubRepo:                      s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo:     s.GetStores().SubscriptionLineItemRepo,
 		PlanRepo:                     s.GetStores().PlanRepo,
 		PriceRepo:                    s.GetStores().PriceRepo,
 		EventRepo:                    s.eventRepo,

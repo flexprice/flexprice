@@ -83,7 +83,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		batchSize = 1000
 	}
 
-	s.Logger.Infow("starting raw event reprocessing",
+	s.Logger.InfowCtx(ctx, "starting raw event reprocessing",
 		"batch_size", batchSize,
 		"use_unprocessed", params.UseUnprocessed,
 		"start_time", params.StartTime,
@@ -134,7 +134,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		eventsCount := len(rawEvents)
 		result.TotalEventsFound += eventsCount
 		hasNextBatch := params.UseUnprocessed && findParams.KeysetCursor != nil
-		s.Logger.Infow("batch fetched",
+		s.Logger.InfowCtx(ctx, "batch fetched",
 			"batch", result.ProcessedBatches+1,
 			"count", eventsCount,
 			"total_so_far", result.TotalEventsFound,
@@ -161,7 +161,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 				// Transformation error (parsing/processing error)
 				batchTransformErrors++
 				result.TotalTransformationErrors++
-				s.Logger.Warnw("transformation error - event skipped",
+				s.Logger.WarnwCtx(ctx, "transformation error - event skipped",
 					"raw_event_id", rawEvent.ID,
 					"external_customer_id", rawEvent.ExternalCustomerID,
 					"event_name", rawEvent.EventName,
@@ -177,7 +177,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 				// Event failed validation and was dropped
 				batchDropped++
 				result.TotalEventsDropped++
-				s.Logger.Infow("validation failed - event dropped",
+				s.Logger.InfowCtx(ctx, "validation failed - event dropped",
 					"raw_event_id", rawEvent.ID,
 					"external_customer_id", rawEvent.ExternalCustomerID,
 					"event_name", rawEvent.EventName,
@@ -193,7 +193,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 			if err := s.publishEvent(ctx, transformedEvent); err != nil {
 				batchPublishFailed++
 				result.TotalEventsFailed++
-				s.Logger.Errorw("failed to publish transformed event",
+				s.Logger.ErrorwCtx(ctx, "failed to publish transformed event",
 					"raw_event_id", rawEvent.ID,
 					"transformed_event_id", transformedEvent.ID,
 					"event_name", transformedEvent.EventName,
@@ -211,7 +211,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		}
 
 		// Log batch summary (one essential line per batch)
-		s.Logger.Infow("batch done",
+		s.Logger.InfowCtx(ctx, "batch done",
 			"batch", result.ProcessedBatches+1,
 			"fetched", eventsCount,
 			"published", batchPublished,
@@ -248,7 +248,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		successRate = float64(result.TotalEventsPublished) / float64(result.TotalEventsFound) * 100
 	}
 
-	s.Logger.Infow("completed raw event reprocessing",
+	s.Logger.InfowCtx(ctx, "completed raw event reprocessing",
 		"batches", result.ProcessedBatches,
 		"total_found", result.TotalEventsFound,
 		"total_published", result.TotalEventsPublished,
@@ -288,7 +288,7 @@ func (s *rawEventsReprocessingService) publishEvent(ctx context.Context, event *
 
 	topic := s.Config.RawEventsReprocessing.OutputTopic
 
-	s.Logger.Debugw("publishing transformed event to kafka",
+	s.Logger.DebugwCtx(ctx, "publishing transformed event to kafka",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,

@@ -225,6 +225,16 @@ func (h *CustomerPortalHandler) GetInvoicePDF(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"presigned_url": url})
 }
 
+func (h *CustomerPortalHandler) GetPortalConfig(c *gin.Context) {
+	response, err := h.portalService.GetPortalConfig(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {
 	walletID := c.Param("id")
 	if walletID == "" {

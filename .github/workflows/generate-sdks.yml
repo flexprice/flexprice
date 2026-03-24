@@ -1,9 +1,9 @@
 # Generate OpenAPI spec and all SDKs (Go, TypeScript, Python) + MCP.
 #
-# Flow: trigger -> version-check (skip if .speakeasy/sdk-version.json equals .speakeasy/gen/go.yaml version) -> generate (swagger, Speakeasy, upload artifacts) -> push to GitHub -> publish to npm/PyPI.
-# Version source: .speakeasy/sdk-version.json and .speakeasy/gen/*.yaml (central config). To release: update sdk-version.json, then trigger.
+# Flow: release published -> version-check (version from release tag only) -> generate -> push to GitHub -> publish to npm/PyPI.
+# Version: strictly from the release tag only (e.g. v1.2.3 -> 1.2.3). No manual input, sdk-version.json, or npm lookup. Skip when version equals .speakeasy/gen/go.yaml.
 #
-# Triggers: push to main (path-filtered); workflow_dispatch. When version unchanged, generate and publish are skipped.
+# Triggers: release published only. When version unchanged vs gen/go.yaml, generate and publish are skipped.
 # Required secrets: SPEAKEASY_API_KEY, SDK_DEPLOY_GIT_TOKEN (fine-grained PAT: Contents R/W + Metadata Read on target SDK repos), NPM_TOKEN, PYPI_TOKEN.
 # Published packages: pip install flexprice | npm i @flexprice/sdk | npm i @flexprice/mcp-server
 # Default SDK repos (override via SDK_GO_REPO, SDK_PYTHON_REPO, SDK_TYPESCRIPT_REPO, SDK_MCP_REPO): flexprice/go-sdk, flexprice/javascript-sdk, flexprice/python-sdk, flexprice/mcp-server.
@@ -13,16 +13,8 @@
 name: Generate SDKs
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/swagger/**"
-      - ".speakeasy/**"
-      - "api/custom/**"
-      - "cmd/**"
-      - "internal/api/**"
-      - "Makefile"
-  workflow_dispatch:
+  release:
+    types: [published]
 
 concurrency:
   group: sdk-generate-publish
@@ -33,7 +25,7 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Compare .speakeasy/sdk-version.json with .speakeasy/gen/go.yaml version; skip generate/publish if equal.
+  # Version from release tag only. Skip if equals gen/go.yaml.
   # ---------------------------------------------------------------------------
   version-check:
     runs-on: ubuntu-latest
@@ -46,30 +38,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Compare versions and set outputs
+      - name: Set version from release tag and set outputs
         id: version-check
         run: |
-          SDK_VERSION=$(jq -r .version .speakeasy/sdk-version.json 2>/dev/null || echo "")
-          [ -z "$SDK_VERSION" ] || [ "$SDK_VERSION" = "null" ] && SDK_VERSION="0.0.0"
+          RAW="${{ github.event.release.tag_name }}"
+          RESOLVED="${RAW#v}"
+          echo "Using release tag: $RAW -> $RESOLVED"
+          [ -z "$RESOLVED" ] && echo "::error::Version is empty (release tag)." && exit 1
+
           GEN_VERSION=""
           if [ -f .speakeasy/gen/go.yaml ]; then
             GEN_VERSION=$(sed -n '/^go:/,/^[a-z]/p' .speakeasy/gen/go.yaml | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*//' | xargs)
           fi
-          [ -z "$GEN_VERSION" ] && GEN_VERSION=""
-          if [ "$SDK_VERSION" = "$GEN_VERSION" ]; then
+
+          if [ "$RESOLVED" = "$GEN_VERSION" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
-            echo "Version unchanged (sdk-version.json=$SDK_VERSION, gen/go.yaml=$GEN_VERSION); skipping generate and publish."
+            echo "Version unchanged (version=$RESOLVED, gen/go.yaml=$GEN_VERSION); skipping generate and publish."
           else
             echo "skip=false" >> $GITHUB_OUTPUT
-            echo "Version changed (sdk-version.json=$SDK_VERSION, gen/go.yaml=$GEN_VERSION); will generate and publish."
+            echo "Version: $RESOLVED (gen/go.yaml=$GEN_VERSION); will generate and publish."
           fi
-          echo "version=$SDK_VERSION" >> $GITHUB_OUTPUT
+          echo "version=$RESOLVED" >> $GITHUB_OUTPUT
 
       - name: Skip summary
         if: steps.version-check.outputs.skip == 'true'
         run: |
           echo "## Skipped generate and publish" >> $GITHUB_STEP_SUMMARY
-          echo "Version in \`.speakeasy/sdk-version.json\` matches \`.speakeasy/gen/go.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
+          echo "Version matches \`.speakeasy/gen/go.yaml\`. No generation or publish." >> $GITHUB_STEP_SUMMARY
 
   # ---------------------------------------------------------------------------
   # Setup → OpenAPI → SDK tooling → Generate → Upload artifacts
@@ -132,18 +127,18 @@ jobs:
         run: |
           unset VERSION && curl -fsSL https://raw.githubusercontent.com/speakeasy-api/speakeasy/main/install.sh | sh
 
-      # SDKs: generate with version from .speakeasy/sdk-version.json (set by version-check job)
+      # SDKs: generate with resolved version only (from version-check job)
       - name: Generate SDKs and MCP
         run: make sdk-all VERSION=${{ needs.version-check.outputs.version }}
 
-      # Overwrite Speakeasy version in artifacts so publish never gets 0.0.1 (version already set in central gen before generate)
-      - name: Apply version from sdk-version.json to SDK artifacts
+      # Overwrite Speakeasy version in artifacts with resolved version only
+      - name: Apply resolved version to SDK artifacts
         run: ./scripts/force-sdk-version.sh "${{ needs.version-check.outputs.version }}"
 
       - name: Generate job summary
         run: |
           echo "## Generate SDKs" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** ${{ needs.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved version:** ${{ needs.version-check.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Artifacts:** api-go, api-typescript, api-python, api-mcp" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload api-go artifact
@@ -175,7 +170,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-to-github:
     needs: [version-check, generate]
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -201,7 +196,7 @@ jobs:
       SDK_PYTHON_REPO: ${{ vars.SDK_PYTHON_REPO }}
       SDK_TYPESCRIPT_REPO: ${{ vars.SDK_TYPESCRIPT_REPO }}
       SDK_MCP_REPO: ${{ vars.SDK_MCP_REPO }}
-      VERSION: ${{ needs.version-check.outputs.version }}
+      VERSION: ${{ needs.version-check.outputs.version }}  # resolved version only
     steps:
       - name: Checkout (for LICENSE)
         uses: actions/checkout@v4
@@ -223,7 +218,7 @@ jobs:
 
       - name: Push SDK to repo
         run: |
-          # Ensure VERSION is never empty so commit message and tag always include version number
+          # Use resolved version only (from version-check)
           VERSION="${{ env.VERSION }}"
           [ -z "$VERSION" ] && VERSION="0.0.0"
           git clone https://x-access-token:${{ secrets.SDK_DEPLOY_GIT_TOKEN }}@github.com/${{ env.REPO }}.git /tmp/sdk-repo
@@ -244,12 +239,33 @@ jobs:
           fi
           echo "Pushed ${{ matrix.lang }} SDK to ${{ env.REPO }}"
 
+      - name: Create Go SDK GitHub release
+        if: matrix.lang == 'go'
+        env:
+          GH_TOKEN: ${{ secrets.SDK_DEPLOY_GIT_TOKEN }}
+        run: |
+          VERSION="${{ env.VERSION }}"
+          [ -z "$VERSION" ] && VERSION="0.0.0"
+          TAG="v${VERSION}"
+          TITLE="Go SDK ${TAG}"
+          NOTES="Automated release for Go SDK ${TAG}."
+
+          if gh release view "$TAG" --repo "${{ env.REPO }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists in ${{ env.REPO }}; skipping."
+          else
+            gh release create "$TAG" \
+              --repo "${{ env.REPO }}" \
+              --title "$TITLE" \
+              --notes "Automated release for Go SDK ${TAG}."
+            echo "Created release $TAG in ${{ env.REPO }}."
+          fi
+
   # ---------------------------------------------------------------------------
   # Summary (runs once after all publish matrix cells)
   # ---------------------------------------------------------------------------
   publish-summary:
     needs: [version-check, generate, publish-to-github]
-    if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: success() && github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -258,7 +274,7 @@ jobs:
       SDK_PYTHON_REPO: ${{ vars.SDK_PYTHON_REPO }}
       SDK_TYPESCRIPT_REPO: ${{ vars.SDK_TYPESCRIPT_REPO }}
       SDK_MCP_REPO: ${{ vars.SDK_MCP_REPO }}
-      VERSION: ${{ needs.version-check.outputs.version }}
+      VERSION: ${{ needs.version-check.outputs.version }}  # resolved version only
     steps:
       - name: Summary
         run: |
@@ -267,7 +283,7 @@ jobs:
           TS_REPO="${SDK_TYPESCRIPT_REPO:-flexprice/javascript-sdk}"
           MCP_REPO="${SDK_MCP_REPO:-flexprice/mcp-server}"
           echo "## SDKs pushed to GitHub" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resolved version:** v${{ env.VERSION }}" >> $GITHUB_STEP_SUMMARY
           echo "- Go: https://github.com/$GO_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- Python: https://github.com/$PY_REPO" >> $GITHUB_STEP_SUMMARY
           echo "- TypeScript: https://github.com/$TS_REPO" >> $GITHUB_STEP_SUMMARY
@@ -283,7 +299,7 @@ jobs:
   # ---------------------------------------------------------------------------
   publish-to-registries:
     needs: [generate, publish-to-github]
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read

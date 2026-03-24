@@ -134,7 +134,7 @@ func (s *couponService) ApplyDiscount(ctx context.Context, req dto.ApplyDiscount
 		return nil, err
 	}
 
-	s.Logger.Debugw("calculating discount for coupon",
+	s.Logger.DebugwCtx(ctx, "calculating discount for coupon",
 		"coupon_id", c.ID,
 		"original_price", req.OriginalPrice,
 		"currency", req.Currency)

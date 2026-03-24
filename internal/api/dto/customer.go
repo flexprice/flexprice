@@ -64,11 +64,14 @@ type CreateCustomerRequest struct {
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
 
-	// parent_customer_id is the internal FlexPrice ID of the parent customer
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// This field is accepted for backward compatibility but no hierarchy validations are enforced.
+	// parent_customer_id is the internal FlexPrice ID of the parent customer.
 	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
 
-	// parent_customer_external_id is the external ID of the parent customer from your system
-	// Exactly one of parent_customer_id or parent_customer_external_id may be provided
+	// Deprecated: See ParentCustomerID.
+	// parent_customer_external_id is the external ID of the parent customer from your system.
+	// Exactly one of parent_customer_id or parent_customer_external_id may be provided.
 	ParentCustomerExternalID *string `json:"parent_customer_external_id,omitempty"`
 }
 
@@ -108,12 +111,15 @@ type UpdateCustomerRequest struct {
 	// integration_entity_mapping contains provider integration mappings for this customer
 	IntegrationEntityMapping []*IntegrationEntityMapping `json:"integration_entity_mapping,omitempty"`
 
-	// parent_customer_id is the internal FlexPrice ID of the parent customer
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// This field is accepted for backward compatibility but no hierarchy validations are enforced.
+	// parent_customer_id is the internal FlexPrice ID of the parent customer.
 	ParentCustomerID *string `json:"parent_customer_id,omitempty"`
 
-	// parent_customer_external_id is the external ID of the parent customer from your system
-	// Exactly one of parent_customer_id or parent_customer_external_id may be provided
-	// If you provide the external ID, the parent customer value will be ignored
+	// Deprecated: See ParentCustomerID.
+	// parent_customer_external_id is the external ID of the parent customer from your system.
+	// Exactly one of parent_customer_id or parent_customer_external_id may be provided.
+	// If you provide the external ID, the parent customer value will be ignored.
 	ParentCustomerExternalID *string `json:"parent_customer_external_id,omitempty"`
 }
 

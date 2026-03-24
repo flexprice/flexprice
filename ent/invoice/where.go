@@ -256,6 +256,11 @@ func IdempotencyKey(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldIdempotencyKey, v))
 }
 
+// RecalculatedInvoiceID applies equality check predicate on the "recalculated_invoice_id" field. It's identical to RecalculatedInvoiceIDEQ.
+func RecalculatedInvoiceID(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldRecalculatedInvoiceID, v))
+}
+
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldTenantID, v))
@@ -2485,6 +2490,81 @@ func IdempotencyKeyEqualFold(v string) predicate.Invoice {
 // IdempotencyKeyContainsFold applies the ContainsFold predicate on the "idempotency_key" field.
 func IdempotencyKeyContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldIdempotencyKey, v))
+}
+
+// RecalculatedInvoiceIDEQ applies the EQ predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDNEQ applies the NEQ predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDIn applies the In predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldRecalculatedInvoiceID, vs...))
+}
+
+// RecalculatedInvoiceIDNotIn applies the NotIn predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldRecalculatedInvoiceID, vs...))
+}
+
+// RecalculatedInvoiceIDGT applies the GT predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDGTE applies the GTE predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDLT applies the LT predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDLTE applies the LTE predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDContains applies the Contains predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDHasPrefix applies the HasPrefix predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDHasSuffix applies the HasSuffix predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDIsNil applies the IsNil predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldRecalculatedInvoiceID))
+}
+
+// RecalculatedInvoiceIDNotNil applies the NotNil predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldRecalculatedInvoiceID))
+}
+
+// RecalculatedInvoiceIDEqualFold applies the EqualFold predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldRecalculatedInvoiceID, v))
+}
+
+// RecalculatedInvoiceIDContainsFold applies the ContainsFold predicate on the "recalculated_invoice_id" field.
+func RecalculatedInvoiceIDContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldRecalculatedInvoiceID, v))
 }
 
 // HasLineItems applies the HasEdge predicate on the "line_items" edge.

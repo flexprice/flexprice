@@ -20,18 +20,6 @@ func NewEnvironmentHandler(service service.EnvironmentService, log *logger.Logge
 	return &EnvironmentHandler{service: service, log: log}
 }
 
-// @Summary Create environment
-// @ID createEnvironment
-// @Description Use when setting up a new environment (e.g. production, staging) for the tenant. Ideal for separating billing or config per environment.
-// @Tags Environments
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param environment body dto.CreateEnvironmentRequest true "Environment"
-// @Success 201 {object} dto.EnvironmentResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /environments [post]
 func (h *EnvironmentHandler) CreateEnvironment(c *gin.Context) {
 	var req dto.CreateEnvironmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -80,20 +68,6 @@ func (h *EnvironmentHandler) GetEnvironments(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update environment
-// @ID updateEnvironment
-// @Description Use when changing environment name or settings (e.g. renaming or updating metadata).
-// @Tags Environments
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Environment ID"
-// @Param environment body dto.UpdateEnvironmentRequest true "Environment"
-// @Success 200 {object} dto.EnvironmentResponse
-// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
-// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
-// @Failure 500 {object} ierr.ErrorResponse "Server error"
-// @Router /environments/{id} [put]
 func (h *EnvironmentHandler) UpdateEnvironment(c *gin.Context) {
 	id := c.Param("id")
 

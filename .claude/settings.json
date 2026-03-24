@@ -1,4 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(awk 'NR>=170 && NR<=190' /Users/agrim/projects/flexprice/flexprice/internal/service/connection.go)",
+      "Read(//Users/agrim/projects/flexprice/flexprice/**)",
+      "Bash(python3 /tmp/fix_logger_ctx.py)",
+      "Bash(grep -rc \"\\\\.Logger\\\\.\\\\w\\\\+Ctx\\(\" internal/service/*.go)",
+      "Bash(grep -v \":0$\")",
+      "Bash(sort -t: -k2 -rn)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

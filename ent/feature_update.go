@@ -14,6 +14,7 @@ import (
 	"github.com/flexprice/flexprice/ent/feature"
 	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // FeatureUpdate is the builder for updating Feature entities.
@@ -175,6 +176,66 @@ func (fu *FeatureUpdate) ClearUnitPlural() *FeatureUpdate {
 	return fu
 }
 
+// SetReportingUnitSingular sets the "reporting_unit_singular" field.
+func (fu *FeatureUpdate) SetReportingUnitSingular(s string) *FeatureUpdate {
+	fu.mutation.SetReportingUnitSingular(s)
+	return fu
+}
+
+// SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
+func (fu *FeatureUpdate) SetNillableReportingUnitSingular(s *string) *FeatureUpdate {
+	if s != nil {
+		fu.SetReportingUnitSingular(*s)
+	}
+	return fu
+}
+
+// ClearReportingUnitSingular clears the value of the "reporting_unit_singular" field.
+func (fu *FeatureUpdate) ClearReportingUnitSingular() *FeatureUpdate {
+	fu.mutation.ClearReportingUnitSingular()
+	return fu
+}
+
+// SetReportingUnitPlural sets the "reporting_unit_plural" field.
+func (fu *FeatureUpdate) SetReportingUnitPlural(s string) *FeatureUpdate {
+	fu.mutation.SetReportingUnitPlural(s)
+	return fu
+}
+
+// SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
+func (fu *FeatureUpdate) SetNillableReportingUnitPlural(s *string) *FeatureUpdate {
+	if s != nil {
+		fu.SetReportingUnitPlural(*s)
+	}
+	return fu
+}
+
+// ClearReportingUnitPlural clears the value of the "reporting_unit_plural" field.
+func (fu *FeatureUpdate) ClearReportingUnitPlural() *FeatureUpdate {
+	fu.mutation.ClearReportingUnitPlural()
+	return fu
+}
+
+// SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
+func (fu *FeatureUpdate) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureUpdate {
+	fu.mutation.SetReportingUnitConversionRate(d)
+	return fu
+}
+
+// SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
+func (fu *FeatureUpdate) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureUpdate {
+	if d != nil {
+		fu.SetReportingUnitConversionRate(*d)
+	}
+	return fu
+}
+
+// ClearReportingUnitConversionRate clears the value of the "reporting_unit_conversion_rate" field.
+func (fu *FeatureUpdate) ClearReportingUnitConversionRate() *FeatureUpdate {
+	fu.mutation.ClearReportingUnitConversionRate()
+	return fu
+}
+
 // SetAlertSettings sets the "alert_settings" field.
 func (fu *FeatureUpdate) SetAlertSettings(ts types.AlertSettings) *FeatureUpdate {
 	fu.mutation.SetAlertSettings(ts)
@@ -192,6 +253,26 @@ func (fu *FeatureUpdate) SetNillableAlertSettings(ts *types.AlertSettings) *Feat
 // ClearAlertSettings clears the value of the "alert_settings" field.
 func (fu *FeatureUpdate) ClearAlertSettings() *FeatureUpdate {
 	fu.mutation.ClearAlertSettings()
+	return fu
+}
+
+// SetGroupID sets the "group_id" field.
+func (fu *FeatureUpdate) SetGroupID(s string) *FeatureUpdate {
+	fu.mutation.SetGroupID(s)
+	return fu
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (fu *FeatureUpdate) SetNillableGroupID(s *string) *FeatureUpdate {
+	if s != nil {
+		fu.SetGroupID(*s)
+	}
+	return fu
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (fu *FeatureUpdate) ClearGroupID() *FeatureUpdate {
+	fu.mutation.ClearGroupID()
 	return fu
 }
 
@@ -314,11 +395,35 @@ func (fu *FeatureUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if fu.mutation.UnitPluralCleared() {
 		_spec.ClearField(feature.FieldUnitPlural, field.TypeString)
 	}
+	if value, ok := fu.mutation.ReportingUnitSingular(); ok {
+		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
+	}
+	if fu.mutation.ReportingUnitSingularCleared() {
+		_spec.ClearField(feature.FieldReportingUnitSingular, field.TypeString)
+	}
+	if value, ok := fu.mutation.ReportingUnitPlural(); ok {
+		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
+	}
+	if fu.mutation.ReportingUnitPluralCleared() {
+		_spec.ClearField(feature.FieldReportingUnitPlural, field.TypeString)
+	}
+	if value, ok := fu.mutation.ReportingUnitConversionRate(); ok {
+		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
+	}
+	if fu.mutation.ReportingUnitConversionRateCleared() {
+		_spec.ClearField(feature.FieldReportingUnitConversionRate, field.TypeOther)
+	}
 	if value, ok := fu.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 	}
 	if fu.mutation.AlertSettingsCleared() {
 		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
+	}
+	if value, ok := fu.mutation.GroupID(); ok {
+		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
+	}
+	if fu.mutation.GroupIDCleared() {
+		_spec.ClearField(feature.FieldGroupID, field.TypeString)
 	}
 	if n, err = sqlgraph.UpdateNodes(ctx, fu.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -486,6 +591,66 @@ func (fuo *FeatureUpdateOne) ClearUnitPlural() *FeatureUpdateOne {
 	return fuo
 }
 
+// SetReportingUnitSingular sets the "reporting_unit_singular" field.
+func (fuo *FeatureUpdateOne) SetReportingUnitSingular(s string) *FeatureUpdateOne {
+	fuo.mutation.SetReportingUnitSingular(s)
+	return fuo
+}
+
+// SetNillableReportingUnitSingular sets the "reporting_unit_singular" field if the given value is not nil.
+func (fuo *FeatureUpdateOne) SetNillableReportingUnitSingular(s *string) *FeatureUpdateOne {
+	if s != nil {
+		fuo.SetReportingUnitSingular(*s)
+	}
+	return fuo
+}
+
+// ClearReportingUnitSingular clears the value of the "reporting_unit_singular" field.
+func (fuo *FeatureUpdateOne) ClearReportingUnitSingular() *FeatureUpdateOne {
+	fuo.mutation.ClearReportingUnitSingular()
+	return fuo
+}
+
+// SetReportingUnitPlural sets the "reporting_unit_plural" field.
+func (fuo *FeatureUpdateOne) SetReportingUnitPlural(s string) *FeatureUpdateOne {
+	fuo.mutation.SetReportingUnitPlural(s)
+	return fuo
+}
+
+// SetNillableReportingUnitPlural sets the "reporting_unit_plural" field if the given value is not nil.
+func (fuo *FeatureUpdateOne) SetNillableReportingUnitPlural(s *string) *FeatureUpdateOne {
+	if s != nil {
+		fuo.SetReportingUnitPlural(*s)
+	}
+	return fuo
+}
+
+// ClearReportingUnitPlural clears the value of the "reporting_unit_plural" field.
+func (fuo *FeatureUpdateOne) ClearReportingUnitPlural() *FeatureUpdateOne {
+	fuo.mutation.ClearReportingUnitPlural()
+	return fuo
+}
+
+// SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
+func (fuo *FeatureUpdateOne) SetReportingUnitConversionRate(d decimal.Decimal) *FeatureUpdateOne {
+	fuo.mutation.SetReportingUnitConversionRate(d)
+	return fuo
+}
+
+// SetNillableReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field if the given value is not nil.
+func (fuo *FeatureUpdateOne) SetNillableReportingUnitConversionRate(d *decimal.Decimal) *FeatureUpdateOne {
+	if d != nil {
+		fuo.SetReportingUnitConversionRate(*d)
+	}
+	return fuo
+}
+
+// ClearReportingUnitConversionRate clears the value of the "reporting_unit_conversion_rate" field.
+func (fuo *FeatureUpdateOne) ClearReportingUnitConversionRate() *FeatureUpdateOne {
+	fuo.mutation.ClearReportingUnitConversionRate()
+	return fuo
+}
+
 // SetAlertSettings sets the "alert_settings" field.
 func (fuo *FeatureUpdateOne) SetAlertSettings(ts types.AlertSettings) *FeatureUpdateOne {
 	fuo.mutation.SetAlertSettings(ts)
@@ -503,6 +668,26 @@ func (fuo *FeatureUpdateOne) SetNillableAlertSettings(ts *types.AlertSettings) *
 // ClearAlertSettings clears the value of the "alert_settings" field.
 func (fuo *FeatureUpdateOne) ClearAlertSettings() *FeatureUpdateOne {
 	fuo.mutation.ClearAlertSettings()
+	return fuo
+}
+
+// SetGroupID sets the "group_id" field.
+func (fuo *FeatureUpdateOne) SetGroupID(s string) *FeatureUpdateOne {
+	fuo.mutation.SetGroupID(s)
+	return fuo
+}
+
+// SetNillableGroupID sets the "group_id" field if the given value is not nil.
+func (fuo *FeatureUpdateOne) SetNillableGroupID(s *string) *FeatureUpdateOne {
+	if s != nil {
+		fuo.SetGroupID(*s)
+	}
+	return fuo
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (fuo *FeatureUpdateOne) ClearGroupID() *FeatureUpdateOne {
+	fuo.mutation.ClearGroupID()
 	return fuo
 }
 
@@ -655,11 +840,35 @@ func (fuo *FeatureUpdateOne) sqlSave(ctx context.Context) (_node *Feature, err e
 	if fuo.mutation.UnitPluralCleared() {
 		_spec.ClearField(feature.FieldUnitPlural, field.TypeString)
 	}
+	if value, ok := fuo.mutation.ReportingUnitSingular(); ok {
+		_spec.SetField(feature.FieldReportingUnitSingular, field.TypeString, value)
+	}
+	if fuo.mutation.ReportingUnitSingularCleared() {
+		_spec.ClearField(feature.FieldReportingUnitSingular, field.TypeString)
+	}
+	if value, ok := fuo.mutation.ReportingUnitPlural(); ok {
+		_spec.SetField(feature.FieldReportingUnitPlural, field.TypeString, value)
+	}
+	if fuo.mutation.ReportingUnitPluralCleared() {
+		_spec.ClearField(feature.FieldReportingUnitPlural, field.TypeString)
+	}
+	if value, ok := fuo.mutation.ReportingUnitConversionRate(); ok {
+		_spec.SetField(feature.FieldReportingUnitConversionRate, field.TypeOther, value)
+	}
+	if fuo.mutation.ReportingUnitConversionRateCleared() {
+		_spec.ClearField(feature.FieldReportingUnitConversionRate, field.TypeOther)
+	}
 	if value, ok := fuo.mutation.AlertSettings(); ok {
 		_spec.SetField(feature.FieldAlertSettings, field.TypeJSON, value)
 	}
 	if fuo.mutation.AlertSettingsCleared() {
 		_spec.ClearField(feature.FieldAlertSettings, field.TypeJSON)
+	}
+	if value, ok := fuo.mutation.GroupID(); ok {
+		_spec.SetField(feature.FieldGroupID, field.TypeString, value)
+	}
+	if fuo.mutation.GroupIDCleared() {
+		_spec.ClearField(feature.FieldGroupID, field.TypeString)
 	}
 	_node = &Feature{config: fuo.config}
 	_spec.Assign = _node.assignValues

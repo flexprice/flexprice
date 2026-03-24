@@ -121,7 +121,7 @@ func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wal
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.Infow("publishing wallet balance alert event",
+	s.Logger.InfowCtx(ctx, "publishing wallet balance alert event",
 		"event_id", event.ID,
 		"customer_id", event.CustomerID,
 		"tenant_id", event.TenantID,
@@ -147,7 +147,7 @@ func (s *walletBalanceAlertService) PublishEvent(ctx context.Context, event *wal
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.Debugw("wallet balance alert event published successfully",
+	s.Logger.DebugwCtx(ctx, "wallet balance alert event published successfully",
 		"event_id", event.ID,
 		"customer_id", event.CustomerID,
 	)
@@ -232,7 +232,7 @@ func (s *walletBalanceAlertService) processMessage(msg *message.Message) error {
 func (s *walletBalanceAlertService) shouldThrottle(ctx context.Context, event wallet.WalletBalanceAlertEvent) bool {
 	// If force_calculate_balance is true, bypass throttle
 	if event.ForceCalculateBalance {
-		s.Logger.Debugw("bypassing throttle due to force_calculate_balance flag",
+		s.Logger.DebugwCtx(ctx, "bypassing throttle due to force_calculate_balance flag",
 			"customer_id", event.CustomerID,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,
@@ -251,7 +251,7 @@ func (s *walletBalanceAlertService) shouldThrottle(ctx context.Context, event wa
 	// Check if we processed this customer recently
 	_, exists := s.cache.ForceCacheGet(ctx, cacheKey)
 	if exists {
-		s.Logger.Infow("throttling wallet balance recalculation - processed recently",
+		s.Logger.InfowCtx(ctx, "throttling wallet balance recalculation - processed recently",
 			"customer_id", event.CustomerID,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,
@@ -275,7 +275,7 @@ func (s *walletBalanceAlertService) markProcessed(ctx context.Context, event wal
 	// Set cache entry with TTL
 	s.cache.ForceCacheSet(ctx, cacheKey, time.Now().Unix(), cache.ExpiryWalletAlertCheck)
 
-	s.Logger.Debugw("marked customer as processed in throttle cache",
+	s.Logger.DebugwCtx(ctx, "marked customer as processed in throttle cache",
 		"customer_id", event.CustomerID,
 		"tenant_id", event.TenantID,
 		"environment_id", event.EnvironmentID,
@@ -290,7 +290,7 @@ func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wall
 	settingsSvc := NewSettingsService(s.ServiceParams).(*settingsService)
 	config, err := GetSetting[types.AlertSettings](settingsSvc, ctx, types.SettingKeyWalletBalanceAlertConfig)
 	if err != nil {
-		s.Logger.Warnw("failed to get wallet balance alert config, skipping",
+		s.Logger.WarnwCtx(ctx, "failed to get wallet balance alert config, skipping",
 			"error", err,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,
@@ -299,7 +299,7 @@ func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wall
 	}
 
 	if !config.IsAlertEnabled() {
-		s.Logger.Debugw("wallet balance alerts disabled for tenant, skipping",
+		s.Logger.DebugwCtx(ctx, "wallet balance alerts disabled for tenant, skipping",
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,
 		)
@@ -308,7 +308,7 @@ func (s *walletBalanceAlertService) processEvent(ctx context.Context, event wall
 
 	// Check if we should throttle this request
 	if s.shouldThrottle(ctx, event) {
-		s.Logger.Infow("skipping wallet balance recalculation due to throttle",
+		s.Logger.InfowCtx(ctx, "skipping wallet balance recalculation due to throttle",
 			"customer_id", event.CustomerID,
 			"tenant_id", event.TenantID,
 			"environment_id", event.EnvironmentID,

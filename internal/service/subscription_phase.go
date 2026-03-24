@@ -189,13 +189,13 @@ func (s *subscriptionPhaseService) DeleteSubscriptionPhase(ctx context.Context, 
 	return nil
 }
 
-func (s *subscriptionPhaseService) publishWebhookEvent(ctx context.Context, eventName string, phaseID string) {
+func (s *subscriptionPhaseService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, phaseID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalSubscriptionPhaseEvent{
 		PhaseID:  phaseID,
 		TenantID: types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -209,6 +209,6 @@ func (s *subscriptionPhaseService) publishWebhookEvent(ctx context.Context, even
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }

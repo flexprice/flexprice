@@ -40,6 +40,8 @@ type CustomerPortalService interface {
 	GetCostAnalytics(ctx context.Context, req dto.PortalCostAnalyticsRequest) (*dto.GetDetailedCostAnalyticsResponse, error)
 	// GetUsageSummary returns usage summary for the portal customer
 	GetUsageSummary(ctx context.Context, req dto.GetCustomerUsageSummaryRequest) (*dto.CustomerUsageSummaryResponse, error)
+	// GetPortalConfig returns the customer portal configuration for the current tenant/environment
+	GetPortalConfig(ctx context.Context) (*dto.SettingResponse, error)
 }
 
 type customerPortalService struct {
@@ -367,6 +369,13 @@ func (s *customerPortalService) GetInvoicePDFUrl(ctx context.Context, invoiceID 
 
 	// Get the presigned URL
 	return invoiceService.GetInvoicePDFUrl(ctx, invoiceID)
+}
+
+// GetPortalConfig returns the customer_portal_config setting for the current tenant/environment.
+// If no config is saved for the tenant, the hardcoded defaults from GetDefaultSettings() are returned.
+func (s *customerPortalService) GetPortalConfig(ctx context.Context) (*dto.SettingResponse, error) {
+	settingsService := NewSettingsService(s.ServiceParams)
+	return settingsService.GetSettingByKey(ctx, types.SettingKeyCustomerPortalConfig)
 }
 
 // GetWalletTransactions returns transactions for a wallet with pagination

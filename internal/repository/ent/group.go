@@ -5,8 +5,10 @@ import (
 
 	"github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/ent/group"
+	"github.com/flexprice/flexprice/ent/predicate"
 	"github.com/flexprice/flexprice/internal/cache"
 	domainGroup "github.com/flexprice/flexprice/internal/domain/group"
+	"github.com/flexprice/flexprice/internal/dsl"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/postgres"
@@ -66,7 +68,6 @@ func (r *groupRepository) Get(ctx context.Context, id string) (*domainGroup.Grou
 			group.IDEQ(id),
 			group.TenantIDEQ(tenantID),
 			group.EnvironmentIDEQ(environmentID),
-			group.StatusEQ(string(types.StatusPublished)),
 		).
 		Only(ctx)
 
@@ -297,24 +298,12 @@ func (o GroupQueryOptions) ApplyPaginationFilter(query GroupQuery, limit int, of
 	return query
 }
 
+// GetFieldName returns the ent field name for group; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o GroupQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return group.FieldCreatedAt
-	case "updated_at":
-		return group.FieldUpdatedAt
-	case "name":
-		return group.FieldName
-	case "entity_type":
-		return group.FieldEntityType
-	case "lookup_key":
-		return group.FieldLookupKey
-	case "status":
-		return group.FieldStatus
-	default:
-		//unknown field
-		return ""
+	if group.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o GroupQueryOptions) GetFieldResolver(field string) (string, error) {
@@ -354,6 +343,44 @@ func (o GroupQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types
 	}
 	if len(f.GroupIDs) > 0 {
 		query = query.Where(group.IDIn(f.GroupIDs...))
+	}
+
+	// Apply time range filters if specified
+	if f.TimeRangeFilter != nil {
+		if f.StartTime != nil {
+			query = query.Where(group.CreatedAtGTE(*f.StartTime))
+		}
+		if f.EndTime != nil {
+			query = query.Where(group.CreatedAtLTE(*f.EndTime))
+		}
+	}
+
+	// Apply filters using the generic DSL (filter by lookup_key, name, entity_type, created_at)
+	if f.Filters != nil {
+		var err error
+		query, err = dsl.ApplyFilters[GroupQuery, predicate.Group](
+			query,
+			f.Filters,
+			o.GetFieldResolver,
+			func(p dsl.Predicate) predicate.Group { return predicate.Group(p) },
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Apply sorts using the generic DSL (sort by updated_at, created_at, etc.)
+	if f.Sort != nil {
+		var err error
+		query, err = dsl.ApplySorts[GroupQuery, group.OrderOption](
+			query,
+			f.Sort,
+			o.GetFieldResolver,
+			func(o dsl.OrderFunc) group.OrderOption { return group.OrderOption(o) },
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return query, nil

@@ -20,7 +20,9 @@ type Customer struct {
 	// Email is the email of the customer
 	Email string `db:"email" json:"email"`
 
-	// ParentCustomerID is the parent customer identifier for the customer
+	// Deprecated: Customer parent hierarchy is deprecated in favor of subscription-level hierarchy.
+	// Retained for backward compatibility; no hierarchy rules are enforced at the service layer.
+	// ParentCustomerID is the parent customer identifier for the customer.
 	ParentCustomerID *string `db:"parent_customer_id" json:"parent_customer_id"`
 
 	// AddressLine1 is the first line of the customer's address

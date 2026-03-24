@@ -117,11 +117,12 @@ type KafkaConfig struct {
 }
 
 type ClickHouseConfig struct {
-	Address  string `mapstructure:"address" validate:"required"`
-	TLS      bool   `mapstructure:"tls"`
-	Username string `mapstructure:"username" validate:"required"`
-	Password string `mapstructure:"password" validate:"required"`
-	Database string `mapstructure:"database" validate:"required"`
+	Address        string `mapstructure:"address" validate:"required"`
+	TLS            bool   `mapstructure:"tls"`
+	Username       string `mapstructure:"username" validate:"required"`
+	Password       string `mapstructure:"password" validate:"required"`
+	Database       string `mapstructure:"database" validate:"required"`
+	MaxMemoryUsage int64  `mapstructure:"max_memory_usage" validate:"required"`
 }
 
 type LoggingConfig struct {
@@ -306,11 +307,12 @@ type Email struct {
 }
 
 type EmailConfig struct {
-	Enabled      bool   `mapstructure:"enabled" validate:"required"`
-	ResendAPIKey string `mapstructure:"resend_api_key" validate:"omitempty"`
-	FromAddress  string `mapstructure:"from_address" validate:"omitempty"`
-	ReplyTo      string `mapstructure:"reply_to" validate:"omitempty"`
-	CalendarURL  string `mapstructure:"calendar_url" validate:"omitempty"`
+	Enabled          bool   `mapstructure:"enabled" validate:"required"`
+	ResendAPIKey     string `mapstructure:"resend_api_key" validate:"omitempty"`
+	FromAddress      string `mapstructure:"from_address" validate:"omitempty"`
+	ReplyTo          string `mapstructure:"reply_to" validate:"omitempty"`
+	CalendarURL      string `mapstructure:"calendar_url" validate:"omitempty"`
+	ZapierWebhookURL string `mapstructure:"zapier_webhook_url" validate:"omitempty"`
 }
 type CostSheetUsageTrackingConfig struct {
 	Enabled       bool   `mapstructure:"enabled" default:"true"`
@@ -433,6 +435,11 @@ func (c ClickHouseConfig) GetClientOptions() *clickhouse.Options {
 	}
 	if c.TLS {
 		options.TLS = &tls.Config{}
+	}
+
+	maxMemoryUsageBytes := c.MaxMemoryUsage * int64(1024) * int64(1024) * int64(1024)
+	options.Settings = clickhouse.Settings{
+		"max_memory_usage": maxMemoryUsageBytes,
 	}
 	return options
 }

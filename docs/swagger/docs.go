@@ -1779,7 +1779,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "write"
             }
         },
         "/customers/external/{external_id}": {
@@ -1884,7 +1885,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "read"
             }
         },
         "/customers/usage": {
@@ -2096,7 +2098,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "read"
             },
             "delete": {
                 "security": [
@@ -2759,123 +2762,6 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Resource not found",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/environments": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when setting up a new environment (e.g. production, staging) for the tenant. Ideal for separating billing or config per environment.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Create environment",
-                "operationId": "createEnvironment",
-                "parameters": [
-                    {
-                        "description": "Environment",
-                        "name": "environment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.CreateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "$ref": "#/definitions/dto.EnvironmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Server error",
-                        "schema": {
-                            "$ref": "#/definitions/errors.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/environments/{id}": {
-            "put": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Use when changing environment name or settings (e.g. renaming or updating metadata).",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Update environment",
-                "operationId": "updateEnvironment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Environment ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Environment",
-                        "name": "environment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/dto.UpdateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/dto.EnvironmentResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
                         "schema": {
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
@@ -4120,7 +4006,8 @@ const docTemplate = `{
                             "$ref": "#/definitions/errors.ErrorResponse"
                         }
                     }
-                }
+                },
+                "x-scope": "delete"
             }
         },
         "/invoices/{id}/payment": {
@@ -4307,7 +4194,60 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when subscription or usage data changed and you need to refresh a draft invoice before finalizing. Optional finalize=true to lock after recalc.",
+                "description": "Starts an async workflow that creates a fresh replacement invoice for a voided SUBSCRIPTION invoice (same billing period). Returns workflow_id and run_id; poll workflow status or GET the new invoice via recalculated_invoice_id after completion.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invoices"
+                ],
+                "summary": "Recalculate invoice (voided invoice)",
+                "operationId": "recalculateInvoice",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invoice ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "$ref": "#/definitions/models.TemporalWorkflowResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or invoice already recalculated",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Invoice not found",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "schema": {
+                            "$ref": "#/definitions/errors.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/invoices/{id}/recalculate-v2": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Recalculates a draft SUBSCRIPTION invoice in-place (replaces line items, reapplies credits/coupons/taxes). Use when subscription or usage data changed before finalizing.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4317,8 +4257,8 @@ const docTemplate = `{
                 "tags": [
                     "Invoices"
                 ],
-                "summary": "Recalculate invoice",
-                "operationId": "recalculateInvoice",
+                "summary": "Recalculate draft invoice (v2)",
+                "operationId": "recalculateInvoiceV2",
                 "parameters": [
                     {
                         "type": "string",
@@ -9373,7 +9313,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Use when provisioning API access for automation, CI/CD pipelines, or headless integrations that need scoped API keys.",
+                "description": "Create a user account (type=user, email required; returns user + password for login) or a service account (type=service_account, roles required) for API/automation access.",
                 "consumes": [
                     "application/json"
                 ],
@@ -9383,11 +9323,11 @@ const docTemplate = `{
                 "tags": [
                     "Users"
                 ],
-                "summary": "Create service account",
+                "summary": "Create user or service account",
                 "operationId": "createUser",
                 "parameters": [
                     {
-                        "description": "Create service account request (type must be 'service_account', roles are required)",
+                        "description": "Create user (email, type=user) or service account (type=service_account, roles)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -9400,7 +9340,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/dto.UserResponse"
+                            "$ref": "#/definitions/dto.CreateUserResponse"
                         }
                     },
                     "400": {
@@ -10252,7 +10192,8 @@ const docTemplate = `{
                             "CREDIT_EXPIRED",
                             "WALLET_TERMINATION",
                             "MANUAL_BALANCE_DEBIT",
-                            "CREDIT_ADJUSTMENT"
+                            "CREDIT_ADJUSTMENT",
+                            "INVOICE_VOID_REFUND"
                         ],
                         "type": "string",
                         "x-enum-varnames": [
@@ -10265,7 +10206,8 @@ const docTemplate = `{
                             "TransactionReasonCreditExpired",
                             "TransactionReasonWalletTermination",
                             "TransactionReasonManualBalanceDebit",
-                            "TransactionReasonCreditAdjustment"
+                            "TransactionReasonCreditAdjustment",
+                            "TransactionReasonInvoiceVoidRefund"
                         ],
                         "name": "transaction_reason",
                         "in": "query"
@@ -12484,21 +12426,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.CreateEnvironmentRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "type"
-            ],
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.CreateFeatureRequest": {
             "type": "object",
             "required": [
@@ -12510,6 +12437,10 @@ const docTemplate = `{
                     "$ref": "#/definitions/types.AlertSettings"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "group_id": {
+                    "description": "GroupID is the id of the group to add the feature to",
                     "type": "string"
                 },
                 "lookup_key": {
@@ -12526,6 +12457,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "type": {
                     "$ref": "#/definitions/types.FeatureType"
@@ -13585,25 +13519,54 @@ const docTemplate = `{
         "dto.CreateUserRequest": {
             "type": "object",
             "required": [
-                "roles",
                 "type"
             ],
             "properties": {
+                "email": {
+                    "description": "Required when type is \"user\"",
+                    "type": "string"
+                },
                 "roles": {
-                    "description": "Roles are required",
+                    "description": "Required when type is \"service_account\"",
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                         "type": "string"
                     }
                 },
                 "type": {
-                    "description": "Must be \"service_account\"",
+                    "description": "\"user\" or \"service_account\"",
                     "allOf": [
                         {
                             "$ref": "#/definitions/types.UserType"
                         }
                     ]
+                }
+            }
+        },
+        "dto.CreateUserResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "description": "Empty for service accounts",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "roles": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "tenant": {
+                    "$ref": "#/definitions/dto.TenantResponse"
+                },
+                "type": {
+                    "$ref": "#/definitions/types.UserType"
                 }
             }
         },
@@ -14418,26 +14381,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.EnvironmentResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.Event": {
             "type": "object",
             "properties": {
@@ -14497,6 +14440,17 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
+                "group": {
+                    "description": "Group is the full group object when the feature belongs to a group (populated in response)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/dto.GroupResponse"
+                        }
+                    ]
+                },
+                "group_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -14514,6 +14468,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -14838,6 +14795,11 @@ const docTemplate = `{
                 "subscription_id"
             ],
             "properties": {
+                "hide_zero_charges_line_items": {
+                    "description": "hide_zero_charges_line_items indicates whether to hide line items with zero cost",
+                    "type": "boolean",
+                    "default": false
+                },
                 "period_end": {
                     "description": "period_end is the optional end date of the period to preview",
                     "type": "string"
@@ -15610,6 +15572,10 @@ const docTemplate = `{
                 },
                 "period_start": {
                     "description": "period_start is the start date of the billing period covered by this invoice",
+                    "type": "string"
+                },
+                "recalculated_invoice_id": {
+                    "description": "recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.\nWhen set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.",
                     "type": "string"
                 },
                 "refunded_amount": {
@@ -18924,17 +18890,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.UpdateEnvironmentRequest": {
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.UpdateFeatureRequest": {
             "type": "object",
             "properties": {
@@ -18950,11 +18905,18 @@ const docTemplate = `{
                         "$ref": "#/definitions/meter.Filter"
                     }
                 },
+                "group_id": {
+                    "description": "GroupID is the id of the group to assign the feature to. Pass empty string to clear.",
+                    "type": "string"
+                },
                 "metadata": {
                     "$ref": "#/definitions/types.Metadata"
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "unit_plural": {
                     "type": "string"
@@ -19073,7 +19035,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "group_id": {
-                    "description": "GroupID is the id of the group to update the price in",
+                    "description": "GroupID is the id of the group to update the price in.\nIf not provided (nil), the group will not be changed\nIf provided as empty string (\"\"), the group will be removed (price will be ungrouped)\nIf provided as a group ID, the price will be assigned to that group (must exist and be published)",
                     "type": "string"
                 },
                 "lookup_key": {
@@ -19351,6 +19313,14 @@ const docTemplate = `{
                 "feature_id": {
                     "type": "string"
                 },
+                "group": {
+                    "description": "Group when the feature belongs to a group (object includes id)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/group.Group"
+                        }
+                    ]
+                },
                 "meter": {
                     "description": "Full meter object (only if expand includes \"meter\")",
                     "allOf": [
@@ -19402,6 +19372,14 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "reporting_unit": {
+                    "description": "Present when total_usage_display is set (unit_singular, unit_plural, conversion_rate)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/types.ReportingUnit"
+                        }
+                    ]
+                },
                 "source": {
                     "type": "string"
                 },
@@ -19432,6 +19410,10 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "total_usage": {
+                    "type": "string"
+                },
+                "total_usage_display": {
+                    "description": "Empty string when feature has no reporting unit; otherwise the value in reporting units",
                     "type": "string"
                 },
                 "unit": {
@@ -20092,6 +20074,17 @@ const docTemplate = `{
                 "environment_id": {
                     "type": "string"
                 },
+                "group": {
+                    "description": "Group is populated by the service layer when building responses; repository/FromEnt do not set it.",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/group.Group"
+                        }
+                    ]
+                },
+                "group_id": {
+                    "type": "string"
+                },
                 "id": {
                     "type": "string"
                 },
@@ -20106,6 +20099,9 @@ const docTemplate = `{
                 },
                 "name": {
                     "type": "string"
+                },
+                "reporting_unit": {
+                    "$ref": "#/definitions/types.ReportingUnit"
                 },
                 "status": {
                     "$ref": "#/definitions/types.Status"
@@ -22435,7 +22431,8 @@ const docTemplate = `{
                 "CREDIT_EXPIRED",
                 "WALLET_TERMINATION",
                 "MANUAL_BALANCE_DEBIT",
-                "CREDIT_ADJUSTMENT"
+                "CREDIT_ADJUSTMENT",
+                "INVOICE_VOID_REFUND"
             ],
             "x-enum-varnames": [
                 "TransactionReasonInvoicePayment",
@@ -22447,7 +22444,8 @@ const docTemplate = `{
                 "TransactionReasonCreditExpired",
                 "TransactionReasonWalletTermination",
                 "TransactionReasonManualBalanceDebit",
-                "TransactionReasonCreditAdjustment"
+                "TransactionReasonCreditAdjustment",
+                "TransactionReasonInvoiceVoidRefund"
             ]
         },
         "types.TransactionStatus": {
@@ -22763,6 +22761,7 @@ const docTemplate = `{
         "types.WindowSize": {
             "type": "string",
             "enum": [
+                "MONTH",
                 "MINUTE",
                 "15MIN",
                 "30MIN",
@@ -22772,10 +22771,10 @@ const docTemplate = `{
                 "12HOUR",
                 "DAY",
                 "WEEK",
-                "MONTH",
                 "MONTH"
             ],
             "x-enum-varnames": [
+                "DefaultWindowSize",
                 "WindowSizeMinute",
                 "WindowSize15Min",
                 "WindowSize30Min",
@@ -22785,8 +22784,7 @@ const docTemplate = `{
                 "WindowSize12Hour",
                 "WindowSizeDay",
                 "WindowSizeWeek",
-                "WindowSizeMonth",
-                "DefaultWindowSize"
+                "WindowSizeMonth"
             ]
         },
         "types.WorkflowExecutionFilter": {
@@ -22853,6 +22851,50 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "workflow_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "group.Group": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "entity_type": {
+                    "$ref": "#/definitions/types.GroupEntityType"
+                },
+                "environment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "lookup_key": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/types.Status"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "updated_by": {
                     "type": "string"
                 }
             }
@@ -23563,6 +23605,17 @@ const docTemplate = `{
                 }
             }
         },
+        "types.GroupEntityType": {
+            "type": "string",
+            "enum": [
+                "price",
+                "feature"
+            ],
+            "x-enum-varnames": [
+                "GroupEntityTypePrice",
+                "GroupEntityTypeFeature"
+            ]
+        },
         "types.ListResponse-dto_WalletResponse": {
             "type": "object",
             "properties": {
@@ -23581,6 +23634,23 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "types.ReportingUnit": {
+            "type": "object",
+            "properties": {
+                "conversion_rate": {
+                    "description": "Multiplier: reporting_unit_value = unit_value * conversion_rate; must be \u003e 0",
+                    "type": "number"
+                },
+                "unit_plural": {
+                    "description": "Display unit label, plural (e.g. \"seconds\")",
+                    "type": "string"
+                },
+                "unit_singular": {
+                    "description": "Display unit label, singular (e.g. \"second\")",
+                    "type": "string"
+                }
             }
         }
     },

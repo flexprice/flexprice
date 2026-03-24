@@ -42,6 +42,7 @@ clickhouse:
   username: flexprice
   password: flexprice123
   database: flexprice
+  max_memory_usage: 50
 
 postgres:
   host: 127.0.0.1 # For local mode
@@ -59,9 +60,9 @@ postgres:
   auto_migrate: false
 
 sentry:
-  enabled: false # Set to true in production
-  dsn: "" # Add your Sentry DSN here
-  environment: "development" # Change to "production" in prod
+  enabled: true
+  dsn: "" # Set via FLEXPRICE_SENTRY_DSN env var
+  environment: "development" # Override via FLEXPRICE_SENTRY_ENVIRONMENT
   sample_rate: 1.0 # Adjust sampling rate as needed (0.0 to 1.0)
 
 pyroscope:
@@ -93,8 +94,8 @@ logging:
 webhook:
   enabled: true
   topic: "system_events"
-  pubsub: "memory"
-  consumer_group: "webhook-consumer-local"
+  consumer_group: "system-events-consumer"
+  rate_limit: 5
   max_retries: 3
   initial_interval: 1s
   max_interval: 10s
@@ -243,6 +244,7 @@ email:
   from_address: "" # Default from address for emails (MUST be verified in Resend)
   reply_to: "" # Reply-to address for emails
   calendar_url: "" # Calendar booking URL for onboarding
+  zapier_webhook_url: "" # Zapier webhook URL for user signup (set via FLEXPRICE_EMAIL_ZAPIER_WEBHOOK_URL environment variable)
 
 rbac:
   roles_config_path: "internal/config/rbac/roles.json" # Path to the roles.json file

@@ -49,7 +49,7 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 	// Create a customer in the billing tenant for this new tenant
 	if err := s.CreateTenantAsBillingCustomer(ctx, newTenant); err != nil {
 		// Log error but don't fail tenant creation
-		s.Logger.Errorw("Failed to create billing customer for tenant",
+		s.Logger.ErrorwCtx(ctx, "Failed to create billing customer for tenant",
 			"tenant_id", newTenant.ID,
 			"error", err)
 	}
@@ -60,7 +60,7 @@ func (s *tenantService) CreateTenant(ctx context.Context, req dto.CreateTenantRe
 // CreateTenantAsBillingCustomer creates a customer in the billing tenant using the tenant details
 func (s *tenantService) CreateTenantAsBillingCustomer(ctx context.Context, t *tenant.Tenant) error {
 	if s.Config.Billing.TenantID == "" {
-		s.Logger.Warnw("Billing tenant ID is not set, skipping customer creation",
+		s.Logger.WarnwCtx(ctx, "Billing tenant ID is not set, skipping customer creation",
 			"tenant_id", t.ID)
 		return nil
 	}
@@ -132,7 +132,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 	}
 
 	if freePlan == nil || freePrice == nil {
-		s.Logger.Warnw("No free plan found, skipping onboarding",
+		s.Logger.WarnwCtx(ctx, "No free plan found, skipping onboarding",
 			"tenant_id", t.ID)
 		return nil
 	}
@@ -151,7 +151,7 @@ func (s *tenantService) onboardTenantOnFreePlan(ctx context.Context, t *tenant.T
 		BillingCycle:       types.BillingCycleAnniversary,
 	})
 	if err != nil {
-		s.Logger.Errorw("Failed to create subscription",
+		s.Logger.ErrorwCtx(ctx, "Failed to create subscription",
 			"tenant_id", t.ID,
 			"error", err)
 		return err

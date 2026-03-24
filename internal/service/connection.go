@@ -305,6 +305,33 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 
 		encryptedMetadata.Moyasar = moyasarMeta
 
+	case types.SecretProviderPaddle:
+		if encryptedSecretData.Paddle == nil {
+			s.Logger.Warnw("Paddle metadata is nil, cannot encrypt", "provider_type", providerType)
+			return types.ConnectionMetadata{}, ierr.NewError("Paddle metadata is required").
+				WithHint("Paddle connection requires encrypted_secret_data with api_key and webhook_secret").
+				Mark(ierr.ErrValidation)
+		}
+		encryptedAPIKey, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.APIKey)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedWebhookSecret, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.WebhookSecret)
+		if err != nil {
+			return types.ConnectionMetadata{}, err
+		}
+		encryptedMetadata.Paddle = &types.PaddleConnectionMetadata{
+			APIKey:        encryptedAPIKey,
+			WebhookSecret: encryptedWebhookSecret,
+		}
+		if encryptedSecretData.Paddle.ClientSideToken != "" {
+			encryptedClientSideToken, err := s.encryptionService.Encrypt(encryptedSecretData.Paddle.ClientSideToken)
+			if err != nil {
+				return types.ConnectionMetadata{}, err
+			}
+			encryptedMetadata.Paddle.ClientSideToken = encryptedClientSideToken
+		}
+
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {
@@ -330,7 +357,7 @@ func (s *connectionService) encryptMetadata(encryptedSecretData types.Connection
 }
 
 func (s *connectionService) CreateConnection(ctx context.Context, req dto.CreateConnectionRequest) (*dto.ConnectionResponse, error) {
-	s.Logger.Debugw("creating connection",
+	s.Logger.DebugwCtx(ctx, "creating connection",
 		"name", req.Name,
 		"provider_type", req.ProviderType,
 	)
@@ -351,7 +378,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 
 	existingConnections, err := s.ConnectionRepo.List(ctx, existingFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to check for existing connections", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to check for existing connections", "error", err)
 		return nil, err
 	}
 
@@ -391,7 +418,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 
 	// Check if this is a Flexprice-managed S3 connection
 	if conn.ProviderType == types.SecretProviderS3 && conn.SyncConfig != nil && conn.SyncConfig.S3 != nil && conn.SyncConfig.S3.IsFlexpriceManaged {
-		s.Logger.Infow("creating flexprice-managed S3 connection",
+		s.Logger.InfowCtx(ctx, "creating flexprice-managed S3 connection",
 			"tenant_id", conn.TenantID,
 			"connection_id", conn.ID)
 
@@ -415,7 +442,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		// Tenant + Environment isolation: tenant_id/environment_id
 		conn.SyncConfig.S3.KeyPrefix = fmt.Sprintf("%s/%s", conn.TenantID, conn.EnvironmentID)
 
-		s.Logger.Infow("injected flexprice S3 credentials",
+		s.Logger.InfowCtx(ctx, "injected flexprice S3 credentials",
 			"bucket", conn.SyncConfig.S3.Bucket,
 			"region", conn.SyncConfig.S3.Region,
 			"key_prefix", conn.SyncConfig.S3.KeyPrefix,
@@ -424,7 +451,7 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 	}
 
 	// Encrypt metadata
-	s.Logger.Debugw("encrypting metadata",
+	s.Logger.DebugwCtx(ctx, "encrypting metadata",
 		"provider_type", conn.ProviderType,
 		"has_quickbooks", conn.EncryptedSecretData.QuickBooks != nil,
 		"has_stripe", conn.EncryptedSecretData.Stripe != nil,
@@ -432,38 +459,38 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 		"has_s3", conn.EncryptedSecretData.S3 != nil)
 	encryptedMetadata, err := s.encryptMetadata(conn.EncryptedSecretData, conn.ProviderType)
 	if err != nil {
-		s.Logger.Errorw("failed to encrypt metadata", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to encrypt metadata", "error", err)
 		return nil, err
 	}
 	conn.EncryptedSecretData = encryptedMetadata
 
 	// Create the connection
 	if err := s.ConnectionRepo.Create(ctx, conn); err != nil {
-		s.Logger.Errorw("failed to create connection", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to create connection", "error", err)
 		return nil, err
 	}
 
-	s.Logger.Infow("connection created successfully", "connection_id", conn.ID)
+	s.Logger.InfowCtx(ctx, "connection created successfully", "connection_id", conn.ID)
 
 	// For QuickBooks connections with auth_code, exchange it immediately for tokens
 	// OAuth 2.0 auth codes expire quickly (typically 10 minutes), so we must exchange them ASAP
 	if conn.ProviderType == types.SecretProviderQuickBooks && s.IntegrationFactory != nil {
 		qbIntegration, err := s.IntegrationFactory.GetQuickBooksIntegration(ctx)
 		if err != nil {
-			s.Logger.Errorw("failed to get QuickBooks integration after connection creation",
+			s.Logger.ErrorwCtx(ctx, "failed to get QuickBooks integration after connection creation",
 				"connection_id", conn.ID,
 				"error", err)
 			// Don't fail connection creation, but log the error
 		} else {
 			// Try to ensure valid access token (will exchange auth_code if present)
 			if err := qbIntegration.Client.EnsureValidAccessToken(ctx); err != nil {
-				s.Logger.Errorw("failed to exchange QuickBooks auth code for tokens",
+				s.Logger.ErrorwCtx(ctx, "failed to exchange QuickBooks auth code for tokens",
 					"connection_id", conn.ID,
 					"error", err)
 				// Don't fail connection creation, but log the error
 				// User will need to re-authenticate
 			} else {
-				s.Logger.Infow("successfully exchanged QuickBooks auth code for tokens",
+				s.Logger.InfowCtx(ctx, "successfully exchanged QuickBooks auth code for tokens",
 					"connection_id", conn.ID)
 			}
 		}
@@ -473,11 +500,11 @@ func (s *connectionService) CreateConnection(ctx context.Context, req dto.Create
 }
 
 func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.ConnectionResponse, error) {
-	s.Logger.Debugw("getting connection", "connection_id", id)
+	s.Logger.DebugwCtx(ctx, "getting connection", "connection_id", id)
 
 	conn, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Errorw("failed to get connection", "error", err, "connection_id", id)
+		s.Logger.ErrorwCtx(ctx, "failed to get connection", "error", err, "connection_id", id)
 		return nil, err
 	}
 
@@ -485,17 +512,17 @@ func (s *connectionService) GetConnection(ctx context.Context, id string) (*dto.
 }
 
 func (s *connectionService) GetConnections(ctx context.Context, filter *types.ConnectionFilter) (*dto.ListConnectionsResponse, error) {
-	s.Logger.Debugw("getting connections", "filter", filter)
+	s.Logger.DebugwCtx(ctx, "getting connections", "filter", filter)
 
 	connections, err := s.ConnectionRepo.List(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to get connections", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to get connections", "error", err)
 		return nil, err
 	}
 
 	total, err := s.ConnectionRepo.Count(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to count connections", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to count connections", "error", err)
 		return nil, err
 	}
 
@@ -509,7 +536,7 @@ func (s *connectionService) GetConnections(ctx context.Context, filter *types.Co
 }
 
 func (s *connectionService) UpdateConnection(ctx context.Context, id string, req dto.UpdateConnectionRequest) (*dto.ConnectionResponse, error) {
-	s.Logger.Debugw("updating connection", "connection_id", id)
+	s.Logger.DebugwCtx(ctx, "updating connection", "connection_id", id)
 
 	if err := req.SyncConfig.Validate(); err != nil {
 		return nil, err
@@ -518,7 +545,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 	// Get existing connection
 	conn, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Errorw("failed to get connection for update", "error", err, "connection_id", id)
+		s.Logger.ErrorwCtx(ctx, "failed to get connection for update", "error", err, "connection_id", id)
 		return nil, err
 	}
 
@@ -542,7 +569,7 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 		// Encrypt and merge the new secret data with existing data
 		encryptedMetadata, err := s.encryptMetadata(*req.EncryptedSecretData, conn.ProviderType)
 		if err != nil {
-			s.Logger.Errorw("failed to encrypt connection metadata during update", "error", err, "connection_id", id)
+			s.Logger.ErrorwCtx(ctx, "failed to encrypt connection metadata during update", "error", err, "connection_id", id)
 			return nil, err
 		}
 
@@ -566,28 +593,28 @@ func (s *connectionService) UpdateConnection(ctx context.Context, id string, req
 
 	// Update the connection
 	if err := s.ConnectionRepo.Update(ctx, conn); err != nil {
-		s.Logger.Errorw("failed to update connection", "error", err, "connection_id", id)
+		s.Logger.ErrorwCtx(ctx, "failed to update connection", "error", err, "connection_id", id)
 		return nil, err
 	}
 
-	s.Logger.Infow("connection updated successfully", "connection_id", conn.ID)
+	s.Logger.InfowCtx(ctx, "connection updated successfully", "connection_id", conn.ID)
 	return dto.ToConnectionResponse(conn), nil
 }
 
 func (s *connectionService) DeleteConnection(ctx context.Context, id string) error {
-	s.Logger.Debugw("deleting connection", "connection_id", id)
+	s.Logger.DebugwCtx(ctx, "deleting connection", "connection_id", id)
 
 	// Get existing connection
 	conn, err := s.ConnectionRepo.Get(ctx, id)
 	if err != nil {
-		s.Logger.Errorw("failed to get connection for deletion", "error", err, "connection_id", id)
+		s.Logger.ErrorwCtx(ctx, "failed to get connection for deletion", "error", err, "connection_id", id)
 		return err
 	}
 
 	// Get all scheduled tasks for the connection
 	schedTasks, err := s.ScheduledTaskRepo.GetByConnection(ctx, conn.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to get scheduled tasks by connection", "error", err, "connection_id", id)
+		s.Logger.ErrorwCtx(ctx, "failed to get scheduled tasks by connection", "error", err, "connection_id", id)
 		return err
 	}
 
@@ -602,7 +629,7 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 	// Scheduled tasks cleanup
 	for _, schedTask := range schedTasks {
 		if err := scheduledTaskService.DeleteScheduledTask(ctx, schedTask.ID); err != nil {
-			s.Logger.Errorw("failed to delete scheduled task", "error", err, "scheduled_task_id", schedTask.ID)
+			s.Logger.ErrorwCtx(ctx, "failed to delete scheduled task", "error", err, "scheduled_task_id", schedTask.ID)
 			return ierr.WithError(err).
 				WithHint("Failed to delete scheduled task").
 				Mark(ierr.ErrDatabase)
@@ -614,10 +641,10 @@ func (s *connectionService) DeleteConnection(ctx context.Context, id string) err
 
 	// Delete the connection
 	if err := s.ConnectionRepo.Delete(ctx, conn); err != nil {
-		s.Logger.Errorw("failed to delete connection", "error", err, "connection_id", id)
+		s.Logger.ErrorwCtx(ctx, "failed to delete connection", "error", err, "connection_id", id)
 		return err
 	}
 
-	s.Logger.Infow("connection deleted successfully", "connection_id", conn.ID)
+	s.Logger.InfowCtx(ctx, "connection deleted successfully", "connection_id", conn.ID)
 	return nil
 }

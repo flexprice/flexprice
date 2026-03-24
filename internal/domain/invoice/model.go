@@ -120,6 +120,10 @@ type Invoice struct {
 	// total_prepaid_credits_applied is the total amount of prepaid credits applied to this invoice.
 	TotalPrepaidCreditsApplied decimal.Decimal `json:"total_prepaid_credits_applied" swaggertype:"string"`
 
+	// recalculated_invoice_id is the ID of the replacement invoice created when this invoice was voided and recalculated.
+	// When set, it forms a parent→child link from this (voided) invoice to the new replacement invoice.
+	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
+
 	// common fields including tenant information, creation/update timestamps, and status
 	types.BaseModel
 }
@@ -180,6 +184,7 @@ func FromEnt(e *ent.Invoice) *Invoice {
 		CouponApplications:         couponApplications,
 		Version:                    e.Version,
 		EnvironmentID:              e.EnvironmentID,
+		RecalculatedInvoiceID:      e.RecalculatedInvoiceID,
 		BaseModel: types.BaseModel{
 			TenantID:  e.TenantID,
 			Status:    types.Status(e.Status),

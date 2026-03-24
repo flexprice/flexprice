@@ -312,8 +312,51 @@ type clickhouseEventRepository struct { ... }
 4. Implement service in `internal/service/<entity>.go`
 5. Create API handler in `internal/api/v1/<entity>.go`
 6. Register route in `internal/api/router.go`
-7. Add Swagger annotations to handler
+7. Add Swagger annotations to handler (including `@x-scope` for MCP - see below)
 8. Run `make swagger` to update API docs
+
+#### MCP Scope Annotations
+
+FlexPrice MCP tools are categorized by permission scope using the `@x-scope` annotation in Swagger comments. This allows Claude and other MCP clients to mount only specific permission levels (e.g., read-only mode).
+
+**Available scopes:**
+- `read` - Read-only operations (GET requests, queries)
+- `write` - Create/update operations (POST/PUT/PATCH)
+- `delete` - Destructive operations (DELETE, finalization, void)
+
+**When to add `@x-scope`:**
+
+Most operations get automatic scope assignment based on HTTP method (GET→read, POST→write, DELETE→delete). Add `@x-scope` explicitly in these cases:
+
+1. **For clarity** (recommended but optional for standard cases):
+   ```go
+   // @Summary Get customer
+   // @ID getCustomer
+   // @Tags Customers
+   // @x-scope "read"
+   // @Router /customers/{id} [get]
+   ```
+
+2. **For overrides** (required when HTTP method doesn't match semantic):
+   ```go
+   // @Summary Query customers (POST for complex query body, but read-only)
+   // @ID queryCustomer
+   // @Tags Customers
+   // @x-scope "read"  // Override POST→write default
+   // @Router /customers/search [post]
+   
+   // @Summary Finalize invoice (POST but destructive/irreversible)
+   // @ID finalizeInvoice
+   // @Tags Invoices
+   // @x-scope "delete"  // Override POST→write default
+   // @Router /invoices/{id}/finalize [post]
+   ```
+
+**Scope assignment logic:**
+1. If `@x-scope` is present → use explicit scope
+2. Otherwise → automatic based on HTTP method (GET/HEAD→read, POST/PUT/PATCH→write, DELETE→delete)
+
+After adding/changing endpoints, regenerate: `make swagger && make sdk-all`
 
 ### Creating a Temporal Workflow
 
@@ -384,6 +427,8 @@ Environment variables override config.yaml. Example:
 
 - `FLEXPRICE_POSTGRES_HOST` overrides `postgres.host`
 - `FLEXPRICE_KAFKA_BROKERS` overrides `kafka.brokers`
+
+**ClickHouse per-query memory limit:** Every ClickHouse query is bounded by a hardcoded limit of 90 GB (`max_memory_usage`).
 
 ## Common Operations
 

@@ -416,32 +416,12 @@ func (o CouponQueryOptions) ApplyPaginationFilter(query CouponQuery, limit int, 
 	return query
 }
 
+// GetFieldName returns the ent field name for coupon; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o CouponQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return coupon.FieldCreatedAt
-	case "updated_at":
-		return coupon.FieldUpdatedAt
-	case "name":
-		return coupon.FieldName
-	case "type":
-		return coupon.FieldType
-	case "cadence":
-		return coupon.FieldCadence
-	case "currency":
-		return coupon.FieldCurrency
-	case "status":
-		return coupon.FieldStatus
-	case "redeem_after":
-		return coupon.FieldRedeemAfter
-	case "redeem_before":
-		return coupon.FieldRedeemBefore
-	case "total_redemptions":
-		return coupon.FieldTotalRedemptions
-	default:
-		//unknown field
-		return ""
+	if coupon.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o CouponQueryOptions) GetFieldResolver(field string) (string, error) {

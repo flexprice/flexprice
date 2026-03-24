@@ -118,3 +118,40 @@ func (s *InvoiceActivities) AttemptInvoicePaymentActivity(
 		Success: true,
 	}, nil
 }
+
+// RecalculateInvoiceActivity recalculates a voided subscription invoice by creating a replacement invoice (same billing period).
+func (s *InvoiceActivities) RecalculateInvoiceActivity(
+	ctx context.Context,
+	input invoiceModels.RecalculateInvoiceActivityInput,
+) (*invoiceModels.RecalculateInvoiceActivityOutput, error) {
+	if err := input.Validate(); err != nil {
+		return nil, err
+	}
+
+	ctx = types.SetTenantID(ctx, input.TenantID)
+	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
+	ctx = types.SetUserID(ctx, input.UserID)
+
+	invSvc := service.NewInvoiceService(s.serviceParams)
+
+	newInv, err := invSvc.RecalculateInvoice(ctx, input.InvoiceID)
+	if err != nil {
+		s.logger.Errorw("failed to recalculate invoice",
+			"invoice_id", input.InvoiceID,
+			"error", err)
+		return nil, err
+	}
+
+	outID := input.InvoiceID
+	if newInv != nil {
+		outID = newInv.ID
+	}
+	s.logger.Infow("recalculated invoice successfully",
+		"invoice_id", input.InvoiceID,
+		"new_invoice_id", outID)
+
+	return &invoiceModels.RecalculateInvoiceActivityOutput{
+		Success:   true,
+		InvoiceID: outID,
+	}, nil
+}

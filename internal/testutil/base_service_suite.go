@@ -189,9 +189,12 @@ func (s *BaseServiceTestSuite) setupContext() {
 }
 
 func (s *BaseServiceTestSuite) setupStores() {
+	subStore := NewInMemorySubscriptionStore()
+	lineItemStore := NewInMemorySubscriptionLineItemStore()
+	subStore.SetLineItemStore(lineItemStore)
 	s.stores = Stores{
-		SubscriptionRepo:             NewInMemorySubscriptionStore(),
-		SubscriptionLineItemRepo:     NewInMemorySubscriptionLineItemStore(),
+		SubscriptionRepo:             subStore,
+		SubscriptionLineItemRepo:     lineItemStore,
 		SubscriptionPhaseRepo:        NewInMemorySubscriptionPhaseStore(),
 		SubscriptionScheduleRepo:     NewInMemorySubscriptionScheduleStore(),
 		EventRepo:                    NewInMemoryEventStore(),

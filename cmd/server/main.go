@@ -46,6 +46,7 @@ import (
 	"github.com/flexprice/flexprice/internal/security"
 	syncExport "github.com/flexprice/flexprice/internal/service/sync/export"
 	"github.com/gin-gonic/gin"
+	"github.com/nedpals/supabase-go"
 )
 
 // @title Flexprice API
@@ -205,6 +206,7 @@ func main() {
 			service.NewOAuthService,
 			service.NewTenantService,
 			service.NewAuthService,
+			provideSupabaseClient,
 			service.NewUserService,
 			service.NewEnvAccessService,
 			service.NewEnvironmentService,
@@ -330,6 +332,7 @@ func provideHandlers(
 	subscriptionScheduleService service.SubscriptionScheduleService,
 	featureUsageTrackingService service.FeatureUsageTrackingService,
 	rawEventsReprocessingService service.RawEventsReprocessingService,
+	rawEventConsumptionService service.RawEventConsumptionService,
 	alertLogsService service.AlertLogsService,
 	groupService service.GroupService,
 	integrationFactory *integration.Factory,
@@ -343,7 +346,7 @@ func provideHandlers(
 	workflowService service.WorkflowService,
 ) api.Handlers {
 	return api.Handlers{
-		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, cfg, logger),
+		Events:                   v1.NewEventsHandler(eventService, eventPostProcessingService, featureUsageTrackingService, rawEventsReprocessingService, rawEventConsumptionService, cfg, logger),
 		Meter:                    v1.NewMeterHandler(meterService, logger),
 		Auth:                     v1.NewAuthHandler(cfg, authService, logger),
 		User:                     v1.NewUserHandler(userService, logger),
@@ -396,6 +399,13 @@ func provideHandlers(
 
 func provideRouter(handlers api.Handlers, cfg *config.Configuration, logger *logger.Logger, secretService service.SecretService, envAccessService service.EnvAccessService, rbacService *rbac.RBACService) *gin.Engine {
 	return api.NewRouter(handlers, cfg, logger, secretService, envAccessService, rbacService)
+}
+
+func provideSupabaseClient(cfg *config.Configuration) *supabase.Client {
+	if cfg == nil || cfg.Auth.Supabase.BaseURL == "" || cfg.Auth.Supabase.ServiceKey == "" {
+		return nil
+	}
+	return supabase.CreateClient(cfg.Auth.Supabase.BaseURL, cfg.Auth.Supabase.ServiceKey)
 }
 
 func provideTemporalConfig(cfg *config.Configuration) *config.TemporalConfig {
@@ -494,6 +504,11 @@ func startServer(
 		startRouter(lc, router, log)
 
 	case types.ModeTemporalWorker:
+		// Register webhook handler and start router so that webhook events
+		// published by temporal activities (e.g. invoice finalization) are
+		// consumed and delivered via Svix/native in the same process.
+		registerRouterHandlers(router, webhookService, onboardingService, eventPostProcessingSvc, eventConsumptionSvc, featureUsageSvc, costSheetUsageSvc, walletBalanceAlertSvc, rawEventConsumptionSvc, cfg, false)
+		startRouter(lc, router, log)
 		startTemporalWorker(lc, temporalService, params)
 	case types.ModeConsumer:
 		if consumer == nil {
@@ -572,10 +587,10 @@ func registerRouterHandlers(
 	cfg *config.Configuration,
 	includeProcessingHandlers bool,
 ) {
-	webhookService.RegisterHandler(router)
-	onboardingService.RegisterHandler(router)
 
 	if includeProcessingHandlers {
+		onboardingService.RegisterHandler(router)
+		webhookService.RegisterHandler(router)
 		eventConsumptionSvc.RegisterHandler(router, cfg)
 		eventConsumptionSvc.RegisterHandlerLazy(router, cfg)
 		// eventPostProcessingSvc.RegisterHandler(router, cfg)

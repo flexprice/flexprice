@@ -17,12 +17,19 @@ import (
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
 	"github.com/flexprice/flexprice/internal/sentry"
+	"github.com/flexprice/flexprice/internal/types"
+	"github.com/flexprice/flexprice/internal/utils"
 )
 
 // RawEventConsumptionService handles consuming raw event batches from Kafka and transforming them
 type RawEventConsumptionService interface {
-	// Register message handler with the router
+	// RegisterHandler registers the message handler with the router (consumer side)
 	RegisterHandler(router *pubsubRouter.Router, cfg *config.Configuration)
+
+	// BulkIngestRawEvents publishes a batch of raw Bento-format event payloads directly
+	// to the raw_events Kafka topic. The consumer (processMessage) will pick them up
+	// exactly as it would if Bento had written them.
+	BulkIngestRawEvents(ctx context.Context, events []json.RawMessage) error
 }
 
 type rawEventConsumptionService struct {
@@ -104,13 +111,52 @@ func (s *rawEventConsumptionService) RegisterHandler(
 	)
 }
 
+// loadIngestionFilter fetches the EventIngestionFilterConfig from the settings DB
+// and returns a ready-to-use allowlist map.
+//
+// Error handling:
+//   - Setting absent (ErrNotFound) → filter disabled, returns (false, nil, nil)
+//   - Any other repo error → returns the error so the caller can fail the batch and retry
+//   - Parsing failure → same: error is returned for retry
+//   - Setting present but enabled=false → returns (false, nil, nil)
+func (s *rawEventConsumptionService) loadIngestionFilter(ctx context.Context) (enabled bool, allowlist map[string]struct{}, err error) {
+	setting, err := s.SettingsRepo.GetByKey(ctx, types.SettingKeyEventIngestionFilter)
+	if err != nil {
+		if ierr.IsNotFound(err) {
+			// Setting not configured is expected — filter simply disabled.
+			return false, nil, nil
+		}
+		// Transient DB or other operational error — bubble up so the batch retries.
+		return false, nil, fmt.Errorf("failed to load event ingestion filter setting: %w", err)
+	}
+
+	cfg, err := utils.ToStruct[types.EventIngestionFilterConfig](setting.Value)
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to parse event ingestion filter config: %w", err)
+	}
+
+	if !cfg.Enabled {
+		return false, nil, nil
+	}
+
+	allowlist = make(map[string]struct{}, len(cfg.AllowedExternalCustomerIDs))
+	for _, id := range cfg.AllowedExternalCustomerIDs {
+		allowlist[id] = struct{}{}
+	}
+
+	s.Logger.Infow("event ingestion filter loaded",
+		"allowlist_size", len(allowlist),
+	)
+	return true, allowlist, nil
+}
+
 // processMessage processes a batch of raw events from Kafka
 func (s *rawEventConsumptionService) processMessage(msg *message.Message) error {
 	s.Logger.Debugw("processing raw event batch from message queue",
 		"message_uuid", msg.UUID,
 	)
 
-	// Unmarshal the batch
+	// Unmarshal the batch first so we have tenant/environment IDs.
 	var batch RawEventBatch
 	if err := json.Unmarshal(msg.Payload, &batch); err != nil {
 		s.Logger.Errorw("failed to unmarshal raw event batch",
@@ -149,6 +195,23 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 		}(),
 	)
 
+	// Build a context from the message's own context so cancellation/tracing propagates,
+	// then attach tenant and environment IDs so the settings repo can scope its query.
+	ctx := types.SetTenantID(msg.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+
+	// Fetch the ingestion filter once per batch (one DB read per Kafka message).
+	// On a real settings-store error (not ErrNotFound) we fail the batch so Kafka retries it.
+	filterEnabled, allowlist, err := s.loadIngestionFilter(ctx)
+	if err != nil {
+		s.Logger.Errorw("failed to load ingestion filter, failing batch for retry",
+			"tenant_id", tenantID,
+			"environment_id", environmentID,
+			"error", err,
+		)
+		return fmt.Errorf("ingestion filter load error: %w", err)
+	}
+
 	// Counters for tracking
 	successCount := 0
 	skipCount := 0
@@ -182,8 +245,20 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 			continue
 		}
 
+		// Apply ingestion filter: skip events for customer IDs not in the allowlist.
+		// Raw event is still stored upstream; we only skip forwarding to the events topic.
+		if filterEnabled {
+			if _, ok := allowlist[transformedEvent.ExternalCustomerID]; !ok {
+				skipCount++
+				s.Logger.Debugw("event filtered by ingestion allowlist - skipped",
+					"batch_position", i+1,
+				)
+				continue
+			}
+		}
+
 		// Publish the transformed event to events topic
-		if err := s.publishTransformedEvent(context.Background(), transformedEvent); err != nil {
+		if err := s.publishTransformedEvent(ctx, transformedEvent); err != nil {
 			errorCount++
 			s.Logger.Errorw("failed to publish transformed event",
 				"event_id", transformedEvent.ID,
@@ -221,6 +296,47 @@ func (s *rawEventConsumptionService) processMessage(msg *message.Message) error 
 	return nil
 }
 
+// BulkIngestRawEvents publishes a batch of raw Bento-format event payloads to the
+// raw_events Kafka topic. The consumer picks them up in the same format as events
+// produced by the Bento collector — there is no difference from the consumer's perspective.
+func (s *rawEventConsumptionService) BulkIngestRawEvents(ctx context.Context, events []json.RawMessage) error {
+	tenantID := types.GetTenantID(ctx)
+	environmentID := types.GetEnvironmentID(ctx)
+
+	if tenantID == "" || environmentID == "" {
+		return fmt.Errorf("BulkIngestRawEvents: tenant_id and environment_id must be set in context (got tenant=%q env=%q)", tenantID, environmentID)
+	}
+
+	batch := RawEventBatch{
+		Data:          events,
+		TenantID:      tenantID,
+		EnvironmentID: environmentID,
+	}
+
+	payload, err := json.Marshal(batch)
+	if err != nil {
+		return fmt.Errorf("failed to marshal raw event batch: %w", err)
+	}
+
+	uniqueID := fmt.Sprintf("%s-%d-%d", types.GenerateUUID(), time.Now().UnixNano(), rand.Int63())
+	msg := message.NewMessage(uniqueID, payload)
+	msg.Metadata.Set("tenant_id", tenantID)
+	msg.Metadata.Set("environment_id", environmentID)
+
+	topic := s.Config.RawEventConsumption.Topic
+	if err := s.pubSub.Publish(ctx, topic, msg); err != nil {
+		return fmt.Errorf("failed to publish raw event batch: %w", err)
+	}
+
+	s.Logger.Infow("published raw event batch to kafka",
+		"batch_size", len(events),
+		"tenant_id", tenantID,
+		"environment_id", environmentID,
+		"topic", topic,
+	)
+	return nil
+}
+
 // publishTransformedEvent publishes a transformed event to the events topic
 func (s *rawEventConsumptionService) publishTransformedEvent(ctx context.Context, event *events.Event) error {
 	// Create message payload
@@ -250,7 +366,7 @@ func (s *rawEventConsumptionService) publishTransformedEvent(ctx context.Context
 	// Publish to events topic (from raw_event_consumption config)
 	topic := s.Config.RawEventConsumption.OutputTopic
 
-	s.Logger.Debugw("publishing transformed event to kafka",
+	s.Logger.DebugwCtx(ctx, "publishing transformed event to kafka",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,

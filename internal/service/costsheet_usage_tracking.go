@@ -132,7 +132,7 @@ func (s *costsheetUsageTrackingService) PublishEvent(ctx context.Context, event 
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.Debugw("publishing event for cost sheet usage tracking",
+	s.Logger.DebugwCtx(ctx, "publishing event for cost sheet usage tracking",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,
@@ -262,7 +262,7 @@ func (s *costsheetUsageTrackingService) processMessage(msg *message.Message) err
 
 // Process a single event for cost sheet usage tracking
 func (s *costsheetUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
-	s.Logger.Debugw("processing event",
+	s.Logger.DebugwCtx(ctx, "processing event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,
@@ -271,7 +271,7 @@ func (s *costsheetUsageTrackingService) processEvent(ctx context.Context, event 
 
 	costUsage, err := s.prepareProcessedEvents(ctx, event)
 	if err != nil {
-		s.Logger.Errorw("failed to prepare cost usage",
+		s.Logger.ErrorwCtx(ctx, "failed to prepare cost usage",
 			"error", err,
 			"event_id", event.ID,
 		)
@@ -313,7 +313,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	costSheet, err := s.getActiveCostsheetWithCache(ctx)
 	if err != nil {
 		if ierr.IsNotFound(err) {
-			s.Logger.Debugw("no active costsheet found for event, skipping",
+			s.Logger.DebugwCtx(ctx, "no active costsheet found for event, skipping",
 				"event_id", event.ID,
 				"tenant_id", event.TenantID,
 				"environment_id", event.EnvironmentID,
@@ -327,7 +327,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	var cust *customer.Customer
 	cust, err = s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warnw("customer not found for event, skipping",
+		s.Logger.WarnwCtx(ctx, "customer not found for event, skipping",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -349,7 +349,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get prices for costsheet",
+		s.Logger.ErrorwCtx(ctx, "failed to get prices for costsheet",
 			"error", err,
 			"event_id", event.ID,
 			"costsheet_id", costSheet.ID,
@@ -358,7 +358,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	}
 
 	if len(prices) == 0 {
-		s.Logger.Debugw("no prices found for costsheet, skipping",
+		s.Logger.DebugwCtx(ctx, "no prices found for costsheet, skipping",
 			"event_id", event.ID,
 			"costsheet_id", costSheet.ID,
 		)
@@ -382,7 +382,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	meterIDs = lo.Uniq(meterIDs)
 
 	if len(meterIDs) == 0 {
-		s.Logger.Debugw("no usage-based prices found for costsheet, skipping",
+		s.Logger.DebugwCtx(ctx, "no usage-based prices found for costsheet, skipping",
 			"event_id", event.ID,
 			"costsheet_id", costSheet.ID,
 		)
@@ -395,7 +395,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 
 	meters, err := s.MeterRepo.List(ctx, meterFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get meters",
+		s.Logger.ErrorwCtx(ctx, "failed to get meters",
 			"error", err,
 			"event_id", event.ID,
 			"meter_count", len(meterIDs),
@@ -418,7 +418,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to get features",
+			s.Logger.ErrorwCtx(ctx, "failed to get features",
 				"error", err,
 				"event_id", event.ID,
 				"meter_count", len(meterMap),
@@ -442,7 +442,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	matches := s.findMatchingPricesForEvent(event, prices, meterMap)
 
 	if len(matches) == 0 {
-		s.Logger.Debugw("no matching prices/meters found for event",
+		s.Logger.DebugwCtx(ctx, "no matching prices/meters found for event",
 			"event_id", event.ID,
 			"event_name", event.EventName,
 			"costsheet_id", costSheet.ID,
@@ -469,7 +469,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 		if feature, ok := featureMeterMap[match.Meter.ID]; ok {
 			costUsage.FeatureID = feature.ID
 		} else {
-			s.Logger.Warnw("feature not found for meter",
+			s.Logger.WarnwCtx(ctx, "feature not found for meter",
 				"event_id", event.ID,
 				"meter_id", match.Meter.ID,
 			)
@@ -481,7 +481,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 
 		// Validate the quantity is positive and within reasonable bounds
 		if quantity.IsNegative() {
-			s.Logger.Warnw("negative quantity calculated, setting to zero",
+			s.Logger.WarnwCtx(ctx, "negative quantity calculated, setting to zero",
 				"event_id", event.ID,
 				"meter_id", match.Meter.ID,
 				"calculated_quantity", quantity.String(),
@@ -496,7 +496,7 @@ func (s *costsheetUsageTrackingService) prepareProcessedEvents(ctx context.Conte
 	}
 
 	if len(results) > 0 {
-		s.Logger.Debugw("cost usage processing request prepared",
+		s.Logger.DebugwCtx(ctx, "cost usage processing request prepared",
 			"event_id", event.ID,
 			"cost_usage_count", len(results),
 		)
@@ -845,7 +845,7 @@ func (s *costsheetUsageTrackingService) convertValueToString(val interface{}) st
 
 // ReprocessEvents triggers reprocessing of events for a customer or with other filters
 func (s *costsheetUsageTrackingService) ReprocessEvents(ctx context.Context, params *events.ReprocessEventsParams) error {
-	s.Logger.Infow("starting event reprocessing for cost sheet usage tracking",
+	s.Logger.InfowCtx(ctx, "starting event reprocessing for cost sheet usage tracking",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"start_time", params.StartTime,
@@ -897,7 +897,7 @@ func (s *costsheetUsageTrackingService) ReprocessEvents(ctx context.Context, par
 
 		eventsCount := len(unprocessedEvents)
 		totalEventsFound += eventsCount
-		s.Logger.Infow("found unprocessed events",
+		s.Logger.InfowCtx(ctx, "found unprocessed events",
 			"batch", processedBatches,
 			"count", eventsCount,
 			"total_found", totalEventsFound,
@@ -911,7 +911,7 @@ func (s *costsheetUsageTrackingService) ReprocessEvents(ctx context.Context, par
 		// Publish each event to the cost sheet usage tracking topic
 		for _, event := range unprocessedEvents {
 			if err := s.PublishEvent(ctx, event, true); err != nil {
-				s.Logger.Errorw("failed to publish event for reprocessing for cost sheet usage tracking",
+				s.Logger.ErrorwCtx(ctx, "failed to publish event for reprocessing for cost sheet usage tracking",
 					"event_id", event.ID,
 					"error", err,
 				)
@@ -925,7 +925,7 @@ func (s *costsheetUsageTrackingService) ReprocessEvents(ctx context.Context, par
 			lastTimestamp = event.Timestamp
 		}
 
-		s.Logger.Infow("published events for reprocessing for cost sheet usage tracking",
+		s.Logger.InfowCtx(ctx, "published events for reprocessing for cost sheet usage tracking",
 			"batch", processedBatches,
 			"count", eventsCount,
 			"total_published", totalEventsPublished,
@@ -940,7 +940,7 @@ func (s *costsheetUsageTrackingService) ReprocessEvents(ctx context.Context, par
 		}
 	}
 
-	s.Logger.Infow("completed event reprocessing for cost sheet usage tracking",
+	s.Logger.InfowCtx(ctx, "completed event reprocessing for cost sheet usage tracking",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"batches_processed", processedBatches,
@@ -961,12 +961,12 @@ func (s *costsheetUsageTrackingService) GetCostSheetUsageAnalytics(ctx context.C
 	// STEP1: Get active costsheet (with caching)
 	costSheet, err := s.getActiveCostsheetWithCache(ctx)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch active costsheet", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to fetch active costsheet", "error", err)
 		return nil, err
 	}
 
 	if costSheet == nil {
-		s.Logger.Debugw("no active costsheet found for tenant")
+		s.Logger.DebugwCtx(ctx, "no active costsheet found for tenant")
 		return nil, ierr.NewError("no active costsheet found").
 			WithHint("Please activate a costsheet for this tenant").
 			Mark(ierr.ErrNotFound)
@@ -977,7 +977,7 @@ func (s *costsheetUsageTrackingService) GetCostSheetUsageAnalytics(ctx context.C
 	if req.ExternalCustomerID != "" {
 		customer, err = s.CustomerRepo.GetByLookupKey(ctx, req.ExternalCustomerID)
 		if err != nil {
-			s.Logger.Errorw("failed to get customer", "error", err, "external_customer_id", req.ExternalCustomerID)
+			s.Logger.ErrorwCtx(ctx, "failed to get customer", "error", err, "external_customer_id", req.ExternalCustomerID)
 			return nil, err
 		}
 		if customer == nil {
@@ -993,21 +993,21 @@ func (s *costsheetUsageTrackingService) GetCostSheetUsageAnalytics(ctx context.C
 	// STEP4: Fetch analytics from costsheet usage repo
 	analytics, err := s.fetchAnalytics(ctx, costSheet, req, customer)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch costsheet analytics", "error", err, "costsheet_id", costSheet.ID)
+		s.Logger.ErrorwCtx(ctx, "failed to fetch costsheet analytics", "error", err, "costsheet_id", costSheet.ID)
 		return nil, err
 	}
 
 	// STEP5: Calculate costs for analytics items
 	priceService := NewPriceService(s.ServiceParams)
 	if err := s.calculateCosts(ctx, costSheet, analytics, priceService); err != nil {
-		s.Logger.Errorw("failed to calculate costs", "error", err, "costsheet_id", costSheet.ID)
+		s.Logger.ErrorwCtx(ctx, "failed to calculate costs", "error", err, "costsheet_id", costSheet.ID)
 		return nil, err
 	}
 
 	// STEP6: Build response
 	response := s.buildAnalyticsResponse(costSheet, req, analytics, customer)
 
-	s.Logger.Debugw("successfully retrieved costsheet analytics",
+	s.Logger.DebugwCtx(ctx, "successfully retrieved costsheet analytics",
 		"costsheet_id", costSheet.ID,
 		"analytics_count", len(analytics),
 		"total_cost", response.TotalCost,
@@ -1042,7 +1042,7 @@ func (s *costsheetUsageTrackingService) fetchAnalytics(ctx context.Context, cost
 	// STEP3: Fetch analytics using repository method
 	analytics, err := s.costUsageRepo.GetDetailedUsageAnalytics(ctx, costsheet.ID, params.ExternalCustomerID, params, maxBucketFeatures, sumBucketFeatures)
 	if err != nil {
-		s.Logger.Errorw("failed to get detailed usage analytics from costsheet repo",
+		s.Logger.ErrorwCtx(ctx, "failed to get detailed usage analytics from costsheet repo",
 			"error", err,
 			"costsheet_id", costsheet.ID,
 			"external_customer_id", params.ExternalCustomerID,
@@ -1053,7 +1053,7 @@ func (s *costsheetUsageTrackingService) fetchAnalytics(ctx context.Context, cost
 	// STEP4: Enrich analytics with feature and meter metadata
 	s.enrichAnalyticsWithMetadata(analytics, featureMap, meterMap)
 
-	s.Logger.Debugw("fetched analytics from costsheet usage repo",
+	s.Logger.DebugwCtx(ctx, "fetched analytics from costsheet usage repo",
 		"costsheet_id", costsheet.ID,
 		"analytics_count", len(analytics),
 		"feature_count", len(featureMap),
@@ -1082,7 +1082,7 @@ func (s *costsheetUsageTrackingService) buildBucketFeaturesFromCostsheet(ctx con
 	}
 
 	if len(meterIDs) == 0 {
-		s.Logger.Debugw("no usage-based prices with meters found in costsheet",
+		s.Logger.DebugwCtx(ctx, "no usage-based prices with meters found in costsheet",
 			"costsheet_id", costsheet.ID,
 		)
 		return make(map[string]*events.MaxBucketFeatureInfo), make(map[string]*events.SumBucketFeatureInfo), make(map[string]*feature.Feature), make(map[string]*meter.Meter), nil
@@ -1093,7 +1093,7 @@ func (s *costsheetUsageTrackingService) buildBucketFeaturesFromCostsheet(ctx con
 	meterFilter.MeterIDs = meterIDs
 	meters, err := s.MeterRepo.List(ctx, meterFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get meters for costsheet analytics",
+		s.Logger.ErrorwCtx(ctx, "failed to get meters for costsheet analytics",
 			"error", err,
 			"costsheet_id", costsheet.ID,
 			"meter_count", len(meterIDs),
@@ -1114,7 +1114,7 @@ func (s *costsheetUsageTrackingService) buildBucketFeaturesFromCostsheet(ctx con
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to get features for costsheet analytics",
+			s.Logger.ErrorwCtx(ctx, "failed to get features for costsheet analytics",
 				"error", err,
 				"costsheet_id", costsheet.ID,
 				"meter_count", len(meterMap),
@@ -1200,7 +1200,7 @@ func (s *costsheetUsageTrackingService) calculateCosts(ctx context.Context, cost
 		meterFilter.MeterIDs = meterIDs
 		meters, err := s.MeterRepo.List(ctx, meterFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to get meters for cost calculation",
+			s.Logger.ErrorwCtx(ctx, "failed to get meters for cost calculation",
 				"error", err,
 				"costsheet_id", costsheet.ID,
 			)
@@ -1215,7 +1215,7 @@ func (s *costsheetUsageTrackingService) calculateCosts(ctx context.Context, cost
 	for _, item := range analytics {
 		price, hasPrice := priceMap[item.PriceID]
 		if !hasPrice {
-			s.Logger.Debugw("price not found for analytics item",
+			s.Logger.DebugwCtx(ctx, "price not found for analytics item",
 				"price_id", item.PriceID,
 				"feature_id", item.FeatureID,
 			)
@@ -1224,7 +1224,7 @@ func (s *costsheetUsageTrackingService) calculateCosts(ctx context.Context, cost
 
 		meter, hasMeter := meterMap[item.MeterID]
 		if !hasMeter {
-			s.Logger.Debugw("meter not found for analytics item",
+			s.Logger.DebugwCtx(ctx, "meter not found for analytics item",
 				"meter_id", item.MeterID,
 				"feature_id", item.FeatureID,
 			)
@@ -1239,7 +1239,7 @@ func (s *costsheetUsageTrackingService) calculateCosts(ctx context.Context, cost
 		}
 	}
 
-	s.Logger.Debugw("calculated costs for costsheet analytics",
+	s.Logger.DebugwCtx(ctx, "calculated costs for costsheet analytics",
 		"costsheet_id", costsheet.ID,
 		"analytics_items_processed", len(analytics),
 	)
@@ -1404,7 +1404,7 @@ func (s *costsheetUsageTrackingService) getActiveCostsheetWithCache(ctx context.
 	var costSheet *dto.CostsheetResponse
 	if cached, found := cacheClient.ForceCacheGet(ctx, cacheKey); found {
 		if cachedCostSheet, ok := cached.(*dto.CostsheetResponse); ok {
-			s.Logger.Debugw("costsheet cache hit", "tenant_id", tenantID, "environment_id", environmentID)
+			s.Logger.DebugwCtx(ctx, "costsheet cache hit", "tenant_id", tenantID, "environment_id", environmentID)
 			costSheet = cachedCostSheet
 		}
 	}
@@ -1420,7 +1420,7 @@ func (s *costsheetUsageTrackingService) getActiveCostsheetWithCache(ctx context.
 
 		// Cache the result for 5 minutes
 		cacheClient.ForceCacheSet(ctx, cacheKey, costSheet, 5*time.Minute)
-		s.Logger.Debugw("costsheet cached", "tenant_id", tenantID, "environment_id", environmentID)
+		s.Logger.DebugwCtx(ctx, "costsheet cached", "tenant_id", tenantID, "environment_id", environmentID)
 	}
 
 	return costSheet, nil

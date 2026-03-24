@@ -29,7 +29,7 @@ const (
     SettingKeyInvoiceConfig      SettingKey = "invoice_config"
     SettingKeySubscriptionConfig SettingKey = "subscription_config"
     SettingKeyInvoicePDFConfig   SettingKey = "invoice_pdf_config"
-    SettingKeyEnvConfig          SettingKey = "env_config"
+    SettingKeyTenantConfig       SettingKey = "tenant_config"
     SettingKeyNotificationConfig SettingKey = "notification_config"  // ← NEW
 )
 ```

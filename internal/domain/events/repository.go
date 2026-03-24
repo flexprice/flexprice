@@ -161,6 +161,7 @@ type GetEventsParams struct {
 type UsageResult struct {
 	WindowSize time.Time       `json:"window_size"`
 	Value      decimal.Decimal `json:"value"`
+	GroupKey   string          `json:"group_key,omitempty"` // group identifier when group_by is used (e.g., KRN value)
 }
 
 type AggregationResult struct {

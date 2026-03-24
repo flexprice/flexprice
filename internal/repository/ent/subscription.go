@@ -522,69 +522,12 @@ func (o SubscriptionQueryOptions) ApplyPaginationFilter(query SubscriptionQuery,
 	return query
 }
 
+// GetFieldName returns the ent field name for subscription; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o SubscriptionQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return subscription.FieldCreatedAt
-	case "updated_at":
-		return subscription.FieldUpdatedAt
-	case "start_date":
-		return subscription.FieldStartDate
-	case "end_date":
-		return subscription.FieldEndDate
-	case "current_period_start":
-		return subscription.FieldCurrentPeriodStart
-	case "current_period_end":
-		return subscription.FieldCurrentPeriodEnd
-	case "status":
-		return subscription.FieldStatus
-	case "subscription_status":
-		return subscription.FieldSubscriptionStatus
-	case "billing_cadence":
-		return subscription.FieldBillingCadence
-	case "billing_period":
-		return subscription.FieldBillingPeriod
-	case "billing_period_count":
-		return subscription.FieldBillingPeriodCount
-	case "version":
-		return subscription.FieldVersion
-	case "metadata":
-		return subscription.FieldMetadata
-	case "pause_status":
-		return subscription.FieldPauseStatus
-	case "active_pause_id":
-		return subscription.FieldActivePauseID
-	case "billing_cycle":
-		return subscription.FieldBillingCycle
-	case "commitment_amount":
-		return subscription.FieldCommitmentAmount
-	case "overage_factor":
-		return subscription.FieldOverageFactor
-	case "payment_behavior":
-		return subscription.FieldPaymentBehavior
-	case "collection_method":
-		return subscription.FieldCollectionMethod
-	case "gateway_payment_method_id":
-		return subscription.FieldGatewayPaymentMethodID
-	case "customer_timezone":
-		return subscription.FieldCustomerTimezone
-	case "proration_behavior":
-		return subscription.FieldProrationBehavior
-	case "lookup_key":
-		return subscription.FieldLookupKey
-	case "customer_id":
-		return subscription.FieldCustomerID
-	case "plan_id":
-		return subscription.FieldPlanID
-	case "invoicing_customer_id":
-		return subscription.FieldInvoicingCustomerID
-	case "parent_subscription_id":
-		return subscription.FieldParentSubscriptionID
-	case "payment_terms":
-		return subscription.FieldPaymentTerms
-	default:
+	if subscription.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o SubscriptionQueryOptions) GetFieldResolver(field string) (string, error) {
@@ -594,6 +537,20 @@ func (o SubscriptionQueryOptions) GetFieldResolver(field string) (string, error)
 			Mark(ierr.ErrValidation)
 	}
 	return fieldName, nil
+}
+
+// filtersConstrainSubscriptionStatus reports whether any DSL filter targets subscription_status,
+// so we should not also apply the default "active only" predicate (which would contradict e.g. draft).
+func (o SubscriptionQueryOptions) filtersConstrainSubscriptionStatus(filters []*types.FilterCondition) bool {
+	for _, fc := range filters {
+		if fc == nil || fc.Field == nil {
+			continue
+		}
+		if o.GetFieldName(*fc.Field) == subscription.FieldSubscriptionStatus {
+			return true
+		}
+	}
+	return false
 }
 
 // applyEntityQueryOptions applies subscription-specific filters to the query
@@ -633,8 +590,8 @@ func (o *SubscriptionQueryOptions) applyEntityQueryOptions(_ context.Context, f 
 		query = query.Where(subscription.SubscriptionStatusIn(f.SubscriptionStatus...))
 	}
 
-	// Default to active subscription if not specified
-	if f.SubscriptionStatus == nil {
+	// Default to active when the client did not constrain subscription_status (neither top-level nor DSL filters).
+	if f.SubscriptionStatus == nil && !o.filtersConstrainSubscriptionStatus(f.Filters) {
 		query = query.Where(subscription.SubscriptionStatusEQ(types.SubscriptionStatusActive))
 	}
 
@@ -779,8 +736,15 @@ func (r *subscriptionRepository) CreateWithLineItems(ctx context.Context, sub *d
 				SetUpdatedAt(time.Now())
 		}
 
-		if err := client.SubscriptionLineItem.CreateBulk(bulk...).Exec(ctx); err != nil {
-			return fmt.Errorf("failed to create subscription line items: %w", err)
+		// Insert in batches to stay within PostgreSQL's 65535 parameter limit.
+		for i := 0; i < len(bulk); i += subscriptionLineItemBatchSize {
+			end := i + subscriptionLineItemBatchSize
+			if end > len(bulk) {
+				end = len(bulk)
+			}
+			if err := client.SubscriptionLineItem.CreateBulk(bulk[i:end]...).Exec(ctx); err != nil {
+				return fmt.Errorf("failed to create subscription line items: %w", err)
+			}
 		}
 
 		return nil

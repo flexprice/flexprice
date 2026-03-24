@@ -328,15 +328,12 @@ func (o TaskQueryOptions) ApplyPaginationFilter(query TaskQuery, limit int, offs
 	return query
 }
 
+// GetFieldName returns the ent field name for task; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o TaskQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return task.FieldCreatedAt
-	case "updated_at":
-		return task.FieldUpdatedAt
-	default:
+	if task.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o TaskQueryOptions) applyEntityQueryOptions(ctx context.Context, f *types.TaskFilter, query *ent.TaskQuery) *ent.TaskQuery {
