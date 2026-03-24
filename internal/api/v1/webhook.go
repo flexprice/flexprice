@@ -12,6 +12,7 @@ import (
 	chargebeewebhook "github.com/flexprice/flexprice/internal/integration/chargebee/webhook"
 	moyasarwebhook "github.com/flexprice/flexprice/internal/integration/moyasar/webhook"
 	nomodwebhook "github.com/flexprice/flexprice/internal/integration/nomod/webhook"
+	paddlewebhook "github.com/flexprice/flexprice/internal/integration/paddle/webhook"
 	quickbookswebhook "github.com/flexprice/flexprice/internal/integration/quickbooks/webhook"
 	razorpaywebhook "github.com/flexprice/flexprice/internal/integration/razorpay/webhook"
 	"github.com/flexprice/flexprice/internal/integration/stripe/webhook"
@@ -112,7 +113,8 @@ func (h *WebhookHandler) GetDashboardURL(c *gin.Context) {
 }
 
 // @Summary Handle Stripe webhook events
-// @Description Process incoming Stripe webhook events for payment status updates and customer creation
+// @ID handleStripeWebhook
+// @Description Use as the Stripe webhook endpoint URL. Receives payment and customer events from Stripe to keep FlexPrice in sync (e.g. payment succeeded, customer created).
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -238,7 +240,8 @@ func (h *WebhookHandler) HandleStripeWebhook(c *gin.Context) {
 }
 
 // @Summary Handle HubSpot webhook events
-// @Description Process incoming HubSpot webhook events for deal closed won and customer creation
+// @ID handleHubspotWebhook
+// @Description Use as the HubSpot webhook endpoint URL. Receives deal and customer events (e.g. deal closed won) to create or update customers in FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -407,7 +410,8 @@ func (h *WebhookHandler) HandleHubSpotWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Razorpay webhook events
-// @Description Process incoming Razorpay webhook events for payment capture and failure
+// @ID handleRazorpayWebhook
+// @Description Use as the Razorpay webhook endpoint URL. Receives payment capture and failure events to update invoice or payment status in FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -518,7 +522,8 @@ func (h *WebhookHandler) HandleRazorpayWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Chargebee webhook events
-// @Description Process incoming Chargebee webhook events for payment status updates
+// @ID handleChargebeeWebhook
+// @Description Use as the Chargebee webhook endpoint URL. Receives payment and subscription events from Chargebee to sync status into FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -657,7 +662,8 @@ func (h *WebhookHandler) HandleChargebeeWebhook(c *gin.Context) {
 }
 
 // @Summary Handle QuickBooks webhook events
-// @Description Process incoming QuickBooks webhook events for payment sync
+// @ID handleQuickbooksWebhook
+// @Description Use as the QuickBooks webhook endpoint URL. Receives payment events from QuickBooks to sync payment status into FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -760,7 +766,8 @@ func (h *WebhookHandler) HandleQuickBooksWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Nomod webhook events
-// @Description Process incoming Nomod webhook events for payment and invoice payments
+// @ID handleNomodWebhook
+// @Description Use as the Nomod webhook endpoint URL. Receives payment and invoice events from Nomod to keep FlexPrice in sync.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -908,7 +915,8 @@ func (h *WebhookHandler) HandleNomodWebhook(c *gin.Context) {
 }
 
 // @Summary Handle Moyasar webhook events
-// @Description Process incoming Moyasar webhook events for payment status updates
+// @ID handleMoyasarWebhook
+// @Description Use as the Moyasar webhook endpoint URL. Receives payment events from Moyasar to update payment status in FlexPrice.
 // @Tags Webhooks
 // @Accept json
 // @Produce json
@@ -1052,4 +1060,119 @@ func (h *WebhookHandler) HandleMoyasarWebhook(c *gin.Context) {
 	h.logger.Infow("successfully processed Moyasar webhook",
 		"environment_id", environmentID,
 		"event_type", event.Type)
+}
+
+// paddleWebhookPayload is a minimal struct to parse event_type from the webhook payload
+type paddleWebhookPayload struct {
+	EventType string `json:"event_type"`
+}
+
+// @Summary Handle Paddle webhook events
+// @ID handlePaddleWebhook
+// @Description Use as the Paddle webhook endpoint URL. Receives transaction.completed events from Paddle to update payment status in FlexPrice.
+// @Tags Webhooks
+// @Accept json
+// @Produce json
+// @Param tenant_id path string true "Tenant ID"
+// @Param environment_id path string true "Environment ID"
+// @Param Paddle-Signature header string true "Paddle webhook signature"
+// @Success 200 {object} map[string]interface{} "Webhook received (always returns 200)"
+// @Router /webhooks/paddle/{tenant_id}/{environment_id} [post]
+func (h *WebhookHandler) HandlePaddleWebhook(c *gin.Context) {
+	handled := false
+	defer func() {
+		if !handled {
+			c.JSON(http.StatusOK, gin.H{
+				"message": "Webhook received",
+			})
+		}
+	}()
+
+	tenantID := c.Param("tenant_id")
+	environmentID := c.Param("environment_id")
+
+	if tenantID == "" || environmentID == "" {
+		h.logger.Errorw("missing tenant_id or environment_id in webhook URL",
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		return
+	}
+
+	// Read the raw request body (must be preserved for signature verification)
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.Errorw("failed to read request body", "error", err)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		handled = true
+		return
+	}
+
+	// Set context with tenant and environment IDs
+	ctx := types.SetTenantID(c.Request.Context(), tenantID)
+	ctx = types.SetEnvironmentID(ctx, environmentID)
+	c.Request = c.Request.WithContext(ctx)
+
+	// Get Paddle integration
+	paddleIntegration, err := h.integrationFactory.GetPaddleIntegration(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Paddle integration", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
+		handled = true
+		return
+	}
+
+	// Get connection and decrypted webhook secret
+	conn, err := paddleIntegration.Client.GetConnection(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get Paddle connection", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Paddle not configured"})
+		handled = true
+		return
+	}
+
+	config, err := paddleIntegration.Client.GetDecryptedPaddleConfig(conn)
+	if err != nil {
+		h.logger.Errorw("failed to get decrypted Paddle config", "error", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid configuration"})
+		handled = true
+		return
+	}
+
+	// Verify signature
+	signature := c.GetHeader("Paddle-Signature")
+	if err := paddleIntegration.Client.VerifyWebhookSignature(ctx, body, signature, config.WebhookSecret); err != nil {
+		h.logger.Errorw("Paddle webhook signature verification failed",
+			"error", err,
+			"tenant_id", tenantID,
+			"environment_id", environmentID)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid signature"})
+		handled = true
+		return
+	}
+
+	// Parse event_type from payload
+	var payload paddleWebhookPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		h.logger.Errorw("failed to parse Paddle webhook payload", "error", err)
+		return
+	}
+
+	h.logger.Infow("processing Paddle webhook", "event_type", payload.EventType)
+
+	serviceDeps := &paddlewebhook.ServiceDependencies{
+		CustomerService:                 h.customerService,
+		PaymentService:                  h.paymentService,
+		InvoiceService:                  h.invoiceService,
+		PlanService:                     h.planService,
+		SubscriptionService:             h.subscriptionService,
+		EntityIntegrationMappingService: h.entityIntegrationMappingService,
+		DB:                              h.db,
+	}
+
+	err = paddleIntegration.WebhookHandler.HandleWebhookEvent(ctx, payload.EventType, body, environmentID, serviceDeps)
+	if err != nil {
+		h.logger.Errorw("failed to handle Paddle webhook event",
+			"error", err,
+			"event_type", payload.EventType)
+	}
 }

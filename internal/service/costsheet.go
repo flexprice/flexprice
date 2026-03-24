@@ -190,7 +190,7 @@ func (s *costsheetService) GetCostsheets(ctx context.Context, filter *domainCost
 
 		pricesResponse, err := priceService.GetPrices(ctx, priceFilter)
 		if err != nil {
-			s.Logger.Warnw("Failed to fetch prices for costsheet list", "error", err)
+			s.Logger.WarnwCtx(ctx, "Failed to fetch prices for costsheet list", "error", err)
 		} else {
 			// Group prices by costsheet ID
 			pricesByCostsheet := make(map[string][]*dto.PriceResponse)

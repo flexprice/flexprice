@@ -761,19 +761,12 @@ func (o WalletTransactionQueryOptions) ApplyPaginationFilter(query WalletTransac
 	return query
 }
 
+// GetFieldName returns the ent field name for wallet transaction; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o WalletTransactionQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return wallettransaction.FieldCreatedAt
-	case "created_by":
-		return wallettransaction.FieldCreatedBy
-	case "updated_at":
-		return wallettransaction.FieldUpdatedAt
-	case "amount":
-		return wallettransaction.FieldAmount
-	default:
+	if wallettransaction.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o WalletTransactionQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.WalletTransactionFilter, query WalletTransactionQuery) (WalletTransactionQuery, error) {

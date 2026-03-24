@@ -53,6 +53,7 @@ type PlanService interface {
 	GetPlans(ctx context.Context, filter *types.PlanFilter) (*dto.ListPlansResponse, error)
 	UpdatePlan(ctx context.Context, id string, req dto.UpdatePlanRequest) (*dto.PlanResponse, error)
 	DeletePlan(ctx context.Context, id string) error
+	ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error)
 	SyncPlanPrices(ctx context.Context, id string) (*dto.SyncPlanPricesResponse, error)
 	ReprocessEventsForMissingPairs(ctx context.Context, missingPairs []planpricesync.PlanLineItemCreationDelta) error
 }

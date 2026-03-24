@@ -77,18 +77,18 @@ func NewRawEventsReprocessingService(
 
 // ReprocessRawEvents reprocesses raw events with given parameters
 func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, params *events.ReprocessRawEventsParams) (*ReprocessRawEventsResult, error) {
-	s.Logger.Infow("starting raw event reprocessing",
-		"external_customer_ids", params.ExternalCustomerIDs,
-		"event_names", params.EventNames,
-		"start_time", params.StartTime,
-		"end_time", params.EndTime,
-	)
-
 	// Set default batch size if not provided
 	batchSize := params.BatchSize
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
+
+	s.Logger.InfowCtx(ctx, "starting raw event reprocessing",
+		"batch_size", batchSize,
+		"use_unprocessed", params.UseUnprocessed,
+		"start_time", params.StartTime,
+		"end_time", params.EndTime,
+	)
 
 	// Create find params from reprocess params
 	findParams := &events.FindRawEventsParams{
@@ -106,14 +106,17 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 	// Keep processing batches until we're done
 	for {
-		// Update offset for next batch
+		// Update offset for next batch (used by FindRawEvents path)
 		findParams.Offset = offset
 
 		// Find raw events using the appropriate method
 		var rawEvents []*events.RawEvent
 		var err error
 		if params.UseUnprocessed {
-			rawEvents, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
+			var cursor *events.KeysetCursor
+			rawEvents, cursor, err = s.rawEventRepo.FindUnprocessedRawEvents(ctx, findParams)
+			// Store cursor for next iteration's keyset pagination
+			findParams.KeysetCursor = cursor
 		} else {
 			rawEvents, err = s.rawEventRepo.FindRawEvents(ctx, findParams)
 		}
@@ -130,10 +133,12 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 
 		eventsCount := len(rawEvents)
 		result.TotalEventsFound += eventsCount
-		s.Logger.Infow("found raw events",
-			"batch", result.ProcessedBatches,
+		hasNextBatch := params.UseUnprocessed && findParams.KeysetCursor != nil
+		s.Logger.InfowCtx(ctx, "batch fetched",
+			"batch", result.ProcessedBatches+1,
 			"count", eventsCount,
-			"total_found", result.TotalEventsFound,
+			"total_so_far", result.TotalEventsFound,
+			"has_next_batch", hasNextBatch,
 		)
 
 		// If no more events, we're done
@@ -156,7 +161,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 				// Transformation error (parsing/processing error)
 				batchTransformErrors++
 				result.TotalTransformationErrors++
-				s.Logger.Warnw("transformation error - event skipped",
+				s.Logger.WarnwCtx(ctx, "transformation error - event skipped",
 					"raw_event_id", rawEvent.ID,
 					"external_customer_id", rawEvent.ExternalCustomerID,
 					"event_name", rawEvent.EventName,
@@ -172,7 +177,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 				// Event failed validation and was dropped
 				batchDropped++
 				result.TotalEventsDropped++
-				s.Logger.Infow("validation failed - event dropped",
+				s.Logger.InfowCtx(ctx, "validation failed - event dropped",
 					"raw_event_id", rawEvent.ID,
 					"external_customer_id", rawEvent.ExternalCustomerID,
 					"event_name", rawEvent.EventName,
@@ -188,7 +193,7 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 			if err := s.publishEvent(ctx, transformedEvent); err != nil {
 				batchPublishFailed++
 				result.TotalEventsFailed++
-				s.Logger.Errorw("failed to publish transformed event",
+				s.Logger.ErrorwCtx(ctx, "failed to publish transformed event",
 					"raw_event_id", rawEvent.ID,
 					"transformed_event_id", transformedEvent.ID,
 					"event_name", transformedEvent.EventName,
@@ -205,26 +210,33 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 			result.TotalEventsPublished++
 		}
 
-		// Log batch summary
-		s.Logger.Infow("batch processing complete",
-			"batch", result.ProcessedBatches,
-			"batch_size", eventsCount,
-			"batch_published", batchPublished,
-			"batch_dropped", batchDropped,
-			"batch_transform_errors", batchTransformErrors,
-			"batch_publish_failed", batchPublishFailed,
+		// Log batch summary (one essential line per batch)
+		s.Logger.InfowCtx(ctx, "batch done",
+			"batch", result.ProcessedBatches+1,
+			"fetched", eventsCount,
+			"published", batchPublished,
+			"dropped", batchDropped,
+			"transform_errors", batchTransformErrors,
+			"publish_failed", batchPublishFailed,
 			"total_found", result.TotalEventsFound,
 			"total_published", result.TotalEventsPublished,
-			"total_dropped", result.TotalEventsDropped,
-			"total_transform_errors", result.TotalTransformationErrors,
-			"total_failed", result.TotalEventsFailed,
 		)
 
 		// Update for next batch
 		result.ProcessedBatches++
-		offset += eventsCount // Move offset by the number of rows we actually got
 
-		// If we didn't get a full batch, we're done
+		// For UseUnprocessed path: pagination is driven by KeysetCursor, not offset.
+		// If cursor is nil it means the last batch was partial — no more data.
+		if params.UseUnprocessed {
+			if findParams.KeysetCursor == nil {
+				break
+			}
+			continue
+		}
+
+		// For FindRawEvents path: advance offset and check for a partial batch.
+		offset += eventsCount
+		findParams.Offset = offset
 		if eventsCount < batchSize {
 			break
 		}
@@ -236,16 +248,13 @@ func (s *rawEventsReprocessingService) ReprocessRawEvents(ctx context.Context, p
 		successRate = float64(result.TotalEventsPublished) / float64(result.TotalEventsFound) * 100
 	}
 
-	s.Logger.Infow("completed raw event reprocessing",
-		"external_customer_ids", params.ExternalCustomerIDs,
-		"event_names", params.EventNames,
-		"batches_processed", result.ProcessedBatches,
-		"total_events_found", result.TotalEventsFound,
-		"total_events_published", result.TotalEventsPublished,
-		"total_events_dropped", result.TotalEventsDropped,
-		"total_transformation_errors", result.TotalTransformationErrors,
-		"total_events_failed", result.TotalEventsFailed,
-		"success_rate_percent", fmt.Sprintf("%.2f", successRate),
+	s.Logger.InfowCtx(ctx, "completed raw event reprocessing",
+		"batches", result.ProcessedBatches,
+		"total_found", result.TotalEventsFound,
+		"total_published", result.TotalEventsPublished,
+		"total_dropped", result.TotalEventsDropped,
+		"total_failed", result.TotalEventsFailed,
+		"success_rate_pct", fmt.Sprintf("%.2f", successRate),
 	)
 
 	return result, nil
@@ -279,7 +288,7 @@ func (s *rawEventsReprocessingService) publishEvent(ctx context.Context, event *
 
 	topic := s.Config.RawEventsReprocessing.OutputTopic
 
-	s.Logger.Debugw("publishing transformed event to kafka",
+	s.Logger.DebugwCtx(ctx, "publishing transformed event to kafka",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,

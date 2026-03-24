@@ -25,13 +25,13 @@ type FeatureUsageRepository interface {
 	// GetDetailedUsageAnalytics provides comprehensive usage analytics with filtering, grouping, and time-series data
 	GetDetailedUsageAnalytics(ctx context.Context, params *UsageAnalyticsParams, maxBucketFeatures map[string]*MaxBucketFeatureInfo, sumBucketFeatures map[string]*SumBucketFeatureInfo) ([]*DetailedUsageAnalytic, error)
 
-	// Get feature usage by subscription
-	GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType) (map[string]*UsageByFeatureResult, error)
+	// Get feature usage by subscription. opts.Source controls whether ClickHouse uses FINAL (e.g. invoice_creation).
+	GetFeatureUsageBySubscription(ctx context.Context, subscriptionID, customerID string, startTime, endTime time.Time, aggTypes []types.AggregationType, opts *GetFeatureUsageBySubscriptionOpts) (map[string]*UsageByFeatureResult, error)
 
 	// GetFeatureUsageForExport gets feature usage data for export in batches
 	GetFeatureUsageForExport(ctx context.Context, startTime, endTime time.Time, batchSize int, offset int) ([]*FeatureUsage, error)
 
-	GetUsageForMaxMetersWithBuckets(ctx context.Context, params *FeatureUsageParams) (*AggregationResult, error)
+	GetUsageForBucketedMeters(ctx context.Context, params *FeatureUsageParams) (*AggregationResult, error)
 
 	// GetFeatureUsageByEventIDs gets feature usage records by event IDs
 	GetFeatureUsageByEventIDs(ctx context.Context, eventIDs []string) ([]*FeatureUsage, error)
@@ -82,6 +82,12 @@ func (p *DeleteFeatureUsageScopeParams) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 	return nil
+}
+
+// GetFeatureUsageBySubscriptionOpts holds options for GetFeatureUsageBySubscription.
+// When Source is InvoiceCreation, the ClickHouse query uses FINAL for correct ReplacingMergeTree deduplication.
+type GetFeatureUsageBySubscriptionOpts struct {
+	Source types.UsageSource
 }
 
 // MaxBucketFeatureInfo contains information about a feature that uses MAX with bucket aggregation

@@ -121,7 +121,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		return result, nil
 	}
 
-	s.Logger.Infow("applying coupons to invoice",
+	s.Logger.InfowCtx(ctx, "applying coupons to invoice",
 		"invoice_id", inv.ID,
 		"invoice_coupon_count", len(invoiceCoupons),
 		"line_item_coupon_count", len(lineItemCoupons),
@@ -184,7 +184,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		// Find the line item this coupon applies to by matching price_id
 		targetLineItem, exists := lineItemsByPriceID[lineItemCoupon.LineItemID]
 		if !exists {
-			s.Logger.Warnw("line item not found for coupon, skipping",
+			s.Logger.WarnwCtx(ctx, "line item not found for coupon, skipping",
 				"price_id_used_as_line_item_id", lineItemCoupon.LineItemID,
 				"coupon_id", lineItemCoupon.CouponID)
 			continue
@@ -200,7 +200,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			Currency:      inv.Currency,
 		})
 		if err != nil {
-			s.Logger.Warnw("failed to apply line item coupon, skipping",
+			s.Logger.WarnwCtx(ctx, "failed to apply line item coupon, skipping",
 				"coupon_id", lineItemCoupon.CouponID,
 				"error", err)
 			continue
@@ -246,7 +246,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			CouponApplication: ca,
 		})
 
-		s.Logger.Debugw("prepared line item coupon application",
+		s.Logger.DebugwCtx(ctx, "prepared line item coupon application",
 			"line_item_id", targetLineItem.ID,
 			"price_id", lineItemCoupon.LineItemID,
 			"coupon_id", lineItemCoupon.CouponID,
@@ -270,7 +270,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 	for _, invoiceCoupon := range invoiceCoupons {
 		// Skip if running subtotal is zero or negative (nothing to discount)
 		if runningSubTotal.LessThanOrEqual(decimal.Zero) {
-			s.Logger.Warnw("running subtotal is zero or negative, skipping remaining invoice coupons",
+			s.Logger.WarnwCtx(ctx, "running subtotal is zero or negative, skipping remaining invoice coupons",
 				"running_subtotal", runningSubTotal,
 				"coupon_id", invoiceCoupon.CouponID)
 			break
@@ -286,7 +286,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			Currency:      inv.Currency,
 		})
 		if err != nil {
-			s.Logger.Warnw("failed to apply invoice coupon, skipping",
+			s.Logger.WarnwCtx(ctx, "failed to apply invoice coupon, skipping",
 				"coupon_id", invoiceCoupon.CouponID,
 				"error", err)
 			continue
@@ -328,7 +328,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 			CouponApplication: ca,
 		})
 
-		s.Logger.Debugw("prepared invoice coupon application",
+		s.Logger.DebugwCtx(ctx, "prepared invoice coupon application",
 			"coupon_id", invoiceCoupon.CouponID,
 			"original_subtotal", runningSubTotal.Add(discountResult.Discount),
 			"discount", discountResult.Discount,
@@ -343,7 +343,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		// Persist coupon applications
 		for _, ca := range appliedCoupons {
 			if err := s.CouponApplicationRepo.Create(txCtx, ca.CouponApplication); err != nil {
-				s.Logger.Errorw("failed to create coupon application",
+				s.Logger.ErrorwCtx(ctx, "failed to create coupon application",
 					"coupon_application_id", ca.CouponApplication.ID,
 					"error", err)
 				return err
@@ -354,7 +354,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		if !totalInvoiceLevelDiscount.IsZero() && len(inv.LineItems) > 0 {
 			invoiceService := NewInvoiceService(s.ServiceParams)
 			if err := invoiceService.DistributeInvoiceLevelDiscount(txCtx, inv.LineItems, totalInvoiceLevelDiscount); err != nil {
-				s.Logger.Errorw("failed to distribute invoice-level discount",
+				s.Logger.ErrorwCtx(ctx, "failed to distribute invoice-level discount",
 					"invoice_id", inv.ID,
 					"total_invoice_level_discount", totalInvoiceLevelDiscount,
 					"error", err)
@@ -366,7 +366,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		for _, lineItem := range inv.LineItems {
 			if !lineItem.LineItemDiscount.IsZero() || !lineItem.InvoiceLevelDiscount.IsZero() {
 				if err := s.InvoiceRepo.UpdateLineItem(txCtx, lineItem); err != nil {
-					s.Logger.Errorw("failed to update line item with discount",
+					s.Logger.ErrorwCtx(ctx, "failed to update line item with discount",
 						"line_item_id", lineItem.ID,
 						"line_item_discount", lineItem.LineItemDiscount,
 						"invoice_level_discount", lineItem.InvoiceLevelDiscount,
@@ -390,7 +390,7 @@ func (s *couponApplicationService) ApplyCouponsToInvoice(ctx context.Context, re
 		TotalInvoiceLevelDiscount:    totalInvoiceLevelDiscount,
 	}
 
-	s.Logger.Infow("completed coupon application to invoice",
+	s.Logger.InfowCtx(ctx, "completed coupon application to invoice",
 		"invoice_id", inv.ID,
 		"total_discount", result.TotalDiscountAmount,
 		"applied_coupon_count", len(appliedCoupons))

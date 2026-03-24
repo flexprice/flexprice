@@ -29,19 +29,6 @@ func NewCustomerPortalHandler(
 	}
 }
 
-// CreateSession creates a dashboard session for a customer
-// @Summary Create a customer portal session
-// @Description Generate a dashboard URL/token for a customer to access their billing information
-// @Tags CustomerPortal
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param external_id path string true "Customer External ID"
-// @Success 200 {object} dto.PortalSessionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /portal/{external_id} [get]
 func (h *CustomerPortalHandler) CreateSession(c *gin.Context) {
 	externalID := c.Param("external_id")
 	if externalID == "" {
@@ -236,6 +223,16 @@ func (h *CustomerPortalHandler) GetInvoicePDF(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"presigned_url": url})
+}
+
+func (h *CustomerPortalHandler) GetPortalConfig(c *gin.Context) {
+	response, err := h.portalService.GetPortalConfig(c.Request.Context())
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *CustomerPortalHandler) GetWalletTransactions(c *gin.Context) {

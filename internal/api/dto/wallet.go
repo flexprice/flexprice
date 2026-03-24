@@ -314,6 +314,7 @@ func (r *TopUpWalletRequest) Validate() error {
 		types.TransactionReasonPurchasedCreditDirect,
 		types.TransactionReasonSubscriptionCredit,
 		types.TransactionReasonCreditNote,
+		types.TransactionReasonInvoiceVoidRefund,
 	}
 
 	if !lo.Contains(allowedTransactionReasons, r.TransactionReason) {
@@ -390,6 +391,7 @@ type GetCustomerWalletsRequest struct {
 	IncludeRealTimeBalance bool   `form:"include_real_time_balance" default:"false"`
 	Expand                 string `form:"expand"`
 	FromCache              bool   `form:"from_cache" default:"false"`
+	MaxLiveSeconds         *int64 `form:"-"` // populated from x-max-live header, not query param
 }
 
 func (r *GetCustomerWalletsRequest) Validate() error {

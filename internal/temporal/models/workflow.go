@@ -411,9 +411,10 @@ func (c *CreateSubscriptionActionConfig) ToDTO(params interface{}) (interface{},
 // CreateFeatureAndPriceActionConfig represents configuration for creating a feature, meter, and price action
 // Meter and price defaults come from GetDefaultSettings() - not stored in action config
 type CreateFeatureAndPriceActionConfig struct {
-	Action      WorkflowAction    `json:"action"` // Type discriminator - automatically set to "create_feature_and_price"
-	PlanID      string            `json:"plan_id" binding:"required"`
-	FeatureType types.FeatureType `json:"feature_type,omitempty"`
+	Action             WorkflowAction    `json:"action"` // Type discriminator - automatically set to "create_feature_and_price"
+	PlanID             string            `json:"plan_id" binding:"required"`
+	FeatureType        types.FeatureType `json:"feature_type,omitempty"`
+	PriceStartDateTime *time.Time        `json:"price_start_date_time,omitempty"` // Optional: start date for created prices only (not line items). Default is now.
 }
 
 func (c *CreateFeatureAndPriceActionConfig) Validate() error {
@@ -469,10 +470,12 @@ const (
 const (
 
 	// Unit Enums
-	UnitSingularCharacter   = "character"
-	UnitPluralCharacters    = "characters"
-	UnitSingularMillisecond = "millisecond"
-	UnitPluralMilliseconds  = "milliseconds"
+	UnitSingularCharacter   = "char"
+	UnitPluralCharacters    = "chars"
+	UnitSingularMillisecond = "ms"
+	UnitPluralMilliseconds  = "ms"
+	UnitSingularToken       = "token"
+	UnitPluralTokens        = "tokens"
 
 	// Aggregation Field Enums
 	AggregationFieldBillableValue = "value"
@@ -526,6 +529,8 @@ func determineFeatureSpecs(eventName string, eventProperties map[string]interfac
 				Name:             featureName,
 				LookupKey:        featureName,
 				AggregationField: aggField,
+				UnitSingular:     UnitSingularToken,
+				UnitPlural:       UnitPluralTokens,
 			})
 		}
 		return specs
@@ -558,6 +563,8 @@ func determineFeatureSpecs(eventName string, eventProperties map[string]interfac
 				Name:             featureName,
 				LookupKey:        featureName,
 				AggregationField: aggField,
+				UnitSingular:     UnitSingularToken,
+				UnitPlural:       UnitPluralTokens,
 			})
 		}
 		return specs
@@ -728,6 +735,10 @@ func (c *CreateFeatureAndPriceActionConfig) ToDTO(params interface{}) (interface
 				"event_name":          actionParams.EventName,
 				"feature_name":        spec.Name,
 			},
+		}
+		// Price start date: config only (does not affect line items). Default is now when unset.
+		if c.PriceStartDateTime != nil {
+			priceReq.StartDate = c.PriceStartDateTime
 		}
 
 		dtosList = append(dtosList, CreateFeatureAndPriceDTOs{

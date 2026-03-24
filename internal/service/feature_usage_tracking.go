@@ -20,12 +20,14 @@ import (
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/feature"
+	"github.com/flexprice/flexprice/internal/domain/group"
 	"github.com/flexprice/flexprice/internal/domain/meter"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/subscription"
 	"github.com/flexprice/flexprice/internal/domain/wallet"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/expression"
 	"github.com/flexprice/flexprice/internal/pubsub"
 	"github.com/flexprice/flexprice/internal/pubsub/kafka"
 	pubsubRouter "github.com/flexprice/flexprice/internal/pubsub/router"
@@ -83,12 +85,13 @@ type FeatureUsageTrackingService interface {
 
 type featureUsageTrackingService struct {
 	ServiceParams
-	pubSub           pubsub.PubSub // Regular PubSub for normal processing
-	backfillPubSub   pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
-	lazyPubSub       pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
-	replayPubSub     pubsub.PubSub // Dedicated Kafka PubSub for replay processing
-	eventRepo        events.Repository
-	featureUsageRepo events.FeatureUsageRepository
+	pubSub              pubsub.PubSub // Regular PubSub for normal processing
+	backfillPubSub      pubsub.PubSub // Dedicated Kafka PubSub for backfill processing
+	lazyPubSub          pubsub.PubSub // Dedicated Kafka PubSub for lazy processing
+	replayPubSub        pubsub.PubSub // Dedicated Kafka PubSub for replay processing
+	eventRepo           events.Repository
+	featureUsageRepo    events.FeatureUsageRepository
+	expressionEvaluator expression.Evaluator
 }
 
 // NewFeatureUsageTrackingService creates a new feature usage tracking service
@@ -98,9 +101,10 @@ func NewFeatureUsageTrackingService(
 	featureUsageRepo events.FeatureUsageRepository,
 ) FeatureUsageTrackingService {
 	ev := &featureUsageTrackingService{
-		ServiceParams:    params,
-		eventRepo:        eventRepo,
-		featureUsageRepo: featureUsageRepo,
+		ServiceParams:       params,
+		eventRepo:           eventRepo,
+		featureUsageRepo:    featureUsageRepo,
+		expressionEvaluator: expression.NewCELEvaluator(),
 	}
 
 	pubSub, err := kafka.NewPubSubFromConfig(
@@ -193,7 +197,7 @@ func (s *featureUsageTrackingService) PublishEvent(ctx context.Context, event *e
 			Mark(ierr.ErrSystem)
 	}
 
-	s.Logger.Debugw("publishing event for feature usage tracking",
+	s.Logger.DebugwCtx(ctx, "publishing event for feature usage tracking",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"partition_key", partitionKey,
@@ -407,7 +411,7 @@ func (s *featureUsageTrackingService) processMessage(msg *message.Message) error
 
 // Process a single event for feature usage tracking
 func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *events.Event) error {
-	s.Logger.Debugw("processing event",
+	s.Logger.DebugwCtx(ctx, "processing event",
 		"event_id", event.ID,
 		"event_name", event.EventName,
 		"external_customer_id", event.ExternalCustomerID,
@@ -416,7 +420,7 @@ func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *e
 
 	featureUsage, err := s.prepareProcessedEventsV2(ctx, event)
 	if err != nil {
-		s.Logger.Errorw("failed to prepare feature usage",
+		s.Logger.ErrorwCtx(ctx, "failed to prepare feature usage",
 			"error", err,
 			"event_id", event.ID,
 		)
@@ -442,7 +446,7 @@ func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *e
 					EnvironmentID:         fu.EnvironmentID,
 				}
 				if err := walletBalanceAlertService.PublishEvent(ctx, event); err != nil {
-					s.Logger.Errorw("failed to publish wallet balance alert event",
+					s.Logger.ErrorwCtx(ctx, "failed to publish wallet balance alert event",
 						"error", err,
 						"event_id", event.ID,
 						"customer_id", event.CustomerID,
@@ -450,13 +454,13 @@ func (s *featureUsageTrackingService) processEvent(ctx context.Context, event *e
 					continue
 				}
 
-				s.Logger.Infow("wallet balance alert event published successfully",
+				s.Logger.InfowCtx(ctx, "wallet balance alert event published successfully",
 					"event_id", event.ID,
 					"customer_id", event.CustomerID,
 				)
 			}
 		} else {
-			s.Logger.Debugw("wallet balance alert push disabled by configuration",
+			s.Logger.DebugwCtx(ctx, "wallet balance alert push disabled by configuration",
 				"feature_usage_count", len(featureUsage),
 			)
 		}
@@ -496,7 +500,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 	// CASE 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warnw("customer not found for event",
+		s.Logger.WarnwCtx(ctx, "customer not found for event",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -505,7 +509,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		// Try to auto-create customer via workflow if configured
 		customer, err = s.handleMissingCustomer(ctx, event)
 		if err != nil {
-			s.Logger.Errorw("failed to handle missing customer",
+			s.Logger.ErrorwCtx(ctx, "failed to handle missing customer",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 				"error", err,
@@ -516,14 +520,14 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 		if customer == nil {
 			// No workflow config or workflow not configured for auto-creation, skip event
-			s.Logger.Infow("skipping event - no customer and no auto-creation workflow configured",
+			s.Logger.InfowCtx(ctx, "skipping event - no customer and no auto-creation workflow configured",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
 			return results, nil
 		}
 
-		s.Logger.Infow("customer auto-created via workflow",
+		s.Logger.InfowCtx(ctx, "customer auto-created via workflow",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"customer_id", customer.ID,
@@ -548,7 +552,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to get subscriptions",
+		s.Logger.ErrorwCtx(ctx, "failed to get subscriptions",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"error", err,
@@ -559,7 +563,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 	subscriptions := subscriptionsList.Items
 	if len(subscriptions) == 0 {
-		s.Logger.Debugw("no active subscriptions found for customer, skipping",
+		s.Logger.DebugwCtx(ctx, "no active subscriptions found for customer, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 		)
@@ -577,7 +581,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 	subscriptions = validSubscriptions
 	if len(subscriptions) == 0 {
-		s.Logger.Debugw("no subscriptions valid for event timestamp, skipping",
+		s.Logger.DebugwCtx(ctx, "no subscriptions valid for event timestamp, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"event_timestamp", event.Timestamp,
@@ -613,7 +617,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get prices",
+		s.Logger.ErrorwCtx(ctx, "failed to get prices",
 			"error", err,
 			"event_id", event.ID,
 			"price_count", len(priceIDs),
@@ -642,7 +646,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 	meters, err := s.MeterRepo.List(ctx, meterFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get meters",
+		s.Logger.ErrorwCtx(ctx, "failed to get meters",
 			"error", err,
 			"event_id", event.ID,
 			"meter_count", len(meterIDs),
@@ -665,7 +669,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		featureFilter.MeterIDs = lo.Keys(meterMap)
 		features, err := s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to get features",
+			s.Logger.ErrorwCtx(ctx, "failed to get features",
 				"error", err,
 				"event_id", event.ID,
 				"meter_count", len(meterMap),
@@ -695,7 +699,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			sub.BillingPeriod,
 		)
 		if err != nil {
-			s.Logger.Errorw("failed to calculate period id",
+			s.Logger.ErrorwCtx(ctx, "failed to calculate period id",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 				"error", err,
@@ -710,7 +714,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		})
 
 		if len(subscriptionLineItems) == 0 {
-			s.Logger.Debugw("no active usage-based line items found for subscription",
+			s.Logger.DebugwCtx(ctx, "no active usage-based line items found for subscription",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 			)
@@ -726,7 +730,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 				}
 				prices = append(prices, price)
 			} else {
-				s.Logger.Warnw("price not found for subscription line item",
+				s.Logger.WarnwCtx(ctx, "price not found for subscription line item",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"line_item_id", item.ID,
@@ -741,7 +745,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 		matches := s.findMatchingPricesForEvent(event, prices, meterMap)
 
 		if len(matches) == 0 {
-			s.Logger.Debugw("no matching prices/meters found for subscription",
+			s.Logger.DebugwCtx(ctx, "no matching prices/meters found for subscription",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 				"event_name", event.EventName,
@@ -753,7 +757,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			// Find the corresponding line item
 			lineItem, ok := subLineItemMap[match.Price.ID]
 			if !ok {
-				s.Logger.Warnw("line item not found for price",
+				s.Logger.WarnwCtx(ctx, "line item not found for price",
 					"event_id", event.ID,
 					"subscription_id", sub.ID,
 					"price_id", match.Price.ID,
@@ -782,7 +786,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			if feature, ok := featureMeterMap[match.Meter.ID]; ok {
 				featureUsageCopy.FeatureID = feature.ID
 			} else {
-				s.Logger.Warnw("feature not found for meter",
+				s.Logger.WarnwCtx(ctx, "feature not found for meter",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 				)
@@ -790,11 +794,14 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 			}
 
 			// Extract quantity based on meter aggregation
-			quantity, _ := s.extractQuantityFromEvent(event, match.Meter, sub.Subscription, periodID)
+			quantity, _, err := s.extractQuantityFromEvent(event, match.Meter, sub.Subscription, periodID)
+			if err != nil {
+				return nil, err
+			}
 
 			// Validate the quantity is positive and within reasonable bounds
 			if quantity.IsNegative() {
-				s.Logger.Warnw("negative quantity calculated, setting to zero",
+				s.Logger.WarnwCtx(ctx, "negative quantity calculated, setting to zero",
 					"event_id", event.ID,
 					"meter_id", match.Meter.ID,
 					"calculated_quantity", quantity.String(),
@@ -811,7 +818,7 @@ func (s *featureUsageTrackingService) prepareProcessedEvents(ctx context.Context
 
 	// Return all processed events
 	if len(featureUsagePerSub) > 0 {
-		s.Logger.Debugw("event processing request prepared",
+		s.Logger.DebugwCtx(ctx, "event processing request prepared",
 			"event_id", event.ID,
 			"feature_usage_count", len(featureUsagePerSub),
 		)
@@ -835,7 +842,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 	// STEP 1: Lookup customer
 	customer, err := s.CustomerRepo.GetByLookupKey(ctx, event.ExternalCustomerID)
 	if err != nil {
-		s.Logger.Warnw("customer not found for event",
+		s.Logger.WarnwCtx(ctx, "customer not found for event",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"error", err,
@@ -844,7 +851,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		// Try to auto-create customer via workflow if configured
 		customer, err = s.handleMissingCustomer(ctx, event)
 		if err != nil {
-			s.Logger.Errorw("failed to handle missing customer",
+			s.Logger.ErrorwCtx(ctx, "failed to handle missing customer",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 				"error", err,
@@ -853,14 +860,14 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		}
 
 		if customer == nil {
-			s.Logger.Infow("skipping event - no customer and no auto-creation workflow configured",
+			s.Logger.InfowCtx(ctx, "skipping event - no customer and no auto-creation workflow configured",
 				"event_id", event.ID,
 				"external_customer_id", event.ExternalCustomerID,
 			)
 			return results, nil
 		}
 
-		s.Logger.Infow("customer auto-created via workflow",
+		s.Logger.InfowCtx(ctx, "customer auto-created via workflow",
 			"event_id", event.ID,
 			"external_customer_id", event.ExternalCustomerID,
 			"customer_id", customer.ID,
@@ -878,7 +885,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 
 	meters, err := s.MeterRepo.List(ctx, meterFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get meters by event name",
+		s.Logger.ErrorwCtx(ctx, "failed to get meters by event name",
 			"event_id", event.ID,
 			"event_name", event.EventName,
 			"error", err,
@@ -886,28 +893,40 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		return results, err
 	}
 
-	if len(meters) == 0 {
-		s.Logger.Debugw("no meters found for event name, skipping",
+	// Fetch workflow config once when we might need it; avoids duplicate lookups in handleMissingFeature.
+	workflowConfig, hasPrepareProcessedEventsConfig := s.getPrepareProcessedEventsConfig(ctx)
+	// When config is off, no meters means nothing to do. When config is on, we still run the helper
+	// so it can create the feature/meter via workflow (e.g. token/audio events from workflow.go) and re-fetch.
+	if !hasPrepareProcessedEventsConfig && len(meters) == 0 {
+		s.Logger.DebugwCtx(ctx, "no meters found for event name, skipping",
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
 		return results, nil
 	}
 
-	// Build meter map and collect meter IDs
-	meterMap := make(map[string]*meter.Meter)
-	meterIDs := make([]string, 0, len(meters))
-	for _, m := range meters {
-		// Check meter filters before including
-		if !s.checkMeterFilters(event, m.Filters) {
-			continue
+	var meterMap map[string]*meter.Meter
+	var meterIDs []string
+	if hasPrepareProcessedEventsConfig {
+		meterMap, meterIDs, err = s.matchMetersWithFeatureCreationSupport(ctx, event, meters, meterFilter, workflowConfig)
+		if err != nil {
+			return results, err
 		}
-		meterMap[m.ID] = m
-		meterIDs = append(meterIDs, m.ID)
+	} else {
+		// Original pipeline: match by event filters only (no required aggregation field, no auto-creation)
+		meterMap = make(map[string]*meter.Meter)
+		meterIDs = make([]string, 0, len(meters))
+		for _, m := range meters {
+			if !s.checkMeterFilters(event, m.Filters) {
+				continue
+			}
+			meterMap[m.ID] = m
+			meterIDs = append(meterIDs, m.ID)
+		}
 	}
 
 	if len(meterIDs) == 0 {
-		s.Logger.Debugw("no meters match event filters, skipping",
+		s.Logger.DebugwCtx(ctx, "no meters match event filters, skipping",
 			"event_id", event.ID,
 			"event_name", event.EventName,
 		)
@@ -919,7 +938,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 	featureFilter.MeterIDs = meterIDs
 	features, err := s.FeatureRepo.List(ctx, featureFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get features by meter IDs",
+		s.Logger.ErrorwCtx(ctx, "failed to get features by meter IDs",
 			"error", err,
 			"event_id", event.ID,
 			"meter_count", len(meterIDs),
@@ -942,7 +961,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 
 	lineItems, err := s.SubscriptionLineItemRepo.List(ctx, lineItemFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get subscription line items",
+		s.Logger.ErrorwCtx(ctx, "failed to get subscription line items",
 			"error", err,
 			"event_id", event.ID,
 			"customer_id", customer.ID,
@@ -952,7 +971,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 	}
 
 	if len(lineItems) == 0 {
-		s.Logger.Debugw("no active subscription line items found for meters and customer, skipping",
+		s.Logger.DebugwCtx(ctx, "no active subscription line items found for meters and customer, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"meter_ids", meterIDs,
@@ -969,7 +988,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 	}
 
 	if len(activeLineItems) == 0 {
-		s.Logger.Debugw("no line items active for event timestamp, skipping",
+		s.Logger.DebugwCtx(ctx, "no line items active for event timestamp, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 			"event_timestamp", event.Timestamp,
@@ -991,7 +1010,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 
 	subscriptions, err := s.SubRepo.List(ctx, subFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to get subscriptions",
+		s.Logger.ErrorwCtx(ctx, "failed to get subscriptions",
 			"error", err,
 			"event_id", event.ID,
 			"subscription_ids", subscriptionIDs,
@@ -1010,7 +1029,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 	}
 
 	if len(subscriptionMap) == 0 {
-		s.Logger.Debugw("no valid subscriptions for event, skipping",
+		s.Logger.DebugwCtx(ctx, "no valid subscriptions for event, skipping",
 			"event_id", event.ID,
 			"customer_id", customer.ID,
 		)
@@ -1026,7 +1045,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		// Get subscription for this line item
 		sub, ok := subscriptionMap[lineItem.SubscriptionID]
 		if !ok {
-			s.Logger.Debugw("subscription not found for line item",
+			s.Logger.DebugwCtx(ctx, "subscription not found for line item",
 				"event_id", event.ID,
 				"line_item_id", lineItem.ID,
 				"subscription_id", lineItem.SubscriptionID,
@@ -1037,7 +1056,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		// Get meter for this line item
 		m, ok := meterMap[lineItem.MeterID]
 		if !ok {
-			s.Logger.Warnw("meter not found for line item",
+			s.Logger.WarnwCtx(ctx, "meter not found for line item",
 				"event_id", event.ID,
 				"line_item_id", lineItem.ID,
 				"meter_id", lineItem.MeterID,
@@ -1048,7 +1067,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		// Get feature for this meter
 		f, ok := featureMeterMap[lineItem.MeterID]
 		if !ok {
-			s.Logger.Warnw("feature not found for meter",
+			s.Logger.WarnwCtx(ctx, "feature not found for meter",
 				"event_id", event.ID,
 				"meter_id", lineItem.MeterID,
 			)
@@ -1066,7 +1085,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 			sub.BillingPeriod,
 		)
 		if err != nil {
-			s.Logger.Errorw("failed to calculate period id",
+			s.Logger.ErrorwCtx(ctx, "failed to calculate period id",
 				"event_id", event.ID,
 				"subscription_id", sub.ID,
 				"error", err,
@@ -1092,11 +1111,14 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 		}
 
 		// Extract quantity based on meter aggregation
-		quantity, _ := s.extractQuantityFromEvent(event, m, sub, periodID)
+		quantity, _, err := s.extractQuantityFromEvent(event, m, sub, periodID)
+		if err != nil {
+			return nil, err
+		}
 
 		// Validate the quantity is positive
 		if quantity.IsNegative() {
-			s.Logger.Warnw("negative quantity calculated, setting to zero",
+			s.Logger.WarnwCtx(ctx, "negative quantity calculated, setting to zero",
 				"event_id", event.ID,
 				"meter_id", m.ID,
 				"calculated_quantity", quantity.String(),
@@ -1109,7 +1131,7 @@ func (s *featureUsageTrackingService) prepareProcessedEventsV2(ctx context.Conte
 	}
 
 	if len(featureUsagePerSub) > 0 {
-		s.Logger.Debugw("event processing request prepared (V2)",
+		s.Logger.DebugwCtx(ctx, "event processing request prepared (V2)",
 			"event_id", event.ID,
 			"feature_usage_count", len(featureUsagePerSub),
 		)
@@ -1408,17 +1430,48 @@ func (s *featureUsageTrackingService) checkMeterFilters(event *events.Event, fil
 }
 
 // Extract quantity from event based on meter aggregation
-// Returns the quantity and the string representation of the field value
+// Returns the quantity, the string representation of the field value, and an error.
+// Callers must propagate errors and must not treat evaluation failures as zero.
 func (s *featureUsageTrackingService) extractQuantityFromEvent(
 	event *events.Event,
 	meter *meter.Meter,
 	subscription *subscription.Subscription,
 	periodID uint64,
-) (decimal.Decimal, string) {
+) (decimal.Decimal, string, error) {
+	// When expression is set, use CEL for per-event quantity (works with most aggregation types)
+	if meter.Aggregation.Expression != "" {
+		// Expression is not supported with COUNT_UNIQUE
+		if meter.Aggregation.Type == types.AggregationCountUnique {
+			err := fmt.Errorf("expression is not supported with aggregation type COUNT_UNIQUE")
+			s.Logger.Errorw("unsupported meter configuration: expression with count_unique",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"expression", meter.Aggregation.Expression,
+				"error", err,
+			)
+			return decimal.Zero, "", err
+		}
+
+		qty, err := s.expressionEvaluator.EvaluateQuantity(meter.Aggregation.Expression, event.Properties)
+		if err != nil {
+			s.Logger.Errorw("CEL evaluation failed, event rejected",
+				"event_id", event.ID,
+				"meter_id", meter.ID,
+				"expression", meter.Aggregation.Expression,
+				"error", err,
+			)
+			return decimal.Zero, "", fmt.Errorf("CEL evaluation failed for event %s meter %s: %w", event.ID, meter.ID, err)
+		}
+		if meter.Aggregation.Multiplier != nil {
+			qty = qty.Mul(*meter.Aggregation.Multiplier)
+		}
+		return qty, qty.String(), nil
+	}
+
 	switch meter.Aggregation.Type {
 	case types.AggregationCount:
 		// For count, always return 1 and empty string for field value
-		return decimal.NewFromInt(1), ""
+		return decimal.NewFromInt(1), "", nil
 
 	case types.AggregationSum, types.AggregationAvg, types.AggregationLatest, types.AggregationMax:
 		if meter.Aggregation.Field == "" {
@@ -1427,7 +1480,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"aggregation_type", meter.Aggregation.Type,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1438,12 +1491,12 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"field", meter.Aggregation.Field,
 				"aggregation_type", meter.Aggregation.Type,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// Convert value to decimal and string with detailed error handling
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
-		return decimalValue, stringValue
+		return decimalValue, stringValue, nil
 
 	case types.AggregationSumWithMultiplier:
 		if meter.Aggregation.Field == "" {
@@ -1451,7 +1504,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		if meter.Aggregation.Multiplier == nil {
@@ -1459,7 +1512,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1469,18 +1522,18 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// Convert value to decimal and apply multiplier
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
 		if decimalValue.IsZero() {
-			return decimal.Zero, stringValue
+			return decimal.Zero, stringValue, nil
 		}
 
 		// Apply multiplier
 		result := decimalValue.Mul(*meter.Aggregation.Multiplier)
-		return result, stringValue
+		return result, stringValue, nil
 
 	case types.AggregationCountUnique:
 		if meter.Aggregation.Field == "" {
@@ -1488,7 +1541,7 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1498,20 +1551,20 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// For count_unique, we return 1 if the value exists (uniqueness is handled at aggregation level)
 		// and convert the value to string for tracking
 		stringValue := s.convertValueToString(val)
-		return decimal.NewFromInt(1), stringValue
+		return decimal.NewFromInt(1), stringValue, nil
 	case types.AggregationWeightedSum:
 		if meter.Aggregation.Field == "" {
 			s.Logger.Warnw("weighted_sum aggregation with empty field name",
 				"event_id", event.ID,
 				"meter_id", meter.ID,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		val, ok := event.Properties[meter.Aggregation.Field]
@@ -1521,28 +1574,28 @@ func (s *featureUsageTrackingService) extractQuantityFromEvent(
 				"meter_id", meter.ID,
 				"field", meter.Aggregation.Field,
 			)
-			return decimal.Zero, ""
+			return decimal.Zero, "", nil
 		}
 
 		// Convert value to decimal and apply multiplier
 		decimalValue, stringValue := s.convertValueToDecimal(val, event, meter)
 		if decimalValue.IsZero() {
-			return decimal.Zero, stringValue
+			return decimal.Zero, stringValue, nil
 		}
 
 		// Apply multiplier
 		result, err := s.getTotalUsageForWeightedSumAggregation(subscription, event, decimalValue, periodID)
 		if err != nil {
-			return decimal.Zero, stringValue
+			return decimal.Zero, stringValue, nil
 		}
-		return result, stringValue
+		return result, stringValue, nil
 	default:
 		s.Logger.Warnw("unsupported aggregation type",
 			"event_id", event.ID,
 			"meter_id", meter.ID,
 			"aggregation_type", meter.Aggregation.Type,
 		)
-		return decimal.Zero, ""
+		return decimal.Zero, "", nil
 	}
 }
 
@@ -1665,6 +1718,7 @@ type AnalyticsData struct {
 	PriceResponses        map[string]*dto.PriceResponse // Map of price ID -> PriceResponse (used when groups need to be expanded)
 	Plans                 map[string]*plan.Plan         // Map of plan ID -> plan
 	Addons                map[string]*addon.Addon       // Map of addon ID -> addon
+	Groups                map[string]*group.Group       // Map of group ID -> group (for features that belong to a group)
 	Currency              string
 	Params                *events.UsageAnalyticsParams
 }
@@ -1711,7 +1765,7 @@ func (s *featureUsageTrackingService) GetDetailedUsageAnalyticsV2(ctx context.Co
 		// Fetch analytics data for this customer
 		data, err := s.fetchAnalyticsData(ctx, &customerReq)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch analytics data for customer, skipping",
+			s.Logger.WarnwCtx(ctx, "failed to fetch analytics data for customer, skipping",
 				"customer_id", customer.ID,
 				"external_customer_id", customer.ExternalID,
 				"error", err,
@@ -1825,6 +1879,7 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 		Prices:                make(map[string]*price.Price),
 		Plans:                 make(map[string]*plan.Plan),
 		Addons:                make(map[string]*addon.Addon),
+		Groups:                make(map[string]*group.Group),
 		PriceResponses:        make(map[string]*dto.PriceResponse),
 	}
 
@@ -1836,12 +1891,92 @@ func (s *featureUsageTrackingService) fetchAnalyticsData(ctx context.Context, re
 		}
 	}
 
-	// 6. Enrich with metadata if we have analytics data
-	if len(analytics) > 0 {
-		if err := s.enrichWithMetadata(ctx, data, req); err != nil {
-			s.Logger.Warnw("failed to enrich analytics with metadata",
+	// 6. Inject synthetic zero-usage analytics entries for committed line items
+	// that have no usage data in ClickHouse. Without this, the commitment fill
+	// logic in calculateCosts never fires for these line items.
+	existingLineItemIDs := make(map[string]bool, len(data.Analytics))
+	for _, item := range data.Analytics {
+		if item.SubLineItemID != "" {
+			existingLineItemIDs[item.SubLineItemID] = true
+		}
+	}
+
+	missingMeterIDs := make(map[string]bool)
+	type missingLineItemInfo struct {
+		lineItem       *subscription.SubscriptionLineItem
+		subscriptionID string
+	}
+	var missingLineItems []missingLineItemInfo
+	for _, sub := range subscriptions {
+		for _, li := range sub.LineItems {
+			if existingLineItemIDs[li.ID] || !li.HasCommitment() || !li.IsUsage() {
+				continue
+			}
+			periodStart := li.GetPeriodStart(params.StartTime)
+			periodEnd := li.GetPeriodEnd(params.EndTime)
+			if !periodEnd.After(periodStart) {
+				continue
+			}
+			missingLineItems = append(missingLineItems, missingLineItemInfo{lineItem: li, subscriptionID: sub.ID})
+			missingMeterIDs[li.MeterID] = true
+		}
+	}
+
+	if len(missingLineItems) > 0 {
+		meterIDList := lo.Keys(missingMeterIDs)
+		featureFilter := types.NewNoLimitFeatureFilter()
+		featureFilter.MeterIDs = meterIDList
+		missingFeatures, err := s.FeatureRepo.List(ctx, featureFilter)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch features for committed line items with zero usage",
 				"error", err,
-				"analytics_count", len(analytics),
+				"meter_ids", meterIDList,
+			)
+		} else {
+			meterToFeature := make(map[string]*feature.Feature, len(missingFeatures))
+			for _, f := range missingFeatures {
+				if f.MeterID != "" {
+					meterToFeature[f.MeterID] = f
+				}
+			}
+
+			featureIDFilter := make(map[string]bool, len(params.FeatureIDs))
+			for _, fid := range params.FeatureIDs {
+				featureIDFilter[fid] = true
+			}
+
+			for _, info := range missingLineItems {
+				li := info.lineItem
+				feat, ok := meterToFeature[li.MeterID]
+				if !ok {
+					continue
+				}
+				// Respect feature ID filter if specified
+				if len(featureIDFilter) > 0 && !featureIDFilter[feat.ID] {
+					continue
+				}
+				data.Analytics = append(data.Analytics, &events.DetailedUsageAnalytic{
+					FeatureID:      feat.ID,
+					MeterID:        li.MeterID,
+					PriceID:        li.PriceID,
+					SubLineItemID:  li.ID,
+					SubscriptionID: info.subscriptionID,
+					TotalUsage:     decimal.Zero,
+					MaxUsage:       decimal.Zero,
+					LatestUsage:    decimal.Zero,
+					Points:         []events.UsageAnalyticPoint{},
+					Properties:     make(map[string]string),
+				})
+			}
+		}
+	}
+
+	// 7. Enrich with metadata if we have analytics data
+	if len(data.Analytics) > 0 {
+		if err := s.enrichWithMetadata(ctx, data, req); err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to enrich analytics with metadata",
+				"error", err,
+				"analytics_count", len(data.Analytics),
 			)
 			// Continue with partial data rather than failing completely
 		}
@@ -1859,7 +1994,7 @@ func (s *featureUsageTrackingService) buildAnalyticsResponse(ctx context.Context
 
 	// Calculate costs
 	if err := s.calculateCosts(ctx, data); err != nil {
-		s.Logger.Warnw("failed to calculate costs",
+		s.Logger.WarnwCtx(ctx, "failed to calculate costs",
 			"error", err,
 			"analytics_count", len(data.Analytics),
 		)
@@ -1908,7 +2043,7 @@ func (s *featureUsageTrackingService) fetchSubscriptions(ctx context.Context, cu
 
 	subscriptionsList, err := subscriptionService.ListSubscriptions(ctx, filter)
 	if err != nil {
-		s.Logger.Errorw("failed to get subscriptions for analytics",
+		s.Logger.ErrorwCtx(ctx, "failed to get subscriptions for analytics",
 			"error", err,
 			"customer_id", customerID,
 		)
@@ -1934,7 +2069,7 @@ func (s *featureUsageTrackingService) buildBucketFeatures(ctx context.Context, p
 	var err error
 
 	if len(params.FeatureIDs) == 0 {
-		s.Logger.Debugw("no feature IDs provided, fetching all features from database",
+		s.Logger.DebugwCtx(ctx, "no feature IDs provided, fetching all features from database",
 			"tenant_id", params.TenantID,
 			"environment_id", params.EnvironmentID,
 		)
@@ -1943,7 +2078,7 @@ func (s *featureUsageTrackingService) buildBucketFeatures(ctx context.Context, p
 		featureFilter := types.NewNoLimitFeatureFilter()
 		features, err = s.FeatureRepo.List(ctx, featureFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to fetch features from database",
+			s.Logger.ErrorwCtx(ctx, "failed to fetch features from database",
 				"error", err,
 				"tenant_id", params.TenantID,
 				"environment_id", params.EnvironmentID,
@@ -1960,7 +2095,7 @@ func (s *featureUsageTrackingService) buildBucketFeatures(ctx context.Context, p
 		}
 		params.FeatureIDs = featureIDs
 
-		s.Logger.Debugw("fetched feature IDs from database",
+		s.Logger.DebugwCtx(ctx, "fetched feature IDs from database",
 			"count", len(featureIDs),
 			"feature_ids", featureIDs,
 		)
@@ -2057,7 +2192,7 @@ func (s *featureUsageTrackingService) fetchAnalytics(ctx context.Context, params
 	// Fetch analytics with bucket features
 	analytics, err := s.featureUsageRepo.GetDetailedUsageAnalytics(ctx, params, maxBucketFeatures, sumBucketFeatures)
 	if err != nil {
-		s.Logger.Errorw("failed to get detailed usage analytics",
+		s.Logger.ErrorwCtx(ctx, "failed to get detailed usage analytics",
 			"error", err,
 			"external_customer_id", params.ExternalCustomerID,
 		)
@@ -2125,11 +2260,31 @@ func (s *featureUsageTrackingService) enrichWithMetadata(ctx context.Context, da
 	// Build feature map and extract meter IDs
 	meterIDs := make([]string, 0)
 	meterIDSet := make(map[string]bool)
+	groupIDSet := make(map[string]bool)
 	for _, f := range features {
 		data.Features[f.ID] = f
 		if f.MeterID != "" && !meterIDSet[f.MeterID] {
 			meterIDs = append(meterIDs, f.MeterID)
 			meterIDSet[f.MeterID] = true
+		}
+		if f.GroupID != "" && !groupIDSet[f.GroupID] {
+			groupIDSet[f.GroupID] = true
+		}
+	}
+
+	// Fetch groups for features that belong to a group
+	for groupID := range groupIDSet {
+		grp, err := s.GroupRepo.Get(ctx, groupID)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for analytics", "group_id", groupID, "error", err)
+			continue
+		}
+		data.Groups[groupID] = grp
+	}
+	// Backfill Feature.Group so expand=feature returns group
+	for _, f := range data.Features {
+		if f.GroupID != "" {
+			f.Group = data.Groups[f.GroupID]
 		}
 	}
 
@@ -2299,10 +2454,8 @@ func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *
 				// that was active when the usage was recorded (important for cancelled/new subscriptions)
 				if price, hasPricing := data.Prices[item.PriceID]; hasPricing {
 					// Calculate cost based on meter type
-					if meter.IsBucketedMaxMeter() {
-						s.calculateBucketedCost(ctx, priceService, item, price, data)
-					} else if meter.IsBucketedSumMeter() {
-						s.calculateSumWithBucketCost(ctx, priceService, item, price, meter, data)
+					if meter.IsBucketedMaxMeter() || meter.IsBucketedSumMeter() {
+						s.calculateBucketedCost(ctx, priceService, item, price, meter, data)
 					} else {
 						s.calculateRegularCost(ctx, priceService, item, meter, price, data)
 					}
@@ -2314,237 +2467,249 @@ func (s *featureUsageTrackingService) calculateCosts(ctx context.Context, data *
 	return nil
 }
 
+// bucketedCostParams encapsulates all context needed for bucketed cost calculation.
+// This avoids passing 6+ parameters through the call chain.
+type bucketedCostParams struct {
+	ctx          context.Context
+	priceService PriceService
+	item         *events.DetailedUsageAnalytic
+	price        *price.Price
+	data         *AnalyticsData
+	aggType      types.AggregationType
+	bucketSize   types.WindowSize
+}
+
 // calculateBucketedCost calculates cost for bucketed max meters
-func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, data *AnalyticsData) {
+func (s *featureUsageTrackingService) calculateBucketedCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter, data *AnalyticsData) {
+	params := &bucketedCostParams{ctx, priceService, item, price, data, meter.Aggregation.Type, meter.Aggregation.BucketSize}
+	lineItem := data.SubscriptionLineItems[item.SubLineItemID]
+	hasCommitment := lineItem != nil && lineItem.HasCommitment()
+	isWindowed := hasCommitment && lineItem.CommitmentWindowed
+	hasTrueUp := isWindowed && lineItem.CommitmentTrueUpEnabled
+
 	var cost decimal.Decimal
 
 	if len(item.Points) > 0 {
-		// Use points as buckets
-		bucketedValues := make([]decimal.Decimal, len(item.Points))
-		for i, point := range item.Points {
-			bucketedValues[i] = s.getCorrectUsageValueForPoint(point, types.AggregationMax)
-		}
-
-		// Check for line item commitment
-		if item.SubLineItemID != "" {
-			// Find the line item
-			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-
-			if lineItem != nil && lineItem.HasCommitment() {
-				// For windowed commitments, skip aggregate cost calculation
-				// as we'll apply commitment per-point and sum the results
-				if lineItem.CommitmentWindowed {
-					// Don't apply commitment at aggregate level for windowed commitments
-					// Cost will be calculated from sum of point costs after merging
-					cost = decimal.Zero
-				} else {
-					// Non-windowed commitment: apply at aggregate level
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, decimal.Zero)
-				}
-			} else {
-				cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-			}
-		} else {
-			cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-		}
-
-		// Calculate cost for each point
-		// For windowed commitments, we should apply commitment at each point level
-		// For non-windowed or no commitment, calculate standard costs
-		if item.SubLineItemID != "" {
-			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-			if lineItem != nil && lineItem.HasCommitment() && lineItem.CommitmentWindowed {
-				// Apply commitment at each point (window) level
-				commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
-				for i := range item.Points {
-					pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationMax)
-					// Apply commitment to this single point/window
-					pointCost, commitmentInfo, err := commitmentCalc.applyWindowCommitmentToLineItem(
-						ctx, lineItem, []decimal.Decimal{pointUsage}, price)
-					if err != nil {
-						s.Logger.Warnw("failed to apply window commitment to point",
-							"error", err, "point_index", i, "line_item_id", lineItem.ID)
-						// Fallback to standard calculation
-						pointCost = priceService.CalculateCost(ctx, price, pointUsage)
-					}
-					item.Points[i].Cost = pointCost
-					// Extract commitment fields if available
-					if commitmentInfo != nil {
-						item.Points[i].ComputedCommitmentUtilizedAmount = commitmentInfo.ComputedCommitmentUtilizedAmount
-						item.Points[i].ComputedOverageAmount = commitmentInfo.ComputedOverageAmount
-						item.Points[i].ComputedTrueUpAmount = commitmentInfo.ComputedTrueUpAmount
-					}
-				}
-			} else {
-				// Standard calculation for non-windowed or no commitment
-				for i := range item.Points {
-					pointCost := priceService.CalculateCost(ctx, price, s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationMax))
-					item.Points[i].Cost = pointCost
-				}
-			}
-		} else {
-			// No line item, standard calculation
-			for i := range item.Points {
-				pointCost := priceService.CalculateCost(ctx, price, s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationMax))
-				item.Points[i].Cost = pointCost
-			}
-		}
-
-		// Merge bucket-level points into request window-level points
-		item.Points = s.mergeBucketPointsByWindow(item.Points, types.AggregationMax)
-
-		// For windowed commitments, calculate total cost from merged point costs
-		if item.SubLineItemID != "" {
-			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-			if lineItem != nil && lineItem.HasCommitment() && lineItem.CommitmentWindowed {
-				// Sum all point costs to get total
-				totalFromPoints := decimal.Zero
-				for _, point := range item.Points {
-					totalFromPoints = totalFromPoints.Add(point.Cost)
-				}
-				cost = totalFromPoints
-			}
-		}
+		cost = s.processPointsWithBuckets(params, lineItem, hasCommitment, isWindowed, hasTrueUp)
 	} else {
-		// Treat total usage as single bucket
-		if item.MaxUsage.IsPositive() {
-			bucketedValues := []decimal.Decimal{item.MaxUsage}
-
-			// Check for line item commitment
-			cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-			if item.SubLineItemID != "" {
-				// Find the line item
-				lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-
-				if lineItem != nil && lineItem.HasCommitment() {
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, cost)
-				}
-			}
-		}
+		cost = s.processSingleBucket(params, lineItem, hasCommitment, isWindowed, hasTrueUp)
 	}
 
 	item.TotalCost = cost
 	item.Currency = price.Currency
 }
 
-// calculateSumWithBucketCost calculates cost for sum with bucket meters
-// Each bucket is priced independently, similar to bucketed max
-func (s *featureUsageTrackingService) calculateSumWithBucketCost(ctx context.Context, priceService PriceService, item *events.DetailedUsageAnalytic, price *price.Price, meter *meter.Meter, data *AnalyticsData) {
+// processPointsWithBuckets handles the case where we have time-series points to process.
+func (s *featureUsageTrackingService) processPointsWithBuckets(
+	p *bucketedCostParams,
+	lineItem *subscription.SubscriptionLineItem,
+	hasCommitment, isWindowed, hasTrueUp bool,
+) decimal.Decimal {
+	bucketedValues := s.extractBucketValues(p.item.Points, p.aggType)
+
+	// Calculate aggregate cost
 	var cost decimal.Decimal
+	switch {
+	case !hasCommitment:
+		cost = p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
+	case isWindowed:
+		cost = decimal.Zero // Will be summed from points after processing
+	default:
+		cost = s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, decimal.Zero)
+	}
 
-	if len(item.Points) > 0 {
-		// Use points as buckets (each point represents a bucket's sum)
-		bucketedValues := make([]decimal.Decimal, len(item.Points))
-		for i, point := range item.Points {
-			bucketedValues[i] = s.getCorrectUsageValueForPoint(point, types.AggregationSum)
+	// Calculate per-point costs
+	s.calculatePointCosts(p, lineItem, isWindowed)
+
+	// Fill missing windows for true-up commitments and recalculate total
+	if hasTrueUp && p.bucketSize != "" {
+		cost = s.fillMissingWindowsAndRecalculate(p, lineItem)
+	}
+
+	// Merge bucket-level points to request window level
+	p.item.Points = s.mergeBucketPointsByWindow(p.item.Points, p.aggType)
+
+	// For windowed without true-up, sum point costs
+	if isWindowed && !hasTrueUp {
+		cost = s.sumPointCosts(p.item.Points)
+	}
+
+	return cost
+}
+
+// processSingleBucket handles the case where there are no time-series points.
+func (s *featureUsageTrackingService) processSingleBucket(
+	p *bucketedCostParams,
+	lineItem *subscription.SubscriptionLineItem,
+	hasCommitment, isWindowed, hasTrueUp bool,
+) decimal.Decimal {
+	totalUsage := s.getSingleBucketUsage(p.item, p.aggType)
+
+	if totalUsage.IsPositive() {
+		bucketedValues := []decimal.Decimal{totalUsage}
+		baseCost := p.priceService.CalculateBucketedCost(p.ctx, p.price, bucketedValues)
+		if hasCommitment {
+			return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, bucketedValues, baseCost)
 		}
+		return baseCost
+	}
 
-		// Check for line item commitment
-		if item.SubLineItemID != "" {
-			// Find the line item
-			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
+	// Zero usage with commitment: apply minimum charges
+	if !hasCommitment {
+		return decimal.Zero
+	}
 
-			if lineItem != nil && lineItem.HasCommitment() {
-				// For windowed commitments, skip aggregate cost calculation
-				// as we'll apply commitment per-point and sum the results
-				if lineItem.CommitmentWindowed {
-					// Don't apply commitment at aggregate level for windowed commitments
-					// Cost will be calculated from sum of point costs after merging
-					cost = decimal.Zero
-				} else {
-					// Non-windowed commitment: apply at aggregate level
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, decimal.Zero)
-				}
-			} else {
-				cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-			}
+	if hasTrueUp && p.bucketSize != "" {
+		return s.fillZeroUsageWindows(p, lineItem)
+	}
+
+	return s.applyLineItemCommitment(p.ctx, p.priceService, p.item, lineItem, p.price, nil, decimal.Zero)
+}
+
+// extractBucketValues extracts usage values from points based on aggregation type.
+func (s *featureUsageTrackingService) extractBucketValues(points []events.UsageAnalyticPoint, aggType types.AggregationType) []decimal.Decimal {
+	values := make([]decimal.Decimal, len(points))
+	for i, pt := range points {
+		values[i] = s.getCorrectUsageValueForPoint(pt, aggType)
+	}
+	return values
+}
+
+// calculatePointCosts calculates cost for each individual point.
+func (s *featureUsageTrackingService) calculatePointCosts(p *bucketedCostParams, lineItem *subscription.SubscriptionLineItem, isWindowed bool) {
+	if !isWindowed {
+		for i := range p.item.Points {
+			usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
+			p.item.Points[i].Cost = p.priceService.CalculateCost(p.ctx, p.price, usage)
+		}
+		return
+	}
+
+	commitmentCalc := newCommitmentCalculator(s.Logger, p.priceService)
+	for i := range p.item.Points {
+		usage := s.getCorrectUsageValueForPoint(p.item.Points[i], p.aggType)
+		pointCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{usage}, p.price)
+		if err != nil {
+			s.Logger.Warnw("failed to apply window commitment to point", "error", err, "point_index", i, "line_item_id", lineItem.ID)
+			pointCost = p.priceService.CalculateCost(p.ctx, p.price, usage)
+		}
+		p.item.Points[i].Cost = pointCost
+		if info != nil {
+			p.item.Points[i].ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
+			p.item.Points[i].ComputedOverageAmount = info.ComputedOverageAmount
+			p.item.Points[i].ComputedTrueUpAmount = info.ComputedTrueUpAmount
+		}
+	}
+}
+
+// fillMissingWindowsAndRecalculate fills gaps in bucket windows and recalculates total cost.
+func (s *featureUsageTrackingService) fillMissingWindowsAndRecalculate(p *bucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
+	billingAnchor := s.getBillingAnchor(p.data, lineItem.SubscriptionID)
+	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
+	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
+	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
+
+	pointsByBucket := make(map[time.Time]events.UsageAnalyticPoint, len(p.item.Points))
+	for _, pt := range p.item.Points {
+		pointsByBucket[pt.Timestamp] = pt
+	}
+
+	filled := make([]decimal.Decimal, 0, len(expectedStarts))
+	filledPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
+	commitmentCalc := newCommitmentCalculator(s.Logger, p.priceService)
+
+	for _, t := range expectedStarts {
+		if existing, ok := pointsByBucket[t]; ok {
+			filled = append(filled, s.getCorrectUsageValueForPoint(existing, p.aggType))
+			filledPoints = append(filledPoints, existing)
 		} else {
-			cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-		}
-
-		// Calculate cost for each point (bucket)
-		// For windowed commitments, apply commitment at each point level
-		if item.SubLineItemID != "" {
-			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-			if lineItem != nil && lineItem.HasCommitment() && lineItem.CommitmentWindowed {
-				// Apply commitment at each point (window) level
-				commitmentCalc := newCommitmentCalculator(s.Logger, priceService)
-				for i := range item.Points {
-					pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationSum)
-					// Apply commitment to this single point/window
-					pointCost, commitmentInfo, err := commitmentCalc.applyWindowCommitmentToLineItem(
-						ctx, lineItem, []decimal.Decimal{pointUsage}, price)
-					if err != nil {
-						s.Logger.Warnw("failed to apply window commitment to point",
-							"error", err, "point_index", i, "line_item_id", lineItem.ID)
-						// Fallback to standard calculation
-						pointCost = priceService.CalculateCost(ctx, price, pointUsage)
-					}
-					item.Points[i].Cost = pointCost
-					// Extract commitment fields if available
-					if commitmentInfo != nil {
-						item.Points[i].ComputedCommitmentUtilizedAmount = commitmentInfo.ComputedCommitmentUtilizedAmount
-						item.Points[i].ComputedOverageAmount = commitmentInfo.ComputedOverageAmount
-						item.Points[i].ComputedTrueUpAmount = commitmentInfo.ComputedTrueUpAmount
-					}
-				}
-			} else {
-				// Standard calculation for non-windowed or no commitment
-				for i := range item.Points {
-					pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationSum)
-					pointCost := priceService.CalculateCost(ctx, price, pointUsage)
-					item.Points[i].Cost = pointCost
-				}
-			}
-		} else {
-			// No line item, standard calculation
-			for i := range item.Points {
-				pointUsage := s.getCorrectUsageValueForPoint(item.Points[i], types.AggregationSum)
-				pointCost := priceService.CalculateCost(ctx, price, pointUsage)
-				item.Points[i].Cost = pointCost
-			}
-		}
-
-		// Merge bucket-level points into request window-level points
-		item.Points = s.mergeBucketPointsByWindow(item.Points, types.AggregationSum)
-
-		// For windowed commitments, calculate total cost from merged point costs
-		if item.SubLineItemID != "" {
-			lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-			if lineItem != nil && lineItem.HasCommitment() && lineItem.CommitmentWindowed {
-				// Sum all point costs to get total
-				totalFromPoints := decimal.Zero
-				for _, point := range item.Points {
-					totalFromPoints = totalFromPoints.Add(point.Cost)
-				}
-				cost = totalFromPoints
-			}
-		}
-	} else {
-		// Treat total usage as single bucket if no points available
-		totalUsage := s.getCorrectUsageValue(item, types.AggregationSum)
-		if totalUsage.IsPositive() {
-			bucketedValues := []decimal.Decimal{totalUsage}
-
-			// Check for line item commitment
-			if item.SubLineItemID != "" {
-				// Find the line item
-
-				lineItem := data.SubscriptionLineItems[item.SubLineItemID]
-
-				if lineItem != nil && lineItem.HasCommitment() {
-					cost = s.applyLineItemCommitment(ctx, priceService, item, lineItem, price, bucketedValues, decimal.Zero)
-				} else {
-					cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-				}
-			} else {
-				cost = priceService.CalculateBucketedCost(ctx, price, bucketedValues)
-			}
+			filled = append(filled, decimal.Zero)
+			filledPoints = append(filledPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
 		}
 	}
 
-	item.TotalCost = cost
-	item.Currency = price.Currency
+	p.item.Points = filledPoints
+	if totalCost, _, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price); err == nil {
+		return totalCost
+	}
+	return decimal.Zero
+}
+
+// fillZeroUsageWindows creates fill points for all expected windows when there's no usage.
+func (s *featureUsageTrackingService) fillZeroUsageWindows(p *bucketedCostParams, lineItem *subscription.SubscriptionLineItem) decimal.Decimal {
+	billingAnchor := s.getBillingAnchor(p.data, lineItem.SubscriptionID)
+	periodStart := lineItem.GetPeriodStart(p.data.Params.StartTime)
+	periodEnd := lineItem.GetPeriodEnd(p.data.Params.EndTime)
+	expectedStarts := generateBucketStarts(periodStart, periodEnd, p.bucketSize, billingAnchor)
+
+	filled := make([]decimal.Decimal, len(expectedStarts))
+	commitmentCalc := newCommitmentCalculator(s.Logger, p.priceService)
+
+	totalCost, info, err := commitmentCalc.applyWindowCommitmentToLineItem(p.ctx, lineItem, filled, p.price)
+	if err != nil {
+		return decimal.Zero
+	}
+
+	p.item.CommitmentInfo = info
+	bucketPoints := make([]events.UsageAnalyticPoint, 0, len(expectedStarts))
+	for _, t := range expectedStarts {
+		bucketPoints = append(bucketPoints, s.createFillPoint(p, lineItem, t, billingAnchor, commitmentCalc))
+	}
+	p.item.Points = s.mergeBucketPointsByWindow(bucketPoints, p.aggType)
+
+	return totalCost
+}
+
+// createFillPoint creates a zero-usage fill point for a missing bucket window.
+func (s *featureUsageTrackingService) createFillPoint(
+	p *bucketedCostParams,
+	lineItem *subscription.SubscriptionLineItem,
+	timestamp time.Time,
+	billingAnchor *time.Time,
+	calc *commitmentCalculator,
+) events.UsageAnalyticPoint {
+	pointCost, info, _ := calc.applyWindowCommitmentToLineItem(p.ctx, lineItem, []decimal.Decimal{decimal.Zero}, p.price)
+	windowStart := truncateToBucketStart(timestamp, p.data.Params.WindowSize, billingAnchor)
+
+	pt := events.UsageAnalyticPoint{
+		Timestamp:   timestamp,
+		WindowStart: windowStart,
+		Usage:       decimal.Zero,
+		MaxUsage:    decimal.Zero,
+		Cost:        pointCost,
+		EventCount:  0,
+	}
+	if info != nil {
+		pt.ComputedCommitmentUtilizedAmount = info.ComputedCommitmentUtilizedAmount
+		pt.ComputedOverageAmount = info.ComputedOverageAmount
+		pt.ComputedTrueUpAmount = info.ComputedTrueUpAmount
+	}
+	return pt
+}
+
+// getBillingAnchor retrieves the billing anchor for a subscription.
+func (s *featureUsageTrackingService) getBillingAnchor(data *AnalyticsData, subscriptionID string) *time.Time {
+	if sub := data.SubscriptionsMap[subscriptionID]; sub != nil {
+		return &sub.BillingAnchor
+	}
+	return nil
+}
+
+// getSingleBucketUsage returns the usage value for single-bucket calculation.
+func (s *featureUsageTrackingService) getSingleBucketUsage(item *events.DetailedUsageAnalytic, aggType types.AggregationType) decimal.Decimal {
+	if aggType == types.AggregationMax {
+		return item.MaxUsage
+	}
+	return s.getCorrectUsageValue(item, aggType)
+}
+
+// sumPointCosts sums the cost of all points.
+func (s *featureUsageTrackingService) sumPointCosts(points []events.UsageAnalyticPoint) decimal.Decimal {
+	total := decimal.Zero
+	for _, pt := range points {
+		total = total.Add(pt.Cost)
+	}
+	return total
 }
 
 // calculateRegularCost calculates cost for regular meters
@@ -2838,7 +3003,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 		runStartTime = time.Now().UTC()
 	}
 
-	s.Logger.Infow("starting event reprocessing for feature usage tracking",
+	s.Logger.InfowCtx(ctx, "starting event reprocessing for feature usage tracking",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"start_time", params.StartTime,
@@ -2930,7 +3095,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 
 		eventsCount := len(unprocessedEvents)
 		totalEventsFound += eventsCount
-		s.Logger.Infow("found unprocessed events",
+		s.Logger.InfowCtx(ctx, "found unprocessed events",
 			"batch", processedBatches,
 			"count", eventsCount,
 			"total_found", totalEventsFound,
@@ -2946,7 +3111,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 			// hardcoded delay to avoid rate limiting
 			// TODO: remove this to make it configurable
 			if err := s.PublishEvent(ctx, event, true); err != nil {
-				s.Logger.Errorw("failed to publish event for reprocessing for feature usage tracking",
+				s.Logger.ErrorwCtx(ctx, "failed to publish event for reprocessing for feature usage tracking",
 					"event_id", event.ID,
 					"error", err,
 				)
@@ -2960,7 +3125,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 			lastTimestamp = event.Timestamp
 		}
 
-		s.Logger.Infow("published events for reprocessing for feature usage tracking",
+		s.Logger.InfowCtx(ctx, "published events for reprocessing for feature usage tracking",
 			"batch", processedBatches,
 			"count", eventsCount,
 			"total_published", totalEventsPublished,
@@ -2975,7 +3140,7 @@ func (s *featureUsageTrackingService) ReprocessEvents(ctx context.Context, param
 		}
 	}
 
-	s.Logger.Infow("completed event reprocessing for feature usage tracking",
+	s.Logger.InfowCtx(ctx, "completed event reprocessing for feature usage tracking",
 		"external_customer_id", params.ExternalCustomerID,
 		"event_name", params.EventName,
 		"batches_processed", processedBatches,
@@ -3022,7 +3187,7 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflow(ctx context
 	)
 
 	if err != nil {
-		s.Logger.Errorw("failed to start reprocess events workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to start reprocess events workflow",
 			"error", err,
 			"external_customer_id", req.ExternalCustomerID,
 			"event_name", req.EventName)
@@ -3035,7 +3200,7 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflow(ctx context
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("reprocess events workflow started successfully",
+	s.Logger.InfowCtx(ctx, "reprocess events workflow started successfully",
 		"external_customer_id", req.ExternalCustomerID,
 		"event_name", req.EventName,
 		"workflow_id", workflowRun.GetID(),
@@ -3080,7 +3245,7 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflowInternal(ctx
 	)
 
 	if err != nil {
-		s.Logger.Errorw("failed to start internal reprocess events workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to start internal reprocess events workflow",
 			"error", err,
 			"external_customer_id", req.ExternalCustomerID,
 			"event_name", req.EventName)
@@ -3093,7 +3258,7 @@ func (s *featureUsageTrackingService) TriggerReprocessEventsWorkflowInternal(ctx
 			Mark(ierr.ErrInternal)
 	}
 
-	s.Logger.Infow("internal reprocess events workflow started successfully",
+	s.Logger.InfowCtx(ctx, "internal reprocess events workflow started successfully",
 		"external_customer_id", req.ExternalCustomerID,
 		"event_name", req.EventName,
 		"workflow_id", workflowRun.GetID(),
@@ -3194,6 +3359,19 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 			Properties:      analytic.Properties,
 			CommitmentInfo:  analytic.CommitmentInfo,
 			Points:          make([]dto.UsageAnalyticPoint, 0, len(analytic.Points)),
+		}
+
+		// If feature has reporting unit, convert total usage and include reporting unit fields; otherwise total_usage_display stays ""
+		if f, ok := data.Features[analytic.FeatureID]; ok && f.ReportingUnit != nil {
+			if reportingUsage, err := f.ToReportingValue(totalUsage); err == nil {
+				item.TotalUsageDisplay = reportingUsage.String()
+				item.ReportingUnit = f.ReportingUnit
+			}
+		}
+
+		// Populate group when the feature belongs to a group
+		if f, ok := data.Features[analytic.FeatureID]; ok && f.GroupID != "" {
+			item.Group = data.Groups[f.GroupID]
 		}
 
 		// Only include Sources array when 'sources' is in expand param
@@ -3312,7 +3490,7 @@ func (s *featureUsageTrackingService) ToGetUsageAnalyticsResponseDTO(ctx context
 	// Build custom analytics if configured
 	customAnalytics, err := s.buildCustomAnalytics(ctx, response)
 	if err != nil {
-		s.Logger.Warnw("failed to build custom analytics",
+		s.Logger.WarnwCtx(ctx, "failed to build custom analytics",
 			"error", err,
 		)
 		// Continue without custom analytics rather than failing
@@ -3378,7 +3556,7 @@ func (s *featureUsageTrackingService) fetchPlans(ctx context.Context, data *Anal
 
 	plans, err := s.PlanRepo.List(ctx, planFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch plans for analytics",
+		s.Logger.ErrorwCtx(ctx, "failed to fetch plans for analytics",
 			"error", err,
 		)
 		return nil, ierr.WithError(err).
@@ -3399,7 +3577,7 @@ func (s *featureUsageTrackingService) fetchAddons(ctx context.Context, data *Ana
 
 	addons, err := s.AddonRepo.List(ctx, addonFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch addons for analytics",
+		s.Logger.ErrorwCtx(ctx, "failed to fetch addons for analytics",
 			"error", err,
 		)
 		return nil, ierr.WithError(err).
@@ -3463,6 +3641,9 @@ func (s *featureUsageTrackingService) mergeAnalyticsData(aggregated *AnalyticsDa
 	if aggregated.Addons == nil {
 		aggregated.Addons = make(map[string]*addon.Addon)
 	}
+	if aggregated.Groups == nil {
+		aggregated.Groups = make(map[string]*group.Group)
+	}
 	if aggregated.PriceResponses == nil {
 		aggregated.PriceResponses = make(map[string]*dto.PriceResponse)
 	}
@@ -3516,6 +3697,13 @@ func (s *featureUsageTrackingService) mergeAnalyticsData(aggregated *AnalyticsDa
 	for id, addon := range additional.Addons {
 		if _, exists := aggregated.Addons[id]; !exists {
 			aggregated.Addons[id] = addon
+		}
+	}
+
+	// Merge groups
+	for id, grp := range additional.Groups {
+		if _, exists := aggregated.Groups[id]; !exists {
+			aggregated.Groups[id] = grp
 		}
 	}
 }
@@ -3583,7 +3771,7 @@ func (s *featureUsageTrackingService) GetHuggingFaceBillingData(ctx context.Cont
 		// Get price for this record
 		p, ok := priceMap[record.PriceID]
 		if !ok {
-			s.Logger.Warnw("price not found for feature_usage record",
+			s.Logger.WarnwCtx(ctx, "price not found for feature_usage record",
 				"request_id", record.ID,
 				"price_id", record.PriceID,
 			)
@@ -3766,7 +3954,7 @@ func (s *featureUsageTrackingService) BenchmarkPrepareV1(ctx context.Context, ev
 		result.CustomerID = featureUsages[0].CustomerID
 	}
 
-	s.Logger.Infow("benchmark v1 completed",
+	s.Logger.InfowCtx(ctx, "benchmark v1 completed",
 		"event_id", event.ID,
 		"duration_ms", result.DurationMs,
 		"feature_usage_count", result.FeatureUsageCount,
@@ -3802,7 +3990,7 @@ func (s *featureUsageTrackingService) BenchmarkPrepareV2(ctx context.Context, ev
 		result.CustomerID = featureUsages[0].CustomerID
 	}
 
-	s.Logger.Infow("benchmark v2 completed",
+	s.Logger.InfowCtx(ctx, "benchmark v2 completed",
 		"event_id", event.ID,
 		"duration_ms", result.DurationMs,
 		"feature_usage_count", result.FeatureUsageCount,
@@ -4266,7 +4454,7 @@ func (s *featureUsageTrackingService) getCustomAnalyticsConfig(ctx context.Conte
 
 	config, err := utils.ToStruct[types.CustomAnalyticsConfig](setting.Value)
 	if err != nil {
-		s.Logger.Warnw("failed to parse custom analytics config",
+		s.Logger.WarnwCtx(ctx, "failed to parse custom analytics config",
 			"error", err,
 			"setting_id", setting.ID,
 		)
@@ -4274,4 +4462,309 @@ func (s *featureUsageTrackingService) getCustomAnalyticsConfig(ctx context.Conte
 	}
 
 	return &config, nil
+}
+
+// getPrepareProcessedEventsConfig fetches the prepare_processed_events workflow setting once.
+// Returns (config, true) when the setting exists and has actions, (nil, false) otherwise.
+// Callers can pass the config to matchMetersWithFeatureCreationSupport and handleMissingFeature to avoid redundant fetches.
+func (s *featureUsageTrackingService) getPrepareProcessedEventsConfig(ctx context.Context) (*workflowModels.WorkflowConfig, bool) {
+	settingsService := &settingsService{ServiceParams: s.ServiceParams}
+	workflowConfig, err := GetSetting[*workflowModels.WorkflowConfig](settingsService, ctx, types.SettingKeyPrepareProcessedEvents)
+	if err != nil || workflowConfig == nil || len(workflowConfig.Actions) == 0 {
+		return nil, false
+	}
+	return workflowConfig, true
+}
+
+// matchMetersWithFeatureCreationSupport runs the required-aggregation-field matching and optional feature auto-creation.
+// Use when prepare_processed_events config is enabled. Returns (meterMap, meterIDs, err); if meterIDs is empty caller should skip.
+func (s *featureUsageTrackingService) matchMetersWithFeatureCreationSupport(
+	ctx context.Context,
+	event *events.Event,
+	meters []*meter.Meter,
+	meterFilter *types.MeterFilter,
+	workflowConfig *workflowModels.WorkflowConfig,
+) (map[string]*meter.Meter, []string, error) {
+	required := workflowModels.RequiredAggregationFields(event.EventName, event.Properties)
+	meterMap, meterIDs, existing := s.matchMetersForEvent(meters, event, required)
+	missing := lo.Filter(required, func(f string, _ int) bool { _, ok := existing[f]; return !ok })
+
+	if len(meterIDs) == 0 {
+		if len(required) == 0 {
+			s.Logger.Debugw("no meters found for event name and no required aggregation fields, skipping", "event_id", event.ID, "event_name", event.EventName)
+			return nil, nil, nil
+		}
+		s.Logger.Debugw("no meters found for event name, attempting auto-creation", "event_id", event.ID, "event_name", event.EventName, "required", required)
+		workflowResult, err := s.handleMissingFeature(ctx, event, nil, workflowConfig)
+		if err != nil {
+			s.Logger.Errorw("failed to handle missing feature", "event_id", event.ID, "event_name", event.EventName, "error", err)
+			return nil, nil, err
+		}
+		if workflowResult == nil {
+			s.Logger.Debugw("skipping event - no auto-creation workflow configured", "event_id", event.ID, "event_name", event.EventName)
+			return nil, nil, nil
+		}
+		s.Logger.Debugw("feature/meter/price auto-created via workflow", "event_id", event.ID, "event_name", event.EventName, "feature_id", workflowResult.ID, "meter_id", workflowResult.MeterID)
+		meters, err = s.MeterRepo.List(ctx, meterFilter)
+		if err != nil {
+			s.Logger.Errorw("failed to re-fetch meters after auto-creation", "event_id", event.ID, "event_name", event.EventName, "error", err)
+			return nil, nil, err
+		}
+		meterMap, meterIDs, _ = s.matchMetersForEvent(meters, event, required)
+		if len(meterIDs) == 0 {
+			s.Logger.Warnw("no meters found even after auto-creation, skipping", "event_id", event.ID, "event_name", event.EventName)
+			return nil, nil, nil
+		}
+	} else if len(missing) > 0 {
+		s.Logger.Infow("creating only missing aggregation fields (skipping existing)", "event_id", event.ID, "event_name", event.EventName, "existing", lo.Keys(existing), "missing", missing)
+		if _, err := s.handleMissingFeature(ctx, event, missing, workflowConfig); err != nil {
+			s.Logger.Errorw("failed to create missing aggregation fields",
+				"event_id", event.ID,
+				"event_name", event.EventName,
+				"missing", missing,
+				"error", err,
+			)
+			// Continue with existing meters; do not fail the event
+		}
+	}
+
+	if len(meterIDs) == 0 {
+		s.Logger.Debugw("no meters match event filters and required aggregation fields, skipping", "event_id", event.ID, "event_name", event.EventName)
+		return nil, nil, nil
+	}
+	return meterMap, meterIDs, nil
+}
+
+// matchMetersForEvent returns meters that pass event filters and have aggregation field in required.
+// Returns meterMap, meterIDs, and set of existing aggregation fields.
+func (s *featureUsageTrackingService) matchMetersForEvent(meters []*meter.Meter, event *events.Event, required []string) (map[string]*meter.Meter, []string, map[string]struct{}) {
+	meterMap := make(map[string]*meter.Meter)
+	meterIDs := make([]string, 0, len(meters))
+	existing := make(map[string]struct{})
+	for _, m := range meters {
+		if !s.checkMeterFilters(event, m.Filters) || !lo.Contains(required, m.Aggregation.Field) {
+			continue
+		}
+		meterMap[m.ID] = m
+		meterIDs = append(meterIDs, m.ID)
+		existing[m.Aggregation.Field] = struct{}{}
+	}
+	return meterMap, meterIDs, existing
+}
+
+func (s *featureUsageTrackingService) handleMissingFeature(
+	ctx context.Context,
+	event *events.Event,
+	onlyCreateAggregationFields []string,
+	workflowConfig *workflowModels.WorkflowConfig,
+) (*feature.Feature, error) {
+
+	var err error
+
+	if workflowConfig == nil || len(workflowConfig.Actions) == 0 {
+		s.Logger.Debugw("no workflow config found for prepare processed events",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return nil, nil // No config, skip auto-creation
+	}
+
+	// Check if workflow has create_feature_and_price action as the first action
+	hasCreateFeatureAndPrice := false
+	if len(workflowConfig.Actions) > 0 {
+		if workflowConfig.Actions[0].GetAction() == workflowModels.WorkflowActionCreateFeatureAndPrice {
+			hasCreateFeatureAndPrice = true
+		}
+	}
+
+	if !hasCreateFeatureAndPrice {
+		s.Logger.Debugw("workflow config does not have create_feature_and_price as first action",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"actions", workflowConfig.Actions,
+		)
+		return nil, nil // No create_feature_and_price action, skip auto-creation
+	}
+
+	// Extract plan_id from the create_feature_and_price action
+	var planID string
+	for _, action := range workflowConfig.Actions {
+		if action.GetAction() == workflowModels.WorkflowActionCreateFeatureAndPrice {
+			if featureAction, ok := action.(*workflowModels.CreateFeatureAndPriceActionConfig); ok {
+				planID = featureAction.PlanID
+				break
+			}
+		}
+	}
+
+	// plan_id is required to run this workflow
+	if planID == "" {
+		s.Logger.Debugw("workflow config missing plan_id in create_feature_and_price action; skipping auto-creation",
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return nil, nil
+	}
+
+	s.Logger.Debugw("executing prepare processed events workflow",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"plan_id", planID,
+	)
+
+	// Validate that plan exists for this tenant and environment
+	_, err = s.PlanRepo.Get(ctx, planID)
+	if err != nil {
+		s.Logger.Errorw("plan does not exist for prepare processed events workflow",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+			"plan_id", planID,
+		)
+		return nil, ierr.WithError(err).
+			WithHint("Plan does not exist for the specified tenant and environment").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+				"plan_id":    planID,
+			}).
+			Mark(ierr.ErrNotFound)
+	}
+
+	input := &workflowModels.PrepareProcessedEventsWorkflowInput{
+		EventID:                     event.ID,
+		EventName:                   event.EventName,
+		EventTimestamp:              event.Timestamp,
+		EventProperties:             event.Properties,
+		TenantID:                    types.GetTenantID(ctx),
+		EnvironmentID:               types.GetEnvironmentID(ctx),
+		WorkflowConfig:              *workflowConfig,
+		OnlyCreateAggregationFields: onlyCreateAggregationFields,
+	}
+
+	if err := input.Validate(); err != nil {
+		s.Logger.Errorw("invalid workflow input for prepare processed events",
+			"error", err,
+			"event_id", event.ID,
+			"event_name", event.EventName,
+		)
+		return nil, ierr.WithError(err).
+			WithHint("Invalid workflow input for prepare processed events").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrValidation)
+	}
+
+	temporalSvc := temporalservice.GetGlobalTemporalService()
+	if temporalSvc == nil {
+		return nil, ierr.NewError("temporal service not available").
+			WithHint("Prepare processed events workflow requires Temporal service").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	result, err := temporalSvc.ExecuteWorkflowSync(
+		ctx,
+		types.TemporalPrepareProcessedEventsWorkflow,
+		input,
+		300, // 5 minutes timeout
+	)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to execute prepare processed events workflow").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	workflowResult, ok := result.(*workflowModels.PrepareProcessedEventsWorkflowResult)
+	if !ok {
+		return nil, ierr.NewError("invalid workflow result type").
+			WithHint("Expected PrepareProcessedEventsWorkflowResult").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	if workflowResult.Status != workflowModels.WorkflowStatusCompleted {
+		errorMsg := "workflow did not complete successfully"
+		if workflowResult.ErrorSummary != nil {
+			errorMsg = *workflowResult.ErrorSummary
+		}
+		return nil, ierr.NewError(errorMsg).
+			WithHint("Prepare processed events workflow failed").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":         event.ID,
+				"event_name":       event.EventName,
+				"workflow_status":  workflowResult.Status,
+				"actions_executed": workflowResult.ActionsExecuted,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	// Extract feature_id from workflow results
+	var featureID string
+	for _, actionResult := range workflowResult.Results {
+		if actionResult.ActionType == workflowModels.WorkflowActionCreateFeatureAndPrice &&
+			actionResult.Status == workflowModels.WorkflowStatusCompleted &&
+			actionResult.ResourceID != "" {
+			featureID = actionResult.ResourceID
+			break
+		}
+	}
+
+	if featureID == "" {
+		return nil, ierr.NewError("feature_id not found in workflow results").
+			WithHint("Workflow completed but feature was not created").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+			}).
+			Mark(ierr.ErrInternal)
+	}
+
+	// Fetch the created feature
+	createdFeature, err := s.FeatureRepo.Get(ctx, featureID)
+	if err != nil {
+		return nil, ierr.WithError(err).
+			WithHint("Failed to fetch created feature").
+			WithReportableDetails(map[string]interface{}{
+				"event_id":   event.ID,
+				"event_name": event.EventName,
+				"feature_id": featureID,
+			}).
+			Mark(ierr.ErrDatabase)
+	}
+
+	// Check if rollout_to_subscriptions action was executed
+	var rolloutExecuted bool
+	var rolloutPlanID string
+	for _, actionResult := range workflowResult.Results {
+		if actionResult.ActionType == workflowModels.WorkflowActionRolloutToSubscriptions &&
+			actionResult.Status == workflowModels.WorkflowStatusCompleted {
+			rolloutExecuted = true
+			rolloutPlanID = actionResult.ResourceID
+			break
+		}
+	}
+
+	s.Logger.Infow("prepare processed events workflow completed successfully",
+		"event_id", event.ID,
+		"event_name", event.EventName,
+		"feature_id", featureID,
+		"actions_executed", workflowResult.ActionsExecuted,
+		"rollout_to_subscriptions_executed", rolloutExecuted,
+		"rollout_plan_id", rolloutPlanID,
+	)
+
+	return createdFeature, nil
 }

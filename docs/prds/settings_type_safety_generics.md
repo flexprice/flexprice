@@ -71,7 +71,7 @@ The existing settings system manages 4 different setting types:
 | `invoice_config`      | Invoice generation configuration | prefix, format, start_sequence, timezone, separator, suffix_length, due_date_days, auto_complete_purchased_credit_transaction | Environment-level |
 | `subscription_config` | Subscription auto-cancellation   | grace_period_days, auto_cancellation_enabled                                                                                  | Environment-level |
 | `invoice_pdf_config`  | Invoice PDF generation           | template_name, group_by                                                                                                       | Environment-level |
-| `env_config`          | Environment creation limits      | production, development (limits)                                                                                              | Tenant-level      |
+| `tenant_config`       | Tenant / environment creation limits | production, development (limits)                                                                                           | Tenant-level      |
 
 ### Architecture Components
 
@@ -117,7 +117,7 @@ type Setting struct {
 **Features:**
 
 - ✅ Environment-level queries: `GetByKey(ctx, key)`
-- ✅ Tenant-level queries: `GetTenantSettingByKey(ctx, key)` (for `env_config`)
+- ✅ Tenant-level queries: `GetTenantSettingByKey(ctx, key)` (for `tenant_config`)
 - ✅ Caching support with key-based and ID-based cache entries
 - ✅ Soft delete with status archiving
 - ✅ List all settings by key across tenants: `ListAllTenantEnvSettingsByKey(ctx, key)`
@@ -143,7 +143,7 @@ type Setting struct {
 
 - ✅ Handles defaults for non-existent settings
 - ✅ Merge strategy for partial updates
-- ✅ Special handling for `env_config` (tenant-level)
+- ✅ Special handling for `tenant_config` (tenant-level)
 - ✅ Type normalization for `invoice_pdf_config` (array handling)
 - ❌ **No type safety** - returns `map[string]interface{}`
 - ❌ Consumers must manually convert to typed structs
@@ -306,7 +306,7 @@ func (h *SettingsHandler) GetSettingByKey(c *gin.Context) {
 ```
 Service.GetSettingByKey(ctx, key)
   ↓
-Repository.GetByKey(ctx, key)  // or GetTenantSettingByKey for env_config
+Repository.GetByKey(ctx, key)  // or GetTenantSettingByKey for tenant_config
   ↓
 Returns: &Setting{Value: map[string]interface{}}
   ↓

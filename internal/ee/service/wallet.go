@@ -688,6 +688,15 @@ func (s *walletService) processWalletOperation(ctx context.Context, req *wallet.
 		)
 	}
 
+	baseWalletService := service.NewWalletService(s.ServiceParams)
+	if err := baseWalletService.CheckWalletBalanceAlert(ctx, event); err != nil {
+		s.Logger.Errorw("failed to check wallet balance alert after wallet operation",
+			"error", err,
+			"wallet_id", req.WalletID,
+			"customer_id", w.CustomerID,
+		)
+	}
+
 	return nil
 }
 
@@ -922,7 +931,7 @@ func (s *walletService) GetCustomerWallets(ctx context.Context, req *dto.GetCust
 	return response, nil
 }
 
-func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, eventName string, walletID string) {
+func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, eventName types.WebhookEventName, walletID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalWalletEvent{
 		WalletID:  walletID,
 		TenantID:  types.GetTenantID(ctx),
@@ -948,7 +957,7 @@ func (s *walletService) publishInternalWalletWebhookEvent(ctx context.Context, e
 	}
 }
 
-func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Context, eventName string, transactionID string) {
+func (s *walletService) publishInternalTransactionWebhookEvent(ctx context.Context, eventName types.WebhookEventName, transactionID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalTransactionEvent{
 		TransactionID: transactionID,
 		TenantID:      types.GetTenantID(ctx),

@@ -1,11 +1,13 @@
 package entitlement
 
 import (
+	"context"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 )
 
 // Entitlement represents the benefits a customer gets from a subscription plan
@@ -26,6 +28,42 @@ type Entitlement struct {
 	StartDate           *time.Time                        `json:"start_date,omitempty"`
 	EndDate             *time.Time                        `json:"end_date,omitempty"`
 	types.BaseModel
+}
+
+// EntitlementCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
+type EntitlementCloneOverrides struct {
+	ID         *string
+	EntityType *types.EntitlementEntityType
+	EntityID   *string
+	BaseModel  *types.BaseModel
+}
+
+// CopyWith returns a shallow copy of the entitlement with optional overrides applied.
+// Pointer fields on the original (UsageLimit, ParentEntitlementID, StartDate, EndDate) are shallow-copied.
+// If BaseModel is not in overrides, uses types.GetDefaultBaseModel(ctx).
+func (e *Entitlement) CopyWith(ctx context.Context, overrides *EntitlementCloneOverrides) *Entitlement {
+	if e == nil {
+		return nil
+	}
+	out := lo.FromPtr(e)
+	if overrides == nil {
+		return lo.ToPtr(out)
+	}
+	if overrides.ID != nil {
+		out.ID = lo.FromPtr(overrides.ID)
+	}
+	if overrides.EntityType != nil {
+		out.EntityType = lo.FromPtr(overrides.EntityType)
+	}
+	if overrides.EntityID != nil {
+		out.EntityID = lo.FromPtr(overrides.EntityID)
+	}
+	if overrides.BaseModel != nil {
+		out.BaseModel = lo.FromPtr(overrides.BaseModel)
+	} else {
+		out.BaseModel = types.GetDefaultBaseModel(ctx)
+	}
+	return lo.ToPtr(out)
 }
 
 // Validate performs validation on the entitlement

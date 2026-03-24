@@ -189,9 +189,12 @@ func (s *BaseServiceTestSuite) setupContext() {
 }
 
 func (s *BaseServiceTestSuite) setupStores() {
+	subStore := NewInMemorySubscriptionStore()
+	lineItemStore := NewInMemorySubscriptionLineItemStore()
+	subStore.SetLineItemStore(lineItemStore)
 	s.stores = Stores{
-		SubscriptionRepo:             NewInMemorySubscriptionStore(),
-		SubscriptionLineItemRepo:     NewInMemorySubscriptionLineItemStore(),
+		SubscriptionRepo:             subStore,
+		SubscriptionLineItemRepo:     lineItemStore,
 		SubscriptionPhaseRepo:        NewInMemorySubscriptionPhaseStore(),
 		SubscriptionScheduleRepo:     NewInMemorySubscriptionScheduleStore(),
 		EventRepo:                    NewInMemoryEventStore(),
@@ -277,6 +280,7 @@ func (s *BaseServiceTestSuite) clearStores() {
 	s.stores.SubscriptionLineItemRepo.(*InMemorySubscriptionLineItemStore).Clear()
 	s.stores.SubscriptionPhaseRepo.(*InMemorySubscriptionPhaseStore).Clear()
 	s.stores.AlertLogsRepo.(*InMemoryAlertLogsStore).Clear()
+	s.stores.FeatureUsageRepo.(*InMemoryFeatureUsageStore).Clear()
 }
 
 func (s *BaseServiceTestSuite) ClearStores() {

@@ -46,8 +46,8 @@ func (a *PrepareProcessedEventsActivities) CreateFeatureAndPriceActivity(
 
 	// Convert workflow config to DTOs - returns slice of DTOs (one per feature)
 	dtos, err := cfg.ToDTO(&models.WorkflowActionParams{
-		EventName:                  input.EventName,
-		EventProperties:            input.EventProperties,
+		EventName:                   input.EventName,
+		EventProperties:             input.EventProperties,
 		OnlyCreateAggregationFields: input.OnlyCreateAggregationFields,
 	})
 	if err != nil {

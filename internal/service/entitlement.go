@@ -100,7 +100,7 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 				}).
 				Mark(ierr.ErrNotFound)
 		}
-		s.Logger.Infow("creating subscription-scoped entitlement",
+		s.Logger.InfowCtx(ctx, "creating subscription-scoped entitlement",
 			"subscription_id", entityID,
 			"feature_id", req.FeatureID,
 			"parent_entitlement_id", req.ParentEntitlementID)
@@ -176,7 +176,7 @@ func (s *entitlementService) CreateEntitlement(ctx context.Context, req dto.Crea
 		response.PlanID = entityID // Keep for backward compatibility
 	case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
 		// For subscription entitlements, we don't add the full subscription object to avoid circular deps
-		s.Logger.Infow("subscription-scoped entitlement created",
+		s.Logger.InfowCtx(ctx, "subscription-scoped entitlement created",
 			"entitlement_id", result.ID,
 			"subscription_id", entityID)
 	}
@@ -376,7 +376,7 @@ func (s *entitlementService) CreateBulkEntitlement(ctx context.Context, req dto.
 				entResp.Addon = &dto.AddonResponse{Addon: addon}
 			case types.ENTITLEMENT_ENTITY_TYPE_SUBSCRIPTION:
 				// For subscription entitlements, we don't add the full subscription object to avoid circular deps
-				s.Logger.Infow("subscription-scoped entitlement created in bulk",
+				s.Logger.InfowCtx(ctx, "subscription-scoped entitlement created in bulk",
 					"entitlement_id", ent.ID,
 					"subscription_id", ent.EntityID)
 			}
@@ -407,11 +407,12 @@ func (s *entitlementService) GetEntitlement(ctx context.Context, id string) (*dt
 	response := &dto.EntitlementResponse{Entitlement: result}
 
 	// Add expanded fields
-	feature, err := s.FeatureRepo.Get(ctx, result.FeatureID)
+	fetaureService := NewFeatureService(s.ServiceParams)
+	feature, err := fetaureService.GetFeature(ctx, result.FeatureID)
 	if err != nil {
 		return nil, err
 	}
-	response.Feature = &dto.FeatureResponse{Feature: feature}
+	response.Feature = feature
 
 	if result.EntityType == types.ENTITLEMENT_ENTITY_TYPE_PLAN {
 		// TODO: !REMOVE after migration
@@ -489,7 +490,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					featuresByID[f.ID] = f
 				}
 
-				s.Logger.Debugw("fetched features for entitlements", "count", len(features))
+				s.Logger.DebugwCtx(ctx, "fetched features for entitlements", "count", len(features))
 			}
 		}
 
@@ -513,7 +514,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					metersByID[m.ID] = m
 				}
 
-				s.Logger.Debugw("fetched meters for entitlements", "count", len(meters))
+				s.Logger.DebugwCtx(ctx, "fetched meters for entitlements", "count", len(meters))
 			}
 		}
 
@@ -536,7 +537,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					plansByID[p.ID] = p
 				}
 
-				s.Logger.Debugw("fetched plans for entitlements", "count", len(plans))
+				s.Logger.DebugwCtx(ctx, "fetched plans for entitlements", "count", len(plans))
 			}
 		}
 
@@ -559,7 +560,7 @@ func (s *entitlementService) ListEntitlements(ctx context.Context, filter *types
 					addonsByID[a.ID] = a
 				}
 
-				s.Logger.Debugw("fetched addons for entitlements", "count", len(addons))
+				s.Logger.DebugwCtx(ctx, "fetched addons for entitlements", "count", len(addons))
 			}
 		}
 	}
@@ -715,13 +716,13 @@ func (s *entitlementService) GetAddonEntitlements(ctx context.Context, addonID s
 	return s.ListEntitlements(ctx, filter)
 }
 
-func (s *entitlementService) publishWebhookEvent(ctx context.Context, eventName string, entitlementID string) {
+func (s *entitlementService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, entitlementID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalEntitlementEvent{
 		EntitlementID: entitlementID,
 		TenantID:      types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -735,6 +736,6 @@ func (s *entitlementService) publishWebhookEvent(ctx context.Context, eventName 
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }

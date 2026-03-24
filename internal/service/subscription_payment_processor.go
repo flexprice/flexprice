@@ -811,7 +811,7 @@ func (s *subscriptionPaymentProcessor) processPaymentMethodCharge(
 func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, sub *subscription.Subscription, invoicingCustomerID string) string {
 	// Use subscription's payment method if set
 	if sub.GatewayPaymentMethodID != nil && *sub.GatewayPaymentMethodID != "" {
-		s.Logger.Infow("using subscription gateway payment method",
+		s.Logger.InfowCtx(ctx, "using subscription gateway payment method",
 			"subscription_id", sub.ID,
 			"gateway_payment_method_id", *sub.GatewayPaymentMethodID,
 		)
@@ -821,7 +821,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	// Get invoicing customer's default payment method from Stripe
 	stripeIntegration, err := s.IntegrationFactory.GetStripeIntegration(ctx)
 	if err != nil {
-		s.Logger.Warnw("failed to get Stripe integration",
+		s.Logger.WarnwCtx(ctx, "failed to get Stripe integration",
 			"error", err,
 			"subscription_id", sub.ID,
 		)
@@ -831,7 +831,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	customerService := NewCustomerService(*s.ServiceParams)
 	defaultPaymentMethod, err := stripeIntegration.CustomerSvc.GetDefaultPaymentMethod(ctx, invoicingCustomerID, customerService)
 	if err != nil {
-		s.Logger.Warnw("failed to get default payment method for invoicing customer",
+		s.Logger.WarnwCtx(ctx, "failed to get default payment method for invoicing customer",
 			"error", err,
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
@@ -841,7 +841,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 	}
 
 	if defaultPaymentMethod == nil {
-		s.Logger.Warnw("invoicing customer has no default payment method",
+		s.Logger.WarnwCtx(ctx, "invoicing customer has no default payment method",
 			"subscription_id", sub.ID,
 			"subscription_customer_id", sub.CustomerID,
 			"invoicing_customer_id", invoicingCustomerID,
@@ -849,7 +849,7 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 		return ""
 	}
 
-	s.Logger.Infow("using invoicing customer default payment method",
+	s.Logger.InfowCtx(ctx, "using invoicing customer default payment method",
 		"subscription_id", sub.ID,
 		"subscription_customer_id", sub.CustomerID,
 		"invoicing_customer_id", invoicingCustomerID,
@@ -863,18 +863,18 @@ func (s *subscriptionPaymentProcessor) getPaymentMethodID(ctx context.Context, s
 func (s *subscriptionPaymentProcessor) hasStripeConnection(ctx context.Context) bool {
 	conn, err := s.ConnectionRepo.GetByProvider(ctx, types.SecretProviderStripe)
 	if err != nil {
-		s.Logger.Debugw("no Stripe connection found",
+		s.Logger.DebugwCtx(ctx, "no Stripe connection found",
 			"error", err,
 		)
 		return false
 	}
 
 	if conn == nil {
-		s.Logger.Debugw("Stripe connection is nil")
+		s.Logger.DebugwCtx(ctx, "Stripe connection is nil")
 		return false
 	}
 
-	s.Logger.Debugw("Stripe connection found",
+	s.Logger.DebugwCtx(ctx, "Stripe connection found",
 		"connection_id", conn.ID,
 		"provider", conn.ProviderType,
 	)

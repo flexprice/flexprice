@@ -101,6 +101,7 @@ func copyInvoice(inv *invoice.Invoice) *invoice.Invoice {
 		Metadata:                   inv.Metadata,
 		Version:                    inv.Version,
 		EnvironmentID:              inv.EnvironmentID,
+		RecalculatedInvoiceID:      inv.RecalculatedInvoiceID,
 		BaseModel:                  inv.BaseModel,
 	}
 }
@@ -186,6 +187,10 @@ func (s *InMemoryInvoiceStore) GetByIdempotencyKey(ctx context.Context, key stri
 	}
 
 	for _, inv := range invoices {
+		// Exclude voided invoices to match PostgreSQL behaviour (WHERE invoice_status != 'VOIDED')
+		if inv.InvoiceStatus == types.InvoiceStatusVoided {
+			continue
+		}
 		if inv.IdempotencyKey != nil && *inv.IdempotencyKey == key {
 			return copyInvoice(inv), nil
 		}
@@ -203,6 +208,11 @@ func (s *InMemoryInvoiceStore) ExistsForPeriod(ctx context.Context, subscription
 	}
 
 	for _, inv := range invoices {
+		// Exclude voided invoices to match PostgreSQL partial index:
+		// UNIQUE (subscription_id, period_start, period_end) WHERE invoice_status != 'VOIDED'
+		if inv.InvoiceStatus == types.InvoiceStatusVoided {
+			continue
+		}
 		if inv.PeriodStart != nil && inv.PeriodEnd != nil {
 			if (periodStart.Equal(*inv.PeriodStart) || periodStart.After(*inv.PeriodStart)) &&
 				(periodEnd.Equal(*inv.PeriodEnd) || periodEnd.Before(*inv.PeriodEnd)) {
@@ -357,6 +367,20 @@ func invoiceFilterFn(ctx context.Context, inv *invoice.Invoice, filter interface
 			if inv.PeriodEnd == nil || inv.PeriodEnd.Before(*f.TimeRangeFilter.EndTime) {
 				return false
 			}
+		}
+	}
+
+	// Filter by period_start_gte (periodStart >= value)
+	if f.PeriodStartGTE != nil {
+		if inv.PeriodStart == nil || inv.PeriodStart.Before(*f.PeriodStartGTE) {
+			return false
+		}
+	}
+
+	// Filter by period_end_lte (periodEnd <= value)
+	if f.PeriodEndLTE != nil {
+		if inv.PeriodEnd == nil || inv.PeriodEnd.After(*f.PeriodEndLTE) {
+			return false
 		}
 	}
 

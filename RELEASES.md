@@ -4,7 +4,7 @@
 ### Changes
 Based on:
 - OpenAPI Doc  
-- Speakeasy CLI 1.680.11 (2.788.15) https://github.com/speakeasy-api/speakeasy
+- SDK generator CLI 1.680.11 (2.788.15) https://github.com/speakeasy-api/speakeasy
 ### Generated
 - [python v2.0.0] api/python
 - [typescript v2.0.0] api/javascript
@@ -18,7 +18,7 @@ Based on:
 ### Changes
 Based on:
 - OpenAPI Doc  
-- Speakeasy CLI 1.680.11 (2.788.15) https://github.com/speakeasy-api/speakeasy
+- SDK generator CLI 1.680.11 (2.788.15) https://github.com/speakeasy-api/speakeasy
 ### Generated
 - [python v2.0.0] api/python
 - [typescript v2.0.0] api/javascript
@@ -27,7 +27,7 @@ Based on:
 ### Changes
 Based on:
 - OpenAPI Doc  
-- Speakeasy CLI 1.680.11 (2.788.15) https://github.com/speakeasy-api/speakeasy
+- SDK generator CLI 1.680.11 (2.788.15) https://github.com/speakeasy-api/speakeasy
 ### Generated
 - [python v2.0.0] api/python
 - [typescript v2.0.0] api/javascript
@@ -39,7 +39,7 @@ Based on:
 ### Changes
 Based on:
 - OpenAPI Doc  
-- Speakeasy CLI 1.680.12 (2.788.15) https://github.com/speakeasy-api/speakeasy
+- SDK generator CLI 1.680.12 (2.788.15) https://github.com/speakeasy-api/speakeasy
 ### Generated
 - [typescript v2.0.2] api/javascript
 - [python v2.0.2] api/python
@@ -51,7 +51,7 @@ Based on:
 ### Changes
 Based on:
 - OpenAPI Doc  
-- Speakeasy CLI 1.680.12 (2.788.15) https://github.com/speakeasy-api/speakeasy
+- SDK generator CLI 1.680.12 (2.788.15) https://github.com/speakeasy-api/speakeasy
 ### Generated
 - [python v2.0.2] api/python
 - [typescript v2.0.2] api/javascript
@@ -60,7 +60,7 @@ Based on:
 ### Changes
 Based on:
 - OpenAPI Doc  
-- Speakeasy CLI 1.680.12 (2.788.15) https://github.com/speakeasy-api/speakeasy
+- SDK generator CLI 1.680.12 (2.788.15) https://github.com/speakeasy-api/speakeasy
 ### Generated
 - [python v2.0.3] api/python
 - [typescript v2.0.3] api/javascript

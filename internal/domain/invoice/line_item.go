@@ -25,25 +25,25 @@ type InvoiceLineItem struct {
 	MeterDisplayName *string               `json:"meter_display_name,omitempty"`
 	PriceUnitID      *string               `json:"price_unit_id,omitempty"`
 	PriceUnit        *string               `json:"price_unit,omitempty"`
-	PriceUnitAmount  *decimal.Decimal      `json:"price_unit_amount,omitempty"`
+	PriceUnitAmount  *decimal.Decimal      `json:"price_unit_amount,omitempty" swaggertype:"string"`
 	DisplayName      *string               `json:"display_name,omitempty"`
-	Amount           decimal.Decimal       `json:"amount"`
-	Quantity         decimal.Decimal       `json:"quantity"`
+	Amount           decimal.Decimal       `json:"amount" swaggertype:"string"`
+	Quantity         decimal.Decimal       `json:"quantity" swaggertype:"string"`
 	Currency         string                `json:"currency"`
 	PeriodStart      *time.Time            `json:"period_start,omitempty"`
-	PeriodEnd        *time.Time            `json:"period_end,omitempty"`
+	PeriodEnd        *time.Time            `json:"period_end,omitempty" `
 	Metadata         types.Metadata        `json:"metadata,omitempty"`
 	EnvironmentID    string                `json:"environment_id"`
 	CommitmentInfo   *types.CommitmentInfo `json:"commitment_info,omitempty"`
 
 	// prepaid_credits_applied is the amount in invoice currency reduced from this line item due to prepaid credits application.
-	PrepaidCreditsApplied decimal.Decimal `json:"prepaid_credits_applied"`
+	PrepaidCreditsApplied decimal.Decimal `json:"prepaid_credits_applied" swaggertype:"string"`
 
 	// line_item_discount is the discount amount in invoice currency applied directly to this line item.
-	LineItemDiscount decimal.Decimal `json:"line_item_discount"`
+	LineItemDiscount decimal.Decimal `json:"line_item_discount" swaggertype:"string"`
 
 	// invoice_level_discount is the discount amount in invoice currency applied to all line items on the invoice.
-	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount"`
+	InvoiceLevelDiscount decimal.Decimal `json:"invoice_level_discount" swaggertype:"string"`
 
 	types.BaseModel
 }

@@ -20,16 +20,17 @@ func NewGroupHandler(service service.GroupService, log *logger.Logger) *GroupHan
 	return &GroupHandler{service: service, log: log}
 }
 
-// @Summary Create a group
-// @Description Create a new group for organizing entities (prices, plans, customers, etc.)
+// @Summary Create group
+// @ID createGroup
+// @Description Use when organizing entities into a group (e.g. for filtering prices or plans by product line or region).
 // @Tags Groups
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param group body dto.CreateGroupRequest true "Group"
 // @Success 201 {object} dto.GroupResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /groups [post]
 func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	var req dto.CreateGroupRequest
@@ -49,17 +50,18 @@ func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a group
-// @Description Get a group by ID
+// @Summary Get group
+// @ID getGroup
+// @Description Use when you need to load a single group (e.g. for display or to assign entities).
 // @Tags Groups
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Group ID"
 // @Success 200 {object} dto.GroupResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /groups/{id} [get]
 func (h *GroupHandler) GetGroup(c *gin.Context) {
 	id := c.Param("id")
@@ -73,17 +75,18 @@ func (h *GroupHandler) GetGroup(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a group
-// @Description Delete a group and remove all entity associations
+// @Summary Delete group
+// @ID deleteGroup
+// @Description Use when removing a group and clearing its entity associations (e.g. retiring a product line). Returns 204 or 200 on success.
 // @Tags Groups
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Group ID"
 // @Success 204 "No Content"
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /groups/{id} [delete]
 func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	id := c.Param("id")
@@ -97,24 +100,19 @@ func (h *GroupHandler) DeleteGroup(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
-// @Summary Get groups
-// @Description Get groups with optional filtering via query parameters
+// @Summary Query groups
+// @ID queryGroup
+// @Description Use when listing or searching groups (e.g. admin catalog). Returns a paginated list; supports filtering and sorting.
 // @Tags Groups
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param entity_type query string false "Filter by entity type (e.g., 'price')"
-// @Param name query string false "Filter by group name (contains search)"
-// @Param lookup_key query string false "Filter by lookup key (exact match)"
-// @Param limit query int false "Number of items to return (default: 20)"
-// @Param offset query int false "Number of items to skip (default: 0)"
-// @Param sort_by query string false "Field to sort by (name, created_at, updated_at)"
-// @Param sort_order query string false "Sort order (asc, desc)"
+// @Param filter body types.GroupFilter true "Filter"
 // @Success 200 {object} dto.ListGroupsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /groups/search [post]
-func (h *GroupHandler) ListGroups(c *gin.Context) {
+func (h *GroupHandler) QueryGroups(c *gin.Context) {
 	var filter types.GroupFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

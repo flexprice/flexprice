@@ -156,6 +156,7 @@ type WalletBalanceAlertEvent struct {
 	ID                    string    `json:"id"`
 	CustomerID            string    `json:"customer_id"`
 	ForceCalculateBalance bool      `json:"force_calculate_balance"`
+	GetFromCache          bool      `json:"get_from_cache"` // If true, use cached balance (max 1 min old) instead of computing fresh
 	TenantID              string    `json:"tenant_id"`
 	EnvironmentID         string    `json:"environment_id"`
 	Timestamp             time.Time `json:"timestamp"`

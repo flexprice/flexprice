@@ -640,19 +640,12 @@ func (o PaymentQueryOptions) ApplyPaginationFilter(query PaymentQuery, limit int
 	return query
 }
 
+// GetFieldName returns the ent field name for payment; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o PaymentQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return payment.FieldCreatedAt
-	case "updated_at":
-		return payment.FieldUpdatedAt
-	case "payment_status":
-		return payment.FieldPaymentStatus
-	case "amount":
-		return payment.FieldAmount
-	default:
+	if payment.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o PaymentQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PaymentFilter, query PaymentQuery) PaymentQuery {

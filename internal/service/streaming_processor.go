@@ -450,7 +450,7 @@ func (sp *StreamingProcessor) downloadFileStream(ctx context.Context, t *task.Ta
 		return nil, fmt.Errorf("failed to get download URL from %s provider: %w", provider.GetProviderName(), err)
 	}
 
-	sp.Logger.Debugw("using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
+	sp.Logger.DebugwCtx(ctx, "using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
 
 	// Create retryable HTTP request
 	req, err := retryablehttp.NewRequestWithContext(ctx, "GET", downloadURL, nil)
@@ -489,7 +489,7 @@ func (sp *StreamingProcessor) updateTaskProgress(ctx context.Context, t *task.Ta
 	t.SuccessfulRecords = successful
 	t.FailedRecords = failed
 
-	sp.Logger.Infow("updating task progress",
+	sp.Logger.InfowCtx(ctx, "updating task progress",
 		"task_id", t.ID,
 		"processed", processed,
 		"successful", successful,

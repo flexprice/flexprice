@@ -362,35 +362,12 @@ func (o TaxAssociationQueryOptions) ApplyPaginationFilter(query TaxAssociationQu
 	return query
 }
 
+// GetFieldName returns the ent field name for tax_association; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o TaxAssociationQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return entTaxConfig.FieldCreatedAt
-	case "updated_at":
-		return entTaxConfig.FieldUpdatedAt
-	case "priority":
-		return entTaxConfig.FieldPriority
-	case "auto_apply":
-		return entTaxConfig.FieldAutoApply
-	case "currency":
-		return entTaxConfig.FieldCurrency
-	case "metadata":
-		return entTaxConfig.FieldMetadata
-	case "environment_id":
-		return entTaxConfig.FieldEnvironmentID
-	case "tax_rate_id":
-		return entTaxConfig.FieldTaxRateID
-	case "entity_type":
-		return entTaxConfig.FieldEntityType
-	case "entity_id":
-		return entTaxConfig.FieldEntityID
-	case "tenant_id":
-		return entTaxConfig.FieldTenantID
-	case "id":
-		return entTaxConfig.FieldID
-	default:
-		return ""
+	if entTaxConfig.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o TaxAssociationQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.TaxAssociationFilter, query TaxAssociationQuery) (TaxAssociationQuery, error) {

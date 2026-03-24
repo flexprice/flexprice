@@ -20,16 +20,17 @@ func NewCreditGrantHandler(service service.CreditGrantService, log *logger.Logge
 	return &CreditGrantHandler{service: service, log: log}
 }
 
-// @Summary Create a new credit grant
-// @Description Create a new credit grant with the specified configuration
-// @Tags CreditGrants
+// @Summary Create credit grant
+// @ID createCreditGrant
+// @Description Use when giving a customer or plan credits (e.g. prepaid balance or promotional credits). Scope can be plan or subscription; supports start/end dates.
+// @Tags Credit Grants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param credit_grant body dto.CreateCreditGrantRequest true "Credit Grant configuration"
 // @Success 201 {object} dto.CreditGrantResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditgrants [post]
 func (h *CreditGrantHandler) CreateCreditGrant(c *gin.Context) {
 	var req dto.CreateCreditGrantRequest
@@ -51,16 +52,16 @@ func (h *CreditGrantHandler) CreateCreditGrant(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a credit grant by ID
-// @Description Get a credit grant by ID
-// @Tags CreditGrants
-// @Accept json
+// @Summary Get credit grant
+// @ID getCreditGrant
+// @Description Use when you need to load a single credit grant (e.g. for display or to check balance).
+// @Tags Credit Grants
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit Grant ID"
 // @Success 200 {object} dto.CreditGrantResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditgrants/{id} [get]
 func (h *CreditGrantHandler) GetCreditGrant(c *gin.Context) {
 	id := c.Param("id")
@@ -81,17 +82,6 @@ func (h *CreditGrantHandler) GetCreditGrant(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get credit grants
-// @Description Get credit grants with the specified filter
-// @Tags CreditGrants
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.CreditGrantFilter true "Filter"
-// @Success 200 {object} dto.ListCreditGrantsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /creditgrants [get]
 func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 	var filter types.CreditGrantFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -117,17 +107,18 @@ func (h *CreditGrantHandler) ListCreditGrants(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a credit grant
-// @Description Update a credit grant with the specified configuration
-// @Tags CreditGrants
+// @Summary Update credit grant
+// @ID updateCreditGrant
+// @Description Use when changing a credit grant (e.g. amount or end date). Request body contains the fields to update.
+// @Tags Credit Grants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit Grant ID"
 // @Param credit_grant body dto.UpdateCreditGrantRequest true "Credit Grant configuration"
 // @Success 200 {object} dto.CreditGrantResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditgrants/{id} [put]
 func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 	id := c.Param("id")
@@ -157,17 +148,18 @@ func (h *CreditGrantHandler) UpdateCreditGrant(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a credit grant
-// @Description Delete a credit grant. Plan-scoped grants are archived; subscription-scoped grants have their end date set (optional body with effective_date). Request body is optional.
-// @Tags CreditGrants
+// @Summary Delete credit grant
+// @ID deleteCreditGrant
+// @Description Use when removing or ending a credit grant (e.g. revoke promo or close prepaid). Plan-scoped grants are archived; subscription-scoped supports optional effective_date in body.
+// @Tags Credit Grants
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit Grant ID"
 // @Param body body dto.DeleteCreditGrantRequest false "Optional: effective_date for subscription-scoped grants"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditgrants/{id} [delete]
 func (h *CreditGrantHandler) DeleteCreditGrant(c *gin.Context) {
 	id := c.Param("id")

@@ -1,11 +1,13 @@
 package creditgrant
 
 import (
+	"context"
 	"time"
 
 	"github.com/flexprice/flexprice/ent"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/samber/lo"
 	"github.com/shopspring/decimal"
 )
 
@@ -43,6 +45,42 @@ type CreditGrant struct {
 
 	EnvironmentID string `json:"environment_id"`
 	types.BaseModel
+}
+
+// CreditGrantCloneOverrides holds optional overrides for CopyWith. Nil fields mean "keep existing value".
+type CreditGrantCloneOverrides struct {
+	ID        *string
+	Scope     *types.CreditGrantScope
+	PlanID    *string
+	BaseModel *types.BaseModel
+}
+
+// CopyWith returns a shallow copy of the credit grant with optional overrides applied.
+// Pointer fields on the original (PlanID, SubscriptionID, Period, StartDate, EndDate, etc.) are shallow-copied.
+// If BaseModel is not in overrides, uses types.GetDefaultBaseModel(ctx).
+func (c *CreditGrant) CopyWith(ctx context.Context, overrides *CreditGrantCloneOverrides) *CreditGrant {
+	if c == nil {
+		return nil
+	}
+	out := lo.FromPtr(c)
+	if overrides == nil {
+		return lo.ToPtr(out)
+	}
+	if overrides.ID != nil {
+		out.ID = lo.FromPtr(overrides.ID)
+	}
+	if overrides.Scope != nil {
+		out.Scope = lo.FromPtr(overrides.Scope)
+	}
+	if overrides.PlanID != nil {
+		out.PlanID = overrides.PlanID
+	}
+	if overrides.BaseModel != nil {
+		out.BaseModel = lo.FromPtr(overrides.BaseModel)
+	} else {
+		out.BaseModel = types.GetDefaultBaseModel(ctx)
+	}
+	return lo.ToPtr(out)
 }
 
 // Validate performs validation on the credit grant

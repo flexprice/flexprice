@@ -45,18 +45,6 @@ func (h *ConnectionHandler) CreateConnection(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a connection
-// @Description Get a connection by ID
-// @Tags Connections
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Connection ID"
-// @Success 200 {object} dto.ConnectionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /connections/{id} [get]
 func (h *ConnectionHandler) GetConnection(c *gin.Context) {
 	id := c.Param("id")
 
@@ -69,18 +57,7 @@ func (h *ConnectionHandler) GetConnection(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get connections
-// @Description Get a list of connections
-// @Tags Connections
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.ConnectionFilter false "Filter"
-// @Success 200 {object} dto.ListConnectionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /connections [get]
-func (h *ConnectionHandler) GetConnections(c *gin.Context) {
+func (h *ConnectionHandler) ListConnections(c *gin.Context) {
 	var filter types.ConnectionFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -102,19 +79,6 @@ func (h *ConnectionHandler) GetConnections(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a connection
-// @Description Update a connection by ID
-// @Tags Connections
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Connection ID"
-// @Param connection body dto.UpdateConnectionRequest true "Connection"
-// @Success 200 {object} dto.ConnectionResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /connections/{id} [put]
 func (h *ConnectionHandler) UpdateConnection(c *gin.Context) {
 	id := c.Param("id")
 
@@ -135,18 +99,6 @@ func (h *ConnectionHandler) UpdateConnection(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a connection
-// @Description Delete a connection by ID
-// @Tags Connections
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param id path string true "Connection ID"
-// @Success 204
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /connections/{id} [delete]
 func (h *ConnectionHandler) DeleteConnection(c *gin.Context) {
 	id := c.Param("id")
 
@@ -159,18 +111,7 @@ func (h *ConnectionHandler) DeleteConnection(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// @Summary List connections by filter
-// @Description List connections by filter
-// @Tags Connections
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter body types.ConnectionFilter true "Filter"
-// @Success 200 {object} dto.ListConnectionsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /connections/search [post]
-func (h *ConnectionHandler) ListConnectionsByFilter(c *gin.Context) {
+func (h *ConnectionHandler) QueryConnections(c *gin.Context) {
 	var filter types.ConnectionFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).

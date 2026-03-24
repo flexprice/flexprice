@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	domainCreditGrant "github.com/flexprice/flexprice/internal/domain/creditgrant"
+	domainEntitlement "github.com/flexprice/flexprice/internal/domain/entitlement"
 	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
@@ -69,19 +71,19 @@ func (s *planService) GetPlan(ctx context.Context, id string) (*dto.PlanResponse
 		AllowExpired: true,
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to fetch prices for plan", "plan_id", plan.ID, "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to fetch prices for plan", "plan_id", plan.ID, "error", err)
 		return nil, err
 	}
 
 	entitlements, err := entitlementService.GetPlanEntitlements(ctx, plan.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch entitlements for plan", "plan_id", plan.ID, "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to fetch entitlements for plan", "plan_id", plan.ID, "error", err)
 		return nil, err
 	}
 
 	creditGrants, err := NewCreditGrantService(s.ServiceParams).GetCreditGrantsByPlan(ctx, plan.ID)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch credit grants for plan", "plan_id", plan.ID, "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to fetch credit grants for plan", "plan_id", plan.ID, "error", err)
 		return nil, err
 	}
 
@@ -257,12 +259,12 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 	}
 
 	// Get the existing plan
-	planResponse, err := s.GetPlan(ctx, id)
+	data, err := s.PlanRepo.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	plan := planResponse.Plan
+	plan := data
 
 	// Update plan fields if provided
 	if req.Name != nil {
@@ -295,7 +297,12 @@ func (s *planService) UpdatePlan(ctx context.Context, id string, req dto.UpdateP
 		return nil, err
 	}
 
-	return s.GetPlan(ctx, id)
+	data, err = s.PlanRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &dto.PlanResponse{Plan: data}, nil
 }
 
 func (s *planService) DeletePlan(ctx context.Context, id string) error {
@@ -391,7 +398,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
-		s.Logger.Errorw("failed to get plan for price synchronization", "plan_id", planID, "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to get plan for price synchronization", "plan_id", planID, "error", err)
 		return nil, err
 	}
 
@@ -406,7 +413,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		terminationIteration++
 		numTerminated, err := s.PlanPriceSyncRepo.TerminateExpiredPlanPricesLineItems(ctx, planPriceSyncParams)
 		if err != nil {
-			s.Logger.Errorw("failed to terminate expired plan price line items", "plan_id", planID, "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to terminate expired plan price line items", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		lineItemsTerminated += numTerminated
@@ -431,13 +438,13 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 		missingPairs, err := s.PlanPriceSyncRepo.ListPlanLineItemsToCreate(ctx, queryParams)
 		if err != nil {
-			s.Logger.Errorw("failed to list plan line items to create", "plan_id", planID, "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to list plan line items to create", "plan_id", planID, "error", err)
 			return nil, err
 		}
 
 		nextSubID, err := s.PlanPriceSyncRepo.GetLastSubscriptionIDInBatch(ctx, queryParams)
 		if err != nil {
-			s.Logger.Errorw("failed to get last subscription ID in batch", "plan_id", planID, "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to get last subscription ID in batch", "plan_id", planID, "error", err)
 			return nil, err
 		}
 
@@ -467,7 +474,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 		prices, err := s.PriceRepo.List(ctx, priceFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to fetch prices for line item creation", "plan_id", planID, "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to fetch prices for line item creation", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
@@ -476,7 +483,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		subFilter.SubscriptionIDs = subscriptionIDs
 		subs, err := s.SubRepo.List(ctx, subFilter)
 		if err != nil {
-			s.Logger.Errorw("failed to fetch subscriptions for line item creation", "plan_id", planID, "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to fetch subscriptions for line item creation", "plan_id", planID, "error", err)
 			return nil, err
 		}
 		subMap := lo.KeyBy(subs, func(s *subscription.Subscription) string { return s.ID })
@@ -512,7 +519,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 
 				err = s.SubscriptionLineItemRepo.CreateBulk(ctx, batch)
 				if err != nil {
-					s.Logger.Errorw("failed to create plan line items in bulk batch",
+					s.Logger.ErrorwCtx(ctx, "failed to create plan line items in bulk batch",
 						"plan_id", planID,
 						"error", err,
 						"batch_start", i,
@@ -544,12 +551,12 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 				}
 				workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsForPlanWorkflow, workflowInput)
 				if err != nil {
-					s.Logger.Warnw("failed to start reprocess events for plan workflow",
+					s.Logger.WarnwCtx(ctx, "failed to start reprocess events for plan workflow",
 						"plan_id", planID,
 						"missing_pairs_count", len(missingPairs),
 						"error", err)
 				} else {
-					s.Logger.Debugw("reprocess events for plan workflow started",
+					s.Logger.DebugwCtx(ctx, "reprocess events for plan workflow started",
 						"plan_id", planID,
 						"missing_pairs_count", len(missingPairs),
 						"workflow_id", workflowRun.GetID(),
@@ -574,7 +581,7 @@ func (s *planService) SyncPlanPrices(ctx context.Context, planID string) (*dto.S
 		},
 	}
 	totalSyncDuration := time.Since(syncStartTime)
-	s.Logger.Infow("completed plan price synchronization",
+	s.Logger.InfowCtx(ctx, "completed plan price synchronization",
 		"plan_id", planID,
 		"line_items_found_for_creation", lineItemsFoundForCreation,
 		"line_items_created", lineItemsCreated,
@@ -607,7 +614,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 
 	prices, err := s.PriceRepo.List(ctx, priceFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to fetch prices for reprocess events for plan", "price_ids", priceIDs, "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to fetch prices for reprocess events for plan", "price_ids", priceIDs, "error", err)
 		return err
 	}
 	priceMap := lo.KeyBy(prices, func(p *domainPrice.Price) string { return p.ID })
@@ -643,7 +650,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 	customerFilter.CustomerIDs = allCustomerIDs
 	customers, err := s.CustomerRepo.List(ctx, customerFilter)
 	if err != nil {
-		s.Logger.Errorw("failed to list customers for reprocess events for plan", "customer_ids", allCustomerIDs, "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to list customers for reprocess events for plan", "customer_ids", allCustomerIDs, "error", err)
 		return err
 	}
 	customerIDToExternalID := make(map[string]string, len(customers))
@@ -683,7 +690,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 
 		eventName, ok := meterIDToEventName[price.MeterID]
 		if !ok || eventName == "" {
-			s.Logger.Warnw("skipping reprocess events for price due to missing meter-event mapping",
+			s.Logger.WarnwCtx(ctx, "skipping reprocess events for price due to missing meter-event mapping",
 				"price_id", priceID,
 				"meter_id", price.MeterID)
 			continue
@@ -707,7 +714,7 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 				CountTotal:         false,
 			})
 			if getEventsErr != nil {
-				s.Logger.Warnw("failed to get events for plan reprocess pre-check",
+				s.Logger.WarnwCtx(ctx, "failed to get events for plan reprocess pre-check",
 					"price_id", priceID,
 					"external_customer_id", extID,
 					"event_name", eventName,
@@ -733,10 +740,10 @@ func (s *planService) ReprocessEventsForMissingPairs(ctx context.Context, missin
 			}
 			workflowRun, err := temporalSvc.ExecuteWorkflow(ctx, types.TemporalReprocessEventsWorkflow, workflowInput)
 			if err != nil {
-				s.Logger.Warnw("failed to start reprocess events workflow for plan customer",
+				s.Logger.WarnwCtx(ctx, "failed to start reprocess events workflow for plan customer",
 					"price_id", priceID, "external_customer_id", extID, "error", err)
 			} else {
-				s.Logger.Debugw("reprocess events workflow started for plan customer",
+				s.Logger.DebugwCtx(ctx, "reprocess events workflow started for plan customer",
 					"price_id", priceID, "external_customer_id", extID,
 					"workflow_id", workflowRun.GetID(), "run_id", workflowRun.GetRunID())
 			}
@@ -780,4 +787,196 @@ func createPlanLineItem(
 	lineItem := req.ToSubscriptionLineItem(ctx, lineItemParams)
 
 	return lineItem
+}
+
+// ClonePlan clones a plan and its associated active prices, published entitlements,
+// and published credit grants into a new plan with a distinct name and lookup_key.
+func (s *planService) ClonePlan(ctx context.Context, id string, req dto.ClonePlanRequest) (*dto.PlanResponse, error) {
+	if id == "" {
+		return nil, ierr.NewError("plan ID is required").
+			WithHint("Please provide a valid plan ID").
+			Mark(ierr.ErrValidation)
+	}
+
+	if err := req.Validate(); err != nil {
+		return nil, err
+	}
+
+	sourcePlan, err := s.PlanRepo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// GetByLookupKey only matches published plans, so a successful lookup means the
+	// key is already taken — covers both "same as source" and "taken by another plan".
+	existing, err := s.PlanRepo.GetByLookupKey(ctx, req.LookupKey)
+	if err != nil && !ierr.IsNotFound(err) {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ierr.NewError("a published plan with this lookup_key already exists").
+			WithHint("Please choose a different lookup_key for the cloned plan").
+			WithReportableDetails(map[string]interface{}{
+				"lookup_key": req.LookupKey,
+			}).
+			Mark(ierr.ErrAlreadyExists)
+	}
+
+	// Active prices: published + not expired
+	sourcePrices, err := s.PriceRepo.List(ctx, types.NewNoLimitPriceFilter().
+		WithEntityIDs([]string{id}).
+		WithEntityType(types.PRICE_ENTITY_TYPE_PLAN).
+		WithStatus(types.StatusPublished))
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to fetch prices for plan clone", "plan_id", id, "error", err)
+		return nil, err
+	}
+
+	// Published entitlements — WithPlanIDs sets EntityType=PLAN + EntityIDs in one call
+	sourceEntitlements, err := s.EntitlementRepo.List(ctx, types.NewNoLimitEntitlementFilter().
+		WithPlanIDs([]string{id}).
+		WithStatus(types.StatusPublished))
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to fetch entitlements for plan clone", "plan_id", id, "error", err)
+		return nil, err
+	}
+
+	// Published credit grants — filter at query level, no post-loop status check needed
+	sourceGrants, err := s.CreditGrantRepo.List(ctx, types.NewNoLimitCreditGrantFilter().
+		WithPlanIDs([]string{id}).
+		WithStatus(types.StatusPublished).
+		WithScope(types.CreditGrantScopePlan))
+	if err != nil {
+		s.Logger.ErrorwCtx(ctx, "failed to fetch credit grants for plan clone", "plan_id", id, "error", err)
+		return nil, err
+	}
+
+	// Resolve fields: request overrides take precedence over source values
+	description := sourcePlan.Description
+	if req.Description != nil {
+		description = *req.Description
+	}
+	// Merge metadata: source plan first, then req overlay (req overwrites/adds), then source_plan_id
+	merged := make(types.Metadata, len(sourcePlan.Metadata)+len(req.Metadata)+1)
+	for k, v := range sourcePlan.Metadata {
+		merged[k] = v
+	}
+	for k, v := range req.Metadata {
+		merged[k] = v
+	}
+	merged["source_plan_id"] = id
+	metadata := merged
+
+	displayOrder := sourcePlan.DisplayOrder
+	if req.DisplayOrder != nil {
+		displayOrder = req.DisplayOrder
+	}
+
+	newPlan := &plan.Plan{
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PLAN),
+		Name:          req.Name,
+		LookupKey:     req.LookupKey,
+		Description:   description,
+		EnvironmentID: sourcePlan.EnvironmentID,
+		Metadata:      metadata,
+		DisplayOrder:  displayOrder,
+		BaseModel:     types.GetDefaultBaseModel(ctx),
+	}
+
+	emptyLookupKey := ""
+	entityTypePlan := types.PRICE_ENTITY_TYPE_PLAN
+	entEntityTypePlan := types.ENTITLEMENT_ENTITY_TYPE_PLAN
+	scopePlan := types.CreditGrantScopePlan
+
+	newPrices := make([]*domainPrice.Price, 0, len(sourcePrices))
+	for _, p := range sourcePrices {
+		newPrices = append(newPrices, p.CopyWith(ctx, &domainPrice.PriceCloneOverrides{
+			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_PRICE)),
+			EntityType: &entityTypePlan,
+			EntityID:   &newPlan.ID,
+			LookupKey:  lo.ToPtr(emptyLookupKey),
+		}))
+	}
+
+	newEntitlements := make([]*domainEntitlement.Entitlement, 0, len(sourceEntitlements))
+	for _, e := range sourceEntitlements {
+		newEntitlements = append(newEntitlements, e.CopyWith(ctx, &domainEntitlement.EntitlementCloneOverrides{
+			ID:         lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_ENTITLEMENT)),
+			EntityType: &entEntityTypePlan,
+			EntityID:   &newPlan.ID,
+		}))
+	}
+
+	newGrants := make([]*domainCreditGrant.CreditGrant, 0, len(sourceGrants))
+	newPlanID := newPlan.ID
+	for _, cg := range sourceGrants {
+		newGrants = append(newGrants, cg.CopyWith(ctx, &domainCreditGrant.CreditGrantCloneOverrides{
+			ID:     lo.ToPtr(types.GenerateUUIDWithPrefix(types.UUID_PREFIX_CREDIT_GRANT)),
+			Scope:  &scopePlan,
+			PlanID: &newPlanID,
+		}))
+	}
+
+	// Batch size for bulk creates (prices, entitlements, credit grants)
+	const createBatchSize = 100
+
+	// Inside tx: plan create then batched bulk creates
+	var entitlementsCreated []*domainEntitlement.Entitlement
+	var grantsCreated []*domainCreditGrant.CreditGrant
+	err = s.DB.WithTx(ctx, func(txCtx context.Context) error {
+		if err := s.PlanRepo.Create(txCtx, newPlan); err != nil {
+			return err
+		}
+		for _, batch := range lo.Chunk(newPrices, createBatchSize) {
+			if err := s.PriceRepo.CreateBulk(txCtx, batch); err != nil {
+				return err
+			}
+		}
+		for _, batch := range lo.Chunk(newEntitlements, createBatchSize) {
+			created, err := s.EntitlementRepo.CreateBulk(txCtx, batch)
+			if err != nil {
+				return err
+			}
+			entitlementsCreated = append(entitlementsCreated, created...)
+		}
+		for _, batch := range lo.Chunk(newGrants, createBatchSize) {
+			created, err := s.CreditGrantRepo.CreateBulk(txCtx, batch)
+			if err != nil {
+				return err
+			}
+			grantsCreated = append(grantsCreated, created...)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.Logger.InfowCtx(ctx, "plan cloned successfully",
+		"source_plan_id", id,
+		"new_plan_id", newPlan.ID,
+		"prices_cloned", len(newPrices),
+		"entitlements_cloned", len(entitlementsCreated),
+		"grants_cloned", len(grantsCreated),
+	)
+
+	priceResponses := make([]*dto.PriceResponse, len(newPrices))
+	for i, p := range newPrices {
+		priceResponses[i] = &dto.PriceResponse{Price: p}
+	}
+	entitlementResponses := make([]*dto.EntitlementResponse, len(entitlementsCreated))
+	for i, e := range entitlementsCreated {
+		entitlementResponses[i] = &dto.EntitlementResponse{Entitlement: e}
+	}
+	grantResponses := make([]*dto.CreditGrantResponse, len(grantsCreated))
+	for i, cg := range grantsCreated {
+		grantResponses[i] = &dto.CreditGrantResponse{CreditGrant: cg}
+	}
+
+	return &dto.PlanResponse{
+		Plan:         newPlan,
+		Prices:       priceResponses,
+		Entitlements: entitlementResponses,
+		CreditGrants: grantResponses,
+	}, nil
 }

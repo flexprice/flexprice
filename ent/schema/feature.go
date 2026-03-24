@@ -7,6 +7,7 @@ import (
 	"entgo.io/ent/schema/index"
 	baseMixin "github.com/flexprice/flexprice/ent/schema/mixin"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/shopspring/decimal"
 )
 
 // Feature holds the schema definition for the Feature entity.
@@ -72,11 +73,36 @@ func (Feature) Fields() []ent.Field {
 			}).
 			Optional().
 			Nillable(),
+		// Reporting unit: application invariant is either all three null or all three set (validated at API layer).
+		field.String("reporting_unit_singular").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable(),
+		field.String("reporting_unit_plural").
+			SchemaType(map[string]string{
+				"postgres": "varchar(255)",
+			}).
+			Optional().
+			Nillable(),
+		field.Other("reporting_unit_conversion_rate", decimal.Decimal{}).
+			SchemaType(map[string]string{
+				"postgres": "numeric(20,10)",
+			}).
+			Optional().
+			Nillable(),
 		field.JSON("alert_settings", types.AlertSettings{}).
 			Optional().
 			SchemaType(map[string]string{
 				"postgres": "jsonb",
 			}),
+		field.String("group_id").
+			SchemaType(map[string]string{
+				"postgres": "varchar(50)",
+			}).
+			Optional().
+			Nillable(),
 	}
 }
 
@@ -96,5 +122,7 @@ func (Feature) Indexes() []ent.Index {
 			StorageKey("idx_feature_tenant_env_status"),
 		index.Fields("tenant_id", "environment_id", "created_at").
 			StorageKey("idx_feature_tenant_env_created_at"),
+		index.Fields("tenant_id", "environment_id", "group_id").
+			StorageKey("idx_feature_tenant_env_group_id"),
 	}
 }

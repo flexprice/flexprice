@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/domain/events"
 	"github.com/flexprice/flexprice/internal/domain/price"
 	"github.com/flexprice/flexprice/internal/domain/priceunit"
 	ierr "github.com/flexprice/flexprice/internal/errors"
@@ -28,8 +29,11 @@ type PriceService interface {
 	DeletePrice(ctx context.Context, id string, req dto.DeletePriceRequest) error
 	CalculateCost(ctx context.Context, price *price.Price, quantity decimal.Decimal) decimal.Decimal
 
-	// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
+	// CalculateBucketedCost calculates cost for bucketed values where each value is priced independently
 	CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal
+
+	// CalculateCostFromUsageResults calculates total cost by pricing each usage result independently (e.g. per-group tiered pricing).
+	CalculateCostFromUsageResults(ctx context.Context, price *price.Price, results []events.UsageResult) decimal.Decimal
 
 	// CalculateCostWithBreakup calculates the cost for a given price and quantity
 	// and returns detailed information about the calculation
@@ -366,7 +370,7 @@ func (s *priceService) CreateBulkPrice(ctx context.Context, req dto.CreateBulkPr
 	}
 
 	// Sync prices to integrations if available and prices are for a plan
-	s.Logger.Debugw("Bulk price sync check",
+	s.Logger.DebugwCtx(ctx, "Bulk price sync check",
 		"response_nil", response == nil,
 		"response_items_count", func() int {
 			if response == nil {
@@ -424,7 +428,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		meterService := NewMeterService(s.MeterRepo)
 		meter, err := meterService.GetMeter(ctx, price.MeterID)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch meter", "meter_id", price.MeterID, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch meter", "meter_id", price.MeterID, "error", err)
 			return nil, err
 		}
 		response.Meter = dto.ToMeterResponse(meter)
@@ -434,7 +438,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		groupService := NewGroupService(s.ServiceParams)
 		group, err := groupService.GetGroup(ctx, price.GroupID)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch group", "group_id", price.GroupID, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch group", "group_id", price.GroupID, "error", err)
 			// Don't fail the request if group fetch fails, just continue
 		} else {
 			response.Group = group
@@ -445,7 +449,7 @@ func (s *priceService) GetPrice(ctx context.Context, id string) (*dto.PriceRespo
 		priceUnitService := NewPriceUnitService(s.ServiceParams)
 		priceUnit, err := priceUnitService.GetPriceUnit(ctx, lo.FromPtr(price.PriceUnitID))
 		if err != nil {
-			s.Logger.Warnw("failed to fetch price unit", "price_unit", *price.PriceUnit, "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch price unit", "price_unit", *price.PriceUnit, "error", err)
 		} else {
 			response.PricingUnit = priceUnit
 		}
@@ -588,7 +592,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 			metersByID[m.ID] = m
 		}
 
-		s.Logger.Debugw("fetched meters for prices", "count", len(metersResponse.Items))
+		s.Logger.DebugwCtx(ctx, "fetched meters for prices", "count", len(metersResponse.Items))
 	}
 
 	// Collect entity IDs based on entity type for efficient bulk fetching
@@ -672,7 +676,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 		groupsResponse, err := groupService.ListGroups(ctx, groupFilter)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch groups in bulk", "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch groups in bulk", "error", err)
 			// Don't fail the request, just continue without groups
 			groupsByID = make(map[string]*dto.GroupResponse)
 		} else {
@@ -696,7 +700,7 @@ func (s *priceService) GetPrices(ctx context.Context, filter *types.PriceFilter)
 
 		priceUnitsResponse, err := priceUnitService.ListPriceUnits(ctx, priceUnitFilter)
 		if err != nil {
-			s.Logger.Warnw("failed to fetch price units in bulk", "error", err)
+			s.Logger.WarnwCtx(ctx, "failed to fetch price units in bulk", "error", err)
 			// Don't fail the request, just continue without price units
 			priceUnitsByID = make(map[string]*dto.PriceUnitResponse)
 		} else {
@@ -827,11 +831,14 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			// Terminate the existing price
 			existingPrice.EndDate = &terminationEndDate
 
-			// Validate group if provided
-			if req.GroupID != "" {
-				existingPrice.GroupID = req.GroupID
-				if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
-					return err
+			// Handle group update: nil = don't change, "" = clear, "group-id" = set and validate
+			if req.GroupID != nil {
+				existingPrice.GroupID = *req.GroupID
+				// Only validate if setting to a non-empty group
+				if *req.GroupID != "" {
+					if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
+						return err
+					}
 				}
 			}
 
@@ -854,7 +861,7 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			return nil, err
 		}
 
-		s.Logger.Infow("price updated with termination and recreation",
+		s.Logger.InfowCtx(ctx, "price updated with termination and recreation",
 			"old_price_id", existingPrice.ID,
 			"new_price_id", newPriceResp.ID,
 			"termination_end_date", terminationEndDate,
@@ -893,10 +900,14 @@ func (s *priceService) UpdatePrice(ctx context.Context, id string, req dto.Updat
 			existingPrice.EndDate = req.EffectiveFrom
 		}
 
-		if req.GroupID != "" {
-			existingPrice.GroupID = req.GroupID
-			if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
-				return nil, err
+		// Handle group update: nil = don't change, "" = clear, "group-id" = set and validate
+		if req.GroupID != nil {
+			existingPrice.GroupID = *req.GroupID
+			// Only validate if setting to a non-empty group
+			if *req.GroupID != "" {
+				if err := s.validateGroup(ctx, []*price.Price{existingPrice}); err != nil {
+					return nil, err
+				}
 			}
 		}
 
@@ -1028,9 +1039,24 @@ func (s *priceService) CalculateCost(ctx context.Context, price *price.Price, qu
 	return s.calculateSingletonCost(ctx, price, quantity)
 }
 
-// CalculateBucketedCost calculates cost for bucketed max values where each value represents max in its time bucket
+// CalculateBucketedCost calculates cost for bucketed values (from []decimal.Decimal).
+// For tiered pricing, each bucket value is priced through tiers independently.
 func (s *priceService) CalculateBucketedCost(ctx context.Context, price *price.Price, bucketedValues []decimal.Decimal) decimal.Decimal {
 	return s.calculateBucketedMaxCost(ctx, price, bucketedValues)
+}
+
+// CalculateCostFromUsageResults sums cost by pricing each usage result independently.
+// For tiered pricing this applies tiers per result (e.g. per group per bucket), not on aggregated usage.
+func (s *priceService) CalculateCostFromUsageResults(ctx context.Context, price *price.Price, results []events.UsageResult) decimal.Decimal {
+	totalCost := decimal.Zero
+	for _, r := range results {
+		if price.BillingModel == types.BILLING_MODEL_TIERED {
+			totalCost = totalCost.Add(s.calculateTieredCost(ctx, price, r.Value))
+		} else {
+			totalCost = totalCost.Add(s.calculateSingletonCost(ctx, price, r.Value))
+		}
+	}
+	return totalCost.Round(types.GetCurrencyPrecision(price.Currency))
 }
 
 // calculateTieredCost calculates cost for tiered pricing
@@ -1351,7 +1377,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	// Get Chargebee integration
 	chargebeeIntegration, err := s.IntegrationFactory.GetChargebeeIntegration(ctx)
 	if err != nil {
-		s.Logger.Debugw("Chargebee integration not available, skipping sync",
+		s.Logger.DebugwCtx(ctx, "Chargebee integration not available, skipping sync",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1360,7 +1386,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 
 	// Check if Chargebee connection exists
 	if !chargebeeIntegration.Client.HasChargebeeConnection(ctx) {
-		s.Logger.Debugw("Chargebee connection not configured, skipping sync",
+		s.Logger.DebugwCtx(ctx, "Chargebee connection not configured, skipping sync",
 			"price_id", priceID,
 			"plan_id", planID)
 		return
@@ -1369,7 +1395,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	// Get plan using repository
 	plan, err := s.PlanRepo.Get(ctx, planID)
 	if err != nil {
-		s.Logger.Errorw("failed to get plan for Chargebee sync",
+		s.Logger.ErrorwCtx(ctx, "failed to get plan for Chargebee sync",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1379,7 +1405,7 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 	// Get price using repository
 	priceModel, err := s.PriceRepo.Get(ctx, priceID)
 	if err != nil {
-		s.Logger.Errorw("failed to get price for Chargebee sync",
+		s.Logger.ErrorwCtx(ctx, "failed to get price for Chargebee sync",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1388,12 +1414,12 @@ func (s *priceService) syncPriceToChargebeeIfEnabled(ctx context.Context, priceI
 
 	// Sync to Chargebee (non-blocking - log errors but don't fail)
 	if syncErr := chargebeeIntegration.PlanSyncSvc.SyncPlanToChargebee(ctx, plan, []*price.Price{priceModel}); syncErr != nil {
-		s.Logger.Errorw("failed to sync price to Chargebee",
+		s.Logger.ErrorwCtx(ctx, "failed to sync price to Chargebee",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", syncErr)
 	} else {
-		s.Logger.Infow("successfully synced price to Chargebee",
+		s.Logger.InfowCtx(ctx, "successfully synced price to Chargebee",
 			"price_id", priceID,
 			"plan_id", planID)
 	}
@@ -1500,7 +1526,7 @@ func (s *priceService) applyPriceUnitConversionToPrice(ctx context.Context, p *p
 		p.DisplayPriceUnitAmount = p.GetDisplayPriceUnitAmount(priceUnit.Symbol)
 	}
 
-	s.Logger.Infow("applied price unit conversion to price object",
+	s.Logger.InfowCtx(ctx, "applied price unit conversion to price object",
 		"price_unit_id", priceUnit.ID,
 		"price_unit_code", priceUnit.Code,
 		"conversion_rate", priceUnit.ConversionRate.String(),
@@ -1519,7 +1545,7 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	// Get global Temporal service
 	temporalSvc := temporalService.GetGlobalTemporalService()
 	if temporalSvc == nil {
-		s.Logger.Debugw("Temporal service not available, skipping QuickBooks sync",
+		s.Logger.DebugwCtx(ctx, "Temporal service not available, skipping QuickBooks sync",
 			"price_id", priceID)
 		return
 	}
@@ -1534,12 +1560,12 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 	if err != nil {
 		if ierr.IsNotFound(err) {
 			// Connection not configured - skip silently
-			s.Logger.Debugw("QB TEMPORAL SYNC - connection not found, skipping",
+			s.Logger.DebugwCtx(ctx, "QB TEMPORAL SYNC - connection not found, skipping",
 				"price_id", priceID)
 			return
 		}
 		// Actual error - log but don't fail
-		s.Logger.Errorw("error checking QuickBooks connection",
+		s.Logger.ErrorwCtx(ctx, "error checking QuickBooks connection",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
@@ -1558,14 +1584,14 @@ func (s *priceService) syncPriceToQuickBooksIfEnabled(ctx context.Context, price
 		workflowInput,
 	)
 	if err != nil {
-		s.Logger.Errorw("failed to start QuickBooks sync workflow",
+		s.Logger.ErrorwCtx(ctx, "failed to start QuickBooks sync workflow",
 			"price_id", priceID,
 			"plan_id", planID,
 			"error", err)
 		return
 	}
 
-	s.Logger.Debugw("QuickBooks sync workflow started",
+	s.Logger.DebugwCtx(ctx, "QuickBooks sync workflow started",
 		"price_id", priceID,
 		"plan_id", planID,
 		"workflow_id", workflowRun.GetID(),

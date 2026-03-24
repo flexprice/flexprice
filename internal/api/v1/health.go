@@ -20,7 +20,8 @@ func NewHealthHandler(
 }
 
 // @Summary Health check
-// @Description Health check
+// @ID healthCheck
+// @Description Use for liveness or readiness checks (e.g. load balancers, Kubernetes probes). Responds with 200 and status ok when the service is healthy.
 // @Tags Health
 // @Accept json
 // @Produce json

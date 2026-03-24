@@ -329,6 +329,19 @@ func convertConnectionMetadataToMap(encryptedSecretData types.ConnectionMetadata
 			}
 			return data
 		}
+	case types.SecretProviderPaddle:
+		if encryptedSecretData.Paddle != nil {
+			data := map[string]interface{}{
+				"api_key": encryptedSecretData.Paddle.APIKey,
+			}
+			if encryptedSecretData.Paddle.WebhookSecret != "" {
+				data["webhook_secret"] = encryptedSecretData.Paddle.WebhookSecret
+			}
+			if encryptedSecretData.Paddle.ClientSideToken != "" {
+				data["client_side_token"] = encryptedSecretData.Paddle.ClientSideToken
+			}
+			return data
+		}
 	default:
 		// For other providers or unknown types, use generic format
 		if encryptedSecretData.Generic != nil {
@@ -511,22 +524,12 @@ func (o ConnectionQueryOptions) ApplyPaginationFilter(query ConnectionQuery, lim
 	return query
 }
 
+// GetFieldName returns the ent field name for connection; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o ConnectionQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return connection.FieldCreatedAt
-	case "updated_at":
-		return connection.FieldUpdatedAt
-	case "name":
-		return connection.FieldName
-	case "provider_type":
-		return connection.FieldProviderType
-	case "status":
-		return connection.FieldStatus
-	default:
-		//unknown field
-		return ""
+	if connection.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o ConnectionQueryOptions) GetFieldResolver(field string) (string, error) {

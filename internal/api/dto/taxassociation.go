@@ -11,13 +11,14 @@ import (
 )
 
 type CreateTaxAssociationRequest struct {
-	TaxRateCode string                  `json:"tax_rate_code" binding:"required"`
-	EntityType  types.TaxRateEntityType `json:"entity_type" binding:"required"`
-	EntityID    string                  `json:"entity_id" binding:"required"`
-	Priority    int                     `json:"priority" binding:"omitempty"`
-	Currency    string                  `json:"currency" binding:"omitempty"`
-	AutoApply   bool                    `json:"auto_apply" binding:"omitempty"`
-	Metadata    map[string]string       `json:"metadata" binding:"omitempty"`
+	TaxRateCode        string                  `json:"tax_rate_code" binding:"required"`
+	EntityType         types.TaxRateEntityType `json:"entity_type" binding:"omitempty"`
+	EntityID           string                  `json:"entity_id" binding:"omitempty"`
+	ExternalCustomerID string                  `json:"external_customer_id" binding:"omitempty"`
+	Priority           int                     `json:"priority" binding:"omitempty"`
+	Currency           string                  `json:"currency" binding:"omitempty"`
+	AutoApply          bool                    `json:"auto_apply" binding:"omitempty"`
+	Metadata           map[string]string       `json:"metadata" binding:"omitempty"`
 }
 
 func (r *CreateTaxAssociationRequest) Validate() error {
@@ -25,16 +26,9 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 		return err
 	}
 
-	// Explicit validation for required fields
 	if r.TaxRateCode == "" {
 		return ierr.NewError("tax_rate_code is required").
 			WithHint("Tax rate ID cannot be empty").
-			Mark(ierr.ErrValidation)
-	}
-
-	if r.EntityID == "" {
-		return ierr.NewError("entity_id is required").
-			WithHint("Entity ID cannot be empty").
 			Mark(ierr.ErrValidation)
 	}
 
@@ -44,8 +38,10 @@ func (r *CreateTaxAssociationRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
-	if err := r.EntityType.Validate(); err != nil {
-		return err
+	if r.EntityType != "" {
+		if err := r.EntityType.Validate(); err != nil {
+			return err
+		}
 	}
 
 	return nil

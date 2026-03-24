@@ -113,6 +113,8 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			}).
 			NotEmpty().
 			GoType(types.BillingPeriod("")),
+		field.Int("billing_period_count").
+			Default(1),
 		field.String("invoice_cadence").
 			SchemaType(map[string]string{
 				"postgres": "varchar(20)",

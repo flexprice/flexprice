@@ -23,19 +23,20 @@ func NewCreditNoteHandler(creditNoteService service.CreditNoteService, logger *l
 	}
 }
 
-// @Summary Create a new credit note
-// @Description Creates a new credit note
+// @Summary Create credit note
+// @ID createCreditNote
+// @Description Use when issuing a refund or adjustment (e.g. customer dispute or proration). Links to an invoice; create as draft then finalize.
 // @Tags Credit Notes
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param credit_note body dto.CreateCreditNoteRequest true "Credit note request"
 // @Success 201 {object} dto.CreditNoteResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditnotes [post]
 // @Security ApiKeyAuth
 func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
@@ -56,21 +57,18 @@ func (h *CreditNoteHandler) CreateCreditNote(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
-// @Summary Get a credit note by ID
-// @Description Retrieves a credit note by ID
+// @Summary Get credit note
+// @ID getCreditNote
+// @Description Use when you need to load a single credit note (e.g. for display or reconciliation).
 // @Tags Credit Notes
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit note ID"
 // @Success 200 {object} dto.CreditNoteResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error" "Server error"
 // @Router /creditnotes/{id} [get]
-// @Security ApiKeyAuth
 func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -89,21 +87,6 @@ func (h *CreditNoteHandler) GetCreditNote(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary List credit notes with filtering
-// @Description Lists credit notes with filtering
-// @Tags Credit Notes
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.CreditNoteFilter true "Filter options"
-// @Success 200 {object} dto.ListCreditNotesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /creditnotes [get]
-// @Security ApiKeyAuth
 func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 	var filter types.CreditNoteFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
@@ -126,19 +109,20 @@ func (h *CreditNoteHandler) ListCreditNotes(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// @Summary Void a credit note
-// @Description Voids a credit note
+// @Summary Void credit note
+// @ID voidCreditNote
+// @Description Use when cancelling a draft credit note (e.g. created by mistake). Only draft credit notes can be voided.
 // @Tags Credit Notes
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit note ID"
 // @Success 200 {object} dto.CreditNoteResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditnotes/{id}/void [post]
 // @Security ApiKeyAuth
 func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
@@ -159,19 +143,20 @@ func (h *CreditNoteHandler) VoidCreditNote(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Credit note voided successfully"})
 }
 
-// @Summary Process a draft credit note
-// @Description Processes a draft credit note
+// @Summary Finalize credit note
+// @ID processCreditNote
+// @Description Use when locking a draft credit note and applying the credit (e.g. after approval). Once finalized, applied per billing provider.
 // @Tags Credit Notes
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Credit note ID"
 // @Success 200 {object} dto.CreditNoteResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 401 {object} ierr.ErrorResponse
-// @Failure 403 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 401 {object} ierr.ErrorResponse "Unauthorized"
+// @Failure 403 {object} ierr.ErrorResponse "Forbidden"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /creditnotes/{id}/finalize [post]
 // @Security ApiKeyAuth
 func (h *CreditNoteHandler) FinalizeCreditNote(c *gin.Context) {

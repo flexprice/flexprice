@@ -99,6 +99,10 @@ func (r *priceRepository) Create(ctx context.Context, p *domainPrice.Price) erro
 		SetDisplayPriceUnitAmount(p.DisplayPriceUnitAmount).
 		SetNillableConversionRate(p.ConversionRate)
 
+	if p.GroupID != "" {
+		priceBuilder = priceBuilder.SetGroupID(p.GroupID)
+	}
+
 	price, err := priceBuilder.Save(ctx)
 
 	if err != nil {
@@ -278,7 +282,8 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 	})
 	defer FinishSpan(span)
 
-	_, err := client.Price.Update().
+	// Build the update query
+	update := client.Price.Update().
 		Where(
 			price.ID(p.ID),
 			price.TenantID(p.TenantID),
@@ -290,9 +295,16 @@ func (r *priceRepository) Update(ctx context.Context, p *domainPrice.Price) erro
 		SetDescription(p.Description).
 		SetMetadata(map[string]string(p.Metadata)).
 		SetUpdatedAt(time.Now().UTC()).
-		SetUpdatedBy(types.GetUserID(ctx)).
-		SetNillableGroupID(lo.ToPtr(p.GroupID)).
-		Save(ctx)
+		SetUpdatedBy(types.GetUserID(ctx))
+
+	// Handle group_id: empty string clears (NULL), non-empty sets the value
+	if p.GroupID == "" {
+		update = update.ClearGroupID()
+	} else {
+		update = update.SetNillableGroupID(lo.ToPtr(p.GroupID))
+	}
+
+	_, err := update.Save(ctx)
 
 	if err != nil {
 		SetSpanError(span, err)
@@ -387,6 +399,7 @@ func (r *priceRepository) CreateBulk(ctx context.Context, prices []*domainPrice.
 			SetDisplayAmount(p.DisplayAmount).
 			SetEntityID(p.EntityID).
 			SetEntityType(p.EntityType).
+			SetNillableParentPriceID(lo.ToPtr(p.ParentPriceID)).
 			SetType(p.Type).
 			SetBillingPeriod(p.BillingPeriod).
 			SetBillingPeriodCount(p.BillingPeriodCount).
@@ -515,22 +528,15 @@ func (o PriceQueryOptions) ApplyPaginationFilter(query PriceQuery, limit int, of
 	return query
 }
 
+// GetFieldName returns the ent field name for price; resolves optional aliases then delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o PriceQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return price.FieldCreatedAt
-	case "updated_at":
-		return price.FieldUpdatedAt
-	case "lookup_key":
-		return price.FieldLookupKey
-	case "amount", "value":
-		return price.FieldAmount
-	case "display_name":
-		return price.FieldDisplayName
-	default:
-		// unknown field
-		return ""
+	if field == "value" {
+		field = "amount"
 	}
+	if price.ValidColumn(field) {
+		return field
+	}
+	return ""
 }
 
 func (o PriceQueryOptions) applyEntityQueryOptions(_ context.Context, f *types.PriceFilter, query PriceQuery) (PriceQuery, error) {

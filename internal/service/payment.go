@@ -236,7 +236,7 @@ func (s *paymentService) getExistingPaymentLinkResponse(ctx context.Context, inv
 		return nil
 	}
 
-	s.Logger.Infow("found existing payment link URL, returning it without creating payment record",
+	s.Logger.InfowCtx(ctx, "found existing payment link URL, returning it without creating payment record",
 		"invoice_id", invoice.ID,
 		"gateway", gateway,
 		"payment_url_present", true)
@@ -464,14 +464,14 @@ func (s *paymentService) DeletePayment(ctx context.Context, id string) error {
 	return s.PaymentRepo.Delete(ctx, id) // Repository already using ierr
 }
 
-func (s *paymentService) publishWebhookEvent(ctx context.Context, eventName string, paymentID string) {
+func (s *paymentService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, paymentID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalPaymentEvent{
 		PaymentID: paymentID,
 		TenantID:  types.GetTenantID(ctx),
 	})
 
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -485,13 +485,13 @@ func (s *paymentService) publishWebhookEvent(ctx context.Context, eventName stri
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }
 
 // GetPaymentByGatewayTrackingID retrieves a payment by its gateway tracking ID and gateway type
 func (s *paymentService) GetPaymentByGatewayTrackingID(ctx context.Context, gatewayTrackingID, gateway string) (*dto.PaymentResponse, error) {
-	s.Logger.Infow("getting payment by gateway tracking ID",
+	s.Logger.InfowCtx(ctx, "getting payment by gateway tracking ID",
 		"gateway_tracking_id", gatewayTrackingID,
 		"gateway", gateway)
 
@@ -524,7 +524,7 @@ func (s *paymentService) GetPaymentByGatewayTrackingID(ctx context.Context, gate
 
 // PaymentExistsByGatewayPaymentID checks if a payment exists with the given gateway payment ID
 func (s *paymentService) PaymentExistsByGatewayPaymentID(ctx context.Context, gatewayPaymentID string) (bool, error) {
-	s.Logger.Debugw("checking if payment exists by gateway payment ID",
+	s.Logger.DebugwCtx(ctx, "checking if payment exists by gateway payment ID",
 		"gateway_payment_id", gatewayPaymentID)
 
 	// Use List API with filters

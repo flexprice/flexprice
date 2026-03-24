@@ -284,6 +284,20 @@ func (slic *SubscriptionLineItemCreate) SetBillingPeriod(tp types.BillingPeriod)
 	return slic
 }
 
+// SetBillingPeriodCount sets the "billing_period_count" field.
+func (slic *SubscriptionLineItemCreate) SetBillingPeriodCount(i int) *SubscriptionLineItemCreate {
+	slic.mutation.SetBillingPeriodCount(i)
+	return slic
+}
+
+// SetNillableBillingPeriodCount sets the "billing_period_count" field if the given value is not nil.
+func (slic *SubscriptionLineItemCreate) SetNillableBillingPeriodCount(i *int) *SubscriptionLineItemCreate {
+	if i != nil {
+		slic.SetBillingPeriodCount(*i)
+	}
+	return slic
+}
+
 // SetInvoiceCadence sets the "invoice_cadence" field.
 func (slic *SubscriptionLineItemCreate) SetInvoiceCadence(tc types.InvoiceCadence) *SubscriptionLineItemCreate {
 	slic.mutation.SetInvoiceCadence(tc)
@@ -543,6 +557,10 @@ func (slic *SubscriptionLineItemCreate) defaults() {
 		v := subscriptionlineitem.DefaultQuantity
 		slic.mutation.SetQuantity(v)
 	}
+	if _, ok := slic.mutation.BillingPeriodCount(); !ok {
+		v := subscriptionlineitem.DefaultBillingPeriodCount
+		slic.mutation.SetBillingPeriodCount(v)
+	}
 	if _, ok := slic.mutation.TrialPeriod(); !ok {
 		v := subscriptionlineitem.DefaultTrialPeriod
 		slic.mutation.SetTrialPeriod(v)
@@ -626,6 +644,9 @@ func (slic *SubscriptionLineItemCreate) check() error {
 		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
 		}
+	}
+	if _, ok := slic.mutation.BillingPeriodCount(); !ok {
+		return &ValidationError{Name: "billing_period_count", err: errors.New(`ent: missing required field "SubscriptionLineItem.billing_period_count"`)}
 	}
 	if v, ok := slic.mutation.InvoiceCadence(); ok {
 		if err := v.Validate(); err != nil {
@@ -767,6 +788,10 @@ func (slic *SubscriptionLineItemCreate) createSpec() (*SubscriptionLineItem, *sq
 	if value, ok := slic.mutation.BillingPeriod(); ok {
 		_spec.SetField(subscriptionlineitem.FieldBillingPeriod, field.TypeString, value)
 		_node.BillingPeriod = value
+	}
+	if value, ok := slic.mutation.BillingPeriodCount(); ok {
+		_spec.SetField(subscriptionlineitem.FieldBillingPeriodCount, field.TypeInt, value)
+		_node.BillingPeriodCount = value
 	}
 	if value, ok := slic.mutation.InvoiceCadence(); ok {
 		_spec.SetField(subscriptionlineitem.FieldInvoiceCadence, field.TypeString, value)

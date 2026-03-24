@@ -57,7 +57,12 @@ type Aggregation struct {
 
 	// Field is the key in $event.properties on which the aggregation is to be applied
 	// For ex if the aggregation type is sum for API usage, the field could be "duration_ms"
+	// Ignored when Expression is set.
 	Field string `json:"field,omitempty"`
+
+	// Expression is an optional CEL expression to compute per-event quantity from event.properties.
+	// When set, it replaces Field-based extraction. Property names are used directly (e.g., token * duration * pixel).
+	Expression string `json:"expression,omitempty"`
 
 	// Multiplier is the multiplier for the aggregation
 	// For ex if the aggregation type is sum_with_multiplier for API usage, the multiplier could be 1000
@@ -97,6 +102,7 @@ func FromEnt(e *ent.Meter) *Meter {
 		Aggregation: Aggregation{
 			Type:       e.Aggregation.Type,
 			Field:      e.Aggregation.Field,
+			Expression: e.Aggregation.Expression,
 			Multiplier: e.Aggregation.Multiplier,
 			BucketSize: e.Aggregation.BucketSize,
 			GroupBy:    e.Aggregation.GroupBy,
@@ -147,6 +153,7 @@ func (m *Meter) ToEntAggregation() schema.MeterAggregation {
 	return schema.MeterAggregation{
 		Type:       m.Aggregation.Type,
 		Field:      m.Aggregation.Field,
+		Expression: m.Aggregation.Expression,
 		Multiplier: m.Aggregation.Multiplier,
 		BucketSize: m.Aggregation.BucketSize,
 		GroupBy:    m.Aggregation.GroupBy,
@@ -178,9 +185,10 @@ func (m *Meter) Validate() error {
 			}).
 			Mark(ierr.ErrValidation)
 	}
-	if m.Aggregation.Type.RequiresField() && m.Aggregation.Field == "" {
-		return ierr.NewError("field is required for aggregation type").
-			WithHint("Please specify a field for this aggregation type").
+	// For types that require a value: either Field OR Expression must be set
+	if m.Aggregation.Type.RequiresField() && m.Aggregation.Field == "" && m.Aggregation.Expression == "" {
+		return ierr.NewError("field or expression is required for aggregation type").
+			WithHint("Please specify a field or expression for this aggregation type").
 			WithReportableDetails(map[string]interface{}{
 				"aggregation_type": m.Aggregation.Type,
 			}).

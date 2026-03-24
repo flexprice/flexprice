@@ -392,6 +392,10 @@ func (r *entitlementRepository) CreateBulk(ctx context.Context, entitlements []*
 			SetUsageResetPeriod(e.UsageResetPeriod).
 			SetIsSoftLimit(e.IsSoftLimit).
 			SetStaticValue(e.StaticValue).
+			SetNillableParentEntitlementID(e.ParentEntitlementID).
+			SetNillableStartDate(e.StartDate).
+			SetNillableEndDate(e.EndDate).
+			SetDisplayOrder(e.DisplayOrder).
 			SetTenantID(e.TenantID).
 			SetStatus(string(e.Status)).
 			SetCreatedAt(e.CreatedAt).
@@ -584,17 +588,12 @@ func (o EntitlementQueryOptions) ApplyPaginationFilter(query EntitlementQuery, l
 	return query
 }
 
+// GetFieldName returns the ent field name for entitlement; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o EntitlementQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return entitlement.FieldCreatedAt
-	case "updated_at":
-		return entitlement.FieldUpdatedAt
-	case "display_order":
-		return entitlement.FieldDisplayOrder
-	default:
+	if entitlement.ValidColumn(field) {
 		return field
 	}
+	return ""
 }
 
 func (o EntitlementQueryOptions) GetFieldResolver(field string) (string, error) {

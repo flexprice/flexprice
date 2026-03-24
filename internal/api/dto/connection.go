@@ -12,8 +12,11 @@ type CreateConnectionRequest struct {
 	Name                string                   `json:"name" validate:"required,max=255"`
 	ProviderType        types.SecretProvider     `json:"provider_type" validate:"required"`
 	EncryptedSecretData types.ConnectionMetadata `json:"encrypted_secret_data,omitempty"`
-	Metadata            map[string]interface{}   `json:"metadata,omitempty"`
-	SyncConfig          *types.SyncConfig        `json:"sync_config,omitempty" validate:"omitempty,dive"`
+	// Metadata holds provider-specific non-secret settings. For Paddle: use {"redirect_url": "https://..."}
+	// as the success URL where customers are redirected after payment. Backend appends &_success=<redirect_url>
+	// to Paddle checkout URLs before storing/sending them.
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	SyncConfig *types.SyncConfig     `json:"sync_config,omitempty" validate:"omitempty,dive"`
 }
 
 // UnmarshalJSON custom unmarshaling to handle flat metadata structure
@@ -212,6 +215,23 @@ func convertFlatMetadataToStructured(flatMetadata map[string]interface{}, provid
 
 		return types.ConnectionMetadata{
 			Moyasar: moyasarMetadata,
+		}
+
+	case types.SecretProviderPaddle:
+		paddleMetadata := &types.PaddleConnectionMetadata{}
+
+		if apiKey, ok := flatMetadata["api_key"].(string); ok {
+			paddleMetadata.APIKey = apiKey
+		}
+		if webhookSecret, ok := flatMetadata["webhook_secret"].(string); ok {
+			paddleMetadata.WebhookSecret = webhookSecret
+		}
+		if clientSideToken, ok := flatMetadata["client_side_token"].(string); ok {
+			paddleMetadata.ClientSideToken = clientSideToken
+		}
+
+		return types.ConnectionMetadata{
+			Paddle: paddleMetadata,
 		}
 
 	default:

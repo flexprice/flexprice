@@ -2,10 +2,13 @@ package activities
 
 import (
 	"context"
+	"time"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	"github.com/flexprice/flexprice/internal/domain/planpricesync"
 	ierr "github.com/flexprice/flexprice/internal/errors"
+	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	eventsModels "github.com/flexprice/flexprice/internal/temporal/models/events"
@@ -54,6 +57,20 @@ func (a *PlanActivities) SyncPlanPrices(ctx context.Context, input SyncPlanPrice
 	ctx = types.SetTenantID(ctx, input.TenantID)
 	ctx = types.SetEnvironmentID(ctx, input.EnvironmentID)
 	ctx = types.SetUserID(ctx, input.UserID)
+
+	lockKey := cache.PrefixPriceSyncLock + input.PlanID
+	log := logger.GetLogger()
+	defer func() {
+		redisCache := cache.GetRedisCache()
+		if redisCache == nil {
+			log.Warnw("price_sync_lock_release_skipped", "plan_id", input.PlanID, "lock_key", lockKey, "reason", "redis_cache_nil")
+			return
+		}
+		releaseCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		redisCache.Delete(releaseCtx, lockKey)
+		log.Infow("price_sync_lock_released", "plan_id", input.PlanID, "lock_key", lockKey)
+	}()
 
 	result, err := a.planService.SyncPlanPrices(ctx, input.PlanID)
 	if err != nil {

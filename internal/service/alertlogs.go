@@ -76,7 +76,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		return err
 	}
 
-	s.Logger.Debugw("evaluating alert status",
+	s.Logger.DebugwCtx(ctx, "evaluating alert status",
 		"entity_type", req.EntityType,
 		"entity_id", req.EntityID,
 		"parent_entity_type", req.ParentEntityType,
@@ -103,7 +103,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 
 	// Debug log to verify what we fetched from DB (NO CACHE!)
 	if existingAlert != nil {
-		s.Logger.Infow("fetched existing alert from database",
+		s.Logger.InfowCtx(ctx, "fetched existing alert from database",
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,
@@ -113,7 +113,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			"requested_status", req.AlertStatus,
 		)
 	} else {
-		s.Logger.Infow("no existing alert found in database",
+		s.Logger.InfowCtx(ctx, "no existing alert found in database",
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,
@@ -136,7 +136,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		// No previous alert exists
 		if req.AlertStatus == types.AlertStateOk {
 			// System is healthy from the start - no need to log
-			s.Logger.Debugw("skipping alert - no previous alert and status is ok (system healthy)",
+			s.Logger.DebugwCtx(ctx, "skipping alert - no previous alert and status is ok (system healthy)",
 				"entity_type", req.EntityType,
 				"entity_id", req.EntityID,
 				"alert_type", req.AlertType,
@@ -146,7 +146,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			// Problem state detected for first time (INFO, WARNING or IN_ALARM) - create alert
 			shouldCreateLog = true
 			webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-			s.Logger.Infow("creating alert - problem detected for first time",
+			s.Logger.InfowCtx(ctx, "creating alert - problem detected for first time",
 				"entity_type", req.EntityType,
 				"entity_id", req.EntityID,
 				"alert_type", req.AlertType,
@@ -158,7 +158,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		// Previous alert exists BUT status is different - state changed, create log
 		shouldCreateLog = true
 		webhookEventName = s.getWebhookEventName(req.AlertType, req.AlertStatus)
-		s.Logger.Infow("creating alert - state changed",
+		s.Logger.InfowCtx(ctx, "creating alert - state changed",
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,
@@ -168,7 +168,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		)
 	} else {
 		// Previous alert exists AND status is the same - no change, skip
-		s.Logger.Debugw("skipping alert - status unchanged",
+		s.Logger.DebugwCtx(ctx, "skipping alert - status unchanged",
 			"entity_type", req.EntityType,
 			"entity_id", req.EntityID,
 			"alert_type", req.AlertType,
@@ -209,7 +209,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			Mark(ierr.ErrDatabase)
 	}
 
-	s.Logger.Infow("alert log created successfully",
+	s.Logger.InfowCtx(ctx, "alert log created successfully",
 		"alert_log_id", alertLog.ID,
 		"entity_type", req.EntityType,
 		"entity_id", req.EntityID,
@@ -235,7 +235,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		if webhookEventName != "" {
 			walletService := NewWalletService(s.ServiceParams)
 			if err := walletService.PublishEvent(ctx, webhookEventName, wallet); err != nil {
-				s.Logger.Errorw("failed to publish webhook event",
+				s.Logger.ErrorwCtx(ctx, "failed to publish webhook event",
 					"error", err,
 					"alert_log_id", alertLog.ID,
 					"entity_type", req.EntityType,
@@ -245,7 +245,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 					"webhook_event", webhookEventName,
 				)
 			}
-			s.Logger.Infow("webhook event published successfully",
+			s.Logger.InfowCtx(ctx, "webhook event published successfully",
 				"alert_log_id", alertLog.ID,
 				"entity_type", req.EntityType,
 				"entity_id", req.EntityID,
@@ -259,7 +259,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 		// This will pass the alert log with parent entity fields (feature_id, wallet_id) to AlertPayloadBuilder
 		if webhookEventName != "" {
 			if err := s.publishWebhookEvent(ctx, webhookEventName, alertLog, req.AlertType); err != nil {
-				s.Logger.Errorw("failed to publish webhook event",
+				s.Logger.ErrorwCtx(ctx, "failed to publish webhook event",
 					"error", err,
 					"alert_log_id", alertLog.ID,
 					"entity_type", req.EntityType,
@@ -269,7 +269,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 					"webhook_event", webhookEventName,
 				)
 			} else {
-				s.Logger.Infow("webhook event published successfully",
+				s.Logger.InfowCtx(ctx, "webhook event published successfully",
 					"alert_log_id", alertLog.ID,
 					"entity_type", req.EntityType,
 					"entity_id", req.EntityID,
@@ -280,7 +280,7 @@ func (s *alertLogsService) LogAlert(ctx context.Context, req *LogAlertRequest) e
 			}
 		}
 	default:
-		s.Logger.Warnw("webhook event not published for alert log:",
+		s.Logger.WarnwCtx(ctx, "webhook event not published for alert log:",
 			"entity_type", req.EntityType,
 			"alert_log_id", alertLog.ID,
 		)
@@ -302,7 +302,7 @@ func (s *alertLogsService) ListAlertsByEntity(ctx context.Context, entityType ty
 
 // WebhookEventMapping represents the mapping configuration for alert types and statuses to webhook events
 type WebhookEventMapping struct {
-	WebhookEvent string `json:"webhook_event"`
+	WebhookEvent types.WebhookEventName `json:"webhook_event"`
 }
 
 // alertWebhookMapping defines the mapping from alert types and statuses to specific webhook events
@@ -345,7 +345,7 @@ var alertWebhookMapping = map[types.AlertType]map[types.AlertState]WebhookEventM
 }
 
 // getWebhookEventName determines the appropriate webhook event name based on alert type and status
-func (s *alertLogsService) getWebhookEventName(alertType types.AlertType, alertStatus types.AlertState) string {
+func (s *alertLogsService) getWebhookEventName(alertType types.AlertType, alertStatus types.AlertState) types.WebhookEventName {
 	// Check if we have a mapping for this alert type
 	if alertTypeMapping, exists := alertWebhookMapping[alertType]; exists {
 		// Check if we have a mapping for this alert status
@@ -358,7 +358,7 @@ func (s *alertLogsService) getWebhookEventName(alertType types.AlertType, alertS
 	return ""
 }
 
-func (s *alertLogsService) publishWebhookEvent(ctx context.Context, eventName string, alertLog *alertlogs.AlertLog, alertType types.AlertType) error {
+func (s *alertLogsService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, alertLog *alertlogs.AlertLog, alertType types.AlertType) error {
 	var webhookPayload []byte
 	var err error
 
@@ -384,7 +384,7 @@ func (s *alertLogsService) publishWebhookEvent(ctx context.Context, eventName st
 			AlertStatus: string(alertLog.AlertStatus), // Alert status
 		})
 		if err != nil {
-			s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+			s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 			return err
 		}
 	default:
@@ -404,7 +404,7 @@ func (s *alertLogsService) publishWebhookEvent(ctx context.Context, eventName st
 	}
 
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 		return err
 	}
 

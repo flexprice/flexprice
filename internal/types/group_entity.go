@@ -9,7 +9,8 @@ import (
 type GroupEntityType string
 
 const (
-	GroupEntityTypePrice GroupEntityType = "price"
+	GroupEntityTypePrice   GroupEntityType = "price"
+	GroupEntityTypeFeature GroupEntityType = "feature"
 )
 
 func (e GroupEntityType) String() string {
@@ -19,6 +20,7 @@ func (e GroupEntityType) String() string {
 func (e GroupEntityType) Validate() error {
 	allowed := []GroupEntityType{
 		GroupEntityTypePrice,
+		GroupEntityTypeFeature,
 	}
 	if !lo.Contains(allowed, e) {
 		return ierr.NewError("invalid group entity type").
@@ -35,6 +37,7 @@ func (e GroupEntityType) Validate() error {
 func GetAllGroupEntityTypes() []GroupEntityType {
 	return []GroupEntityType{
 		GroupEntityTypePrice,
+		GroupEntityTypeFeature,
 	}
 }
 

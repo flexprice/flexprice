@@ -17,7 +17,7 @@ actions:
           - 5XX
           - 429
         retryConnectionErrors: true
-  
+
   # Add retries configuration for POST operations
   - target: $.paths.*.post
     update:
@@ -32,7 +32,7 @@ actions:
           - 5XX
           - 429
         retryConnectionErrors: true
-  
+
   # Add retries configuration for PUT operations
   - target: $.paths.*.put
     update:
@@ -47,7 +47,7 @@ actions:
           - 5XX
           - 429
         retryConnectionErrors: true
-  
+
   # Add retries configuration for PATCH operations
   - target: $.paths.*.patch
     update:
@@ -62,7 +62,7 @@ actions:
           - 5XX
           - 429
         retryConnectionErrors: true
-  
+
   # Add retries configuration for DELETE operations
   - target: $.paths.*.delete
     update:
@@ -77,4 +77,3 @@ actions:
           - 5XX
           - 429
         retryConnectionErrors: true
-

@@ -129,15 +129,24 @@ type RawEvent struct {
 	Sign               int8      `json:"sign" ch:"sign"`
 }
 
+// KeysetCursor holds the pagination position for keyset-based pagination.
+// The caller passes this back on the next request to continue from where
+// the previous batch left off.
+type KeysetCursor struct {
+	LastTimestamp time.Time // Timestamp of the last row in the previous batch
+	LastID        string    // ID of the last row in the previous batch
+}
+
 // FindRawEventsParams contains parameters for finding raw events
 type FindRawEventsParams struct {
-	ExternalCustomerIDs []string  // Optional filter by external customer IDs
-	EventNames          []string  // Optional filter by event names
-	StartTime           time.Time // Optional filter by start time
-	EndTime             time.Time // Optional filter by end time
-	BatchSize           int       // Number of events to return per batch
-	Offset              int       // Offset for pagination (OFFSET/LIMIT approach)
-	EventIDs            []string  // Optional filter by specific event IDs
+	ExternalCustomerIDs []string      // Optional filter by external customer IDs
+	EventNames          []string      // Optional filter by event names
+	StartTime           time.Time     // Optional filter by start time
+	EndTime             time.Time     // Optional filter by end time
+	BatchSize           int           // Number of events to return per batch
+	Offset              int           // Offset for pagination (OFFSET/LIMIT approach)
+	EventIDs            []string      // Optional filter by specific event IDs
+	KeysetCursor        *KeysetCursor // Optional cursor for keyset pagination (used by FindUnprocessedRawEvents)
 }
 
 // ReprocessRawEventsParams contains parameters for raw event reprocessing

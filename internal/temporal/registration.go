@@ -11,6 +11,7 @@ import (
 	invoiceActivities "github.com/flexprice/flexprice/internal/temporal/activities/invoice"
 	moyasarActivities "github.com/flexprice/flexprice/internal/temporal/activities/moyasar"
 	nomodActivities "github.com/flexprice/flexprice/internal/temporal/activities/nomod"
+	paddleActivities "github.com/flexprice/flexprice/internal/temporal/activities/paddle"
 	planActivities "github.com/flexprice/flexprice/internal/temporal/activities/plan"
 	prepareProcessedEventsActivities "github.com/flexprice/flexprice/internal/temporal/activities/prepareprocessedevents"
 	qbActivities "github.com/flexprice/flexprice/internal/temporal/activities/quickbooks"
@@ -127,6 +128,13 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 		params.Logger,
 	)
 
+	// Paddle activities
+	paddleInvoiceSyncActivities := paddleActivities.NewInvoiceSyncActivities(
+		params.IntegrationFactory,
+		customerService,
+		params.Logger,
+	)
+
 	// Customer activities
 	customerActivities := customerActivities.NewCustomerActivities(
 		params,
@@ -147,7 +155,7 @@ func RegisterWorkflowsAndActivities(temporalService temporalService.TemporalServ
 
 	// Get all task queues and register workflows/activities for each
 	for _, taskQueue := range types.GetAllTaskQueues() {
-		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities)
+		config := buildWorkerConfig(taskQueue, workflowTrackingActivities, planActivities, prepareEventsActivities, taskActivities, taskActivity, scheduledTaskActivity, exportActivity, hubspotDealSyncActivities, hubspotInvoiceSyncActivities, hubspotQuoteSyncActivities, qbPriceSyncActivities, nomodInvoiceSyncActivities, moyasarInvoiceSyncActivities, paddleInvoiceSyncActivities, customerActivities, scheduleBillingActivities, billingActivities, invoiceActs, reprocessEventsActivities, reprocessRawEventsActivities)
 		if err := registerWorker(temporalService, config); err != nil {
 			return fmt.Errorf("failed to register worker for task queue %s: %w", taskQueue, err)
 		}
@@ -172,6 +180,7 @@ func buildWorkerConfig(
 	qbPriceSyncActivities *qbActivities.QuickBooksPriceSyncActivities,
 	nomodInvoiceSyncActivities *nomodActivities.InvoiceSyncActivities,
 	moyasarInvoiceSyncActivities *moyasarActivities.InvoiceSyncActivities,
+	paddleInvoiceSyncActivities *paddleActivities.InvoiceSyncActivities,
 	customerActivities *customerActivities.CustomerActivities,
 	scheduleBillingActivities *subscriptionActivities.SubscriptionActivities,
 	billingActivities *subscriptionActivities.BillingActivities,
@@ -195,6 +204,8 @@ func buildWorkerConfig(
 			workflows.HubSpotQuoteSyncWorkflow,
 			workflows.NomodInvoiceSyncWorkflow,
 			workflows.MoyasarInvoiceSyncWorkflow,
+			workflows.PaddleInvoiceSyncWorkflow,
+			workflows.PrepareProcessedEventsWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			taskActivities.ProcessTask,
@@ -204,6 +215,9 @@ func buildWorkerConfig(
 			hubspotQuoteSyncActivities.CreateQuoteAndLineItems,
 			nomodInvoiceSyncActivities.SyncInvoiceToNomod,
 			moyasarInvoiceSyncActivities.SyncInvoiceToMoyasar,
+			paddleInvoiceSyncActivities.SyncInvoiceToPaddle,
+			prepareEventsActivities.CreateFeatureAndPriceActivity,
+			prepareEventsActivities.RolloutToSubscriptionsActivity,
 		)
 
 	case types.TemporalTaskQueuePrice:
@@ -234,6 +248,7 @@ func buildWorkerConfig(
 			workflowsList,
 			subscriptionWorkflows.ScheduleSubscriptionBillingWorkflow,
 			subscriptionWorkflows.ProcessSubscriptionBillingWorkflow,
+			invoiceWorkflows.RecalculateInvoiceWorkflow,
 		)
 		activitiesList = append(activitiesList,
 			// Schedule billing activities
@@ -246,6 +261,8 @@ func buildWorkerConfig(
 			billingActivities.CheckCancellationActivity,
 			billingActivities.ProcessPendingPlanChangesActivity,
 			billingActivities.TriggerInvoiceWorkflowActivity,
+			// Invoice recalculation (v2)
+			invoiceActs.RecalculateInvoiceActivity,
 		)
 
 	case types.TemporalTaskQueueInvoice:

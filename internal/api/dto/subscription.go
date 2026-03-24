@@ -262,14 +262,20 @@ type CreateSubscriptionRequest struct {
 	// and must be same as what you provided as external_id while creating the customer in flexprice.
 	ExternalCustomerID string `json:"external_customer_id"`
 
-	// invoicing_customer_id is the customer ID to use for invoicing
-	// This can differ from the subscription customer (e.g., parent company invoicing for child company)
-	// This field is set internally based on InvoiceBillingConfig and is not exposed in the API
-	InvoicingCustomerID *string `json:"-"`
+	// invoicing_customer_id is the FlexPrice customer ID to use for invoicing.
+	// This can differ from the subscription customer (e.g., a billing entity invoicing on behalf of another customer).
+	// Mutually exclusive with invoicing_customer_external_id.
+	InvoicingCustomerID *string `json:"invoicing_customer_id,omitempty"`
 
-	// invoice_billing determines which customer should receive invoices for a subscription
-	// "invoice_to_parent" - Invoices are sent to the parent customer
-	// "invoice_to_self" - Invoices are sent to the subscription's customer
+	// invoicing_customer_external_id is the external ID of the customer to use for invoicing.
+	// Resolved internally to an internal customer ID via external ID lookup.
+	// Mutually exclusive with invoicing_customer_id.
+	InvoicingCustomerExternalID *string `json:"invoicing_customer_external_id,omitempty"`
+
+	// Deprecated: Use invoicing_customer_id or invoicing_customer_external_id instead.
+	// invoice_billing determines which customer should receive invoices for a subscription.
+	// Supported values: "invoice_to_parent" (uses the subscription customer's parent) or "invoice_to_self" (default).
+	// Will be removed in a future version.
 	InvoiceBilling *types.InvoiceBilling `json:"invoice_billing,omitempty"`
 
 	PlanID             string               `json:"plan_id" validate:"required"`
@@ -543,6 +549,20 @@ func (r *CreateSubscriptionRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// invoicing_customer_id and invoicing_customer_external_id are mutually exclusive
+	if r.InvoicingCustomerID != nil && r.InvoicingCustomerExternalID != nil {
+		return ierr.NewError("only one of invoicing_customer_id or invoicing_customer_external_id may be provided").
+			WithHint("Send either invoicing_customer_id or invoicing_customer_external_id, but not both").
+			Mark(ierr.ErrValidation)
+	}
+
+	// invoice_billing (deprecated) cannot be combined with the new invoicing customer fields
+	if r.InvoiceBilling != nil && (r.InvoicingCustomerID != nil || r.InvoicingCustomerExternalID != nil) {
+		return ierr.NewError("invoice_billing cannot be used together with invoicing_customer_id or invoicing_customer_external_id").
+			WithHint("invoice_billing is deprecated; use invoicing_customer_id or invoicing_customer_external_id instead").
+			Mark(ierr.ErrValidation)
+	}
+
 	err := validator.ValidateRequest(r)
 	if err != nil {
 		return err
@@ -593,11 +613,9 @@ func (r *CreateSubscriptionRequest) Validate() error {
 		r.PaymentBehavior = &defaultPaymentBehavior
 	}
 
-	// Set default for invoice billing if not provided
-	if r.InvoiceBilling == nil {
-		r.InvoiceBilling = lo.ToPtr(types.InvoiceBillingInvoiceToSelf)
-	} else {
-		// Validate invoice billing if provided
+	// Deprecated: invoice_billing is deprecated in favor of invoicing_customer_id / invoicing_customer_external_id.
+	// Validate the value if it was explicitly provided for backward compatibility.
+	if r.InvoiceBilling != nil {
 		if err := r.InvoiceBilling.Validate(); err != nil {
 			return err
 		}
@@ -1532,6 +1550,9 @@ type GetUsageBySubscriptionRequest struct {
 	StartTime      time.Time `json:"start_time" example:"2024-03-13T00:00:00Z"`
 	EndTime        time.Time `json:"end_time" example:"2024-03-20T00:00:00Z"`
 	LifetimeUsage  bool      `json:"lifetime_usage" example:"false"`
+	// Source indicates the caller context. When "invoice_creation", ClickHouse queries use FINAL.
+	// Optional; omit for default (no FINAL).
+	Source string `json:"-"`
 }
 
 type GetUsageBySubscriptionResponse struct {
@@ -1549,16 +1570,17 @@ type GetUsageBySubscriptionResponse struct {
 }
 
 type SubscriptionUsageByMetersResponse struct {
-	Amount           float64            `json:"amount"`
-	Currency         string             `json:"currency"`
-	DisplayAmount    string             `json:"display_amount"`
-	Quantity         float64            `json:"quantity"`
-	FilterValues     price.JSONBFilters `json:"filter_values"`
-	MeterID          string             `json:"meter_id"`
-	MeterDisplayName string             `json:"meter_display_name"`
-	Price            *price.Price       `json:"price"`
-	IsOverage        bool               `json:"is_overage"`               // Whether this charge is at overage rate
-	OverageFactor    float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
+	SubscriptionLineItemID string             `json:"subscription_line_item_id,omitempty"` // For feature_usage: direct match by sub_line_item_id
+	Amount                 float64            `json:"amount"`
+	Currency               string             `json:"currency"`
+	DisplayAmount          string             `json:"display_amount"`
+	Quantity               float64            `json:"quantity"`
+	FilterValues           price.JSONBFilters `json:"filter_values"`
+	MeterID                string             `json:"meter_id"`
+	MeterDisplayName       string             `json:"meter_display_name"`
+	Price                  *price.Price       `json:"price"`
+	IsOverage              bool               `json:"is_overage"`               // Whether this charge is at overage rate
+	OverageFactor          float64            `json:"overage_factor,omitempty"` // Factor applied to this charge if in overage
 }
 
 type SubscriptionUpdatePeriodResponse struct {

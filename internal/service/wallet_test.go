@@ -80,6 +80,7 @@ func (s *WalletServiceSuite) setupService() {
 		DB:                       s.GetDB(),
 		WalletRepo:               stores.WalletRepo,
 		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
 		PlanRepo:                 stores.PlanRepo,
 		PriceRepo:                stores.PriceRepo,
 		EventRepo:                stores.EventRepo,
@@ -97,26 +98,28 @@ func (s *WalletServiceSuite) setupService() {
 		WalletBalanceAlertPubSub: types.WalletBalanceAlertPubSub{PubSub: pubsub},
 	})
 	s.subsService = NewSubscriptionService(ServiceParams{
-		Logger:                s.GetLogger(),
-		Config:                s.GetConfig(),
-		DB:                    s.GetDB(),
-		SubRepo:               stores.SubscriptionRepo,
-		PlanRepo:              stores.PlanRepo,
-		PriceRepo:             stores.PriceRepo,
-		EventRepo:             stores.EventRepo,
-		MeterRepo:             stores.MeterRepo,
-		CustomerRepo:          stores.CustomerRepo,
-		InvoiceRepo:           stores.InvoiceRepo,
-		EntitlementRepo:       stores.EntitlementRepo,
-		FeatureRepo:           stores.FeatureRepo,
-		CouponRepo:            stores.CouponRepo,
-		CouponAssociationRepo: stores.CouponAssociationRepo,
-		CouponApplicationRepo: stores.CouponApplicationRepo,
-		AddonAssociationRepo:  stores.AddonAssociationRepo,
-		SettingsRepo:          stores.SettingsRepo,
-		EventPublisher:        s.GetPublisher(),
-		WebhookPublisher:      s.GetWebhookPublisher(),
-		AlertLogsRepo:         s.GetStores().AlertLogsRepo,
+		Logger:                   s.GetLogger(),
+		Config:                   s.GetConfig(),
+		DB:                       s.GetDB(),
+		SubRepo:                  stores.SubscriptionRepo,
+		SubscriptionLineItemRepo: stores.SubscriptionLineItemRepo,
+		PlanRepo:                 stores.PlanRepo,
+		PriceRepo:                stores.PriceRepo,
+		EventRepo:                stores.EventRepo,
+		MeterRepo:                stores.MeterRepo,
+		CustomerRepo:             stores.CustomerRepo,
+		InvoiceRepo:              stores.InvoiceRepo,
+		EntitlementRepo:          stores.EntitlementRepo,
+		FeatureRepo:              stores.FeatureRepo,
+		FeatureUsageRepo:         stores.FeatureUsageRepo,
+		CouponRepo:               stores.CouponRepo,
+		CouponAssociationRepo:    stores.CouponAssociationRepo,
+		CouponApplicationRepo:    stores.CouponApplicationRepo,
+		AddonAssociationRepo:     stores.AddonAssociationRepo,
+		SettingsRepo:             stores.SettingsRepo,
+		EventPublisher:           s.GetPublisher(),
+		WebhookPublisher:         s.GetWebhookPublisher(),
+		AlertLogsRepo:            s.GetStores().AlertLogsRepo,
 	})
 }
 
@@ -808,12 +811,9 @@ func (s *WalletServiceSuite) TestGetWalletBalance() {
 		{
 			name:     "Success - Active wallet with matching currency",
 			walletID: s.testData.wallet.ID,
-			// Usage includes both storage (315 * 0.1 = 31.5) and API calls tiers (assessed across subscriptions)
-			// Given test data, current period usage totals to 123
-			// Wallet balance now only includes usage charges (not unpaid invoices)
-			// Real-time balance: 1000 - 123 = 877
-			expectedRealTimeBalance: decimal.NewFromInt(877), // 1000 - 123 (usage only)
-			expectedCurrentUsage:    decimal.NewFromInt(123), // 123 (usage charges only)
+			// Usage: storage + archive + API from a single pass over subscription line items (no duplicate rows per meter).
+			expectedRealTimeBalance: decimal.RequireFromString("938.5"),
+			expectedCurrentUsage:    decimal.RequireFromString("61.5"),
 		},
 		{
 			name:          "Error - Invalid wallet ID",
@@ -1879,11 +1879,9 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			// current setup; align expectation with computed usage (78)
-			// Wallet balance now only includes usage charges (not unpaid invoices)
-			// Real-time balance: 1000 - 78 = 922
-			expectedRealTimeBalance: decimal.NewFromInt(922), // 1000 - 78 (usage only)
-			expectedCurrentUsage:    decimal.NewFromInt(78),  // 78 (usage charges only)
+			// current setup; align expectation with computed usage (single line-item pass per meter)
+			expectedRealTimeBalance: decimal.NewFromInt(961), // 1000 - 39 (usage only)
+			expectedCurrentUsage:    decimal.NewFromInt(39),
 			wantErr:                 false,
 		},
 		{
@@ -1904,10 +1902,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			// Wallet balance now only includes usage charges (not unpaid invoices)
-			// Real-time balance: 1000 - 78 = 922
-			expectedRealTimeBalance: decimal.NewFromInt(922), // 1000 - 78 (usage only)
-			expectedCurrentUsage:    decimal.NewFromInt(78),  // 78 (usage charges only)
+			expectedRealTimeBalance: decimal.NewFromInt(961),
+			expectedCurrentUsage:    decimal.NewFromInt(39),
 			wantErr:                 false,
 		},
 		{
@@ -1928,10 +1924,8 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				_, err := s.GetStores().EntitlementRepo.Create(s.GetContext(), entitlement)
 				s.NoError(err)
 			},
-			// Wallet balance now only includes usage charges (not unpaid invoices)
-			// Real-time balance: 1000 - 78 = 922
-			expectedRealTimeBalance: decimal.NewFromInt(922), // 1000 - 78 (usage only)
-			expectedCurrentUsage:    decimal.NewFromInt(78),  // 78 (usage charges only)
+			expectedRealTimeBalance: decimal.NewFromInt(961),
+			expectedCurrentUsage:    decimal.NewFromInt(39),
 			wantErr:                 false,
 		},
 		{
@@ -1960,11 +1954,10 @@ func (s *WalletServiceSuite) TestGetWalletBalanceWithEntitlements() {
 				s.NoError(err)
 				s.False(created.IsEnabled, "Entitlement should be disabled")
 			},
-			// Disabled entitlement should not adjust usage; expect same charges as baseline
-			// Wallet balance now only includes usage charges (not unpaid invoices)
-			// Real-time balance: 1000 - 123 = 877
-			expectedRealTimeBalance: decimal.NewFromInt(877), // 1000 - 123 (usage only)
-			expectedCurrentUsage:    decimal.NewFromInt(123), // 123 (usage charges only)
+			// Disabled entitlement should not adjust usage (no entitlement capping).
+			// Wallet balance only includes usage charges; amounts reflect a single pass over line items (no duplicate meter rows).
+			expectedRealTimeBalance: decimal.RequireFromString("938.5"), // 1000 - 61.5
+			expectedCurrentUsage:    decimal.RequireFromString("61.5"),
 			wantErr:                 false,
 		},
 	}

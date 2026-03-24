@@ -28,6 +28,7 @@ type SubscriptionLineItem struct {
 	Quantity            decimal.Decimal                      `db:"quantity" json:"quantity" swaggertype:"string"`
 	Currency            string                               `db:"currency" json:"currency"`
 	BillingPeriod       types.BillingPeriod                  `db:"billing_period" json:"billing_period"`
+	BillingPeriodCount  int                                  `db:"billing_period_count" json:"billing_period_count"` // from price at create; default 1
 	InvoiceCadence      types.InvoiceCadence                 `db:"invoice_cadence" json:"invoice_cadence"`
 	TrialPeriod         int                                  `db:"trial_period" json:"trial_period"`
 	StartDate           time.Time                            `db:"start_date" json:"start_date,omitempty"`
@@ -37,10 +38,10 @@ type SubscriptionLineItem struct {
 	EnvironmentID       string                               `db:"environment_id" json:"environment_id"`
 
 	// Commitment fields
-	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty"`
-	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty"`
+	CommitmentAmount        *decimal.Decimal     `db:"commitment_amount" json:"commitment_amount,omitempty" swaggertype:"string"`
+	CommitmentQuantity      *decimal.Decimal     `db:"commitment_quantity" json:"commitment_quantity,omitempty" swaggertype:"string"`
 	CommitmentType          types.CommitmentType `db:"commitment_type" json:"commitment_type,omitempty"`
-	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty"`
+	CommitmentOverageFactor *decimal.Decimal     `db:"commitment_overage_factor" json:"commitment_overage_factor,omitempty" swaggertype:"string"`
 	CommitmentTrueUpEnabled bool                 `db:"commitment_true_up_enabled" json:"commitment_true_up_enabled"`
 	CommitmentWindowed      bool                 `db:"commitment_windowed" json:"commitment_windowed"`
 	CommitmentDuration      *types.BillingPeriod `db:"commitment_duration" json:"commitment_duration,omitempty"`
@@ -142,6 +143,10 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		commitmentDuration = &cd
 	}
 
+	billingPeriodCount := e.BillingPeriodCount
+	if billingPeriodCount <= 0 {
+		billingPeriodCount = 1
+	}
 	return &SubscriptionLineItem{
 		ID:                      e.ID,
 		SubscriptionID:          e.SubscriptionID,
@@ -159,6 +164,7 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		Quantity:                e.Quantity,
 		Currency:                e.Currency,
 		BillingPeriod:           e.BillingPeriod,
+		BillingPeriodCount:      billingPeriodCount,
 		InvoiceCadence:          e.InvoiceCadence,
 		TrialPeriod:             e.TrialPeriod,
 		StartDate:               startDate,

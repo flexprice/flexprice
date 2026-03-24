@@ -96,6 +96,8 @@ type Invoice struct {
 	TotalPrepaidCreditsApplied *decimal.Decimal `json:"total_prepaid_credits_applied,omitempty"`
 	// Key for ensuring idempotent invoice creation
 	IdempotencyKey *string `json:"idempotency_key,omitempty"`
+	// ID of the replacement invoice created when this invoice was recalculated after voiding
+	RecalculatedInvoiceID *string `json:"recalculated_invoice_id,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the InvoiceQuery when eager-loading is set.
 	Edges        InvoiceEdges `json:"edges"`
@@ -144,7 +146,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(decimal.Decimal)
 		case invoice.FieldVersion, invoice.FieldBillingSequence:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey:
+		case invoice.FieldID, invoice.FieldTenantID, invoice.FieldStatus, invoice.FieldCreatedBy, invoice.FieldUpdatedBy, invoice.FieldEnvironmentID, invoice.FieldCustomerID, invoice.FieldSubscriptionID, invoice.FieldInvoiceType, invoice.FieldInvoiceStatus, invoice.FieldPaymentStatus, invoice.FieldCurrency, invoice.FieldDescription, invoice.FieldBillingPeriod, invoice.FieldInvoicePdfURL, invoice.FieldBillingReason, invoice.FieldInvoiceNumber, invoice.FieldIdempotencyKey, invoice.FieldRecalculatedInvoiceID:
 			values[i] = new(sql.NullString)
 		case invoice.FieldCreatedAt, invoice.FieldUpdatedAt, invoice.FieldDueDate, invoice.FieldPaidAt, invoice.FieldVoidedAt, invoice.FieldFinalizedAt, invoice.FieldPeriodStart, invoice.FieldPeriodEnd:
 			values[i] = new(sql.NullTime)
@@ -414,6 +416,13 @@ func (i *Invoice) assignValues(columns []string, values []any) error {
 				i.IdempotencyKey = new(string)
 				*i.IdempotencyKey = value.String
 			}
+		case invoice.FieldRecalculatedInvoiceID:
+			if value, ok := values[j].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field recalculated_invoice_id", values[j])
+			} else if value.Valid {
+				i.RecalculatedInvoiceID = new(string)
+				*i.RecalculatedInvoiceID = value.String
+			}
 		default:
 			i.selectValues.Set(columns[j], values[j])
 		}
@@ -601,6 +610,11 @@ func (i *Invoice) String() string {
 	builder.WriteString(", ")
 	if v := i.IdempotencyKey; v != nil {
 		builder.WriteString("idempotency_key=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := i.RecalculatedInvoiceID; v != nil {
+		builder.WriteString("recalculated_invoice_id=")
 		builder.WriteString(*v)
 	}
 	builder.WriteByte(')')

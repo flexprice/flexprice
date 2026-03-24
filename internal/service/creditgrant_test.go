@@ -67,6 +67,7 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		CustomerRepo:               s.GetStores().CustomerRepo,
 		PlanRepo:                   s.GetStores().PlanRepo,
 		SubRepo:                    s.GetStores().SubscriptionRepo,
+		SubscriptionLineItemRepo:   s.GetStores().SubscriptionLineItemRepo,
 		SubscriptionPhaseRepo:      s.GetStores().SubscriptionPhaseRepo,
 		WalletRepo:                 s.GetStores().WalletRepo,
 		TenantRepo:                 s.GetStores().TenantRepo,
@@ -88,6 +89,7 @@ func (s *CreditGrantServiceTestSuite) setupServices() {
 		WebhookPublisher:           s.GetWebhookPublisher(),
 		AlertLogsRepo:              s.GetStores().AlertLogsRepo,
 		WalletBalanceAlertPubSub:   types.WalletBalanceAlertPubSub{PubSub: testutil.NewInMemoryPubSub()},
+		AddonAssociationRepo:       s.GetStores().AddonAssociationRepo,
 	}
 
 	s.creditGrantService = NewCreditGrantService(serviceParams)

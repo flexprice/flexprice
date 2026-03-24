@@ -8,12 +8,13 @@ import (
 type TaxAssociationFilter struct {
 	*QueryFilter
 	*TimeRangeFilter
-	TaxAssociationIDs []string          `json:"tax_association_ids,omitempty" form:"tax_association_ids"`
-	TaxRateIDs        []string          `json:"tax_rate_ids,omitempty" form:"tax_rate_ids"`
-	EntityType        TaxRateEntityType `json:"entity_type,omitempty" form:"entity_type"`
-	EntityID          string            `json:"entity_id,omitempty" form:"entity_id"`
-	Currency          string            `json:"currency,omitempty" form:"currency"`
-	AutoApply         *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
+	TaxAssociationIDs  []string          `json:"tax_association_ids,omitempty" form:"tax_association_ids"`
+	TaxRateIDs         []string          `json:"tax_rate_ids,omitempty" form:"tax_rate_ids"`
+	EntityType         TaxRateEntityType `json:"entity_type,omitempty" form:"entity_type"`
+	EntityID           string            `json:"entity_id,omitempty" form:"entity_id"`
+	ExternalCustomerID string            `json:"external_customer_id,omitempty" form:"external_customer_id"`
+	Currency           string            `json:"currency,omitempty" form:"currency"`
+	AutoApply          *bool             `json:"auto_apply,omitempty" form:"auto_apply"`
 }
 
 // EntityHierarchy defines the hierarchy levels for tax associations

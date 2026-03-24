@@ -605,3 +605,22 @@ func (f SubscriptionScheduleFilter) Validate() error {
 
 	return nil
 }
+
+// UsageSource indicates the caller context for GetFeatureUsageBySubscription.
+// When InvoiceCreation, queries use FINAL for correct ReplacingMergeTree deduplication.
+// When Analytics or empty, FINAL is omitted for performance.
+const (
+	UsageSourceInvoiceCreation UsageSource = "invoice_creation"
+	UsageSourceAnalytics       UsageSource = "analytics"
+	UsageSourcePreview         UsageSource = "preview"
+	UsageSourceAPI             UsageSource = "api"
+	UsageSourceWallet          UsageSource = "wallet"
+)
+
+// UsageSource is the type for usage query source.
+type UsageSource string
+
+// UseFinal returns true when the source requires FINAL in ClickHouse feature_usage queries.
+func (s UsageSource) UseFinal() bool {
+	return s == UsageSourceInvoiceCreation
+}

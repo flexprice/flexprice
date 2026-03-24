@@ -23547,29 +23547,33 @@ func (m *EnvironmentMutation) ResetEdge(name string) error {
 // FeatureMutation represents an operation that mutates the Feature nodes in the graph.
 type FeatureMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *string
-	tenant_id      *string
-	status         *string
-	created_at     *time.Time
-	updated_at     *time.Time
-	created_by     *string
-	updated_by     *string
-	environment_id *string
-	lookup_key     *string
-	name           *string
-	description    *string
-	_type          *string
-	meter_id       *string
-	metadata       *map[string]string
-	unit_singular  *string
-	unit_plural    *string
-	alert_settings *types.AlertSettings
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*Feature, error)
-	predicates     []predicate.Feature
+	op                             Op
+	typ                            string
+	id                             *string
+	tenant_id                      *string
+	status                         *string
+	created_at                     *time.Time
+	updated_at                     *time.Time
+	created_by                     *string
+	updated_by                     *string
+	environment_id                 *string
+	lookup_key                     *string
+	name                           *string
+	description                    *string
+	_type                          *string
+	meter_id                       *string
+	metadata                       *map[string]string
+	unit_singular                  *string
+	unit_plural                    *string
+	reporting_unit_singular        *string
+	reporting_unit_plural          *string
+	reporting_unit_conversion_rate *decimal.Decimal
+	alert_settings                 *types.AlertSettings
+	group_id                       *string
+	clearedFields                  map[string]struct{}
+	done                           bool
+	oldValue                       func(context.Context) (*Feature, error)
+	predicates                     []predicate.Feature
 }
 
 var _ ent.Mutation = (*FeatureMutation)(nil)
@@ -24320,6 +24324,153 @@ func (m *FeatureMutation) ResetUnitPlural() {
 	delete(m.clearedFields, feature.FieldUnitPlural)
 }
 
+// SetReportingUnitSingular sets the "reporting_unit_singular" field.
+func (m *FeatureMutation) SetReportingUnitSingular(s string) {
+	m.reporting_unit_singular = &s
+}
+
+// ReportingUnitSingular returns the value of the "reporting_unit_singular" field in the mutation.
+func (m *FeatureMutation) ReportingUnitSingular() (r string, exists bool) {
+	v := m.reporting_unit_singular
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReportingUnitSingular returns the old "reporting_unit_singular" field's value of the Feature entity.
+// If the Feature object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FeatureMutation) OldReportingUnitSingular(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReportingUnitSingular is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReportingUnitSingular requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReportingUnitSingular: %w", err)
+	}
+	return oldValue.ReportingUnitSingular, nil
+}
+
+// ClearReportingUnitSingular clears the value of the "reporting_unit_singular" field.
+func (m *FeatureMutation) ClearReportingUnitSingular() {
+	m.reporting_unit_singular = nil
+	m.clearedFields[feature.FieldReportingUnitSingular] = struct{}{}
+}
+
+// ReportingUnitSingularCleared returns if the "reporting_unit_singular" field was cleared in this mutation.
+func (m *FeatureMutation) ReportingUnitSingularCleared() bool {
+	_, ok := m.clearedFields[feature.FieldReportingUnitSingular]
+	return ok
+}
+
+// ResetReportingUnitSingular resets all changes to the "reporting_unit_singular" field.
+func (m *FeatureMutation) ResetReportingUnitSingular() {
+	m.reporting_unit_singular = nil
+	delete(m.clearedFields, feature.FieldReportingUnitSingular)
+}
+
+// SetReportingUnitPlural sets the "reporting_unit_plural" field.
+func (m *FeatureMutation) SetReportingUnitPlural(s string) {
+	m.reporting_unit_plural = &s
+}
+
+// ReportingUnitPlural returns the value of the "reporting_unit_plural" field in the mutation.
+func (m *FeatureMutation) ReportingUnitPlural() (r string, exists bool) {
+	v := m.reporting_unit_plural
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReportingUnitPlural returns the old "reporting_unit_plural" field's value of the Feature entity.
+// If the Feature object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FeatureMutation) OldReportingUnitPlural(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReportingUnitPlural is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReportingUnitPlural requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReportingUnitPlural: %w", err)
+	}
+	return oldValue.ReportingUnitPlural, nil
+}
+
+// ClearReportingUnitPlural clears the value of the "reporting_unit_plural" field.
+func (m *FeatureMutation) ClearReportingUnitPlural() {
+	m.reporting_unit_plural = nil
+	m.clearedFields[feature.FieldReportingUnitPlural] = struct{}{}
+}
+
+// ReportingUnitPluralCleared returns if the "reporting_unit_plural" field was cleared in this mutation.
+func (m *FeatureMutation) ReportingUnitPluralCleared() bool {
+	_, ok := m.clearedFields[feature.FieldReportingUnitPlural]
+	return ok
+}
+
+// ResetReportingUnitPlural resets all changes to the "reporting_unit_plural" field.
+func (m *FeatureMutation) ResetReportingUnitPlural() {
+	m.reporting_unit_plural = nil
+	delete(m.clearedFields, feature.FieldReportingUnitPlural)
+}
+
+// SetReportingUnitConversionRate sets the "reporting_unit_conversion_rate" field.
+func (m *FeatureMutation) SetReportingUnitConversionRate(d decimal.Decimal) {
+	m.reporting_unit_conversion_rate = &d
+}
+
+// ReportingUnitConversionRate returns the value of the "reporting_unit_conversion_rate" field in the mutation.
+func (m *FeatureMutation) ReportingUnitConversionRate() (r decimal.Decimal, exists bool) {
+	v := m.reporting_unit_conversion_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReportingUnitConversionRate returns the old "reporting_unit_conversion_rate" field's value of the Feature entity.
+// If the Feature object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FeatureMutation) OldReportingUnitConversionRate(ctx context.Context) (v *decimal.Decimal, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReportingUnitConversionRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReportingUnitConversionRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReportingUnitConversionRate: %w", err)
+	}
+	return oldValue.ReportingUnitConversionRate, nil
+}
+
+// ClearReportingUnitConversionRate clears the value of the "reporting_unit_conversion_rate" field.
+func (m *FeatureMutation) ClearReportingUnitConversionRate() {
+	m.reporting_unit_conversion_rate = nil
+	m.clearedFields[feature.FieldReportingUnitConversionRate] = struct{}{}
+}
+
+// ReportingUnitConversionRateCleared returns if the "reporting_unit_conversion_rate" field was cleared in this mutation.
+func (m *FeatureMutation) ReportingUnitConversionRateCleared() bool {
+	_, ok := m.clearedFields[feature.FieldReportingUnitConversionRate]
+	return ok
+}
+
+// ResetReportingUnitConversionRate resets all changes to the "reporting_unit_conversion_rate" field.
+func (m *FeatureMutation) ResetReportingUnitConversionRate() {
+	m.reporting_unit_conversion_rate = nil
+	delete(m.clearedFields, feature.FieldReportingUnitConversionRate)
+}
+
 // SetAlertSettings sets the "alert_settings" field.
 func (m *FeatureMutation) SetAlertSettings(ts types.AlertSettings) {
 	m.alert_settings = &ts
@@ -24369,6 +24520,55 @@ func (m *FeatureMutation) ResetAlertSettings() {
 	delete(m.clearedFields, feature.FieldAlertSettings)
 }
 
+// SetGroupID sets the "group_id" field.
+func (m *FeatureMutation) SetGroupID(s string) {
+	m.group_id = &s
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *FeatureMutation) GroupID() (r string, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the Feature entity.
+// If the Feature object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FeatureMutation) OldGroupID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ClearGroupID clears the value of the "group_id" field.
+func (m *FeatureMutation) ClearGroupID() {
+	m.group_id = nil
+	m.clearedFields[feature.FieldGroupID] = struct{}{}
+}
+
+// GroupIDCleared returns if the "group_id" field was cleared in this mutation.
+func (m *FeatureMutation) GroupIDCleared() bool {
+	_, ok := m.clearedFields[feature.FieldGroupID]
+	return ok
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *FeatureMutation) ResetGroupID() {
+	m.group_id = nil
+	delete(m.clearedFields, feature.FieldGroupID)
+}
+
 // Where appends a list predicates to the FeatureMutation builder.
 func (m *FeatureMutation) Where(ps ...predicate.Feature) {
 	m.predicates = append(m.predicates, ps...)
@@ -24403,7 +24603,7 @@ func (m *FeatureMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FeatureMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 20)
 	if m.tenant_id != nil {
 		fields = append(fields, feature.FieldTenantID)
 	}
@@ -24449,8 +24649,20 @@ func (m *FeatureMutation) Fields() []string {
 	if m.unit_plural != nil {
 		fields = append(fields, feature.FieldUnitPlural)
 	}
+	if m.reporting_unit_singular != nil {
+		fields = append(fields, feature.FieldReportingUnitSingular)
+	}
+	if m.reporting_unit_plural != nil {
+		fields = append(fields, feature.FieldReportingUnitPlural)
+	}
+	if m.reporting_unit_conversion_rate != nil {
+		fields = append(fields, feature.FieldReportingUnitConversionRate)
+	}
 	if m.alert_settings != nil {
 		fields = append(fields, feature.FieldAlertSettings)
+	}
+	if m.group_id != nil {
+		fields = append(fields, feature.FieldGroupID)
 	}
 	return fields
 }
@@ -24490,8 +24702,16 @@ func (m *FeatureMutation) Field(name string) (ent.Value, bool) {
 		return m.UnitSingular()
 	case feature.FieldUnitPlural:
 		return m.UnitPlural()
+	case feature.FieldReportingUnitSingular:
+		return m.ReportingUnitSingular()
+	case feature.FieldReportingUnitPlural:
+		return m.ReportingUnitPlural()
+	case feature.FieldReportingUnitConversionRate:
+		return m.ReportingUnitConversionRate()
 	case feature.FieldAlertSettings:
 		return m.AlertSettings()
+	case feature.FieldGroupID:
+		return m.GroupID()
 	}
 	return nil, false
 }
@@ -24531,8 +24751,16 @@ func (m *FeatureMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldUnitSingular(ctx)
 	case feature.FieldUnitPlural:
 		return m.OldUnitPlural(ctx)
+	case feature.FieldReportingUnitSingular:
+		return m.OldReportingUnitSingular(ctx)
+	case feature.FieldReportingUnitPlural:
+		return m.OldReportingUnitPlural(ctx)
+	case feature.FieldReportingUnitConversionRate:
+		return m.OldReportingUnitConversionRate(ctx)
 	case feature.FieldAlertSettings:
 		return m.OldAlertSettings(ctx)
+	case feature.FieldGroupID:
+		return m.OldGroupID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Feature field %s", name)
 }
@@ -24647,12 +24875,40 @@ func (m *FeatureMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUnitPlural(v)
 		return nil
+	case feature.FieldReportingUnitSingular:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReportingUnitSingular(v)
+		return nil
+	case feature.FieldReportingUnitPlural:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReportingUnitPlural(v)
+		return nil
+	case feature.FieldReportingUnitConversionRate:
+		v, ok := value.(decimal.Decimal)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReportingUnitConversionRate(v)
+		return nil
 	case feature.FieldAlertSettings:
 		v, ok := value.(types.AlertSettings)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetAlertSettings(v)
+		return nil
+	case feature.FieldGroupID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Feature field %s", name)
@@ -24708,8 +24964,20 @@ func (m *FeatureMutation) ClearedFields() []string {
 	if m.FieldCleared(feature.FieldUnitPlural) {
 		fields = append(fields, feature.FieldUnitPlural)
 	}
+	if m.FieldCleared(feature.FieldReportingUnitSingular) {
+		fields = append(fields, feature.FieldReportingUnitSingular)
+	}
+	if m.FieldCleared(feature.FieldReportingUnitPlural) {
+		fields = append(fields, feature.FieldReportingUnitPlural)
+	}
+	if m.FieldCleared(feature.FieldReportingUnitConversionRate) {
+		fields = append(fields, feature.FieldReportingUnitConversionRate)
+	}
 	if m.FieldCleared(feature.FieldAlertSettings) {
 		fields = append(fields, feature.FieldAlertSettings)
+	}
+	if m.FieldCleared(feature.FieldGroupID) {
+		fields = append(fields, feature.FieldGroupID)
 	}
 	return fields
 }
@@ -24749,8 +25017,20 @@ func (m *FeatureMutation) ClearField(name string) error {
 	case feature.FieldUnitPlural:
 		m.ClearUnitPlural()
 		return nil
+	case feature.FieldReportingUnitSingular:
+		m.ClearReportingUnitSingular()
+		return nil
+	case feature.FieldReportingUnitPlural:
+		m.ClearReportingUnitPlural()
+		return nil
+	case feature.FieldReportingUnitConversionRate:
+		m.ClearReportingUnitConversionRate()
+		return nil
 	case feature.FieldAlertSettings:
 		m.ClearAlertSettings()
+		return nil
+	case feature.FieldGroupID:
+		m.ClearGroupID()
 		return nil
 	}
 	return fmt.Errorf("unknown Feature nullable field %s", name)
@@ -24805,8 +25085,20 @@ func (m *FeatureMutation) ResetField(name string) error {
 	case feature.FieldUnitPlural:
 		m.ResetUnitPlural()
 		return nil
+	case feature.FieldReportingUnitSingular:
+		m.ResetReportingUnitSingular()
+		return nil
+	case feature.FieldReportingUnitPlural:
+		m.ResetReportingUnitPlural()
+		return nil
+	case feature.FieldReportingUnitConversionRate:
+		m.ResetReportingUnitConversionRate()
+		return nil
 	case feature.FieldAlertSettings:
 		m.ResetAlertSettings()
+		return nil
+	case feature.FieldGroupID:
+		m.ResetGroupID()
 		return nil
 	}
 	return fmt.Errorf("unknown Feature field %s", name)
@@ -25876,6 +26168,7 @@ type InvoiceMutation struct {
 	addbilling_sequence           *int
 	total_prepaid_credits_applied *decimal.Decimal
 	idempotency_key               *string
+	recalculated_invoice_id       *string
 	clearedFields                 map[string]struct{}
 	line_items                    map[string]struct{}
 	removedline_items             map[string]struct{}
@@ -27726,6 +28019,55 @@ func (m *InvoiceMutation) ResetIdempotencyKey() {
 	delete(m.clearedFields, invoice.FieldIdempotencyKey)
 }
 
+// SetRecalculatedInvoiceID sets the "recalculated_invoice_id" field.
+func (m *InvoiceMutation) SetRecalculatedInvoiceID(s string) {
+	m.recalculated_invoice_id = &s
+}
+
+// RecalculatedInvoiceID returns the value of the "recalculated_invoice_id" field in the mutation.
+func (m *InvoiceMutation) RecalculatedInvoiceID() (r string, exists bool) {
+	v := m.recalculated_invoice_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRecalculatedInvoiceID returns the old "recalculated_invoice_id" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldRecalculatedInvoiceID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRecalculatedInvoiceID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRecalculatedInvoiceID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRecalculatedInvoiceID: %w", err)
+	}
+	return oldValue.RecalculatedInvoiceID, nil
+}
+
+// ClearRecalculatedInvoiceID clears the value of the "recalculated_invoice_id" field.
+func (m *InvoiceMutation) ClearRecalculatedInvoiceID() {
+	m.recalculated_invoice_id = nil
+	m.clearedFields[invoice.FieldRecalculatedInvoiceID] = struct{}{}
+}
+
+// RecalculatedInvoiceIDCleared returns if the "recalculated_invoice_id" field was cleared in this mutation.
+func (m *InvoiceMutation) RecalculatedInvoiceIDCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldRecalculatedInvoiceID]
+	return ok
+}
+
+// ResetRecalculatedInvoiceID resets all changes to the "recalculated_invoice_id" field.
+func (m *InvoiceMutation) ResetRecalculatedInvoiceID() {
+	m.recalculated_invoice_id = nil
+	delete(m.clearedFields, invoice.FieldRecalculatedInvoiceID)
+}
+
 // AddLineItemIDs adds the "line_items" edge to the InvoiceLineItem entity by ids.
 func (m *InvoiceMutation) AddLineItemIDs(ids ...string) {
 	if m.line_items == nil {
@@ -27868,7 +28210,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 38)
+	fields := make([]string, 0, 39)
 	if m.tenant_id != nil {
 		fields = append(fields, invoice.FieldTenantID)
 	}
@@ -27983,6 +28325,9 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.idempotency_key != nil {
 		fields = append(fields, invoice.FieldIdempotencyKey)
 	}
+	if m.recalculated_invoice_id != nil {
+		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
+	}
 	return fields
 }
 
@@ -28067,6 +28412,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.TotalPrepaidCreditsApplied()
 	case invoice.FieldIdempotencyKey:
 		return m.IdempotencyKey()
+	case invoice.FieldRecalculatedInvoiceID:
+		return m.RecalculatedInvoiceID()
 	}
 	return nil, false
 }
@@ -28152,6 +28499,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTotalPrepaidCreditsApplied(ctx)
 	case invoice.FieldIdempotencyKey:
 		return m.OldIdempotencyKey(ctx)
+	case invoice.FieldRecalculatedInvoiceID:
+		return m.OldRecalculatedInvoiceID(ctx)
 	}
 	return nil, fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -28427,6 +28776,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIdempotencyKey(v)
 		return nil
+	case invoice.FieldRecalculatedInvoiceID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRecalculatedInvoiceID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
 }
@@ -28559,6 +28915,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldIdempotencyKey) {
 		fields = append(fields, invoice.FieldIdempotencyKey)
 	}
+	if m.FieldCleared(invoice.FieldRecalculatedInvoiceID) {
+		fields = append(fields, invoice.FieldRecalculatedInvoiceID)
+	}
 	return fields
 }
 
@@ -28647,6 +29006,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldIdempotencyKey:
 		m.ClearIdempotencyKey()
+		return nil
+	case invoice.FieldRecalculatedInvoiceID:
+		m.ClearRecalculatedInvoiceID()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice nullable field %s", name)
@@ -28769,6 +29131,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldIdempotencyKey:
 		m.ResetIdempotencyKey()
+		return nil
+	case invoice.FieldRecalculatedInvoiceID:
+		m.ResetRecalculatedInvoiceID()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice field %s", name)
@@ -48729,6 +49094,8 @@ type SubscriptionLineItemMutation struct {
 	quantity                   *decimal.Decimal
 	currency                   *string
 	billing_period             *types.BillingPeriod
+	billing_period_count       *int
+	addbilling_period_count    *int
 	invoice_cadence            *types.InvoiceCadence
 	trial_period               *int
 	addtrial_period            *int
@@ -49793,6 +50160,62 @@ func (m *SubscriptionLineItemMutation) ResetBillingPeriod() {
 	m.billing_period = nil
 }
 
+// SetBillingPeriodCount sets the "billing_period_count" field.
+func (m *SubscriptionLineItemMutation) SetBillingPeriodCount(i int) {
+	m.billing_period_count = &i
+	m.addbilling_period_count = nil
+}
+
+// BillingPeriodCount returns the value of the "billing_period_count" field in the mutation.
+func (m *SubscriptionLineItemMutation) BillingPeriodCount() (r int, exists bool) {
+	v := m.billing_period_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBillingPeriodCount returns the old "billing_period_count" field's value of the SubscriptionLineItem entity.
+// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SubscriptionLineItemMutation) OldBillingPeriodCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBillingPeriodCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBillingPeriodCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBillingPeriodCount: %w", err)
+	}
+	return oldValue.BillingPeriodCount, nil
+}
+
+// AddBillingPeriodCount adds i to the "billing_period_count" field.
+func (m *SubscriptionLineItemMutation) AddBillingPeriodCount(i int) {
+	if m.addbilling_period_count != nil {
+		*m.addbilling_period_count += i
+	} else {
+		m.addbilling_period_count = &i
+	}
+}
+
+// AddedBillingPeriodCount returns the value that was added to the "billing_period_count" field in this mutation.
+func (m *SubscriptionLineItemMutation) AddedBillingPeriodCount() (r int, exists bool) {
+	v := m.addbilling_period_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetBillingPeriodCount resets all changes to the "billing_period_count" field.
+func (m *SubscriptionLineItemMutation) ResetBillingPeriodCount() {
+	m.billing_period_count = nil
+	m.addbilling_period_count = nil
+}
+
 // SetInvoiceCadence sets the "invoice_cadence" field.
 func (m *SubscriptionLineItemMutation) SetInvoiceCadence(tc types.InvoiceCadence) {
 	m.invoice_cadence = &tc
@@ -50526,7 +50949,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 36)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -50592,6 +51015,9 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	}
 	if m.billing_period != nil {
 		fields = append(fields, subscriptionlineitem.FieldBillingPeriod)
+	}
+	if m.billing_period_count != nil {
+		fields = append(fields, subscriptionlineitem.FieldBillingPeriodCount)
 	}
 	if m.invoice_cadence != nil {
 		fields = append(fields, subscriptionlineitem.FieldInvoiceCadence)
@@ -50684,6 +51110,8 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.Currency()
 	case subscriptionlineitem.FieldBillingPeriod:
 		return m.BillingPeriod()
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		return m.BillingPeriodCount()
 	case subscriptionlineitem.FieldInvoiceCadence:
 		return m.InvoiceCadence()
 	case subscriptionlineitem.FieldTrialPeriod:
@@ -50763,6 +51191,8 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldCurrency(ctx)
 	case subscriptionlineitem.FieldBillingPeriod:
 		return m.OldBillingPeriod(ctx)
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		return m.OldBillingPeriodCount(ctx)
 	case subscriptionlineitem.FieldInvoiceCadence:
 		return m.OldInvoiceCadence(ctx)
 	case subscriptionlineitem.FieldTrialPeriod:
@@ -50952,6 +51382,13 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 		}
 		m.SetBillingPeriod(v)
 		return nil
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBillingPeriodCount(v)
+		return nil
 	case subscriptionlineitem.FieldInvoiceCadence:
 		v, ok := value.(types.InvoiceCadence)
 		if !ok {
@@ -51051,6 +51488,9 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 // this mutation.
 func (m *SubscriptionLineItemMutation) AddedFields() []string {
 	var fields []string
+	if m.addbilling_period_count != nil {
+		fields = append(fields, subscriptionlineitem.FieldBillingPeriodCount)
+	}
 	if m.addtrial_period != nil {
 		fields = append(fields, subscriptionlineitem.FieldTrialPeriod)
 	}
@@ -51062,6 +51502,8 @@ func (m *SubscriptionLineItemMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *SubscriptionLineItemMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		return m.AddedBillingPeriodCount()
 	case subscriptionlineitem.FieldTrialPeriod:
 		return m.AddedTrialPeriod()
 	}
@@ -51073,6 +51515,13 @@ func (m *SubscriptionLineItemMutation) AddedField(name string) (ent.Value, bool)
 // type.
 func (m *SubscriptionLineItemMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBillingPeriodCount(v)
+		return nil
 	case subscriptionlineitem.FieldTrialPeriod:
 		v, ok := value.(int)
 		if !ok {
@@ -51301,6 +51750,9 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldBillingPeriod:
 		m.ResetBillingPeriod()
+		return nil
+	case subscriptionlineitem.FieldBillingPeriodCount:
+		m.ResetBillingPeriodCount()
 		return nil
 	case subscriptionlineitem.FieldInvoiceCadence:
 		m.ResetInvoiceCadence()

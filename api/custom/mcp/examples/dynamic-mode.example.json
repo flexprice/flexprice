@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "flexprice": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@flexprice/mcp-server",
+        "start",
+        "--server-url",
+        "https://us.api.flexprice.io/v1",
+        "--api-key-auth",
+        "YOUR_API_KEY",
+        "--mode",
+        "dynamic"
+      ]
+    }
+  }
+}

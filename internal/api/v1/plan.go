@@ -4,9 +4,11 @@ import (
 	"net/http"
 
 	"github.com/flexprice/flexprice/internal/api/dto"
+	"github.com/flexprice/flexprice/internal/cache"
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/logger"
 	"github.com/flexprice/flexprice/internal/service"
+	"github.com/flexprice/flexprice/internal/temporal/models"
 	temporalservice "github.com/flexprice/flexprice/internal/temporal/service"
 	"github.com/flexprice/flexprice/internal/types"
 	"github.com/gin-gonic/gin"
@@ -37,16 +39,17 @@ func NewPlanHandler(
 	}
 }
 
-// @Summary Create a new plan
-// @Description Create a new plan with the specified configuration
+// @Summary Create plan
+// @ID createPlan
+// @Description Use when defining a new pricing plan (e.g. Free, Pro, Enterprise). Attach prices and entitlements; customers subscribe to plans.
 // @Tags Plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param plan body dto.CreatePlanRequest true "Plan configuration"
 // @Success 201 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans [post]
 func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	var req dto.CreatePlanRequest
@@ -66,17 +69,17 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a plan
-// @Description Get a plan by ID
+// @Summary Get plan
+// @ID getPlan
+// @Description Use when you need to load a single plan (e.g. for display or to create a subscription).
 // @Tags Plans
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id} [get]
 func (h *PlanHandler) GetPlan(c *gin.Context) {
 	id := c.Param("id")
@@ -96,18 +99,7 @@ func (h *PlanHandler) GetPlan(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get plans
-// @Description Get plans with optional filtering
-// @Tags Plans
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.PlanFilter false "Filter"
-// @Success 200 {object} dto.ListPlansResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /plans [get]
-func (h *PlanHandler) GetPlans(c *gin.Context) {
+func (h *PlanHandler) ListPlans(c *gin.Context) {
 	var filter types.PlanFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -129,8 +121,9 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a plan
-// @Description Update a plan by ID
+// @Summary Update plan
+// @ID updatePlan
+// @Description Use when changing plan details (e.g. name, interval, or metadata). Partial update supported.
 // @Tags Plans
 // @Accept json
 // @Produce json
@@ -138,9 +131,9 @@ func (h *PlanHandler) GetPlans(c *gin.Context) {
 // @Param id path string true "Plan ID"
 // @Param plan body dto.UpdatePlanRequest true "Plan update"
 // @Success 200 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id} [put]
 func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	id := c.Param("id")
@@ -168,17 +161,18 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a plan
-// @Description Delete a plan by ID
+// @Summary Delete plan
+// @ID deletePlan
+// @Description Use when retiring a plan (e.g. end-of-life). Existing subscriptions may be affected. Returns 200 with success message.
 // @Tags Plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id} [delete]
 func (h *PlanHandler) DeletePlan(c *gin.Context) {
 	id := c.Param("id")
@@ -199,16 +193,16 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 }
 
 // @Summary Get plan entitlements
-// @Description Get all entitlements for a plan
+// @ID getPlanEntitlements
+// @Description Use when checking what a plan includes (e.g. feature list or limits for display or gating).
 // @Tags Entitlements
-// @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.PlanResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id}/entitlements [get]
 func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 	id := c.Param("id")
@@ -229,16 +223,16 @@ func (h *PlanHandler) GetPlanEntitlements(c *gin.Context) {
 }
 
 // @Summary Get plan credit grants
-// @Description Get all credit grants for a plan
-// @Tags CreditGrants
-// @Accept json
+// @ID getPlanCreditGrants
+// @Description Use when listing credits attached to a plan (e.g. included prepaid or promo credits).
+// @Tags Credit Grants
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Plan ID"
 // @Success 200 {object} dto.ListCreditGrantsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 404 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Resource not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/{id}/creditgrants [get]
 func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 	id := c.Param("id")
@@ -258,8 +252,13 @@ func (h *PlanHandler) GetPlanCreditGrants(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func priceSyncLockKey(planID string) string {
+	return cache.PrefixPriceSyncLock + planID
+}
+
 // @Summary Synchronize plan prices
-// @Description Synchronize current plan prices with all existing active subscriptions
+// @ID syncPlanPrices
+// @Description Use when you have changed plan prices and need to push them to all active subscriptions (e.g. global price update). Returns workflow ID.
 // @Tags Plans
 // @Accept json
 // @Produce json
@@ -287,32 +286,58 @@ func (h *PlanHandler) SyncPlanPrices(c *gin.Context) {
 		c.Error(err)
 		return
 	}
-	// Start the price sync workflow using the unified method
+	// Acquire plan-level lock (Redis SetNX, 2h TTL)
+	redisCache := cache.GetRedisCache()
+	if redisCache == nil {
+		c.Error(ierr.NewError("price sync lock unavailable").
+			WithHint("Redis cache is not available. Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+	lockKey := priceSyncLockKey(id)
+	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	if err != nil {
+		h.log.Errorw("price_sync_lock_acquire_failed", "plan_id", id, "lock_key", lockKey, "error", err)
+		c.Error(ierr.NewError("failed to acquire price sync lock").
+			WithHint("Try again later.").
+			Mark(ierr.ErrInternal))
+		return
+	}
+	if !acquired {
+		h.log.Infow("price_sync_lock_rejected", "plan_id", id, "lock_key", lockKey, "reason", "already_held")
+		c.Error(ierr.NewError("price sync already in progress for this plan").
+			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			Mark(ierr.ErrAlreadyExists))
+		return
+	}
+	h.log.Infow("price_sync_lock_acquired", "plan_id", id, "lock_key", lockKey)
+	// Start the price sync workflow (activity will release lock when done)
 	workflowRun, err := h.temporalService.ExecuteWorkflow(c.Request.Context(), types.TemporalPriceSyncWorkflow, id)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":     "price sync workflow started successfully",
-		"workflow_id": workflowRun.GetID(),
-		"run_id":      workflowRun.GetRunID(),
+	c.JSON(http.StatusOK, models.TemporalWorkflowResult{
+		Message:    "price sync workflow started successfully",
+		WorkflowID: workflowRun.GetID(),
+		RunID:      workflowRun.GetRunID(),
 	})
 }
 
-// @Summary List plans by filter
-// @Description List plans by filter
+// @Summary Query plans
+// @ID queryPlan
+// @Description Use when listing or searching plans (e.g. plan picker or admin catalog). Returns a paginated list; supports filtering and sorting.
 // @Tags Plans
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter body types.PlanFilter true "Filter"
 // @Success 200 {object} dto.ListPlansResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /plans/search [post]
-func (h *PlanHandler) ListPlansByFilter(c *gin.Context) {
+func (h *PlanHandler) QueryPlans(c *gin.Context) {
 	var filter types.PlanFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -332,6 +357,46 @@ func (h *PlanHandler) ListPlansByFilter(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// @Summary Clone a plan
+// @Description Clone an existing plan, copying its active prices, published entitlements, and published credit grants
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param id path string true "Source Plan ID"
+// @Param request body dto.ClonePlanRequest true "Clone configuration"
+// @Success 201 {object} dto.PlanResponse
+// @Failure 400 {object} ierr.ErrorResponse
+// @Failure 404 {object} ierr.ErrorResponse
+// @Failure 409 {object} ierr.ErrorResponse
+// @Failure 500 {object} ierr.ErrorResponse
+// @Router /plans/{id}/clone [post]
+func (h *PlanHandler) ClonePlan(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.Error(ierr.NewError("plan ID is required").
+			WithHint("Plan ID is required").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	var req dto.ClonePlanRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(ierr.WithError(err).
+			WithHint("Invalid request format").
+			Mark(ierr.ErrValidation))
+		return
+	}
+
+	resp, err := h.service.ClonePlan(c.Request.Context(), id, req)
+	if err != nil {
+		c.Error(err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
@@ -340,6 +405,32 @@ func (h *PlanHandler) SyncPlanPricesV2(c *gin.Context) {
 			Mark(ierr.ErrValidation))
 		return
 	}
+	// Acquire plan-level lock (Redis SetNX, 2h TTL)
+	redisCache := cache.GetRedisCache()
+	if redisCache == nil {
+		c.Error(ierr.NewError("price sync lock unavailable").
+			WithHint("Redis cache is not available. Try again later.").
+			Mark(ierr.ErrServiceUnavailable))
+		return
+	}
+	lockKey := priceSyncLockKey(id)
+	acquired, err := redisCache.TrySetNX(c.Request.Context(), lockKey, "1", cache.ExpiryPriceSyncLock)
+	if err != nil {
+		h.log.Errorw("price_sync_lock_acquire_failed", "plan_id", id, "lock_key", lockKey, "error", err)
+		c.Error(ierr.NewError("failed to acquire price sync lock").
+			WithHint("Try again later.").
+			Mark(ierr.ErrInternal))
+		return
+	}
+	if !acquired {
+		h.log.Infow("price_sync_lock_rejected", "plan_id", id, "lock_key", lockKey, "reason", "already_held")
+		c.Error(ierr.NewError("price sync already in progress for this plan").
+			WithHint("Try again later or wait up to 2 hours for the current sync to complete.").
+			Mark(ierr.ErrAlreadyExists))
+		return
+	}
+	h.log.Infow("price_sync_lock_acquired", "plan_id", id, "lock_key", lockKey)
+	defer redisCache.Delete(c.Request.Context(), lockKey)
 
 	resp, err := h.service.SyncPlanPrices(c.Request.Context(), id)
 	if err != nil {

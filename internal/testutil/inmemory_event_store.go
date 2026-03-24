@@ -292,13 +292,17 @@ func (s *InMemoryEventStore) GetUsage(ctx context.Context, params *events.UsageP
 		sort.Slice(keys, func(i, j int) bool { return keys[i].Before(keys[j]) })
 
 		result.Results = make([]events.UsageResult, 0, len(keys))
+		var sumOfBucketMaxes decimal.Decimal
 		for _, k := range keys {
 			result.Results = append(result.Results, events.UsageResult{
 				WindowSize: k,
 				Value:      buckets[k],
 			})
+			sumOfBucketMaxes = sumOfBucketMaxes.Add(buckets[k])
 		}
-		result.Value = overallMax
+		// Value is the sum of per-bucket maxes, matching ClickHouse SQL behavior.
+		// The billing code uses this as the total quantity for the bucketed meter.
+		result.Value = sumOfBucketMaxes
 		return result, nil
 	}
 

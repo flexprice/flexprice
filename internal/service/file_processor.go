@@ -81,7 +81,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	fp.Logger.Debugw("using file provider", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
+	fp.Logger.DebugwCtx(ctx, "using file provider", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
 
 	// Download file
 	req := &httpclient.Request{
@@ -120,7 +120,7 @@ func (fp *FileProcessor) DownloadFile(ctx context.Context, t *task.Task) ([]byte
 	if len(resp.Body) < previewLen {
 		previewLen = len(resp.Body)
 	}
-	fp.Logger.Debugw("received file content preview",
+	fp.Logger.DebugwCtx(ctx, "received file content preview",
 		"preview", string(resp.Body[:previewLen]),
 		"content_type", resp.Headers["Content-Type"],
 		"content_length", len(resp.Body),
@@ -150,7 +150,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	fp.Logger.Debugw("using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
+	fp.Logger.DebugwCtx(ctx, "using file provider for streaming", "original_url", t.FileURL, "download_url", downloadURL, "provider", provider.GetProviderName())
 
 	// Create HTTP request directly for streaming
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", downloadURL, nil)
@@ -197,7 +197,7 @@ func (fp *FileProcessor) DownloadFileStream(ctx context.Context, t *task.Task) (
 			Mark(ierr.ErrHTTPClient)
 	}
 
-	fp.Logger.Debugw("successfully opened file stream",
+	fp.Logger.DebugwCtx(ctx, "successfully opened file stream",
 		"content_type", resp.Header.Get("Content-Type"),
 		"content_length", resp.Header.Get("Content-Length"),
 		"provider", provider.GetProviderName())
@@ -282,7 +282,7 @@ func (fp *FileProcessor) GetFileSize(ctx context.Context, t *task.Task) (int64, 
 			Mark(ierr.ErrValidation)
 	}
 
-	fp.Logger.Debugw("retrieved file size", "size", fileSize, "url", downloadURL, "provider", provider.GetProviderName())
+	fp.Logger.DebugwCtx(ctx, "retrieved file size", "size", fileSize, "url", downloadURL, "provider", provider.GetProviderName())
 	return fileSize, nil
 }
 

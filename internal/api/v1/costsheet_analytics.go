@@ -35,15 +35,16 @@ func NewRevenueAnalyticsHandler(
 
 // GetCombinedAnalytics retrieves combined cost and revenue analytics with derived metrics
 // @Summary Get combined revenue and cost analytics
-// @Description Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.
+// @ID getDetailedCostAnalytics
+// @Description Use when building dashboards or reports that need revenue vs cost, ROI, and margin over a time period (e.g. finance views or executive summaries).
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetCostAnalyticsRequest true "Combined analytics request (start_time/end_time optional - defaults to last 7 days)"
 // @Success 200 {object} dto.GetDetailedCostAnalyticsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/analytics [post]
 func (h *RevenueAnalyticsHandler) GetDetailedCostAnalytics(c *gin.Context) {
 	ctx := c.Request.Context()
@@ -66,16 +67,17 @@ func (h *RevenueAnalyticsHandler) GetDetailedCostAnalytics(c *gin.Context) {
 }
 
 // GetCombinedAnalytics retrieves combined cost and revenue analytics with derived metrics
-// @Summary Get combined revenue and cost analytics
-// @Description Retrieve combined analytics with ROI, margin, and detailed breakdowns. If start_time and end_time are not provided, defaults to last 7 days.
+// @Summary Get combined revenue and cost analytics (V2)
+// @ID getDetailedCostAnalyticsV2
+// @Description Use when you need the same revenue/cost/ROI analytics but computed from the costsheet usage-tracking pipeline (e.g. for consistency with usage-based cost data).
 // @Tags Costs
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body dto.GetCostAnalyticsRequest true "Combined analytics request (start_time/end_time optional - defaults to last 7 days)"
 // @Success 200 {object} dto.GetDetailedCostAnalyticsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /costs/analytics-v2 [post]
 func (h *RevenueAnalyticsHandler) GetDetailedCostAnalyticsV2(c *gin.Context) {
 	ctx := c.Request.Context()

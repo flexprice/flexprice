@@ -264,9 +264,11 @@ func (r *CreateInvoiceRequest) Validate() error {
 			totalAmount = totalAmount.Add(item.Amount)
 		}
 
-		// Verify total amount matches invoice amount
-		if !totalAmount.Equal(r.AmountDue) {
-			return ierr.NewError("sum of line item amounts must equal invoice amount_due").WithHintf("sum of line item amounts %s must equal invoice amount_due %s", totalAmount.String(), r.AmountDue.String()).Mark(ierr.ErrValidation)
+		// Round both values to currency precision before comparing to avoid floating-point accumulation errors
+		roundedTotal := types.RoundToCurrencyPrecision(totalAmount, r.Currency)
+		roundedAmountDue := types.RoundToCurrencyPrecision(r.AmountDue, r.Currency)
+		if !roundedTotal.Equal(roundedAmountDue) {
+			return ierr.NewError("sum of line item amounts must equal invoice amount_due").WithHintf("sum of line item amounts %s must equal invoice amount_due %s", roundedTotal.String(), roundedAmountDue.String()).Mark(ierr.ErrValidation)
 		}
 	}
 
@@ -908,6 +910,9 @@ type ListInvoicesResponse = types.ListResponse[*InvoiceResponse]
 
 // GetPreviewInvoiceRequest represents the request payload for previewing an invoice
 type GetPreviewInvoiceRequest struct {
+	// hide_zero_charges_line_items indicates whether to hide line items with zero cost
+	HideZeroChargesLineItems bool `json:"hide_zero_charges_line_items,omitempty" default:"false"`
+
 	// subscription_id is the unique identifier of the subscription to preview invoice for
 	SubscriptionID string `json:"subscription_id" binding:"required"`
 

@@ -90,8 +90,8 @@ func (r *settingsRepository) Update(ctx context.Context, s *domainSettings.Setti
 		"key", s.Key,
 	)
 
-	// For env_config, use NULL environment_id (tenant-level)
-	// Build the WHERE clause based on whether it's env_config or not
+	// For tenant_config, use NULL environment_id (tenant-level)
+	// Build the WHERE clause based on whether it's tenant_config or not
 	_, err := client.Settings.Update().
 		Where(
 			settings.ID(s.ID),

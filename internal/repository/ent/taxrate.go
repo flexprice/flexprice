@@ -452,31 +452,12 @@ func (o TaxRateQueryOptions) ApplyPaginationFilter(query TaxRateQuery, limit int
 	return query
 }
 
-// GetFieldName returns the field name for the given field
-// @Returns: the field name for the given field
+// GetFieldName returns the ent field name for tax_rate; delegates to ent's ValidColumn so new schema fields are supported automatically.
 func (o TaxRateQueryOptions) GetFieldName(field string) string {
-	switch field {
-	case "created_at":
-		return taxrate.FieldCreatedAt
-	case "updated_at":
-		return taxrate.FieldUpdatedAt
-	case "name":
-		return taxrate.FieldName
-	case "code":
-		return taxrate.FieldCode
-	case "percentage_value":
-		return taxrate.FieldPercentageValue
-	case "fixed_value":
-		return taxrate.FieldFixedValue
-	case "scope":
-		return taxrate.FieldScope
-	case "tax_rate_type":
-		return taxrate.FieldTaxRateType
-	case "status":
-		return taxrate.FieldStatus
-	default:
-		return ""
+	if taxrate.ValidColumn(field) {
+		return field
 	}
+	return ""
 }
 
 func (o TaxRateQueryOptions) GetFieldResolver(field string) (string, error) {

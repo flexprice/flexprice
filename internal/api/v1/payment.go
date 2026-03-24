@@ -22,16 +22,17 @@ func NewPaymentHandler(service service.PaymentService, processor service.Payment
 	return &PaymentHandler{service: service, processor: processor, log: log}
 }
 
-// @Summary Create a new payment
-// @Description Create a new payment with the specified configuration
+// @Summary Create payment
+// @ID createPayment
+// @Description Use when recording a payment against an invoice (e.g. after receiving funds via a gateway or manual entry).
 // @Tags Payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param payment body dto.CreatePaymentRequest true "Payment configuration"
-// @Success 201 {object} dto.PaymentResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 201 {object} dto.PaymentResponse "Created payment"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /payments [post]
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	var req dto.CreatePaymentRequest
@@ -53,16 +54,18 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a payment by ID
-// @Description Get a payment by ID
+// @Summary Get payment
+// @ID getPayment
+// @Description Use when you need to load a single payment (e.g. for a receipt view or reconciliation).
 // @Tags Payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
-// @Success 200 {object} dto.PaymentResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.PaymentResponse "Payment details"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Payment not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /payments/{id} [get]
 func (h *PaymentHandler) GetPayment(c *gin.Context) {
 	id := c.Param("id")
@@ -83,17 +86,18 @@ func (h *PaymentHandler) GetPayment(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a payment
-// @Description Update a payment with the specified configuration
+// @Summary Update payment
+// @ID updatePayment
+// @Description Use when updating payment status or metadata (e.g. after reconciliation or adding a reference).
 // @Tags Payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
 // @Param payment body dto.UpdatePaymentRequest true "Payment configuration"
-// @Success 200 {object} dto.PaymentResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.PaymentResponse "Updated payment"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /payments/{id} [put]
 func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 	id := c.Param("id")
@@ -124,15 +128,16 @@ func (h *PaymentHandler) UpdatePayment(c *gin.Context) {
 }
 
 // @Summary List payments
-// @Description List payments with the specified filter
+// @ID listPayments
+// @Description Use when listing or searching payments (e.g. reconciliation UI or customer payment history). Returns a paginated list; supports filtering by customer, invoice, status.
 // @Tags Payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param filter query types.PaymentFilter true "Filter"
-// @Success 200 {object} dto.ListPaymentsResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.ListPaymentsResponse "Paginated payments"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /payments [get]
 func (h *PaymentHandler) ListPayments(c *gin.Context) {
 	var filter types.PaymentFilter
@@ -158,16 +163,18 @@ func (h *PaymentHandler) ListPayments(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a payment
-// @Description Delete a payment
+// @Summary Delete payment
+// @ID deletePayment
+// @Description Use when removing or voiding a payment record (e.g. correcting erroneous entries). Returns 200 with success message.
 // @Tags Payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
-// @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.SuccessResponse "Payment deleted"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Payment not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /payments/{id} [delete]
 func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 	id := c.Param("id")
@@ -187,16 +194,18 @@ func (h *PaymentHandler) DeletePayment(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "payment deleted successfully"})
 }
 
-// @Summary Process a payment
-// @Description Process a payment
+// @Summary Process payment
+// @ID processPayment
+// @Description Use when you need to charge or process a payment (e.g. trigger the payment provider to capture funds). Returns updated payment with status.
 // @Tags Payments
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Payment ID"
-// @Success 200 {object} dto.PaymentResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Success 200 {object} dto.PaymentResponse "Processed payment"
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 404 {object} ierr.ErrorResponse "Payment not found"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /payments/{id}/process [post]
 func (h *PaymentHandler) ProcessPayment(c *gin.Context) {
 	id := c.Param("id")

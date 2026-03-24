@@ -20,7 +20,10 @@ type CreateFeatureRequest struct {
 	Metadata      types.Metadata       `json:"metadata,omitempty"`
 	UnitSingular  string               `json:"unit_singular,omitempty"`
 	UnitPlural    string               `json:"unit_plural,omitempty"`
+	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	// GroupID is the id of the group to add the feature to
+	GroupID string `json:"group_id,omitempty"`
 }
 
 func (r *CreateFeatureRequest) Validate() error {
@@ -53,6 +56,13 @@ func (r *CreateFeatureRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Reporting (display) unit: when provided, all three must be set; conversion: reporting_unit = unit * conversion_rate
+	if r.ReportingUnit != nil {
+		if err := r.ReportingUnit.Validate(); err != nil {
+			return err
+		}
+	}
+
 	// Validate alert settings if provided (NO mutation here)
 	if r.AlertSettings != nil {
 		if err := r.AlertSettings.Validate(); err != nil {
@@ -66,16 +76,17 @@ func (r *CreateFeatureRequest) Validate() error {
 func (r *CreateFeatureRequest) ToFeature(ctx context.Context) (*feature.Feature, error) {
 
 	feature := &feature.Feature{
-		ID:           types.GenerateUUIDWithPrefix(types.UUID_PREFIX_FEATURE),
-		Name:         r.Name,
-		Description:  r.Description,
-		LookupKey:    r.LookupKey,
-		Metadata:     r.Metadata,
-		Type:         r.Type,
-		MeterID:      r.MeterID,
-		UnitSingular: r.UnitSingular,
-		UnitPlural:   r.UnitPlural,
-
+		ID:            types.GenerateUUIDWithPrefix(types.UUID_PREFIX_FEATURE),
+		Name:          r.Name,
+		Description:   r.Description,
+		LookupKey:     r.LookupKey,
+		Metadata:      r.Metadata,
+		Type:          r.Type,
+		MeterID:       r.MeterID,
+		UnitSingular:  r.UnitSingular,
+		UnitPlural:    r.UnitPlural,
+		ReportingUnit: r.ReportingUnit,
+		GroupID:       r.GroupID,
 		EnvironmentID: types.GetEnvironmentID(ctx),
 		BaseModel:     types.GetDefaultBaseModel(ctx),
 	}
@@ -95,13 +106,18 @@ type UpdateFeatureRequest struct {
 	Metadata      *types.Metadata      `json:"metadata,omitempty"`
 	UnitSingular  *string              `json:"unit_singular,omitempty"`
 	UnitPlural    *string              `json:"unit_plural,omitempty"`
+	ReportingUnit *types.ReportingUnit `json:"reporting_unit,omitempty"`
 	Filters       *[]meter.Filter      `json:"filters,omitempty"`
 	AlertSettings *types.AlertSettings `json:"alert_settings,omitempty"`
+	// GroupID is the id of the group to assign the feature to. Pass empty string to clear.
+	GroupID *string `json:"group_id,omitempty"`
 }
 
 type FeatureResponse struct {
 	*feature.Feature
 	Meter *MeterResponse `json:"meter,omitempty"`
+	// Group is the full group object when the feature belongs to a group (populated in response)
+	Group *GroupResponse `json:"group,omitempty"`
 }
 
 // ListFeaturesResponse represents a paginated list of features

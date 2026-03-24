@@ -10,25 +10,38 @@ import (
 	ierr "github.com/flexprice/flexprice/internal/errors"
 	"github.com/flexprice/flexprice/internal/rbac"
 	"github.com/flexprice/flexprice/internal/types"
+	"github.com/nedpals/supabase-go"
+	"github.com/samber/lo"
+	"github.com/sethvargo/go-password/password"
 )
 
 type UserService interface {
 	GetUserInfo(ctx context.Context) (*dto.UserResponse, error)
-	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.UserResponse, error)
+	CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error)
 	ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error)
 }
 
 type userService struct {
-	userRepo    user.Repository
-	tenantRepo  tenant.Repository
-	rbacService *rbac.RBACService
+	userRepo        user.Repository
+	tenantRepo      tenant.Repository
+	rbacService     *rbac.RBACService
+	supabaseAuth    *supabase.Client
+	settingsService SettingsService
 }
 
-func NewUserService(userRepo user.Repository, tenantRepo tenant.Repository, rbacService *rbac.RBACService) UserService {
+func NewUserService(
+	userRepo user.Repository,
+	tenantRepo tenant.Repository,
+	rbacService *rbac.RBACService,
+	supabaseAuth *supabase.Client,
+	settingsService SettingsService,
+) UserService {
 	return &userService{
-		userRepo:    userRepo,
-		tenantRepo:  tenantRepo,
-		rbacService: rbacService,
+		userRepo:        userRepo,
+		tenantRepo:      tenantRepo,
+		rbacService:     rbacService,
+		supabaseAuth:    supabaseAuth,
+		settingsService: settingsService,
 	}
 }
 
@@ -60,24 +73,11 @@ func (s *userService) GetUserInfo(ctx context.Context) (*dto.UserResponse, error
 	return dto.NewUserResponse(user, tenant), nil
 }
 
-func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.UserResponse, error) {
+func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest) (*dto.CreateUserResponse, error) {
 	if err := req.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Validate roles (required for service accounts)
-	for _, role := range req.Roles {
-		if !s.rbacService.ValidateRole(role) {
-			return nil, ierr.NewError("invalid role").
-				WithHint("Role '" + role + "' does not exist").
-				WithReportableDetails(map[string]interface{}{
-					"role": role,
-				}).
-				Mark(ierr.ErrValidation)
-		}
-	}
-
-	// Get tenant ID from context
 	tenantID := types.GetTenantID(ctx)
 	if tenantID == "" {
 		return nil, ierr.NewError("tenant ID is required").
@@ -97,32 +97,141 @@ func (s *userService) CreateUser(ctx context.Context, req *dto.CreateUserRequest
 		currentUserID = "system"
 	}
 
-	// Create service account with RBAC roles
-	newUser := &user.User{
-		ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
-		Email: "",                           // Service accounts have no email
-		Type:  types.UserTypeServiceAccount, // Always service_account
-		Roles: req.Roles,                    // Required roles
-		BaseModel: types.BaseModel{
-			TenantID:  tenantID,
-			Status:    types.StatusPublished,
-			CreatedBy: currentUserID,
-			UpdatedBy: currentUserID,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
+	var newUser *user.User
+	var password string
+
+	switch req.Type {
+	case types.UserTypeUser:
+		existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
+		if err != nil && !ierr.IsNotFound(err) {
+			return nil, err
+		}
+		if existingUser != nil {
+			return nil, ierr.NewError("email already in use").
+				WithHint("A user with this email already exists in this tenant").
+				WithReportableDetails(map[string]interface{}{"email": req.Email}).
+				Mark(ierr.ErrAlreadyExists)
+		}
+		// Enforce per-tenant user limit from add_user_config (GetSetting returns default when not set)
+		svc, ok := s.settingsService.(*settingsService)
+		if !ok || svc == nil {
+			return nil, ierr.NewError("settings service not configured").
+				WithHint("User creation requires settings service for add_user_config.").
+				Mark(ierr.ErrValidation)
+		}
+		addUserConfig, err := GetSetting[types.TenantConfig](svc, ctx, types.SettingKeyTenantConfig)
+		if err != nil {
+			return nil, err
+		}
+		// ListByFilter uses tenant from context and repo filters by StatusPublished
+		_, totalActiveUsers, err := s.userRepo.ListByFilter(ctx, &types.UserFilter{
+			QueryFilter: &types.QueryFilter{
+				Limit:  lo.ToPtr(1),
+				Offset: lo.ToPtr(0),
+				Status: lo.ToPtr(types.StatusPublished),
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		if totalActiveUsers >= int64(addUserConfig.MaxUsers) {
+			return nil, ierr.NewError("user limit reached: you cannot add any more users").
+				WithHintf("Maximum %d user(s) allowed for this tenant. Limit reached.", addUserConfig.MaxUsers).
+				WithReportableDetails(map[string]interface{}{"max_users": addUserConfig.MaxUsers, "current_active_users": totalActiveUsers}).
+				Mark(ierr.ErrValidation)
+		}
+		if s.supabaseAuth == nil {
+			return nil, ierr.NewError("auth provider not configured").
+				WithHint("User accounts require Supabase auth to be configured; create user (type=user) only when Supabase is available.").
+				Mark(ierr.ErrValidation)
+		}
+		plainPassword, err := generateSecurePassword()
+		if err != nil {
+			return nil, ierr.WithError(err).WithHint("Failed to generate password").Mark(ierr.ErrSystem)
+		}
+		password = plainPassword
+
+		// Create in Supabase first; only on success create in DB. We cannot rollback either side
+		// This ordering ensures we never persist in DB without auth; if DB create fails after Supabase succeeds, caller sees the error.
+		supabaseUser, err := s.supabaseAuth.Admin.CreateUser(ctx, supabase.AdminUserParams{
+			Email:        req.Email,
+			Password:     lo.ToPtr(plainPassword),
+			EmailConfirm: true,
+			AppMetadata: map[string]interface{}{
+				"tenant_id": tenantID,
+			},
+		})
+		if err != nil {
+			return nil, ierr.WithError(err).WithHint("Failed to create user in auth provider").Mark(ierr.ErrSystem)
+		}
+		newUser = &user.User{
+			ID:    supabaseUser.ID,
+			Email: req.Email,
+			Type:  types.UserTypeUser,
+			Roles: []string{},
+			BaseModel: types.BaseModel{
+				TenantID:  tenantID,
+				Status:    types.StatusPublished,
+				CreatedBy: currentUserID,
+				UpdatedBy: currentUserID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
+		if err := newUser.Validate(); err != nil {
+			return nil, err
+		}
+		if err := s.userRepo.Create(ctx, newUser); err != nil {
+			return nil, err
+		}
+	case types.UserTypeServiceAccount:
+		if s.rbacService == nil {
+			return nil, ierr.NewError("RBAC not configured").
+				WithHint("Service accounts require RBAC for role validation; provide a non-nil RBAC service.").
+				Mark(ierr.ErrValidation)
+		}
+		for _, role := range req.Roles {
+			if !s.rbacService.ValidateRole(role) {
+				return nil, ierr.NewError("invalid role").
+					WithHint("Role '" + role + "' does not exist").
+					WithReportableDetails(map[string]interface{}{"role": role}).
+					Mark(ierr.ErrValidation)
+			}
+		}
+		newUser = &user.User{
+			ID:    types.GenerateUUIDWithPrefix(types.UUID_PREFIX_USER),
+			Email: "",
+			Type:  types.UserTypeServiceAccount,
+			Roles: req.Roles,
+			BaseModel: types.BaseModel{
+				TenantID:  tenantID,
+				Status:    types.StatusPublished,
+				CreatedBy: currentUserID,
+				UpdatedBy: currentUserID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			},
+		}
+		if err := newUser.Validate(); err != nil {
+			return nil, err
+		}
+		if err := s.userRepo.Create(ctx, newUser); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, ierr.NewError("invalid user type").WithHint("Type must be 'user' or 'service_account'").Mark(ierr.ErrValidation)
 	}
 
-	// Validate user before creating
-	if err := newUser.Validate(); err != nil {
-		return nil, err
-	}
+	return &dto.CreateUserResponse{
+		UserResponse: dto.NewUserResponse(newUser, tenant),
+		Password:     password,
+	}, nil
+}
 
-	if err := s.userRepo.Create(ctx, newUser); err != nil {
-		return nil, err
-	}
-
-	return dto.NewUserResponse(newUser, tenant), nil
+// generateSecurePassword returns a cryptographically secure random password via sethvargo/go-password (crypto/rand).
+func generateSecurePassword() (string, error) {
+	// 16 chars, 4 digits, 2 symbols, allow upper, no repeat (strong, copyable)
+	return password.Generate(16, 4, 2, false, false)
 }
 
 func (s *userService) ListUsersByFilter(ctx context.Context, filter *types.UserFilter) (*dto.ListUsersResponse, error) {

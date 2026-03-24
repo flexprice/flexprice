@@ -51,13 +51,12 @@ func (h *WalletCronHandler) ExpireCredits(c *gin.Context) {
 		return
 	}
 
-	// Create filter to find expired credits (expired at least 6 hours ago - grace period after expiry)
-	filter := &types.WalletTransactionFilter{
-		Type:               lo.ToPtr(types.TransactionTypeCredit),
-		TransactionStatus:  lo.ToPtr(types.TransactionStatusCompleted),
-		ExpiryDateBefore:   lo.ToPtr(time.Now().UTC().Add(-6 * time.Hour)),
-		CreditsAvailableGT: lo.ToPtr(decimal.Zero),
-	}
+	// Create filter to find expired credits (expired at least 6 hours ago - grace period after expiry).
+	filter := types.NewNoLimitWalletTransactionFilter()
+	filter.Type = lo.ToPtr(types.TransactionTypeCredit)
+	filter.TransactionStatus = lo.ToPtr(types.TransactionStatusCompleted)
+	filter.ExpiryDateBefore = lo.ToPtr(time.Now().UTC().Add(-6 * time.Hour))
+	filter.CreditsAvailableGT = lo.ToPtr(decimal.Zero)
 
 	response := &dto.ExpiredCreditsResponse{
 		Items:                          make([]*dto.ExpiredCreditsResponseItem, 0),

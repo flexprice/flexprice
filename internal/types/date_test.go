@@ -798,6 +798,13 @@ func TestNextBillingDate_Daily_CalendarBilling(t *testing.T) {
 			unit:          1,
 			want:          time.Date(2024, time.February, 29, 0, 0, 0, 0, jst),
 		},
+		{
+			name:          "daily: mid-day start with calendar billing should align to midnight",
+			currentPeriod: time.Date(2026, time.March, 2, 7, 58, 45, 337000000, time.UTC),
+			billingAnchor: CalculateCalendarBillingAnchor(time.Date(2026, time.March, 2, 7, 58, 45, 337000000, time.UTC), BILLING_PERIOD_DAILY),
+			unit:          1,
+			want:          time.Date(2026, time.March, 3, 0, 0, 0, 0, time.UTC),
+		},
 	}
 
 	for _, tt := range tests {

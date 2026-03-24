@@ -67,6 +67,7 @@ const (
 	TransactionReasonWalletTermination       TransactionReason = "WALLET_TERMINATION"
 	TransactionReasonManualBalanceDebit      TransactionReason = "MANUAL_BALANCE_DEBIT"
 	TransactionReasonCreditAdjustment        TransactionReason = "CREDIT_ADJUSTMENT"
+	TransactionReasonInvoiceVoidRefund       TransactionReason = "INVOICE_VOID_REFUND"
 )
 
 func (t TransactionReason) Validate() error {
@@ -85,6 +86,7 @@ func (t TransactionReason) Validate() error {
 		string(TransactionReasonWalletTermination),
 		string(TransactionReasonManualBalanceDebit),
 		string(TransactionReasonCreditAdjustment),
+		string(TransactionReasonInvoiceVoidRefund),
 	}
 	if !lo.Contains(allowedValues, string(t)) {
 		return ierr.NewError("invalid transaction reason").

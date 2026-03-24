@@ -80,6 +80,13 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 			return err
 		}
 
+		if featureModel.GroupID != "" {
+			groupService := NewGroupService(s.ServiceParams)
+			if err := groupService.ValidateGroup(ctx, featureModel.GroupID, types.GroupEntityTypeFeature); err != nil {
+				return err
+			}
+		}
+
 		if err := s.FeatureRepo.Create(ctx, featureModel); err != nil {
 			return err
 		}
@@ -94,7 +101,16 @@ func (s *featureService) CreateFeature(ctx context.Context, req dto.CreateFeatur
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventFeatureCreated, featureModel.ID)
 
-	return &dto.FeatureResponse{Feature: featureModel}, nil
+	response := &dto.FeatureResponse{Feature: featureModel}
+	if featureModel.GroupID != "" {
+		groupService := NewGroupService(s.ServiceParams)
+		if groupResp, err := groupService.GetGroup(ctx, featureModel.GroupID); err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for feature create response", "group_id", featureModel.GroupID, "error", err)
+		} else {
+			response.Group = groupResp
+		}
+	}
+	return response, nil
 }
 
 func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.FeatureResponse, error) {
@@ -112,6 +128,17 @@ func (s *featureService) GetFeature(ctx context.Context, id string) (*dto.Featur
 			return nil, err
 		}
 		response.Meter = dto.ToMeterResponse(meter)
+	}
+
+	// Always populate group object when feature has a group_id
+	if feature.GroupID != "" {
+		groupService := NewGroupService(s.ServiceParams)
+		groupResp, err := groupService.GetGroup(ctx, feature.GroupID)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for feature", "group_id", feature.GroupID, "error", err)
+		} else {
+			response.Group = groupResp
+		}
 	}
 
 	return response, nil
@@ -177,7 +204,32 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 				metersByID[m.ID] = m
 			}
 
-			s.Logger.Debugw("fetched meters for features", "count", len(meters))
+			s.Logger.DebugwCtx(ctx, "fetched meters for features", "count", len(meters))
+		}
+	}
+
+	// Collect group IDs and fetch groups in bulk so every feature response includes group object when applicable
+	groupIDs := make([]string, 0)
+	for _, f := range features {
+		if f.GroupID != "" {
+			groupIDs = append(groupIDs, f.GroupID)
+		}
+	}
+	groupsByID := make(map[string]*dto.GroupResponse)
+	if len(groupIDs) > 0 {
+		groupIDs = lo.Uniq(groupIDs)
+		groupService := NewGroupService(s.ServiceParams)
+		groupFilter := &types.GroupFilter{
+			QueryFilter: types.NewNoLimitQueryFilter(),
+			GroupIDs:    groupIDs,
+		}
+		groupsResp, err := groupService.ListGroups(ctx, groupFilter)
+		if err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch groups for features", "error", err)
+		} else {
+			for _, g := range groupsResp.Items {
+				groupsByID[g.ID] = g
+			}
 		}
 	}
 
@@ -188,6 +240,13 @@ func (s *featureService) GetFeatures(ctx context.Context, filter *types.FeatureF
 		if !filter.GetExpand().IsEmpty() && filter.GetExpand().Has(types.ExpandMeters) && f.Type == types.FeatureTypeMetered && f.MeterID != "" {
 			if m, ok := metersByID[f.MeterID]; ok {
 				response.Items[i].Meter = dto.ToMeterResponse(m)
+			}
+		}
+
+		// Always add group object when feature has group_id
+		if f.GroupID != "" {
+			if g, ok := groupsByID[f.GroupID]; ok {
+				response.Items[i].Group = g
 			}
 		}
 	}
@@ -227,6 +286,23 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 	}
 	if req.UnitPlural != nil {
 		feature.UnitPlural = *req.UnitPlural
+	}
+
+	if req.ReportingUnit != nil {
+		if err := req.ReportingUnit.Validate(); err != nil {
+			return nil, err
+		}
+		feature.ReportingUnit = req.ReportingUnit
+	}
+
+	if req.GroupID != nil {
+		feature.GroupID = *req.GroupID
+		if feature.GroupID != "" {
+			groupService := NewGroupService(s.ServiceParams)
+			if err := groupService.ValidateGroup(ctx, feature.GroupID, types.GroupEntityTypeFeature); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Update alert settings if provided
@@ -291,7 +367,16 @@ func (s *featureService) UpdateFeature(ctx context.Context, id string, req dto.U
 	// Publish webhook event
 	s.publishWebhookEvent(ctx, types.WebhookEventFeatureUpdated, feature.ID)
 
-	return &dto.FeatureResponse{Feature: feature}, nil
+	response := &dto.FeatureResponse{Feature: feature}
+	if feature.GroupID != "" {
+		groupService := NewGroupService(s.ServiceParams)
+		if groupResp, err := groupService.GetGroup(ctx, feature.GroupID); err != nil {
+			s.Logger.WarnwCtx(ctx, "failed to fetch group for feature update response", "group_id", feature.GroupID, "error", err)
+		} else {
+			response.Group = groupResp
+		}
+	}
+	return response, nil
 }
 
 func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
@@ -339,13 +424,13 @@ func (s *featureService) DeleteFeature(ctx context.Context, id string) error {
 	return nil
 }
 
-func (s *featureService) publishWebhookEvent(ctx context.Context, eventName string, featureID string) {
+func (s *featureService) publishWebhookEvent(ctx context.Context, eventName types.WebhookEventName, featureID string) {
 	webhookPayload, err := json.Marshal(webhookDto.InternalFeatureEvent{
 		FeatureID: featureID,
 		TenantID:  types.GetTenantID(ctx),
 	})
 	if err != nil {
-		s.Logger.Errorw("failed to marshal webhook payload", "error", err)
+		s.Logger.ErrorwCtx(ctx, "failed to marshal webhook payload", "error", err)
 		return
 	}
 
@@ -359,6 +444,6 @@ func (s *featureService) publishWebhookEvent(ctx context.Context, eventName stri
 		Payload:       json.RawMessage(webhookPayload),
 	}
 	if err := s.WebhookPublisher.PublishWebhook(ctx, webhookEvent); err != nil {
-		s.Logger.Errorf("failed to publish %s event: %v", webhookEvent.EventName, err)
+		s.Logger.ErrorfCtx(ctx, "failed to publish %s event: %v", webhookEvent.EventName, err)
 	}
 }

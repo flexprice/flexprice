@@ -1,9 +1,24 @@
-# .github/workflows/deploy.yml
-name: Build and push image to Flexprice ECR
+name: Build, Push & Deploy to AWS ECS
 
 on:
   push:
     branches: [develop, main]
+  # Manual trigger: lets you validate config or force-deploy without a push
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        type: choice
+        default: staging
+        options: [staging, production]
+      dry_run:
+        description: "Dry run — validate config & print plan, skip register/deploy"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   id-token: write
@@ -14,8 +29,16 @@ env:
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
 jobs:
-  deploy:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 1: Build the Docker image and push it to ECR
+  # Skipped on dry-run dispatches (no code change, no reason to rebuild)
+  # ──────────────────────────────────────────────────────────────────────────
+  build:
+    name: Build & Push Docker Image
     runs-on: self-hosted
+    if: ${{ github.event.inputs.dry_run != 'true' }}
+    outputs:
+      image: ${{ steps.set-image.outputs.image }}
 
     steps:
       - uses: actions/checkout@v3
@@ -32,12 +55,196 @@ jobs:
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push image (without cache)
+      - name: Prepare image tag
+        id: image-tag
+        env:
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          echo "tag=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build & push image
         uses: docker/build-push-action@v4
         with:
           context: .
           file: Dockerfile.ecs
           platforms: linux/arm64
           push: true
-          tags: |
-            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          tags: ${{ steps.image-tag.outputs.tag }}
+
+      - name: Set image output
+        id: set-image
+        env:
+          ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: echo "image=${ECR_REGISTRY}/${ECR_REPOSITORY}:${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Job 2: Resolve deployment targets from branch or manual input
+  #
+  # Targets are stored as a single JSON variable per environment so that
+  # each region can have its own cluster and service names:
+  #
+  #   PROD_DEPLOY_TARGETS / STAGING_DEPLOY_TARGETS
+  #   (GitHub Actions → Settings → Variables)
+  #
+  #   Format (one object per region):
+  #   [
+  #     {
+  #       "region":           "ap-south-1",
+  #       "cluster":          "fp-prod-backend",
+  #       "api_service":      "flexprice-api-v4",
+  #       "consumer_service": "flexprice-consumer-v1",
+  #       "worker_service":   "temporal-worker"
+  #     },
+  #     {
+  #       "region":           "us-west-2",
+  #       "cluster":          "prod-flexprice-v1",
+  #       "api_service":      "prod-flexprice-v1",
+  #       "consumer_service": "flexprice-consumer-v1",
+  #       "worker_service":   "flexprice-temporal-worker-v1"
+  #     }
+  #   ]
+  #
+  #   Trigger mapping:
+  #     push to main    → production targets
+  #     push to develop → staging targets
+  #     workflow_dispatch → chosen via "environment" input
+  # ──────────────────────────────────────────────────────────────────────────
+  resolve-config:
+    name: Resolve deployment targets
+    runs-on: self-hosted
+    outputs:
+      targets: ${{ steps.config.outputs.targets }}
+      dry_run: ${{ steps.config.outputs.dry_run }}
+
+    steps:
+      - name: Select targets based on branch / input
+        id: config
+        env:
+          PROD_TARGETS: ${{ vars.PROD_DEPLOY_TARGETS }}
+          STAGING_TARGETS: ${{ vars.STAGING_DEPLOY_TARGETS }}
+        run: |
+          # Determine environment
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+            # Default dry_run to false when not explicitly set
+            DRY_RUN="${{ github.event.inputs.dry_run }}"
+            if [ -z "$DRY_RUN" ]; then DRY_RUN="false"; fi
+          elif [ "${{ github.ref_name }}" = "main" ]; then
+            ENV="production"
+            DRY_RUN="false"
+          else
+            ENV="staging"
+            DRY_RUN="false"
+          fi
+
+          echo "Environment and dry_run configured (values redacted for public logs)"
+
+          # Use delimiter format so JSON (newlines, spaces) is written correctly to GITHUB_OUTPUT
+          if [ "$ENV" = "production" ]; then
+            echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
+            echo "$PROD_TARGETS" >> $GITHUB_OUTPUT
+            echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+          else
+            echo "targets<<TARGETS_EOF" >> $GITHUB_OUTPUT
+            echo "$STAGING_TARGETS" >> $GITHUB_OUTPUT
+            echo "TARGETS_EOF" >> $GITHUB_OUTPUT
+          fi
+
+          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Jobs 3a–3c: Deploy API, Consumer, Worker — one job per service type,
+  # each with matrix over targets (regions). Runs in parallel for faster deploys
+  # and smaller, trackable steps. max-parallel limits concurrent load on runners.
+  #
+  # Each target matrix entry: region, cluster, api_service, consumer_service, worker_service.
+  # Task definition family is derived at runtime from the ECS service.
+  # DRY RUN: composite action prints plan only, no register/update-service.
+  # ──────────────────────────────────────────────────────────────────────────
+  deploy-api:
+    name: Deploy API (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Deploy ECS API service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.api_service }}
+          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
+  deploy-consumer:
+    name: Deploy Consumer (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Deploy ECS Consumer service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.consumer_service }}
+          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}
+
+  deploy-worker:
+    name: Deploy Worker (${{ strategy.job-index }})
+    needs: [build, resolve-config]
+    if: ${{ always() && needs.resolve-config.result == 'success' }}
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        target: ${{ fromJson(needs.resolve-config.outputs.targets) }}
+      fail-fast: false
+      max-parallel: 3
+
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-cicd
+          aws-region: ${{ matrix.target.region }}
+
+      - name: Deploy ECS Worker service
+        uses: ./.github/actions/deploy-ecs-service
+        with:
+          cluster: ${{ matrix.target.cluster }}
+          region: ${{ matrix.target.region }}
+          service_name: ${{ matrix.target.worker_service }}
+          image: ${{ needs.build.outputs.image || format('{0}/{1}:{2}', env.ECR_REGISTRY, env.ECR_REPOSITORY, github.sha) }}
+          ecr_repo_prefix: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}
+          dry_run: ${{ needs.resolve-config.outputs.dry_run }}

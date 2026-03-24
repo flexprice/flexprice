@@ -148,10 +148,18 @@ func executeCreateCustomerAction(
 		return temporal.NewApplicationError("invalid action config type for create_customer", "InvalidActionConfig")
 	}
 
-	// Use ExternalCustomerID from input for customer creation
+	// Skip if customer already exists (e.g. created via API before workflow was triggered)
+	// Use the existing CustomerID for subsequent actions (create_wallet, create_subscription)
+	if input.CustomerID != "" {
+		actionResult.ResourceID = input.CustomerID
+		actionResult.ResourceType = models.WorkflowResourceTypeCustomer
+		return nil
+	}
+
+	// Use ExternalCustomerID from input for customer creation (event-driven flow)
 	externalID := input.ExternalCustomerID
 	if externalID == "" {
-		return temporal.NewApplicationError("external_customer_id is required for create_customer action", "MissingExternalID")
+		return temporal.NewApplicationError("external_customer_id is required for create_customer action when customer_id is not provided", "MissingExternalID")
 	}
 
 	userID := ""

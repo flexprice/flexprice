@@ -60,7 +60,7 @@ type RawEventRepository interface {
 
 	// FindUnprocessedRawEvents finds raw events that haven't been processed yet
 	// Uses ANTI JOIN with feature_usage table to exclude already processed events
-	FindUnprocessedRawEvents(ctx context.Context, params *FindRawEventsParams) ([]*RawEvent, error)
+	FindUnprocessedRawEvents(ctx context.Context, params *FindRawEventsParams) ([]*RawEvent, *KeysetCursor, error)
 }
 
 // Additional types needed for the new methods
@@ -161,6 +161,7 @@ type GetEventsParams struct {
 type UsageResult struct {
 	WindowSize time.Time       `json:"window_size"`
 	Value      decimal.Decimal `json:"value"`
+	GroupKey   string          `json:"group_key,omitempty"` // group identifier when group_by is used (e.g., KRN value)
 }
 
 type AggregationResult struct {
@@ -215,6 +216,8 @@ type FeatureUsageParams struct {
 	PriceID       string `json:"price_id"`
 	MeterID       string `json:"meter_id"`
 	SubLineItemID string `json:"sub_line_item_id"`
+	// QuerySource: when InvoiceCreation, ClickHouse uses FINAL for ReplacingMergeTree deduplication; other sources do not.
+	Source types.UsageSource `json:"query_source,omitempty"`
 }
 
 // Cost Usage Params

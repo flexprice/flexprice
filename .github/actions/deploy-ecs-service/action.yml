@@ -1,0 +1,102 @@
+# Composite action: deploy a single ECS service (update task definition image + force new deployment).
+# Used by deploy-api, deploy-consumer, deploy-worker jobs in deploy.yml.
+name: 'Deploy ECS service'
+description: 'Deploy one ECS service by registering a new task definition revision and forcing deployment'
+
+inputs:
+  cluster:
+    description: 'ECS cluster name'
+    required: true
+  region:
+    description: 'AWS region'
+    required: true
+  service_name:
+    description: 'ECS service name to deploy'
+    required: true
+  image:
+    description: 'Docker image to deploy (e.g. ECR URI:tag)'
+    required: true
+  ecr_repo_prefix:
+    description: 'ECR repository prefix for matching container images to update'
+    required: true
+  dry_run:
+    description: 'If true, only print plan and do not register/update'
+    required: true
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Deploy ECS service
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        REGION: ${{ inputs.region }}
+        SERVICE: ${{ inputs.service_name }}
+        IMAGE: ${{ inputs.image }}
+        ECR_REPO_PREFIX: ${{ inputs.ecr_repo_prefix }}
+        DRY_RUN: ${{ inputs.dry_run }}
+      run: |
+        set -euo pipefail
+
+        echo ""
+        echo "==> Deploying ECS service (cluster, region, service_name only; no credentials or image URIs logged)"
+
+        TASK_ARN=$(aws ecs describe-services \
+          --cluster "$CLUSTER" \
+          --services "$SERVICE" \
+          --region "$REGION" \
+          --query 'services[0].taskDefinition' \
+          --output text)
+
+        if [ -z "$TASK_ARN" ] || [ "$TASK_ARN" = "None" ]; then
+          echo "  ERROR: service not found (cluster/region/service abstract)" >&2
+          exit 1
+        fi
+
+        TASK_FAMILY=$(echo "$TASK_ARN" | sed 's|.*/||' | sed 's|:[0-9]*$||')
+
+        TASK_DEF=$(aws ecs describe-task-definition \
+          --task-definition "$TASK_FAMILY" \
+          --region "$REGION" \
+          --query 'taskDefinition')
+
+        if [ "$DRY_RUN" = "true" ]; then
+          echo "  [DRY RUN] Would register new task definition revision and force-deploy"
+          exit 0
+        fi
+
+        # Pass image and ecr_repo_prefix via env so they never appear in script/logs
+        NEW_TASK_DEF=$(echo "$TASK_DEF" | ECR_REPO_PREFIX="$ECR_REPO_PREFIX" IMAGE="$IMAGE" python3 -c "
+        import json, sys, os
+        ecr_prefix = os.environ['ECR_REPO_PREFIX']
+        new_image = os.environ['IMAGE']
+        td = json.load(sys.stdin)
+        for c in td.get('containerDefinitions', []):
+            if c.get('image', '').startswith(ecr_prefix):
+                c['image'] = new_image
+        for f in [
+            'taskDefinitionArn', 'revision', 'status',
+            'requiresAttributes', 'compatibilities',
+            'registeredAt', 'registeredBy',
+        ]:
+            td.pop(f, None)
+        print(json.dumps(td))
+        ")
+
+        NEW_ARN=$(aws ecs register-task-definition \
+          --cli-input-json "$NEW_TASK_DEF" \
+          --region "$REGION" \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+
+        aws ecs update-service \
+          --cluster "$CLUSTER" \
+          --service "$SERVICE" \
+          --task-definition "$NEW_ARN" \
+          --force-new-deployment \
+          --region "$REGION" \
+          --query 'service.{status:status,running:runningCount,desired:desiredCount}' \
+          --output table
+
+        echo "    Deployment triggered ✓"

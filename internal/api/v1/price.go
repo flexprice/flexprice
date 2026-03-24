@@ -24,16 +24,17 @@ func NewPriceHandler(service service.PriceService, log *logger.Logger) *PriceHan
 	}
 }
 
-// @Summary Create a new price
-// @Description Create a new price with the specified configuration. Supports both regular and price unit configurations.
+// @Summary Create price
+// @ID createPrice
+// @Description Use when adding a new price to a plan or catalog (e.g. per-seat, flat, or metered). Ideal for both simple and usage-based pricing.
 // @Tags Prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param price body dto.CreatePriceRequest true "Price configuration"
 // @Success 201 {object} dto.PriceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices [post]
 func (h *PriceHandler) CreatePrice(c *gin.Context) {
 	var req dto.CreatePriceRequest
@@ -53,16 +54,17 @@ func (h *PriceHandler) CreatePrice(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Create multiple prices in bulk
-// @Description Create multiple prices with the specified configurations. Supports both regular and price unit configurations.
+// @Summary Create prices in bulk
+// @ID createPricesBulk
+// @Description Use when creating many prices at once (e.g. importing a catalog or setting up a plan with multiple tiers).
 // @Tags Prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param prices body dto.CreateBulkPriceRequest true "Bulk price configuration"
 // @Success 201 {object} dto.CreateBulkPriceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/bulk [post]
 func (h *PriceHandler) CreateBulkPrice(c *gin.Context) {
 	var req dto.CreateBulkPriceRequest
@@ -82,16 +84,17 @@ func (h *PriceHandler) CreateBulkPrice(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
-// @Summary Get a price by ID
-// @Description Get a price by ID with expanded meter and price unit information
+// @Summary Get price
+// @ID getPrice
+// @Description Use when you need to load a single price (e.g. for display or editing). Response includes expanded meter and price unit when applicable.
 // @Tags Prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path string true "Price ID"
 // @Success 200 {object} dto.PriceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/{id} [get]
 func (h *PriceHandler) GetPrice(c *gin.Context) {
 	id := c.Param("id")
@@ -111,18 +114,7 @@ func (h *PriceHandler) GetPrice(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Get prices
-// @Description Get prices with the specified filter
-// @Tags Prices
-// @Accept json
-// @Produce json
-// @Security ApiKeyAuth
-// @Param filter query types.PriceFilter false "Filter"
-// @Success 200 {object} dto.ListPricesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
-// @Router /prices [get]
-func (h *PriceHandler) GetPrices(c *gin.Context) {
+func (h *PriceHandler) ListPrices(c *gin.Context) {
 	var filter types.PriceFilter
 	if err := c.ShouldBindQuery(&filter); err != nil {
 		c.Error(ierr.WithError(err).
@@ -144,8 +136,9 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Update a price
-// @Description Update a price with the specified configuration
+// @Summary Update price
+// @ID updatePrice
+// @Description Use when changing price configuration (e.g. amount, billing scheme, or metadata).
 // @Tags Prices
 // @Accept json
 // @Produce json
@@ -153,8 +146,8 @@ func (h *PriceHandler) GetPrices(c *gin.Context) {
 // @Param id path string true "Price ID"
 // @Param price body dto.UpdatePriceRequest true "Price configuration"
 // @Success 200 {object} dto.PriceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/{id} [put]
 func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 	id := c.Param("id")
@@ -182,8 +175,9 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary Delete a price
-// @Description Delete a price
+// @Summary Delete price
+// @ID deletePrice
+// @Description Use when retiring a price (e.g. end-of-life or replacement). Optional effective date or cascade for subscriptions.
 // @Tags Prices
 // @Accept json
 // @Produce json
@@ -191,8 +185,8 @@ func (h *PriceHandler) UpdatePrice(c *gin.Context) {
 // @Param id path string true "Price ID"
 // @Param request body dto.DeletePriceRequest true "Delete Price Request"
 // @Success 200 {object} dto.SuccessResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/{id} [delete]
 func (h *PriceHandler) DeletePrice(c *gin.Context) {
 	id := c.Param("id")
@@ -220,15 +214,16 @@ func (h *PriceHandler) DeletePrice(c *gin.Context) {
 }
 
 // @Summary Get price by lookup key
-// @Description Get price by lookup key
+// @ID getPriceByLookupKey
+// @Description Use when resolving a price by external id (e.g. from your catalog or CMS). Ideal for integrations.
 // @Tags Prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param lookup_key path string true "Lookup key"
 // @Success 200 {object} dto.PriceResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/lookup/{lookup_key} [get]
 func (h *PriceHandler) GetByLookupKey(c *gin.Context) {
 	lookupKey := c.Param("lookup_key")
@@ -248,18 +243,19 @@ func (h *PriceHandler) GetByLookupKey(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// @Summary List prices by filter
-// @Description List prices with filter
+// @Summary Query prices
+// @ID queryPrice
+// @Description Use when listing or searching prices (e.g. plan builder or catalog). Returns a paginated list; supports filtering and sorting.
 // @Tags Prices
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Param filter body types.PriceFilter true "Filter with DSL support"
+// @Param filter body types.PriceFilter true "Filter"
 // @Success 200 {object} dto.ListPricesResponse
-// @Failure 400 {object} ierr.ErrorResponse
-// @Failure 500 {object} ierr.ErrorResponse
+// @Failure 400 {object} ierr.ErrorResponse "Invalid request"
+// @Failure 500 {object} ierr.ErrorResponse "Server error"
 // @Router /prices/search [post]
-func (h *PriceHandler) ListPricesByFilter(c *gin.Context) {
+func (h *PriceHandler) QueryPrices(c *gin.Context) {
 	var filter types.PriceFilter
 	if err := c.ShouldBindJSON(&filter); err != nil {
 		c.Error(ierr.WithError(err).
