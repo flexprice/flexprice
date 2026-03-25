@@ -362,9 +362,19 @@ func (r *CreatePriceRequest) Validate() error {
 				Mark(ierr.ErrValidation)
 		}
 	case types.BILLING_CADENCE_ONETIME:
-		if r.InvoiceCadence != "" && r.InvoiceCadence != types.InvoiceCadenceAdvance {
+		// Normalise: empty invoice_cadence defaults to ADVANCE for one-time prices.
+		if r.InvoiceCadence == "" {
+			r.InvoiceCadence = types.InvoiceCadenceAdvance
+		}
+		if r.InvoiceCadence != types.InvoiceCadenceAdvance {
 			return ierr.NewError("invoice_cadence must be ADVANCE for ONETIME prices").
 				WithHint("One-time charges are always billed in advance").
+				Mark(ierr.ErrValidation)
+		}
+		// billing_period_count is unused for one-time prices but must not be negative.
+		if r.BillingPeriodCount < 0 {
+			return ierr.NewError("billing_period_count cannot be negative for ONETIME prices").
+				WithHint("Set billing_period_count to 0 or omit it for one-time prices").
 				Mark(ierr.ErrValidation)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	entpkg "github.com/flexprice/flexprice/ent"
 	"github.com/flexprice/flexprice/internal/domain/customer"
 	"github.com/flexprice/flexprice/internal/domain/plan"
 	"github.com/flexprice/flexprice/internal/domain/price"
@@ -151,7 +152,11 @@ func (s *BillingOnetimeSuite) setupSharedFixtures() {
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, s.prices.onetimeFixed))
 
-	// ONETIME ARREAR fixed price – $200 end-of-period charge
+	// ONETIME fixed price used for arrear-cadence line-item classification tests – $200.
+	// NOTE: The price itself uses InvoiceCadenceAdvance because the DTO validation
+	// enforces ADVANCE for all ONETIME prices.  The arrear InvoiceCadence is set
+	// directly on the line item in tests to exercise domain-level ARREAR classification
+	// logic independently of the DTO constraint.
 	s.prices.onetimeArrear = &price.Price{
 		ID:                 "price_onetime_arrear",
 		Amount:             decimal.NewFromInt(200),
@@ -163,7 +168,7 @@ func (s *BillingOnetimeSuite) setupSharedFixtures() {
 		BillingPeriodCount: 0,
 		BillingModel:       types.BILLING_MODEL_FLAT_FEE,
 		BillingCadence:     types.BILLING_CADENCE_ONETIME,
-		InvoiceCadence:     types.InvoiceCadenceArrear,
+		InvoiceCadence:     types.InvoiceCadenceAdvance,
 		BaseModel:          types.GetDefaultBaseModel(ctx),
 	}
 	s.NoError(s.GetStores().PriceRepo.Create(ctx, s.prices.onetimeArrear))
@@ -363,6 +368,50 @@ func (s *BillingOnetimeSuite) TestIsOneTime_False_Recurring() {
 func (s *BillingOnetimeSuite) TestGetChargeDate_ReturnsStartDate() {
 	item := s.makeOnetimeLineItem("p", types.InvoiceCadenceAdvance, s.jan15)
 	s.Equal(s.jan15, item.GetChargeDate())
+}
+
+// TestIsOneTime_ViaMapper verifies that the production Ent→domain mapping path
+// correctly preserves the ONETIME signal (BillingPeriod="") so that IsOneTime()
+// returns true without requiring the Price object to be pre-loaded.
+// This prevents mapper regressions that might accidentally set a non-empty
+// BillingPeriod for ONETIME items.
+func (s *BillingOnetimeSuite) TestIsOneTime_ViaMapper() {
+	priceType := types.PRICE_TYPE_FIXED
+	entItem := &entpkg.SubscriptionLineItem{
+		ID:             "ent-onetime-1",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.cust.ID,
+		PriceID:        s.prices.onetimeFixed.ID,
+		PriceType:      &priceType,
+		BillingPeriod:  "", // ONETIME: intentionally empty
+		Currency:       "usd",
+		Quantity:       decimal.NewFromInt(1),
+		TenantID:       s.GetContext().Value(types.CtxTenantID).(string),
+		Status:         string(types.StatusPublished),
+	}
+	domainItem := subscription.SubscriptionLineItemFromEnt(entItem)
+	s.True(domainItem.IsOneTime(), "mapper must preserve empty BillingPeriod → IsOneTime() == true")
+	s.Equal("", string(domainItem.BillingPeriod), "BillingPeriod must be empty for ONETIME")
+}
+
+// TestIsOneTime_ViaMapper_Recurring verifies that a recurring item coming through
+// the mapper is NOT classified as one-time.
+func (s *BillingOnetimeSuite) TestIsOneTime_ViaMapper_Recurring() {
+	priceType := types.PRICE_TYPE_FIXED
+	entItem := &entpkg.SubscriptionLineItem{
+		ID:             "ent-rec-1",
+		SubscriptionID: s.sub.ID,
+		CustomerID:     s.cust.ID,
+		PriceID:        s.prices.recurringFixed.ID,
+		PriceType:      &priceType,
+		BillingPeriod:  types.BILLING_PERIOD_MONTHLY,
+		Currency:       "usd",
+		Quantity:       decimal.NewFromInt(1),
+		TenantID:       s.GetContext().Value(types.CtxTenantID).(string),
+		Status:         string(types.StatusPublished),
+	}
+	domainItem := subscription.SubscriptionLineItemFromEnt(entItem)
+	s.False(domainItem.IsOneTime(), "recurring item via mapper must return IsOneTime() == false")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

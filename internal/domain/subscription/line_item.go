@@ -64,7 +64,15 @@ func (li *SubscriptionLineItem) IsActive(t time.Time) bool {
 		return false
 	}
 
-	if !li.EndDate.IsZero() && li.EndDate.Before(t) {
+	// For ONETIME items, treat a zero EndDate as closed at StartDate (the charge
+	// date).  This prevents them from appearing "active forever" after their
+	// single charge date has passed.
+	effectiveEnd := li.EndDate
+	if li.IsOneTime() && li.EndDate.IsZero() {
+		effectiveEnd = li.StartDate
+	}
+
+	if !effectiveEnd.IsZero() && effectiveEnd.Before(t) {
 		return false
 	}
 	return true
@@ -227,6 +235,13 @@ func (li *SubscriptionLineItem) GetPeriodStart(defaultPeriodStart time.Time) tim
 
 // GetPeriodEnd returns the period end date based on line item dates
 func (li *SubscriptionLineItem) GetPeriodEnd(defaultPeriodEnd time.Time) time.Time {
+	// For ONETIME items with no explicit EndDate, the effective period is the
+	// single charge date (StartDate).  Returning StartDate here ensures callers
+	// see a zero-duration period [chargeDate, chargeDate] rather than the billing
+	// period end, which prevents accidental proration or window mis-bucketing.
+	if li.IsOneTime() && li.EndDate.IsZero() {
+		return li.StartDate
+	}
 	// If line item has an end date before default period end, use line item end date
 	if !li.EndDate.IsZero() && (li.EndDate.Before(defaultPeriodEnd) || li.EndDate.Equal(defaultPeriodEnd)) {
 		return li.EndDate

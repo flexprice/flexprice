@@ -49,6 +49,17 @@ func (r *SubscriptionPhaseCreateRequest) Validate() error {
 			Mark(ierr.ErrValidation)
 	}
 
+	// Validate each nested line item (price/price_id presence, date ordering, etc.)
+	// Price and subscription context are not available here; full business-rule
+	// validation is deferred to createPhaseExtraLineItems in the service layer.
+	for i, li := range r.LineItems {
+		if err := li.Validate(nil, nil); err != nil {
+			return ierr.NewErrorf("invalid line_item at index %d: %s", i, err.Error()).
+				WithHint("Check the line item fields at the given index").
+				Mark(ierr.ErrValidation)
+		}
+	}
+
 	return nil
 }
 

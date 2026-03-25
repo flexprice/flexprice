@@ -2154,7 +2154,11 @@ func (s *billingService) checkIfChargeInvoiced(
 		// Instead, check that the charge date falls within [periodStart, periodEnd).
 		if lineStart.Equal(lineEnd) {
 			chargeDate := lineStart
-			if !chargeDate.Before(periodStart) && chargeDate.Before(periodEnd) {
+			// Use a closed interval [periodStart, periodEnd] so that arrear one-time
+			// charges with chargeDate == periodEnd are correctly detected as already
+			// invoiced.  ClassifyLineItems uses (start, end] for ARREAR, so we must
+			// be at least as inclusive here to avoid duplicate billing at the boundary.
+			if !chargeDate.Before(periodStart) && !chargeDate.After(periodEnd) {
 				return true
 			}
 			continue
