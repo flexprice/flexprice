@@ -641,7 +641,7 @@ func (slic *SubscriptionLineItemCreate) check() error {
 		return &ValidationError{Name: "billing_period", err: errors.New(`ent: missing required field "SubscriptionLineItem.billing_period"`)}
 	}
 	if v, ok := slic.mutation.BillingPeriod(); ok {
-		if err := v.Validate(); err != nil {
+		if err := subscriptionlineitem.BillingPeriodValidator(string(v)); err != nil {
 			return &ValidationError{Name: "billing_period", err: fmt.Errorf(`ent: validator failed for field "SubscriptionLineItem.billing_period": %w`, err)}
 		}
 	}

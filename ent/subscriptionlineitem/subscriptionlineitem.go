@@ -186,6 +186,8 @@ var (
 	DefaultQuantity decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
+	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
+	BillingPeriodValidator func(string) error
 	// DefaultBillingPeriodCount holds the default value on creation for the "billing_period_count" field.
 	DefaultBillingPeriodCount int
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.

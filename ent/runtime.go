@@ -1721,6 +1721,10 @@ func init() {
 	subscriptionlineitemDescCurrency := subscriptionlineitemFields[14].Descriptor()
 	// subscriptionlineitem.CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	subscriptionlineitem.CurrencyValidator = subscriptionlineitemDescCurrency.Validators[0].(func(string) error)
+	// subscriptionlineitemDescBillingPeriod is the schema descriptor for billing_period field.
+	subscriptionlineitemDescBillingPeriod := subscriptionlineitemFields[15].Descriptor()
+	// subscriptionlineitem.BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
+	subscriptionlineitem.BillingPeriodValidator = subscriptionlineitemDescBillingPeriod.Validators[0].(func(string) error)
 	// subscriptionlineitemDescBillingPeriodCount is the schema descriptor for billing_period_count field.
 	subscriptionlineitemDescBillingPeriodCount := subscriptionlineitemFields[16].Descriptor()
 	// subscriptionlineitem.DefaultBillingPeriodCount holds the default value on creation for the billing_period_count field.
