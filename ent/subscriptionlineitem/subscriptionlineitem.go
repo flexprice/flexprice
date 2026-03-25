@@ -88,8 +88,6 @@ const (
 	FieldCommitmentWindowed = "commitment_windowed"
 	// FieldCommitmentDuration holds the string denoting the commitment_duration field in the database.
 	FieldCommitmentDuration = "commitment_duration"
-	// FieldBillingCadence holds the string denoting the billing_cadence field in the database.
-	FieldBillingCadence = "billing_cadence"
 	// EdgeSubscription holds the string denoting the subscription edge name in mutations.
 	EdgeSubscription = "subscription"
 	// EdgeCouponAssociations holds the string denoting the coupon_associations edge name in mutations.
@@ -151,7 +149,6 @@ var Columns = []string{
 	FieldCommitmentTrueUpEnabled,
 	FieldCommitmentWindowed,
 	FieldCommitmentDuration,
-	FieldBillingCadence,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -189,8 +186,6 @@ var (
 	DefaultQuantity decimal.Decimal
 	// CurrencyValidator is a validator for the "currency" field. It is called by the builders before save.
 	CurrencyValidator func(string) error
-	// BillingPeriodValidator is a validator for the "billing_period" field. It is called by the builders before save.
-	BillingPeriodValidator func(string) error
 	// DefaultBillingPeriodCount holds the default value on creation for the "billing_period_count" field.
 	DefaultBillingPeriodCount int
 	// DefaultTrialPeriod holds the default value on creation for the "trial_period" field.
@@ -199,8 +194,6 @@ var (
 	DefaultCommitmentTrueUpEnabled bool
 	// DefaultCommitmentWindowed holds the default value on creation for the "commitment_windowed" field.
 	DefaultCommitmentWindowed bool
-	// DefaultBillingCadence holds the default value on creation for the "billing_cadence" field.
-	DefaultBillingCadence types.BillingCadence
 )
 
 // OrderOption defines the ordering options for the SubscriptionLineItem queries.
@@ -384,11 +377,6 @@ func ByCommitmentWindowed(opts ...sql.OrderTermOption) OrderOption {
 // ByCommitmentDuration orders the results by the commitment_duration field.
 func ByCommitmentDuration(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCommitmentDuration, opts...).ToFunc()
-}
-
-// ByBillingCadence orders the results by the billing_cadence field.
-func ByBillingCadence(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldBillingCadence, opts...).ToFunc()
 }
 
 // BySubscriptionField orders the results by subscription field.

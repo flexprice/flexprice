@@ -93,8 +93,6 @@ type SubscriptionLineItem struct {
 	CommitmentWindowed bool `json:"commitment_windowed,omitempty"`
 	// CommitmentDuration holds the value of the "commitment_duration" field.
 	CommitmentDuration *types.BillingPeriod `json:"commitment_duration,omitempty"`
-	// BillingCadence holds the value of the "billing_cadence" field.
-	BillingCadence types.BillingCadence `json:"billing_cadence,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the SubscriptionLineItemQuery when eager-loading is set.
 	Edges        SubscriptionLineItemEdges `json:"edges"`
@@ -147,7 +145,7 @@ func (*SubscriptionLineItem) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case subscriptionlineitem.FieldBillingPeriodCount, subscriptionlineitem.FieldTrialPeriod:
 			values[i] = new(sql.NullInt64)
-		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldSubscriptionPhaseID, subscriptionlineitem.FieldCommitmentType, subscriptionlineitem.FieldCommitmentDuration, subscriptionlineitem.FieldBillingCadence:
+		case subscriptionlineitem.FieldID, subscriptionlineitem.FieldTenantID, subscriptionlineitem.FieldStatus, subscriptionlineitem.FieldCreatedBy, subscriptionlineitem.FieldUpdatedBy, subscriptionlineitem.FieldEnvironmentID, subscriptionlineitem.FieldSubscriptionID, subscriptionlineitem.FieldCustomerID, subscriptionlineitem.FieldEntityID, subscriptionlineitem.FieldEntityType, subscriptionlineitem.FieldPlanDisplayName, subscriptionlineitem.FieldPriceID, subscriptionlineitem.FieldPriceType, subscriptionlineitem.FieldMeterID, subscriptionlineitem.FieldMeterDisplayName, subscriptionlineitem.FieldPriceUnitID, subscriptionlineitem.FieldPriceUnit, subscriptionlineitem.FieldDisplayName, subscriptionlineitem.FieldCurrency, subscriptionlineitem.FieldBillingPeriod, subscriptionlineitem.FieldInvoiceCadence, subscriptionlineitem.FieldSubscriptionPhaseID, subscriptionlineitem.FieldCommitmentType, subscriptionlineitem.FieldCommitmentDuration:
 			values[i] = new(sql.NullString)
 		case subscriptionlineitem.FieldCreatedAt, subscriptionlineitem.FieldUpdatedAt, subscriptionlineitem.FieldStartDate, subscriptionlineitem.FieldEndDate:
 			values[i] = new(sql.NullTime)
@@ -406,12 +404,6 @@ func (sli *SubscriptionLineItem) assignValues(columns []string, values []any) er
 				sli.CommitmentDuration = new(types.BillingPeriod)
 				*sli.CommitmentDuration = types.BillingPeriod(value.String)
 			}
-		case subscriptionlineitem.FieldBillingCadence:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field billing_cadence", values[i])
-			} else if value.Valid {
-				sli.BillingCadence = types.BillingCadence(value.String)
-			}
 		default:
 			sli.selectValues.Set(columns[i], values[i])
 		}
@@ -597,9 +589,6 @@ func (sli *SubscriptionLineItem) String() string {
 		builder.WriteString("commitment_duration=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
-	builder.WriteString(", ")
-	builder.WriteString("billing_cadence=")
-	builder.WriteString(fmt.Sprintf("%v", sli.BillingCadence))
 	builder.WriteByte(')')
 	return builder.String()
 }

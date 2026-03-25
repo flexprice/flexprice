@@ -111,7 +111,6 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			SchemaType(map[string]string{
 				"postgres": "varchar(50)",
 			}).
-			NotEmpty().
 			GoType(types.BillingPeriod("")),
 		field.Int("billing_period_count").
 			Default(1),
@@ -178,15 +177,6 @@ func (SubscriptionLineItem) Fields() []ent.Field {
 			Optional().
 			Nillable().
 			GoType(types.BillingPeriod("")),
-		// billing_cadence mirrors the price's billing cadence (RECURRING or ONETIME).
-		// Stored here to avoid price lookups during invoice classification.
-		// Default is RECURRING for backwards compatibility.
-		field.String("billing_cadence").
-			SchemaType(map[string]string{
-				"postgres": "varchar(20)",
-			}).
-			Default(string(types.BILLING_CADENCE_RECURRING)).
-			GoType(types.BillingCadence("")),
 	}
 }
 

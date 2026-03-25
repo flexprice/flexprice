@@ -49110,7 +49110,6 @@ type SubscriptionLineItemMutation struct {
 	commitment_true_up_enabled *bool
 	commitment_windowed        *bool
 	commitment_duration        *types.BillingPeriod
-	billing_cadence            *types.BillingCadence
 	clearedFields              map[string]struct{}
 	subscription               *string
 	clearedsubscription        bool
@@ -50835,42 +50834,6 @@ func (m *SubscriptionLineItemMutation) ResetCommitmentDuration() {
 	delete(m.clearedFields, subscriptionlineitem.FieldCommitmentDuration)
 }
 
-// SetBillingCadence sets the "billing_cadence" field.
-func (m *SubscriptionLineItemMutation) SetBillingCadence(tc types.BillingCadence) {
-	m.billing_cadence = &tc
-}
-
-// BillingCadence returns the value of the "billing_cadence" field in the mutation.
-func (m *SubscriptionLineItemMutation) BillingCadence() (r types.BillingCadence, exists bool) {
-	v := m.billing_cadence
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldBillingCadence returns the old "billing_cadence" field's value of the SubscriptionLineItem entity.
-// If the SubscriptionLineItem object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SubscriptionLineItemMutation) OldBillingCadence(ctx context.Context) (v types.BillingCadence, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldBillingCadence is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldBillingCadence requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldBillingCadence: %w", err)
-	}
-	return oldValue.BillingCadence, nil
-}
-
-// ResetBillingCadence resets all changes to the "billing_cadence" field.
-func (m *SubscriptionLineItemMutation) ResetBillingCadence() {
-	m.billing_cadence = nil
-}
-
 // ClearSubscription clears the "subscription" edge to the Subscription entity.
 func (m *SubscriptionLineItemMutation) ClearSubscription() {
 	m.clearedsubscription = true
@@ -50986,7 +50949,7 @@ func (m *SubscriptionLineItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SubscriptionLineItemMutation) Fields() []string {
-	fields := make([]string, 0, 37)
+	fields := make([]string, 0, 36)
 	if m.tenant_id != nil {
 		fields = append(fields, subscriptionlineitem.FieldTenantID)
 	}
@@ -51095,9 +51058,6 @@ func (m *SubscriptionLineItemMutation) Fields() []string {
 	if m.commitment_duration != nil {
 		fields = append(fields, subscriptionlineitem.FieldCommitmentDuration)
 	}
-	if m.billing_cadence != nil {
-		fields = append(fields, subscriptionlineitem.FieldBillingCadence)
-	}
 	return fields
 }
 
@@ -51178,8 +51138,6 @@ func (m *SubscriptionLineItemMutation) Field(name string) (ent.Value, bool) {
 		return m.CommitmentWindowed()
 	case subscriptionlineitem.FieldCommitmentDuration:
 		return m.CommitmentDuration()
-	case subscriptionlineitem.FieldBillingCadence:
-		return m.BillingCadence()
 	}
 	return nil, false
 }
@@ -51261,8 +51219,6 @@ func (m *SubscriptionLineItemMutation) OldField(ctx context.Context, name string
 		return m.OldCommitmentWindowed(ctx)
 	case subscriptionlineitem.FieldCommitmentDuration:
 		return m.OldCommitmentDuration(ctx)
-	case subscriptionlineitem.FieldBillingCadence:
-		return m.OldBillingCadence(ctx)
 	}
 	return nil, fmt.Errorf("unknown SubscriptionLineItem field %s", name)
 }
@@ -51523,13 +51479,6 @@ func (m *SubscriptionLineItemMutation) SetField(name string, value ent.Value) er
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCommitmentDuration(v)
-		return nil
-	case subscriptionlineitem.FieldBillingCadence:
-		v, ok := value.(types.BillingCadence)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetBillingCadence(v)
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)
@@ -51843,9 +51792,6 @@ func (m *SubscriptionLineItemMutation) ResetField(name string) error {
 		return nil
 	case subscriptionlineitem.FieldCommitmentDuration:
 		m.ResetCommitmentDuration()
-		return nil
-	case subscriptionlineitem.FieldBillingCadence:
-		m.ResetBillingCadence()
 		return nil
 	}
 	return fmt.Errorf("unknown SubscriptionLineItem field %s", name)

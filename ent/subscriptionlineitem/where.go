@@ -247,12 +247,6 @@ func CommitmentDuration(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldCommitmentDuration, vc))
 }
 
-// BillingCadence applies equality check predicate on the "billing_cadence" field. It's identical to BillingCadenceEQ.
-func BillingCadence(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldBillingCadence, vc))
-}
-
 // TenantIDEQ applies the EQ predicate on the "tenant_id" field.
 func TenantIDEQ(v string) predicate.SubscriptionLineItem {
 	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldTenantID, v))
@@ -2471,90 +2465,6 @@ func CommitmentDurationEqualFold(v types.BillingPeriod) predicate.SubscriptionLi
 func CommitmentDurationContainsFold(v types.BillingPeriod) predicate.SubscriptionLineItem {
 	vc := string(v)
 	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldCommitmentDuration, vc))
-}
-
-// BillingCadenceEQ applies the EQ predicate on the "billing_cadence" field.
-func BillingCadenceEQ(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldEQ(FieldBillingCadence, vc))
-}
-
-// BillingCadenceNEQ applies the NEQ predicate on the "billing_cadence" field.
-func BillingCadenceNEQ(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldNEQ(FieldBillingCadence, vc))
-}
-
-// BillingCadenceIn applies the In predicate on the "billing_cadence" field.
-func BillingCadenceIn(vs ...types.BillingCadence) predicate.SubscriptionLineItem {
-	v := make([]any, len(vs))
-	for i := range v {
-		v[i] = string(vs[i])
-	}
-	return predicate.SubscriptionLineItem(sql.FieldIn(FieldBillingCadence, v...))
-}
-
-// BillingCadenceNotIn applies the NotIn predicate on the "billing_cadence" field.
-func BillingCadenceNotIn(vs ...types.BillingCadence) predicate.SubscriptionLineItem {
-	v := make([]any, len(vs))
-	for i := range v {
-		v[i] = string(vs[i])
-	}
-	return predicate.SubscriptionLineItem(sql.FieldNotIn(FieldBillingCadence, v...))
-}
-
-// BillingCadenceGT applies the GT predicate on the "billing_cadence" field.
-func BillingCadenceGT(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldGT(FieldBillingCadence, vc))
-}
-
-// BillingCadenceGTE applies the GTE predicate on the "billing_cadence" field.
-func BillingCadenceGTE(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldGTE(FieldBillingCadence, vc))
-}
-
-// BillingCadenceLT applies the LT predicate on the "billing_cadence" field.
-func BillingCadenceLT(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldLT(FieldBillingCadence, vc))
-}
-
-// BillingCadenceLTE applies the LTE predicate on the "billing_cadence" field.
-func BillingCadenceLTE(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldLTE(FieldBillingCadence, vc))
-}
-
-// BillingCadenceContains applies the Contains predicate on the "billing_cadence" field.
-func BillingCadenceContains(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldContains(FieldBillingCadence, vc))
-}
-
-// BillingCadenceHasPrefix applies the HasPrefix predicate on the "billing_cadence" field.
-func BillingCadenceHasPrefix(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldHasPrefix(FieldBillingCadence, vc))
-}
-
-// BillingCadenceHasSuffix applies the HasSuffix predicate on the "billing_cadence" field.
-func BillingCadenceHasSuffix(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldHasSuffix(FieldBillingCadence, vc))
-}
-
-// BillingCadenceEqualFold applies the EqualFold predicate on the "billing_cadence" field.
-func BillingCadenceEqualFold(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldEqualFold(FieldBillingCadence, vc))
-}
-
-// BillingCadenceContainsFold applies the ContainsFold predicate on the "billing_cadence" field.
-func BillingCadenceContainsFold(v types.BillingCadence) predicate.SubscriptionLineItem {
-	vc := string(v)
-	return predicate.SubscriptionLineItem(sql.FieldContainsFold(FieldBillingCadence, vc))
 }
 
 // HasSubscription applies the HasEdge predicate on the "subscription" edge.
