@@ -179,6 +179,10 @@ func (s *billingService) CalculateFixedCharges(
 		if err != nil {
 			return nil, fixedCost, err
 		}
+		// Attach price so IsOneTime() uses price.BillingCadence (authoritative)
+		if item.Price == nil {
+			item.Price = price.Price
+		}
 
 		var amount decimal.Decimal
 		var linePeriodStart, linePeriodEnd time.Time
@@ -1830,6 +1834,52 @@ func (s *billingService) calculateAllFeatureUsageCharges(
 	}, nil
 }
 
+// attachPricesToLineItems bulk-fetches prices for a slice of line items and attaches
+// each price to its line item so that IsOneTime() (and other price-aware methods) can
+// use price.BillingCadence without an additional per-item DB call.
+func (s *billingService) attachPricesToLineItems(ctx context.Context, lineItems []*subscription.SubscriptionLineItem) error {
+	if len(lineItems) == 0 {
+		return nil
+	}
+
+	// Collect unique price IDs (skip any line items that already have a price loaded)
+	priceIDSet := make(map[string]struct{}, len(lineItems))
+	for _, li := range lineItems {
+		if li.Price == nil && li.PriceID != "" {
+			priceIDSet[li.PriceID] = struct{}{}
+		}
+	}
+	if len(priceIDSet) == 0 {
+		return nil
+	}
+
+	priceIDs := make([]string, 0, len(priceIDSet))
+	for id := range priceIDSet {
+		priceIDs = append(priceIDs, id)
+	}
+
+	filter := types.NewNoLimitPriceFilter()
+	filter.PriceIDs = priceIDs
+	prices, err := s.PriceRepo.List(ctx, filter)
+	if err != nil {
+		return err
+	}
+
+	priceMap := make(map[string]*priceDomain.Price, len(prices))
+	for _, p := range prices {
+		priceMap[p.ID] = p
+	}
+
+	for _, li := range lineItems {
+		if li.Price == nil {
+			if p, ok := priceMap[li.PriceID]; ok {
+				li.Price = p
+			}
+		}
+	}
+	return nil
+}
+
 func (s *billingService) PrepareSubscriptionInvoiceRequest(
 	ctx context.Context,
 	sub *subscription.Subscription,
@@ -1853,6 +1903,11 @@ func (s *billingService) PrepareSubscriptionInvoiceRequest(
 		return nil, err
 	}
 	sub.LineItems = lineItems
+
+	// Attach prices so ClassifyLineItems can use price.BillingCadence for ONETIME detection
+	if err := s.attachPricesToLineItems(ctx, sub.LineItems); err != nil {
+		return nil, err
+	}
 
 	// nothing to invoice default response 0$ invoice
 	zeroAmountInvoice, err := s.CreateInvoiceRequestForCharges(ctx,

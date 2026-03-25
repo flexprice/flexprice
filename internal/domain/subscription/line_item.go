@@ -75,11 +75,17 @@ func (li *SubscriptionLineItem) IsUsage() bool {
 }
 
 // IsOneTime returns true if this line item is charged exactly once (not recurring).
-// ONETIME charges are FIXED type with no billing period.
-// RECURRING FIXED charges always have an explicit BillingPeriod (MONTHLY, ANNUAL, etc.).
+//
+// Detection order:
+//  1. If the price is already loaded (li.Price != nil), use price.BillingCadence — authoritative.
+//  2. Fallback: detect by empty BillingPeriod.  ONETIME line items store "" because
+//     ToSubscriptionLineItem() clears BillingPeriod when the price cadence is ONETIME.
+//     Recurring FIXED lines always carry an explicit period (MONTHLY, ANNUAL, …).
 func (li *SubscriptionLineItem) IsOneTime() bool {
-	// ONETIME charges are FIXED type with no billing period.
-	// RECURRING FIXED charges always have an explicit BillingPeriod (MONTHLY, ANNUAL, etc.).
+	if li.Price != nil {
+		return li.Price.BillingCadence == types.BILLING_CADENCE_ONETIME
+	}
+	// Fallback for test fixtures and paths where price is not pre-loaded.
 	return li.PriceType == types.PRICE_TYPE_FIXED && li.BillingPeriod == ""
 }
 
@@ -156,8 +162,10 @@ func SubscriptionLineItemFromEnt(e *ent.SubscriptionLineItem) *SubscriptionLineI
 		commitmentDuration = &cd
 	}
 
+	// ONETIME line items have BillingPeriod="" and a meaningful BillingPeriodCount of 0.
+	// Only default to 1 for recurring line items (non-empty BillingPeriod) where 0 is invalid.
 	billingPeriodCount := e.BillingPeriodCount
-	if billingPeriodCount <= 0 {
+	if billingPeriodCount <= 0 && e.BillingPeriod != "" {
 		billingPeriodCount = 1
 	}
 	return &SubscriptionLineItem{

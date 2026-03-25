@@ -491,14 +491,6 @@ func (r *CreatePriceRequest) ToPrice(ctx context.Context) (*priceDomain.Price, e
 		price.Tiers = tiers
 	}
 
-	// Normalize ONETIME prices: billing period is irrelevant for one-time charges.
-	// The client may supply any valid billing_period to satisfy the required tag;
-	// we clear it here so that IsOneTime() (BillingPeriod == "") works correctly.
-	if r.BillingCadence == types.BILLING_CADENCE_ONETIME {
-		price.BillingPeriod = ""
-		price.BillingPeriodCount = 0
-	}
-
 	price.DisplayAmount = price.GetDisplayAmount()
 
 	return price, nil
