@@ -144,7 +144,7 @@ func (s *SandboxSubscriptionCleanupActivities) TerminateSandboxSubscriptionsBatc
 		subCtx = context.WithValue(subCtx, types.CtxEnvironmentID, sub.EnvironmentID)
 		subCtx = context.WithValue(subCtx, types.CtxUserID, sub.CreatedBy)
 		_, err := s.subscriptionService.CancelSubscription(subCtx, sub.SubscriptionID, &dto.CancelSubscriptionRequest{
-			CancellationType: types.CancellationTypeSandboxSubscriptionCleanup,
+			CancellationType: types.CancellationTypeImmediate,
 			Reason:           "Sandbox subscription auto-cancelled after cleanup window",
 		})
 		if err != nil {

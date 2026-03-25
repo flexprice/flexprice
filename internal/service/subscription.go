@@ -4738,9 +4738,6 @@ func (s *subscriptionService) determineEffectiveDate(
 		}
 		return customDate.UTC(), nil
 
-	case types.CancellationTypeSandboxSubscriptionCleanup:
-		return now, nil
-
 	default:
 		return time.Time{}, ierr.NewError("invalid cancellation type").
 			WithHintf("Unsupported cancellation type: %s", cancellationType).
@@ -4853,11 +4850,6 @@ func (s *subscriptionService) updateSubscriptionForCancellation(
 		// EndDate is NOT set here; it will be set by the cancellation schedule processor.
 		subscription.CancelAtPeriodEnd = true
 		subscription.CancelAt = &effectiveDate
-
-	case types.CancellationTypeSandboxSubscriptionCleanup:
-		subscription.SubscriptionStatus = types.SubscriptionStatusCancelled
-		subscription.CancelledAt = &now
-		subscription.EndDate = &now
 
 	default:
 		return ierr.NewError("invalid cancellation type").
