@@ -3593,7 +3593,9 @@ func (s *featureUsageTrackingService) fetchAddons(ctx context.Context, data *Ana
 	return addonMap, nil
 }
 
-// fetchCustomers fetches all customers when no external customer ID is provided
+// fetchCustomers fetches all customers when no external customer ID is provided.
+// When no ExternalCustomerID is specified it pages through all customers in
+// batches of 1000 to avoid an unbounded full-table scan.
 func (s *featureUsageTrackingService) fetchCustomers(ctx context.Context, req *dto.GetUsageAnalyticsRequest) ([]*customer.Customer, error) {
 	if req.ExternalCustomerID != "" {
 		cust, err := s.fetchCustomer(ctx, req.ExternalCustomerID)
@@ -3601,15 +3603,29 @@ func (s *featureUsageTrackingService) fetchCustomers(ctx context.Context, req *d
 			return nil, err
 		}
 		return []*customer.Customer{cust}, nil
-	} else {
-		customers, err := s.CustomerRepo.List(ctx, types.NewNoLimitCustomerFilter())
+	}
+
+	const batchSize = 1000
+	var all []*customer.Customer
+	offset := 0
+	for {
+		filter := types.NewNoLimitCustomerFilter()
+		limit := batchSize
+		filter.Limit = &limit
+		filter.Offset = &offset
+		batch, err := s.CustomerRepo.List(ctx, filter)
 		if err != nil {
 			return nil, ierr.WithError(err).
 				WithHint("Failed to fetch customers").
 				Mark(ierr.ErrDatabase)
 		}
-		return customers, nil
+		all = append(all, batch...)
+		if len(batch) < batchSize {
+			break
+		}
+		offset += batchSize
 	}
+	return all, nil
 }
 
 // mergeAnalyticsData merges additional analytics data into the aggregated data structure

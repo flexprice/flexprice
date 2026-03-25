@@ -296,6 +296,9 @@ func (r *customerRepository) ListAll(ctx context.Context, filter *types.Customer
 			Mark(ierr.ErrDatabase)
 	}
 
+	query = ApplySorting(query, filter, r.queryOpts)
+	query = ApplyPagination(query, filter, r.queryOpts)
+
 	customers, err := query.All(ctx)
 	if err != nil {
 		SetSpanError(span, err)
