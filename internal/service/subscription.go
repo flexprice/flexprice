@@ -412,8 +412,30 @@ func (s *subscriptionService) CreateSubscription(ctx context.Context, req dto.Cr
 				return err
 			}
 			if len(req.Phases) > 0 && len(req.Phases[0].LineItems) > 0 {
-				if _, err = s.createPhaseExtraLineItems(ctx, sub, phases[0], req.Phases[0]); err != nil {
-					return err
+				extraItems, extraErr := s.createPhaseExtraLineItems(ctx, sub, phases[0], req.Phases[0])
+				if extraErr != nil {
+					return extraErr
+				}
+				// Apply phase 0 coupons to the extra line items created above.
+				// handleSubCoupons runs before this block and only covers req.Coupons /
+				// req.LineItemCoupons; phase-level coupons (req.Phases[0].Coupons /
+				// req.Phases[0].LineItemCoupons) need to be resolved here using the
+				// just-created items.
+				phase0Req := req.Phases[0]
+				if len(phase0Req.Coupons) > 0 || len(phase0Req.LineItemCoupons) > 0 {
+					phase0PriceToLIMap := make(map[string]string)
+					for _, li := range extraItems {
+						if li.PriceID != "" && li.ID != "" {
+							phase0PriceToLIMap[li.PriceID] = li.ID
+						}
+					}
+					phase0Coupons := s.normalizePhaseCoupons(phase0Req, phases[0].ID, phase0PriceToLIMap)
+					if len(phase0Coupons) > 0 {
+						couponSvc := NewCouponAssociationService(s.ServiceParams)
+						if err = couponSvc.ApplyCouponsToSubscription(ctx, sub, phase0Coupons); err != nil {
+							return err
+						}
+					}
 				}
 			}
 		}
